@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The Pi mark as a plain white glyph, for in-app use at any size.
+
+    Same geometry as the launcher icon but *not* centred by translation: this one
+    is drawn from the origin with a tight viewport, because the caller decides
+    where it goes. The launcher variant needs its offsets to land on the adaptive
+    icon's centre; a `painterResource` in Compose does not.
+
+    **White, like the launcher icon.** It was amber until the first-launch screen was
+    looked at next to the icon it comes from: the tap and the screen it opens are the
+    same moment, and a mark that changes colour between them reads as a different
+    logo. The amber goes on the surface it is actually for — `Icons.Filled.*` tints
+    and the interface's own accents — not on the logo.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="37.6dp"
+    android:height="37.6dp"
+    android:viewportWidth="37.6"
+    android:viewportHeight="37.6">
+    <group android:translateX="-29.9" android:translateY="-40">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M29.9,40 L58.1,40 L58.1,58.8 L48.7,58.8 L48.7,68.2 L39.3,68.2 L39.3,77.6 L29.9,77.6 Z M39.3,49.4 L39.3,58.8 L48.7,58.8 L48.7,49.4 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M58.1,58.8 L67.5,58.8 L67.5,77.6 L58.1,77.6 Z" />
+    </group>
+</vector>

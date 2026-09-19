@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Pi talks to LLM providers over the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- The agent keeps running while the UI is backgrounded. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
+        Taking a photo from the composer's + sheet.
+
+        `CAMERA` is only needed because the manifest declares it; without the
+        declaration the permission is not checked at all. It is requested at the
+        moment the camera is asked for rather than at launch, and a reader who
+        refuses it is told so instead of watching a tap do nothing.
+
+        The `queries` block is what makes the camera *visible* on Android 11 and
+        up: package visibility hides every app an intent does not name, and
+        `ACTION_IMAGE_CAPTURE` would otherwise resolve to nothing on the device
+        this app is actually used on.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
+    <!-- Shared storage, so the agent can read/write ~/storage/* like Termux does. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
+    <!--
+        Reading /sdcard is not enough: without this the process never joins the
+        `sdcard_rw` group on a modern Android, so every write under /sdcard
+        fails with EACCES even though the legacy storage permissions above are
+        granted. A low targetSdk does not grant it either. The user confirms it
+        on the system's "All files access" page; see StorageAccess.kt.
+    -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
+    <application
+        android:name=".PiKitApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PiKit"
+        tools:targetApi="28">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode|density|fontScale"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Owns the lifecycle of the agent child process (pi in RPC mode).
+            Declared as a foreground service so the agent survives the UI going
+            to the background and is not killed mid-turn by the OS.
+        -->
+        <service
+            android:name=".pi.PiAgentService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!--
+            Lets the Files tab hand a file to another app ("Open with"). The
+            files live in the app's private directory, which no other app can
+            read, so they have to be exposed through a content:// URI.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
+            The bundled `termux-setup-storage` does not create the ~/storage
+            symlinks itself; it broadcasts this action and expects the app to.
+            Without the receiver the command silently did nothing.
+        -->
+        <receiver
+            android:name=".env.StorageSetupReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="pi.kit.mob.app.reload_style" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

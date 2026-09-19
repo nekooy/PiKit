@@ -1,0 +1,46 @@
+# Build outputs
+build/
+.gradle/
+.kotlin/
+local.properties
+captures/
+.cxx/
+
+# Host tooling downloaded by the bootstrap script (not part of the project)
+.tooling/
+
+# Python bytecode from the tools/ scripts
+__pycache__/
+*.pyc
+
+# Intermediate and cached inputs for the runtime image builder
+.runtime-build/
+
+# Generated runtime images. These are ~285 MB per ABI of binaries assembled by
+# tools/build-runtime-image.py from upstream sources; they are deliberately not
+# committed. Run that script before building the app.
+app/src/*/assets/runtime/
+
+# Signing material. There is no keystore in this repository — release builds are
+# signed with the debug key until one is supplied through the four
+# pikit.keystore.* properties (docs/RELEASING.md) — and this is the guard for the
+# day someone runs `keytool` in the working directory and then `git add -A`. A
+# committed keystore is not recoverable: rotating it orphans every installed copy.
+#
+# `.release/` is where docs/RELEASING.md puts one, together with the base64 GitHub
+# needs and the four `gh secret set` commands that carry the passwords — all four
+# files are secrets and none of them belongs in a commit.
+.release/
+*.jks
+*.keystore
+keystore.properties
+release.jks
+
+# IDE
+.idea/
+*.iml
+*.hprof
+
+# OS
+.DS_Store
+Thumbs.db

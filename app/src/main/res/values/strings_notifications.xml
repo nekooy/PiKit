@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_name">Agent</string>
+    <string name="notification_channel_description">Keeps the Pi agent running while PiKit is in the background.</string>
+    <string name="notification_agent_title">PiKit agent is running</string>
+    <string name="notification_agent_text">Tap to return to the conversation</string>
+    <string name="notification_stop">Stop</string>
+</resources>

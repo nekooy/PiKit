@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pikit_window_background">#FF0E1116</color>
+    <!--
+        The launcher icon is black with a white mark, so the window that appears
+        before Compose draws matches the icon instead of flashing a lighter grey.
+    -->
+    <color name="ic_launcher_background">#FF000000</color>
+</resources>
