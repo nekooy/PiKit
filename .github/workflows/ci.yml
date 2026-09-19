@@ -1,26 +1,32 @@
 # Everything that can be checked without building the runtime image.
 #
-# The split is deliberate. Assembling an image downloads ~200 MB from upstream
-# (the Termux bootstrap, its .deb dependencies, the npm packages for pi) and takes
-# tens of minutes per ABI, so it happens in `release.yml` — where the APK needs it
-# — and not on every push. What is here is the part that catches a broken change in
-# a few minutes: the JVM suites, and the tools that check what Gradle cannot see.
+# **Dispatch-only on purpose.** Everything below is also a step of
+# `tools/build-apks.py`, which is the one command for a full local build, so an
+# ordinary change is verified by running that. A dispatch is asked for when the
+# answer has to come from a clean machine: a workflow edit, a toolchain bump, a
+# checker's own inputs. `push:` and `pull_request:` (each filtered to `main`) used to
+# be here, which spent a full run on every push and every pull request — a one-line
+# README edit did not deserve one. The bulk of that traffic is gone anyway:
+# Dependabot's version updates were switched off after they produced eleven pull
+# requests in the repository's first week (docs/MAINTAINING.md). Nothing in this
+# repository parses YAML, so a change to a workflow is verified only by dispatching it
+# (AGENTS.md).
+#
+# The split from `release.yml` is deliberate. Assembling an image downloads ~200 MB
+# from upstream (the Termux bootstrap, its .deb dependencies, the npm packages for
+# pi) and takes tens of minutes per ABI, so it happens in `release.yml` — where the
+# APK needs it — and not here. What is here finishes in a few minutes: the JVM
+# suites, and the tools that check what Gradle cannot see.
 #
 # The two things the tests need on the machine are named in docs/BUILDING.md:
 # JDK 17–23, and the NDK version `terminal-emulator/build.gradle.kts` pins.
 name: CI
 
 on:
-  push:
-    branches: [main]
-  # `branches: [main]` rather than every pull request: a run for a branch nobody will
-  # merge into main answers no question, and the repository's first week produced
-  # eleven pull-request runs from Dependabot alone.
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
-# A new push to the same branch makes the previous run's answer worthless.
+# A second dispatch on the same branch makes the first run's answer worthless: the
+# group is the branch, so dispatching `main` again cancels the `main` run in flight.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
