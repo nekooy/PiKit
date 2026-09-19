@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launcher glyph: the Pi mark, drawn as pixels.
+
+    This is the geometry of pi.dev's own logo (viewBox 800x800, two right-angle
+    polygons), scaled by 0.080. Everything is axis-aligned rectangles, which is
+    what gives it the pixel-face look at launcher size — the stem of the P, the
+    notch that forms the bowl, and the detached square that dots the i.
+
+    **The group's translation is what centres it, and it is not cosmetic.** The
+    mark is asymmetric: the bowl of the P ends at y 58.8 while the i's dot runs
+    down to y 77.6, so its bounding box is 37.6 wide by 37.6 tall with its centre
+    at (48.7, 58.8). The adaptive-icon viewport centres on (54, 54), so an
+    untranslated draw sits 5.3 units left and 4.8 units low — visible on a
+    launcher, where the mask makes the offset obvious. Translating the whole
+    group by (+5.3, -4.8) puts the bounding box exactly on the centre; the raw
+    path data is left alone so it still matches the source geometry one-to-one
+    and can be re-scaled without re-deriving it.
+
+    One path with evenOdd fill rather than two: the bowl of the P is a genuine
+    hole, and drawing it as a second filled path would leave a visible seam
+    wherever the two met on a low-density screen.
+
+    **White, on black, with no colour of its own.** The mark was pi's amber until
+    it was looked at on a launcher rather than in the source: at 48–64dp a single
+    flat shape is what reads, the icons around it are monochrome, and an amber
+    glyph is then the only tinted thing in the row. White has a second effect —
+    the themed-icon layer (`ic_launcher_monochrome`, which the system recolours)
+    is now the same picture as this one, so the icon is recognisable in either
+    mode. The amber is not gone, it moved to where it is an interface accent
+    rather than a logo: `ic_pi_mark.xml` and the setup screen's progress bar.
+
+    `tools/render-icon.py` derives the README's copy of this icon from this file
+    and `values/colors.xml`, and `tools/build-apks.py` runs it in check mode, so
+    the picture at the top of the README cannot drift away from the app's icon.
+    (No double hyphen in an XML comment: the check flag's name is spelled out in
+    that script's own docstring instead, because `aapt2` refuses a comment
+    containing one — which is how this paragraph was written the second time.)
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="5.3" android:translateY="-4.8">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M29.9,40 L58.1,40 L58.1,58.8 L48.7,58.8 L48.7,68.2 L39.3,68.2 L39.3,77.6 L29.9,77.6 Z M39.3,49.4 L39.3,58.8 L48.7,58.8 L48.7,49.4 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M58.1,58.8 L67.5,58.8 L67.5,77.6 L58.1,77.6 Z" />
+    </group>
+</vector>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The confirmation mark: Lucide's `check`, shown in the copy mark's place for a moment.
+
+    Lucide rather than the copy mark's own source, because a check is a *stroke*: `ic_copy.xml` is
+    drawn with frames about 1.5dp thick at the size the app draws it, and Font Awesome's filled
+    tick beside it was visibly heavier than the glyph it replaced. Lucide's `check` carries the same
+    stroke weight (2 of 24 units) as the sheets' walls.
+
+    ## Provenance
+
+    Lucide's own single path, with its stroke weight and its round caps and joins:
+
+        M20 6 9 17l-5-5
+
+    Source: https://github.com/lucide-icons/lucide (ISC).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:pathData="M20 6 L9 17 L4 12"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

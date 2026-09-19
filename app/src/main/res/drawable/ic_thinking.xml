@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The thinking mark: a brain, from Lucide's `brain`.
+
+    Lucide is ISC-licensed and draws on the same 24dp grid as the Material set this
+    app uses everywhere else, so the mark sits beside them without a second visual
+    language. The path data is copied verbatim; only the stroke colour differs, and
+    `Icon`'s own tint replaces that anyway.
+
+    Why a mark of its own rather than a Material glyph: this row used
+    `Icons.Filled.Psychology`, which is a *head with a gear in it* — a picture of a
+    person, not of the act of thinking, and at 15dp the head reads as a blob. The
+    reference the reader pointed at uses a brain, Material has no brain, and the
+    same reasoning that produced `ic_model.xml` applies here: one custom vector
+    costs less than a glyph that says the wrong thing.
+
+    Lucide's own `brain` also carries six short hair-line ticks (at the crown, the
+    temples and the jaw). They are omitted: at 15dp they are sub-pixel, and what is
+    left — two halves and the seam between them — is the shape that reads.
+
+    Stroked rather than filled, the same way `ic_model.xml` is: Material's own
+    outlined weight is 2/24 too, and a filled brain at 15dp is one solid blob.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+</vector>

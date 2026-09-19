@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The command mark: Lucide's `command`, the ⌘ glyph.
+
+    Chosen by the reader from a sheet of twenty candidates across Tabler, Lucide,
+    Bootstrap and Phosphor, rendered at the sizes the app actually draws — 21dp, 55dp and
+    64dp. It is a different answer from the `</>` this started as, and a better one for a
+    control that opens a list of commands: `</>` says "code", the looped square says
+    "command", and it is a single closed figure so there is no third stroke to read as a
+    blob at 21dp.
+
+    ## Provenance
+
+    Lucide's own single path, with its stroke weight and its round caps and joins:
+
+        M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3
+
+    Written out below as absolute coordinates, which is the form a vector drawable takes.
+    One path, four lines and four 3-unit arcs: the four corner loops of the glyph.
+
+    ## Why this file is stroked and not filled
+
+    An earlier round converted this glyph to filled polygons, because three shipped builds
+    drew a *missing* stroke. That cause was found and was unrelated: the drawable failed to
+    compile — an XML comment held a double hyphen, which XML forbids — so the resource never
+    reached the APK and a cached older one was installed. With that fixed,
+    `android:strokeWidth` draws exactly as the library intends, and the library's own
+    round caps and joins are what make the corner loops look right.
+
+    Source: https://github.com/lucide-icons/lucide (ISC).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- One closed figure: down the stem, round the four corner loops, and back. -->
+    <path
+        android:pathData="M15 6 L15 18 A3 3 0 1 0 18 15 L6 15 A3 3 0 1 0 9 18 L9 6 A3 3 0 1 0 6 9 L18 9 A3 3 0 1 0 15 6"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

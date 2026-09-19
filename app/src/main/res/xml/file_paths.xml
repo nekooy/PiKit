@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What the Files tab may hand to another app.
+
+    Two roots, and both are load bearing:
+
+      * `files-path` is the app's private `filesDir`, because that is where the
+        bundled runtime puts `$HOME` and `$PREFIX`; the browser is rooted at
+        `$HOME`, so without this root "Open with" would have nothing to expose.
+      * `external-path` is `/storage/emulated/0`, because `~/storage/*` is a
+        *symlink* to the user's real shared storage. `FileProvider.getUriForFile`
+        compares `file.getCanonicalPath()` — symlinks resolved — against these
+        roots, so a path that reads as `…/files/home/storage/shared/Download/a.txt`
+        arrives there as `/storage/emulated/0/Download/a.txt` and matched nothing.
+        The call threw `IllegalArgumentException: Failed to find configured root`,
+        the app had wrapped it in `runCatching { … }.getOrNull() ?: return`, and the
+        tap did nothing at all on screen. That is the report: "with shared storage
+        on, tapping Open with on a file in it does nothing".
+
+    `external-path` resolves through `Environment.getExternalStorageDirectory()`,
+    which is the primary volume. pi's own `~/storage` farm only ever links that
+    volume, so a path outside these roots is one the browser cannot reach anyway.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="pikit_root" path="." />
+    <cache-path name="pikit_cache" path="." />
+    <external-path name="pikit_shared" path="." />
+</paths>

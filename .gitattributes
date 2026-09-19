@@ -1,0 +1,25 @@
+# The repository stores text with LF. This matters here rather than being a
+# preference: the runtime image is assembled from POSIX shell scripts and the
+# `gradlew` launcher, and a CRLF in either breaks at execution time — the shell
+# reports `\r: command not found`, and Gradle's own wrapper refuses to start.
+#
+# `eol=lf` on the checkout side too, so a clone on Windows does not rewrite them.
+* text=auto eol=lf
+
+# Windows batch files are the exception: cmd.exe wants CRLF.
+*.bat text eol=crlf
+
+# Anything that is not text must never be line-ending converted. Listed
+# explicitly because `text=auto` guesses from content, and it guesses wrong on
+# small binaries often enough to corrupt them.
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.zip binary
+*.jar binary
+*.aar binary
+*.so binary
+*.apk binary
+*.deb binary
+*.ttf binary

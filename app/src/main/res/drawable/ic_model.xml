@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The model mark: three stacked layers, from Lucide's `layers-3`.
+
+    Lucide is ISC-licensed and its icons are drawn on the same 24dp grid as the
+    Material set this app uses everywhere else, so the mark sits beside them
+    without a second visual language. The path data is copied verbatim; only the
+    stroke colour differs, and `Icon`'s own tint replaces that anyway.
+
+    Why a mark of its own rather than a Material glyph: the model places used to
+    borrow `SmartToy` — a robot head, which is a picture of an assistant rather
+    than of the thing being chosen — and `Hub`, which at 15dp on the composer's
+    chip reads as a five-pointed star. A model is a stack of cards, and the app
+    draws the same stack in the settings row, in the profile's model list and on
+    the composer's chip.
+
+    Stroked rather than filled, which is the one place this app mixes the two
+    styles: Material's own outlined weight is 2/24 too, and three solid cards at
+    15dp merge into one block.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="m6.08 9.5l-3.5 1.6a1 1 0 0 0 0 1.81l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9a1 1 0 0 0 0-1.83l-3.5-1.59" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="m6.08 14.5l-3.5 1.6a1 1 0 0 0 0 1.81l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9a1 1 0 0 0 0-1.83l-3.5-1.59" />
+</vector>

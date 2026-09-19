@@ -1,0 +1,395 @@
+# Publishes a release, by hand, from a tag-worthy commit.
+#
+# This is the only workflow that builds an APK, because it is the only one that can
+# afford to: the runtime image is not committed (~285 MB of binaries per ABI), so it
+# is assembled here from upstream — the Termux bootstrap, its .deb dependencies and
+# the npm packages for pi, roughly 200 MB of downloads — and then the two release
+# APKs are built, four Gradle invocations in all. Budget around an hour cold; the
+# `.runtime-build/cache` cache below is what keeps a re-run from paying the download
+# again.
+#
+# The version is not an input. It is `pikit.versionName`/`pikit.versionCode` in
+# `gradle.properties` — one place, bumped in the commit being released — and this
+# workflow refuses a version whose tag already exists. See docs/RELEASING.md.
+#
+# It publishes: the release it creates is public the moment the run ends, and the
+# description is edited afterwards. A draft was tried and removed — see the comment
+# on the publishing job — because a draft is invisible to the app's own update check
+# until someone presses "Publish", and this repository has no second reviewer to
+# press it. Nothing else commits, tags or branches on its own; the tag is created by
+# `gh release create` in the publishing job and by nothing else.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_debug_signing:
+        description: >-
+          Publish even though no release keystore is configured. The APKs are then
+          signed with the debug key and can never be upgraded by a properly signed
+          release. Only for a build that is not for real users.
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# One release at a time, and never cancelled. A `ci.yml`-style
+# `cancel-in-progress` would be actively wrong here: the run it would cancel is
+# the one that has already spent an hour on the runtime image and may be halfway
+# through publishing. This is the guard against a double dispatch — two runs
+# racing to create the same tag, or to attach the same assets to it — rather than
+# a way to save work.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Must track `ndkVersion` in terminal-emulator/build.gradle.kts.
+  NDK_VERSION: "29.0.14033849"
+  # One spelling for the build-tools the workflow installs and the apksigner it
+  # then runs out of them. `ci.yml` carries the same pair.
+  BUILD_TOOLS_VERSION: "36.0.0"
+
+jobs:
+  release:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    # The build reads the repository and writes nothing to it, so its token stays
+    # read-only; the `publish` job below is the one that asks for more.
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # See ci.yml: the runner image's own SDK, and not `android-actions/setup-android`,
+      # whose `sdkmanager tools` step fails before anything else runs.
+      - name: Locate the Android SDK
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          test -d "$sdk" || { echo "::error::no Android SDK at $sdk"; exit 1; }
+          {
+            echo "ANDROID_HOME=$sdk"
+            echo "ANDROID_SDK_ROOT=$sdk"
+            echo "PATH=$sdk/cmdline-tools/latest/bin:$PATH"
+          } >> "$GITHUB_ENV"
+          echo "Using $sdk"
+
+      - name: Accept the SDK licences
+        run: yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Install the SDK components and the NDK
+        run: sdkmanager --install "platforms;android-36" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The image builder's only third-party module; docs/BUILDING.md names it as a
+      # prerequisite for exactly this reason.
+      - name: Install zstandard
+        run: python -m pip install zstandard
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # See ci.yml: a checkout made on Windows has no executable bit on `gradlew`.
+      - name: Restore the wrapper's executable bit
+        run: chmod +x gradlew
+
+      - name: Read the version
+        id: version
+        run: |
+          name=$(sed -n 's/^pikit\.versionName=//p' gradle.properties)
+          code=$(sed -n 's/^pikit\.versionCode=//p' gradle.properties)
+          test -n "$name" -a -n "$code" || {
+            echo "::error::gradle.properties has no pikit.versionName/pikit.versionCode"
+            exit 1
+          }
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Releasing PiKit $name (versionCode $code)"
+
+      # A release is the tip of `main` or it is not a release. The workflow can be
+      # dispatched from any branch, and without this a tag would be cut on a commit
+      # nobody reviewed — which is the one mistake here that cannot be undone by
+      # pushing again, because the tag is what the in-app update check compares
+      # against.
+      - name: Refuse a release from anywhere but main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::This was dispatched from $GITHUB_REF. Releases are cut from refs/heads/main — switch to main (or merge first) and run it again."
+            exit 1
+          fi
+
+      - name: Refuse a version that is already tagged
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.version.outputs.name }}" >/dev/null 2>&1; then
+            echo "::error::v${{ steps.version.outputs.name }} is already tagged. Bump pikit.versionName and pikit.versionCode in gradle.properties in a new commit."
+            exit 1
+          fi
+
+      # A tag is not the only trace of a release, and the check above cannot see the
+      # other one: a hand-made draft carries a placeholder slug
+      # (`releases/tag/untagged-…`) and no tag ref at all, because the tag is created
+      # on `target_commitish` when the draft is *published* — measured on a probe
+      # draft, whose `refs/tags/v0.0.0-drafttest` was a 404. This workflow no longer
+      # creates drafts (see the publish job), but a person can, and two releases with
+      # the same tag name are accepted by the API, so a version that exists as a draft
+      # would otherwise be built all over again and the two would race to create the
+      # tag.
+      #
+      # `gh release view` rather than `GET /releases/tags/…`, which answers 404 for a
+      # draft. Whether this job's token can see one is the open question: draft releases
+      # are returned only to a token with push access, and this job asks for
+      # `contents: read`. A token that cannot see drafts makes this check pass silently,
+      # which is why the publish job — which holds `contents: write` — repeats it as a
+      # hard refusal before it creates anything.
+      - name: Refuse a version that already has a release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.name }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::a release for v${{ steps.version.outputs.name }} already exists, draft or published. Finish it in the browser, or delete it ('gh release delete v${{ steps.version.outputs.name }} --cleanup-tag --yes') before cutting this version again."
+            exit 1
+          fi
+
+      # The keystore arrives as one base64 secret plus three passwords, never as a
+      # file in the repository. The four properties are exported here under Gradle's
+      # own `ORG_GRADLE_PROJECT_` names, and `tools/build-apks.py` copies whichever of
+      # them it finds into `-P` arguments: the dotted environment form does *not*
+      # become a Gradle project property on this runner (the first release run exported
+      # all four, the build step listed them in its environment, and the APK still came
+      # out signed with a key Gradle generated on the spot). docs/BUILDING.md → Signing
+      # has the four names and the keytool command that makes the file.
+      - name: Write the signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          # Kept for the signing check below, because a shell cannot read a variable
+          # whose name contains a dot (`ORG_GRADLE_PROJECT_pikit.keystore.…` is set
+          # for Gradle's sake, not for bash's).
+          printf '%s' "$KEYSTORE_STORE_PASSWORD" > "$RUNNER_TEMP/store-password"
+          {
+            echo "ORG_GRADLE_PROJECT_pikit.keystore.file=$RUNNER_TEMP/release.jks"
+            echo "ORG_GRADLE_PROJECT_pikit.keystore.alias=$KEYSTORE_ALIAS"
+            echo "ORG_GRADLE_PROJECT_pikit.keystore.storePassword=$KEYSTORE_STORE_PASSWORD"
+            echo "ORG_GRADLE_PROJECT_pikit.keystore.keyPassword=$KEYSTORE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to publish a debug-signed release
+        if: steps.signing.outputs.configured == 'false' && inputs.allow_debug_signing != true
+        run: |
+          echo "::error::No release keystore is configured (secrets.KEYSTORE_BASE64). A release signed with the debug key installs fine and can never be upgraded by a properly signed one, because the signatures differ — see docs/RELEASING.md. Re-run with 'allow debug signing' if this build is not for real users."
+          exit 1
+
+      - name: Cache the runtime image's downloads
+        uses: actions/cache@v6
+        with:
+          path: .runtime-build/cache
+          # Keyed on the content of the scripts, not only their paths, so an edit that
+          # changes what they *download* — a new `PI_VERSION`, a new `pkg`, a new
+          # `IMAGE_INPUTS` entry — produces a miss. The `restore-keys` below then
+          # brings back the previous key's downloads, which is the point rather than a
+          # leak: upstream tarballs are immutable, the cache manifest records what it
+          # holds and which version, and `build-runtime-image.py` re-fetches only what
+          # moved. Without the content hash a changed script would hit the old key and
+          # the cache-manifest check would be the only thing standing between the build
+          # and a tree the script no longer describes.
+          key: runtime-${{ runner.os }}-${{ hashFiles('tools/build-runtime-image.py', 'tools/prefix_patch.py') }}
+          restore-keys: |
+            runtime-${{ runner.os }}-
+
+      # `--release-only` still runs every test and checker first: a release that has
+      # not been through them is a release nobody has verified. It also assembles the
+      # runtime images, which is where the downloads above happen.
+      - name: Test, assemble the images and build the release APKs
+        run: python tools/build-apks.py --release-only
+
+      # The four properties reach Gradle through the `-P` arguments that
+      # `tools/build-apks.py` adds, and one that arrived empty would make the build fall
+      # back to the debug key *and succeed* — the single failure this workflow exists to
+      # prevent, and the one nobody notices until someone tries to upgrade. So the APKs
+      # are checked against the keystore's own fingerprint rather than trusted.
+      - name: Check the APKs carry the release key
+        if: steps.signing.outputs.configured == 'true'
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          # The build-tools the workflow installed, not a version guessed here: this
+          # step used to name `35.0.0` while the install step names `36.0.0`, and it
+          # worked only because the runner image happened to carry both. A version the
+          # workflow did not install is a step that fails the day the image changes.
+          APKSIGNER="$SDK/build-tools/$BUILD_TOOLS_VERSION/apksigner"
+          test -x "$APKSIGNER" || { echo "::error::no apksigner at $APKSIGNER"; exit 1; }
+          expected=$(keytool -J-Duser.language=en -list -v \
+              -keystore "$RUNNER_TEMP/release.jks" \
+              -storepass "$(cat "$RUNNER_TEMP/store-password")" \
+            | sed -n 's/.*SHA256: //p' | head -1 | tr -d ':' | tr 'A-F' 'a-f')
+          test -n "$expected" || { echo "::error::could not read the keystore's fingerprint"; exit 1; }
+          for apk in app/build/outputs/apk/*/release/*.apk; do
+            actual=$("$APKSIGNER" verify --print-certs "$apk" \
+              | sed -n 's/.*SHA-256 digest: //p' | head -1 | tr 'A-F' 'a-f')
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$apk is not signed with the release key: it carries $actual, the keystore is $expected. Do not publish this build."
+              exit 1
+            fi
+            echo "$apk carries the release key"
+          done
+
+      # The APKs are named for the release, not for Gradle. `app-arm64-release.apk` says nothing
+      # about what it is or which version it belongs to, and that name is what a reader sees on
+      # the release page and in their downloads folder — measured before this step existed, and
+      # the reason for the report "你gh发布apk的文件名带不带PiKit和版本". `PiKit-0.1.0-arm64.apk`
+      # says both, and sorts beside the checksum file it belongs to.
+      #
+      # Renamed **in place** rather than copied: the checksum step, the artifact and the publishing
+      # job all work off `*/release/*.apk` by glob, so one directory keeps one candidate for "the
+      # APK". Renaming happens after the fingerprint check, because that check should name the file
+      # the build produced if it fails.
+      - name: Name the APKs for the release
+        run: |
+          version="${{ steps.version.outputs.name }}"
+          for apk in app/build/outputs/apk/*/release/*.apk; do
+            abi="$(basename "$(dirname "$(dirname "$apk")")")"
+            mv "$apk" "$(dirname "$apk")/PiKit-$version-$abi.apk"
+          done
+          ls -l app/build/outputs/apk/*/release/
+
+      - name: Checksums
+        run: |
+          # Basenames, so that `sha256sum -c SHA256SUMS` works in the folder someone
+          # downloaded the two APKs into. The paths inside the build tree would only
+          # be checkable by recreating that tree.
+          #
+          # `*/release/*.apk` and not `*/*/release/*.apk`: the layout under
+          # `outputs/apk` is `<flavour>/<buildType>/`. The extra level made the glob
+          # match nothing, `sha256sum` was handed the literal pattern, and the file that
+          # reached the release page was eight bytes — so the two checks below refuse to
+          # hand over anything that is not a line per APK.
+          (
+            cd app/build/outputs/apk
+            for apk in */release/*.apk; do
+              printf '%s  %s\n' "$(sha256sum "$apk" | cut -d' ' -f1)" "$(basename "$apk")"
+            done
+          ) > SHA256SUMS
+          cat SHA256SUMS
+          grep -qE '^[0-9a-f]{64}  [^ ]+\.apk$' SHA256SUMS || {
+            echo "::error::SHA256SUMS has no checksum line in it — the glob matched nothing, and this file is about to be published."
+            exit 1
+          }
+
+      - name: Summary
+        run: |
+          {
+            echo "## PiKit ${{ steps.version.outputs.name }} (versionCode ${{ steps.version.outputs.code }})"
+            echo
+            echo "- signed with: ${{ steps.signing.outputs.configured == 'true' && 'the release keystore' || '**the debug key**' }}"
+            echo "- runtime image revisions:"
+            for file in app/src/*/assets/runtime/*/revision.txt; do
+              echo "  - \`$(cat "$file")\`"
+            done
+            echo
+            cat SHA256SUMS
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the APKs for the publishing job, and for a failed one
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: PiKit-${{ steps.version.outputs.name }}-apks
+          path: |
+            app/build/outputs/apk/*/release/*.apk
+            SHA256SUMS
+          if-no-files-found: warn
+
+  # Publishing is its own job, and that is not tidiness.
+  #
+  # `gh release create` answered `HTTP 403: Resource not accessible by integration` when
+  # it ran in the build job — which asked for `contents: write` at both the workflow and
+  # the job level, had the token in its environment, and had built the APKs it was about
+  # to attach. The same command, with the same permission, creates a release in a job of
+  # its own (measured in `ci.yml`, on both a push and a dispatch run). Whatever narrows
+  # the token over that job's twenty-odd steps, this job has none of them: it downloads
+  # two files and publishes them, so it is also the part that can be re-run alone
+  # ("Re-run failed jobs") without rebuilding anything.
+  publish:
+    name: Publish the release
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download the APKs the build produced
+        uses: actions/download-artifact@v8
+        with:
+          name: PiKit-${{ needs.release.outputs.version }}-apks
+
+      # The release is created published, and the notes are written afterwards in the
+      # browser. That is a reversal, and worth recording, because the draft was there
+      # for a reason.
+      #
+      # A draft was the pause between the build and the public release: the notes could
+      # be written where they could be read, the assets checked, and nothing reached the
+      # app's update check — which reads `releases/latest`, and a draft is not one —
+      # until "Publish release" was pressed. The cost turned out to be the pause itself:
+      # a release that waits for a person is a release the in-app update check cannot see
+      # for as long as that person is away, and `gh release view` answered 404 for a
+      # draft, so the *next* dispatch could not tell "already built, waiting to be
+      # published" from "never built" — the two checks in the build job can only see a
+      # draft if their token has push access. Publishing in the same run removes both
+      # problems: `v<version>` exists the moment the job finishes, the update check finds
+      # it, and a second dispatch is refused by the tag it can actually see. The notes are
+      # edited afterwards, which is what the maintainer was doing anyway.
+      #
+      # `--generate-notes` stays: it can only list merged pull requests, so on a
+      # repository whose history is commits pushed straight to `main` the body it produces
+      # is the single "Full Changelog" line — which is a true sentence, and a better
+      # starting point to edit than an empty body.
+      - name: Refuse to publish over an existing release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ needs.release.outputs.version }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::a release for v${{ needs.release.outputs.version }} already exists and this build would sit beside it with the same tag name. Delete it ('gh release delete v${{ needs.release.outputs.version }} --cleanup-tag --yes') and re-run this job, or bump pikit.versionName."
+            exit 1
+          fi
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -l
+          gh release create "v${{ needs.release.outputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "PiKit ${{ needs.release.outputs.version }}" \
+            --generate-notes \
+            app/build/outputs/apk/arm64/release/PiKit-${{ needs.release.outputs.version }}-arm64.apk \
+            app/build/outputs/apk/x64/release/PiKit-${{ needs.release.outputs.version }}-x64.apk \
+            SHA256SUMS
