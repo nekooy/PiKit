@@ -65,7 +65,7 @@ Model & provider → Add a profile**.
 | Models | press **Fetch models** and tap one, or type an id; tap a row to make it the answering model |
 | Save | the profile goes live and the agent restarts |
 
-The first launch unpacks about 200 MB and asks
+The first launch unpacks about 285 MB and asks
 once about file access. **Declining is fine**;
 **Settings → Shared storage** brings the offer
 back.
