@@ -20,7 +20,8 @@ Kotlin and Jetpack Compose over a vendored Termux terminal, and no WebView anywh
 - **Chat on pi's RPC protocol.** A finished turn folds to one line
   (`Worked 47s · 5 steps`) and reopens on a tap; thinking level, model, context use and
   cache hits are chips above the input, and both switches apply without restarting the
-  agent. The app adds `!command`, `/new`, `/compact` and `/stop`, and nothing else.
+  agent. Beyond that it adds `!command` and seven slash commands — `/new`, `/compact`,
+  `/stop`, `/clone`, `/export`, `/model`, `/clear` — and nothing else.
 - **A terminal and a file browser.** PTY sessions that survive a tab switch, the keys a
   phone keyboard lacks, and a read-only view of `$HOME`.
 - **Providers on pi's terms.** The 32 providers pi's own key table knows, plus a custom
@@ -45,7 +46,7 @@ APK per CPU architecture, about 107 MB, and no Play Store listing by design.
 harmless: the app reports that the build carries no image for the device instead of
 starting. Verify with `sha256sum -c SHA256SUMS`, install by tapping the file or with
 `adb install PiKit-<version>-arm64.apk`, and give the first launch a minute — it unpacks the
-runtime (~110 MB), then asks about notifications and "all files access" (needed only for
+runtime (about 285 MB), then asks about notifications and "all files access" (needed only for
 **Settings → Shared storage**). **Settings → Model & provider** takes an API key, or
 `pi /login` in the Terminal tab for a subscription. Updating is manual too: **About PiKit
 → Check for updates** asks GitHub when you tap it, and a newer APK installs over the old
@@ -61,25 +62,23 @@ whole story.
 python tools/build-apks.py    # checks, tests, then all four APKs
 ```
 
-The runtime images are generated rather than committed (~285 MB per ABI), so that
-command assembles a missing or stale one on the way.
+The runtime images are generated rather than committed (~100 MB of archives per ABI,
+~285 MB unpacked), so that command assembles a missing or stale one on the way.
 
 ## Documentation
 
 [docs/README.md](docs/README.md) indexes every document. These are the ones a reader
 usually wants:
 
-| Document | What it is |
-| --- | --- |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The map of the design decisions and the constraints behind them, chapter by chapter |
-| [BUILDING.md](docs/BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device |
-| [VERIFICATION.md](docs/VERIFICATION.md) | What has actually been exercised, on which emulator and which phone, and what has not |
-| [RELEASING.md](docs/RELEASING.md) | The version, the tag, the workflows, and the signing that has to happen first |
-| [MAINTAINING.md](docs/MAINTAINING.md) | The recurring chores: upstream pi, packages, dependencies, the device pass |
-| [LICENSING.md](docs/LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named |
-| [AGENTS.md](AGENTS.md) | Commands, hard constraints and commit conventions for a change to this repository |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose a change, and where the rules that matter live |
-| [SECURITY.md](SECURITY.md) | How to report a vulnerability, what is in scope, and what goes upstream instead |
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — the design decisions and the constraints behind them.
+- [BUILDING.md](docs/BUILDING.md) — prerequisites, the image builder, artifacts, signing, the device workflow.
+- [VERIFICATION.md](docs/VERIFICATION.md) — what has been exercised, on what, and what has not.
+- [RELEASING.md](docs/RELEASING.md) — the version, the tag, and the signing that comes first.
+- [MAINTAINING.md](docs/MAINTAINING.md) — the recurring chores: upstream pi, packages, dependencies.
+- [LICENSING.md](docs/LICENSING.md) — why GPLv3, what the APK carries, where the credits are.
+- [AGENTS.md](AGENTS.md) — commands, hard constraints and commit conventions.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to propose a change, and where the rules live.
+- [SECURITY.md](SECURITY.md) — how to report a vulnerability, and what is in scope.
 
 ## License
 
@@ -92,11 +91,12 @@ source available, `tools/` included. The pi agent itself is MIT.
 
 PiKit is mostly other people's work. The three it is built on:
 
-| Component | Licence | From |
-| --- | --- | --- |
-| Termux environment and terminal | GPLv3 | [termux/termux-packages](https://github.com/termux/termux-packages), [termux/termux-app](https://github.com/termux/termux-app) |
-| pi, the agent (`@earendil-works/pi-coding-agent`) | MIT | [pi.dev](https://pi.dev) |
-| `pi-web-access` by Nico Bailon (search, page reading, PDF extraction) | MIT | [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access) |
+- **Termux environment and terminal** — GPLv3, from
+  [termux/termux-packages](https://github.com/termux/termux-packages) and
+  [termux/termux-app](https://github.com/termux/termux-app).
+- **pi, the agent** (`@earendil-works/pi-coding-agent`) — MIT, [pi.dev](https://pi.dev).
+- **`pi-web-access`** by Nico Bailon (search, page reading, PDF extraction) — MIT,
+  [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access).
 
 Everything else — Node.js and the bundled command-line tools, the Android libraries, the
 formula renderer, the marks — is listed with its licence in
