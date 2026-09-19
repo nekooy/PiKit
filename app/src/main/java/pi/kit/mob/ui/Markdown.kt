@@ -219,7 +219,7 @@ internal enum class MdAlign { Start, Center, End }
  * 150-formula reply fills its cache in about 50 ms; what is left of a slow first frame is the
  * layout of the blocks themselves — a `Text`, a `Row`, a divider — and Compose has to measure all
  * of them, because a `Column` here cannot know which are off screen. That is the `Column` note
- * above, and the numbers are in `docs/architecture/12-markdown-and-math.md`.
+ * above, and the numbers are in ARCHITECTURE §12.
  */
 /**
  * A reply, block by block.

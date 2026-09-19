@@ -3,9 +3,7 @@
 This is the map. The reasoning itself lives under [`architecture/`](architecture/),
 one file per topic — a chapter that outgrew a single topic is several files sharing
 its § number — because most of the shape of this project is forced by two external
-systems that do not bend, the Termux package format and Pi's RPC protocol, and a
-single 2,700-line document is one nobody reads before changing the thing it
-describes.
+systems that do not bend: the Termux package format and Pi's RPC protocol.
 
 Chapters 1–6 are those constraints. 7–9 are the interface, where several designs
 were tried and rejected and the number that settled each one is recorded. 10–12 are
@@ -32,20 +30,20 @@ of everything under `docs/`.
 | 9 | [Pages, and which moves are one](architecture/09-pages-and-navigation.md) | Back behaviour, the flattened settings root, sheets, dividers, and forms that ask before leaving |
 | 10 | [Process and state ownership](architecture/10-process-and-state.md) | Who owns the agent process, the session and the saved state |
 | 11 | [Vendored code](architecture/11-vendored-code.md) | The two Termux modules, why only those two, and their licence |
-| 12 | [What the model writes](architecture/12-markdown-and-math.md) | Markdown, mathematics and tables, and the test that could not catch a bug |
+| 12 | [What the model writes](architecture/12-markdown-and-math.md) | The Markdown half: what the parser accepts, the inline walk, and the test that could not catch a bug |
+| 12 | [Mathematics](architecture/12-mathematics.md) | Why the renderer is a library, how a formula's line box is built, and every measurement that chose it |
+| 12 | [Tables, display formulas, and the marks](architecture/12-display-and-marks.md) | Table layout, display formulas as paragraphs, and the glyphs the reader chose |
 
 ## How to read it
 
-**Read the chapter, not the code first.** Every file in `app/src/main/java` that
-depends on a non-obvious decision names the chapter in a comment, and several name
-the design that was rejected with the measurement that rejected it. Numbers here are
-measurements — node bounds from `uiautomator`, window frames, byte counts — rather
-than estimates, and they are the reason a rejected design stays written down
-instead of being deleted with the code.
+**Read the chapter, not the code first.** The files in `app/src/main/java` that turn on
+a non-obvious decision name the chapter in a comment (`ARCHITECTURE §12` and the like),
+and several name the design that was rejected with the measurement that rejected it.
+Numbers here are measurements — node bounds from `uiautomator`, window frames, byte
+counts — rather than estimates.
 
-**When a design is removed, its reasoning moves here.** It does not get deleted with
-the code: the next person to try it should find out why it failed without repeating
-the afternoon. That rule, and the rest of the conventions, is in
+**When a design is removed, its reasoning moves here**, so the next person does not
+repeat the afternoon; that rule and the rest of the conventions are in
 [AGENTS.md](../AGENTS.md).
 
 **A chapter that outgrows its file gets split, not shortened.** The index above is

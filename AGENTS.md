@@ -9,30 +9,29 @@ the index of every document. This file is the practical part.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 375 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 377 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
 
-There is no `testDebugUnitTest`: the ABI is a product flavor, so the task name
-carries it. APKs land in `app/build/outputs/apk/<flavor>/debug/`. Prerequisites,
+There is no `:app:testDebugUnitTest`: the ABI is a product flavor, so that task's name
+carries it. (`:terminal-emulator:testDebugUnitTest` exists — the vendored VT parser is
+its own module and has no flavor.) APKs land in `app/build/outputs/apk/<flavor>/debug/`. Prerequisites,
 the image builder, signing and the device workflow are in
 [docs/BUILDING.md](docs/BUILDING.md). For anything layout-related, measure rather
-than look: `uiautomator dump` gives exact node bounds, which is how the layout
-claims in this repo were settled.
+than look: `uiautomator dump` gives exact node bounds.
 
 **`tools/build-apks.py` enumerates the build by hand, so a change that adds
 something it lists must update it in the same change.** It is the one command the
 README, `docs/BUILDING.md` and this file all point at, and a list it does not know
-about does not fail — it goes missing, which is how a broken APK gets handed over:
+about does not fail — it goes missing:
 
 - a new Gradle test task or module → the task list in `run_tests()`;
 - a new standalone checker under `tools/` → the `checks` list there, which is also
   what prints its one-line verdict (and which skips itself when what the checker
   needs is absent, as the relocator check does without the `.deb` cache). The one
   exception is a checker that reads an **APK**: `checks` runs before anything is
-  packaged, so `check-release-math.py` is called by `main()` after `build_apks()`
-  instead, and a checker of that kind belongs there rather than in the list;
+  packaged, so `check-release-math.py` is called by `main()` after `build_apks()`;
 - a new ABI or flavour → `VARIANTS` and `ABI_DIRS`, and `build-runtime-image.py`
   with them, because the assets a flavour packages are that script's output;
 - a new file the runtime image is built from → `IMAGE_INPUTS` there **and** the
@@ -42,9 +41,8 @@ about does not fail — it goes missing, which is how a broken APK gets handed o
   fails the build over a file it copies that the list does not name;
 - a new prerequisite — a runtime, an SDK component, a version floor →
   `check_prerequisites()`, so it is reported by name instead of exploding inside
-  Gradle (and `image_builder_prerequisites()`, for the two that only a machine
-  about to *build an image* needs, so a machine that already has the images is not
-  blocked by them);
+  Gradle (and `image_builder_prerequisites()` for the two only an image build
+  needs, so a machine that already has the images is not blocked by them);
 - a new flag → the parser in `main()` **and** the usage block in the module
   docstring, which `docs/BUILDING.md` mirrors as its flag table.
 
@@ -54,20 +52,18 @@ figure maintained by hand.
 
 ## Documentation — where a change goes
 
-The tree is meant to be read one file at a time, and the rules exist so that stays
-true. `docs/README.md` is the index of every document and the place the rules are
+`docs/README.md` is the index of every document and the place the rules are
 written out in full; this is the short version, because a change that adds or moves
 a document is exactly the change that forgets them.
 
 - **One topic per file.** `docs/ARCHITECTURE.md` is a map with a table of chapters,
   not a document; the reasoning itself is one file per chapter in
-  `docs/architecture/`. A reader who wants to know why the runtime image is rebuilt
-  should open one file, not search a 2,700-line one.
+  `docs/architecture/`.
 - **A file that outgrows its topic gets split, not trimmed.** Look at it again
   around 25 KB (roughly 400 lines); the fix is a new file, a row in `docs/README.md`
   and a row in `ARCHITECTURE.md`'s table — never a shorter version of the same
-  reasoning. §7 is four files and §6 is two, each part carrying the chapter's own
-  number, because a number survives a split and a file name does not.
+  reasoning. Each part of a split chapter carries the chapter's own number, because
+  a number survives a split and a file name does not.
 - **Cite chapters by § number, not by file name**, in code comments and in other
   documents: `ARCHITECTURE §4` resolves through the table in `ARCHITECTURE.md`, and
   that is what survives a split or a rename.
@@ -75,8 +71,7 @@ a document is exactly the change that forgets them.
   generator and the command that reproduces it; a checker under `tools/` — listed in
   `build-apks.py`'s `checks` — fails the build when the file and its source have
   drifted. `docs/assets/icon.svg` (from `tools/render-icon.py`, which reads the
-  launcher icon) is the only one today, and it is why the README cannot show an icon
-  the app does not have.
+  launcher icon) is the only one today.
 - **The index is updated in the same change as the file.** Nothing in the build
   parses Markdown, so a link to a file that no longer exists is found by a reader,
   not by CI.
@@ -106,34 +101,31 @@ a document is exactly the change that forgets them.
   that rots, so update all three in one change. The build-tools version is a
   workflow-only pair in the same shape — `BUILD_TOOLS_VERSION` in `ci.yml` and
   `release.yml` — because the release one installs them and then runs the
-  `apksigner` inside them; it used to be written out twice, and the signing check
-  ran a version the install step never named.
-- **`.github/workflows/ci.yml` is the fast half and `release.yml` is the manual
-  one.** CI runs the JVM suites and the checkers that need no runtime image;
-  `release.yml` assembles the images (hundreds of MB of upstream downloads), builds
-  both release APKs and publishes them, and refuses a tag that already exists. Both
-  are `workflow_dispatch`-able, which is how to test a change to a workflow —
-  nothing else verifies one. `release.yml` **publishes** the release it creates
-  (no draft) and is serialised against itself with `concurrency: release-…`,
-  never cancelled.
+  `apksigner` inside them.
+- **Both workflows are dispatch-only; `ci.yml` is the fast half and `release.yml` the
+  slow one.** `ci.yml` runs the JVM suites and the checkers that need no runtime image,
+  and is dispatched when the answer has to come from a clean machine; an ordinary
+  change is verified by `python tools/build-apks.py` instead. `release.yml` assembles
+  the images (hundreds of MB of upstream downloads), builds both release APKs and
+  publishes them, and refuses a tag that already exists. Dispatching is the only way
+  to test a change to a workflow — nothing else verifies one. `release.yml`
+  **publishes** the release it creates (no draft) and is serialised against itself
+  with `concurrency: release-…`, never cancelled.
 - **Nothing here commits, tags or branches on its own.** See *Commits* below.
 
 ## Hard constraints — do not "fix" these
 
 **The application id must be exactly 10 characters.** `pi.kit.mob`. The bundled
 Termux image is relocated from `com.termux` (also 10) by a length-preserving byte
-rewrite, so every ELF section offset and internal string length stays valid; a
-different length corrupts the binaries. `app/build.gradle.kts` and
+rewrite, so a different length corrupts the binaries. `app/build.gradle.kts` and
 `tools/prefix_patch.py` both enforce it.
 
 **`targetSdk` stays 28.** Android 10 refuses `exec()` of files in an app's own
 writable data directory from the `untrusted_app_29` SELinux domain up, and the whole
-runtime lives there. The boundary is AOSP's policy, not a precedent count:
-`private/untrusted_app_27.te` (`25 < targetSdkVersion <= 28`) grants
-`app_data_file:file execute_no_trans` — "The ability to call exec() on files in the apps
-home directories for targetApi 26, 27, and 28" — and `untrusted_app_29.te` does not. So
-28 is the **highest** value that runs, not merely the safest (ARCHITECTURE §1). The
-`ExpiredTargetSdkVersion` lint warning is expected.
+runtime lives there. AOSP's policy grants `app_data_file:file execute_no_trans` from
+`private/untrusted_app_27.te` (`25 < targetSdkVersion <= 28`) and not from
+`untrusted_app_29.te`, so 28 is the **highest** value that runs, not merely the safest
+(ARCHITECTURE §1). The `ExpiredTargetSdkVersion` lint warning is expected.
 
 **The prefix is an absolute path compiled into every binary.**
 `/data/data/pi.kit.mob/files/usr`. Nothing may move it, and
@@ -147,28 +139,22 @@ and it refuses any path outside the app's private data directory. Do not add
 
 **No vertically scrollable component may be measured with an unbounded height, and
 `MarkdownText` is the one that is shared.** It is a plain `Column`, and it has to stay
-one: it is drawn inside the transcript's `LazyColumn` (where a nested lazy list is
-legal) *and* inside `SettingsBody`'s `Column(verticalScroll)` (where a `LazyColumn`
-throws `IllegalStateException: Vertically scrollable component was measured with an
-infinity maximum height constraints`). The mistake has been made once already and it
-cost two crashes, so the rule is about the *call sites*, not about the composable: a
-shared composable's constraints are the union of everywhere it is drawn. Making the
-container lazy again is tempting for a 300-block reply — and it is still the crash.
+one: it is drawn inside the transcript's `LazyColumn` *and* inside `SettingsBody`'s
+`Column(verticalScroll)`, where a `LazyColumn` throws `IllegalStateException:
+Vertically scrollable component was measured with an infinity maximum height
+constraints`. The rule is about the *call sites*, not the composable: a shared
+composable's constraints are the union of everywhere it is drawn, so making the
+container lazy again — tempting for a 300-block reply — is still the crash.
 
 **A formula is typeset by JLaTeXMath, and its line box has to be built around it.** The renderer is
-`ru.noties:jlatexmath-android` (`MathCache.kt`'s `typeset`), and what a caller has to get right is
-the vertical placement. Compose places an inline placeholder by an *edge*, and which edge decides
-which side of the **line box** grows — read out of `PlaceholderSpan.getSize`: `AboveBaseline` grows
-only the ascent, `TextTop` only the descent, and **`TextCenter` grows both** by centring the box on
-the text's own centre. A formula needs room on both sides of the baseline, so `MathView.kt` declares
-the smallest box centred on the text's centre that contains the formula's ink and draws the drawable
-inside it with the offset that puts the formula's baseline on the line's. The text's ascent and
-descent come from a `TextMeasurer` measurement of the same style, because the sentence's font
-decides them and the renderer cannot know them.
-
-Two attempts are in `docs/VERIFICATION.md` and neither is worth repeating: drawn to fill a placeholder
-aligned by its bottom, every fraction floats above its line; drawn that way *and* pushed down by its
-depth, a tall formula overlaps the line above it, because the placeholder never grew the descent.
+`ru.noties:jlatexmath-android` (`MathCache.kt`'s `typeset`), and the vertical placement is the
+caller's job. Compose places an inline placeholder by an *edge*, and of the edges in
+`PlaceholderSpan.getSize` only **`TextCenter`** grows both the ascent and the descent — which is what
+a formula needs — so `MathView.kt` declares the smallest box centred on the text's centre that
+contains the formula's ink and draws the drawable inside it at the offset that puts the formula's
+baseline on the line's. The ascent and descent come from a `TextMeasurer` measurement of the same
+style, because the sentence's font decides them. Two failed attempts are in
+`docs/verification/2026-09-19-renderer-swap.md`, and ARCHITECTURE §12 has the full mechanism.
 
 **A formula the renderer refuses is rewritten before it is given up on.** `LatexCompat.kt` drops
 numbering (`\tag`, `\label`, `\nonumber`), unwraps decorations (`\cancel{x}` → `x`), renames
@@ -177,14 +163,13 @@ where it can. Only then does the formula fall back to being drawn as its source,
 naming the body — a formula that silently shows its source is a bug report waiting to happen.
 
 **Do not go back to a Compose-measured renderer.** `io.github.huarangmeng:latex-renderer` typeset
-from KaTeX's metrics and cost **21.7 ms per formula**, measured: 142 formulas took 3078 ms on
-`MathCache`'s worker and a 300-block reply showed LaTeX source for seconds. JLaTeXMath lays the
-same formula out in **0.42 ms** on the same emulator. Moving that work off the UI thread — which
-`MathCache` does, and should keep doing — is not a substitute for the renderer being cheap: it was
-done first and the reply was still slow. What the swap cost is real and is recorded in
-ARCHITECTURE §12: the ink is fixed at typeset time (so a theme change re-typesets, 0.35 ms a
-formula), and the MathSpeak accessibility description is gone, leaving the LaTeX source as the
-placeholder's alternative text.
+from KaTeX's metrics and cost **21.7 ms per formula**: 142 formulas took 3078 ms on `MathCache`'s
+worker, where JLaTeXMath lays the same formula out in **0.42 ms** on the same emulator. Moving that
+work off the UI thread — which `MathCache` does, and should keep doing — is not a substitute for the
+renderer being cheap: it was tried first and the reply was still slow. What the swap cost is real
+and is recorded in ARCHITECTURE §12: the ink is fixed at typeset time (so a theme change re-typesets,
+0.35 ms a formula), and the MathSpeak accessibility description is gone, leaving the LaTeX source as
+the placeholder's alternative text.
 
 **Keep JLaTeXMath whole in the release build, and check the APK that ships.** R8 runs only in the
 release variant, and JLaTeXMath resolves its command table **by name at run time** — `MacroInfo`
@@ -192,38 +177,23 @@ and `TeXFormulaParser` use `Class.forName`, `getDeclaredMethod`/`getMethod` and
 `getDeclaredField`, so a member nothing appears to call is deleted and the lookup returns null.
 Measured on one 42-construct sweep: the debug APK fell back on `\oiint`/`\oiiint` only, the release
 APK additionally on `\dfrac`, `\tfrac`, `\left\{…\right.`, `\begin{align}`, `\operatorname` and
-`\substack` — which is the reader's "我发现这三块公式只有第一块渲染正常了" about the APK on their phone,
-while every formula test on the emulator's debug build was green. `app/proguard-rules.pro` keeps the
-whole `org.scilab.forge.jlatexmath` package (330 KB of classes against a 107 MB APK, and **218**
+`\substack` — a difference no debug build shows, which is how it reached a reader's phone while
+every formula test on the emulator was green. `app/proguard-rules.pro` keeps the whole
+`org.scilab.forge.jlatexmath` package (330 KB of classes against a 107 MB APK, and **218**
 reflective entry points to guess wrong about otherwise), and `tools/check-release-math.py` — called
 by `build-apks.py` **after** the APKs are built, not from its `checks` list — fails when a release
-APK's dex has lost them. **A formula verified on a debug build is not a formula verified on the build
-a reader installs**; ARCHITECTURE §12 and `docs/VERIFICATION.md` carry the numbers.
+APK's dex has lost them. **A formula verified on a debug build is not a formula verified on the
+build a reader installs**; ARCHITECTURE §12 and `docs/verification/2026-09-19-release-dex.md` carry
+the numbers.
 
-**Do not hand-draw an icon, and do not adjust one you did not draw.** This burned six
-revisions of one 24-unit glyph, and every one was rejected. The sequence is worth knowing
-because each step looked reasonable:
-
-- An earlier version of this file claimed Material3's `Icon` zeroes a stroked vector's
-  `strokeLineWidth`, so `Icons.Filled.Code` drew nothing. **That was false** — `Icon` calls
-  `rememberVectorPainter(ImageVector, …)`, the overload with no stroke arguments, and the
-  glyph is drawn at the width its own `ImageVector` carries.
-- Two hand-drawn replacements followed the false diagnosis, then two more adjusting weight
-  and clearance. All four were wrong in the same way: a glyph whose parts have been
-  individually adjusted is no longer part of the set it was taken from.
-- The icon that shipped is **Lucide's `command`** (ISC) — ⌘, one closed path with four corner
-  loops — chosen by the reader from a sheet of twenty candidates across Lucide, Tabler,
-  Bootstrap and Phosphor, each rendered at 21dp, 55dp and 64dp. A `</>` was offered at the
-  same time; ⌘ is what the button's actual job is, and it is a single figure, so there is no
-  third stroke to collide with the other two at the size the app draws.
-
-Two lessons. **Render candidates at the size the app draws them and let the reader choose**
-— a 64dp preview says nothing about whether a glyph survives at 21dp. And **a resource that
-fails to compile is silently replaced by a cached older one**: the drawable was missing from
-three APKs because an XML comment held a double hyphen, which XML forbids, and a build-output
-filter hid AAPT's error. `unzip -l app-debug.apk | grep ic_whatever` is the check that settles
-it — **on a debug APK**, because a release one renames every resource to a two-character path
-(`res/0K.xml`) and the same grep returns nothing for a resource that is present and correct.
+**Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
+glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12 part 3 has that
+sequence. **Render candidates at the size the app draws them and let the reader choose** — a 64dp
+preview says nothing about whether a glyph survives at 21dp. And **a resource that fails to compile
+is silently replaced by a cached older one**, which is how a drawable went missing from three APKs:
+`unzip -l app-debug.apk | grep ic_whatever` is the check that settles it — **on a debug APK**,
+because a release one renames every resource to a two-character path (`res/0K.xml`) and the same
+grep returns nothing for a resource that is present and correct.
 
 **A glyph from another set has another weight, so its size is a call-site decision.** ⌘ at the
 21dp the Material glyphs beside it use is the report "常用命令图标太大了": Lucide draws that
@@ -232,13 +202,10 @@ figure out to 21 of its 24 units where Material's `Add` keeps its ink inside 14.
 site is a layout decision; editing its geometry is the mistake the bullet above is about.
 
 **When a report is about how something looks, ask for a picture of the thing wanted — not for a
-menu.** The copy button took four rounds because three of them answered the wrong question: six
-*containers* (filled circle, outlined circle, rounded square, labelled pills, bare glyph), then six
-glyphs from Lucide/Tabler/Phosphor, then five more sets. The answer that finally worked was an SVG
-pasted into the conversation. `ic_copy.xml` is that geometry — two rounded sheets, the back one at
-the top **right**, which no set looked at draws (they all put it top-left, or hang a folded corner
-off the front) — and `ic_check.xml` is Lucide's check, at about the weight of the sheets' walls.
-`CopyButton.kt` is the one composable both copy buttons use. See ARCHITECTURE §12.
+menu.** The copy button took four rounds — six *containers*, then six glyphs from other icon sets,
+then five more sets — before an SVG pasted into the conversation (`ic_copy.xml`) worked;
+`ic_check.xml` is Lucide's check at about the weight of its walls, and `CopyButton.kt` is the one
+composable both copy buttons use. ARCHITECTURE §12 part 3 has the four rounds.
 
 **`Modifier.fillMaxWidth()` sets the *minimum* width, not just the maximum.** Inside a
 parent that caps the width — `Box(Modifier.widthIn(max = …))` over a `BoxWithConstraints`
@@ -276,6 +243,11 @@ before concluding that something is arbitrary.
 When a commit *is* requested, use Conventional Commits. **Only the subject line is
 required — the body and the footer are optional**, and a subject-line-only commit
 is often the right choice for a small change.
+
+**A message is short: the subject plus at most five bullets of one or two lines each.**
+A change that does not fit in that is two commits, or the detail belongs in a document
+under `docs/` that the message points at. The body says *why*; the diff already says
+*what*, and a message nobody reads to the end is not a record.
 
 - **Subject** — `<type>(<scope>): <subject>`. Imperative mood, no trailing full
   stop, lower case after the colon, at most 72 characters. It says what the commit
@@ -329,14 +301,12 @@ prompt, which billed the idle gap to a turn that had already finished.
 ## Things that will waste your time if you do not know them
 
 - **Start the AVD with `-gpu host`, not `-gpu swiftshader_indirect`.** On software
-  rasterisation the GPU context times out — `dumpsys gfxinfo` reports `GPU Context
-  timeout: 10` and frames at 4950 ms — and the app's window then never finishes its
-  first draw. The symptom is a window that `dumpsys window` calls visible and
-  full-screen but `dumpsys input` calls `NOT_VISIBLE, alpha=0` with a half-size frame,
-  a blank `screencap`, and `InputDispatcher: No new touched window` for every
-  `adb shell input tap`. `uiautomator dump` still returns a correct tree, which makes
-  it look like a broken instrument rather than a broken backend. `docs/VERIFICATION.md`
-  has the full reading; it cost this project a whole round of "unverified" notes.
+  rasterisation the GPU context times out (`dumpsys gfxinfo`: `GPU Context timeout:
+  10`, frames at 4950 ms) and the app's window never finishes its first draw, while
+  `dumpsys window` calls it visible and `dumpsys input` calls it `NOT_VISIBLE,
+  alpha=0` with a blank `screencap` — and `uiautomator dump` still returns a correct
+  tree, so it looks like a broken instrument rather than a broken backend.
+  `docs/verification/2026-09-18-rendering-rounds.md` has the full reading.
 - **`pkg install` relocation has two paths** — apt's `DPkg::Pre-Install-Pkgs` hook
   (`pikit-relocate --apt-list`, which reads the archives apt is about to hand to
   dpkg from stdin), plus a `bin/dpkg` wrapper around a renamed `bin/dpkg.real`.

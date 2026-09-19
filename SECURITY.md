@@ -17,16 +17,12 @@ builder:
 
 ## What PiKit does and does not protect
 
-Written down because the honest answer is shorter than a threat model, and because
-"the app stores my API key" deserves a precise one.
-
 - **The API key is plain text in the app's private storage** — SharedPreferences
   `pikit_settings` — which is readable by this app's uid and, on a rooted or
   debuggable device, by whoever has that access. It is not encrypted: there is no
-  keystore-wrapped secret in this build, and saying otherwise would be worse than
-  the fact. What protects it is Android's application sandbox plus
-  `android:allowBackup="false"` (so it is not swept into a cloud backup or an
-  `adb backup`) and nothing else.
+  keystore-wrapped secret in this build. What protects it is Android's application
+  sandbox plus `android:allowBackup="false"` (so it is not swept into a cloud backup
+  or an `adb backup`) and nothing else.
 - **A custom endpoint's key also reaches the agent process through `argv`.**
   Deliberately: pi does not expand `$VARIABLE` in `models.json` for a provider it
   does not know, so `--api-key` is the only mechanism that works ([ARCHITECTURE
@@ -37,7 +33,7 @@ Written down because the honest answer is shorter than a threat model, and becau
 - **No telemetry, no account, no analytics, no crash reporter.** The network
   traffic the app originates is the agent's model calls, made on your behalf, and one
   request of its own: **Check for updates** on the About page asks
-  `api.github.com` about this repository's newest release, and only when you tap it.
+  `github.com` for this repository's newest release, and only when you tap it.
   There is no background check and no update notification, because both would mean
   traffic nobody asked for. Everything else that leaves the device does so through a
   process you started inside the runtime — `pi update`, `pkg upgrade`, a URL you
@@ -50,18 +46,19 @@ Written down because the honest answer is shorter than a threat model, and becau
   not a container. `docs/ARCHITECTURE.md` §5 says what each layer does and does not
   cover.
 - **Shared storage is off until you grant it**, one folder at a time, and the
-  "All files access" grant is the one permission that is not scoped — the app asks
-  for it on first launch for the folders you switch on.
+  "All files access" grant is the one permission that is not scoped — the app explains
+  it once, on first launch, and offers the system page; the folder switches are the
+  scoped grant and work without it.
 
 ## Supported versions
 
 The tip of `main`, and nothing older: PiKit has no release branch. A release APK from
-this repository is signed with the release keystore once one is configured
-(`docs/RELEASING.md`); until then every release is signed with the **debug** key,
-whose private half is in the Android SDK and which is therefore a build artefact
-rather than a secret. Which key an APK carries is checkable without trusting this
-file:
+this repository carries the release certificate, whose key is the one
+`docs/RELEASING.md` describes; a build made without the four `pikit.keystore.*`
+properties falls back to the **debug** key, whose private half is in the Android SDK and
+which is therefore a build artefact rather than a secret. Which key an APK carries is
+checkable without trusting this file:
 
 ```bash
-apksigner verify --print-certs app-arm64-release.apk
+apksigner verify --print-certs app/build/outputs/apk/arm64/release/app-arm64-release.apk
 ```

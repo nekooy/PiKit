@@ -13,22 +13,21 @@ That is the whole loop, and it is also the list of things that must stay true. T
 smaller commands when the full one is not warranted: `./gradlew
 :app:testX64DebugUnitTest` for a Kotlin-only change, `python
 tools/verify-runtime-image.py` after touching anything that ends up in the image.
-[AGENTS.md](../AGENTS.md) has the rules that a change has to satisfy — the enums in
-`tools/build-apks.py` (variants, image inputs, checkers) are the ones people forget,
-because a list it does not know about does not fail, it goes missing.
+[AGENTS.md](../AGENTS.md) has the rules a change has to satisfy — the enums in
+`tools/build-apks.py` (variants, image inputs, checkers) are the ones people forget.
 
 ## Periodically
 
 | What | How | Why it is on this list |
 | --- | --- | --- |
-| Dependency versions, by hand | Check `gradle/libs.versions.toml`, `gradle/wrapper/gradle-wrapper.properties` and the `uses:` lines in both workflows; bump minors and patches freely, and majors in one coordinated change against a **full APK build**. The authoritative sources, so nobody has to hunt for them again: `https://services.gradle.org/versions/current` for Gradle, `https://dl.google.com/dl/android/maven2/<group-as-path>/<artifact>/maven-metadata.xml` for AGP and every AndroidX artifact (**not** Maven Central, whose `com.android.tools.build:gradle` stops at 2.x), `https://search.maven.org/solrsearch/select?q=g:%22<group>%22+AND+a:%22<artifact>%22&core=gav&rows=8&wt=json` for Kotlin, coroutines and serialization, `https://registry.npmjs.org/<package>/latest` for pi and the extension, and `https://github.com/<owner>/<repo>/releases/tag/v<N>.0.0` for a workflow action — a `404` there is what proves the major in the YAML is the newest one | Dependabot's version updates were switched off: they arrived faster than they could be reviewed (eleven pull requests in the first week, four of them red), and the ones that matter are *majors* — Kotlin, its Compose compiler plugin, AndroidX and the BOM move together with the build files, so a pull request per library is four checks nobody can merge one at a time. **Security alerts stay on**: they are a separate feed that only speaks when an advisory affects something pinned here |
-| The runtime's own dependencies | `npm audit --omit=dev` inside `.runtime-build/cache/pi` (and `.../web-access`) after a bump, and the Termux packages' advisories upstream | Nothing scans the image: pi, Node.js, `rg`, `fd` and the Termux packages are inputs pinned by `tools/build-runtime-image.py`, not dependencies of a build that an advisory feed reads. A clean alerts page says nothing about what the APK ships, and this is the only place that surface is looked at. Last run: 0 vulnerabilities in both trees, against pi 0.85.1 and web-access 0.29.0 |
-| `pi` itself | `npm view @earendil-works/pi-coding-agent version`, then bump `PI_VERSION` in `tools/build-runtime-image.py` and rebuild | The agent is the point of the app; its RPC records, tool list and catalogue are what the app parses. The cache records which version it holds, so the bump re-vendors on the next build — before that marker existed, "latest" meant whatever was vendored first and a bump changed nothing |
+| Dependency versions, by hand | Check `gradle/libs.versions.toml`, `gradle/wrapper/gradle-wrapper.properties` and the `uses:` lines in both workflows; bump minors and patches freely, and majors in one coordinated change against a **full APK build**. The authoritative sources, so nobody has to hunt for them again: `https://services.gradle.org/versions/current` for Gradle, `https://dl.google.com/dl/android/maven2/<group-as-path>/<artifact>/maven-metadata.xml` for AGP and every AndroidX artifact (**not** Maven Central, whose `com.android.tools.build:gradle` stops at 2.x), `https://search.maven.org/solrsearch/select?q=g:%22<group>%22+AND+a:%22<artifact>%22&core=gav&rows=8&wt=json` for Kotlin, coroutines and serialization, `https://registry.npmjs.org/<package>/latest` for pi and the extension, and `https://github.com/<owner>/<repo>/releases/tag/v<N>.0.0` for a workflow action — a `404` there is what proves the major in the YAML is the newest one | Dependabot's version updates were switched off: eleven pull requests in the first week, four of them red, and the ones that matter are *majors* — Kotlin, its Compose compiler plugin, AndroidX and the BOM move together with the build files, so a pull request per library is four checks nobody can merge one at a time. **Security alerts stay on**: they are a separate feed that only speaks when an advisory affects something pinned here |
+| The runtime's own dependencies | `npm audit --omit=dev` inside `.runtime-build/cache/pi` (and `.../web-access`) after a bump, and the Termux packages' advisories upstream | Nothing scans the image: pi, Node.js, `rg`, `fd` and the Termux packages are inputs pinned by `tools/build-runtime-image.py`, not dependencies of a build that an advisory feed reads. A clean alerts page says nothing about what the APK ships. Last run: 0 vulnerabilities in both trees, against pi 0.85.1 and web-access 0.29.0 |
+| `pi` itself | `npm view @earendil-works/pi-coding-agent version`, then bump `PI_VERSION` in `tools/build-runtime-image.py` and rebuild | The agent is the point of the app; its RPC records, tool list and catalogue are what the app parses. The cache records which version it holds, so the bump re-vendors on the next build |
 | Where the app looks for releases | `pikit.repository` in `gradle.properties`, if the repository moves | It is compiled into the update check's URL and shown on the About page. A published release is what the check sees, so a version that is committed but not released looks up to date |
-| The Termux bootstrap and package set | Bump `BOOTSTRAP_TAG` and the package list in `tools/build-runtime-image.py`, knowingly — not because a newer tag exists | A bootstrap bump changes the userland under everything; it is a device pass, not a version bump. The cached download is named after the URL it came from, so a tag bump fetches the new archive instead of rebuilding the image around the old one (that was the bug: the cache was `bootstrap-<arch>.zip` while the tag lives in the URL) |
+| The Termux bootstrap and package set | Bump `BOOTSTRAP_TAG` and the package list in `tools/build-runtime-image.py`, knowingly — not because a newer tag exists | A bootstrap bump changes the userland under everything; it is a device pass, not a version bump. The cached download is named after the URL it came from, so a tag bump fetches the new archive instead of rebuilding the image around the old one |
 | The web-access extension | Bump `WEB_ACCESS_VERSION`; `vendor_web_access` re-vendors and re-verifies when the version moves | Its page-extraction path is checked by a real fetch, and a broken one fails silently at runtime otherwise |
 | Gradle, AGP, the NDK | The wrapper is Gradle's, in `gradle/wrapper/gradle-wrapper.properties`; AGP is in `gradle/libs.versions.toml`; the NDK is pinned in `terminal-emulator/build.gradle.kts` **and copied into both workflows' `NDK_VERSION`** | Three spellings of one version is exactly the kind of thing that rots. Two orderings matter and are not obvious: **AGP 9 needs Gradle ≥ 9.1** and turns on built-in Kotlin, so `org.jetbrains.kotlin.android` stops being applied the old way; and **a newer AndroidX needs a newer `compileSdk`** — AGP 8.x enforces each AAR's `minCompileSdk`, so a `compose-bom` bump drags `compileSdk` up with it. `android.sdk.defaultTargetSdkToCompileSdkIfUnset` (on by default in AGP 9) would set `targetSdk` from `compileSdk`, which is the one default that must not be allowed to reach this project's `pikit.targetSdk=28` |
-| Both workflows | Run `ci.yml` by hand after touching it (`workflow_dispatch`) | A workflow is only verified when it runs; a typo in an `if:` never runs and never fails |
+| Both workflows | Dispatch `ci.yml` by hand after touching it (`workflow_dispatch`); nothing runs on a push or a pull request | A workflow is only verified when it runs; a typo in an `if:` never runs and never fails, and with no automatic trigger `python tools/build-apks.py` is the only check an ordinary change gets |
 | The doc indexes | `docs/README.md` and the table in `docs/ARCHITECTURE.md` after any doc is added, split or renamed | Nothing parses Markdown in this build, so a dead link is found by reading, not by CI |
 
 ## When upstream pi changes
@@ -40,7 +39,7 @@ because a list it does not know about does not fail, it goes missing.
 2. **Re-capture wire traffic if the shape looks wrong.** `tools/capture-pi-rpc.mjs`
    records a real session; `app/src/test/.../RealCaptureTest` and `ChatFoldTest`
    assert against captures rather than hand-written fixtures, because a fixture
-   once agreed with a bug (pi sends no `id` on `toolcall_delta`).
+   once agreed with a bug.
 3. **Check the provider table.** `PiProviderTest` pins the app's enum against pi's
    own `getApiKeyEnvVars` fixture and lists the providers deliberately absent;
    a provider pi adds should appear there or in that list, with a reason.
@@ -72,37 +71,31 @@ last actually done.
 
 ## Traps that cost an afternoon
 
-- **A stale APK from the build cache.** `tools/build-apks.py` detects it, applies
-  the documented remedy and retries once, so a failure here is information rather
-  than a mystery — but if it happens twice, delete
-  `~/.gradle/caches/build-cache-1`. See BUILDING.md → *The size of an APK is
-  checked*.
-- **A stale runtime image.** Editing anything in the image's sources without
-  rebuilding ships the previous guard *and* leaves a device that already installed
-  the old APK running its old unpacked runtime. `build-apks.py` rebuilds on a
-  timestamp comparison against `IMAGE_INPUTS` and the digest covers the files'
-  contents; `--refresh-images` overrules it.
+Three that are specific to maintaining this project. The rest — a stale APK from the build
+cache, the emulator's DNS, `appops set --uid` — are in AGENTS.md's *Things that will waste
+your time*, which is the list a change is written against.
+
+- **A stale runtime image.** Editing the image's sources without rebuilding ships the
+  previous guard *and* leaves a device running its old unpacked runtime. `build-apks.py`
+  catches it by timestamp against `IMAGE_INPUTS` and by content digest;
+  `--refresh-images` overrules it.
 - **`EXPECTED_URL_OCCURRENCES` in `verify-runtime-image.py` is a tripwire, not a
   bug.** When a bump legitimately changes the number of relocated URL occurrences,
   update the constant in the same commit — that is the check telling you it noticed.
-- **The emulator's DNS comes and goes**, and nothing local fixes it
-  (`getaddrinfo` goes through `netd`). `tools/dns-pin.cjs` plus a `dns-pins.txt` in
-  the app's `files/` is the workaround.
-- **`appops set <pkg> MANAGE_EXTERNAL_STORAGE deny` is not enough** to revoke all-files
-  access — the uid mode stays `allow`; use `appops set --uid`.
 - **`adb shell pm clear pi.kit.mob`** deletes the unpacked runtime, which costs a
-  fresh ~200 MB unpack on the next launch. `am force-stop` is the cheap restart.
+  fresh ~285 MB unpack on the next launch. `am force-stop` is the cheap restart.
 
 ## Housekeeping
 
 - **Test counts are summed by `tools/build-apks.py` and written down by hand** in
   `AGENTS.md` and `docs/VERIFICATION.md`; a round that adds tests updates both.
+  `CONTRIBUTING.md` points at AGENTS.md rather than keeping a third copy — there were
+  three once and they drifted apart (375, 353 and 362 for one suite; 377 in 31 suites
+  after a re-measurement).
 - **The README icon is generated** (`tools/render-icon.py`), and the build fails when
   it and the launcher icon have drifted apart. Edit the vector, regenerate, commit
   both.
 - **Rejected designs are not deleted.** When a behaviour is removed, its reasoning
-  moves into the chapter that describes it, with the number that settled it; that is
-  the most valuable thing in `docs/architecture/` and the first thing a tidy-up
-  throws away.
+  moves into the chapter that describes it, with the number that settled it.
 - **Nothing in this repository writes to git on its own.** Commits, tags and
   branches are made by a person, deliberately — see AGENTS.md.

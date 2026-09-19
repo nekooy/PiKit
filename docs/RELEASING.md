@@ -3,6 +3,11 @@
 Publishing a build is: bump one version in one file, commit it, push, then run one
 workflow. Everything else is a check that the workflow does for you.
 
+**The push itself starts nothing.** Both workflows are dispatch-only (AGENTS.md): what
+they cannot check for themselves is the hand-run checklist under *Before you dispatch*,
+and the release job runs every test and checker `tools/build-apks.py` runs before it
+packages anything.
+
 ## The version lives in one place
 
 `gradle.properties`:
@@ -14,8 +19,8 @@ pikit.versionCode=1
 
 - **`versionName`** is what the user sees — **Settings → About PiKit**, the in-app
   manual's subtitle, and the release tag. (It is *not* what a shell sees:
-  `TERMUX_VERSION` reports the bundled environment's version, which comes from the
-  image's metadata — see §3 of the architecture notes.) It must be a bare
+  `TERMUX_VERSION` reports the bundled environment's version — the image's own
+  metadata, not this file; `docs/VERIFICATION.md` records the check.) It must be a bare
   `major.minor.patch`; `app/build.gradle.kts` refuses anything else, because
   `0.1.0-x64` is a build note rather than a version and the ABI is already reported
   by the runtime revision on the same page.
@@ -43,10 +48,9 @@ workflow refuses a version whose tag exists.
 
 ## The keystore, once
 
-Release builds fall back to the **debug** key while no keystore is configured, which
-is fine to install and impossible to upgrade (the signatures differ, so a properly
-signed release can never replace it). This repository therefore keeps one in
-`.release/`, which is ignored by `.gitignore` and holds four files:
+Release builds fall back to the **debug** key while no keystore is configured —
+installable, but impossible to upgrade. This repository therefore keeps one in
+`.release/`, ignored by `.gitignore`, holding five files:
 
 | File | What it is |
 | --- | --- |
@@ -56,10 +60,9 @@ signed release can never replace it). This repository therefore keeps one in
 | `github-secrets.md` | The four `gh secret set` commands, **with the password in them** |
 | `fingerprint.txt` | The certificate's SHA-256, for checking a published APK against it |
 
-`password.txt` sits next to the keystore it opens, which is worth being explicit about: a
-key and its password in one directory are, together, the secret — the file is there so a
-build script does not have to parse prose, and it is ignored by `.gitignore` like the rest.
-**Back up the directory, not the file.**
+`password.txt` sits next to the keystore it opens: a key and its password in one directory
+are, together, the secret. The file is there so a build script does not have to parse prose,
+and it is ignored by `.gitignore` like the rest. **Back up the directory, not the file.**
 
 The key this repository generated on 2026-09-16 has the certificate SHA-256
 `9B:A9:BF:38:1B:3C:72:2A:A9:1C:2B:79:53:3C:BC:3A:E7:5F:24:D3:90:06:C4:D1:AC:43:44:B5:33:3D:00:E4`,
@@ -68,13 +71,12 @@ signed. A release APK built here before that key existed is signed with the Andr
 debug certificate instead, and **cannot** be upgraded by one signed with this key —
 it has to be uninstalled first, which loses the app's data.
 
-**Back it up somewhere you will still have in five years, and never commit it.** Both
-are unrecoverable mistakes in opposite directions: a committed keystore is anyone's,
-and a lost one means no future build can upgrade anyone who installed your release —
-they have to uninstall and reinstall, which loses the app's data.
+**Back it up somewhere you will still have in five years, and never commit it.** A
+committed keystore is anyone's; a lost one means no future build can upgrade anyone who
+installed your release.
 
-To make a new one (only if you are replacing the key, which orphans every installed
-copy — `docs/RELEASING.md`'s warning, not an ordinary step):
+To make a new one — only if you are replacing the key, which orphans every installed
+copy, and never as an ordinary step:
 
 ```bash
 mkdir -p .release
@@ -84,8 +86,7 @@ keytool -genkeypair -v -keystore .release/release.jks -storetype PKCS12 \
 base64 -w0 .release/release.jks > .release/release.jks.base64
 ```
 
-For a local build with that key, point Gradle at it — `tools/build-apks.py` passes no flags
-of its own, so the four properties are what the build reads however it is started:
+For a local build with that key:
 
 ```bash
 ./gradlew :app:assembleArm64Release \
@@ -113,37 +114,33 @@ so a typo in one secret name is a failed build rather than a wrong APK.
 
 `tools/build-apks.py` forwards whichever of the four is in its environment to Gradle as
 `-P` arguments, redacting the two passwords from its own output. Gradle reads the
-`ORG_GRADLE_PROJECT_*` form by itself, and that is deliberately not relied on: the first
-release run exported all four, the build step's environment listed them, and the APK still
-came out signed with a key Gradle generated on the spot. The release workflow checks the
-resulting APK against the keystore's own fingerprint for the same reason — a build that
-succeeds is not evidence that it was signed with the key it was given.
+`ORG_GRADLE_PROJECT_*` form by itself, but that is deliberately not relied on: the release
+workflow checks the resulting APK against the keystore's own fingerprint, because a build
+that succeeds is not evidence that it was signed with the key it was given.
 
 ## Publishing the repository, the first time
 
-The workflows do nothing until the repository exists on GitHub, and three of these
-settings are not in any file. `nekooy/PiKit` has been through all four steps; this is
-kept because a fork, a mirror or a re-creation needs them again, and because none of
-them is discoverable from the tree.
+`nekooy/PiKit` is already through this; it is kept for a fork, a mirror or a
+re-creation.
 
-1. **Create the repository and push.** `git add --chmod=+x gradlew` first (a Windows
-   checkout has no executable bit — see CONTRIBUTING.md), then
-   `gh repo create nekooy/PiKit --public --source . --remote origin --push`. Keep it
-   public: GPLv3 §6 accepts distributing to your own users, but a public tree is the
-   simplest way to meet the corresponding-source obligation, and a private repository
-   also makes **Check for updates** useless (see the note above).
+1. **Create the repository and keep it public.** `git add --chmod=+x gradlew` first (a
+   Windows checkout has no executable bit — see CONTRIBUTING.md), then
+   `gh repo create nekooy/PiKit --public --source . --remote origin --push`. GPLv3 §6
+   accepts distributing to your own users, but a public tree is the simplest way to meet
+   the corresponding-source obligation; a private repository also makes **Check for
+   updates** useless (below).
 
 2. **Let the release job write.** *Settings → Actions → General → Workflow
    permissions* → **Read and write permissions**, because `release.yml` creates a
    release and a tag. It is also the first thing to check if publishing fails with a
    403 that names the token rather than the setting.
 
-3. **Add the four secrets** above, and 4. **fill in the repository's blurb** —
-   description, topics, and a social preview exported from `docs/assets/icon.svg`
-   (GitHub wants a PNG there, 1280×640).
+3. **Add the four secrets** above, and **fill in the blurb** — description, topics, and
+   a social preview exported from `docs/assets/icon.svg` (GitHub wants a PNG there,
+   1280×640).
 
-Nothing else is needed: `ci.yml` runs on the first push, and the two workflows carry
-their own toolchain setup.
+Nothing else is needed: neither workflow runs on its own — each is dispatched by hand
+from the Actions tab — and each carries its own toolchain setup.
 
 ## Run the release workflow
 
@@ -159,50 +156,34 @@ Release, **published rather than drafted**. Budget about an hour cold, several m
 warm. The run is serialised against itself (`concurrency: release-…`, never cancelled):
 two dispatches racing to create the same tag is the failure that guard exists for.
 
-**Publishing is its own job on purpose.** `gh release create` answered
-`HTTP 403: Resource not accessible by integration` in the build job — which asked for
-`contents: write` at both levels, had the token in its environment, and had just built
-the APKs it was attaching — while the same command with the same permission publishes
-from a job of its own (measured in `ci.yml`, on both a push and a dispatch). What
-narrows the token over that job's twenty-odd steps was not identified; a separate job
-has none of them, needs only `contents: write`, and can be re-run alone ("Re-run failed
+**Publishing is its own job on purpose.** `gh release create` was refused
+(`HTTP 403: Resource not accessible by integration`) inside the twenty-step build job, and works
+from a job of its own, which needs only `contents: write` and can be re-run alone ("Re-run failed
 jobs") without rebuilding anything.
 
-`SHA256SUMS` is guarded, because it was published once as eight bytes: its glob had one
-level too many (`*/*/release/*.apk` under `outputs/apk`, where the layout is
-`<flavour>/<buildType>`), `sha256sum` was handed the literal pattern, and nothing about
-the release page said so. The step now refuses to write a file with no checksum line in
-it, and the checksums it kept are also written to the run's step summary.
+**The assets are named `PiKit-<version>-<abi>.apk`**, renamed in place after the signing check —
+one directory, one candidate for "the APK", which is what the checksum file, the artifact and the
+publishing job all pick up. The step refuses to write a
+`SHA256SUMS` with no checksum line in it, and writes the checksums to the run's step summary as
+well.
 
-**The assets are named `PiKit-<version>-<abi>.apk`**, not after Gradle's output. They used to
-be published as `app-arm64-release.apk` and `app-x64-release.apk` — the names Gradle writes into
-`app/build/outputs/apk/<flavour>/release/`, which say nothing about the application or the
-version and are what a reader sees on the release page and in their downloads folder. The build
-job renames them in place after the signing check (so a fingerprint failure still names the file
-Gradle produced), which is what the checksum file, the artifact and the publishing job all pick
-up — one directory, one candidate for "the APK".
-
-The signing check is not a formality: the four `pikit.keystore.*` values reach Gradle
-as `ORG_GRADLE_PROJECT_*` environment variables, and one that arrived empty would make
-the build fall back to the debug key *and succeed*. The comparing is done against the
-keystore's own fingerprint (`apksigner verify --print-certs` against
-`keytool -list -v`), so a debug-signed APK cannot be published by accident. The
+**The signing check is not a formality**: a release with none of the four
+`pikit.keystore.*` properties is signed with the debug key, which is why the workflow
+refuses to publish unless **allow debug signing** is set; a *partial* set is a build
+failure rather than an APK signed with the wrong key. It compares against the keystore's
+own fingerprint (`apksigner verify --print-certs` against `keytool -list -v`), so a
+debug-signed APK cannot be published by accident. The
 `apksigner` it runs is the one the workflow installed, named once in
-`BUILD_TOOLS_VERSION` — it used to be a hard-coded path to a build-tools version the
-workflow never installed, which worked only by accident of the runner image.
+`BUILD_TOOLS_VERSION`.
 
-**The release publishes itself, and the notes are edited afterwards.** A draft was the
-first design and has been removed. It was there so the notes could be written before
-anything reached the app's update check — which reads `releases/latest`, and a draft is
-not one — and the cost turned out to be the pause: a release waiting for a person is a
-release nothing can see until that person comes back, and `gh release view` answers 404
-for a draft, so the build job's own "already released?" check could not tell "built and
-waiting" from "never built" without a push-capable token. `--generate-notes` still runs
-and still produces the single `**Full Changelog**: …compare/v0.1.0...v0.2.0` line,
-because `--generate-notes` groups by merged pull request and every commit here went
-straight to `main`; that line is a true sentence and a better starting point than an
-empty body. Edit it on the release page when you have something to add:
-`gh release edit v0.2.0 --notes-file …` does the same from a terminal.
+**The release publishes itself, and the notes are edited afterwards.** No draft: a draft
+is not a `releases/latest` the update check can see, so a release waiting for a person to
+write its notes is a release nothing can see. `--generate-notes` still runs and still
+produces the single `**Full Changelog**: …compare/v0.1.0...v0.2.0` line, because it groups
+by merged pull request and every commit here went straight to `main`; that line is a true
+sentence and a better starting point than an empty body. Edit it on the release page when
+you have something to add: `gh release edit v0.2.0 --notes-file …` does the same from a
+terminal.
 
 The tag and the release are created together by that one command, so there is no window
 in which a version exists and is invisible. `gh release delete v0.2.0 --cleanup-tag
@@ -211,9 +192,9 @@ in which a version exists and is invisible. `gh release delete v0.2.0 --cleanup-
 The release it creates is also what **Settings → About PiKit → Check for updates**
 reads: the app asks for `github.com/<owner>/<repo>/releases/latest` and reads the tag out
 of the URL GitHub redirects it to (`…/releases/tag/v0.2.0`), comparing that against its own
-`versionName`. It is the release *page* and not `api.github.com` on purpose — the API's
+`versionName`. It is the release *page* and not `api.github.com` on purpose: the API's
 unauthenticated budget is 60 requests per hour **per address**, which a VPN exit shares and
-spends, so the check used to answer 403 for anyone behind one (ARCHITECTURE §9). A version
+spends (ARCHITECTURE §9). A version
 that is committed but never released is invisible to it, and a release created by hand needs
 the same `v<versionName>` tag to be seen. `pikit.repository` is where the app is told which
 repository to ask.
@@ -233,10 +214,10 @@ users, never for a version people will install and keep.
 - [ ] `versionName`/`versionCode` bumped in `gradle.properties`, in the commit
       being released — and `git status` clean, because the workflow releases the
       commit it checks out.
-- [ ] `python tools/build-apks.py` passes locally, or CI on that commit is green.
+- [ ] `python tools/build-apks.py` passes locally — nothing else runs before the
+      release job's own tests, unless you dispatch `ci.yml` on this commit.
 - [ ] `docs/VERIFICATION.md` says what this round was actually exercised on. A
-      feature tested only on the emulator is written down as emulator-only; the
-      known gaps section is part of the file, not an embarrassment.
+      feature tested only on the emulator is written down as emulator-only.
 - [ ] Anything with a layout change has been through a `uiautomator` pass on a
       device, which is this project's bar for a layout claim.
 - [ ] The keystore secrets are set — or you have decided, on purpose, to publish a

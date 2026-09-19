@@ -22,158 +22,132 @@ contains the id, and getting the choice wrong is silent in both directions:
 - **A `models` entry replaces** pi's entry for that id outright (`modelFromJson`), and
   every field the entry does not name falls back to fixed values: `reasoning: false`,
   `contextWindow: 128000`, `maxTokens: 16384`, a zero cost and no `thinkingLevelMap`.
-  Writing one for a model pi knows is the first report this feature ever produced —
-  `deepseek-v4-pro` came back with a 128K window, a zero cost and **one** thinking level
-  (`reasoning: false` makes `getSupportedThinkingLevels` answer `["off"]`) — but it is
-  also the *only* mechanism that reaches an id pi does not know, because
-  `buildFallbackModel`'s copy is not run through `applyModelOverride` at all.
+  Writing one for a model pi knows takes away its cost, thinking map and reasoning flag
+  along with the field the user meant to change — `deepseek-v4-pro` came back with a 128K
+  window, a zero cost and **one** thinking level — but it is also the *only* mechanism
+  that reaches an id pi does not know, because `buildFallbackModel`'s copy is not run
+  through `applyModelOverride` at all.
 
-So the app has to answer "does pi's catalogue contain this id", and the history of
-getting that answer wrong is why the answer now comes from a process that cannot see
-PiKit's own file:
+So the app has to answer "does pi's catalogue contain this id", and the answer has to come
+from a process that cannot see PiKit's own file. Three earlier designs failed on that:
 
-- The first version wrote a `models` entry for every declared model, and that is the
-  128K report above.
-- The second wrote an override for a model the catalogue knew and a `models` entry for
-  one it did not, classified from `get_available_models` captured after each handshake
-  into `filesDir/pikit-pi-models.json` (`PiModelCatalog`). A device report killed it:
-  `deepseek-flash` came back as **context 128K, max-out 16.4K** while `pi --list-models`
-  gave it 1M and 384K. The classification could not be repaired because
+- Writing a `models` entry for every declared model produced the 128K report above.
+- Classifying from `get_available_models` captured after each handshake
+  (`PiModelCatalog`, `filesDir/pikit-pi-models.json`) gave `deepseek-flash` **context 128K,
+  max-out 16.4K** where `pi --list-models` said 1M and 384K, and could not be repaired:
   **`get_available_models` cannot be asked "do you know this id *without* PiKit's
-  `models.json`"**: a `models` entry PiKit wrote *is* the entry pi resolves, so it is in
-  the answer, and subtracting the app's own registrations made the mistake permanent —
-  once declared, an id could never again be seen as catalogued.
-- The third wrote overrides where it could and definitions where it had to, and asked the
-  question of a probe whose process is deliberately blind to `models.json` — but only when
-  the key field was not empty, which made the one answer the app depends on depend on a
-  field that has nothing to do with it (see below).
-- The fourth is the current one, and it is the first that is not a process at all for the
-  common case. See *Where the answer comes from* below.
+  `models.json`"**, because a `models` entry PiKit wrote *is* the entry pi resolves.
+- Writing overrides where it could and definitions where it had to, but only when the key
+  field was not empty, made the answer depend on a field that has nothing to do with it.
+
+The current design is the first that is not a process at all for the common case.
 
 ## Where the answer comes from, in order
 
-`ModelDiscoveryClient.catalogueProbe` asks three sources, cheapest first, and stops at the
-first that can answer:
+`ModelDiscoveryClient.catalogueProbe` asks its sources cheapest first:
 
-1. **This app run's cache** (`CatalogueCache`), keyed by the catalogue state it was read in.
-   Confirming that state is two file reads.
+1. **This app run's cache** (`CatalogueCache`), keyed by the catalogue state it was read
+   in. Confirming that state is two file reads, and this is the only step that can answer
+   on its own.
 2. **`models-store.json`** — pi's own copy of pi.dev's per-provider catalogue, which the
-   launch path refreshes for **every** built-in provider (`refreshCatalogueIfStale`). This is
-   the whole answer for an id it holds: no process, no timeout, nothing to fail on a slow
-   phone.
-3. **A throwaway `pi --mode rpc`**, for the one thing the store cannot answer — an id it does
-   not hold. See *What the store deliberately does not answer*.
+   launch path refreshes for **every** built-in provider (`refreshCatalogueIfStale`). This
+   is the whole answer for an id it holds: no process, no timeout, nothing to fail on a
+   slow phone.
+3. **A throwaway `pi --mode rpc`**, launched unless the run cache answered: an id the store
+   does not hold needs it, and so does the fallback facts a custom id's entry is built
+   from. A process that fails costs the reader nothing when the store answered. See *What
+   the store deliberately does not answer*.
 
-The order is the fix for a real report: with the process first, a node start that failed left
-the model page with **no** answer, and a page with no answer cannot draw the per-model
-controls at all — so a failure to start a process took away the ability to declare anything
-about *any* model, including the ones the store already described. Two facts make reading the
-store possible at all, and both were measured rather than assumed:
+The order is the fix for a real report: with the process first, a failed node start left the
+page with **no** answer, and a page with no answer cannot draw the per-model controls at all.
+Two facts make reading the store possible, and both were measured:
 
 - **pi.dev serves a catalogue for every provider pi's own key table knows.** Asked
-  directly, fourteen of them answer `200` with a model list — including `minimax`, `xiaomi`,
-  `kimi-coding`, `opencode`, `zai-coding-cn` and `ant-ling` — and their byte counts match the
-  built-in data file for the same provider almost exactly, which is also what says the
-  bundled data is generated from that endpoint.
-- **So a store with one or two providers in it is a fact about the phone, not about pi.dev.**
-  pi persists a catalogue only for a provider whose credential resolves, which is what the app
-  used to pass — one key, one provider. That is the same defect `catalogueRefreshEnvironment`
-  fixes for the refresh itself (ARCHITECTURE §7), and the two changes are one idea: the store
-  is worth reading because it is now complete.
+  directly, fourteen of them answer `200` with a model list — including `minimax`,
+  `xiaomi`, `kimi-coding`, `opencode`, `zai-coding-cn` and `ant-ling` — and their byte
+  counts match the built-in data file for the same provider almost exactly, which is also
+  what says the bundled data is generated from that endpoint.
+- **So a store with one or two providers in it is a fact about the phone, not about
+  pi.dev.** pi persists a catalogue only for a provider whose credential resolves, which
+  is what the app used to pass — one key, one provider. That is the defect
+  `catalogueRefreshEnvironment` fixes for the refresh itself (ARCHITECTURE §7), and the
+  two changes are one idea.
 
 ## What the store deliberately does not answer
 
-**Absence is not an answer.** The store is only pi.dev's half of the catalogue; pi's built-in
-half lives inside its package (`pi-ai/dist/providers/data/*.json`, one file per provider, the
-same content the endpoint above serves). An id the store does not hold may still be
-catalogued, so the process stays for exactly that case — and for the second thing only a
-process can give:
+**Absence is not an answer.** The store is only pi.dev's half of the catalogue; pi's
+built-in half lives inside its package (`pi-ai/dist/providers/data/*.json`, one file per
+provider, the same content the endpoint above serves). An id the store does not hold may
+still be catalogued, so the process stays for exactly that case — and for the second thing
+only a process can give: **the fallback model**, what pi resolves an id it does not contain
+to (`buildFallbackModel`'s copy of the provider's default), which is what a `models` entry
+for such an id has to name.
 
-- **the fallback model** — what pi resolves an id it does not contain to
-  (`buildFallbackModel`'s copy of the provider's default), which is what a `models` entry for
-  such an id has to name.
-
-A failed process therefore costs the reader nothing when the store answered: the ids that are
-listed still get their controls. It costs the controls for an id that is in neither, which is
-the state the page's status row explains — with the process's own message rather than "could
-not read it", because a `pi` that would not start, a scratch directory that could not be made
-and a provider with no models are three problems with three fixes
-(`CatalogueProbe.error`).
+A failed process therefore costs the reader nothing when the store answered; it costs the
+controls for an id that is in neither, which is the state the page's status row explains with
+the process's own message rather than "could not read it" — a `pi` that would not start, a
+scratch directory that could not be made and a provider with no models are three problems
+with three fixes (`CatalogueProbe.error`).
 
 The check runs on the model page. When it does launch a process it points it at a scratch
 agent directory that holds a copy of `models-store.json` and **no `models.json`**
-(`PI_CODING_AGENT_DIR`). Two facts make that the honest question rather than a hack:
+(`PI_CODING_AGENT_DIR`). Two facts make that the honest question:
 
 - The scratch directory has to carry `models-store.json`, because pi's catalogue is not
   only the built-in data: `pi.dev`'s per-provider catalogue is merged in from that file
-  (`remote-catalog-provider.js`). A probe without it would answer "pi has never heard of it"
-  for every model pi.dev added since the bundle was built.
-- The answer decides which mechanism carries a statement about an id — see the section at
-  the end of this file — and it is what the per-model controls are drawn from: a
-  catalogued id starts at its own catalogue entry, an uncatalogued one at the fallback's
-  numbers, and `ModelProfile.writtenModels` records the ids PiKit has written a `models`
-  entry for — the ones the check found absent, plus the ones it wrote before and has not
-  taken back out. The catalogue answer itself is recorded too
-  (`ModelProfile.knownCatalogueIds`), because the launch path has to make the same routing
-  decision with no check to ask.
+  (`remote-catalog-provider.js`). A probe without it would answer "pi has never heard of
+  it" for every model pi.dev added since the bundle was built.
+- The answer decides which mechanism carries a statement about an id: a catalogued id starts
+  at its own catalogue entry, an uncatalogued one at the fallback's numbers, and
+  `ModelProfile.writtenModels` records the ids PiKit has written a `models` entry for — the
+  ones the check found absent, plus the ones it wrote before and has not taken back out. The
+  catalogue answer itself is recorded too (`ModelProfile.knownCatalogueIds`), because the
+  launch path has to make the same routing decision with no check to ask.
 
-**An empty key field is not a reason to refuse the check.** pi builds the available
-snapshot by filtering its composed catalogue through `configuredProviders`
-(`ModelRuntime.runAvailabilityRefresh`), so with no credential the answer is empty — and
-empty is the one reading that must never be taken, because it would mean "pi has never
-heard of any of these" over a catalogue pi describes in full. The fix cannot be to read
-the empty answer as something else; it is to make the answer non-empty, which is what
-`PROBE_API_KEY` does: `catalogueProbe` hands pi a placeholder when the field is blank,
-because a credential only has to *resolve* for the provider's catalogue to be composed and
-its value plays no part in it. The probe writes nothing (`auth.json` is not in the scratch
-directory) and asks only for the catalogue and the process's own state.
+**An empty key field is not a reason to refuse the check.** pi filters its composed
+catalogue through `configuredProviders` (`ModelRuntime.runAvailabilityRefresh`), so with no
+credential the answer is empty — the one reading that must never be taken, because it would
+mean "pi has never heard of any of these" over a catalogue pi describes in full.
+`PROBE_API_KEY` hands pi a placeholder when the field is blank, because a credential only has
+to *resolve* for the provider's catalogue to be composed. The probe writes nothing
+(`auth.json` is not in the scratch directory) and asks only for the catalogue and the
+process's own state.
 
 This is also why the check is keyed on the provider and not on the key: the answer is a
-fact about pi's own bundle, so a keystroke in the key field must not restart a node
-process whose answer cannot change. The 800ms debounce that used to guard that restart is
-gone with it — it was there to stop a process per keystroke, and there are no keystrokes
-in the question any more.
-
-(With the store first, this paragraph is now about step 3 only: the common case never
-reaches a process, so there is no key in the question at all.)
+fact about pi's own bundle, so a keystroke in the key field must not restart a node process
+whose answer cannot change. The 800ms debounce that used to guard that restart is gone with
+it — there is no key in the question any more.
 
 ## The check is a read, so it must not update what it reads
 
 pi's RPC mode starts a fire-and-forget `modelRuntime.refresh()` at launch (`main()`:
-`!offlineMode && appMode==="rpc"`). For the agent that is fine — it is how a `pi` the user
-launched keeps itself current — but for a throwaway process whose whole purpose is to
-report the catalogue, it is three problems at once: a network round trip per provider on a
-phone, a second copy of the refresh the app's launch path already performs
+`!offlineMode && appMode==="rpc"`). For the agent that is fine; for a throwaway process whose
+purpose is to report the catalogue it is three problems: a network round trip per provider on
+a phone, a second copy of the refresh the app's launch path already performs
 (`refreshCatalogueIfStale`), and — because the fetched overlay is published into the live
-process before it is persisted — the possibility that the answer moves under the question
-it is answering. The recorded basis would then describe a state that never produced the
-answer.
+process before it is persisted — the answer moving under the question it answers.
 
 So the read-only launches pass `--offline`. It is the flag the *agent* deliberately does
 not pass (it also switches off pi's update checks, which the user asked for), and that
 asymmetry is the point: for a question about pi's catalogue, the state that answers is the
 state on disk. The same launches pass `--no-session`, because pi would otherwise write the
-throwaway run's session into its default session directory — which is the directory
-PiKit's History page reads — leaving an empty conversation nobody started.
+throwaway run's session into its default session directory — which is the directory PiKit's
+History page reads — leaving an empty conversation nobody started.
 
-**The answer is cached for the app run, and the cache key is the basis.**
-`CatalogueCache` holds one answer per provider and serves it while `catalogueBasis` still
-matches; confirming that is two file reads. A hit is not a shortcut with a caveat: the
-basis names everything the answer is a function of, and the write path trusts the same
-string, so a cached answer is the same claim re-checked cheaply. A *failed* check is not
-cached, which is what makes the model page's retry row worth having.
-
+**The answer is cached for the app run, and the cache key is the basis.** `CatalogueCache`
+holds one answer per provider and serves it while `catalogueBasis` still matches;
+confirming that is two file reads. A hit is not a shortcut with a caveat: the basis names
+everything the answer is a function of, and the write path trusts the same string, so a
+cached answer is the same claim re-checked cheaply. A *failed* check is not cached, which
+is what makes the model page's retry row worth having.
 
 ## Nothing is drawn before the answer
 
-The three controls are a description of what will be written to pi's file, and what gets
-written depends on the check: the ids say which models pi's own entry already describes,
-and the fallback's facts are what an entry for the others has to name. Drawing them before
-the answer is therefore drawing controls whose meaning is not known yet — and the report
-was the shape of that: three states in a row on every visit, a tall block of inert switches
-and empty number fields saying "cannot be filled in yet", the same block saying "reading…",
-and then the real thing, so the card visibly jumped and the jump was the tallest state of
-a card the user could not touch.
+The three controls describe what will be written to pi's file, and what gets written depends
+on the check: the ids say which models pi's own entry already describes, and the fallback's
+facts are what an entry for the others has to name. Drawing them first is drawing controls
+whose meaning is not known yet — a tall block of inert switches and empty number fields on
+every visit, then the real thing, so the card jumped and the jump was its tallest state.
 
 Until the answer is in, the section is one status row — title `pi 模型目录`, and the state
 as its second line — and when the check has failed that row is tappable and says so. A
@@ -183,32 +157,30 @@ answer are required before the controls appear: ids without facts would be the o
 combination that lets the app write pi's hard-coded 128k/16k over a model whose real window
 nobody asked about.
 
-
 ## A custom id's entry is the fallback, plus what the user said
 
 The requirement is one sentence: a model pi's catalogue contains follows the catalogue, a
-model it does not contain follows the fallback, and the three settings adjust the second
-and nothing else. So the `models` entry PiKit writes for a custom id **names every fact pi
+model it does not contain follows the fallback, and the three settings adjust the second and
+nothing else. So the `models` entry PiKit writes for a custom id **names every fact pi
 resolved** — not just `input` — and then the three fields on top.
 
 Which facts those are comes from pi, and the way to get them is the same probe read
-differently: the catalogue check launches its process with `--model pikit-probe-model`,
-an id no provider serves. pi resolves an unknown id through `buildFallbackModel`, which
-copies the provider's default model, so `get_state`'s `session.model` — the reply that is
-also the readiness probe — *is* that copy, with the fallback's window, max-out, cost,
-reasoning flag, thinking-level map and sampling parameters. `modelDefinitionFacts` copies
-the subset of those fields `ModelDefinitionSchema` accepts, whitelisted by name and with
-nulls dropped, because a document pi rejects takes every provider in the file down with
-it. The two omissions are deliberate: `name` (the entry is named after the id it declares)
-and `cost.tiers` (a structure pi validates, for a figure a phone screen never shows).
+differently: the catalogue check launches its process with `--model pikit-probe-model`, an
+id no provider serves. pi resolves an unknown id through `buildFallbackModel`, which copies
+the provider's default model, so `get_state`'s `session.model` — the reply that is also the
+readiness probe — *is* that copy, with the fallback's window, max-out, cost, reasoning flag,
+thinking-level map and sampling parameters. `modelDefinitionFacts` copies the subset of
+those fields `ModelDefinitionSchema` accepts, whitelisted by name and with nulls dropped,
+because a document pi rejects takes every provider in the file down with it. The two
+omissions are deliberate: `name` (the entry is named after the id it declares) and
+`cost.tiers` (a structure pi validates, for a figure a phone screen never shows).
 
 The three settings are then written *last*, because a key put twice replaces the first:
 
 - `input` is `["text", "image"]` when the switch is on, `["text"]` when it is off, and the
   fallback's own list when it has never been touched. The three states are the point: with
   only on/off, an entry written for a model whose fallback takes images would silently take
-  them away, and a switch drawn `off` over such a model would be a capability the app
-  appeared to have removed.
+  them away.
 - `contextWindow` and `maxTokens` are the user's numbers, or the fallback's when nothing has
   been said. Saying nothing means *do not name the key*, which is not the same document as
   naming pi's 128K default — it is the entry that leaves pi's own value alone.
@@ -216,76 +188,65 @@ The three settings are then written *last*, because a key put twice replaces the
 ## One group of rows per model, and numbers edited in a sheet
 
 The three settings used to be a switch row with the model id in its value column and two
-outlined number boxes side by side under it, on a 12dp inset of their own. Reported as
-unfit to look at, and the report is easy to agree with once the three faults are separated:
-nothing named the group (with two declarable models the page drew switch/boxes/divider/
-switch/boxes, and the boxes belonged to a model only by position), the boxes did not line up
-with anything (every other row in the card is 16dp of gutter, a 24dp icon and a 14dp gap;
-the fields started at 12dp, so the card's left edge was ragged in two places), and two
-floating labels over two numbers is a lot of furniture for the rare half of the section.
+outlined number boxes side by side under it, on a 12dp inset of their own. Three faults:
+nothing named the group (with two declarable models the page drew
+switch/boxes/divider/switch/boxes, the boxes belonging to a model only by position); the
+boxes did not line up with anything (every other row is 16dp of gutter, a 24dp icon and a
+14dp gap; the fields started at 12dp, so the card's left edge was ragged in two places); and
+two floating labels over two numbers is a lot of furniture for the rare half of the section.
 
 What is there now is a **heading row per model** — its id, with the rule that applies to it
-underneath, which is the pair of sentences the switch row and the catalogue row used to
-carry separately — then that model's own rows: the image switch, and the two numbers as
-ordinary rows whose value is the number. Tapping a number opens a sheet
-(`ModelNumberSheet`), which is where this app edits one value at a time anyway
-(`WebSearchValueSheet`), keyboard and focus included. A row is 54dp tall against a field's
-56dp plus padding, so the new shape is also the shorter of the two.
+underneath — then that model's own rows: the image switch, and the two numbers as ordinary
+rows whose value is the number. Tapping a number opens a sheet (`ModelNumberSheet`), which
+is where this app edits one value at a time anyway (`WebSearchValueSheet`), keyboard and
+focus included. A row is 54dp tall against a field's 56dp plus padding, so the new shape is
+also the shorter of the two.
 
 Two details are the point rather than the styling:
 
 - **The number rows carry no icon and are indented 38dp** — 16 + 24 + 14, the width of the
   column above them — so their labels line up under the *title* of the switch row they
-  belong to. That is what makes the three rows read as one group.
+  belong to.
 - **A number the user set is drawn plainly and pi's own is drawn grey**
   (`SettingsRow.valueEmphasised`). Before, the boxes were pre-filled with the fallback, so a
   number the user had chosen and a number pi would have used anyway looked identical — and
-  the empty box, which is a real answer ("do not name this key"), was the one state the
-  layout could not show. The sheet opens from the user's value with the fallback as its
-  placeholder, never pre-filled with it, on `WebSearchValueSheet`'s rule: a value that
-  arrives because a placeholder showed it is a configuration the user never chose.
+  the empty box, a real answer ("do not name this key"), was the one state the layout could
+  not show. The sheet opens from the user's value with the fallback as its placeholder,
+  never pre-filled with it, on `WebSearchValueSheet`'s rule: a value that arrives because a
+  placeholder showed it is a configuration the user never chose.
 
-The seeding machinery this replaced — a per-model map of the numbers *as text*, re-derived
-once per answer and never overwritten so that a cleared box stayed cleared — is gone with
-the boxes. It existed because a text field holds a string and "10" is a prefix of "1000000";
-a sheet holds the draft instead, for as long as it is open, which is the same protection
-without a map that has to outlive the typing.
+The per-model map of the numbers *as text* this replaced is gone with the boxes: it existed
+because a text field holds a string and "10" is a prefix of "1000000", and a sheet holds the
+draft while it is open, which is the same protection without a map that has to outlive the
+typing.
 
-`input` is therefore part of the facts, which is the opposite of what the previous build
-did and is what makes an untouched switch harmless.
+`input` is therefore part of the facts, which is what makes an untouched switch harmless: a
+definition that names only `input` would not add image support to the fallback, it would
+replace the fallback with a worse model that happens to take images.
 
-This is why the original "definition path" was wrong in a way the fix had to undo rather
-than patch: `modelFromJson` fills every field a definition does not name from fixed
-values (`reasoning: false`, `contextWindow: 128000`, `maxTokens: 16384`, a zero cost, no
-thinking map) and **never** from the model pi would otherwise have resolved. A definition
-that names only `input` therefore does not add image support to the fallback — it replaces
-the fallback with a worse model that happens to take images.
-
-The record is a claim about a world that moves, so it carries the world with it
-(`ModelProfile.catalogueBasis` — the provider the question was asked about, pi's installed
-version and the revision of `models-store.json`, read *before* the probe runs so that a
-catalogue refreshed during the probe invalidates it). Entries are written only while that
-basis still matches and are withdrawn when it does not; the model page's next check
-re-writes them. The provider belongs in that string because the facts stored beside it are
-that provider's fallback: a profile whose provider was changed would otherwise write one
-provider's window and endpoint into an entry for another. Failing closed
-is the only safe direction here: an entry left in place after pi learned the model would
-replace the window, cost and thinking map pi now has for it, which is exactly the 128K
-bug. A `pi update` therefore drops a custom id back to the fallback until the model page
-is opened again, and that is worth writing down rather than discovering.
+The record carries the world it was made in (`ModelProfile.catalogueBasis` — the provider the
+question was asked about, pi's installed version and the revision of `models-store.json`, read
+*before* the probe runs so that a catalogue refreshed during the probe invalidates it). Entries
+are written only while that basis matches and are withdrawn when it does not. The provider
+belongs in that string because the facts stored beside it are that provider's fallback: a
+profile whose provider was changed would otherwise write one provider's window and endpoint
+into an entry for another. Failing closed is the only safe direction: an entry left in place
+after pi learned the model would replace the window, cost and thinking map pi now has for it.
+A `pi update` therefore drops a custom id back to the fallback until the model page is opened
+again.
 
 Withdrawing those entries needs a way to recognise them, and a facts-carrying entry has no
-fixed shape left to match — so `ModelProfile.writtenModels` is the app's record of every id
-it has written an entry for, accumulating across saves and consulted whatever the basis
-says. `isPikitModelDefinition`'s fixed shape still exists, for the entries the builds
-before the probe left behind. It is serialized under the key those builds used
-(`customImageModels`) for exactly that reason: a migration that reads the record under a
-new name would leave every entry it names in pi's file for ever.
+fixed shape left to match — so `ModelProfile.writtenModels` records every id the app has
+written an entry for, accumulating across saves and consulted whatever the basis says.
+`isPikitModelDefinition`'s fixed shape still exists, for the entries the builds before the
+probe left behind, and is serialized under the key those builds used (`customImageModels`) for
+exactly that reason: a migration that reads the record under a new name would leave every entry
+it names in pi's file for ever.
 
 ## The override half, which is now the half for models pi knows
 
-The app writes **two** kinds of statement, and which one an id gets is the catalogue
-answer the check recorded (`ModelProfile.knownCatalogueIds`):
+The app writes **two** kinds of statement, and which one an id gets is the catalogue answer
+the check recorded (`ModelProfile.knownCatalogueIds`):
 
 - an id pi's catalogue **does not** contain gets a `models` entry — the definition path
   above, which has to carry the fallback's facts because `modelFromJson` fills everything
@@ -294,13 +255,10 @@ answer the check recorded (`ModelProfile.knownCatalogueIds`):
   which names only the fields the user actually changed.
 
 Both mechanisms are needed and neither can do the other's job. `applyModelOverride` runs
-over `composeModelProvider`'s model list, which is the models pi resolved from its own
-catalogue, so an id pi did not resolve never sees an override — that is why a custom id
-needs a definition at all. In the other direction a `models` entry *replaces* pi's entry
-through `modelFromJson`, so writing one for a model pi knows takes away its cost, its
-thinking-level map and its reasoning flag along with the field the user meant to change;
-the device report for that was "context 128K, max-out 16.4K" on a `deepseek-flash` whose
-catalogue entry says 1M and 384K.
+over `composeModelProvider`'s model list, so an id pi did not resolve never sees an override
+— that is why a custom id needs a definition at all. In the other direction a `models` entry
+*replaces* pi's entry through `modelFromJson`, which is why writing one for a model pi knows
+is the 128K/16.4K mistake above.
 
 `modelOverrideFor` names `input`/`contextWindow`/`maxTokens` and **nothing else**, and only
 the ones the user said something about — an untouched field is absent from the entry rather
@@ -309,16 +267,14 @@ model to a number a later pi release could no longer move. `api` and `baseUrl` a
 deliberately absent, which is the point of the mechanism: `applyModelOverride` reads
 neither, so a model declared here keeps the endpoint pi resolved for its provider.
 `modelDefinitionFacts` — the same copy in the other direction — *does* carry both, and that
-is correct there and wrong here: a definition has to stand alone, an override sits on top
-of something that already says where to send the request. `ModelsJsonTest` asserts the
-absence.
+is correct there and wrong here. `ModelsJsonTest` asserts the absence.
 
-The set of ids routed to overrides is gated on the same `catalogueBasis` as the
-definitions, and the gate is not redundancy: the routing *set* is a claim about the
-catalogue at that moment, and a basis that has moved means it may call an id unknown that
-pi has since started cataloguing — the one mistake here that replaces what pi knows. The
-cost is that a pi update returns a declared window to the catalogue's value until the model
-page is visited again, which is the same trade every other declaration in this app makes.
+The set of ids routed to overrides is gated on the same `catalogueBasis` as the definitions:
+the routing *set* is a claim about the catalogue at that moment, and a basis that has moved
+means it may call an id unknown that pi has since started cataloguing — the one mistake here
+that replaces what pi knows. The cost is that a pi update returns a declared window to the
+catalogue's value until the model page is visited again, which is the same trade every other
+declaration in this app makes.
 
 ### The controls, for every model
 
@@ -330,19 +286,13 @@ to say the catalogue's window is wrong for the endpoint in front of you. What th
 show is pi's own entry **for that id** (`CatalogueProbe.facts`, read out of
 `get_available_models` — `ModelRuntime.getAvailableSnapshot` is the composed model list
 itself, so pi hands over the full objects) and, for an id the catalogue does not contain,
-the fallback's numbers, which is what pi resolved the id to. The row's line says which of
-the two it is.
+the fallback's numbers. The row's line says which of the two it is.
 
-The prose that goes with the controls is placed by what it is about, which took two passes
-to get right. The switch's own sentence sits **under the first model's switch** — not in a
-paragraph above the section, where the phrase "this switch" was two rows and a divider away
-from the control it named. It is drawn once rather than per model, because every switch on
-the card means the same thing and the sentence repeated four times would read as four
-statements; what genuinely differs per model is where its values come from, and that is the
-row's own line. The custom endpoint's paragraph stays above the rows, because it is about
-the provider rather than one control. Both sentences also had to be rewritten once a
-catalogued model became declarable: the old pair asserted that the switch does nothing for
-such a model, which is exactly what stopped being true.
+The switch's own sentence sits **under the first model's switch** rather than in a paragraph
+above the section, and it is drawn once rather than per model, because every switch on the card
+means the same thing; what genuinely differs per model is where its values come from, and that
+is the row's own line. The custom endpoint's paragraph stays above the rows, because it is
+about the provider rather than one control.
 
 ### A previous build's overrides
 
@@ -360,8 +310,7 @@ whole provider object — `models` array included — is rebuilt from the profil
 launch (`CustomEndpoint.providerObject`), and the three controls start at pi's own defaults
 for a definition that names nothing (`["text"]`, 128000, 16384). The models of a custom
 endpoint used to be registered as image-capable wholesale, on the argument that claiming
-support a model lacks costs one clear API error while denying support it has costs a
-feature that appears broken with no explanation. The argument is sound and the premise is
-not: pi knows nothing about a relay, so that was not a declaration about a model, it was a
+support a model lacks costs one clear API error while denying support it has costs a feature
+that appears broken with no explanation — but pi knows nothing about a relay, so that was a
 guess written into a file pi believes. The default is now the honest one and the user says
 otherwise per model.

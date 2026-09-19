@@ -44,8 +44,8 @@
 # `\dfrac` — the one thing a model writes that the release build could not draw.
 # The library is ~330 KB of classes against a 107 MB APK, so it is kept whole
 # rather than guessing which of its reflective paths matter; the cost is measured
-# in docs/VERIFICATION.md and `tools/check-release-math.py` fails the build if a
-# release APK loses these entry points again.
+# in `docs/verification/2026-09-19-release-dex.md` and `tools/check-release-math.py` fails
+# the build if a release APK loses these entry points again.
 -keep class org.scilab.forge.jlatexmath.** { *; }
 
 # ---------------------------------------------------------------------------
