@@ -41,7 +41,8 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
    `pikit-dpkg.sh`, `pi-safety-guard.ts`, `storage-self-test.sh`) — and, because the
    image is built from upstream sources rather than committed, the versions the
    image was built from, which `tools/build-runtime-image.py` pins (`BOOTSTRAP_TAG`,
-   the `pi` version, the web-access version) and the image's `revision.txt` records.
+   the `pi` version, the web-access version) and the image's `build-metadata.json`
+   records.
 3. **Say what changed.** Nothing in the Termux packages or the vendored terminal
    modules is modified beyond the prefix rewrite that relocates them to
    `/data/data/pi.kit.mob/files/usr`; that rewrite and every other edit the builder
@@ -60,9 +61,9 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
 | fd | MIT / Apache-2.0 | [sharkdp/fd](https://github.com/sharkdp/fd) |
 | AndroidX, Jetpack Compose, Material 3, Kotlin, kotlinx.serialization, Okio | Apache-2.0 | [developer.android.com/jetpack](https://developer.android.com/jetpack) |
 | `ru.noties:jlatexmath-android` (formula typesetting) | GPL-2.0, over upstream JLaTeXMath's GPL-2.0 **with a linking exception** | [noties/jlatexmath-android](https://github.com/noties/jlatexmath-android), [opencollab/jlatexmath](https://github.com/opencollab/jlatexmath) |
-| Lucide (the model mark, and the command and check marks) | ISC | [lucide.dev](https://lucide.dev) |
+| Lucide (the model, thinking, command and check marks) | ISC | [lucide.dev](https://lucide.dev) |
 
 The web-access extension resolves a further set of MIT/Apache-licensed packages
 (`turndown`, `@mozilla/readability`, `defuddle`, `linkedom`, `unpdf`, `undici`,
 `p-limit`, `typebox`); they are named in the app's credits for the same reason as
-the rest — the list is not decorative, it is what the licence requires.
+the rest, because the list is what the licence requires.

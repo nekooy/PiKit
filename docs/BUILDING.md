@@ -43,13 +43,13 @@ missing rather than failing inside Gradle), assembles the runtime images whose A
 assets do not have them *or whose sources have changed since they were assembled*
 (below), runs the unit suites and the tools that check what Gradle cannot see — the
 images, the relocator against real `.deb` files, the manual's reflow, the terminal
-banners, the agent's delete guard — and then builds
+banners, the agent's delete guard, the README icon — and then builds
 **`arm64`/`x64` × `debug`/`release`**, one Gradle invocation per variant so a failure
 names the one it happened to. Every step streams its output, and the summary at the
 end is the list of files to install. The last thing it does is read the release APKs
 it has just built: `tools/check-release-math.py` fails the build when R8 has removed
 the formula renderer's reflective command table — a failure that no JVM test and no
-debug device can see, and that reached a reader's phone once (ARCHITECTURE §12).
+debug device can see (ARCHITECTURE §12).
 
 | Flag | For |
 | --- | --- |
@@ -90,9 +90,9 @@ Each APK carries exactly one ABI's runtime image, and the app resolves the ABI f
 Studio's default variant is `arm64Debug` (arm64 is declared first), and its *Run*
 also passes `android.injected.build.abi`, the ABI of the device it is deploying to,
 which overrides every module's `abiFilters`. Selecting the wrong variant therefore
-produces an APK that is a genuine mixture — the `arm64` flavor's
-`assets/runtime/arm64-v8a/` with the emulator's `lib/x86_64/libtermux.so` — so it
-installs, starts, and then reports that its runtime image is missing.
+produces a genuine mixture — the `arm64` flavor's `assets/runtime/arm64-v8a/` with
+the emulator's `lib/x86_64/libtermux.so` — that installs, starts, and then reports
+that its runtime image is missing.
 
 Set it once per device, in **Build → Select Build Variant**:
 
@@ -117,47 +117,42 @@ reason — a build/device mismatch is reported, not papered over.
 
 They are not committed. Each is around 285 MB of binaries assembled from upstream
 sources — measured: a 90 MB bootstrap plus the 196 MB of overlay files that are not
-already in it, which is what an install unpacks — and they are reproducible from
-`tools/build-runtime-image.py` plus a network connection, so committing them would
-only ever add a merge conflict. The
+already in it — and they are reproducible from `tools/build-runtime-image.py` plus a
+network connection, so committing them would only ever add a merge conflict. The
 app cannot be built without them: `BootstrapInstaller.plan()` fails with an
 explicit message if `assets/runtime/<abi>/` is empty.
 
 ### An image is rebuilt when a file it is built from changes
 
-Nothing else in the build knows that relationship. Gradle sees the archives as
-assets, so it repackages when they change and cannot tell that they are out of date;
-`verify-runtime-image.py` checks that an image is *self-consistent*, which a stale
+Nothing else in the build knows that relationship: Gradle sees the archives as assets,
+so it repackages when they change and cannot tell that they are out of date, and
+`verify-runtime-image.py` only checks that an image is *self-consistent*, which a stale
 one is. `build-apks.py` therefore compares each image's timestamp (the oldest of
 `bootstrap.zip`, `overlay.zip`, `revision.txt`) against `IMAGE_INPUTS` — the builder,
 the prefix rewriter, the relocator, the `dpkg` wrapper, the delete guard and the
 storage self-test — and rebuilds a flavour whose image predates one of them, naming
 the file that made it stale.
 
-The stakes are higher than a stale file in an APK. The image carries a
+The image carries a
 `revision.txt`, and `BootstrapInstaller.ensureInstalled` compares revisions rather
 than contents, so an image built from a previous guard both ships the previous guard
 *and* leaves a device that already installed the earlier APK running its old
 unpacked runtime after the new APK is installed. That is why the revision digest
 hashes those files' *content* rather than trusting the archives' sizes — and why the
 two files that decide the content rather than ending up in it are hashed as well,
-`tools/prefix_patch.py` and the builder itself: the rewrite is length-preserving by
-design (the package id and the app id are both ten characters), so a change to it can
-rebuild every archive at exactly the same size.
+`tools/prefix_patch.py` and the builder itself: the rewrite is length-preserving (both
+ids are ten characters), so it can rebuild every archive at exactly the same size.
 
-The list is hand-kept like the rest of the build's enumerations, and checked rather
-than trusted: `image_input_manifest_errors()` reads the builder's own source and
-fails the build over a repository file it copies that the list does not name. Use
-`--refresh-images` to rebuild the images regardless.
+The list is checked rather than trusted — `image_input_manifest_errors()` reads the
+builder's own source and fails the build over a repository file it copies that the
+list does not name — and `--refresh-images` rebuilds the images regardless.
 
 **A cache file has to name what it cached.** `.runtime-build/cache` holds downloads so
-a rebuild does not re-fetch 200 MB, and two of them used to be named after the
-*architecture* while their URLs carry the version: the bootstrap archive was
-`bootstrap-<arch>.zip`, so bumping `BOOTSTRAP_TAG` built an image from the previous
-tag's archive and stamped the new tag's revision on it — silently, because the
-revision is hashed from the tag rather than from the bytes. It is now
-`bootstrap-<arch>-<url hash>.zip`; the pi tree records the version it holds in
-`pikit-vendored.json`; `.deb` files carry their version in their names. The apt
+a rebuild does not re-fetch 200 MB, and each one is named after its URL rather than its
+architecture: `bootstrap-<arch>-<url hash>.zip`, `pikit-vendored.json` for the pi tree,
+the version in each `.deb`'s name. An architecture-named cache can build an image around the
+previous `BOOTSTRAP_TAG`'s archive and stamp the new tag's revision on it, silently, because
+the revision is hashed from the tag rather than the bytes. The apt
 *index* is the one deliberate exception: its URL is the repository's moving `stable`
 suite, it has no version to name it by, and keeping the first one fetched is what
 makes two builds of one commit agree — deleting `Packages-<arch>.bz2` is how a new
@@ -174,20 +169,21 @@ The builder's work, in order:
 4. Fix up the things the rewrite cannot reach — the `bin/dpkg` wrapper, the apt
    hooks, the executable-bit list, and `tools/pi-safety-guard.ts` staged where the
    installer can find it.
-5. Emit two stored (uncompressed) zip archives plus `SYMLINKS.txt`, because the
-   zip format cannot represent symlinks.
+5. Emit two stored (uncompressed) zip archives, `revision.txt` (the id the app compares
+   an installed runtime against) and `build-metadata.json` (what the image was built
+   from), plus `SYMLINKS.txt`, because the zip format cannot represent symlinks.
 
 ## Build output
 
-| Artifact | Size | Contains |
+| Artifact | Size (decimal MB, as a download reports it) | Contains |
 | --- | --- | --- |
-| `app-arm64-debug.apk` | ~120 MB | arm64 runtime image, `libtermux.so` (arm64) |
-| `app-arm64-release.apk` | ~105 MB | as above, R8-shrunk |
-| `app-x64-debug.apk` | ~120 MB | x86_64 runtime image, `libtermux.so` (x86_64) |
-| `app-x64-release.apk` | ~105 MB | as above, R8-shrunk |
+| `app-arm64-debug.apk` | ~126 MB | arm64 runtime image, `libtermux.so` (arm64) |
+| `app-arm64-release.apk` | ~107 MB | as above, R8-shrunk |
+| `app-x64-debug.apk` | ~126 MB | x86_64 runtime image, `libtermux.so` (x86_64) |
+| `app-x64-release.apk` | ~107 MB | as above, R8-shrunk |
 
-Each flavour carries only its own architecture's image and native library, so the
-two APKs stay independent and neither is a fat binary. Inside each APK the runtime
+Each flavour carries only its own architecture's image and native library, so neither
+APK is a fat binary. Inside each APK the runtime
 archives are stored uncompressed, which is what lets the app stream them out of
 assets during first-run unpacking without buffering ~110 MB in memory.
 
@@ -196,11 +192,10 @@ assets during first-run unpacking without buffering ~110 MB in memory.
 `assemble<Flavour><BuildType>` also runs `verifyApkPackaging<Flavour><BuildType>`,
 which compares each APK's length with what its own entries account for. It exists
 because one build produced an `app-arm64-debug.apk` of 202.8 MB whose entries came
-to 126.3 MB, and the extra 76.5 MB was not padding: it hid the central directory, so
-Java could not open the file as a zip at all and neither would the installer. The
-packaging task is not the culprit — appending 50 MB to an APK and re-running
-`packageArm64Debug` brings it back to its real size — so the stale artifact came
-from the **build cache**, which that build reported reusing.
+to 126.3 MB: the extra 76.5 MB hid the central directory, so Java could not open the
+file as a zip at all and neither would the installer. Packaging was not the culprit —
+appending 50 MB and re-running `packageArm64Debug` restores the real size — the stale
+artifact came from the **build cache**, which that build reported reusing.
 
 If it fires, rebuild that variant without the cache:
 
@@ -215,16 +210,14 @@ the failure it looks for is measured in megabytes.
 
 ## Signing
 
-Release builds default to the **debug** key. That is deliberate for an unreleased
-project — there is no release keystore in the repository, and an unsigned release
-APK could not be installed at all — but it must be replaced before anything is
-published: a release signed with the debug key can never be upgraded by a
-properly signed one, because the signatures differ.
+Release builds fall back to the **debug** key unless the four `pikit.keystore.*`
+properties are given, so such a build is installable but can never be upgraded by a
+properly signed one. The keystore this project uses lives in `.release/`, ignored and
+never committed, and published releases carry its certificate.
 
 A real keystore is picked up from four Gradle properties, so nothing secret is ever
 committed and a local build and CI use the same path. `docs/RELEASING.md` has the
-keystore this repository keeps in `.release/` (ignored), the `keytool` command that
-makes another one, and the four GitHub secrets that carry it:
+`keytool` command that makes a keystore and the four GitHub secrets that carry it:
 
 ```bash
 ./gradlew :app:assembleArm64Release \
@@ -235,8 +228,7 @@ makes another one, and the four GitHub secrets that carry it:
 ```
 
 All four have to be present — a half-configured keystore is a build failure rather
-than a silent fall back to the debug key, which is how a debug-signed APK would
-otherwise reach a release page. Their absence is not an error: that is the
+than a silent fall back to the debug key. Their absence is not an error: that is the
 debug-key case above. They may be given as `-P` arguments or as
 `ORG_GRADLE_PROJECT_*` environment variables; `tools/build-apks.py` forwards the
 latter as the former, so a build it drives cannot come out debug-signed because an
@@ -251,13 +243,12 @@ adb exec-out screencap -p > shot.png
 adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml
 ```
 
-`uiautomator dump` gives exact node bounds, which is how the layout claims
-elsewhere in this repository were settled — a screenshot tells you something is
+`uiautomator dump` gives exact node bounds: a screenshot tells you something is
 wrong, bounds tell you by how much. `tools/android-ui-dump.py` prints an app's
 clickable nodes with their tap centres.
 
-Two emulator facts worth knowing before you spend an afternoon on them: a
-Play-Store system image has no working DNS and no `adb root` (so the app's own
-`tools/dns-pin.cjs` path exists for testing), and `adb shell pm clear pi.kit.mob`
-deletes the unpacked runtime, costing a fresh ~200 MB unpack on the next launch.
+Two emulator facts worth knowing. A Play-Store system image's DNS comes and goes —
+`ping api.deepseek.com` and `github.com` both resolve, and a later request fails — and
+it has no `adb root`, which is why `tools/dns-pin.cjs` exists for testing. And
+`adb shell pm clear pi.kit.mob` costs a fresh ~285 MB unpack on the next launch, where
 `adb shell am force-stop pi.kit.mob` restarts the app without that cost.

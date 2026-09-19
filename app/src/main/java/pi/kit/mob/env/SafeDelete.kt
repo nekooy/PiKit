@@ -7,11 +7,12 @@ import java.io.File
  * The only place this app is allowed to delete a directory tree.
  *
  * A recursive delete is the single most destructive thing an app can do, and the
- * app has three of them: throwing away a half-unpacked staging tree, replacing
- * the runtime prefix, and rebuilding the `~/storage` symlink farm. Every one of
- * those used to call `File.deleteRecursively()` directly, which is a call that
- * will happily walk anywhere it is pointed — including, if a path is ever wrong,
- * into the user's own files.
+ * three trees this app removes — a half-unpacked staging prefix, the runtime
+ * prefix it replaces, and the model-discovery scratch agent directory — all used to
+ * call `File.deleteRecursively()` directly, which is a call that will happily walk
+ * anywhere it is pointed — including, if a path is ever wrong, into the user's own
+ * files. (The `~/storage` link farm is not on that list: a link has to be removed
+ * *as a link*, so `StorageAccess.removeFarm` deletes them one at a time instead.)
  *
  * This is the guard that makes that class of bug impossible rather than
  * unlikely. It refuses to run unless all of the following hold:
@@ -28,9 +29,10 @@ import java.io.File
  *     a link into shared storage would be walked *through* and the target's
  *     contents deleted. Links are deleted by path instead.
  *
- * The remaining calls to raw `deleteRecursively()` in this codebase are all on
- * files this app itself created (`File.delete()` on a single session JSONL, the
- * temp file in [PrefixPatcher]) and are not trees.
+ * No caller uses `deleteRecursively()` any more: every tree above goes through
+ * [recursively], and the single-file deletes elsewhere in the app — a session
+ * JSONL, the stores' temp files, [PrefixPatcher]'s scratch — are `File.delete()`,
+ * which cannot walk a tree.
  */
 object SafeDelete {
 
