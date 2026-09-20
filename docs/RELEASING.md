@@ -216,8 +216,8 @@ users, never for a version people will install and keep.
       commit it checks out.
 - [ ] `python tools/build-apks.py` passes locally — nothing else runs before the
       release job's own tests, unless you dispatch `ci.yml` on this commit.
-- [ ] `docs/VERIFICATION.md` says what this round was actually exercised on. A
-      feature tested only on the emulator is written down as emulator-only.
+- [ ] The matching file in `docs/verification/` says what this change was actually
+      exercised on. A feature tested only on the emulator is written down as emulator-only.
 - [ ] Anything with a layout change has been through a `uiautomator` pass on a
       device, which is this project's bar for a layout claim.
 - [ ] The keystore secrets are set — or you have decided, on purpose, to publish a

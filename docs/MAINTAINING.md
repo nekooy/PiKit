@@ -88,7 +88,7 @@ your time*, which is the list a change is written against.
 ## Housekeeping
 
 - **Test counts are summed by `tools/build-apks.py` and written down by hand** in
-  `AGENTS.md` and `docs/VERIFICATION.md`; a round that adds tests updates both.
+  `AGENTS.md` and `docs/verification/build-machine.md`; a change that adds tests updates both.
   `CONTRIBUTING.md` points at AGENTS.md rather than keeping a third copy — there were
   three once and they drifted apart (375, 353 and 362 for one suite; 377 in 31 suites
   after a re-measurement).

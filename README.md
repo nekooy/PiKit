@@ -67,8 +67,8 @@ The runtime images are generated rather than committed (~100 MB of archives per 
 
 ## Documentation
 
-[docs/README.md](docs/README.md) indexes every document. These are the ones a reader
-usually wants:
+[docs/README.md](docs/README.md) indexes every document. These are the ones usually wanted
+first:
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — the design decisions and the constraints behind them.
 - [BUILDING.md](docs/BUILDING.md) — prerequisites, the image builder, artifacts, signing, the device workflow.

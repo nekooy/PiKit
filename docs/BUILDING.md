@@ -21,7 +21,7 @@ runtime image has to exist at all is in
   vendored terminal emulator builds a small PTY shim through `ndk-build`. The 36 is
   an AAR floor rather than a preference: the formula renderer's own metadata requires
   it, and CI installs exactly `platforms;android-36` + `build-tools;36.0.0`
-  (ARCHITECTURE §12). `targetSdk` is a separate property and stays 28.
+  (ARCHITECTURE §12.2). `targetSdk` is a separate property and stays 28.
 - **Python 3.10+** with the `zstandard` module (`python -m pip install zstandard`).
   Only the runtime image builder needs it.
 - **Node.js and npm**, only for vendoring the pi agent into that image.
@@ -49,7 +49,7 @@ names the one it happened to. Every step streams its output, and the summary at 
 end is the list of files to install. The last thing it does is read the release APKs
 it has just built: `tools/check-release-math.py` fails the build when R8 has removed
 the formula renderer's reflective command table — a failure that no JVM test and no
-debug device can see (ARCHITECTURE §12).
+debug device can see (ARCHITECTURE §12.2).
 
 | Flag | For |
 | --- | --- |

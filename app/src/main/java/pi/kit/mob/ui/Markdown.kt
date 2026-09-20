@@ -87,7 +87,7 @@ import pi.kit.mob.ui.components.CopyButton
  * they are unreadable. It is also the one part of this file's job that is *not*
  * hand-written — `MathView.kt` hands a formula to JLaTeXMath, because
  * the geometry a formula needs lives in the font's OpenType `MATH` table, which
- * Android's public text API does not expose (ARCHITECTURE §12). This file decides
+ * Android's public text API does not expose (ARCHITECTURE §12.2). This file decides
  * what is a block and which span of a paragraph is a formula; the renderer decides
  * what it looks like.
  *
@@ -219,7 +219,7 @@ internal enum class MdAlign { Start, Center, End }
  * 150-formula reply fills its cache in about 50 ms; what is left of a slow first frame is the
  * layout of the blocks themselves — a `Text`, a `Row`, a divider — and Compose has to measure all
  * of them, because a `Column` here cannot know which are off screen. That is the `Column` note
- * above, and the numbers are in ARCHITECTURE §12.
+ * above, and the numbers are in ARCHITECTURE §12.1.
  */
 /**
  * A reply, block by block.
