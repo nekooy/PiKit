@@ -12,7 +12,7 @@ Every document in this repository, and the rule for adding one.
 | [architecture/](architecture/) | The chapters themselves, one file per topic | When a comment in the code cites a chapter |
 | [BUILDING.md](BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device | Before the first build, on a new machine |
 | [VERIFICATION.md](VERIFICATION.md) | What has actually been exercised, on which emulator and which phone, and what has not | Before claiming something works |
-| [verification/](verification/) | The dated rounds in full, one file per session, plus every check that needs no device | When a number in the summary needs its evidence |
+| [verification/](verification/) | The evidence itself, one file per topic — the devices, the renderer, the release build, and the gaps | When a number in the summary needs its evidence |
 | [RELEASING.md](RELEASING.md) | The version, the tag, the workflows, and the signing that has to happen first | When publishing a build |
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores: upstream pi, packages, dependencies, the device pass | Periodically, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
@@ -29,7 +29,8 @@ it there.
 **One topic per file.** A reader who wants to know why the runtime image is rebuilt
 should open one file and read it, not search a 2,700-line document for the section
 that mentions it. `ARCHITECTURE.md` is a map with a table of chapters for exactly
-that reason.
+that reason, and `VERIFICATION.md` is the same kind of map over the evidence in
+`verification/`: what has been exercised, one file per topic.
 
 **A file that outgrows its topic gets split, not trimmed.** Around 25 KB — roughly
 400 lines — is the point to look at it again; the fix is a new file per topic with a
@@ -39,7 +40,7 @@ rejected a design is the most valuable part of it.
 
 **The index is updated in the same change as the file.** A document nobody links to
 is a document nobody finds; a link to a file that no longer exists is worse, and
-both are checked by reading, since nothing in the build parses Markdown.
+both are found by reading, since nothing in the build parses Markdown.
 
 **Generated files say so.** The first comment names the generator and the command
 that reproduces it (`docs/assets/icon.svg` and `tools/render-icon.py` are the
@@ -47,11 +48,25 @@ pattern), and a checker under `tools/` — listed in `tools/build-apks.py`'s `ch
 — fails the build when the file and its source have drifted apart. Nothing else in
 `docs/` is generated, and a hand-written file never claims to be.
 
-**Architecture chapters keep their § number.** A comment in the code says
-"ARCHITECTURE §4", not a file name, because chapters get split and reordered; §4 is
-`04-package-relocation.md` and the table in `ARCHITECTURE.md` is what resolves the
-number. §6 is two files, §7 is four and §12 is three for the same reason — a chapter
-that grew past one topic keeps its number and gains a part.
+**Architecture chapters are addressed by § number, and a part is part of it.** A comment
+in the code says "ARCHITECTURE §4", not a file name, because files get split and reordered;
+§4 is `04-package-relocation.md` and the table in `ARCHITECTURE.md` is what resolves the
+number. A chapter that grew past one topic has numbered parts — `§6.1`–`§6.2`,
+`§7.1`–`§7.4`, `§12.1`–`§12.3` — and the part number is in the file name, so **every §
+resolves to exactly one file**: a citation without a part is never written.
+
+**The verification record is the exception, and deliberately: it is cited by name.**
+`docs/verification/` is cited from prose — and once from a comment, as a path — where a
+link resolves on its own, and its files gain evidence in place rather than in a new
+chapter, so numbering them would create numbers whose only job is to be maintained.
+`VERIFICATION.md` is still a map, with one row per file.
+
+**Prose states the problem, not who reported it.** A section is not dated, a bug report
+is not quoted as the subject of a sentence, and "the reader reported X" is written as
+what was observed: "a two-character prompt drew an 86%-wide bar". A measurement, a device,
+a log line and an interface string are evidence; the wording of a report is not — but what
+the report *established* is kept with the number that settled it, and that is the same rule
+as never deleting a rejected design.
 
 **Prose is English, the interface is not.** Documentation, comments and commit
 messages are written in English. Anything the user reads goes through

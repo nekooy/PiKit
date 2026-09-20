@@ -24,7 +24,7 @@ Three moves were missing one, and the audit that found them is the list of scree
   it is this tab's second level, and the way out is the header's own action row. Only the
   *list* travels here, not the header: the title never changes (it is always "Files"), and
   what changes is the path under it, which updates in place.
-- **The terminal's session list**, which was a `DropdownMenu` — see §7, sheets.
+- **The terminal's session list**, which was a `DropdownMenu` — see §7.1, sheets.
 
 Not pages, and deliberately so: the four tabs (a crossfade, not a slide), every sheet
 (movement from the bottom edge, not from the side), and every dialog (the platform's own
@@ -48,8 +48,8 @@ page that is a browser or on a page with a sheet over it.
   `BackHandler` at the root, and pages are composed *inside* a transition: `Crossfade` and
   `AnimatedContent` subcompose their content during the layout pass, so a page's handler
   reaches the dispatcher **after** the layer's, and the dispatcher runs the most recently
-  added enabled callback first. A page that was merely `enabled` therefore won, and the
-  reader saw the sheet stay open while the page went back underneath it. Ordering the two
+  added enabled callback first. A page that was merely `enabled` therefore won, and a sheet
+  stayed open while the page went back underneath it. Ordering the two
   handlers correctly would mean depending on the order two composition passes happen to run
   in, so the rule is explicit instead: `PageBackHandler` consumes back only while nothing is
   open above it (`SheetHost.isOpen`).
@@ -121,8 +121,8 @@ the only inset divider in the app.
 `SettingsSection` draws its rows on a `Surface` with `shapes.medium`, and `Surface` clips
 its content to that shape — so a row's press ripple is a rounded rectangle at the card's own
 corners and a plain rectangle everywhere else, and which of the two a row gets depends on
-whether anything is drawn **inside the card** below it. That is the report the search page's
-*添加配置项* row produced: its outcome note (`ConfigNote`, "已保存…") was inside the card
+whether anything is drawn **inside the card** below it. The search page's
+*添加配置项* row showed it: its outcome note (`ConfigNote`, `已保存…`) was inside the card
 under the row, so as soon as an option had been added the row's ripple changed shape — square
 along the bottom edge — while the storage page's *添加文件夹* row, which never had anything
 under it, kept its rounded one.
@@ -180,7 +180,7 @@ rendered document — PiKit's six keys uncommented with the values in effect, ev
 as a comment carrying its path and a usable example — and it asked the user to write JSON to
 set one API key, on a phone keyboard, in a box about 46 columns wide, where the one thing
 that mattered (which of three hundred lines are live) had to be read off a marker in front of
-a `//` — "一头雾水". The renderer, the schema list and the comment reader all remain, because
+a `//`. The renderer, the schema list and the comment reader all remain, because
 they are what keeps the *file* correct and what the fallback editor still shows.
 
 **The list is the file.** `WebSearchStore.extra` walks the document and reports every live
@@ -276,10 +276,9 @@ notification is a check nobody asked for. Four details are each a decision:
   backwards.
 - **It asks the release *page*, not the API.** `GET api.github.com/repos/…/releases/latest`
   is unauthenticated here — there is no token in this app, by design — and GitHub allows
-  **60 such requests per hour per address**, so a reader behind a VPN is asking from an
-  address whose budget a whole node has already spent: measured from exactly such an address,
-  `HTTP/1.1 403 rate limit exceeded` with `X-RateLimit-Limit: 60`, `X-RateLimit-Remaining: 0`
-  and `X-RateLimit-Used: 60` — "开了vpn后就一直403". The page
+  **60 such requests per hour per address**, so an address behind a VPN can already have spent
+  a whole node's budget: measured from exactly such an address, `HTTP/1.1 403 rate limit exceeded`
+  with `X-RateLimit-Limit: 60`, `X-RateLimit-Remaining: 0` and `X-RateLimit-Used: 60`. The page
   `https://github.com/<owner>/<repo>/releases/latest` carries the same fact as a `302` to
   `…/releases/tag/v0.2.0`, against no API budget, and the URL it lands on is both the tag to
   compare and the page to open; a repository with nothing published answers `404` (measured

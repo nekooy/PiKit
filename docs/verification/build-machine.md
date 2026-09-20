@@ -1,6 +1,6 @@
 # On a build machine
 
-*Part of [VERIFICATION.md](../VERIFICATION.md): every check that needs no device.*
+*[Verification](../VERIFICATION.md): every check that needs no device.*
 
 - **Unit tests** — `./gradlew :app:testX64DebugUnitTest`, 377 tests in 31 suites, no device; it
   is the same figure `tools/build-apks.py` sums out of the JUnit XML. Covered:
@@ -69,7 +69,7 @@
   repository uninstallable.
 - **The agent guard's rules** — `node tools/test-safety-guard.mjs`: **180 cases**,
   each run through the same `inspect()` the extension runs and none of them executed.
-  They are grouped by the four axes the report named: a recursive delete outside the
+  They are grouped by four axes: a recursive delete outside the
   workspace is refused (`rm -rf ~`, `$HOME`, `~/tmp/x`, `~/workspace` itself,
   `find ~ -delete`, the same through `~/storage/shared/`, a three-line script, and the
   same command one level down in `sh -c`, `eval` and a heredoc fed to `bash`); pi's own
@@ -77,8 +77,8 @@
   `settings.json`, `models.json`, `web-search.json`, `AGENTS.md`, a session file and
   `pikit-config.json`, plus `mv`, `>`, `truncate`, `sed -i`, `chmod` and `cp` onto them);
   ordinary work outside the workspace still runs (`rm -f ~/notes.md`, `pkg`, `npm`, `git`,
-  and the three false positives the report listed); and work inside the workspace runs at
-  any depth (`rm -rf ~/workspace/myapp/node_modules`, `rm -rf ./dist`,
+  and the false positives a first version of the guard refused); and work inside the
+  workspace runs at any depth (`rm -rf ~/workspace/myapp/node_modules`, `rm -rf ./dist`,
   `find . -name '*.log' -delete`). A relative target is checked against the directory the
   shell is really in: `rm -rf node_modules` is allowed from the workspace and refused from
   `$HOME`. The `write` and `edit` tools are covered by the same protected list, because they
@@ -94,7 +94,11 @@
   resolve (1291 on `arm64-v8a`, 1293 on `x86_64`), every shebang under `bin/` and
   `libexec/` points at something that exists, and `bin/bash` and `bin/node` are
   valid ELF for the target ABI with
-  `DT_RUNPATH=/data/data/pi.kit.mob/files/usr/lib`.
+  `DT_RUNPATH=/data/data/pi.kit.mob/files/usr/lib`. A zip entry carries no Unix mode
+  the JVM will apply, so the installer keeps a list of the paths that need one. It
+  originally missed `lib/node_modules/<package>/bin/`, which made `bin/npm` a symlink to
+  a file that could not be executed — invisible until an update to a newer pi existed.
+  Both the installer and the on-demand repair cover it now.
 - **Both APKs assemble**, debug and release, with `com/termux/terminal/JNI`
   surviving R8 in the release dex; the native PTY shim compiles for both ABIs.
 - **The README's icon is the launcher's icon** — `python tools/render-icon.py
@@ -103,11 +107,12 @@
   `checks`, and the geometry it writes is a copy of the vector's `pathData`
   (read out by regex — the script has no XML parser).
 - **The documentation split lost nothing** — `docs/ARCHITECTURE.md` became a map
-  plus sixteen chapter files under `docs/architecture/`, one per topic, with §6 and §7
-  each several files sharing their number. The old single document's every
+  plus one file per topic under `docs/architecture/`, and the old single document's every
   non-blank, non-heading line was checked to be present in exactly one of them when
-  the split was made, and the §-number references in code comments still resolve
-  because each chapter kept its number.
+  the split was made. The chapters that outgrew one file later gained numbered parts
+  (`§6.1`–`§6.2`, `§7.1`–`§7.4`, `§12.1`–`§12.3`), and every `ARCHITECTURE §N`
+  citation in the code and the documents was re-pointed to the part it means in the
+  same change — 39 sites, checked by reading, since nothing parses Markdown.
 - **Both workflows have run, repeatedly.** `ci.yml` passed on every push to `main` and on
   pull requests to it while it had those triggers, and it has since been made dispatch-only
   — the job is unchanged, so one dispatch confirms it fires and that the removed triggers
@@ -121,7 +126,7 @@
   on the release APK built with the keystore reports the PiKit certificate rather than
   `CN=Android Debug`.
 - **A release has been published from the workflow, and its APKs were checked before it
-  was.** `v0.1.0` (2026-09-19) carries `PiKit-0.1.0-arm64.apk` (107,833,364 bytes),
+  was.** `v0.1.0` carries `PiKit-0.1.0-arm64.apk` (107,833,364 bytes),
   `PiKit-0.1.0-x64.apk` (107,269,014 bytes) and `SHA256SUMS`; the run that made it passed
   the certificate check against the keystore's fingerprint on the runner, and the assets'
   own `digest` fields were compared with the checksum file afterwards. Two failures on the
@@ -129,7 +134,10 @@
   (`HTTP 403: Resource not accessible by integration`) inside the twenty-step build job and
   works from a job of its own, so publishing is a second job; and the first published
   `SHA256SUMS` was eight bytes because its glob had one directory level too many, which the
-  step now refuses to produce.
+  step now refuses to produce. The assets carry the app's own names because the build job
+  renames Gradle's outputs in place, after the signing check and before the checksums and
+  the artifact; before that the release attached `app-arm64-release.apk` and
+  `app-x64-release.apk`, which name neither the application nor the version.
 - **`ORG_GRADLE_PROJECT_*` does not become a Gradle property on the GitHub runner, and
   that is measured.** A two-step probe in `ci.yml` isolated it: a variable written as
   `ORG_GRADLE_PROJECT_probe.dotted` is in the next step's environment (`printenv` prints
@@ -157,7 +165,7 @@
   ```
 
   The page endpoint answered with a real release while the endpoint it replaced refused the same
-  address in the same run — the reader's "开了vpn后就一直403". What has **not** run is that request
+  address in the same run, its anonymous budget already spent. What has **not** run is that request
   from Android: the emulator cannot resolve `github.com` at all (`ping github.com` → `unknown
   host`, while `api.deepseek.com` resolves; the `dns-pins.txt` workaround reaches pi's Node process
   only, never the app's own `HttpURLConnection`). Two states are therefore device-unverified: the

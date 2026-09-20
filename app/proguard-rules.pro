@@ -40,11 +40,11 @@
 #             `\operatorname`, `\substack`, `\oiint`, `\oiiint` fall back
 #
 # i.e. **the release APK typeset six fewer constructs than the debug build this
-# project verifies with**, and the reader's report "只有第一块渲染正常了" is
-# `\dfrac` — the one thing a model writes that the release build could not draw.
+# project verifies with**, and the one that showed on screen was `\dfrac` — the one
+# thing a model writes that the release build could not draw.
 # The library is ~330 KB of classes against a 107 MB APK, so it is kept whole
 # rather than guessing which of its reflective paths matter; the cost is measured
-# in `docs/verification/2026-09-19-release-dex.md` and `tools/check-release-math.py` fails
+# in `docs/verification/release-build.md` and `tools/check-release-math.py` fails
 # the build if a release APK loses these entry points again.
 -keep class org.scilab.forge.jlatexmath.** { *; }
 

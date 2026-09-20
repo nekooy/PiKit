@@ -3,11 +3,10 @@
 //
 // Why this exists: a formula the renderer refuses is drawn as its LaTeX source and logged
 // (`MathCache`: "formula not typeset, drawn as its source: …"), so the only honest inventory
-// of what the renderer can do comes from a device's logcat. Two rounds of reader reports
-// ("某些情况没渲染", "只有第一块渲染正常了") were both answered with it, and the second one
-// turned out not to be about the renderer at all — the *release* APK had lost six constructs
-// to R8 (ARCHITECTURE §12), which is why the sweep is worth running against the release
-// build and not only the debug one.
+// of what the renderer can do comes from a device's logcat. Two sweeps found constructs falling
+// back to their source, and the second turned out not to be about the renderer at all — the
+// *release* APK had lost six constructs to R8 (ARCHITECTURE §12.2), which is why the sweep is
+// worth running against the release build and not only the debug one.
 //
 // It is a device fixture, not a checker: `tools/check-release-math.py` is the check.
 //

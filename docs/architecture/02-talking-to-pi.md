@@ -38,8 +38,8 @@ using captured traffic.
 - **An abort is not a stop.** "`abort` continues queued messages when they remain in
   the session" (`docs/rpc.md`, `clear_queue`), which is why the reference client's Esc is
   `clear_queue` **then** `abort`. PiKit sent only the `abort`, so a prompt queued as
-  `steer` by `sendPrompt` was delivered once the run went idle — the report that the Stop
-  button does not stop. `session.abort()` already covers that run's retry, compaction and
+  `steer` by `sendPrompt` was delivered once the run went idle, which is a Stop button that
+  does not stop. `session.abort()` already covers that run's retry, compaction and
   bash (`abortRetry`/`abortCompaction`/`abortBranchSummary`/`agent.abort`), so
   `abort_retry` and `abort_bash` add nothing; the text `clear_queue` returns goes back
   into the composer when it is empty.
@@ -51,10 +51,10 @@ using captured traffic.
   the same event plus its own refresh.
 - **Nothing is asked for that is not used.** `get_available_models` was asked on every
   handshake for a test that no longer exists — every model of every configured provider
-  with costs, windows and thinking maps, on a phone, at startup. §6, "The override half,
+  with costs, windows and thinking maps, on a phone, at startup. §6.2, "The override half,
   which is now the half for models pi knows", has the rest; the catalogue is refreshed
   instead by pi's own `update --models`, for every built-in provider, on a four-hour
-  freshness window (§7, "The model catalogue is pi's, and stale is the default").
+  freshness window (§7.2, "The model catalogue is pi's, and stale is the default").
 
 The last four points, plus the undocumented `session_info_changed`,
 `entry_appended` and `thinking_level_changed` events, are places where Pi's prose
@@ -76,11 +76,11 @@ catalogue has no network** (`ModelRuntime`'s constructor: `modelNetworkEnabled =
 process.env.PI_OFFLINE === undefined`) as well as "skip the update check, the package
 checks and the install telemetry" — on a phone, the model list never moves. The privacy
 promise the flag also carried is kept by `PI_TELEMETRY=0`. Two app-side changes go with
-it: the catalogue refresh runs on pi's own four-hour **freshness window** (§7), and the
+it: the catalogue refresh runs on pi's own four-hour **freshness window** (§7.2), and the
 update button updates pi, the installed extensions *and* the catalogue. The API key is
 passed through the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for every
 provider Pi already knows, because argv is readable by other processes; for a **custom
-endpoint it has to go on the command line** instead — see §6, which records the control
+endpoint it has to go on the command line** instead — see §6.1, which records the control
 test that established it.
 
 ### Why the built-in tool list is not `--tools`
@@ -89,8 +89,8 @@ test that established it.
 `fd` for exactly those two, and pi enables only `read, bash, edit, write` by default —
 but pi applies it as a **strict allowlist over built-in, extension and SDK tools
 alike** (`agent-session.js` filters `getAllRegisteredTools()` through it). Passing it
-dropped every tool an installed extension registered, with no error anywhere — the report
-"扩展注册的工具无法在对话页使用".
+dropped every tool an installed extension registered, with no error anywhere, so an
+extension's own tools could not be used in a conversation.
 
 The list now reaches pi as `defaultTools` in `$HOME/.pi/agent/settings.json`, which
 selects the **built-in** tools enabled at startup and leaves extension and SDK tools
@@ -116,11 +116,11 @@ own settings empty. That is not a terminal bug — the fix is to keep them, in p
   profile is configured. They are the values the app itself launches pi with, so the
   two cannot disagree; `defaultTools` and the bundled extension's `packages` entry are
   written by the same merge, which is also where the exclusion-list reasoning for
-  `models.json` lives (§6).
+  `models.json` lives (§6.1).
 - The login shell that the Terminal tab spawns gets the active profile's key under the
   same environment variable the agent uses, so the credential is in scope for whatever
   the user runs. It is *not* written to pi's `auth.json`: that would put the secret on
-  disk permanently, when it is already in the agent's argv by design (§6).
+  disk permanently, when it is already in the agent's argv by design (§6.1).
 - Only new shells see a changed key. A session that is already open keeps the
   environment it was born with, which is the honest behaviour for a PTY.
 

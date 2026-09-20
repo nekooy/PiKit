@@ -104,7 +104,7 @@ contradict the guard.
 
 ## The folder switches are a rule, not a wall
 
-The storage page's switches were reported as a dead letter: grant "all files
+The storage page's switches behaved as a dead letter: grant "all files
 access" once and the agent can read `/sdcard` whatever the switches say. That is
 exactly what the platform allows — the grant belongs to the *process*, the agent
 runs as this app, and there is no unprivileged way to run it as anyone else (a
@@ -140,9 +140,9 @@ such variable and starts in `$HOME`, so the guard resolves relative targets agai
 The bar is stated in the UI: the page says the agent may reach the folders that are on
 and that PiKit refuses the rest. It is a policy, not a sandbox — the guard matches paths
 in a command's text, so a path built at runtime or hidden in base64 is not caught — and
-`tools/test-safety-guard.mjs` holds 180 cases: the four axes of the report (a recursive
+`tools/test-safety-guard.mjs` holds 180 cases across four axes — a recursive
 delete outside the workspace, an ordinary command outside it, ordinary work inside it,
-and pi's own files) plus every command that was allowed before this rule existed.
+and pi's own files — plus every command that was allowed before this rule existed.
 
 Measured on the Medium_Phone AVD with nothing granted: the agent asked to run
 `cat /sdcard/Download/notes.txt` came back with *"the pikit-safety-guard intercepted

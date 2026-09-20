@@ -288,7 +288,7 @@ dependencies {
     // Formula typesetting. JLaTeXMath carries the OpenType math metrics the platform's
     // text API does not expose, and it lays a formula out in **422 µs** where the KaTeX
     // metrics library this replaced took **21.7 ms** — measured on the same emulator at
-    // the same size, and the whole of why a formula-heavy reply was slow. ARCHITECTURE §12.
+    // the same size, and the whole of why a formula-heavy reply was slow. ARCHITECTURE §12.2.
     implementation(libs.jlatexmath)
 
     testImplementation(libs.junit)

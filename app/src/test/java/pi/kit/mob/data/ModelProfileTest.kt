@@ -74,7 +74,7 @@ class ModelProfileTest {
 
         // Deduplicated, in the order given; the base URL loses only its trailing
         // slash; the key field is the environment variable's *name* — the secret
-        // itself reaches the process through argv, which ARCHITECTURE §6 explains —
+        // itself reaches the process through argv, which ARCHITECTURE §6.1 explains —
         // and the API is pinned to what relays speak rather than guessed at.
         assertEquals("https://relay.example.com/v1", provider["baseUrl"]!!.jsonPrimitive.content)
         assertEquals(2, models.size)

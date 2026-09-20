@@ -26,7 +26,7 @@ builder:
 - **A custom endpoint's key also reaches the agent process through `argv`.**
   Deliberately: pi does not expand `$VARIABLE` in `models.json` for a provider it
   does not know, so `--api-key` is the only mechanism that works ([ARCHITECTURE
-  §6](docs/architecture/06-custom-endpoints.md)). `/proc/<pid>/cmdline`
+  §6.1](docs/architecture/06.1-custom-endpoints.md)). `/proc/<pid>/cmdline`
   is readable by the same uid, so this widens the exposure from "the app's files" to
   "anything running as this app", and `models.json` itself holds `$PIKIT_API_KEY`
   rather than the key so that the secret exists in one place.

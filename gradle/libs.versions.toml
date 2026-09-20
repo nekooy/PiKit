@@ -15,7 +15,7 @@ okio = "3.9.0"
 # JLaTeXMath's Android port: the typesetter, and the OpenType metrics it carries as
 # its own font files. It replaced `io.github.huarangmeng:latex-*`, whose KaTeX
 # metrics were correct and 21.7 ms per formula — the measurement is in
-# ARCHITECTURE §12. See the comment in `app/build.gradle.kts` for what that bought.
+# ARCHITECTURE §12.2. See the comment in `app/build.gradle.kts` for what that bought.
 jlatexmath = "0.2.0"
 junit = "4.13.2"
 

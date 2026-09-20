@@ -58,22 +58,27 @@ a document is exactly the change that forgets them.
 
 - **One topic per file.** `docs/ARCHITECTURE.md` is a map with a table of chapters,
   not a document; the reasoning itself is one file per chapter in
-  `docs/architecture/`.
+  `docs/architecture/`. `docs/VERIFICATION.md` is the same kind of map over the
+  evidence in `docs/verification/`, one file per topic.
 - **A file that outgrows its topic gets split, not trimmed.** Look at it again
   around 25 KB (roughly 400 lines); the fix is a new file, a row in `docs/README.md`
   and a row in `ARCHITECTURE.md`'s table — never a shorter version of the same
-  reasoning. Each part of a split chapter carries the chapter's own number, because
-  a number survives a split and a file name does not.
+  reasoning. A chapter that outgrows one file gains numbered parts (`§6.1`, `§7.3`,
+  `§12.2`), the part number goes into the file name, and every citation is re-pointed
+  to the part it means in the same change — a citation without a part (`§12`) is never
+  written.
 - **Cite chapters by § number, not by file name**, in code comments and in other
-  documents: `ARCHITECTURE §4` resolves through the table in `ARCHITECTURE.md`, and
-  that is what survives a split or a rename.
+  documents: `ARCHITECTURE §12.2` resolves through the table in `ARCHITECTURE.md`,
+  and that is what survives a split or a rename. The verification record under
+  `docs/verification/` is the exception: it is cited by file name, because a link
+  resolves it and its files gain evidence in place.
 - **A generated file says so, and is checked.** The first comment names the
   generator and the command that reproduces it; a checker under `tools/` — listed in
   `build-apks.py`'s `checks` — fails the build when the file and its source have
   drifted. `docs/assets/icon.svg` (from `tools/render-icon.py`, which reads the
   launcher icon) is the only one today.
 - **The index is updated in the same change as the file.** Nothing in the build
-  parses Markdown, so a link to a file that no longer exists is found by a reader,
+  parses Markdown, so a link to a file that no longer exists is found by reading,
   not by CI.
 - **Prose is English; the interface is not.** Documentation, comments and commit
   messages are English. Anything the user reads goes through `locales/`.
@@ -154,7 +159,7 @@ a formula needs — so `MathView.kt` declares the smallest box centred on the te
 contains the formula's ink and draws the drawable inside it at the offset that puts the formula's
 baseline on the line's. The ascent and descent come from a `TextMeasurer` measurement of the same
 style, because the sentence's font decides them. Two failed attempts are in
-`docs/verification/2026-09-19-renderer-swap.md`, and ARCHITECTURE §12 has the full mechanism.
+`docs/verification/formula-renderer.md`, and ARCHITECTURE §12.2 has the full mechanism.
 
 **A formula the renderer refuses is rewritten before it is given up on.** `LatexCompat.kt` drops
 numbering (`\tag`, `\label`, `\nonumber`), unwraps decorations (`\cancel{x}` → `x`), renames
@@ -167,7 +172,7 @@ from KaTeX's metrics and cost **21.7 ms per formula**: 142 formulas took 3078 ms
 worker, where JLaTeXMath lays the same formula out in **0.42 ms** on the same emulator. Moving that
 work off the UI thread — which `MathCache` does, and should keep doing — is not a substitute for the
 renderer being cheap: it was tried first and the reply was still slow. What the swap cost is real
-and is recorded in ARCHITECTURE §12: the ink is fixed at typeset time (so a theme change re-typesets,
+and is recorded in ARCHITECTURE §12.2: the ink is fixed at typeset time (so a theme change re-typesets,
 0.35 ms a formula), and the MathSpeak accessibility description is gone, leaving the LaTeX source as
 the placeholder's alternative text.
 
@@ -177,18 +182,18 @@ and `TeXFormulaParser` use `Class.forName`, `getDeclaredMethod`/`getMethod` and
 `getDeclaredField`, so a member nothing appears to call is deleted and the lookup returns null.
 Measured on one 42-construct sweep: the debug APK fell back on `\oiint`/`\oiiint` only, the release
 APK additionally on `\dfrac`, `\tfrac`, `\left\{…\right.`, `\begin{align}`, `\operatorname` and
-`\substack` — a difference no debug build shows, which is how it reached a reader's phone while
+`\substack` — a difference no debug build shows, which is how it reached a phone while
 every formula test on the emulator was green. `app/proguard-rules.pro` keeps the whole
 `org.scilab.forge.jlatexmath` package (330 KB of classes against a 107 MB APK, and **218**
 reflective entry points to guess wrong about otherwise), and `tools/check-release-math.py` — called
 by `build-apks.py` **after** the APKs are built, not from its `checks` list — fails when a release
 APK's dex has lost them. **A formula verified on a debug build is not a formula verified on the
-build a reader installs**; ARCHITECTURE §12 and `docs/verification/2026-09-19-release-dex.md` carry
+build people install**; ARCHITECTURE §12.2 and `docs/verification/release-build.md` carry
 the numbers.
 
 **Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
-glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12 part 3 has that
-sequence. **Render candidates at the size the app draws them and let the reader choose** — a 64dp
+glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12.3 has that
+sequence. **Render candidates at the size the app draws them, and choose from those** — a 64dp
 preview says nothing about whether a glyph survives at 21dp. And **a resource that fails to compile
 is silently replaced by a cached older one**, which is how a drawable went missing from three APKs:
 `unzip -l app-debug.apk | grep ic_whatever` is the check that settles it — **on a debug APK**,
@@ -196,16 +201,16 @@ because a release one renames every resource to a two-character path (`res/0K.xm
 grep returns nothing for a resource that is present and correct.
 
 **A glyph from another set has another weight, so its size is a call-site decision.** ⌘ at the
-21dp the Material glyphs beside it use is the report "常用命令图标太大了": Lucide draws that
+21dp the Material glyphs beside it use is too heavy: Lucide draws that
 figure out to 21 of its 24 units where Material's `Add` keeps its ink inside 14. It is drawn at
 **17dp** in `ChatScreen.kt`, and the vector is untouched — scaling a borrowed glyph at the call
 site is a layout decision; editing its geometry is the mistake the bullet above is about.
 
-**When a report is about how something looks, ask for a picture of the thing wanted — not for a
+**When the question is how something should look, ask for a picture of the thing wanted — not for a
 menu.** The copy button took four rounds — six *containers*, then six glyphs from other icon sets,
 then five more sets — before an SVG pasted into the conversation (`ic_copy.xml`) worked;
 `ic_check.xml` is Lucide's check at about the weight of its walls, and `CopyButton.kt` is the one
-composable both copy buttons use. ARCHITECTURE §12 part 3 has the four rounds.
+composable both copy buttons use. ARCHITECTURE §12.3 has the four rounds.
 
 **`Modifier.fillMaxWidth()` sets the *minimum* width, not just the maximum.** Inside a
 parent that caps the width — `Box(Modifier.widthIn(max = …))` over a `BoxWithConstraints`
@@ -282,6 +287,13 @@ prompt, which billed the idle gap to a turn that had already finished.
   landed at y=1454 with the keyboard up against y=2274 with it down"). Keep the
   reasoning for a rejected design when you remove the behaviour: it moves into the
   chapter under `docs/architecture/` that describes it, and is never deleted.
+- **Prose states the problem, not who reported it.** A chapter, a comment or a
+  commit message describes what was observed and what it measured — "a
+  two-character prompt drew an 86%-wide bar" — and never dates a section, quotes a
+  bug report as the subject of a sentence, or writes "the reader reported X".
+  Quoting a specification, a log line or an interface string is fine; narrating a
+  report is not. What a report *established* stays, because that is the rejected
+  design's reasoning.
 - **User-visible text goes through the catalogs**, never inline. `locales/Strings.kt`
   declares the interfaces; the three catalogs implement them, and the compiler
   refuses one that is missing a member. Prose is the exception: `ManualText*.kt`
@@ -306,7 +318,7 @@ prompt, which billed the idle gap to a turn that had already finished.
   `dumpsys window` calls it visible and `dumpsys input` calls it `NOT_VISIBLE,
   alpha=0` with a blank `screencap` — and `uiautomator dump` still returns a correct
   tree, so it looks like a broken instrument rather than a broken backend.
-  `docs/verification/2026-09-18-rendering-rounds.md` has the full reading.
+  `docs/verification/emulator.md` has the full reading.
 - **`pkg install` relocation has two paths** — apt's `DPkg::Pre-Install-Pkgs` hook
   (`pikit-relocate --apt-list`, which reads the archives apt is about to hand to
   dpkg from stdin), plus a `bin/dpkg` wrapper around a renamed `bin/dpkg.real`.
@@ -319,7 +331,7 @@ prompt, which billed the idle gap to a turn that had already finished.
   §4).
 - **`--api-key` goes on the command line for a custom endpoint**, because pi does
   not expand `$VARIABLE` in `models.json` for a provider it does not know. The key
-  is therefore in argv, deliberately; ARCHITECTURE §6 has the control test.
+  is therefore in argv, deliberately; ARCHITECTURE §6.1 has the control test.
 - **The emulator's DNS comes and goes.** Measured on the Medium_Phone AVD
   (Play-Store `user` build): `ping api.deepseek.com` and `ping github.com` both
   resolve, and a `pi` run by hand reached the provider and got a real `401` back —

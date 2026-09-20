@@ -21,10 +21,10 @@
  * `cases`, `\text{}`, `\binom`, `\sqrt[3]`, `\mathbb{}` and `\underset`. That is a factor of about
  * fifty, and it is the whole of the reason a formula-heavy reply was slow.
  *
- * The two renderers disagree about one thing a reader will notice: JLaTeXMath sets Computer
+ * The two renderers disagree about one visible thing: JLaTeXMath sets Computer
  * Modern, so a formula is spaced and hinted slightly differently from the KaTeX metrics this
  * project used before. That is a change of voice, not a loss of correctness, and it is recorded in
- * ARCHITECTURE §12 with the rest of the trade.
+ * ARCHITECTURE §12.2 with the rest of the trade.
  *
  * ## What a formula is here
  *
