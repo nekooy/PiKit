@@ -476,6 +476,37 @@ class WebSearchStoreTest {
     }
 
     @Test
+    fun `the commands are not the switch's keys, so a file that sets them is read past`() {
+        // The switch was widened to the four `commands.*` keys once and the change
+        // was withdrawn (ARCHITECTURE §9.2): one boolean over nine keys overwrites a
+        // hand-set key on the next tap anywhere on the page. So the commands stay the
+        // file's, and this pins what that means — a file that turned them off is read
+        // as "on" while any tool is left, because `/websearch` is still registered.
+        val commandsOff = """
+        {
+          "commands": {
+            "websearch": {"enabled": false},
+            "curator": {"enabled": false},
+            "search": {"enabled": false},
+            "google-account": {"enabled": false}
+          }
+        }
+        """.trimIndent()
+
+        assertTrue(readWebSearchSettings(commandsOff)!!.enabled)
+        assertTrue(
+            "the switch does not write them either",
+            WEB_SEARCH_OWNED_PATHS.none { it.startsWith("commands.") },
+        )
+        val written = parse(stripJsonComments(render(document = parse(commandsOff), settings = WebSearchSettings())))
+        assertEquals(
+            "a command the user turned off is left exactly as it was",
+            JsonPrimitive(false),
+            written.obj("commands").obj("search").value("enabled"),
+        )
+    }
+
+    @Test
     fun `a value of the wrong type reads as absent`() {
         val text = """
         {

@@ -136,7 +136,10 @@ internal fun SearchPage(
                     // One switch over the extension's five keys. It is a real
                     // master: off takes the search, source-check, fetch and
                     // retrieval tools all with it, which is what the subtitle
-                    // beside it promises.
+                    // beside it promises. It deliberately does not take the
+                    // extension's four commands with it: one boolean over nine keys
+                    // would overwrite a hand-set command with the next tap on any row
+                    // (ARCHITECTURE §9.2).
                     SettingsSwitchRow(
                         title = text.settings.webAccess,
                         subtitle = text.settings.webAccessSubtitle,
