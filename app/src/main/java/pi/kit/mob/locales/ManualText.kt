@@ -120,7 +120,9 @@ Type into the box at the bottom and press the
 round arrow. While the model answers it becomes
 a red stop button. The header holds the
 conversation's name, the agent's state and three
-icons: history, new conversation, compress.
+icons: history, new conversation, compress. The
+name is the first thing you wrote, or **PiKit**
+while the conversation is still empty.
 
 The chips above the input are everything you
 change while talking:
@@ -162,10 +164,11 @@ The transcript:
   ✕ as it finishes: tap to read the output, and
   copy it from there.
 
-Long-press text to copy it. Answers are
-Markdown, and code blocks scroll sideways. The
-ticks down the right edge are the turns: tap one
-to jump to that turn.
+Long-press text to copy it. Answers are rendered
+as Markdown, code blocks scroll sideways, and
+inline code is drawn as a rounded chip: a
+long-press still selects and copies it,
+including part of it.
 
 ## 4. Terminal
 
@@ -240,6 +243,19 @@ paths outside the app's private data. **Settings
 both checks for real, in a separate process, one
 line per check.
 
+A bundled safety extension checks every `bash`,
+`write` and `edit` call before it runs and
+refuses the destructive ones: a recursive delete
+outside the workspace, a filesystem command, a
+write to a raw device, deleting or overwriting
+pi's own credentials or settings, or naming a
+folder you did not grant. It is on by default,
+and the switch is on **Settings → Shared
+storage**. Turning it off asks for confirmation
+first and uninstalls nothing either way; the
+agent restarts so the change takes effect at
+once.
+
 ## 7. Web search
 
 The agent can search the web out of the box:
@@ -282,6 +298,7 @@ of it.
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
+| Agent context | The system prompt, the global AGENTS.md, the runtime, the tools and the conversation |
 | Agent process | Start, stop, restart, working directory |
 | Maintenance & repair | Model list, relocation, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
