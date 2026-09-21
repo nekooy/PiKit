@@ -58,8 +58,8 @@ a document is exactly the change that forgets them.
 
 - **One topic per file.** `docs/ARCHITECTURE.md` is a map with a table of chapters,
   not a document; the reasoning itself is one file per chapter in
-  `docs/architecture/`. `docs/VERIFICATION.md` is the same kind of map over the
-  evidence in `docs/verification/`, one file per topic.
+  `docs/architecture/`, and each chapter carries its own measurements — the number
+  that settled a design and the design it rejected live together.
 - **A file that outgrows its topic gets split, not trimmed.** Look at it again
   around 25 KB (roughly 400 lines); the fix is a new file, a row in `docs/README.md`
   and a row in `ARCHITECTURE.md`'s table — never a shorter version of the same
@@ -69,9 +69,7 @@ a document is exactly the change that forgets them.
   written.
 - **Cite chapters by § number, not by file name**, in code comments and in other
   documents: `ARCHITECTURE §12.2` resolves through the table in `ARCHITECTURE.md`,
-  and that is what survives a split or a rename. The verification record under
-  `docs/verification/` is the exception: it is cited by file name, because a link
-  resolves it and its files gain evidence in place.
+  and that is what survives a split or a rename.
 - **A generated file says so, and is checked.** The first comment names the
   generator and the command that reproduces it; a checker under `tools/` — listed in
   `build-apks.py`'s `checks` — fails the build when the file and its source have
@@ -158,8 +156,8 @@ caller's job. Compose places an inline placeholder by an *edge*, and of the edge
 a formula needs — so `MathView.kt` declares the smallest box centred on the text's centre that
 contains the formula's ink and draws the drawable inside it at the offset that puts the formula's
 baseline on the line's. The ascent and descent come from a `TextMeasurer` measurement of the same
-style, because the sentence's font decides them. Two failed attempts are in
-`docs/verification/formula-renderer.md`, and ARCHITECTURE §12.2 has the full mechanism.
+style, because the sentence's font decides them. ARCHITECTURE §12.2 has the two failed
+attempts and the full mechanism.
 
 **A formula the renderer refuses is rewritten before it is given up on.** `LatexCompat.kt` drops
 numbering (`\tag`, `\label`, `\nonumber`), unwraps decorations (`\cancel{x}` → `x`), renames
@@ -188,7 +186,7 @@ every formula test on the emulator was green. `app/proguard-rules.pro` keeps the
 reflective entry points to guess wrong about otherwise), and `tools/check-release-math.py` — called
 by `build-apks.py` **after** the APKs are built, not from its `checks` list — fails when a release
 APK's dex has lost them. **A formula verified on a debug build is not a formula verified on the
-build people install**; ARCHITECTURE §12.2 and `docs/verification/release-build.md` carry
+build people install**; ARCHITECTURE §12.2 carries
 the numbers.
 
 **Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
@@ -318,7 +316,6 @@ prompt, which billed the idle gap to a turn that had already finished.
   `dumpsys window` calls it visible and `dumpsys input` calls it `NOT_VISIBLE,
   alpha=0` with a blank `screencap` — and `uiautomator dump` still returns a correct
   tree, so it looks like a broken instrument rather than a broken backend.
-  `docs/verification/emulator.md` has the full reading.
 - **`pkg install` relocation has two paths** — apt's `DPkg::Pre-Install-Pkgs` hook
   (`pikit-relocate --apt-list`, which reads the archives apt is about to hand to
   dpkg from stdin), plus a `bin/dpkg` wrapper around a renamed `bin/dpkg.real`.

@@ -166,7 +166,9 @@ out to them rather than carrying decompressors written in JavaScript.
   relocator refused every run (`relocator misconfigured: OLD_ID === NEW_ID`, exit 4)
   and every package installed afterwards went unrelocated. Measured on the device with
   a before/after sha256 catalogue of all 19 325 files: exactly three files changed, and
-  nothing else. The list is read per pass rather than held from construction, because
+  nothing else — and the same press took the storage self-test from `10 passed, 0 failed`
+  to `8 passed, 2 failed`, both failures its relocator-boundary checks, which key on the
+  refusal message the misconfigured script never reaches. The list is read per pass rather than held from construction, because
   the runtime is re-extracted into the prefix after the session object exists, and it is
   the *union* of the file and a compiled-in fallback, so a stale or partial file cannot
   drop protection.

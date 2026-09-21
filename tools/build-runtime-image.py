@@ -144,7 +144,7 @@ PI_PACKAGE = "@earendil-works/pi-coding-agent"
 #: loads the bundled TypeScript guard extension through, so every agent start after it
 #: failed outright (`Failed to load extension "…/pi-safety-guard.ts": Cannot find
 #: module 'jiti'`). A version that ships in the image cannot be half-installed.
-#: `docs/verification/maintenance-page.md` has the reading.
+#: ARCHITECTURE §2 has the reasoning.
 PI_VERSION = "0.86.1"
 
 PI_ENTRY_RELATIVE = f"lib/node_modules/{PI_PACKAGE}/dist/bundle/cli.js"

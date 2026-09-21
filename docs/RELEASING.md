@@ -20,7 +20,8 @@ pikit.versionCode=1
 - **`versionName`** is what the user sees — **Settings → About PiKit**, the in-app
   manual's subtitle, and the release tag. (It is *not* what a shell sees:
   `TERMUX_VERSION` reports the bundled environment's version — the image's own
-  metadata, not this file; `docs/VERIFICATION.md` records the check.) It must be a bare
+  metadata, not this file, and `BundledImageTest` pins the tag parse behind it.)
+  It must be a bare
   `major.minor.patch`; `app/build.gradle.kts` refuses anything else, because
   `0.1.0-x64` is a build note rather than a version and the ABI is already reported
   by the runtime revision on the same page.
@@ -216,8 +217,9 @@ users, never for a version people will install and keep.
       commit it checks out.
 - [ ] `python tools/build-apks.py` passes locally — nothing else runs before the
       release job's own tests, unless you dispatch `ci.yml` on this commit.
-- [ ] The matching file in `docs/verification/` says what this change was actually
-      exercised on. A feature tested only on the emulator is written down as emulator-only.
+- [ ] Every behaviour this release changes has its reasoning and its measurement in
+      the chapter that describes it — a feature exercised only on the emulator is
+      written down as emulator-only, never as verified.
 - [ ] Anything with a layout change has been through a `uiautomator` pass on a
       device, which is this project's bar for a layout claim.
 - [ ] The keystore secrets are set — or you have decided, on purpose, to publish a

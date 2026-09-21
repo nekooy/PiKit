@@ -18,7 +18,7 @@ of everything under `docs/`.
 | --- | --- | --- |
 | 1 | [The prefix cannot move](architecture/01-the-prefix.md) | Why `/data/data/pi.kit.mob/files/usr` is rewritten into every binary in place, and why `targetSdk` stays 28 |
 | 2 | [Talking to Pi](architecture/02-talking-to-pi.md) | `--mode rpc` instead of driving the TUI through a PTY, and the exact command line |
-| 3 | [What is baked in](architecture/03-what-is-baked-in.md) | What the runtime image carries, why `rg` and `fd` are not optional, and why every version in it — pi's included — is pinned |
+| 3 | [What is baked in](architecture/03-what-is-baked-in.md) | What the runtime image carries, why `rg` and `fd` are not optional, why every version in it — pi's included — is pinned, and what it deliberately does not carry |
 | 4 | [`pkg install` without the user noticing](architecture/04-package-relocation.md) | Relocating a package on the tar stream, the two install paths, and the one file the rewrite must not touch |
 | 5 | [Storage, and why the first design could delete a phone](architecture/05-storage-and-safety.md) | The three layers — a scoped grant, a refusing delete, a guard inside the agent — and the self-test |
 | 6.1 | [Custom endpoints](architecture/06.1-custom-endpoints.md) | `models.json` merged and never replaced, the provider list, why the key is in `argv`, and the end-to-end run |
@@ -28,12 +28,12 @@ of everything under `docs/`.
 | 7.3 | [The transcript](architecture/07.3-transcript.md) | Following, folding, tool rows, the removed cursor and turn rail, and the page's rhythm |
 | 7.4 | [The terminal's key bar](architecture/07.4-terminal-keys.md) | Uniform keys, an arrow pad, and the word that toggles |
 | 8 | [Restoring a conversation](architecture/08-restoring-a-conversation.md) | How a reopened conversation gets its turns, durations and folding back |
-| 9 | [Pages, and which moves are one](architecture/09-pages-and-navigation.md) | Back behaviour, the flattened settings root, sheets, dividers, and forms that ask before leaving |
+| 9 | [Pages, and which moves are one](architecture/09-pages-and-navigation.md) | Back behaviour, the flattened settings root, sheets, dividers, forms that ask before leaving, and what the maintenance page says it does |
 | 10 | [Process and state ownership](architecture/10-process-and-state.md) | Who owns the agent process, the session and the saved state |
 | 11 | [Vendored code](architecture/11-vendored-code.md) | The two Termux modules, why only those two, and their licence |
 | 12.1 | [What the model writes](architecture/12.1-markdown-and-math.md) | The Markdown half: what the parser accepts, the inline walk, and the test that could not catch a bug |
 | 12.2 | [Mathematics](architecture/12.2-mathematics.md) | Why the renderer is a library, how a formula's line box is built, and every measurement that chose it |
-| 12.3 | [Tables, display formulas, and the marks](architecture/12.3-display-and-marks.md) | Table layout, display formulas as paragraphs, and the glyphs that were chosen |
+| 12.3 | [Tables, display formulas, and the marks](architecture/12.3-display-and-marks.md) | Table layout, display formulas as paragraphs, the glyphs that were chosen, and the colour one action carries |
 
 ## How to read it
 

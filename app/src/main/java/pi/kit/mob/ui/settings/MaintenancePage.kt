@@ -39,7 +39,7 @@ import pi.kit.mob.pi.StorageSelfTest
  * arrives with a new PiKit; replacing it on the device was removed after a
  * half-completed `npm install -g` left a tree the agent could not start from (the
  * `jiti` the 0.86 TypeScript guard extension is loaded through was gone). See
- * [CatalogueUpdater] and `docs/verification/`. What the button below does instead is
+ * [CatalogueUpdater] and ARCHITECTURE §2. What the button below does instead is
  * metadata: the providers' model catalogues, which pi's launch path refreshes on its
  * own four-hour window and which the button forces when a just-released model is
  * wanted now.

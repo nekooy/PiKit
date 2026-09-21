@@ -11,8 +11,6 @@ Every document in this repository, and the rule for adding one.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The map of the design decisions and the constraints behind them | Before changing anything whose shape looks arbitrary |
 | [architecture/](architecture/) | The chapters themselves, one file per topic | When a comment in the code cites a chapter |
 | [BUILDING.md](BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device | Before the first build, on a new machine |
-| [VERIFICATION.md](VERIFICATION.md) | What has actually been exercised, on which emulator and which phone, and what has not | Before claiming something works |
-| [verification/](verification/) | The evidence itself, one file per topic — the devices, the renderer, the release build, and the gaps | When a number in the summary needs its evidence |
 | [RELEASING.md](RELEASING.md) | The version, the tag, the workflows, and the signing that has to happen first | When publishing a build |
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores: upstream pi, packages, dependencies, the device pass | Periodically, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
@@ -29,8 +27,8 @@ it there.
 **One topic per file.** A reader who wants to know why the runtime image is rebuilt
 should open one file and read it, not search a 2,700-line document for the section
 that mentions it. `ARCHITECTURE.md` is a map with a table of chapters for exactly
-that reason, and `VERIFICATION.md` is the same kind of map over the evidence in
-`verification/`: what has been exercised, one file per topic.
+that reason, and each chapter is one topic: the measurement that settled a design and
+the design it rejected live together in the chapter that describes the behaviour.
 
 **A file that outgrows its topic gets split, not trimmed.** Around 25 KB — roughly
 400 lines — is the point to look at it again; the fix is a new file per topic with a
@@ -55,11 +53,11 @@ number. A chapter that grew past one topic has numbered parts — `§6.1`–`§6
 `§7.1`–`§7.4`, `§12.1`–`§12.3` — and the part number is in the file name, so **every §
 resolves to exactly one file**: a citation without a part is never written.
 
-**The verification record is the exception, and deliberately: it is cited by name.**
-`docs/verification/` is cited from prose — and once from a comment, as a path — where a
-link resolves on its own, and its files gain evidence in place rather than in a new
-chapter, so numbering them would create numbers whose only job is to be maintained.
-`VERIFICATION.md` is still a map, with one row per file.
+**A measurement lives with the design it settled, not in a separate record.** Node bounds
+from `uiautomator`, a `logcat` line, a frame duration and a byte count are the reasoning:
+they say why something is shaped the way it is and what the alternative cost. Each chapter
+therefore carries its own evidence, in place and undated, and there is no second tree of
+topics to keep in step with it.
 
 **Prose states the problem, not who reported it.** A section is not dated, a bug report
 is not quoted as the subject of a sentence, and "the reader reported X" is written as
