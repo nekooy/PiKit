@@ -83,7 +83,7 @@ CACHE_DIR = BUILD_ROOT / "cache"
 STAGING_ROOT = BUILD_ROOT / "staging"
 
 #: Bootstrap release pinned by this project. Bump deliberately, then rebuild.
-BOOTSTRAP_TAG = "bootstrap-2026.09.06-r1+apt.android-7"
+BOOTSTRAP_TAG = "bootstrap-2026.09.20-r1+apt.android-7"
 
 #: Termux apt repository. `Packages.xz` does not exist; `.bz2` is the smallest.
 APT_BASE = "https://packages.termux.dev/apt/termux-main"
