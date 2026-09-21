@@ -7,6 +7,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
@@ -55,6 +56,18 @@ internal sealed interface SettingsPage {
 
     /** Which of the user's folders the agent may reach. */
     data object Storage : SettingsPage
+
+    /**
+     * What the agent is told before it starts, and the one part of it that is a
+     * document the user can edit.
+     *
+     * Its own page rather than a section of the storage page: it is the answer to
+     * "what does the agent know?", which spans the model, the folders, the search
+     * configuration and the guard, and it belongs between the two rows whose
+     * subjects it also contains — the storage switches below it and the agent
+     * process above it.
+     */
+    data object AgentContext : SettingsPage
 
     data object Manual : SettingsPage
 
@@ -118,6 +131,7 @@ private val SettingsPageSaver: Saver<SettingsPage, String> = Saver(
             encoded == "Advanced" -> SettingsPage.Root
             encoded == "Maintenance" -> SettingsPage.Maintenance
             encoded == "Storage" -> SettingsPage.Storage
+            encoded == "AgentContext" -> SettingsPage.AgentContext
             encoded == "Manual" -> SettingsPage.Manual
             encoded == "About" -> SettingsPage.About
             encoded == "Search" -> SettingsPage.Search
@@ -133,6 +147,7 @@ private fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Agent -> "Agent"
     SettingsPage.Maintenance -> "Maintenance"
     SettingsPage.Storage -> "Storage"
+    SettingsPage.AgentContext -> "AgentContext"
     SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
     SettingsPage.Search -> "Search"
@@ -262,6 +277,11 @@ fun SettingsScreen(session: PiAgentSession) {
                 )
 
                 SettingsPage.Storage -> StoragePage(
+                    session = session,
+                    onBack = { open(SettingsPage.Root) },
+                )
+
+                SettingsPage.AgentContext -> AgentContextPage(
                     session = session,
                     onBack = { open(SettingsPage.Root) },
                 )
@@ -396,6 +416,19 @@ private fun RootPage(
                     },
                     showChevron = true,
                     onClick = { onOpen(SettingsPage.Storage) },
+                )
+                SettingsDivider()
+                // Between the folders and the process, which is also where its
+                // subject sits: what the agent may reach is the row above, and what
+                // pi is launched with is the row below. This row is what the two of
+                // them *add up to* as far as the model is concerned — plus the one
+                // document that is neither.
+                SettingsRow(
+                    title = text.settings.agentContextTitle,
+                    subtitle = text.settings.agentContextSubtitle,
+                    icon = Icons.Filled.Psychology,
+                    showChevron = true,
+                    onClick = { onOpen(SettingsPage.AgentContext) },
                 )
                 SettingsDivider()
                 SettingsRow(

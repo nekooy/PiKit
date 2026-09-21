@@ -675,6 +675,59 @@ interface Strings {
         val storageGuardOffBody: String
         val storageGuardOffConfirm: String
 
+        // Agent context: a short explanation of what the model is given, and the one
+        // control on the page — the global AGENTS.md.
+        val agentContextTitle: String
+        val agentContextSubtitle: String
+
+        /** The label over the explanation: "what the context holds". */
+        val agentContextSection: String
+
+        /**
+         * The explanation, as numbered points: a lead line and five parts, each a
+         * title and a body.
+         *
+         * One block of strings rather than a row per part: this is a description of
+         * what the model receives, not a control panel, and a row with a value column
+         * and a chevron promises something to read or to open. The one part that *is*
+         * a control — the global `AGENTS.md` — is a row on the same card.
+         */
+        val agentContextLead: String
+        val agentContextSystemTitle: String
+        val agentContextSystemBody: String
+        val agentContextInstructionsTitle: String
+        val agentContextInstructionsBody: String
+        val agentContextRuntimeTitle: String
+        val agentContextRuntimeBody: String
+        val agentContextToolsTitle: String
+        val agentContextToolsBody: String
+        val agentContextHistoryTitle: String
+        val agentContextHistoryBody: String
+
+        /**
+         * The one editable part: `$HOME/.pi/agent/AGENTS.md`.
+         *
+         * Named for what the file *is* — the global instructions pi reads, as against
+         * the copy a project keeps in its own directory — rather than for what it
+         * contains: "environment notes" described one section of it, and a reader
+         * looking for the file the agent is actually told to follow would not have
+         * recognised it.
+         */
+        val agentContextInstructions: String
+        val agentContextInstructionsEditable: String
+
+        /** Under the card: the file is read at startup, and what stays read-only. */
+        val agentContextNote: String
+
+        val agentContextEditorNote: String
+        val agentContextSave: String
+        val agentContextSaved: String
+        val agentContextFailed: String
+        val agentContextRestore: String
+        val agentContextRestoreTitle: String
+        val agentContextRestoreBody: String
+        val agentContextRestoreConfirm: String
+
         // Model profiles
         val profilesTitle: String
         val profilesSubtitle: String

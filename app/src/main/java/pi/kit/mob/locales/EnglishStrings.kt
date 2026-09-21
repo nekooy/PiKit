@@ -386,6 +386,57 @@ internal object EnglishStrings : Strings {
                 "agent restarts now so the change takes effect."
         override val storageGuardOffConfirm = "Switch off"
 
+        override val agentContextTitle = "Agent context"
+        override val agentContextSubtitle = "What the model is given with every request"
+        override val agentContextSection = "What the context holds"
+        override val agentContextLead = "With every request, pi sends the model:"
+        override val agentContextSystemTitle = "System prompt"
+        override val agentContextSystemBody =
+            "pi's own role (a coding assistant), its tool list and calling rules (edit replaces " +
+                "exactly, read instead of cat), and pi's documentation index. PiKit does not " +
+                "change it."
+        override val agentContextInstructionsTitle = "Instruction files, AGENTS.md"
+        override val agentContextInstructionsBody =
+            "pi reads AGENTS.md from two places:\n" +
+                "\u00b7 Global: \$HOME/.pi/agent/AGENTS.md, written by PiKit at install time — the " +
+                "row below, editable here;\n" +
+                "\u00b7 Workspace: an AGENTS.md a project keeps in the working directory, such as " +
+                "~/workspace/AGENTS.md. pi looks from the working directory upwards, so the " +
+                "closest one is the most specific. A project may bring its own; there is none " +
+                "yet."
+        override val agentContextRuntimeTitle = "Runtime"
+        override val agentContextRuntimeBody =
+            "The model and provider, the thinking level, the session id and session file path, " +
+                "the workspace (PIKIT_WORKSPACE), shared storage (PIKIT_STORAGE_ROOTS and " +
+                "PIKIT_STORAGE_ALLOWED), and the telemetry switch (PI_TELEMETRY=0)."
+        override val agentContextToolsTitle = "Tools"
+        override val agentContextToolsBody =
+            "pi's own read, bash, edit, write, grep, find and ls, plus web_search, " +
+                "fetch_content, source_check and get_search_content from the extension PiKit " +
+                "installs, and pikit-safety-guard, which refuses a dangerous call."
+        override val agentContextHistoryTitle = "Conversation"
+        override val agentContextHistoryBody =
+            "This session, tool calls and results included, sent with every message and " +
+                "written to the session file."
+        override val agentContextInstructions = "Global AGENTS.md"
+        override val agentContextInstructionsEditable = "Editable"
+        override val agentContextNote =
+            "pi reads this file at every start, and the agent restarts after a save. " +
+                "Everything else here is read-only: the model and the thinking level are " +
+                "changed on Model & provider, the workspace on Agent process, and shared " +
+                "storage on Shared storage."
+        override val agentContextEditorNote =
+            "pi reads this file when it starts. The agent restarts after a save so the change " +
+                "takes effect."
+        override val agentContextSave = "Save"
+        override val agentContextSaved = "Saved; the agent is restarting"
+        override val agentContextFailed = "Could not save; the file is unchanged"
+        override val agentContextRestore = "Restore the default"
+        override val agentContextRestoreTitle = "Restore the default text?"
+        override val agentContextRestoreBody =
+            "The file goes back to PiKit's initial text and what you wrote is lost."
+        override val agentContextRestoreConfirm = "Restore"
+
         override val profilesTitle = "Model & provider"
         override val profilesSubtitle = "The active profile is what the agent is launched with"
         override val savedProfiles = "Saved profiles"
