@@ -456,13 +456,23 @@ def files_in(root: Path) -> set[str] | None:
     Every file a vendored tree holds, relative to it, or None when it is not there.
 
     Which of them the image owes is [BUILDER.vendor_junk]'s answer, applied by the caller.
+
+    **A symlink counts, as itself or as the file it points at**, and that is a correction
+    rather than a detail. npm creates `node_modules/.bin/*` as symlinks on Linux and as
+    shim files on Windows, and the archive writer has no symlink to make for one — the
+    extraction produces a regular file — so the two sides of the comparison describe the
+    same entry in different forms. Excluding symlinks here made a *cold CI cache* report
+    the six `.bin` entries as files the image has and the tree does not
+    (`node_modules/.bin/esbuild` and friends, five in pi's tree and one in the
+    extension's), while a Windows build host, whose cache has no symlink in that
+    directory at all, passed the same check.
     """
     if not root.is_dir():
         return None
     return {
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
-        if path.is_file() and not path.is_symlink()
+        if path.is_file() or path.is_symlink()
     }
 
 
@@ -582,9 +592,11 @@ def check_abi(abi: str, flavor: str) -> bool:
             if BUILDER.vendor_kept(name, keep) or not BUILDER.vendor_junk(name, drop)
         }
         prefix = f"{image_root}/"
-        shipped = {
-            path[len(prefix):] for path in image.files if path.startswith(prefix)
-        }
+        # Both forms, because either is a correct way for the archive to carry the entry:
+        # a symlinked file as its own bytes (what the writer does today) or as a
+        # `SYMLINKS.txt` line. See [files_in] for the cold-CI failure that settled this.
+        available = set(image.files) | set(image.symlinks)
+        shipped = {path[len(prefix):] for path in available if path.startswith(prefix)}
         missing = sorted(expected - shipped)
         unexpected = sorted(shipped - expected)
         report(
