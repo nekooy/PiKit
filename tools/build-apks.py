@@ -561,6 +561,11 @@ def run_tests() -> bool:
 
     checks = [
         ("the runtime images", lambda: python_tool("verify-runtime-image.py")),
+        # The rule that decides whether the agent's manual — and the extension's only
+        # documentation — reaches the phone at all. It is a `keep` argument and one
+        # `unlink` away from being silently wrong, and a device shows nothing when it
+        # is: the chapters are simply absent, which is how they went missing.
+        ("the vendored documentation", lambda: python_tool("test-vendor-trim.py")),
         ("the relocator", lambda: python_tool("test-relocate.py")),
         ("the manual's reflow", lambda: python_tool("reflow-manual.py", "--check")),
         ("the terminal banners", lambda: python_tool("check-locales.py")),

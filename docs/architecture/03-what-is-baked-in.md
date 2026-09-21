@@ -38,9 +38,10 @@ Two details in that script are load-bearing:
 
 `tools/verify-runtime-image.py` rebuilds the tree the installer would produce and asserts
 against it: all 1291 symlinks on `arm64-v8a` (1293 on `x86_64`) resolve, every shebang
-under `bin/` and `libexec/` points at something that exists, and `bin/bash` and `bin/node`
+under `bin/` and `libexec/` points at something that exists, `bin/bash` and `bin/node`
 are valid ELF for the target ABI with
-`DT_RUNPATH=/data/data/pi.kit.mob/files/usr/lib`.
+`DT_RUNPATH=/data/data/pi.kit.mob/files/usr/lib`, and the documentation below is present
+by name and by count.
 
 ## The bundled extension, and why it is not `pi install`
 
@@ -64,11 +65,12 @@ Four build details carry numbers:
   193 MB with peers against 30 MB without. pi is already at `$PREFIX/lib/node_modules`,
   which Node finds by walking up from the extension's own directory.
 - **Trimming**, because the package ships its npm page inside itself
-  (`pi-web-fetch-demo.mp4`, `banner.png`, the markdown) plus every dependency's test
-  fixtures, `.yarn` plugin bundles and source maps. Measured: 24.9 MB of vendored tree
-  becomes 14.6 MB, and the shipped archive 8.6 MB becomes 5.5 MB **per ABI**;
-  `@mixmark-io/domino` alone is 3.4 MB of HTML5-parser conformance data inside a runtime
-  dependency.
+  (`pi-web-fetch-demo.mp4`, `banner.png`, the changelog), every dependency's test fixtures,
+  its source maps and its type declarations. Measured under the delete list below: 33.4 MB
+  of vendored tree becomes 15.7 MB **per ABI**; `@mixmark-io/domino` alone is 3.4 MB of
+  HTML5-parser conformance data inside a runtime dependency, plus 1.07 MB of Yarn plugin
+  bundles. The trim runs on the copy the image ships, never on the cache — see the last
+  part of that section.
 - **`--omit=optional` needs one exception, named in `WEB_ACCESS_RUNTIME_DEPS`.** The flag
   exists for platform-specific optional binaries that are never loaded, but `defuddle/node`,
   the entry `extract.ts` imports for every `fetch_content`, unconditionally requires
@@ -112,6 +114,102 @@ memory. Extraction goes into a staging directory that is renamed into place only
 after every archive is applied, so an interrupted install cannot leave a
 half-populated `$PREFIX`. `$HOME` lives outside `$PREFIX`, so reinstalling the
 runtime never discards the user's Pi sessions.
+
+## The vendored trees are trimmed by a delete list, and the documentation rides on it
+
+Both vendored trees are trimmed of what nothing loads, and the rule that does it is a
+**delete list**: `test`/`tests`/`__tests__` directories, a package manager's `.yarn`
+bundles, the `.map` files beside them, every `README.md` and `CHANGELOG.md`, a
+dependency's type declarations and a dependency's `docs/`, pi's four `docs/images`
+screenshots, and the extension's npm-page banner and video. Everything else ships.
+
+The shape of the rule is the part worth recording, because the first two attempts got it
+wrong in opposite ways. It began as three directory names, which caught pi's own
+documentation and nothing else. It was then broadened to a *keep* list — delete `docs`,
+`examples`, `benchmarks`, `.md`, `.map`, and keep back the chapters — which is correct only
+about what it names: it deleted pi's `examples/` (132 files, 0.96 MB, which pi's own
+documentation links into 49 times), the dependency trees' documentation (0.57 MB, mostly
+`undici/docs`), and the extension's only reference for its options, all without anyone
+deciding to. A keep list has to be right about everything; a delete list has to be right
+about what it names, and what it leaves behind is visible in the size of the archive.
+
+Two of the entries are narrower than a name, and both are about whose documentation it is:
+
+- **a dependency's type declarations, and a dependency's manual** — `.d.ts` and `docs/`
+  inside a `node_modules`, which are 12.36 MB and 0.42 MB of pi's tree and 1.04 MB and
+  0.42 MB of the extension's. Nothing loads either on a device: Node ignores a `types`
+  condition at runtime, and jiti strips types rather than resolving declarations. The
+  exception is `@earendil-works/*`, which the rule leaves whole — 370 `.d.ts` files,
+  0.75 MB — because that is pi's own API, what an extension author codes against, beside
+  pi's chapters and the extension's README;
+- **the extension's own page** — its banner (1.27 MB), its demonstration video (5.13 MB)
+  and its `SECURITY.md` are `WEB_ACCESS_DROPS`, and its `README.md` is the one file the
+  rule's `keep` protects.
+
+What that costs and buys, measured:
+
+- pi's tree is 105.5 MB / 14,007 files, of which 51.5 MB goes — 33.94 MB of source maps,
+  12.36 MB of a dependency's type declarations, 2.29 MB of screenshots, 2.12 MB of
+  `README.md`/`CHANGELOG.md`, 0.42 MB of a dependency's manuals, 0.38 MB of test fixtures —
+  leaving 53.9 MB to ship. The keep list removed 40.3 MB, and the 1.6 MB difference is
+  `examples/` and the dependency documentation above;
+- the extension's project tree is 33.4 MB / 7,773 files, of which 17.8 MB goes, leaving
+  15.7 MB;
+- the shipped `overlay.zip` is 4.7 MB smaller per ABI than the delete list's first version
+  (arm64 75.08 → 70.38 MB, `x86_64` 74.59 → 69.88 MB) and 12.25 MB smaller than before any
+  trim at all (82.63 MB); the release APKs measure 105.5 MB on arm64 and 105.0 MB on
+  `x86_64`, and they store the archive uncompressed, so they move with it;
+- what arrives is pi's 30 chapters and their `docs.json` index at
+  `$PREFIX/lib/node_modules/@earendil-works/pi-coding-agent/docs/`, its `examples/`,
+  `@earendil-works/pi-*`'s declarations and chapters, and the extension's `README.md` at
+  `$PREFIX/lib/node_modules/pikit-extensions/node_modules/pi-web-access/README.md`.
+
+The losses a *reader* would notice are the screenshots, and that cost is visible:
+`docs/images` is 2.29 MB of the 2.79 MB pi's `docs/` weighs (1.44 MB of that a sponsor's
+mascot), the reader is a terminal on a phone that draws none of them, and the two chapters
+that embed one show a missing image. Carrying all four was the rejected alternative, at
+2.3 MB of archive per ABI. The rest is nobody's reading material: a dependency's type
+declarations and its manual, and pi's own `README.md` with its 569 KB `CHANGELOG.md` among
+the npm pages — the first describes installing pi into a Termux that is not this app, and
+the second is a release history for a version that cannot move under the user's feet.
+
+One consequence of the rule lives in the cache, not the image. A vendored tree used to be
+trimmed **in place** in `.runtime-build` — so a build host that had one held a tree with
+another rule's deletions already applied, and a warm cache would have shipped an image
+missing exactly what the current rule keeps, silently, because the version had not moved.
+The trim now runs on the copy that ships, as pi's tree always did, and the marker's
+`pristine` flag is what a cache written by the old code fails, so it re-vendors once.
+
+Three things keep what ships from quietly going missing again, because nothing loads these
+files and a device shows no error when they are absent:
+
+- `verify-runtime-image.py` asserts three entry points by path — the manual's
+  `docs/index.md` and its `docs.json` index, and the extension's `README.md` — and then
+  compares the image against the vendoring cache: **every file the tree holds and the rule
+  keeps must be in the image, by name** (7,618 in pi's tree at 0.86.1, 5,449 in the
+  extension's). The expectation is computed from the tree and from `vendor_junk`, the same
+  predicate the trim deletes by, so a release that adds, renames or retires anything moves
+  no constant here and a file the image is missing is named. Documents alone were compared
+  first, and a file dropped from `examples/` passed it — which is why the claim is about
+  every file: the rule is a delete list, so "everything else arrived" is what it promises.
+  The count that stood in for this at the start (a floor of 25 chapters, measured against
+  30) was the wrong shape twice over — it went stale on any documentation edit and stayed
+  green through the ones it should have caught;
+- the rewrite check is an invariant rather than a count: no member may contain
+  `pi/kit/mob`, the application id in a slash form nothing in the image uses, which is
+  exactly what a rewrite that clobbered a `com/termux` URL would leave behind. That
+  replaced a pinned count of those URLs (195, two of them in the `docs/termux.md` that now
+  ships) which had to be re-measured whenever upstream edited a link — and the occurrence
+  is still *reported*, just not asserted;
+- `tools/test-vendor-trim.py` pins the rule itself on synthetic trees — what it does *not*
+  name is still there (the `examples/` and dependency documentation above), each deletion,
+  both per-tree exceptions, and the agreement between what the trim deletes and what the
+  image verifier expects — and runs among `build-apks.py`'s checks.
+
+One detail of the relocation pass lands well here: `docs/termux.md` documents
+`/data/data/com.termux/files/home`, and the prefix rewrite that relocates every Termux
+package also rewrites the chapter, so the paths a reader finds in it name the prefix the
+app actually has. The two `github.com/termux/...` links in the same file are left alone.
 
 ## Every version in the image is pinned, pi's included
 

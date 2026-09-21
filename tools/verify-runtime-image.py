@@ -42,6 +42,33 @@ from prefix_patch import (  # noqa: E402
     is_dex,
 )
 
+
+def load_image_builder():
+    """
+    Loads the image builder by path, because its file name is not a module name.
+
+    Only its declarations are read — what a vendored tree drops ([VENDOR_JUNK_DIRS],
+    [VENDOR_JUNK_FILES], [VENDOR_JUNK_SUFFIXES]), the per-tree extras ([PI_DROPS],
+    [WEB_ACCESS_DROPS]) and the one exception ([WEB_ACCESS_DOCS]) — and the predicate
+    they feed, so that the check below states the rule the builder applied instead of a
+    second copy of it. A copy is how a check and its subject drift apart while both look
+    right, which is the failure this whole file exists to catch.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "pikit_runtime_image", Path(__file__).resolve().parent / "build-runtime-image.py"
+    )
+    if spec is None or spec.loader is None:  # pragma: no cover - the file is here
+        raise SystemExit("cannot load tools/build-runtime-image.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+BUILDER = load_image_builder()
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: The application id the image is built for. Set from `--app-id`.
@@ -67,10 +94,16 @@ RELOCATOR = "libexec/pikit/relocate.js"
 #: set as `AUTHORED_MEMBERS`.
 REWRITE_EXCLUSIONS = "share/pikit/never-rewrite.txt"
 
-#: `com/termux` (slash form) appears only inside `github.com/termux/...` URLs in
-#: comments and docs. It must survive untouched; rewriting it corrupts them.
+#: `com/termux` (slash form) appears only inside URLs in comments and docs — `github.com`
+#: and the mirrors that host the same repositories — so rewriting one corrupts it, and
+#: `UPSTREAM_NAME` cannot catch that: the rewrite replaces a *dotted* id, and `com/termux`
+#: is not one. What a bad rewrite of these leaves behind is `pi/kit/mob`, which is this
+#: app's id in a form nothing in the image uses: every path in it is
+#: `/data/data/pi.kit.mob/...`, dotted. So the check is that string's absence, which needs
+#: no re-measuring when a release edits a documented link — a count of the occurrences
+#: moved every time pi's documentation did, and had to be bumped by hand.
 UPSTREAM_URL_NAME = b"com/termux"
-EXPECTED_URL_OCCURRENCES = 193
+REWRITTEN_URL_NAME = b"pi/kit/mob"
 
 FLAVORS = {"arm64-v8a": "arm64", "x86_64": "x64"}
 
@@ -91,6 +124,47 @@ REQUIRED_FILES = [
 
 #: Absolute files that may legitimately be provided as symlinks.
 REQUIRED_ANY = ["bin/sh", "bin/npm", "bin/env"]
+
+#: Documentation the reader has no other copy of, as `(label, root in the image, root in
+#: the vendoring cache, what that tree drops, what it keeps)`. The last three are the
+#: builder's own declarations, and the expectation below is computed from them plus the
+#: cache — so a pi release that adds, renames or retires a chapter moves nothing here and
+#: a file the image is missing is named. A list or a count kept in this file would go
+#: stale on the next bump and, worse, stay green while it did.
+#:
+#: The cache is a build host's directory — a machine that only has the assembled assets
+#: does not have it — and the check says so there instead of failing.
+DOCUMENTED_TREES = (
+    (
+        "pi",
+        "lib/node_modules/@earendil-works/pi-coding-agent",
+        ".runtime-build/cache/pi/node_modules/@earendil-works/pi-coding-agent",
+        BUILDER.PI_DROPS,
+        (),
+    ),
+    # The extension's cache root is the project directory the image installs as
+    # `lib/node_modules/pikit-extensions`, which is why one path is relative to the
+    # other: its drops and its kept README are written against that root.
+    (
+        "pi-web-access",
+        "lib/node_modules/pikit-extensions",
+        ".runtime-build/cache/web-access",
+        BUILDER.WEB_ACCESS_DROPS,
+        BUILDER.WEB_ACCESS_DOCS,
+    ),
+)
+
+#: Documentation the image must carry even where there is no cache to compare against:
+#: the structure a reader navigates by, not particular chapters. A chapter *name* is
+#: deliberately not asserted — pi may rename, split or retire one, and a check that
+#: pinned the names would fail on a pi release for a reason that has nothing to do with
+#: the image being wrong. What the names cannot catch is caught by the comparison above,
+#: which names the missing file.
+ANCHOR_DOCUMENTS = (
+    "lib/node_modules/@earendil-works/pi-coding-agent/docs/index.md",
+    "lib/node_modules/@earendil-works/pi-coding-agent/docs/docs.json",
+    "lib/node_modules/pikit-extensions/node_modules/pi-web-access/README.md",
+)
 
 SYMLINK_SEPARATOR = "\u2190"
 EXECUTABLE_PREFIXES = ("bin/", "libexec", "lib/apt/apt-helper", "lib/apt/methods")
@@ -377,6 +451,21 @@ def check_rewrite_exclusions(overlay: zipfile.ZipFile) -> tuple[bool, str]:
     return True, f"the app's rewrite exclusion list matches the build's ({len(listed)} paths)"
 
 
+def files_in(root: Path) -> set[str] | None:
+    """
+    Every file a vendored tree holds, relative to it, or None when it is not there.
+
+    Which of them the image owes is [BUILDER.vendor_junk]'s answer, applied by the caller.
+    """
+    if not root.is_dir():
+        return None
+    return {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+
+
 def check_abi(abi: str, flavor: str) -> bool:
     root = REPO_ROOT / "app" / "src" / flavor / "assets" / "runtime" / abi
     print(f"\n=== {abi}  ({root.relative_to(REPO_ROOT)}) ===")
@@ -470,6 +559,44 @@ def check_abi(abi: str, flavor: str) -> bool:
     cli = image.read(overlay, "lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js")
     report(cli is not None and len(cli) > 100, "pi CLI entry point is present and non-trivial")
 
+    # What the reader has no other copy of (§3): the structure first, then *everything*
+    # the vendored tree holds and the rule keeps — documents, `examples/`, the extension's
+    # TypeScript, all of it. Both halves come from the builder, `vendor_junk` being the
+    # predicate the trim itself deletes by, so the check cannot disagree with the build
+    # about what ships and a release that adds a file expects it of the image without a
+    # constant moving. Documents alone were checked here first, and a file dropped from
+    # `examples/` passed: the rule is a delete list, so "the rest arrived" is the claim.
+    for path in ANCHOR_DOCUMENTS:
+        report(image.exists(path), f"present: {path}")
+    for label, image_root, cache_root, drop, keep in DOCUMENTED_TREES:
+        held = files_in(REPO_ROOT / cache_root)
+        if held is None:
+            print(
+                f"  note  {label}: {cache_root} is not here, so the files the vendored "
+                f"tree holds could not be compared"
+            )
+            continue
+        expected = {
+            name
+            for name in held
+            if BUILDER.vendor_kept(name, keep) or not BUILDER.vendor_junk(name, drop)
+        }
+        prefix = f"{image_root}/"
+        shipped = {
+            path[len(prefix):] for path in image.files if path.startswith(prefix)
+        }
+        missing = sorted(expected - shipped)
+        unexpected = sorted(shipped - expected)
+        report(
+            not missing and not unexpected,
+            f"{label}: all {len(expected)} file(s) the tree holds are in the image"
+            + (
+                ""
+                if not missing and not unexpected
+                else f" — missing {missing[:5]}, not in the tree {unexpected[:5]}"
+            ),
+        )
+
     # The bundled environment must not reference a staging directory.
     stray = [p for p in image.symlinks if "usr-staging" in image.symlinks[p]]
     report(not stray, "no reference to the staging directory survives")
@@ -479,6 +606,7 @@ def check_abi(abi: str, flavor: str) -> bool:
     # package, otherwise it would resolve to a directory this app cannot read.
     old_prefix_hits = 0
     url_hits = 0
+    rewritten_url_hits = 0
     decompressed_old_hits = 0
     decompressed_members = 0
     bad_dex: list[str] = []
@@ -501,6 +629,7 @@ def check_abi(abi: str, flavor: str) -> bool:
             data = archive.read(info.filename)
             old_prefix_hits += data.count(UPSTREAM_NAME)
             url_hits += data.count(UPSTREAM_URL_NAME)
+            rewritten_url_hits += data.count(REWRITTEN_URL_NAME)
 
             # A byte scan of a compressed member proves nothing: the payload is
             # unreadable, so a hit count of zero means "not visible", not
@@ -524,6 +653,7 @@ def check_abi(abi: str, flavor: str) -> bool:
                                 continue
                             nested_checked += 1
                             blob = nested.read(member.filename)
+                            rewritten_url_hits += blob.count(REWRITTEN_URL_NAME)
                             if is_dex(blob):
                                 if not dex_headers_valid(blob):
                                     bad_dex.append(f"{label}:{info.filename}!{member.filename}")
@@ -541,9 +671,14 @@ def check_abi(abi: str, flavor: str) -> bool:
         f"across {decompressed_members} compressed members)",
     )
     report(
-        url_hits == EXPECTED_URL_OCCURRENCES,
-        f"{UPSTREAM_URL_NAME.decode()} URLs preserved ({url_hits}, expected {EXPECTED_URL_OCCURRENCES})",
+        rewritten_url_hits == 0,
+        f"no member rewrote a {UPSTREAM_URL_NAME.decode()} URL into "
+        f"{REWRITTEN_URL_NAME.decode()} ({rewritten_url_hits} found)",
     )
+    # Reported, not asserted: the number is upstream's — pi's and the bootstrap's
+    # documentation and comments decide it — so a release that edits a link must not
+    # fail a build over it. What matters is the line above and the docs comparison.
+    print(f"  --      {url_hits} {UPSTREAM_URL_NAME.decode()} URL(s) left alone")
 
     # The members skipped above are only skippable while they are really there:
     # a name in the exclusion list that is absent from the image silently stops

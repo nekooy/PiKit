@@ -78,9 +78,16 @@ your time*, which is the list a change is written against.
   previous guard *and* leaves a device running its old unpacked runtime. `build-apks.py`
   catches it by timestamp against `IMAGE_INPUTS` and by content digest;
   `--refresh-images` overrules it.
-- **`EXPECTED_URL_OCCURRENCES` in `verify-runtime-image.py` is a tripwire, not a
-  bug.** When a bump legitimately changes the number of relocated URL occurrences,
-  update the constant in the same commit — that is the check telling you it noticed.
+- **Two checks in `verify-runtime-image.py` are deliberately not counts, and the trim rule
+  is a delete list.** Nothing in the image may contain `pi/kit/mob` — the app id in a slash
+  form nothing uses, which is what a rewrite that clobbered a `com/termux` URL would leave —
+  and every file a vendored tree holds that the rule keeps is expected in the image by
+  name, computed from the cache through `vendor_junk`, the same predicate the trim deletes
+  by. So a pi release that edits a link, adds a file or retires one needs no constant
+  moved, and a missing one is reported by name (ARCHITECTURE §3). A count of either goes
+  stale on the next upstream edit and stays green while it does. Adding a name to the
+  delete list is the cheap change; adding one to a keep list silently deletes everything
+  the list forgot.
 - **`adb shell pm clear pi.kit.mob`** deletes the unpacked runtime, which costs a
   fresh ~285 MB unpack on the next launch. `am force-stop` is the cheap restart.
 
