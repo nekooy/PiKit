@@ -9,9 +9,10 @@
 [English](README.md) | 简体中文
 
 PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上，事先不需要安装任何东西：一个
-Termux 环境、Node.js、`ripgrep`、`fd` 和 `pi` 命令行都烘焙在 APK 里，首次启动时从里面解包，
-所以第一次提问离线也能用。Kotlin 和 Jetpack Compose 架在一个引入的 Termux 终端之上，任何
-地方都没有 WebView。
+Termux 环境、Node.js、`ripgrep`、`fd` 和 `pi` 命令行都烘焙在 APK 里，首次启动时从里面解包——
+装好 APK 之后不需要再连任何软件源，也没有任何包要下载。提问本身仍要送到它所在的供应商，所以
+需要的连接只有「能连上那家供应商」这一条。Kotlin 和 Jetpack Compose 架在一个引入的 Termux
+终端之上，任何地方都没有 WebView。
 
 ## 特色
 
@@ -78,7 +79,7 @@ Termux 运行环境和它的终端模拟器，两者都是 GPLv3，所以分发�
 
 ## 致谢
 
-APK 里的大部分东西都是别人的工作，最主要的是这三个：
+APK 里的大部分东西都是别人的工作，最主要的是这四项：
 
 - **Termux 运行环境与终端**——GPLv3，来自
   [termux/termux-packages](https://github.com/termux/termux-packages) 和
@@ -86,6 +87,5 @@ APK 里的大部分东西都是别人的工作，最主要的是这三个：
 - **pi，即 Agent**（`@earendil-works/pi-coding-agent`）——MIT，[pi.dev](https://pi.dev)。
 - **`pi-web-access`**（Nico Bailon；联网搜索、读取网页、解析 PDF）——MIT，
   [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access)。
-
-其余的——Node.js 与内置命令行工具、Android 各种库、公式排版、图标——都连同许可证列在
-[docs/LICENSING.md](docs/LICENSING.md) 和应用的 **设置 → 关于 PiKit → 致谢** 里。
+- 其余的——Node.js 与内置命令行工具、Android 各种库、公式排版、图标——都连同许可证
+  列在 [docs/LICENSING.md](docs/LICENSING.md) 和应用的 **设置 → 关于 PiKit → 致谢** 里。

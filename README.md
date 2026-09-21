@@ -10,8 +10,10 @@
 
 PiKit runs the [pi](https://pi.dev) coding agent on an Android phone with nothing to
 install first: a Termux environment, Node.js, `ripgrep`, `fd` and the `pi` CLI are baked
-into the APK and unpacked from it on first launch, so the first prompt works offline.
-Kotlin and Jetpack Compose over a vendored Termux terminal, and no WebView anywhere.
+into the APK and unpacked from it on first launch — no repository to reach, no package to
+fetch after the APK is installed. A prompt still travels to the provider it runs on, so the
+only connection needed is one that can reach that provider. Kotlin and Jetpack Compose over
+a vendored Termux terminal, and no WebView anywhere.
 
 ## Features
 
@@ -88,7 +90,7 @@ source available, `tools/` included. The pi agent itself is MIT.
 
 ## Acknowledgements
 
-PiKit is mostly other people's work. The three it is built on:
+PiKit is mostly other people's work. The four it leans on:
 
 - **Termux environment and terminal** — GPLv3, from
   [termux/termux-packages](https://github.com/termux/termux-packages) and
@@ -96,8 +98,7 @@ PiKit is mostly other people's work. The three it is built on:
 - **pi, the agent** (`@earendil-works/pi-coding-agent`) — MIT, [pi.dev](https://pi.dev).
 - **`pi-web-access`** by Nico Bailon (search, page reading, PDF extraction) — MIT,
   [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access).
-
-Everything else — Node.js and the bundled command-line tools, the Android libraries, the
-formula renderer, the marks — is listed with its licence in
-[docs/LICENSING.md](docs/LICENSING.md) and in the app under **Settings → About PiKit →
-Credits**.
+- **Everything else** — Node.js and the bundled command-line tools, the Android libraries,
+  the formula renderer, the marks — is listed with its licence in
+  [docs/LICENSING.md](docs/LICENSING.md) and in the app under **Settings → About PiKit →
+  Credits**.
