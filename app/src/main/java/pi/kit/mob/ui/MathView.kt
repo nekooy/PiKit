@@ -58,19 +58,17 @@
  * fraction has to do.
  *
  * The text's centre comes from a `TextMeasurer` measurement of the same style, because it is the
- * only place the font's ascent and descent are readable — the same measurement the inline code chip
- * already makes. It is a number the renderer cannot know: the *sentence's* font decides it.
+ * only place the font's ascent and descent are readable — the same measurement the inline code
+ * fill makes in `CodeChip.kt`, for the same reason and in the same shape. It is a number the
+ * renderer cannot know: the *sentence's* font decides it.
  */
 package pi.kit.mob.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -82,7 +80,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
@@ -92,7 +89,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
@@ -166,8 +162,8 @@ internal class MathInline(
 /**
  * A paragraph's inline text, with any mathematics in it typeset.
  *
- * Falls back to a plain render when the fragment has no formula and no code span, so the common
- * case — ordinary prose — never asks the cache for anything and never builds a chip.
+ * Falls back to a plain render when the fragment has no formula, so the common case —
+ * ordinary prose, and prose with a code span in it — never asks the cache for anything.
  *
  * [source] and [style] are what the result is keyed on, and both are stable across a
  * recomposition that changed nothing: `style` is an immutable data class and the text style is
@@ -181,37 +177,32 @@ internal fun rememberMathInline(
     source: String,
     inline: InlineStyle,
     textStyle: TextStyle,
-    /** False for a table cell, which is *measured* rather than drawn with this result. */
-    codeChips: Boolean = true,
     /**
      * True for a display formula: its block is the formula and scrolls horizontally, so it must
      * **not** be scaled down to the line the way an inline one is.
      */
     display: Boolean = false,
 ): MathInline {
-    val hasMath = containsInlineMath(source)
-    val hasCode = codeChips && inline.codeBackground != Color.Unspecified && containsInlineCode(source)
-    if (!hasMath && !hasCode) {
+    if (!containsInlineMath(source)) {
         return remember(source, inline, textStyle) { renderInline(source, inline) }
     }
 
-    // Both are remembered *inside* their branch so that a paragraph with neither a formula nor a
-    // code span in it never builds one.
-    val spec = if (hasMath) mathSpec(textStyle.fontSize) else null
-    val chip = if (hasCode) rememberCodeChip(textStyle, inline.codeBackground) else null
+    // Remembered inside the branch so that a paragraph with no formula in it never
+    // builds one.
+    val spec = mathSpec(textStyle.fontSize)
     // The placeholder's size is in `sp`, so the conversion back out of pixels depends on the
     // density as well as on the formula: a font-scale change arrives as a new `Density`, and a
     // key that missed it would draw every formula at the old size. The font metrics are read here
     // for the same reason — the sentence's own font decides where a formula's baseline goes.
     val density = LocalDensity.current
-    val metrics = if (hasMath) rememberFontMetrics(textStyle) else null
+    val metrics = rememberFontMetrics(textStyle)
     val lineWidth = if (display) Float.POSITIVE_INFINITY else LocalFormulaWidth.current
 
     // Read in composition, and it is what makes a finished measurement redraw *this* block.
     // Per block rather than global: see `MathCache.versions`.
-    val cached = if (spec != null) MathCache.versionOf(MathCache.keysFor(source, spec)) else 0
+    val cached = MathCache.versionOf(MathCache.keysFor(source, spec))
 
-    return remember(source, inline, textStyle, spec, chip, cached, density, metrics, lineWidth) {
+    return remember(source, inline, textStyle, spec, cached, density, metrics, lineWidth) {
         renderInline(
             text = source,
             style = inline,
@@ -219,19 +210,14 @@ internal fun rememberMathInline(
             // and a miss returns null so the block draws the formula's own source. That is the
             // whole of the off-thread change: no typesetting on this thread, and a block that
             // redraws itself when its formulas arrive (see `MathCache`).
-            method = if (spec != null && metrics != null) {
-                { body, _ ->
-                    MathCache.get(body, spec)?.let { formula ->
-                        formulaInlineContent(formula, density, metrics, lineWidth)
-                    } ?: run {
-                        MathCache.request(body, spec)
-                        null
-                    }
+            method = { body, _ ->
+                MathCache.get(body, spec)?.let { formula ->
+                    formulaInlineContent(formula, density, metrics, lineWidth)
+                } ?: run {
+                    MathCache.request(body, spec)
+                    null
                 }
-            } else {
-                null
             },
-            code = chip,
         )
     }
 }
@@ -371,87 +357,3 @@ internal fun WarmFormulaRenderer() {
     val spec = mathSpec(MaterialTheme.typography.bodyMedium.fontSize)
     LaunchedEffect(spec) { MathCache.warm(spec) }
 }
-
-/**
- * The measurer for an inline code span, as the `InlineTextContent` factory
- * `renderInline` wants.
- *
- * ## Why inline code is measured content rather than a `SpanStyle`
- *
- * Because **Compose has no rounded background for a text span**. `SpanStyle` carries
- * `background: Color`, which the text renderer fills as a plain rectangle, and ui-text 1.10 has no
- * `BackgroundStyle` to give it a radius — checked in the artefact, not assumed. A `Text` whose
- * code spans have square fills behind rounded ones everywhere else on the page is the report
- * "行内代码背景无圆角很难看".
- *
- * So the fill becomes a composable: this returns a factory that measures the span's text and
- * wraps it in a `Box` with [background] and a corner radius, which leaves `Text` to place it as an
- * `InlineTextContent` — the same mechanism the formulas use.
- *
- * ## The three numbers
- *
- * - **Width** is the measured width plus a symmetric pad. The pad is what keeps the fill off the
- *   glyphs; without it a code span's box touches its own first and last character and reads as a
- *   highlight rather than as a chip.
- * - **Height is the line box**, not the text: an `InlineTextContent` is *clipped* to the
- *   placeholder it declares, so a shorter box would cut the fill's top and bottom off rather than
- *   shrink it, and the code would look like it had been struck through. Filling the whole line
- *   box instead reads as a chip that spans the line, which is what a code span is in a monospaced
- *   face.
- * - **The radius is bounded by the height**, because a pill needs half the height and a radius
- *   larger than that is silently clamped by the platform. `min(8dp, h / 2)` is a rounded
- *   rectangle on a normal line and a pill on a very short one.
- *
- * The text is drawn in the *same* monospace style the span would have had, resolved against
- * [textStyle] so a code span inside a heading is drawn at the heading's size rather than at the
- * paragraph's.
- */
-@Composable
-private fun rememberCodeChip(
-    textStyle: TextStyle,
-    background: Color,
-): (String) -> InlineTextContent {
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val style = textStyle.copy(fontFamily = FontFamily.Monospace)
-
-    return remember(measurer, textStyle, background, density) {
-        { source ->
-            val size = measurer.measure(source, style, maxLines = 1).size
-            val padX = with(density) { CODE_CHIP_PAD_X.roundToPx() }
-            InlineTextContent(
-                // The placeholder is in `sp`, as it is for every inline content: the size
-                // `TextMeasurer` returns is a pixel count, and `toSp()` is the conversion back
-                // that the density this was measured with inverts.
-                Placeholder(
-                    width = with(density) { (size.width + padX * 2).toSp() },
-                    height = with(density) { size.height.toSp() },
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                ),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = CODE_CHIP_PAD_X)
-                        .background(background, RoundedCornerShape(CODE_CHIP_RADIUS)),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Text(source, style = style, color = Color.Unspecified, maxLines = 1)
-                }
-            }
-        }
-    }
-}
-
-/** The gap between a code span's text and its fill, on each side. */
-private val CODE_CHIP_PAD_X = 3.dp
-
-/**
- * The code chip's corner radius.
- *
- * 6dp rather than the 8dp a block of code uses: a chip is one line tall, and at 8dp on a 22sp line
- * box the corners are nearly half its height and it stops reading as a rounded rectangle. The
- * chip's own height clamps it to a pill where the line is shorter than 12dp, which is what the
- * platform would do with a larger number anyway.
- */
-private val CODE_CHIP_RADIUS = 6.dp
