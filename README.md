@@ -72,7 +72,6 @@ first:
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — the design decisions and the constraints behind them.
 - [BUILDING.md](docs/BUILDING.md) — prerequisites, the image builder, artifacts, signing, the device workflow.
-- [VERIFICATION.md](docs/VERIFICATION.md) — what has been exercised, on what, and what has not.
 - [RELEASING.md](docs/RELEASING.md) — the version, the tag, and the signing that comes first.
 - [MAINTAINING.md](docs/MAINTAINING.md) — the recurring chores: upstream pi, packages, dependencies.
 - [LICENSING.md](docs/LICENSING.md) — why GPLv3, what the APK carries, where the credits are.

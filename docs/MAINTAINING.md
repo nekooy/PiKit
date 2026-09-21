@@ -22,7 +22,7 @@ tools/verify-runtime-image.py` after touching anything that ends up in the image
 | --- | --- | --- |
 | Dependency versions, by hand | Check `gradle/libs.versions.toml`, `gradle/wrapper/gradle-wrapper.properties` and the `uses:` lines in both workflows; bump minors and patches freely, and majors in one coordinated change against a **full APK build**. The authoritative sources, so nobody has to hunt for them again: `https://services.gradle.org/versions/current` for Gradle, `https://dl.google.com/dl/android/maven2/<group-as-path>/<artifact>/maven-metadata.xml` for AGP and every AndroidX artifact (**not** Maven Central, whose `com.android.tools.build:gradle` stops at 2.x), `https://search.maven.org/solrsearch/select?q=g:%22<group>%22+AND+a:%22<artifact>%22&core=gav&rows=8&wt=json` for Kotlin, coroutines and serialization, `https://registry.npmjs.org/<package>/latest` for pi and the extension, and `https://github.com/<owner>/<repo>/releases/tag/v<N>.0.0` for a workflow action — a `404` there is what proves the major in the YAML is the newest one | Dependabot's version updates were switched off: eleven pull requests in the first week, four of them red, and the ones that matter are *majors* — Kotlin, its Compose compiler plugin, AndroidX and the BOM move together with the build files, so a pull request per library is four checks nobody can merge one at a time. **Security alerts stay on**: they are a separate feed that only speaks when an advisory affects something pinned here |
 | The runtime's own dependencies | `npm audit --omit=dev` inside `.runtime-build/cache/pi` (and `.../web-access`) after a bump, and the Termux packages' advisories upstream | Nothing scans the image: pi, Node.js, `rg`, `fd` and the Termux packages are inputs pinned by `tools/build-runtime-image.py`, not dependencies of a build that an advisory feed reads. A clean alerts page says nothing about what the APK ships. Last run: 0 vulnerabilities in both trees, against pi 0.86.1 and web-access 0.30.0 |
-| `pi` itself | `npm view @earendil-works/pi-coding-agent version`, then bump `PI_VERSION` in `tools/build-runtime-image.py` and rebuild | The agent is the point of the app; its RPC records, tool list and catalogue are what the app parses. The cache records which version it holds, so the bump re-vendors on the next build. **This is the only way pi moves**: the app has no update button for it any more (see `docs/verification/maintenance-page.md`) |
+| `pi` itself | `npm view @earendil-works/pi-coding-agent version`, then bump `PI_VERSION` in `tools/build-runtime-image.py` and rebuild | The agent is the point of the app; its RPC records, tool list and catalogue are what the app parses. The cache records which version it holds, so the bump re-vendors on the next build. **This is the only way pi moves**: the app has no update button for it any more (ARCHITECTURE §2) |
 | Where the app looks for releases | `pikit.repository` in `gradle.properties`, if the repository moves | It is compiled into the update check's URL and shown on the About page. A published release is what the check sees, so a version that is committed but not released looks up to date |
 | The Termux bootstrap and package set | Bump `BOOTSTRAP_TAG` and the package list in `tools/build-runtime-image.py`, knowingly — not because a newer tag exists | A bootstrap bump changes the userland under everything; it is a device pass, not a version bump. The cached download is named after the URL it came from, so a tag bump fetches the new archive instead of rebuilding the image around the old one |
 | The web-access extension | Bump `WEB_ACCESS_VERSION`; `vendor_web_access` re-vendors and re-verifies when the version moves | Its page-extraction path is checked by a real fetch, and a broken one fails silently at runtime otherwise |
@@ -51,8 +51,7 @@ tools/verify-runtime-image.py` after touching anything that ends up in the image
 
 An emulator is enough for layout and the terminal; a phone is needed for shared
 storage, real network and the ARM translation trap. Both are described in
-[BUILDING.md](BUILDING.md), and `docs/VERIFICATION.md` records which of these were
-last actually done.
+[BUILDING.md](BUILDING.md).
 
 - Install over the previous build (`adb install -r`) and launch cold.
 - **Measure, do not look**: `adb shell uiautomator dump` plus
@@ -88,8 +87,8 @@ your time*, which is the list a change is written against.
 ## Housekeeping
 
 - **Test counts are summed by `tools/build-apks.py` and written down by hand** in
-  `AGENTS.md` and `docs/verification/build-machine.md`; a change that adds tests updates both.
-  `CONTRIBUTING.md` points at AGENTS.md rather than keeping a third copy — there were
+  `AGENTS.md`; a change that adds tests updates it.
+  `CONTRIBUTING.md` points at AGENTS.md rather than keeping a copy of its own — there were
   three once and they drifted apart (375, 353 and 362 for one suite; 377 in 31 suites
   after a re-measurement).
 - **The README icon is generated** (`tools/render-icon.py`), and the build fails when

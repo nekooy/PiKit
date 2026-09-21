@@ -63,7 +63,6 @@ python tools/build-apks.py    # checks, tests, then all four APKs
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md)——设计决策与背后的约束。
 - [BUILDING.md](docs/BUILDING.md)——前置条件、运行时镜像构建、产物、签名、设备上的流程。
-- [VERIFICATION.md](docs/VERIFICATION.md)——哪些真的跑过、跑在哪，哪些还没跑。
 - [RELEASING.md](docs/RELEASING.md)——版本号、tag，以及必须先完成的签名。
 - [MAINTAINING.md](docs/MAINTAINING.md)——周期性要做的事：跟进上游 pi、软件包、依赖。
 - [LICENSING.md](docs/LICENSING.md)——为什么是 GPLv3、APK 里装了什么、致谢写在哪里。

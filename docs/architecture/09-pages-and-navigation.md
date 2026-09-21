@@ -256,6 +256,26 @@ would.
 "Restore defaults" is the one destructive control on the page and it asks first: it puts the
 fresh-install configuration back, which takes every key the user typed with it.
 
+## The maintenance page says when to press it
+
+The page has one row that acts on pi's metadata and one that repairs the prefix, and neither
+is housekeeping: a row that reads as housekeeping is a button pressed on a healthy install.
+There is deliberately nothing here that updates pi itself — it is an input of the runtime
+image, so it moves only with a PiKit release (§2, §3).
+
+- **The model list.** The row is "Model list / Updates the model list on demand", the button
+  is "Refresh now", and the note under it states the four-hour automatic window, that a
+  just-released model is the reason to force one, that it needs a network connection, and
+  that pi is not updated there. The run's state is `CatalogueUpdater`, held by
+  `SettingsScreen` rather than by the page, so leaving mid-refresh does not throw the result
+  away; the button and the launch path go through one function
+  (`PiAgentSession.requestCatalogueRefresh`) so they cannot come to mean two different things
+  about the store on disk (§7.2).
+- **The relocation row leads with "only if something already errors".** Anything installed
+  with `pkg` or `apt` is rewritten as it installs, so the button is for a package that
+  arrived another way and refuses to start — which is what the note says, because the repair
+  is otherwise read as routine maintenance (§4).
+
 ## The update check is a row, and it is the app's only request of its own
 
 About PiKit gained a **Check for updates** row, and the design question was not how to check

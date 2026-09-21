@@ -216,7 +216,21 @@ reach=[documents:link=true,read=ok(1),write=ok  downloads:link=true,read=ok(1),w
 
 and after **Remove all access**: both links gone, `~/storage` empty, and all four
 seeded files — a document, a download, a downloaded file the agent had written,
-and a camera photo — still present and unchanged.
+and a camera photo — still present and unchanged. With no folders granted the shipped
+`pikit-storage-check` reports `9 passed, 0 failed`, which is the state a fresh install is
+in.
+
+## A canonical path is not the path the app holds
+
+Handing a file to another app is the one place where a path the app has and a path the
+*caller* will see part company: `FileProvider.getUriForFile` resolves a file's
+**canonical** path, so a file the app reaches as
+`…/files/home/storage/shared/Download/a.txt` arrives at the provider as
+`/storage/emulated/0/Download/a.txt` — the spelling the link farm is a convenience for —
+and matched none of the configured roots, which is why "open with" on a file under
+`~/storage` did nothing. `res/xml/file_paths.xml` carries an `external-path` root for it
+now. The lesson is the same one the link farm teaches: the same file has several names,
+and the one that decides is the one at the boundary being crossed.
 
 ## The first launch asks for both permissions, in order
 

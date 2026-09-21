@@ -26,10 +26,21 @@ Two details in that script are load-bearing:
 - **Java's zip API cannot represent symlinks**, so `.deb` symlinks are recorded in
   a `SYMLINKS.txt` side-car using Termux's own `target←path` convention (U+2190).
   `BootstrapInstaller` parses exactly this and recreates the links.
+- **A zip entry carries no Unix mode the JVM will apply either**, so the installer keeps a
+  list of the paths that need one. It originally missed
+  `lib/node_modules/<package>/bin/`, which made `bin/npm` a symlink to a file that could
+  not be executed — invisible until an update to a newer pi existed. Both the installer
+  and the on-demand repair cover it now.
 - **`npm ci --omit=optional`** takes pi's tree from ~396 MiB to ~101 MiB by
   dropping 26 `@esbuild/*` platform packages and the desktop clipboard binaries,
   none of which are loaded at runtime on Android. `--ignore-scripts` is safe
   because pi declares no install lifecycle scripts.
+
+`tools/verify-runtime-image.py` rebuilds the tree the installer would produce and asserts
+against it: all 1291 symlinks on `arm64-v8a` (1293 on `x86_64`) resolve, every shebang
+under `bin/` and `libexec/` points at something that exists, and `bin/bash` and `bin/node`
+are valid ELF for the target ABI with
+`DT_RUNPATH=/data/data/pi.kit.mob/files/usr/lib`.
 
 ## The bundled extension, and why it is not `pi install`
 
@@ -119,8 +130,22 @@ version the cached tree was vendored from, so bumping the constant re-vendors in
 rebuilding an image around the tree that was already there — without the marker the pin
 would have been decorative.
 
+The vendored extension's cache needed the same fix. `vendor_web_access` reused
+`node_modules` whenever it existed and re-checked only the named runtime dependencies, so
+a `WEB_ACCESS_VERSION` bump would have rebuilt the image **around the tree the cache
+vendored first** while `build-metadata.json` named the new version; `pikit-vendored.json`
+records `@version` for it now, exactly as it does for pi.
+
 `--pi-version` overrides the pin for one build, which is how a pi release candidate gets
 tried without editing the tree. [MAINTAINING.md](../MAINTAINING.md) has the routine for
 moving pi.
+
+## What the image does not carry
+
+Three `dpkg` packaging-developer scripts — `dpkg-buildapi`, `dpkg-buildtree` and
+`dpkg-fsys-usrunmess` — want `perl`, which is not bundled. `apt`, `dpkg` and `pkg` install
+and remove packages without it, and the official Termux bootstrap has the same omission,
+so this is a limit that is accepted rather than fixed: bundling `perl` to make three
+developer scripts run would pay for a language runtime on every device.
 
 ---

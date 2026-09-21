@@ -31,7 +31,7 @@ sealed interface CatalogueStatus {
  * This is all that is left of the updater that also replaced pi itself on the device.
  * That half is gone on purpose: the runtime's packages are inputs of the image the APK
  * carries, and rewriting pi inside a live install turned out to be able to leave a tree
- * that cannot start at all. The evidence is in `docs/verification/` — a half-completed
+ * that cannot start at all. ARCHITECTURE §2 records it — a half-completed
  * `npm install -g`, an abandoned run, and then every agent start failing with
  *
  *     Failed to load extension "…/pi-safety-guard.ts": Cannot find module 'jiti'
