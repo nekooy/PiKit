@@ -280,9 +280,10 @@ private val BLOCK_GAP = 8.dp
  * needs a code tint that contrasts with the fill behind it, and the answer's
  * surface needs a different one.
  *
- * [codeBackground] is `Color.Unspecified` for "no fill". The table measurement
- * uses that: a filled span in every cell of a measured grid reads as a grid of
- * errors, and the measurement only wants the widths.
+ * [codeBackground] is `Color.Unspecified` for "no fill", which is what the table
+ * measurement passes: a filled chip in every cell of a measured grid reads as a
+ * grid of errors, and the measurement only wants the widths. It is also the switch
+ * `CodeChipText` reads to decide whether it has anything to draw at all.
  */
 @Immutable
 internal data class InlineStyle(
@@ -326,7 +327,12 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
     when (block) {
         is MdBlock.Paragraph -> {
             val rendered = rememberMathInline(block.text, style, bodyStyle())
-            Text(rendered.text, style = bodyStyle(), inlineContent = rendered.inlineContent)
+            CodeChipText(
+                text = rendered.text,
+                style = bodyStyle(),
+                background = style.codeBackground,
+                inlineContent = rendered.inlineContent,
+            )
         }
 
         is MdBlock.Heading -> {
@@ -336,9 +342,10 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
                 else -> MaterialTheme.typography.titleSmall
             }
             val rendered = rememberMathInline(block.text, style, textStyle)
-            Text(
-                rendered.text,
+            CodeChipText(
+                text = rendered.text,
                 style = textStyle,
+                background = style.codeBackground,
                 fontWeight = FontWeight.SemiBold,
                 inlineContent = rendered.inlineContent,
             )
@@ -448,9 +455,10 @@ private fun MarkdownList(block: MdBlock.ListBlock, style: InlineStyle) {
                 )
                 Box(Modifier.weight(1f)) {
                     val rendered = rememberMathInline(item.text, style, bodyStyle())
-                    Text(
+                    CodeChipText(
                         text = rendered.text,
                         style = bodyStyle(),
+                        background = style.codeBackground,
                         textDecoration = if (item.checked == true) {
                             TextDecoration.LineThrough
                         } else {
@@ -728,9 +736,9 @@ private fun MarkdownTable(block: MdBlock.Table, style: InlineStyle) {
     // placeholders so a column holding a fraction is as wide as the fraction rather
     // than as wide as its source. Built *outside* the `remember` below: the maths
     // measurer is a composable, and a `remember` lambda is not.
-    val headerCells = block.header.map { rememberMathInline(it, measureStyle, headerStyle, codeChips = false) }
+    val headerCells = block.header.map { rememberMathInline(it, measureStyle, headerStyle) }
     val rowCells = block.rows.map { row ->
-        row.map { rememberMathInline(it, measureStyle, cellStyle, codeChips = false) }
+        row.map { rememberMathInline(it, measureStyle, cellStyle) }
     }
 
     // The cells' rendered text changes when a formula of theirs lands in the cache, and
@@ -2310,22 +2318,16 @@ private const val ESCAPABLE = "\\`*_{}[]()#+-.!<>|~$"
  * `Text`, so "the caller said no" and "the renderer said no" have to end the same
  * way, and they do: the source text goes back.
  *
- * [code] is the same contract for a code span, and it exists because **Compose has
- * no rounded background for a text span**: `SpanStyle.background` is a plain colour
- * fill with no corner radius, and ui-text 1.10 has no `BackgroundStyle` to supply
- * one. So the fill has to be a *composable* — a `Box` with a shape behind the text —
- * which means the span becomes an inline content like a formula: measured first,
- * then declared as a placeholder. A null (and the default) keeps the span a plain
- * `SpanStyle`, which is what the table measurement wants: a filled chip in every
- * cell of a measured grid reads as a grid of errors, and only the widths are wanted
- * there.
+ * A code span is **text**, not a placeholder: it is drawn in the monospace face and
+ * the range is tagged with [CODE_SPAN_TAG] so `CodeChipText` can paint the rounded
+ * fill behind it. Making it an inline content was what stopped it being
+ * selectable — see that file for the three things that cost.
  */
 internal fun renderInline(
     text: String,
     style: InlineStyle,
     method: ((body: String, source: String) -> InlineTextContent?)? = null,
     definitions: Map<String, String> = emptyMap(),
-    code: ((source: String) -> InlineTextContent?)? = null,
 ): MathInline {
     val content = LinkedHashMap<String, InlineTextContent>()
     var inline = 0
@@ -2335,7 +2337,6 @@ internal fun renderInline(
             style,
             content,
             method,
-            code,
             key = { inline++ },
         )
     }
@@ -2360,7 +2361,6 @@ private fun AnnotatedString.Builder.drawTokens(
     style: InlineStyle,
     content: MutableMap<String, InlineTextContent>,
     method: ((body: String, source: String) -> InlineTextContent?)?,
-    code: ((source: String) -> InlineTextContent?)?,
     key: () -> Int,
 ) {
     for (token in tokens) {
@@ -2368,25 +2368,19 @@ private fun AnnotatedString.Builder.drawTokens(
             is InlineToken.Text -> append(token.text)
 
             is InlineToken.Code -> {
-                val chip = code?.invoke(token.text)
-                if (chip == null) {
-                    withStyle(
-                        SpanStyle(fontFamily = FontFamily.Monospace, background = style.codeBackground),
-                    ) {
-                        append(token.text)
-                    }
-                } else {
-                    val id = "code${key()}"
-                    // The alternative text is the code itself, which is what a screen
-                    // reader announces and what a `TextMeasurer` weighs the placeholder
-                    // by if it is ever measured without the map.
-                    appendInlineContent(id, token.text)
-                    content[id] = chip
+                // Real characters in the monospace face, with the range tagged so
+                // the fill can be drawn behind them. See [CODE_SPAN_TAG]: this is
+                // what makes half of a code span selectable and what stops a copy
+                // of the paragraph carrying `U+FFFC` where the code is.
+                val start = length
+                withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) {
+                    append(token.text)
                 }
+                addStringAnnotation(CODE_SPAN_TAG, "", start, length)
             }
 
             is InlineToken.Styled -> withStyle(token.style) {
-                drawTokens(token.children, style, content, method, code, key)
+                drawTokens(token.children, style, content, method, key)
             }
 
             is InlineToken.Link -> withLink(
@@ -2400,7 +2394,7 @@ private fun AnnotatedString.Builder.drawTokens(
                     ),
                 ),
             ) {
-                drawTokens(token.children, style, content, method, code, key)
+                drawTokens(token.children, style, content, method, key)
             }
 
             is InlineToken.Math -> {
@@ -2456,24 +2450,5 @@ private fun InlineToken.containsMath(): Boolean = when (this) {
     is InlineToken.Math -> true
     is InlineToken.Styled -> children.any { it.containsMath() }
     is InlineToken.Link -> children.any { it.containsMath() }
-    else -> false
-}
-
-/**
- * Whether a fragment contains any inline code, which is the question
- * [rememberMathInline] asks before it pays for a `TextMeasurer`.
- *
- * The same shape as [containsInlineMath] and for the same reason: the tokeniser is
- * the one authority on what is code, so a second, cheaper rule — "does it contain a
- * backtick" — would disagree with it exactly where the answer matters, on an escaped
- * backtick or a fenced block's worth of them.
- */
-internal fun containsInlineCode(source: String): Boolean =
-    tokenizeInline(source).any { it.containsCode() }
-
-private fun InlineToken.containsCode(): Boolean = when (this) {
-    is InlineToken.Code -> true
-    is InlineToken.Styled -> children.any { it.containsCode() }
-    is InlineToken.Link -> children.any { it.containsCode() }
     else -> false
 }
