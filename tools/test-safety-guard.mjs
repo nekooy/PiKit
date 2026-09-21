@@ -21,7 +21,7 @@
  * (Node 22+ strips the types; the file is plain JavaScript apart from them.)
  */
 
-import { inspect, inspectFileTool, storagePolicyFromEnvironment } from "./pi-safety-guard.ts";
+import { guardEnabled, inspect, inspectFileTool, storagePolicyFromEnvironment } from "./pi-safety-guard.ts";
 
 const HOME = "/data/data/pi.kit.mob/files/home";
 const WORKSPACE = `${HOME}/workspace`;
@@ -437,6 +437,19 @@ console.log("=== the file tools, which carry no command text");
   }
 }
 
+console.log("=== the switch that takes the guard out of force");
+{
+  // The app writes `PIKIT_SAFETY_GUARD` into every process it spawns. Only the exact
+  // string `off` may disable the guard: a missing variable is a `pi` started outside
+  // PiKit, and a missing variable must never be what turns a guard off.
+  report(guardEnabled({}), "unset means the guard runs");
+  report(guardEnabled({ PIKIT_SAFETY_GUARD: "on" }), "`on` means the guard runs");
+  report(!guardEnabled({ PIKIT_SAFETY_GUARD: "off" }), "`off` takes it out of force");
+  report(guardEnabled({ PIKIT_SAFETY_GUARD: "OFF" }), "only the lower-case `off` does");
+  report(guardEnabled({ PIKIT_SAFETY_GUARD: "false" }), "`false` is not the magic value");
+  report(guardEnabled({ PIKIT_SAFETY_GUARD: "" }), "an empty value leaves it running");
+}
+
 const total =
   MUST_BLOCK.length +
   MUST_BLOCK_PROTECTED.length +
@@ -449,7 +462,8 @@ const total =
   4 + // policy in both spellings
   7 + // the environment block
   4 + // where the shell really is
-  12; // the file tools
+  12 + // the file tools
+  6; // the effectiveness switch
 console.log();
 if (failures > 0) {
   console.log(`FAIL — ${failures} of ${total} cases wrong`);

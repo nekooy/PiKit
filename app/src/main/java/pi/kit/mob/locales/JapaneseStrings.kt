@@ -340,6 +340,25 @@ internal object JapaneseStrings : Strings {
                 "そのアプリも同じようにあなたのファイルを扱えるようになります。"
         override val storageGrantPromptConfirm = "設定を開く"
 
+        override val storageGuardSection = "安全拡張"
+        override val storageGuardTitle = "安全拡張"
+        override val storageGuardSubtitle = "ツール実行前に検査し、危険な操作を拒否します"
+        override val storageGuardMissing = "このランタイムイメージには安全拡張が含まれていません"
+        override val storageGuardNote =
+            "拒否するのは、ワークスペース外の再帰削除、ファイルシステムの作成・変更、生デバイスへの" +
+                "書き込み、pi 自身の認証情報と設定の削除・上書き、そして許可していない共有ストレージ" +
+                "のパスを名指ししたコマンドです。オフにするとこれらは検査されなくなります。拡張は" +
+                "インストールされたまま読み込まれ、効果がなくなるだけで、いつでも戻せます。"
+        override val storageGuardOffTitle = "安全拡張をオフにしますか？"
+        override val storageGuardOffBody =
+            "オフにすると、エージェントのツール呼び出しは検査されなくなります。ワークスペース外の" +
+                "再帰削除、ファイルシステムのコマンド、生デバイスへの書き込み、pi 自身の認証情報や" +
+                "設定の削除はそのまま実行されます。オフにしたフォルダーは ~/storage に現れませんが、" +
+                "実際のパスを直接書いたコマンドは拒否されなくなります。\n\n" +
+                "アンインストールはされません。いつでもオンに戻せます。変更を反映するため、" +
+                "エージェントを今すぐ再起動します。"
+        override val storageGuardOffConfirm = "オフにする"
+
         override val profilesTitle = "モデルとプロバイダー"
         override val profilesSubtitle = "使用中のプロファイルでエージェントが起動します"
         override val savedProfiles = "保存済みのプロファイル"

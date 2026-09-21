@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import pi.kit.mob.env.SafetyGuard
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -106,6 +109,10 @@ fun StoragePage(
     val text = strings
     val context = LocalContext.current
     val sheets = LocalSheetHost.current
+    // Collected rather than read once: the switch is the store's value, so a change
+    // made anywhere reaches the row.
+    val settings by session.settingsStore.settings.collectAsState()
+    val guardInstalled = remember(session) { SafetyGuard.isInstalled(session.env) }
 
     var policy by remember { mutableStateOf(session.storagePolicy()) }
     var granted by remember { mutableStateOf(StorageAccess.isGranted()) }
@@ -120,6 +127,9 @@ fun StoragePage(
     var showGrantPrompt by remember { mutableStateOf(false) }
     // Where the folder picker is looking; null when it is closed.
     var pickerDir by remember { mutableStateOf<File?>(null) }
+    // Turning the guard off, held until the question is answered. One dialog for the
+    // one control here with no undo on this page.
+    var confirmDisableGuard by remember { mutableStateOf(false) }
 
     // "All files access" has no result callback — the only signal that the user
     // came back from the system page is the lifecycle. Re-reading here also
@@ -315,6 +325,37 @@ fun StoragePage(
                     )
                 }
             }
+
+            // Last, and in its own section, because it is the one control on this page
+            // that is not a folder: the switches above decide what the agent may
+            // *reach*, and this one decides whether anything checks what it does with
+            // it. `SafetyGuard` has the whole argument — the enforcement of those
+            // switches runs inside this extension, which is why turning it off is a
+            // question rather than a tap.
+            SettingsSection(text.settings.storageGuardSection) {
+                SettingsSwitchRow(
+                    title = text.settings.storageGuardTitle,
+                    subtitle = if (guardInstalled) {
+                        text.settings.storageGuardSubtitle
+                    } else {
+                        text.settings.storageGuardMissing
+                    },
+                    icon = Icons.Filled.Security,
+                    checked = guardInstalled && settings.safetyExtension,
+                    // A runtime image built before the guard existed has nothing to
+                    // switch: a switch that reports a state it cannot change is worse
+                    // than one that is visibly inert and says why.
+                    enabled = guardInstalled,
+                    onChange = { wanted ->
+                        if (wanted) {
+                            session.setSafetyExtension(true)
+                        } else {
+                            confirmDisableGuard = true
+                        }
+                    },
+                )
+            }
+            SettingsNote(text.settings.storageGuardNote)
         }
     }
 
@@ -415,6 +456,33 @@ fun StoragePage(
             },
             dismissButton = {
                 TextButton(onClick = { showGrantPrompt = false }) { Text(text.common.cancel) }
+            },
+        )
+    }
+
+    if (confirmDisableGuard) {
+        AlertDialog(
+            onDismissRequest = { confirmDisableGuard = false },
+            icon = { Icon(Icons.Filled.Security, contentDescription = null) },
+            title = { Text(text.settings.storageGuardOffTitle) },
+            text = { Text(text.settings.storageGuardOffBody) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDisableGuard = false
+                        session.setSafetyExtension(false)
+                    },
+                ) {
+                    // Red, like every other control in this app whose effect is the
+                    // destructive direction of the switch it belongs to.
+                    Text(
+                        text.settings.storageGuardOffConfirm,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDisableGuard = false }) { Text(text.common.cancel) }
             },
         )
     }
