@@ -359,6 +359,54 @@ internal object JapaneseStrings : Strings {
                 "エージェントを今すぐ再起動します。"
         override val storageGuardOffConfirm = "オフにする"
 
+        override val agentContextTitle = "エージェントのコンテキスト"
+        override val agentContextSubtitle = "モデルが毎回のリクエストで受け取る内容"
+        override val agentContextSection = "コンテキストの内容"
+        override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
+        override val agentContextSystemTitle = "システムプロンプト"
+        override val agentContextSystemBody =
+            "pi 自身の役割（コーディングアシスタント）、ツール一覧と呼び出し規則（edit は正確な" +
+                "置換、cat の代わりに read など）、pi のドキュメント索引。PiKit は変更しません。"
+        override val agentContextInstructionsTitle = "指示ファイル AGENTS.md"
+        override val agentContextInstructionsBody =
+            "pi は AGENTS.md を 2 か所から読みます：\n" +
+                "・グローバル：\$HOME/.pi/agent/AGENTS.md。PiKit がインストール時に書き込む、次の行の" +
+                "ファイルで、ここで編集できます。\n" +
+                "・ワークスペース：プロジェクトが作業ディレクトリに置く AGENTS.md（例：" +
+                "~/workspace/AGENTS.md）。pi は作業ディレクトリから上へたどるので、プロジェクトに" +
+                "近いものほど具体的です。プロジェクトが自前で持つこともできます（今はまだありません）。"
+        override val agentContextRuntimeTitle = "実行環境"
+        override val agentContextRuntimeBody =
+            "モデルとプロバイダー、思考レベル、セッション ID とセッションファイルのパス、ワーク" +
+                "スペース（PIKIT_WORKSPACE）、共有ストレージ（PIKIT_STORAGE_ROOTS と " +
+                "PIKIT_STORAGE_ALLOWED）、テレメトリーのスイッチ（PI_TELEMETRY=0）。"
+        override val agentContextToolsTitle = "ツール"
+        override val agentContextToolsBody =
+            "pi 自身の read、bash、edit、write、grep、find、ls に加えて、PiKit が入れた " +
+                "web_search、fetch_content、source_check、get_search_content、そして危険な呼び出しを" +
+                "拒否する pikit-safety-guard。"
+        override val agentContextHistoryTitle = "会話"
+        override val agentContextHistoryBody =
+            "現在のセッションです。ツール呼び出しと結果も含めて毎回のメッセージと一緒に送られ、" +
+                "セッションファイルに書き込まれます。"
+        override val agentContextInstructions = "グローバル AGENTS.md"
+        override val agentContextInstructionsEditable = "編集可"
+        override val agentContextNote =
+            "このファイルは pi が起動のたびに読み込み、保存するとエージェントが再起動します。" +
+                "それ以外はここでは読み取り専用です。モデルと思考レベルは「モデルとプロバイダー」、" +
+                "ワークスペースは「エージェントのプロセス」、共有ストレージは「共有ストレージ」の" +
+                "各ページで変更します。"
+        override val agentContextEditorNote =
+            "pi は起動時にこのファイルを読みます。保存するとエージェントが再起動し、変更が反映" +
+                "されます。"
+        override val agentContextSave = "保存"
+        override val agentContextSaved = "保存しました。エージェントを再起動しています"
+        override val agentContextFailed = "保存できませんでした。ファイルは変更されていません"
+        override val agentContextRestore = "既定に戻す"
+        override val agentContextRestoreTitle = "既定の内容に戻しますか？"
+        override val agentContextRestoreBody = "ファイルは PiKit の初期内容に戻り、書いた内容は失われます。"
+        override val agentContextRestoreConfirm = "戻す"
+
         override val profilesTitle = "モデルとプロバイダー"
         override val profilesSubtitle = "使用中のプロファイルでエージェントが起動します"
         override val savedProfiles = "保存済みのプロファイル"

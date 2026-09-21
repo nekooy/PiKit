@@ -350,6 +350,48 @@ internal object ChineseStrings : Strings {
                 "扩展不会被卸载，随时可以再打开；Agent 会立即重启让改动生效。"
         override val storageGuardOffConfirm = "关闭"
 
+        override val agentContextTitle = "Agent 上下文"
+        override val agentContextSubtitle = "模型每次请求时看到的内容"
+        override val agentContextSection = "上下文包含什么"
+        override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
+        override val agentContextSystemTitle = "系统提示"
+        override val agentContextSystemBody =
+            "pi 自带的角色设定（编码助手）、工具清单与调用规则（比如 edit 用精确替换、read 代替 " +
+                "cat），以及 pi 自己的文档索引。PiKit 不改动它。"
+        override val agentContextInstructionsTitle = "指令文件 AGENTS.md"
+        override val agentContextInstructionsBody =
+            "pi 会自动读取 AGENTS.md，有两处：\n" +
+                "· 全局：\$HOME/.pi/agent/AGENTS.md，PiKit 在安装时写入，就是下面这一行，可以编辑；\n" +
+                "· 工作区：项目自己放在工作目录里的 AGENTS.md，例如 ~/workspace/AGENTS.md；pi 从工作" +
+                "目录往上找，越靠近项目的那份越具体。项目可以自带一份，现在还没有。"
+        override val agentContextRuntimeTitle = "运行环境"
+        override val agentContextRuntimeBody =
+            "模型与供应商、思考等级、会话 ID 与会话文件路径、工作区（PIKIT_WORKSPACE）、共享存储" +
+                "授权（PIKIT_STORAGE_ROOTS 与 PIKIT_STORAGE_ALLOWED），以及遥测开关" +
+                "（PI_TELEMETRY=0）。"
+        override val agentContextToolsTitle = "工具"
+        override val agentContextToolsBody =
+            "pi 自带的 read、bash、edit、write、grep、find、ls，加上 PiKit 装的 web_search、" +
+                "fetch_content、source_check、get_search_content，以及拦截危险调用的 " +
+                "pikit-safety-guard。"
+        override val agentContextHistoryTitle = "对话历史"
+        override val agentContextHistoryBody =
+            "当前这段会话，包括工具调用与结果，随每条消息一起发送，并写入会话文件。"
+        override val agentContextInstructions = "全局 AGENTS.md"
+        override val agentContextInstructionsEditable = "可编辑"
+        override val agentContextNote =
+            "这个文件由 pi 在每次启动时读取，保存后 Agent 会重启。其余内容在这里都是只读的：" +
+                "模型和思考等级在「模型与供应商」页改，工作区在「Agent 进程」页改，共享存储在「手机存储」页改。"
+        override val agentContextEditorNote =
+            "这个文件由 pi 在启动时读取。保存后 Agent 会重启，改动才会生效。"
+        override val agentContextSave = "保存"
+        override val agentContextSaved = "已保存，Agent 正在重启"
+        override val agentContextFailed = "保存失败，文件没有改动"
+        override val agentContextRestore = "恢复默认"
+        override val agentContextRestoreTitle = "恢复默认说明？"
+        override val agentContextRestoreBody = "文件会换回 PiKit 的初始内容，你写的内容会丢失。"
+        override val agentContextRestoreConfirm = "恢复"
+
         override val profilesTitle = "模型与供应商"
         override val profilesSubtitle = "当前配置就是 Agent 启动时使用的配置"
         override val savedProfiles = "已保存的配置"
