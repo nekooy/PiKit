@@ -125,6 +125,16 @@ class WebAccessParamsTest {
             "geminiAuth",
             "geminiProject",
             "geminiLocation",
+            // The six 0.30.0 adds. They are named here rather than left to the row
+            // list because the point of this test is that a *new* area of the
+            // extension's file cannot be missed, and a bump that adds one is exactly
+            // when nobody looks.
+            "fetch.defaultMode",
+            "fetch.allowedModes",
+            "webSearch.allowedProviders",
+            "openaiUseProviderBaseUrl",
+            "openaiUseAlphaSearch",
+            "serplyApiKey",
         ).forEach { path ->
             assertTrue("$path is documented", path in paths)
         }

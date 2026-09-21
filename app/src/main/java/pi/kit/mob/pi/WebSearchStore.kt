@@ -163,8 +163,8 @@ data class WebSearchSettings(
          * run the search through a model, then the rest alphabetically enough to be
          * findable.
          *
-         * **This is the extension 0.29.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
-         * from its `search-providers.ts`, and it is 30 entries rather than the eleven
+         * **This is the extension 0.30.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
+         * from its `gemini-search.ts`, and it is 31 entries rather than the eleven
          * the page used to offer. The eleven were not "the supported ones": they were
          * the ones somebody had heard of, so a user whose provider was `kagi` or
          * `serper` could not select it at all and the picker looked complete.
@@ -200,6 +200,10 @@ data class WebSearchSettings(
             "serper",
             "serpapi",
             "serpbase",
+            // Added by 0.30.0, and explicitly opt-in there: it is never chosen by
+            // `auto`, so it appears in this list without becoming the default for
+            // anyone who has a key from somewhere else.
+            "serply",
             "kagi",
             "valyu",
             "bocha",

@@ -946,15 +946,35 @@ interface Strings {
         val installedVersion: String
         val installedVersionSubtitle: String
         val unknown: String
-        val updatePi: String
-        val updatePiSubtitle: String
-        val checkAndUpdate: String
-        val installing: String
+
+        /**
+         * The model-catalogue row: what the button refreshes, in a phrase.
+         *
+         * Deliberately a separate key from [modelListRefresh] rather than one string used
+         * twice: the row's caption says what the button is *for*, the button says what it
+         * does, and a language is free to want them worded differently.
+         */
+        val modelList: String
+        val modelListRefresh: String
+        val modelListRefreshSubtitle: String
+        val modelListRefreshing: String
+
+        /** The refresh ran and the catalogue moved; the agent is restarted to read it. */
+        val modelListChanged: String
+
+        /** The refresh ran and nothing moved — which is a success, not a failure. */
+        val modelListUnchanged: String
+
+        /**
+         * The paragraph under the button.
+         *
+         * Its whole job is to stop the button being pressed for no reason: the list is
+         * refreshed automatically on a four-hour window, so this says when a manual
+         * refresh is worth it and what it costs (a network round trip per provider).
+         */
+        val modelListNote: String
+
         val dismiss: String
-        fun updatedTo(version: String): String
-        val unknownVersion: String
-        val updateFailedNote: String
-        val updateIdleNote: String
         val installedPackages: String
         val relocate: String
 
@@ -965,9 +985,11 @@ interface Strings {
         /**
          * The paragraph under the relocation button.
          *
-         * Short by design: the reasoning that used to be here — package ids,
-         * `DT_RUNPATH`, shebangs — is in docs/ARCHITECTURE.md, and this page only
-         * has to say what the button is for and why it is usually unnecessary.
+         * It leads with *only if something is already failing*, because the row's title
+         * ("package relocation") reads as housekeeping and the button was pressed for no
+         * reason by users whose runtime was fine. The reasoning that used to be here —
+         * package ids, `DT_RUNPATH`, shebangs — is in docs/ARCHITECTURE.md, and this page
+         * only has to say when the button is for and why it is almost never needed.
          */
         val relocateNote: String
 

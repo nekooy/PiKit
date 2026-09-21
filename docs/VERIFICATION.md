@@ -26,6 +26,7 @@ file that gains a section never renumbers its neighbours.
 | [The transcript's frame cost](verification/transcript-performance.md) | Why opening a long reply is slow, every attempt to fix it, and the number or the crash that settled each |
 | [Marks and colours](verification/marks-and-colours.md) | The borrowed glyphs, the copy mark, the colour the rows converged on, and an icon cache that is not a build |
 | [The release build's dex](verification/release-build.md) | What R8 removes from the release APK that the debug one keeps, and the checker that now fails the build over it |
+| [The maintenance page](verification/maintenance-page.md) | What the on-device agent update could do to a working install, why pi now moves only with a PiKit release, and what the page does instead |
 | [Known gaps](verification/known-gaps.md) | What has not been verified, what needs a person rather than an instrument, and what is accepted rather than fixed |
 
 ## How to read it

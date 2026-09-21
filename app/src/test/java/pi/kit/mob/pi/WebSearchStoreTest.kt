@@ -509,9 +509,9 @@ class WebSearchStoreTest {
     fun `the provider list is the extension's own, with no duplicates`() {
         val providers = WebSearchSettings.SEARCH_PROVIDERS
 
-        // The number the bundled 0.29.0 resolves to. It is pinned because the page
+        // The number the bundled 0.30.0 resolves to. It is pinned because the page
         // presents this list as "all of them", which is only true while it is.
-        assertEquals(30, providers.size)
+        assertEquals(31, providers.size)
         assertEquals("no provider is listed twice", providers.size, providers.toSet().size)
         assertEquals(
             "the two selectors are not providers",
@@ -525,7 +525,7 @@ class WebSearchStoreTest {
 
     @Test
     fun `every provider has a description in every language`() {
-        // A picker of thirty rows whose second line is blank for a language looks
+        // A picker of thirty-one rows whose second line is blank for a language looks
         // like a rendering fault rather than like missing text, and the fallback in
         // `providerDescription` is the empty string.
         Lang.entries.forEach { lang ->
@@ -542,7 +542,7 @@ class WebSearchStoreTest {
 
     @Test
     fun `the rendered document has no trailing comma for pi to strip`() {
-        // Measured against pi 0.29.0's own `stripJsonComments`: on a document of this
+        // Measured against the bundled extension's own `stripJsonComments`: on a document of this
         // shape it left two trailing commas behind, and `JSON.parse` then refused the
         // file outright — its string-literal alternative can swallow a comma that is
         // followed by comment-stripped blank lines. So the annotated document carries

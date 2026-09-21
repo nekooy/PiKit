@@ -472,12 +472,32 @@ class PiAgentSession private constructor(context: Context) {
      * @param workingDir the directory pi is run from, which `update` inherits.
      */
     private suspend fun refreshCatalogueIfStale(workingDir: File) {
+        if (!catalogueRefreshDue(System.currentTimeMillis())) return
+        refreshCatalogueNow(workingDir)
+    }
+
+    /** Whether the launch path would refresh the catalogue at [now]. */
+    private fun catalogueRefreshDue(now: Long): Boolean =
+        catalogueRefreshDue(now, cataloguePrefs.getLong(KEY_CATALOGUE_DUE_AT, 0L))
+
+    /**
+     * Runs the catalogue refresh, whatever the deadline says, and reports what it found.
+     *
+     * The one entry point for both callers: the launch path
+     * ([refreshCatalogueIfStale], which checks the window first) and the maintenance
+     * page's own button ([requestCatalogueRefresh]). They have to behave identically —
+     * one refresh in flight at a time, the same deadline written back, the same
+     * "did anything change" test — or the button and the window would disagree about
+     * what the store on disk means.
+     *
+     * @return true when the refresh succeeded *and* the catalogue it wrote differs from
+     *   the one the agent would otherwise have resolved from.
+     */
+    private suspend fun refreshCatalogueNow(workingDir: File): Boolean {
+        if (!catalogueRefreshRunning.compareAndSet(false, true)) return false
         val now = System.currentTimeMillis()
-        val dueAt = cataloguePrefs.getLong(KEY_CATALOGUE_DUE_AT, 0L)
-        if (!catalogueRefreshDue(now, dueAt)) return
-        if (!catalogueRefreshRunning.compareAndSet(false, true)) return
         try {
-            val cliEntry = PiInstallation.cliEntry(env)?.absolutePath ?: return
+            val cliEntry = PiInstallation.cliEntry(env)?.absolutePath ?: return false
             val store = File(env.piConfigDir, CATALOGUE_STORE_NAME)
             val before = store.catalogueContent()
             val settings = settingsStore.read()
@@ -517,19 +537,43 @@ class PiAgentSession private constructor(context: Context) {
                     now + if (succeeded) CATALOGUE_REFRESH_WINDOW_MS else CATALOGUE_RETRY_MS,
                 )
                 .apply()
-            if (!succeeded) return
+            if (!succeeded) return false
             // The file is rewritten by every refresh; the catalogue is not. See the
             // note above: comparing the file made this a restart loop.
-            if (store.catalogueContent() == before) return
+            if (store.catalogueContent() == before) return false
             if (_conversation.value.isStreaming) {
                 Log.i(TAG, "model catalogue changed; the agent keeps the old one until it restarts")
-                return
+                return false
             }
             Log.i(TAG, "model catalogue changed; restarting pi to read it")
             scheduleRestart()
+            return true
         } finally {
             catalogueRefreshRunning.set(false)
         }
+    }
+
+    /**
+     * The maintenance page's manual catalogue refresh, run to completion.
+     *
+     * The button is the *only* thing this adds over the launch path: pi's own
+     * freshness window is four hours ([CATALOGUE_REFRESH_WINDOW_MS]), so a model
+     * published an hour ago is not due for another three by the clock. Pressing the
+     * button skips that test — nothing else about the refresh is different, which is
+     * why this delegates to the same function the launch path uses.
+     *
+     * Only [refreshCatalogueNow] running is a failure here: the launch path was
+     * already refreshing, so the answer the button was about to buy is on its way.
+     * A refresh that succeeded without changing anything is a success — the model the
+     * user was looking for may simply not exist yet.
+     *
+     * @return true when the catalogue actually moved, which is also the case where the
+     *   agent is restarted to read it.
+     */
+    internal suspend fun requestCatalogueRefresh(): Boolean {
+        val workingDir = File(settingsStore.read().workingDir.ifBlank { env.workspacePath })
+        Log.i(TAG, "manual model catalogue refresh requested")
+        return refreshCatalogueNow(workingDir)
     }
 
     /**
@@ -1621,8 +1665,18 @@ class PiAgentSession private constructor(context: Context) {
          *    policy is ~757 KB per launch, which is not a launch-path cost on a phone.
          *
          * Four hours is the reconciliation: pi's own freshness window, honoured rather
-         * than bypassed, with the maintenance page's button (`PiUpdater`) as the manual
-         * override for anyone who wants a model released an hour ago.
+         * than bypassed, with the maintenance page's own button ([requestCatalogueRefresh])
+         * as the manual override for anyone who wants a model released an hour ago.
+         *
+         * There is deliberately no button and no code path that updates *pi itself* on
+         * the device. The runtime's packages — pi included — are inputs of the image the
+         * APK carries (`tools/build-runtime-image.py`), and rewriting pi inside a live
+         * install produced the failure this policy replaced: a half-completed
+         * `npm install -g`, thrown away by the user when it looked stuck, left a tree
+         * whose `jiti` was missing, and since 0.86.x the bundled TypeScript guard
+         * extension is loaded *through* `jiti`, the whole agent then refused to start
+         * (`pi exited with code 1`, `Cannot find module 'jiti'`). A version that ships in
+         * the image cannot be half-installed.
          *
          * A *failure* backs off further, to [CATALOGUE_RETRY_MS]: that is what keeps a
          * phone with no network from paying the attempt at every launch.

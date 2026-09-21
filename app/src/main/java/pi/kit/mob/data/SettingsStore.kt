@@ -349,7 +349,7 @@ fun apiKeyEnvironment(settings: PiSettings): Map<String, String> {
  * thirty-two providers as available, and offer providers the user has no account with.
  * The two legitimate callers are the two processes whose whole job is to refresh or read
  * the catalogue and which then exit: [pi.kit.mob.pi.PiProcessLauncher.refreshCatalogue]
- * and [pi.kit.mob.pi.PiUpdater]'s `update --models` half.
+ * and the launch path's own scheduled call to it.
  *
  * [PiProvider.CUSTOM] is not included. Its id is PiKit's own, and the credential it
  * authenticates with is the one the user pasted — a placeholder there would make an

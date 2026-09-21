@@ -1,15 +1,11 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Extension
@@ -18,7 +14,6 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,29 +23,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.strings
+import pi.kit.mob.pi.CatalogueStatus
+import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.pi.PiUpdater
 import pi.kit.mob.pi.StorageSelfTest
-import pi.kit.mob.pi.UpdateStatus
 
 /**
- * Maintenance: updating pi and repairing the prefix.
+ * Maintenance: the model catalogue and repairing the prefix.
  *
  * Both actions change files under `$PREFIX`, which is why they are together and
  * away from the settings that only change what the agent is launched with.
- */@Composable
+ *
+ * There is deliberately nothing here that updates pi itself. The bundled agent is an
+ * input of the runtime image `tools/build-runtime-image.py` produces, so a new pi
+ * arrives with a new PiKit; replacing it on the device was removed after a
+ * half-completed `npm install -g` left a tree the agent could not start from (the
+ * `jiti` the 0.86 TypeScript guard extension is loaded through was gone). See
+ * [CatalogueUpdater] and `docs/verification/`. What the button below does instead is
+ * metadata: the providers' model catalogues, which pi's launch path refreshes on its
+ * own four-hour window and which the button forces when a just-released model is
+ * wanted now.
+ */
+@Composable
 internal fun MaintenancePage(
     session: PiAgentSession,
-    updater: PiUpdater,
+    catalogue: CatalogueUpdater,
     selfTest: StorageSelfTest,
     onBack: () -> Unit,
 ) {
     val repair by session.repair.collectAsState()
     val repairRunning by session.repairRunning.collectAsState()
     val repairScanned by session.repairScanned.collectAsState()
-    val status by updater.status.collectAsState()
-    val output by updater.output.collectAsState()
-    val version by updater.version.collectAsState()
+    val catalogueStatus by catalogue.status.collectAsState()
+    val version by catalogue.version.collectAsState()
     val storageCheck by selfTest.status.collectAsState()
     val text = strings
 
@@ -78,8 +83,8 @@ internal fun MaintenancePage(
                 )
                 SettingsDivider()
                 SettingsRow(
-                    title = text.settings.updatePi,
-                    subtitle = text.settings.updatePiSubtitle,
+                    title = text.settings.modelList,
+                    subtitle = text.settings.modelListRefreshSubtitle,
                     icon = Icons.Filled.Refresh,
                 )
                 Row(
@@ -87,63 +92,58 @@ internal fun MaintenancePage(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(
-                        onClick = { updater.start() },
-                        enabled = status !is UpdateStatus.Checking && status !is UpdateStatus.Running,
-                    ) { Text(text.settings.checkAndUpdate) }
+                        onClick = { catalogue.start() },
+                        enabled = catalogueStatus !is CatalogueStatus.Running,
+                    ) { Text(text.settings.modelListRefresh) }
 
-                    if (status !is UpdateStatus.Idle && status !is UpdateStatus.Checking &&
-                        status !is UpdateStatus.Running
+                    if (catalogueStatus !is CatalogueStatus.Idle &&
+                        catalogueStatus !is CatalogueStatus.Running
                     ) {
-                        TextButton(onClick = { updater.dismiss(); updater.refreshVersion() }) {
+                        TextButton(onClick = { catalogue.dismiss(); catalogue.refreshVersion() }) {
                             Text(text.settings.dismiss)
                         }
                     }
                 }
 
-                when (val current = status) {
-                    UpdateStatus.Idle -> SettingsNote(
-                        text.settings.updateIdleNote,
+                when (val current = catalogueStatus) {
+                    CatalogueStatus.Idle -> SettingsNote(
+                        text.settings.modelListNote,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
 
-                    UpdateStatus.Checking, UpdateStatus.Running -> Column(
+                    CatalogueStatus.Running -> Column(
                         Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text(
-                            text.settings.installing,
+                            text.settings.modelListRefreshing,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 6.dp),
                         )
                     }
 
-                    is UpdateStatus.Succeeded -> Text(
-                        text.settings.updatedTo(
-                            current.version ?: text.settings.unknownVersion,
-                        ),
+                    is CatalogueStatus.Done -> Text(
+                        // The changed case also restarted the agent, so the sentence
+                        // says both; the unchanged case is a success too — the model the
+                        // user came for may simply not exist yet — and saying so is what
+                        // keeps "nothing happened" from reading as a failure.
+                        text = if (current.changed) {
+                            text.settings.modelListChanged
+                        } else {
+                            text.settings.modelListUnchanged
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
 
-                    is UpdateStatus.Failed -> Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text(
-                            current.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            text.settings.updateFailedNote,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                }
-
-                if (output.isNotEmpty()) {
-                    OutputLog(output)
+                    is CatalogueStatus.Failed -> Text(
+                        text = current.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
                 }
             }
 
@@ -154,9 +154,10 @@ internal fun MaintenancePage(
             // installed before those hooks existed or by something that bypassed
             // both. The reasoning that used to be on this page — package ids,
             // `DT_RUNPATH`, shebangs — is in docs/ARCHITECTURE.md, where it is
-            // useful and invisible. [Strings.Settings.relocateNote] is the short
-            // version, and it is deliberately under the button rather than beside
-            // the title: the row states the fact, the note answers "do I need this".
+            // useful and invisible. `Strings.Settings.relocateNote` is the short
+            // version, and it leads with "only if something already errors" rather
+            // than with what the button does: the row states the fact, the note
+            // answers "do I need this", and the honest answer is almost always no.
             SettingsSection(text.settings.installedPackages) {
                 SettingsRow(
                     title = text.settings.relocate,
@@ -185,7 +186,7 @@ internal fun MaintenancePage(
                 if (repairRunning) {
                     // The walk reads every file under `$PREFIX` — 22 000 on a
                     // freshly installed image — so it gets the same progress
-                    // treatment the update section uses rather than a dead button.
+                    // treatment the catalogue refresh uses rather than a dead button.
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text(
@@ -232,7 +233,7 @@ internal fun MaintenancePage(
                 }
 
                 // Under the button, always, the way the storage check carries its
-                // own explanation: a page whose two actions are "upgrade" and
+                // own explanation: a page whose actions are "refresh metadata" and
                 // "repair a package" has to say what the second one is for, and the
                 // row's caption alone cannot.
                 SettingsNote(
@@ -321,38 +322,6 @@ internal fun MaintenancePage(
                     }
                 }
             }
-        }
-    }
-}
-
-/**
- * The updater's output, newest last.
- *
- * Scrollable and capped rather than truncated to the last line: npm's output is
- * only useful in context, and a failure that fits on one screen should be
- * readable without copying it anywhere.
- */
-@Composable
-private fun OutputLog(lines: List<String>) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 260.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(10.dp),
-        ) {
-            Text(
-                lines.joinToString("\n"),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-            )
         }
     }
 }

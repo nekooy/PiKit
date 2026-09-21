@@ -88,7 +88,7 @@ PiKit has to *write* (section 9), and the extension documents and validates them
 ## The extension's licence, and why it is named on the About page
 
 `pi-web-access` is **MIT** (Nico Bailon, `github.com/nicobailon/pi-web-access`,
-pinned by `WEB_ACCESS_VERSION = "0.29.0"` in the image builder), and so are the packages
+pinned by `WEB_ACCESS_VERSION = "0.30.0"` in the image builder), and so are the packages
 npm resolves under it — `turndown`, `@mozilla/readability`, `defuddle`, `linkedom`,
 `unpdf`, `undici`, `p-limit`, `typebox`. MIT is compatible with this app's GPLv3 as long
 as the notice travels with the code, and it does: the APK contains each package's own
