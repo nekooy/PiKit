@@ -171,8 +171,18 @@ WEB_ACCESS_VERSION = "0.30.0"
 WEB_ACCESS_ROOT = ("lib", "node_modules", "pikit-extensions")
 WEB_ACCESS_RELATIVE = "/".join((*WEB_ACCESS_ROOT, "node_modules", WEB_ACCESS_PACKAGE))
 
-#: Files the extension ships for its npm page rather than for running.
-WEB_ACCESS_JUNK = ("pi-web-fetch-demo.mp4", "banner.png", "CHANGELOG.md", "README.md", "SECURITY.md")
+#: What the extension ships for its npm page rather than for running, as paths relative
+#: to the tree the trim is given (`lib/node_modules/pikit-extensions` in the image, the
+#: cache's project directory behind it). The shape is [vendor_junk]'s `drop`.
+#:
+#: `README.md` is deliberately *not* here: it is the extension's only documentation — 104
+#: KB naming every provider, key and option — and it ships through [WEB_ACCESS_DOCS]. The
+#: changelog needs no entry either: it is one of [VENDOR_JUNK_FILES] everywhere.
+WEB_ACCESS_DROPS = (
+    "node_modules/pi-web-access/pi-web-fetch-demo.mp4",
+    "node_modules/pi-web-access/banner.png",
+    "node_modules/pi-web-access/SECURITY.md",
+)
 
 #: Modules the extension loads at runtime that `--omit=optional` was dropping.
 #:
@@ -585,7 +595,7 @@ def vendor_pi(pi_cache: Path, pi_version: str) -> Path:
     node_modules = pi_cache / "node_modules"
 
     if node_modules.is_dir():
-        held = read_vendored_spec(marker)
+        held = read_vendored_marker(marker).get("spec")
         if held == spec:
             log(f"reusing vendored pi from cache ({spec})")
             return pi_cache
@@ -611,12 +621,18 @@ def vendor_pi(pi_cache: Path, pi_version: str) -> Path:
     return pi_cache
 
 
-def read_vendored_spec(marker: Path) -> str | None:
-    """What a cached pi tree was vendored from, or None when that is not recorded."""
+def read_vendored_marker(marker: Path) -> dict:
+    """
+    What a vendoring cache records about itself: its `spec` (the package and version it
+    holds) and, where the writer sets it, `pristine` — whether the tree is what npm
+    installed rather than the image builder's trimmed copy. An unreadable or absent
+    marker is an empty dict, which matches neither, so the tree is vendored again.
+    """
     try:
-        return json.loads(marker.read_text(encoding="utf-8")).get("spec")
-    except (OSError, ValueError, AttributeError):
-        return None
+        held = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return held if isinstance(held, dict) else {}
 
 
 
@@ -667,6 +683,11 @@ def vendor_web_access(cache: Path) -> Path:
     one optional dependency that is *not* optional in practice is named in
     [WEB_ACCESS_RUNTIME_DEPS] and installed on its own — `--omit=optional` took it
     out and every `fetch_content` call failed without it.
+
+    What it returns is the tree npm installed, untouched: the trim runs on the copy the
+    image ships ([install_web_access]), so a change to the rule reaches a warm cache
+    instead of being silently absent from the image. That used not to be true — the cache
+    itself was trimmed — which is what the marker's `pristine` flag remembers.
     """
     node_modules = cache / "node_modules"
     package_json = cache / "package.json"
@@ -677,6 +698,12 @@ def vendor_web_access(cache: Path) -> Path:
         name for name in WEB_ACCESS_RUNTIME_DEPS
         if not (node_modules / name).is_dir()
     ]
+    # The documentation is required by the same check and for the same reason: it is
+    # what [WEB_ACCESS_DOCS] protects from the trim, so a cache without it is a cache
+    # that would ship the extension with no reference for its options. `held == spec`
+    # would not notice — the version did not move — which is the failure mode this whole
+    # file is written against.
+    missing += [name for name in WEB_ACCESS_DOCS if not (cache / name).is_file()]
     # The version is checked, not just the presence of a tree, and that check was
     # missing: `WEB_ACCESS_VERSION` went into the revision digest, so bumping it
     # rebuilt the image — around the extension the cache had vendored first, because
@@ -685,8 +712,9 @@ def vendor_web_access(cache: Path) -> Path:
     # reason. The old tree could not be caught by the version in `build-metadata.json`
     # either: that file is written from `WEB_ACCESS_VERSION`, so it would have named
     # 0.30.0 over a 0.29.0 tree.
-    held = read_vendored_spec(marker)
-    if installed.is_dir() and not missing and held == spec:
+    held = read_vendored_marker(marker)
+    reusable = held.get("spec") == spec and held.get("pristine") is True
+    if installed.is_dir() and not missing and reusable:
         log(f"reusing vendored web-access extension from cache ({spec})")
         # Verified on the reuse path too, and that is the point of it: a cache that
         # was built before this check existed, or emptied of one directory by hand,
@@ -696,10 +724,15 @@ def vendor_web_access(cache: Path) -> Path:
     if installed.is_dir():
         # Regenerated rather than patched in place: the cache is a build artefact,
         # and a tree that was half-updated is how two builds come to differ.
-        if held != spec:
+        if held.get("spec") != spec:
             log(
                 f"re-vendoring the web-access extension: the cache holds "
-                f"{held or 'an unrecorded version'}, this build wants {spec}"
+                f"{held.get('spec') or 'an unrecorded version'}, this build wants {spec}"
+            )
+        elif held.get("pristine") is not True:
+            log(
+                "re-vendoring the web-access extension: the cache was written by a build "
+                "that trimmed it in place, so it is not the tree npm installs"
             )
         else:
             log(f"re-vendoring the web-access extension: {', '.join(missing)} missing from the cache")
@@ -742,17 +775,27 @@ def vendor_web_access(cache: Path) -> Path:
                 f"the generated package.json; without it every fetch_content call "
                 f"fails with `Cannot find module`."
             )
+    for name in WEB_ACCESS_DOCS:
+        if not (cache / name).is_file():
+            raise SystemExit(
+                f"{name} is missing from the vendored {WEB_ACCESS_PACKAGE}. It is the "
+                f"extension's only documentation and [trim_vendor_tree] is told to keep "
+                f"it; a release that stopped shipping it is a version of the extension "
+                f"whose options no longer have a reference on the device."
+            )
 
     # After the verification above, never before: a marker that outlives a failed
     # install is a cache that claims to hold something it does not. Same rule as the
     # pi vendoring's own marker.
-    marker.write_text(json.dumps({"spec": spec}) + "\n", encoding="utf-8")
-
-    # The npm page's own artwork and prose. `files` in the package manifest ships
-    # them on purpose; they are 6 MB of the 30 MB and nothing loads them.
-    for junk in WEB_ACCESS_JUNK:
-        (installed / junk).unlink(missing_ok=True)
-    trim_vendor_tree(cache)
+    #
+    # `pristine` records that this cache is what npm installed, untouched. It was not
+    # always: the trim used to run on the cache itself, so a build host's copy is a tree
+    # with another rule's deletions already applied, and reusing it would ship an image
+    # missing whatever the current rule keeps — silently, because the version did not
+    # move. A marker without the flag is such a cache, and it is re-vendored once.
+    marker.write_text(
+        json.dumps({"spec": spec, "pristine": True}) + "\n", encoding="utf-8"
+    )
     verify_web_access(cache)
     return cache
 
@@ -798,32 +841,137 @@ def verify_web_access(cache: Path) -> None:
     log("  " + completed.stdout.strip())
 
 
-#: Directories and files inside a vendored npm tree that are source material or
-#: documentation rather than something the extension loads.
-VENDOR_JUNK_DIRS = ("test", "tests", "__tests__", ".yarn", "docs", "examples", "benchmarks", ".github")
+#: What a vendored npm tree loses, and — this is the whole rule — what it loses *only*.
+#: Everything else ships, including the things nobody thought about when the rule was a
+#: keep list: pi's `examples/` (132 files, its documentation links into them 49 times),
+#: the dependency trees' own documentation, their `.github` directory, their TypeScript
+#: sources. A keep list has to be right about everything; a delete list has to be right
+#: about what it names, and what it leaves behind is visible in the size of the archive.
+#: Names a vendored tree loses wherever they appear, each with the reason it does — the
+#: reason is what a reader of the check's output sees, so it is worth being exact.
+#: `.yarn` is the one that is not about testing: it is a package manager's own plugin and
+#: release bundles, published inside a dependency, and `@mixmark-io/domino` alone ships
+#: 1.07 MB of them.
+VENDOR_JUNK_DIRS = {
+    "test": "test fixtures",
+    "tests": "test fixtures",
+    "__tests__": "test fixtures",
+    ".yarn": "a package manager's own bundles",
+}
+VENDOR_JUNK_FILES = ("README.md", "CHANGELOG.md")
+VENDOR_JUNK_SUFFIXES = (".map",)
+
+#: The scope in a vendored `node_modules` that the two dependency rules below leave alone.
+#:
+#: `@earendil-works/pi-*` is pi's own API: an extension author codes against those type
+#: declarations and reads those chapters, so they are the one part of a dependency tree
+#: that is documentation for *this* app rather than a JavaScript library's npm page. 370
+#: `.d.ts` files, 0.75 MB, against the 12.36 MB of type declarations the other 87 packages
+#: in pi's tree ship and nothing reads: Node ignores a `types` condition at runtime, and
+#: jiti strips types rather than resolving declarations, so no `.d.ts` is ever loaded on a
+#: device. They are the largest thing left in the image that cannot run.
+PI_API_SCOPE = "@earendil-works"
+
+#: The one thing pi's own tree drops on top of the shared rule: four screenshots, 2.29 MB
+#: of the 2.79 MB its `docs/` weighs (1.44 MB of that a sponsor's mascot). The reader is a
+#: terminal on a phone and draws none of them, and the two chapters that embed one show a
+#: missing image — the cost this design accepts, against 2.3 MB of archive per ABI.
+PI_DROPS = ("docs/images",)
+
+#: Documentation the shared rule would otherwise delete, as paths relative to the tree
+#: being trimmed. The extension's README is the only one: it is its only documentation —
+#: every provider, key and option it accepts — and `README.md` is a name the rule deletes
+#: everywhere else.
+WEB_ACCESS_DOCS = ("node_modules/pi-web-access/README.md",)
 
 
-def trim_vendor_tree(root: Path) -> None:
+def vendored_package(relative: str) -> str | None:
     """
-    Removes the parts of a vendored npm tree that nothing loads at runtime.
+    Which npm package a path inside a vendored tree belongs to, or None when the path is
+    the tree's own — pi's or the extension's — rather than a dependency's.
+    """
+    directories = relative.split("/")[:-1]
+    if "node_modules" not in directories:
+        return None
+    # The last `node_modules` before the file: a dependency's own nested `node_modules`
+    # is what decides there, not the tree's outermost one.
+    at = len(directories) - 1 - directories[::-1].index("node_modules")
+    following = directories[at + 1:]
+    if not following:
+        return None
+    return "/".join(following[:2]) if following[0].startswith("@") else following[0]
 
-    Measured on the web-access tree (24.9 MB uncompressed): the test fixtures, the
-    Yarn plugin bundles, the source maps and the markdown bring it to 14.6 MB, and
-    the shipped archive from 8.6 MB to 5.5 MB **per ABI**. `@mixmark-io/domino`
-    alone is 3.4 MB of HTML5-parser conformance data inside a runtime dependency.
-    `LICENSE` files stay: they are the terms the code ships under.
+
+def vendor_junk(relative: str, drop: tuple[str, ...] = ()) -> str | None:
+    """
+    Why a vendored tree loses this path, or None when it ships.
+
+    One predicate, two callers: [trim_vendor_tree] deletes by it, and
+    `tools/verify-runtime-image.py` derives what the image owes by it. Two spellings of
+    this rule is how a check and its subject drift apart while both look right.
+
+    `relative` is a posix path relative to the tree being trimmed, and `drop` is the
+    per-tree extra (`PI_DROPS`, `WEB_ACCESS_DROPS`).
+    """
+    parts = relative.split("/")
+    for part in parts:
+        if part in VENDOR_JUNK_DIRS:
+            return VENDOR_JUNK_DIRS[part]
+    if parts[-1] in VENDOR_JUNK_FILES:
+        return "the package's own npm-page prose"
+    if parts[-1].endswith(VENDOR_JUNK_SUFFIXES):
+        return "source maps"
+    package = vendored_package(relative)
+    if package is not None and not package.startswith(PI_API_SCOPE):
+        if parts[-1].endswith(".d.ts"):
+            return "a dependency's type declarations"
+        if "docs" in parts[:-1]:
+            return "a dependency's manual"
+    if any(relative == entry or relative.startswith(entry + "/") for entry in drop):
+        return "the npm page's artwork"
+    return None
+
+
+def vendor_kept(relative: str, keep: tuple[str, ...]) -> bool:
+    """Whether `keep` protects this path from [vendor_junk] — the rule's exception."""
+    return any(relative == entry or relative.startswith(entry + "/") for entry in keep)
+
+
+def trim_vendor_tree(
+    root: Path, *, drop: tuple[str, ...] = (), keep: tuple[str, ...] = ()
+) -> None:
+    """
+    Removes the parts of a vendored npm tree that [vendor_junk] names.
+
+    Measured on the web-access tree (33.4 MB uncompressed, 7,773 files): the test
+    fixtures, the npm page's artwork and prose, the source maps, a package manager's own
+    bundles and the dependencies' type declarations and manuals are 17.8 MB of it, leaving
+    15.7 MB to ship. `@mixmark-io/domino` alone is 3.4 MB of HTML5-parser conformance data
+    inside a runtime dependency and ships 1.07 MB of Yarn plugin bundles, and `LICENSE`
+    files always stay: they are the terms the code ships under.
+
+    `drop` is the tree's own extra ([PI_DROPS], [WEB_ACCESS_DROPS]) and `keep` its
+    exception ([WEB_ACCESS_DOCS]). Both are paths relative to `root`.
     """
     removed = 0
+    # Deepest first, so a directory the rule names is removed once rather than walked
+    # twice — its files would otherwise be counted twice as well.
     for path in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
-        if path.is_dir() and path.name in VENDOR_JUNK_DIRS:
-            removed += sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-            shutil.rmtree(path, ignore_errors=True)
+        if not path.is_dir():
+            continue
+        relative = path.relative_to(root).as_posix()
+        if vendor_kept(relative, keep) or not vendor_junk(relative, drop):
+            continue
+        removed += sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+        shutil.rmtree(path, ignore_errors=True)
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
-        if path.suffix == ".map" or (path.suffix == ".md" and "LICENSE" not in path.name.upper()):
-            removed += path.stat().st_size
-            path.unlink()
+        relative = path.relative_to(root).as_posix()
+        if vendor_kept(relative, keep) or not vendor_junk(relative, drop):
+            continue
+        removed += path.stat().st_size
+        path.unlink()
     log(f"  trimmed {removed / 1e6:.1f} MB of vendored source material")
 
 
@@ -859,12 +1007,21 @@ def install_rewrite_exclusions(overlay_root: Path) -> None:
 
 
 def install_web_access(overlay_root: Path, vendored: Path) -> None:
-    """Copies the vendored extension into the overlay and records how to find it."""
+    """
+    Copies the vendored extension into the overlay, trims the copy, and records how to
+    find it.
+
+    The trim is here rather than in [vendor_web_access] so that the cache stays the tree
+    npm installed: pi's tree has always been trimmed this way, on the copy, and the
+    extension's used to be trimmed in place — which made a rule change invisible on a warm
+    cache and cost the marker's `pristine` flag to recover from.
+    """
     destination = overlay_root.joinpath(*WEB_ACCESS_ROOT)
     if destination.exists():
         shutil.rmtree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(vendored, destination, symlinks=True)
+    trim_vendor_tree(destination, drop=WEB_ACCESS_DROPS, keep=WEB_ACCESS_DOCS)
 
     metadata = overlay_root / WEB_ACCESS_METADATA
     metadata.parent.mkdir(parents=True, exist_ok=True)
@@ -952,18 +1109,23 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     log("copying pi into the overlay")
     shutil.copytree(pi_source, pi_destination, symlinks=True)
 
-    # The same trim the web-access tree gets, and for the same reason: pi's
-    # dependency tree ships source maps, typings and TypeScript sources that Node
-    # never loads. Measured on the arm64 overlay: 3,309 `.map` files (37.9 MB raw,
-    # 8.1 MB of the compressed archive), 2,865 `.d.ts`, 504 `.ts`, plus the test and
-    # documentation directories of its dependencies.
+    # The same trim the web-access tree gets, and for the same reason: pi's dependency
+    # tree ships source maps, test fixtures, type declarations and the npm page of a
+    # hundred packages. Measured over the vendored tree (105.5 MB, 14,007 files) under the
+    # rule above, 51.5 MB of it goes and 53.9 MB ships: source maps 33.94 MB, the
+    # dependencies' type declarations 12.36 MB, four screenshots 2.29 MB ([PI_DROPS]),
+    # `README.md`/`CHANGELOG.md` 2.12 MB, the dependencies' manuals 0.42 MB and test
+    # fixtures 0.38 MB.
     #
-    # The whole trim, over the 106.2 MB tree: 44.5 MB raw (the line the function
-    # logs) and 9.95 MB off the compressed overlay — `overlay.zip` went 82.63 MB ->
-    # 72.68 MB on both ABIs, and the release APK with it (111.8 MB -> 107.2 MB on
-    # arm64), measured 2026-09-15. It used to delete three directories by name, which
-    # caught pi's own docs and nothing else.
-    trim_vendor_tree(pi_destination)
+    # What a keep list cost, for the record: it removed 40.3 MB and deleted pi's
+    # `examples/` (0.96 MB, 132 files its own documentation links into 49 times) and the
+    # dependency trees' documentation (0.57 MB) without anyone deciding to — which is why
+    # the rule is a delete list. Against that rule the archive is 4.7 MB smaller per ABI
+    # (arm64 75.08 -> 70.38 MB, x86_64 74.59 -> 69.88 MB) and an APK that stores the
+    # archive uncompressed by the same. Introducing the trim at all took `overlay.zip`
+    # from 82.63 MB to 72.68 MB and the arm64 release APK from 111.8 MB to 107.2 MB
+    # (measured 2026-09-15).
+    trim_vendor_tree(pi_destination, drop=PI_DROPS)
 
     # 3b. the bundled web-access extension ----------------------------------
     # Ahead of the prefix rewrite below, so it is covered by it like everything
