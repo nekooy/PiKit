@@ -189,7 +189,12 @@ files and a device shows no error when they are absent:
   keeps must be in the image, by name** (7,618 in pi's tree at 0.86.1, 5,449 in the
   extension's). The expectation is computed from the tree and from `vendor_junk`, the same
   predicate the trim deletes by, so a release that adds, renames or retires anything moves
-  no constant here and a file the image is missing is named. Documents alone were compared
+  no constant here and a file the image is missing is named. **A symlink counts on both
+  sides, as itself or as the file it points at**: npm makes `node_modules/.bin/*` symlinks
+  on Linux and shim files on Windows, and the archive carries either form, so a comparison
+  that excluded symlinks reported six `.bin` entries as files the image has and the tree
+  does not — on a cold CI cache only, because a Windows build host's cache has no symlink
+  in that directory to disagree about. Documents alone were compared
   first, and a file dropped from `examples/` passed it — which is why the claim is about
   every file: the rule is a delete list, so "everything else arrived" is what it promises.
   The count that stood in for this at the start (a floor of 25 chapters, measured against
