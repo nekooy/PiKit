@@ -848,7 +848,7 @@ private fun ChatPage(
             //
             // `state.items` is read for it here, one expression wide, which is what keeps
             // the transcript's own scrolling and folding decisions out of this call path.
-            title = conversationTitle(state, text),
+            title = conversationTitle(state),
             onOpenSessions = onOpenSessions,
             onNewSession = onNewSession,
             onCompact = { session.compact() },
@@ -1525,7 +1525,12 @@ private fun AgentStatusLine(message: String, color: Color) {
         ),
         style = style,
         color = color,
-        maxLines = 2,
+        // One line, because the header's band is a fixed two-line height: a state
+        // that wrapped would push the transcript down and back again every time
+        // the agent started or stopped. A failure message is pi's own stderr and
+        // its first line is the one that names the cause; the rest is on the Agent
+        // page.
+        maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
 }
@@ -1554,13 +1559,23 @@ private fun statusColor(agent: AgentStatus): Color = when (agent) {
  * pi does not generate titles, so an unnamed conversation is labelled with its
  * first user message — the same rule pi's own session picker uses. Reusing
  * [SessionMetadata.asTitle] keeps the two identical.
+ *
+ * A conversation with nothing in it yet is labelled with the application's name
+ * rather than with `chat.newConversation`. The header is where the reader looks to
+ * see *what* they are looking at, and "新对话" answers a question nobody asked: the
+ * page is a new conversation because that is what an empty transcript is. The name
+ * is a literal because it is a proper noun and not interface text — the same
+ * spelling in all three catalogs, and the same one the About page writes.
  */
-private fun conversationTitle(state: ConversationState, text: Strings): String {
+private fun conversationTitle(state: ConversationState): String {
     state.sessionName?.takeIf { it.isNotBlank() }?.let { return it }
     val firstUser = state.items.firstOrNull { it is ChatItem.User && it.text.isNotBlank() }
     val message = (firstUser as? ChatItem.User)?.text
-    return if (message.isNullOrBlank()) text.chat.newConversation else SessionMetadata.asTitle(message)
+    return if (message.isNullOrBlank()) APP_NAME else SessionMetadata.asTitle(message)
 }
+
+/** The application's name, as it is written wherever a proper noun is wanted. */
+private const val APP_NAME = "PiKit"
 
 /**
  * One prompt from the user.
