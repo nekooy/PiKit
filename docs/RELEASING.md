@@ -242,7 +242,8 @@ users, never for a version people will install and keep.
    What belongs there is what changed for someone holding the previous APK — not the
    commit list, which the compare link already has. Nothing has to be pressed for the
    release to be visible: the app's update check has been reading it since the run
-   ended, and an edit does not change that.
+   ended, and an edit does not change that. The shape below is the one `v0.2.0`
+   established; `gh release edit v0.2.0 --notes-file <file>` is how it was applied.
 2. **Install the release APK over the previous release**, not next to it:
    `adb install -r app/build/outputs/apk/arm64/release/app-arm64-release.apk`. This
    is the upgrade path a real user takes, and it is the one thing the build itself
@@ -256,3 +257,52 @@ users, never for a version people will install and keep.
 5. **Update the supported-version notes** if this release changed what the previous
    one could do: `SECURITY.md` and any chapter under `docs/architecture/` that
    describes behaviour this build changed.
+
+### The notes: Chinese, four sections, and the same parts around them every time
+
+[`v0.2.0`](https://github.com/nekooy/PiKit/releases/tag/v0.2.0) is the worked example: the block
+below is that body's shape with the version-specific parts blanked out, and the shape is what to
+copy rather than the notes themselves — the four headings' contents change every release, and a
+sentence about one release is wrong in the next.
+
+```markdown
+### 新增功能
+
+- <something a user can do now that the previous APK could not>
+
+### 体验优化
+
+- <a change to something that already existed: how it looks, how long it takes, how big it is>
+
+### 问题修复
+
+- 修复…<what was wrong, and what it does now>
+
+### 其他变更
+
+- <the manual, the build, the runtime image — anything the user does not operate>
+
+### 选哪个文件：
+
+| 设备 | 文件 |
+| --- | --- |
+| 手机、平板 | `PiKit-<version>-arm64.apk` |
+| `x86_64` 模拟器 | `PiKit-<version>-x64.apk` |
+
+<one sentence: whether this release installs over the previous one, and why>
+
+**Full Changelog**: https://github.com/nekooy/PiKit/compare/v<previous>...v<version>
+```
+
+- **An empty section is left out, not written as "无".** A heading with nothing under it
+  is a promise the release did not keep, and the four names are fixed so a reader knows
+  which one to look in: what is new, what got better, what was broken, and what else
+  moved.
+- **A bullet is one line**, and it says what changed rather than how. The measurement
+  that settled a design belongs in the chapter that describes it, and the commit list is
+  behind the compare link.
+- **The sentence between the table and the changelog link is a claim about *this*
+  release**, not a formality to copy forward: "the same signing key and no breaking
+  changes" is a statement about the keystore secrets and about `versionCode`, and it has
+  to be true of the two artefacts either side of the link.
+
