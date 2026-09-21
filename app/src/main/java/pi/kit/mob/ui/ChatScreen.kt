@@ -40,6 +40,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
+import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -891,9 +893,13 @@ private fun ChatPage(
             ) {
                 SelectionContainer(
                     modifier = if (maxWidth >= WIDE_TRANSCRIPT_WINDOW) {
-                        Modifier.widthIn(max = MAX_TRANSCRIPT_WIDTH)
+                        Modifier
+                            .widthIn(max = MAX_TRANSCRIPT_WIDTH)
+                            .transcriptContextMenu()
                     } else {
-                        Modifier.fillMaxWidth()
+                        Modifier
+                            .fillMaxWidth()
+                            .transcriptContextMenu()
                     },
                 ) {
                     LazyColumn(
@@ -1382,6 +1388,44 @@ internal fun transcriptRows(
 
     return rows
 }
+
+/**
+ * The transcript's text-selection menu, with "Select all" taken out of it.
+ *
+ * ## The flash this exists for
+ *
+ * Tapping an empty part of the transcript to give up a selection made a **"Select
+ * all" button appear by itself and vanish again**. It is not this app's rendering:
+ * on the tap, Compose's `SelectionManager` clears the selection
+ * (`onClearSelectionRequested` → `onRelease`), and then that same tap's selection
+ * update *ends*, which sets `showToolbar = true`. The toolbar is requested with an
+ * empty selection, so the only item left enabled is "Select all" — "Copy" is
+ * included disabled, and the platform drops it — and it is drawn over the transcript
+ * for a frame or two before the manager hides it again. Reproduced on the emulator
+ * with a 40-frame capture of one tap: the selection is on screen for ten frames, the
+ * "Select all" button alone for the next, and the dismissed transcript after that.
+ *
+ * The selection itself is not readable from here — `SelectionContainer`'s controlled
+ * form and `Selection` are both internal in this version of Compose — so the menu is
+ * what this app can change. Dropping the item is therefore the fix *and* the
+ * argument below.
+ *
+ * ## Why "Select all" is dropped outright
+ *
+ * The transcript is a `LazyColumn`, and Compose's own documentation for
+ * `SelectionContainer` says a select-all cannot reach items that are not composed:
+ * it would select the part of the conversation that happens to be on screen and look
+ * as if it had selected the whole thing. A control that quietly copies half of what
+ * it names is worse than one that is not there — and every message carries its own
+ * copy button, which copies that message's *source*, Markdown and all.
+ *
+ * What is left is "Copy" and the platform's own classifier items (Translate, Read
+ * aloud), which act on the selection the reader actually made.
+ */
+private fun Modifier.transcriptContextMenu(): Modifier =
+    filterTextContextMenuComponents { component ->
+        component.key != TextContextMenuKeys.SelectAllKey
+    }
 
 /**
  * The page title is the conversation, plus whatever the user can do to it.
