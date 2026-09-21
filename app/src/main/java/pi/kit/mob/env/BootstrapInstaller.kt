@@ -357,7 +357,7 @@ class BootstrapInstaller(private val context: Context) {
     private fun installSafetyGuard() {
         val source = File(env.prefix, SAFETY_GUARD_SOURCE)
         if (!source.isFile) return
-        val destination = File(env.piConfigDir, "extensions/${source.name}")
+        val destination = SafetyGuard.file(env)
         runCatching {
             destination.parentFile?.mkdirsOrThrow()
             // Only rewritten when it actually differs, so the file's mtime is a

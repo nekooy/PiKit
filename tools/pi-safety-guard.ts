@@ -98,9 +98,39 @@
  *
  * It also does not touch reads, writes inside the workspace, `pkg`/`apt`, `git`, or
  * any ordinary build or edit command.
+ *
+ * ## The switch that takes it out of force
+ *
+ * PiKit's shared-storage page has a switch for this extension, and it is an
+ * effectiveness switch rather than an uninstall: `PIKIT_SAFETY_GUARD=off` in the
+ * environment makes this module register nothing, while the file itself stays where
+ * pi loads it from. That is deliberate — a guard the user deletes by hand stops
+ * arriving with updates and cannot be turned back on from the app — and it means the
+ * environment is the only thing that has to agree: PiKit writes `on` or `off` into
+ * every process it spawns, and restarts the agent when the switch moves, because
+ * this is read once when pi loads the module.
+ *
+ * The default is the guard running. A missing variable is a `pi` started outside
+ * PiKit, and a missing variable must never be what turns a guard off.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+/** Set by PiKit in every process it spawns: `on` or `off`. */
+export const SAFETY_GUARD_VAR = "PIKIT_SAFETY_GUARD";
+
+/** The one value that takes the guard out of force. */
+export const SAFETY_GUARD_DISABLED = "off";
+
+/**
+ * Whether the guard should register its `tool_call` handler at all.
+ *
+ * Exported so `tools/test-safety-guard.mjs` can pin the rule — in particular that
+ * only the exact string `off` disables it, and that an absent variable does not.
+ */
+export function guardEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env[SAFETY_GUARD_VAR] !== SAFETY_GUARD_DISABLED;
+}
 
 /** Where the agent may work, and where it may not destroy anything. */
 export interface GuardRoots {
@@ -929,6 +959,10 @@ function fileToolRefusal(resolved: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  // Switched off in the app: nothing is registered, and the extension is otherwise
+  // untouched. See this file's header.
+  if (!guardEnabled()) return;
+
   const roots = environmentRoots();
   // Read once, at startup, the way the storage policy reaches this process: PiKit
   // restarts the agent when a switch changes, so a cached copy cannot go stale.

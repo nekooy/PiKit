@@ -99,8 +99,42 @@ It is deliberately conservative — it matches a small set of patterns and allow
 what it does not recognise, because a guard that blocks legitimate work gets
 removed, and a removed guard protects nothing. Where it blocks, it explains why, so
 the model reports the refusal rather than retrying blindly. `$HOME/.pi/agent/AGENTS.md`
-states the same rules in prose and is rewritten on every launch, so a stale copy cannot
-contradict the guard.
+states the same rules in prose, so the model has them before it writes a command at
+all; the two are the same rules written twice on purpose, and neither is allowed to be
+the only copy — see the section below for what happens to that file.
+
+## Taking the guard out of force, and the document beside it
+
+The guard has a switch, on the shared-storage page, and it is an **effectiveness** switch rather
+than an uninstall: `PIKIT_SAFETY_GUARD=off`, published by `ShellEnvironment.build` into every
+process PiKit spawns, makes `tools/pi-safety-guard.ts` register nothing at all while the file stays
+exactly where pi loads it from. Three reasons for that shape, and each is a design that was
+rejected:
+
+- **An uninstall is one-way.** The only way to remove the guard before this was to delete the
+  extension by hand in the terminal, and a file deleted by hand never arrives again with an update
+  — so an app-level removal would be the same one-way door with a switch on it.
+- **The environment is already how the policy reaches the guard**, so this is the same mechanism
+  rather than a second one: the extension reads the variable once, when pi loads it, which is also
+  why `PiAgentSession.setSafetyExtension` restarts the agent the way `setStoragePolicy` does.
+- **The default has to be the guard running.** A missing variable is a `pi` started outside PiKit,
+  and `tools/test-safety-guard.mjs` pins that only the exact string `off` disables it — `OFF`,
+  `false` and an empty value all leave it in force.
+
+The row is greyed out and says why when the runtime image carries no guard at all, which is the
+state an image built before the extension existed is in: a switch that reports a state it cannot
+change is worse than one that is visibly inert. Turning it *off* asks first, because the four
+things the guard refuses are the four things the folder switches above it rely on it for.
+
+`$HOME/.pi/agent/AGENTS.md` is the other half of the agent's context — pi reads it automatically at
+startup — and the installer writes it **only when it is missing**. That is the opposite of
+`models.json` and `settings.json`, which the launcher rewrites on every start, and the difference is
+what the file *is*: those are projections of what the app knows, where a hand edit is a change the
+app cannot see and would otherwise have no way back from, while this is a document. It is editable
+from **Settings → Agent context**, which also offers the default text back, and an update that
+silently replaced it would throw away the sentences a user added about their own project. A stale
+default costs a less well-informed agent rather than an unguarded one, because the rules that have
+to hold are enforced by the extension rather than by the file.
 
 ## The folder switches are a rule, not a wall
 

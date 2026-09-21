@@ -257,6 +257,20 @@ class PiAgentSession private constructor(context: Context) {
         if (_agent.value is AgentStatus.Running) scheduleRestart()
     }
 
+    /**
+     * Puts the tool-call guard in force, or takes it out of force.
+     *
+     * The agent is restarted for the same reason [setStoragePolicy] restarts it: the
+     * flag is read once, from the environment, when pi loads the extension, so a
+     * running process would keep the answer it started with. Nothing is installed or
+     * removed either way — see `SafetyGuard` for why the switch is about the guard
+     * being *in force* rather than present.
+     */
+    fun setSafetyExtension(enabled: Boolean) {
+        settingsStore.update { it.copy(safetyExtension = enabled) }
+        if (_agent.value is AgentStatus.Running) scheduleRestart()
+    }
+
     // ---------------------------------------------------------------- agent
 
     /**

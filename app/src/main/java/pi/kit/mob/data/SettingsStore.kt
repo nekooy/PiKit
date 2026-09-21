@@ -293,6 +293,15 @@ data class PiSettings(
     val workingDir: String = "",
     /** Interface language. Persisted here because it is not part of a profile. */
     val language: Lang = Lang.DEFAULT,
+    /**
+     * Whether PiKit's tool-call guard is in force.
+     *
+     * An environment fact rather than a preference the app acts on: the value is
+     * published to every process PiKit spawns (`ShellEnvironment`, as
+     * `SafetyGuard.ENV_VAR`) and read once by the extension when pi loads it. On by
+     * default, and the switch that turns it off asks first — see the storage page.
+     */
+    val safetyExtension: Boolean = true,
 ) {
     /**
      * Whether the agent can actually be started with this.
@@ -407,7 +416,7 @@ class SettingsStore(context: Context) {
     private val appContext = context.applicationContext
 
     private val prefs = appContext
-        .getSharedPreferences("pikit_settings", Context.MODE_PRIVATE)
+        .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     // Held so that the profile store can refresh the snapshot from the
     // constructor, before a StateFlow would exist to be published.
@@ -420,6 +429,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
+            safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
         ),
     )
 
@@ -489,6 +499,7 @@ class SettingsStore(context: Context) {
             .putString(KEY_LEVELS_FOR, next.availableThinkingLevelsFor)
             .putString(KEY_WORKDIR, next.workingDir)
             .putString(KEY_LANGUAGE, next.language.code)
+            .putBoolean(KEY_SAFETY, next.safetyExtension)
             .apply()
         // The model fields are read back from the active profile rather than
         // taken from `next`, which keeps one source of truth for them.
@@ -498,6 +509,7 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = next.availableThinkingLevelsFor,
             workingDir = next.workingDir,
             language = next.language,
+            safetyExtension = next.safetyExtension,
         )
         return resolved
     }
@@ -513,6 +525,7 @@ class SettingsStore(context: Context) {
         availableThinkingLevelsFor: String = current.get().availableThinkingLevelsFor,
         workingDir: String = current.get().workingDir,
         language: Lang = current.get().language,
+        safetyExtension: Boolean = current.get().safetyExtension,
     ): PiSettings {
         val next = current.updateAndGet {
             it.copy(
@@ -525,21 +538,43 @@ class SettingsStore(context: Context) {
                 availableThinkingLevelsFor = availableThinkingLevelsFor,
                 workingDir = workingDir,
                 language = language,
+                safetyExtension = safetyExtension,
             )
         }
         _settings.value = next
         return next
     }
 
-    private companion object {
-        const val KEY_PROVIDER = "provider"
-        const val KEY_MODEL = "model"
-        const val KEY_API_KEY = "api_key"
-        const val KEY_THINKING = "thinking_level"
-        const val KEY_LEVELS = "thinking_levels"
-        const val KEY_LEVELS_FOR = "thinking_levels_for"
-        const val KEY_WORKDIR = "working_dir"
-        const val KEY_LANGUAGE = "language"
+    companion object {
+        /**
+         * Whether the tool-call guard is in force, read straight from preferences.
+         *
+         * A companion function rather than a field on a `SettingsStore` instance
+         * because its one caller outside this class is `ShellEnvironment`, which
+         * builds the environment for every process PiKit spawns and must not
+         * construct a store to do it: `SettingsStore`'s constructor reads the profile
+         * file and applies the active profile, which is work with side effects and
+         * nothing to do with the question. The preference name and the key stay here,
+         * so there is still one writer and one place they are spelled.
+         */
+        fun safetyExtension(context: Context): Boolean =
+            context.applicationContext
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_SAFETY, true)
+
+        private const val PREFS = "pikit_settings"
+
+        private const val KEY_PROVIDER = "provider"
+        private const val KEY_MODEL = "model"
+        private const val KEY_API_KEY = "api_key"
+        private const val KEY_THINKING = "thinking_level"
+        private const val KEY_LEVELS = "thinking_levels"
+        private const val KEY_LEVELS_FOR = "thinking_levels_for"
+        private const val KEY_WORKDIR = "working_dir"
+        private const val KEY_LANGUAGE = "language"
+
+        /** True unless the user switched the tool-call guard off; see [PiSettings]. */
+        private const val KEY_SAFETY = "safety_extension"
 
         /**
          * The remembered level list, comma-separated.

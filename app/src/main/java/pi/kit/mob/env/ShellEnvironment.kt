@@ -2,6 +2,7 @@ package pi.kit.mob.env
 
 import android.content.Context
 import android.os.Build
+import pi.kit.mob.data.SettingsStore
 import java.io.File
 
 /**
@@ -147,6 +148,16 @@ object ShellEnvironment {
                     if (granted.isEmpty) StorageAccess.Policy.NONE else granted,
                 ),
             ),
+        )
+
+        // Whether the tool-call guard is in force, for the same reason and with the
+        // same reach: the extension reads it once when pi loads, and a `pi` typed in
+        // the terminal has to be guarded — or unguarded — exactly like the agent.
+        // `on` is written rather than omitted so that the switch's state is visible
+        // in `/proc/<pid>/environ` instead of being an absence.
+        put(
+            SafetyGuard.ENV_VAR,
+            if (SettingsStore.safetyExtension(context)) SafetyGuard.ENABLED else SafetyGuard.DISABLED,
         )
 
         // Development hook: pin a hostname to an address inside Node.

@@ -655,6 +655,26 @@ interface Strings {
         val storageGrantPromptBody: String
         val storageGrantPromptConfirm: String
 
+        /**
+         * The tool-call guard, which is the enforcement behind every switch above.
+         *
+         * Its own section rather than a folder row, because it decides whether those
+         * switches are *checked* rather than what they allow — see `SafetyGuard`. The
+         * switch is an effectiveness switch: the extension stays installed either
+         * way, which is what [storageGuardNote] says, and turning it off asks first
+         * ([storageGuardOffTitle]).
+         */
+        val storageGuardSection: String
+        val storageGuardTitle: String
+        val storageGuardSubtitle: String
+
+        /** Shown instead of [storageGuardSubtitle] when the image carries no guard. */
+        val storageGuardMissing: String
+        val storageGuardNote: String
+        val storageGuardOffTitle: String
+        val storageGuardOffBody: String
+        val storageGuardOffConfirm: String
+
         // Model profiles
         val profilesTitle: String
         val profilesSubtitle: String

@@ -334,6 +334,22 @@ internal object ChineseStrings : Strings {
             "在这个页面上要小心：把权限授予文件管理器或终端类应用，等于让那个应用也能动你的文件。"
         override val storageGrantPromptConfirm = "打开设置"
 
+        override val storageGuardSection = "安全扩展"
+        override val storageGuardTitle = "安全扩展"
+        override val storageGuardSubtitle = "工具执行前先检查，危险操作直接拒绝"
+        override val storageGuardMissing = "这个运行镜像里没有安全扩展，无法开关"
+        override val storageGuardNote =
+            "它拒绝的是：工作区之外的递归删除、创建或修改文件系统、写入原始设备、删除或改写" +
+                "pi 自己的凭据和设置，以及命令里出现你没有授权的共享存储路径。" +
+                "关闭后这些都不再检查——扩展仍然装着并随 pi 加载，只是不再生效，随时可以再打开。"
+        override val storageGuardOffTitle = "关闭安全扩展？"
+        override val storageGuardOffBody =
+            "关闭后 Agent 的工具调用不再被检查：工作区之外的递归删除、创建或修改文件系统、" +
+                "写入原始设备、删除 pi 自己的凭据和设置，都会被直接放行。你关掉的文件夹仍然不会" +
+                "出现在 ~/storage 里，但 Agent 直接写路径就不再被拒绝。\n\n" +
+                "扩展不会被卸载，随时可以再打开；Agent 会立即重启让改动生效。"
+        override val storageGuardOffConfirm = "关闭"
+
         override val profilesTitle = "模型与供应商"
         override val profilesSubtitle = "当前配置就是 Agent 启动时使用的配置"
         override val savedProfiles = "已保存的配置"

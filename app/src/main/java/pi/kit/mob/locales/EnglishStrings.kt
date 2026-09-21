@@ -365,6 +365,27 @@ internal object EnglishStrings : Strings {
                 "that app the same reach over your files."
         override val storageGrantPromptConfirm = "Open settings"
 
+        override val storageGuardSection = "Safety extension"
+        override val storageGuardTitle = "Safety extension"
+        override val storageGuardSubtitle = "Checks every tool call before it runs"
+        override val storageGuardMissing = "This runtime image carries no safety extension"
+        override val storageGuardNote =
+            "It refuses a recursive delete outside the workspace, a filesystem command, a write " +
+                "to a raw device, a delete or rewrite of pi's own credentials and settings, and " +
+                "a command naming shared storage you did not grant. Switched off, none of that " +
+                "is checked — the extension stays installed and loaded, it just does nothing, " +
+                "and it can be switched back on at any time."
+        override val storageGuardOffTitle = "Switch the safety extension off?"
+        override val storageGuardOffBody =
+            "With it off, the agent's tool calls are no longer checked: a recursive delete " +
+                "outside the workspace, a filesystem command, a write to a raw device, and a " +
+                "delete of pi's own credentials or settings all run. A folder you switched off " +
+                "still does not appear in ~/storage, but a command naming its real path is no " +
+                "longer refused.\n\n" +
+                "Nothing is uninstalled and the switch can be turned back on at any time. The " +
+                "agent restarts now so the change takes effect."
+        override val storageGuardOffConfirm = "Switch off"
+
         override val profilesTitle = "Model & provider"
         override val profilesSubtitle = "The active profile is what the agent is launched with"
         override val savedProfiles = "Saved profiles"
