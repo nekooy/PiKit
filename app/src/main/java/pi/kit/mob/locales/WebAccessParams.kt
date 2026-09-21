@@ -26,12 +26,13 @@ package pi.kit.mob.locales
  *
  * ## The facts, and where they come from
  *
- * Every row is the extension **0.29.0** — the version the runtime image vendors
+ * Every row is the extension **0.30.0** — the version the runtime image vendors
  * (`tools/build-runtime-image.py`'s `WEB_ACCESS_VERSION`, recorded in the image's
- * `build-metadata.json`) — read from its own source rather than from its README:
- * the project's `main` branch documents `serplyApiKey`, `fetch.defaultMode` and
- * `webSearch.allowedProviders`, none of which exist in any published release, and
- * listing them would be instructions for settings the bundled extension ignores.
+ * `build-metadata.json`) — read from its own source rather than from its README. The
+ * keys were checked against 0.30.0's modules one by one when the pin moved: it adds
+ * six (`serplyApiKey`, `fetch.defaultMode`, `fetch.allowedModes`,
+ * `webSearch.allowedProviders`, `openaiUseProviderBaseUrl`, `openaiUseAlphaSearch`)
+ * and removes none, which is why the rows below could grow rather than be rewritten.
  *
  * The provider, type and description of each row were taken from the extension's
  * per-feature modules, which each re-parse the file with their own partial
@@ -216,6 +217,28 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "その回答に使うモデル。",
     ),
     p(
+        "fetch.defaultMode", "string", "\"readable\"",
+        "Which mode `fetch_content` uses when a call does not name one: `readable` " +
+            "(markdown), `raw` (the textual body over plain HTTP) or `answer`. It must be " +
+            "one of `fetch.allowedModes`, or the extension refuses to start the tool.",
+        "调用时未指定模式时 `fetch_content` 使用的模式：`readable`（Markdown 正文）、" +
+            "`raw`（仅走 HTTP 取原始文本）或 `answer`。必须是 `fetch.allowedModes` 中的一项，" +
+            "否则扩展会拒绝启用该工具。",
+        "呼び出しでモードを指定しないとき `fetch_content` が使うモード。`readable`（Markdown）、" +
+            "`raw`（HTTP のみで本文テキスト）、`answer`。`fetch.allowedModes` のいずれかである必要があり、" +
+            "そうでないと拡張がツールの登録を拒否します。",
+    ),
+    p(
+        "fetch.allowedModes", "string[]", "[\"readable\", \"raw\"]",
+        "The modes the tool offers. Anything outside `readable`, `raw` and `answer` is " +
+            "rejected, as is an empty list or a repeated entry — the document is checked " +
+            "at load, and a mistake here disables `fetch_content` rather than one mode.",
+        "该工具提供的模式。除 `readable`、`raw`、`answer` 之外的值会被拒绝，空数组或重复项也会。" +
+            "读取时即校验：这里写错会让整个 `fetch_content` 不可用，而不只是某个模式。",
+        "ツールが提供するモード。`readable`・`raw`・`answer` 以外、空配列、重複は拒否されます。" +
+            "読み込み時に検証されるため、誤ると特定のモードではなく `fetch_content` 全体が使えなくなります。",
+    ),
+    p(
         "fetchRouting.providers", "string[]", "[\"http\", \"firecrawl\", \"jina\"]",
         "Extraction fallback order. The default is http, firecrawl, crawl4ai, jina, " +
             "tinyfish, search1api, querit, kagi, ollama, parallel, brightdata, gemini.",
@@ -369,6 +392,16 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "拡張の旧形式。false で無効になるのは web_search と source_check だけで、残り 4 つは下のキーで決まります。" +
             "ページの主スイッチは 5 つをまとめて書き込みます。",
     ),
+    p(
+        "webSearch.allowedProviders", "string[]", "[\"exa\", \"tavily\"]",
+        "Restrict which search services may be used at all: the picker's value, " +
+            "`searchRouting.providers` and the Curator are all checked against this list, " +
+            "and a list naming nothing is a rejected document.",
+        "限定只能用哪些搜索服务：选择器的值、`searchRouting.providers` 以及 Curator 都会逐一" +
+            "对照这个列表，列表为空会被拒绝。",
+        "使用を許可する検索サービスを限定します。選択の値、`searchRouting.providers`、" +
+            "Curator のすべてがこのリストと照合され、空のリストは拒否されます。",
+    ),
     p("tools.webSearch.enabled", "boolean", "true", "The `web_search` tool.", "web_search 工具。", "web_search ツール。"),
     p("tools.sourceCheck.enabled", "boolean", "true", "The `source_check` tool.", "source_check 工具。", "source_check ツール。"),
     p("tools.fetchContent.enabled", "boolean", "true", "The `fetch_content` tool.", "fetch_content 工具。", "fetch_content ツール。"),
@@ -499,6 +532,26 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "从哪些 Pi 模型供应商读取 OpenAI 凭据，按顺序尝试。写空数组则跳过它们，只用上面的 Key。",
         "OpenAI の資格情報を読む Pi モデルプロバイダー（順番）。空配列にすると上のキーだけを使います。",
     ),
+    p(
+        "openaiUseProviderBaseUrl", "boolean", "false",
+        "Reuse a Pi provider's own URL and credentials for OpenAI search, so a gateway " +
+            "does not have to be configured twice. `openaiResponsesUrl` above still wins " +
+            "when both are set.",
+        "复用某个 Pi 供应商的接口地址与凭据来做 OpenAI 搜索，网关不必配置两遍。" +
+            "同时设置时，上面的 `openaiResponsesUrl` 优先。",
+        "OpenAI 検索で Pi プロバイダーの URL と資格情報を再利用し、ゲートウェイの二重設定を避けます。" +
+            "両方ある場合は上の `openaiResponsesUrl` が優先されます。",
+    ),
+    p(
+        "openaiUseAlphaSearch", "boolean", "false",
+        "Use standalone OpenAI search instead of Responses search — and *only* then do " +
+            "the source limit, recency and allowed-domain options apply. Responses " +
+            "remains the default.",
+        "改用独立的 OpenAI 搜索，而不是 Responses 搜索；只有在这种模式下，来源数量、" +
+            "时间范围、允许域名等选项才生效。默认仍然是 Responses。",
+        "Responses 検索ではなく単体の OpenAI 検索を使います。出典数・期間・許可ドメインの" +
+            "指定が効くのはこのモードだけです。既定は Responses のままです。",
+    ),
     key("braveApiKey", "Brave Search", "BRAVE_API_KEY"),
     endpoint("braveBaseUrl", "Brave Search", "https://api.search.brave.com"),
     key("tavilyApiKey", "Tavily", "TAVILY_API_KEY"),
@@ -531,6 +584,7 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     key("serperApiKey", "Serper", "SERPER_API_KEY"),
     key("serpapiApiKey", "SerpApi", "SERPAPI_KEY"),
     key("serpbaseApiKey", "SerpBase", "SERPBASE_API_KEY"),
+    key("serplyApiKey", "Serply", "SERPLY_API_KEY", "key, for Google results through Serply."),
     key("valyuApiKey", "Valyu", "VALYU_API_KEY"),
     key("bochaApiKey", "Bocha", "BOCHA_API_KEY"),
     key("queritApiKey", "Querit", "QUERIT_API_KEY"),

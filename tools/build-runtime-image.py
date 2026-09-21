@@ -137,7 +137,15 @@ PI_PACKAGE = "@earendil-works/pi-coding-agent"
 #: the day it ran. It matters more here than for the other two — pi's RPC records,
 #: tool list and model catalogue are what this app parses, so a silent move changes
 #: behaviour with no diff to look at. `--pi-version` overrides it for one build.
-PI_VERSION = "0.85.1"
+#:
+#: This is the *only* way pi moves on a user's device. There is deliberately no
+#: in-app update any more: it ran pi's own `npm install -g` into the live prefix, and
+#: an interrupted run left a tree whose `jiti` was gone — which is what pi 0.86.x
+#: loads the bundled TypeScript guard extension through, so every agent start after it
+#: failed outright (`Failed to load extension "…/pi-safety-guard.ts": Cannot find
+#: module 'jiti'`). A version that ships in the image cannot be half-installed.
+#: `docs/verification/maintenance-page.md` has the reading.
+PI_VERSION = "0.86.1"
 
 PI_ENTRY_RELATIVE = f"lib/node_modules/{PI_PACKAGE}/dist/bundle/cli.js"
 
@@ -155,7 +163,7 @@ VENDORED_MARKER = "pikit-vendored.json"
 #: a new version changes the extension's tools and its config, so it is bumped
 #: with the image and by hand, exactly as BOOTSTRAP_TAG is.
 WEB_ACCESS_PACKAGE = "pi-web-access"
-WEB_ACCESS_VERSION = "0.29.0"
+WEB_ACCESS_VERSION = "0.30.0"
 
 #: Where the bundled extension lives inside the prefix, relative to `$PREFIX`.
 #: Its own `node_modules` is a separate tree from pi's so that npm cannot touch
@@ -663,12 +671,23 @@ def vendor_web_access(cache: Path) -> Path:
     node_modules = cache / "node_modules"
     package_json = cache / "package.json"
     installed = node_modules / WEB_ACCESS_PACKAGE
+    marker = cache / VENDORED_MARKER
+    spec = f"{WEB_ACCESS_PACKAGE}@{WEB_ACCESS_VERSION}"
     missing = [
         name for name in WEB_ACCESS_RUNTIME_DEPS
         if not (node_modules / name).is_dir()
     ]
-    if installed.is_dir() and not missing:
-        log("reusing vendored web-access extension from cache")
+    # The version is checked, not just the presence of a tree, and that check was
+    # missing: `WEB_ACCESS_VERSION` went into the revision digest, so bumping it
+    # rebuilt the image — around the extension the cache had vendored first, because
+    # nothing here compared the cache against what this build asked for. It is the bug
+    # `vendor_pi` already has `VENDORED_MARKER` for, in the same shape and for the same
+    # reason. The old tree could not be caught by the version in `build-metadata.json`
+    # either: that file is written from `WEB_ACCESS_VERSION`, so it would have named
+    # 0.30.0 over a 0.29.0 tree.
+    held = read_vendored_spec(marker)
+    if installed.is_dir() and not missing and held == spec:
+        log(f"reusing vendored web-access extension from cache ({spec})")
         # Verified on the reuse path too, and that is the point of it: a cache that
         # was built before this check existed, or emptied of one directory by hand,
         # is exactly the tree that shipped the bug.
@@ -677,8 +696,15 @@ def vendor_web_access(cache: Path) -> Path:
     if installed.is_dir():
         # Regenerated rather than patched in place: the cache is a build artefact,
         # and a tree that was half-updated is how two builds come to differ.
-        log(f"re-vendoring the web-access extension: {', '.join(missing)} missing from the cache")
+        if held != spec:
+            log(
+                f"re-vendoring the web-access extension: the cache holds "
+                f"{held or 'an unrecorded version'}, this build wants {spec}"
+            )
+        else:
+            log(f"re-vendoring the web-access extension: {', '.join(missing)} missing from the cache")
         shutil.rmtree(node_modules)
+        marker.unlink(missing_ok=True)
 
     cache.mkdir(parents=True, exist_ok=True)
     package_json.write_text(
@@ -716,6 +742,11 @@ def vendor_web_access(cache: Path) -> Path:
                 f"the generated package.json; without it every fetch_content call "
                 f"fails with `Cannot find module`."
             )
+
+    # After the verification above, never before: a marker that outlives a failed
+    # install is a cache that claims to hold something it does not. Same rule as the
+    # pi vendoring's own marker.
+    marker.write_text(json.dumps({"spec": spec}) + "\n", encoding="utf-8")
 
     # The npm page's own artwork and prose. `files` in the package manifest ships
     # them on purpose; they are 6 MB of the 30 MB and nothing loads them.

@@ -161,11 +161,11 @@ would make the *question* change the thing it is asking about.
 
 ## The web-access page owns six keys, and documents the rest itself
 
-`pi-web-access` 0.29.0 — the version the runtime image vendors — reads roughly eighty
+`pi-web-access` 0.30.0 — the version the runtime image vendors — reads around 110
 configuration keys. The page used to present a *selection* of them: a master switch, two
 pickers, three toggles, four numbers and seven credential fields, laid out as if that were
 the configuration. Two things were wrong with that: the provider picker listed eleven
-services where the extension resolves **thirty**, so a Kagi or Serper user concluded their
+services where the extension resolves **thirty-one**, so a Kagi or Serper user concluded their
 provider was unsupported (`WebSearchSettings.SEARCH_PROVIDERS` is now the extension's own
 list, and `WebSearchStoreTest` pins the count); and a *drawn* control is also a writer —
 `githubClone.enabled` defaults to `true`, so a switch the page showed as on, because it had

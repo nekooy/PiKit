@@ -274,7 +274,7 @@ internal object EnglishStrings : Strings {
         override val thinkingLevel = "Thinking level"
         override val workingDirectory = "Working directory"
         override val updateAndRepair = "Maintenance & repair"
-        override val updateAndRepairSubtitle = "Update Pi, repair packages"
+        override val updateAndRepairSubtitle = "Model list, repair packages"
         override val userManual = "User manual"
         override val userManualSubtitle = "How this app works, start to finish"
         override val about = "About PiKit"
@@ -492,36 +492,38 @@ internal object EnglishStrings : Strings {
         override val bundledTools = "Bundled tools"
         override val runtimePrefixNote =
             "Packages installed here are relocated to this prefix automatically."
-        override val maintenanceSubtitle = "Update Pi and repair installed packages"
+        override val maintenanceSubtitle = "Model list and installed packages"
         override val piAgent = "Pi agent"
         override val installedVersion = "Installed version"
         override val installedVersionSubtitle = "Read from the package inside the runtime"
         override val unknown = "unknown"
-        override val updatePi = "Update Pi"
-        override val updatePiSubtitle =
-            "Runs `pi update --all` and then `pi update --models` inside the runtime: the " +
-                "latest pi release, every installed extension, and the model catalogue"
-        override val checkAndUpdate = "Check and update"
-        override val installing = "Installing…"
+        override val modelList = "Model list"
+        override val modelListRefresh = "Refresh now"
+        override val modelListRefreshSubtitle = "Updates the model list on demand"
+        override val modelListRefreshing = "Contacting the providers…"
+        override val modelListChanged =
+            "The model list changed. The agent is restarting to read it."
+        override val modelListUnchanged =
+            "The model list is already up to date."
+        override val modelListNote =
+            "Usually nothing to do here: the list refreshes by itself every four hours, " +
+                "and a model released since then is the only reason to press the button. " +
+                "A refresh asks each configured provider for its catalogue, so it needs a " +
+                "network connection; the rest of the app keeps working offline. Pi itself " +
+                "is not updated here — it is part of the app, and arrives with a " +
+                "PiKit update."
         override val dismiss = "Dismiss"
-        override fun updatedTo(version: String) = "Updated to $version. The agent is restarting."
-        override val unknownVersion = "an unknown version"
-        override val updateFailedNote =
-            "The installed version is unchanged unless npm reported success. The tail of " +
-                "its output is below."
-        override val updateIdleNote =
-            "Updating needs a network connection. The version is read from pi.dev, then " +
-                "npm installs the release into this app's prefix; the rest of the app " +
-                "keeps working offline."
         override val installedPackages = "Installed packages"
         override val relocate = "Package relocation"
         override val relocateSubtitle = "Rewrite a package that still points at Termux"
         override val relocateNow = "Check and repair"
         override val relocateNote =
-            "Packages installed with pkg or apt are rewritten as they install, so this " +
-                "is only for one that arrived another way and refuses to run. The scan " +
-                "reads every file in the runtime and rewrites the paths inside them; " +
-                "nothing installed outside it is touched, and nothing is deleted."
+            "Only needed if something you installed already fails to run — normally " +
+                "nothing has to be pressed: anything installed with pkg or apt is " +
+                "rewritten automatically as it installs. For a package that arrived some " +
+                "other way and refuses to start, this scan reads every file in the " +
+                "runtime and rewrites the paths inside them; nothing installed outside " +
+                "it is touched, and nothing is deleted."
         override fun relocateScanning(files: Int) =
             "Scanning… ${plural(files, "file", "files")} so far"
         override val relocateBroken =
@@ -628,6 +630,10 @@ internal object EnglishStrings : Strings {
             "serper" -> "Needs a Serper key"
             "serpapi" -> "Needs a SerpApi key"
             "serpbase" -> "Needs a SerpBase key"
+            // 0.30.0's provider, and the one that is never chosen automatically:
+            // listing it without saying so would make a Google result look like the
+            // keyless default.
+            "serply" -> "Google results; needs a Serply key, and is never chosen automatically"
             "kagi" -> "Needs a Kagi key"
             "valyu" -> "Needs a Valyu key"
             "bocha" -> "Needs a Bocha key"

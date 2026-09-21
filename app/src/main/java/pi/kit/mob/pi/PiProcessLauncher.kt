@@ -186,13 +186,17 @@ fun thinkingLevelsFor(live: List<String>, remembered: List<String>): List<String
  *  - `PI_TELEMETRY=0` in the agent's environment keeps the no-telemetry promise
  *    the licence text makes, without disabling anything else (see
  *    `ShellEnvironment.forPiAgent`).
- *  - The catalogue refresh is run by the app when the copy on disk is older than pi's own
- *    four-hour window — see [PiAgentSession.refreshCatalogueIfStale] for why the app has to
- *    do it at all: pi's RPC mode does start a refresh of its own, but that one republishes
- *    the overlay inside the running process and never writes `models-store.json`, so
- *    dropping the flag would not have fixed the model list by itself.
- *  - Updates are the user's own button, and it now updates pi *and* the installed
- *    extensions and the catalogue (see [PiUpdater]).
+ *  - The model catalogue is the app's own two-speed job: it is refreshed on the launch
+ *    path when the copy on disk is older than pi's own four-hour window, and on demand
+ *    from the maintenance page's button — see [PiAgentSession.requestCatalogueRefresh]
+ *    for why the app has to do it at all: pi's RPC mode does start a refresh of its own,
+ *    but that one republishes the overlay inside the running process and never writes
+ *    `models-store.json`, so dropping the flag would not have fixed the model list by
+ *    itself.
+ *  - pi *itself* is never updated on the device: it is an input of the runtime image the
+ *    APK carries, so a new pi arrives with a new PiKit. The button that ran pi's own
+ *    `npm install -g` here was removed after an interrupted run left a tree no agent
+ *    start could read (see [CatalogueUpdater]).
  */
 object PiProcessLauncher {
 

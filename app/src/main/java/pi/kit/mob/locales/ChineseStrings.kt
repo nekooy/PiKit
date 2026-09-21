@@ -254,7 +254,7 @@ internal object ChineseStrings : Strings {
         override val thinkingLevel = "思考等级"
         override val workingDirectory = "工作目录"
         override val updateAndRepair = "维护与修复"
-        override val updateAndRepairSubtitle = "更新 Pi、修复软件包"
+        override val updateAndRepairSubtitle = "模型列表、修复软件包"
         override val userManual = "使用手册"
         override val userManualSubtitle = "从零开始了解这个应用"
         override val about = "关于 PiKit"
@@ -447,33 +447,30 @@ internal object ChineseStrings : Strings {
         override val installedImageSubtitle = "从 APK 解包出来的运行环境版本"
         override val bundledTools = "内置工具"
         override val runtimePrefixNote = "在这里安装的软件包会自动重定位到这个前缀。"
-        override val maintenanceSubtitle = "更新 Pi，并修复已安装的软件包"
+        override val maintenanceSubtitle = "模型列表，以及已安装软件包的修复"
         override val piAgent = "Pi Agent"
         override val installedVersion = "已安装版本"
         override val installedVersionSubtitle = "从运行环境中的包读取"
         override val unknown = "未知"
-        override val updatePi = "更新 Pi"
-        override val updatePiSubtitle =
-            "在运行环境中依次执行 `pi update --all` 与 `pi update --models`：更新 pi 本体、" +
-                "已安装的扩展以及模型目录"
-        override val checkAndUpdate = "检查并更新"
-        override val installing = "正在安装…"
+        override val modelList = "模型列表"
+        override val modelListRefresh = "立即刷新"
+        override val modelListRefreshSubtitle = "需要时手动刷新模型列表"
+        override val modelListRefreshing = "正在联系各服务商…"
+        override val modelListChanged = "模型列表有更新，Agent 正在重启以读取。"
+        override val modelListUnchanged = "模型列表已是最新。"
+        override val modelListNote =
+            "一般不需要手动点：模型列表每 4 小时自动刷新一次，只有想立刻用到刚发布的新模型时才需要" +
+                "点这个按钮。刷新会向每个已配置的服务商请求一次目录，因此需要联网；其余功能离线" +
+                "照常可用。Pi 本体不在这里更新 —— 它属于应用的一部分，随 PiKit 更新一起升级。"
         override val dismiss = "关闭"
-        override fun updatedTo(version: String) = "已更新到 $version。Agent 正在重启。"
-        override val unknownVersion = "未知版本"
-        override val updateFailedNote =
-            "除非 npm 报告成功，否则已安装版本不会改变。下面是它输出的末尾内容。"
-        override val updateIdleNote =
-            "更新需要网络连接。版本号从 pi.dev 读取，然后由 npm 把新版本安装到本应用的前缀目录；" +
-                "其余功能在离线状态下照常可用。"
         override val installedPackages = "已安装的软件包"
         override val relocate = "软件包重定位"
         override val relocateSubtitle = "修复仍然指向 Termux 路径的软件包"
         override val relocateNow = "检测并修复"
         override val relocateNote =
-            "用 pkg 或 apt 安装的软件包会在安装时自动完成重定位，所以这个按钮只用于" +
-                "从别处装进来、启动报错的包。检测会读取运行环境里的每个文件并改写其中的路径；" +
-                "环境之外的东西不会被改，也不会被删除。"
+            "仅在已安装的东西确实启动报错时才需要点 —— 正常情况无需点击：用 pkg 或 apt 安装的" +
+                "软件包会在安装时自动完成重定位。若是从别的途径装进来、启动报错的包，这个检测会" +
+                "读取运行环境里的每个文件并改写其中的路径；环境之外的东西不会被改，也不会被删除。"
         override fun relocateScanning(files: Int) = "正在检测…已扫描 $files 个文件"
         override val relocateBroken =
             "当前运行环境里的包重定位器已经损坏，修复无法解决。请重新安装 PiKit —— " +
@@ -567,6 +564,7 @@ internal object ChineseStrings : Strings {
             "serper" -> "需要 Serper 的 Key"
             "serpapi" -> "需要 SerpApi 的 Key"
             "serpbase" -> "需要 SerpBase 的 Key"
+            "serply" -> "Google 结果；需要 Serply 的 Key，且不会被自动选中"
             "kagi" -> "需要 Kagi 的 Key"
             "valyu" -> "需要 Valyu 的 Key"
             "bocha" -> "需要 Bocha 的 Key"

@@ -251,7 +251,7 @@ internal object JapaneseStrings : Strings {
         override val thinkingLevel = "思考レベル"
         override val workingDirectory = "作業ディレクトリ"
         override val updateAndRepair = "メンテナンスと修復"
-        override val updateAndRepairSubtitle = "Pi を更新し、パッケージを修復"
+        override val updateAndRepairSubtitle = "モデル一覧、パッケージの修復"
         override val userManual = "ユーザーマニュアル"
         override val userManualSubtitle = "このアプリの使い方を最初から"
         override val about = "PiKit について"
@@ -459,34 +459,34 @@ internal object JapaneseStrings : Strings {
         override val installedImageSubtitle = "APK から展開された実行環境のリビジョン"
         override val bundledTools = "同梱ツール"
         override val runtimePrefixNote = "ここで入れたパッケージは自動的にこのプレフィックスへ再配置されます。"
-        override val maintenanceSubtitle = "Pi を更新し、インストール済みパッケージを修復"
+        override val maintenanceSubtitle = "モデル一覧と、インストール済みパッケージの修復"
         override val piAgent = "Pi エージェント"
         override val installedVersion = "インストール済みバージョン"
         override val installedVersionSubtitle = "実行環境内のパッケージから読み取ります"
         override val unknown = "不明"
-        override val updatePi = "Pi を更新"
-        override val updatePiSubtitle =
-            "実行環境内で `pi update --all` に続けて `pi update --models` を実行します。" +
-                "Pi 本体・導入済みの拡張・モデルカタログを更新します"
-        override val checkAndUpdate = "確認して更新"
-        override val installing = "インストール中…"
+        override val modelList = "モデル一覧"
+        override val modelListRefresh = "今すぐ更新"
+        override val modelListRefreshSubtitle = "必要なときにモデル一覧を更新します"
+        override val modelListRefreshing = "各プロバイダに問い合わせています…"
+        override val modelListChanged =
+            "モデル一覧が更新されました。読み込むためエージェントを再起動します。"
+        override val modelListUnchanged = "モデル一覧は最新です。"
+        override val modelListNote =
+            "通常は何も押す必要はありません。モデル一覧は 4 時間ごとに自動で更新され、" +
+                "このボタンが要るのは公開されたばかりのモデルを今すぐ使いたいときだけです。" +
+                "更新は設定済みの各プロバイダにカタログを問い合わせるため、ネットワーク接続が" +
+                "必要です。それ以外はオフラインでも動作します。Pi 本体はここでは更新されません" +
+                "（アプリの一部であり、PiKit の更新と一緒に届きます）。"
         override val dismiss = "閉じる"
-        override fun updatedTo(version: String) = "$version に更新しました。エージェントを再起動しています。"
-        override val unknownVersion = "不明なバージョン"
-        override val updateFailedNote =
-            "npm が成功を報告しない限り、インストール済みバージョンは変わりません。" +
-                "以下はその出力の末尾です。"
-        override val updateIdleNote =
-            "更新にはネットワーク接続が必要です。バージョンは pi.dev から取得し、npm が" +
-                "このアプリのプレフィックスにインストールします。それ以外はオフラインでも動作します。"
         override val installedPackages = "インストール済みパッケージ"
         override val relocate = "パッケージの再配置"
         override val relocateSubtitle = "Termux のパスを指したままのパッケージを直します"
         override val relocateNow = "確認して修復"
         override val relocateNote =
-            "pkg や apt で入れたパッケージはインストール時に自動で再配置されるため、このボタンは" +
-                "別の経路で入って起動しないパッケージのためのものです。確認は実行環境のすべての" +
-                "ファイルを読み、その中のパスを書き換えます。環境の外には触れず、削除もしません。"
+            "インストールしたものが既に起動できないときだけ必要です。通常は押す必要はありません。" +
+                "pkg や apt で入れたパッケージはインストール時に自動で再配置されます。別の経路で" +
+                "入って起動しないパッケージのために、この確認は実行環境のすべてのファイルを読み、" +
+                "その中のパスを書き換えます。環境の外には触れず、削除もしません。"
         override fun relocateScanning(files: Int) = "確認中…$files ファイルを走査"
         override val relocateBroken =
             "この実行環境のパッケージ再配置ツールが壊れているため、修復では直りません。" +
@@ -585,6 +585,7 @@ internal object JapaneseStrings : Strings {
             "serper" -> "Serper のキーが必要です"
             "serpapi" -> "SerpApi のキーが必要です"
             "serpbase" -> "SerpBase のキーが必要です"
+            "serply" -> "Google の結果。Serply のキーが必要で、自動選択はされません"
             "kagi" -> "Kagi のキーが必要です"
             "valyu" -> "Valyu のキーが必要です"
             "bocha" -> "Bocha のキーが必要です"

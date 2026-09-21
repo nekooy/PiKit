@@ -283,7 +283,7 @@ of it.
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
 | Agent process | Start, stop, restart, working directory |
-| Maintenance & repair | Update pi, relocation, storage check |
+| Maintenance & repair | Model list, relocation, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
 
 ## 9. Troubleshooting

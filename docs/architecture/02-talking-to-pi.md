@@ -76,8 +76,13 @@ catalogue has no network** (`ModelRuntime`'s constructor: `modelNetworkEnabled =
 process.env.PI_OFFLINE === undefined`) as well as "skip the update check, the package
 checks and the install telemetry" — on a phone, the model list never moves. The privacy
 promise the flag also carried is kept by `PI_TELEMETRY=0`. Two app-side changes go with
-it: the catalogue refresh runs on pi's own four-hour **freshness window** (§7.2), and the
-update button updates pi, the installed extensions *and* the catalogue. The API key is
+it: the catalogue refresh runs on pi's own four-hour **freshness window** (§7.2), with a
+button on the maintenance page to force it, and **pi itself is never updated on the
+device** — it is an input of the runtime image, so a new pi arrives with a new PiKit.
+The button that used to run pi's own `npm install -g` in the live prefix was removed
+after an interrupted run left a tree with no `jiti` in it, which 0.86.x loads the bundled
+TypeScript guard extension through: every agent start then failed with
+`Failed to load extension "…/pi-safety-guard.ts": Cannot find module 'jiti'`. The API key is
 passed through the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for every
 provider Pi already knows, because argv is readable by other processes; for a **custom
 endpoint it has to go on the command line** instead — see §6.1, which records the control

@@ -32,7 +32,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
-import pi.kit.mob.pi.PiUpdater
+import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.StorageSelfTest
 import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.PageSwap
@@ -152,26 +152,16 @@ fun SettingsScreen(session: PiAgentSession) {
     val agent by session.agent.collectAsState()
     val context = LocalContext.current
 
-    // Held here rather than inside the Maintenance page: an update runs for
-    // minutes, and leaving that page — to check the version, or because the
-    // output scrolled past — must not throw away the process or its log.
-    val updater = remember {
-        PiUpdater(
-            context = context,
-            env = session.env,
-            // Read at spawn time, not here: the updater outlives every visit to the page
-            // it lives on, and its `update --models` phase refreshes the catalogue with
-            // the credentials the profile has *now*. See `PiUpdater.updateEnvironment`.
-            settings = { session.settingsStore.read() },
-            onUpdated = {
-                // The new files are on disk but the running agent still holds the
-                // old code in memory, so it has to be respawned.
-                session.scheduleRestart()
-            },
-        )
-    }
+    // Held here rather than inside the Maintenance page: a catalogue refresh runs for
+    // seconds to a minute, and leaving that page — to check the version, or because the
+    // result arrived — must not throw away the run or its result.
+    //
+    // It cannot update pi itself, and that is deliberate: the agent is an input of the
+    // runtime image the APK carries, and an on-device `npm install -g` that was
+    // interrupted left a tree no agent start could read. See `CatalogueUpdater`.
+    val catalogue = remember { CatalogueUpdater(session) }
 
-    // Held here for the same reason as the updater: the self-test spawns a
+    // Held here for the same reason as the catalogue: the self-test spawns a
     // process, and leaving the page while it runs must not throw the result away.
     val storageSelfTest = remember { StorageSelfTest(context, session.env) }
 
@@ -266,7 +256,7 @@ fun SettingsScreen(session: PiAgentSession) {
 
                 SettingsPage.Maintenance -> MaintenancePage(
                     session = session,
-                    updater = updater,
+                    catalogue = catalogue,
                     selfTest = storageSelfTest,
                     onBack = { open(SettingsPage.Root) },
                 )
