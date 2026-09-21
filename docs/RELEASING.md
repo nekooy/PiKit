@@ -195,7 +195,7 @@ reads: the app asks for `github.com/<owner>/<repo>/releases/latest` and reads th
 of the URL GitHub redirects it to (`…/releases/tag/v0.2.0`), comparing that against its own
 `versionName`. It is the release *page* and not `api.github.com` on purpose: the API's
 unauthenticated budget is 60 requests per hour **per address**, which a VPN exit shares and
-spends (ARCHITECTURE §9). A version
+spends (ARCHITECTURE §9.2). A version
 that is committed but never released is invisible to it, and a release created by hand needs
 the same `v<versionName>` tag to be seen. `pikit.repository` is where the app is told which
 repository to ask.
