@@ -241,6 +241,16 @@ creation, and `git init`. Read-only commands (`status`, `diff`, `log`, `show`,
 history starts at one commit, so `git log` and `git blame` are worth reading
 before concluding that something is arbitrary.
 
+**One concern per commit.** A turn that answers two questions is two commits rather
+than one whose subject carries an "and": a fix and the documentation that describes
+it are one concern, but two unrelated fixes are not, and neither is a feature plus
+the sentence in the manual that happens to mention it. A file is routinely shared by
+two concerns — a locale catalog, a screen, the installer — and staging selected
+*hunks* is worth the trouble when the alternative is a subject that lists things.
+Where the tree already holds a change somebody else has not committed, stage only
+your own hunks: a commit that sweeps up another author's work is theirs to write a
+message for, and the reply says what was left behind.
+
 ## Commit message format
 
 When a commit *is* requested, use Conventional Commits. **Only the subject line is
