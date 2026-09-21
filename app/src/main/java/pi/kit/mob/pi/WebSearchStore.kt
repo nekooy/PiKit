@@ -102,6 +102,14 @@ data class WebSearchSettings(
      * tool's own `tools.<name>.enabled` when that is a boolean, the shorthand for
      * the two tools it covers otherwise, and on when neither says anything, so the
      * switch is off only when the extension would have no tool left.
+     *
+     * It does *not* own the extension's four commands (`commands.<name>.enabled`,
+     * which default to on and reach the same search stack), and that is a decision
+     * rather than an omission: widening the switch to them was written, tested and
+     * withdrawn — see ARCHITECTURE §9.2 — because every key it owns is rewritten from
+     * this one boolean on every render, so nine keys instead of five is nine keys a
+     * hand edit can lose to the next tap, and the keys a reader is most likely to
+     * have set by hand are the ones the extension documents.
      */
     val enabled: Boolean = true,
     /**

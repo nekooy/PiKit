@@ -385,12 +385,14 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     p(
         "webSearch.enabled", "boolean", "true",
         "The extension's older shorthand. Off unregisters only `web_search` and " +
-            "`source_check` — the four keys below cover the rest. The page's master switch " +
-            "writes all five together.",
-        "扩展的旧写法。关闭只停用 web_search 与 source_check，其余四个由下面的键控制。" +
-            "本页的联网访问开关会同时写这五个。",
-        "拡張の旧形式。false で無効になるのは web_search と source_check だけで、残り 4 つは下のキーで決まります。" +
-            "ページの主スイッチは 5 つをまとめて書き込みます。",
+            "`source_check` — the four tool keys below cover the rest. The page's master " +
+            "switch writes those five together; the `commands.*` keys below are the " +
+            "file's own.",
+        "扩展的旧写法。关闭只停用 web_search 与 source_check，其余四个工具由下面的键控制。" +
+            "本页的联网访问开关会同时写这五个；下面的 `commands.*` 键由文件自己管理。",
+        "拡張の旧形式。false で無効になるのは web_search と source_check だけで、残り 4 つのツールは" +
+            "下のキーで決まります。ページの主スイッチはこの 5 つをまとめて書き込みます。" +
+            "下の `commands.*` はファイル側の設定です。",
     ),
     p(
         "webSearch.allowedProviders", "string[]", "[\"exa\", \"tavily\"]",
