@@ -240,12 +240,17 @@ internal fun ModelPage(
                             }
                         },
                         onClick = {
-                            store.setActive(profile.id)
-                            // Provider, model and key are only read when the
-                            // process is spawned, so the running agent has to be
-                            // replaced for the switch to be real. The page itself
-                            // needs no reload: it is collecting the store.
-                            session.scheduleRestart()
+                            // Tapping the profile that is already active is a read, not
+                            // a switch: restarting there tore down a healthy agent (and
+                            // any turn that was streaming) to change nothing.
+                            if (profile.id != activeId) {
+                                store.setActive(profile.id)
+                                // Provider, model and key are only read when the
+                                // process is spawned, so the running agent has to be
+                                // replaced for the switch to be real. The page itself
+                                // needs no reload: it is collecting the store.
+                                session.scheduleRestart()
+                            }
                         },
                     )
                 }
@@ -618,17 +623,16 @@ internal fun ModelEditPage(
         // rather than two is what makes the page's three controls the same three controls
         // for every model.
         //
-        // With no answer at all the stored settings are carried over untouched, because a
-        // check that could not run must not delete what the user chose: the controls are not
-        // drawn in that state, so nothing new can be asked for, and the basis recorded with
-        // the profile is what keeps the carried-over settings honest — a basis that no
-        // longer matches (including one from another provider) writes nothing at all. See
-        // `modelDefinitions`.
-        val kept = if (catalogueIds == null) {
-            existing?.modelSettings.orEmpty()
-        } else {
-            settings.filterKeys { it in listed }
-        }
+        // Always the form's own map, filtered to the ids still listed. The previous rule —
+        // "no catalogue answer means keep `existing.modelSettings` untouched" — was wrong
+        // for a custom endpoint, which never runs the catalogue probe and so had
+        // `catalogueIds == null` on every visit: the three numbers and the image switch the
+        // user had just set were dropped on Save and the reopened form showed empty rows
+        // ("自定义参数保存了再打开就丢失"). A check that could not run still cannot delete
+        // what the user chose, because the form's map *starts* as `existing.modelSettings`
+        // and only the controls move it — so filtering it is both the new edits and the old
+        // ones, which is exactly the carry-over that rule was reaching for.
+        val kept = settings.filterKeys { it in listed }
         // The catalogue answer, recorded so the launch path can route each id without a check
         // of its own. Only the ids still in the list are kept: the question this answers is per
         // stored setting, and an id that has left the profile has no setting left to route.
@@ -678,6 +682,21 @@ internal fun ModelEditPage(
                 modelId = activeModel,
                 models = listed,
                 baseUrl = baseUrl.trim(),
+                // The withdrawal record follows the write, not the field: an emptied
+                // field means "use the provider's own endpoint", and the override this
+                // app last put in pi's file is what has to come out next launch. A
+                // value typed now becomes the record; clearing keeps the old one.
+                writtenBaseUrl = baseUrl.trim().ifEmpty {
+                    // The record is per provider: a custom relay's URL must not
+                    // become DeepSeek's withdrawal key after a switch in this
+                    // form. Carry it forward only when the provider is the one
+                    // the record was written for.
+                    if (existing == null || existing.provider == chosen.id) {
+                        existing?.writtenBaseUrl.orEmpty()
+                    } else {
+                        ""
+                    }
+                },
                 modelSettings = kept,
                 writtenModels = written,
                 // pi's own account of what it resolves an unknown id to. The entry written
@@ -706,7 +725,26 @@ internal fun ModelEditPage(
             // line and the key through the environment. Without a
             // restart the running process keeps the old ones and
             // the header would disagree with this page.
-            session.scheduleRestart()
+            //
+            // Only when something the *launch* reads has moved. A
+            // rename used to restart too, which tore down a healthy
+            // agent — and a turn that was streaming with it — to
+            // rewrite a label no process looks at.
+            val launchChanged = existing == null ||
+                chosen.id != existing.provider ||
+                activeModel != existing.modelId ||
+                apiKey.trim() != existing.apiKey ||
+                baseUrl.trim() != existing.baseUrl ||
+                listed != existing.selectableModels ||
+                kept != existing.modelSettings
+            if (launchChanged) session.scheduleRestart()
+        }
+        // A write that reached memory but not disk looks exactly like a save
+        // until the next launch re-reads the old file. Say so here rather than
+        // leave the page claiming success.
+        if (store.lastWriteFailed) {
+            saveMessage = text.settings.saveFailed
+            return false
         }
         saveMessage = null
         return true
@@ -788,31 +826,45 @@ internal fun ModelEditPage(
                             // goes too (it was for the provider just left).
                             settings = emptyMap()
                             draft = ""
+                            // The endpoint goes with the provider for the same reason,
+                            // and more sharply since the field became an *override*:
+                            // a relay URL typed for `pikit-custom` kept on the form and
+                            // saved against DeepSeek would rewrite every DeepSeek model
+                            // to that relay (`applyModelsJson`). The withdrawal record
+                            // goes too — it belongs to the provider just left, and a
+                            // blank one here would leave that provider's override in
+                            // pi's file for ever.
+                            baseUrl = ""
                         }
                     },
                 )
 
-                // Only a provider whose URL pi does not know asks for one. The
-                // field is inside this section rather than its own so the two
-                // things that together identify an endpoint — which provider, and
-                // where it lives — read as one decision.
-                if (provider in PiProvider.needsBaseUrl) {
-                    SettingsNote(
-                        text.settings.baseUrlNote,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
-                    OutlinedTextField(
-                        value = baseUrl,
-                        onValueChange = { baseUrl = it },
-                        label = { Text(text.settings.baseUrl) },
-                        placeholder = { Text(text.settings.baseUrlPlaceholder) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
-                }
+                // The endpoint is a property of every provider, not only of the custom
+                // one. A built-in provider leaves it blank to use pi's own URL; filling
+                // it in is how a proxy or relay in front of DeepSeek/OpenAI is used
+                // without giving up the catalogue. A custom endpoint has no default to
+                // fall back to, so the same field is required there — `refusal` says so.
+                // Inside this section rather than its own so which provider, and where
+                // it lives, read as one decision.
+                SettingsNote(
+                    if (provider in PiProvider.needsBaseUrl) {
+                        text.settings.baseUrlNote
+                    } else {
+                        text.settings.baseUrlOptionalNote
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+                OutlinedTextField(
+                    value = baseUrl,
+                    onValueChange = { baseUrl = it },
+                    label = { Text(text.settings.baseUrl) },
+                    placeholder = { Text(text.settings.baseUrlPlaceholder) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                )
 
                 OutlinedTextField(
                     value = apiKey,

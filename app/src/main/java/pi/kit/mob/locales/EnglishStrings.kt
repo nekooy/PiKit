@@ -484,8 +484,15 @@ internal object EnglishStrings : Strings {
         override val baseUrlNote =
             "The base URL of the API, including any version segment the provider " +
                 "documents — for example https://relay.example.com/v1. The model id " +
-                "below is sent to this endpoint."
+                "below is sent to this endpoint. A bare host gains /v1 automatically."
+        override val baseUrlOptionalNote =
+            "Optional. Leave empty to use the provider's own endpoint; fill it in to " +
+                "send requests through a proxy or relay (for example " +
+                "https://relay.example.com/v1). A bare host gains /v1 automatically."
         override val needBaseUrl = "A custom endpoint needs its base URL."
+        override val saveFailed =
+            "Save failed: the config file could not be written. This change will be " +
+                "lost on the next launch."
         override val fetchModels = "Fetch models"
         override val fetching = "Fetching…"
         override val chooseProviderFirst = "Choose a provider first."

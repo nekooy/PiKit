@@ -85,6 +85,14 @@ class ModelProfileTest {
     }
 
     @Test
+    fun `a bare host is completed to the path pi posts under`() {
+        val document = CustomEndpoint.document("https://relay.example.com", listOf("m"))!!
+        val provider = Json.parseToJsonElement(document).jsonObject
+
+        assertEquals("https://relay.example.com/v1", provider["baseUrl"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `the document needs a base url and at least one model`() {
         assertNull(CustomEndpoint.document("", listOf("a")))
         assertNull(CustomEndpoint.document("https://relay.example.com/v1", emptyList()))
@@ -151,5 +159,43 @@ class ModelProfileTest {
         )
 
         assertEquals(listOf("vision-v1"), decoded.writtenModels)
+    }
+
+    /**
+     * The endpoint override and its withdrawal record are two different strings.
+     *
+     * Clearing the field means "use the provider's own endpoint"; the override this
+     * app last put in pi's file is what has to come out, and that is only knowable
+     * from [ModelProfile.writtenBaseUrl]. A profile written before the record
+     * existed still decodes — the load path seeds it from the field — and one that
+     * has both must round-trip them apart.
+     */
+    @Test
+    fun `the endpoint override and its withdrawal record round trip apart`() {
+        val profile = ModelProfile(
+            id = "p1",
+            provider = "deepseek",
+            modelId = "deepseek-chat",
+            baseUrl = "https://proxy.example.com/v1",
+            writtenBaseUrl = "https://old-proxy.example.com/v1",
+        )
+
+        val encoded = Json.encodeToString(ModelProfile.serializer(), profile)
+        val decoded = Json.decodeFromString(ModelProfile.serializer(), encoded)
+
+        assertEquals(profile, decoded)
+        assertEquals("https://proxy.example.com/v1", decoded.baseUrl)
+        assertEquals("https://old-proxy.example.com/v1", decoded.writtenBaseUrl)
+    }
+
+    @Test
+    fun `a profile written before the withdrawal record existed still decodes`() {
+        val decoded = Json.decodeFromString(
+            ModelProfile.serializer(),
+            """{"id":"p1","provider":"deepseek","modelId":"m","baseUrl":"https://proxy.example.com/v1"}""",
+        )
+
+        assertEquals("https://proxy.example.com/v1", decoded.baseUrl)
+        assertEquals("", decoded.writtenBaseUrl)
     }
 }

@@ -451,8 +451,16 @@ internal object JapaneseStrings : Strings {
         override val baseUrlPlaceholder = "https://relay.example.com/v1"
         override val baseUrlNote =
             "API のベース URL です。プロバイダーのドキュメントにあるバージョン部分も含めて" +
-                "ください（例：https://relay.example.com/v1）。下のモデル ID がここに送られます。"
+                "ください（例：https://relay.example.com/v1）。下のモデル ID がここに送られます。" +
+                "ホスト名のみの場合は /v1 が自動的につきます。"
+        override val baseUrlOptionalNote =
+            "任意です。空欄ならプロバイダー既定のエンドポイントを使います。" +
+                "埋めるとリクエストはこのアドレス（プロキシ／リレー）へ送られます" +
+                "（例：https://relay.example.com/v1）。ホスト名のみの場合は /v1 が自動的につきます。"
         override val needBaseUrl = "カスタムエンドポイントにはベース URL が必要です。"
+        override val saveFailed =
+            "保存できませんでした：設定ファイルを書き込めませんでした。" +
+                "次回起動時に今回の変更は失われます。"
         override val fetchModels = "モデルを取得"
         override val fetching = "取得中…"
         override val chooseProviderFirst = "先にプロバイダーを選択してください。"
