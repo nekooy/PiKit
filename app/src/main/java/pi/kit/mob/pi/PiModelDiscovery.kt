@@ -3,6 +3,7 @@ package pi.kit.mob.pi
 import android.content.Context
 import android.util.Log
 import pi.kit.mob.data.PiProvider
+import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.env.SafeDelete
 import pi.kit.mob.env.TermuxEnv
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +11,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -50,8 +52,13 @@ sealed interface ModelDiscovery {
      * way to a model list and the user needs to see all of them, because the
      * fix differs: a rejected key, a provider without a models endpoint, or a
      * pi catalog that refused to start.
+     *
+     * [fatal] is true when trying another URL cannot help — a rejected key is
+     * rejected on every path — so the caller stops after one instead of burning
+     * another timeout. A 404 is not fatal: that is the case a second path shape
+     * exists for.
      */
-    data class Failure(val message: String) : ModelDiscovery
+    data class Failure(val message: String, val fatal: Boolean = false) : ModelDiscovery
 }
 
 /**
@@ -167,8 +174,10 @@ class ModelDiscoveryClient(
 ) {
 
     /**
-     * @param baseUrl the endpoint for a custom provider. Ignored by the built-in
-     *   ones, whose URLs pi already knows.
+     * @param baseUrl the endpoint override. For a custom provider it is the only
+     *   endpoint; for a built-in one it is a proxy in front of the real API and is
+     *   asked first, falling back to pi's known URL (and then pi's catalogue) when
+     *   it does not answer with a model list.
      */
     suspend fun discover(
         provider: PiProvider,
@@ -176,27 +185,32 @@ class ModelDiscoveryClient(
         baseUrl: String = "",
     ): ModelDiscovery {
         val key = apiKey.trim()
-        if (key.isEmpty()) {
+        val isCustom = provider in PiProvider.needsBaseUrl
+        // A custom relay may sit in front of a gateway that needs no key of its own;
+        // every built-in provider does, and saying so up front beats a 401 that reads
+        // as "your key was rejected" for a field that was never filled in.
+        if (key.isEmpty() && !isCustom) {
             return ModelDiscovery.Failure("Enter an API key first — a model list cannot be fetched without one.")
         }
 
-        // A custom endpoint is a relay, which almost always speaks the OpenAI
-        // API, so its model list is at `<baseUrl>/models`. Built here rather than
-        // in `modelsEndpoint()` because that function only knows the provider.
-        val endpoint = if (provider in PiProvider.needsBaseUrl) {
-            customEndpoint(baseUrl)
-        } else {
-            provider.modelsEndpoint()
-        }
         val failures = mutableListOf<String>()
+        val override = normalizeApiBaseUrl(baseUrl)
 
-        if (endpoint != null) {
-            when (val result = fetchFromProvider(endpoint, key)) {
-                is ModelDiscovery.Success -> return result
-                is ModelDiscovery.Failure -> failures += result.message
-            }
+        // A user-supplied endpoint is asked first: for a custom provider it is the only
+        // one, and for a built-in it is the proxy the profile is pointed at. Several
+        // path shapes are tried because relays disagree on where `/models` lives —
+        // `$base/models` and `$base/v1/models` are both real, and a bare host that this
+        // app already normalised to `…/v1` is the common OpenAI-compatible case.
+        val endpoints = if (override.isNotEmpty()) {
+            modelListEndpoints(provider, override)
+        } else if (!isCustom) {
+            listOfNotNull(provider.modelsEndpoint())
         } else {
-            failures += if (provider in PiProvider.needsBaseUrl) {
+            emptyList()
+        }
+
+        if (endpoints.isEmpty()) {
+            failures += if (isCustom) {
                 "Enter the endpoint's base URL first — the model list is fetched from " +
                     "`<endpoint>/models`."
             } else {
@@ -204,9 +218,38 @@ class ModelDiscoveryClient(
             }
         }
 
+        // 401/403 are the key, not the path: trying another path after one only burns
+        // another timeout on a request that cannot succeed. 404 is the path, and is the
+        // one case where the next candidate is worth asking.
+        var rejectedCredential = false
+        for (endpoint in endpoints) {
+            when (val result = fetchFromProvider(endpoint, key)) {
+                is ModelDiscovery.Success -> return result
+                is ModelDiscovery.Failure -> {
+                    failures += result.message
+                    if (result.fatal) {
+                        rejectedCredential = true
+                        break
+                    }
+                }
+            }
+        }
+
+        // A user-supplied override that failed is not the end of a built-in provider:
+        // its own models endpoint is still there, and a proxy typo should not cost the
+        // user the real list. A rejected credential is — it is rejected everywhere.
+        if (!isCustom && override.isNotEmpty() && !rejectedCredential) {
+            provider.modelsEndpoint()?.let { endpoint ->
+                when (val result = fetchFromProvider(endpoint, key)) {
+                    is ModelDiscovery.Success -> return result
+                    is ModelDiscovery.Failure -> failures += result.message
+                }
+            }
+        }
+
         // pi's own catalog is meaningless for a relay: it lists built-in
         // providers' models, none of which the relay is serving.
-        if (provider in PiProvider.needsBaseUrl) {
+        if (isCustom) {
             return ModelDiscovery.Failure(failures.joinToString("\n\n"))
         }
 
@@ -406,17 +449,29 @@ class ModelDiscoveryClient(
         dir
     }.onFailure { Log.w(TAG, "could not prepare a scratch agent directory", it) }.getOrNull()
 
-    /** `<baseUrl>/models`, tolerating a base URL that already ends in a slash. */
-    private fun customEndpoint(baseUrl: String): ModelsEndpoint? {
-        val base = baseUrl.trim().trimEnd('/')
-        if (base.isEmpty() || !base.startsWith("http")) return null
-        return ModelsEndpoint(
-            provider = PiProvider.CUSTOM,
-            url = { "$base/models" },
-            modelsPath = listOf("data"),
-            headers = { key -> mapOf("Authorization" to "Bearer $key") },
-        )
-    }
+    /**
+     * The model-list URLs a user-supplied base URL might serve, most likely first.
+     *
+     * Relays disagree on where `/models` lives. A base that already names `/v1`
+     * (the shape every one of pi's own `docs/models.md` examples uses, and the
+     * shape [normalizeApiBaseUrl] produces for a bare host) lists at
+     * `<base>/models`. A base that names some other path may still want `/v1`
+     * under it, and a base that names a versioned path may have dropped it and
+     * list at the parent. Each is a real layout this app has to be willing to
+     * ask about once; 404 is what moves on to the next, and a rejected key stops
+     * the walk ([ModelDiscovery.Failure.fatal]).
+     */
+    private fun modelListEndpoints(provider: PiProvider, base: String): List<ModelsEndpoint> =
+        modelListUrls(base).map { url ->
+            ModelsEndpoint(
+                provider = provider,
+                url = { url },
+                modelsPath = MODELS_RESPONSE_PATHS,
+                headers = { key ->
+                    if (key.isEmpty()) emptyMap() else mapOf("Authorization" to "Bearer $key")
+                },
+            )
+        }
 
     // ------------------------------------------------------------- provider
 
@@ -427,14 +482,25 @@ class ModelDiscoveryClient(
         try {
             val response = get(endpoint, key)
             when {
+                response.code == 401 || response.code == 403 -> ModelDiscovery.Failure(
+                    "${endpoint.host()} rejected the request: HTTP ${response.code} ${response.message}" +
+                        detailFrom(response.body),
+                    fatal = true,
+                )
+
                 response.code !in 200..299 -> ModelDiscovery.Failure(
                     "${endpoint.host()} rejected the request: HTTP ${response.code} ${response.message}" +
                         detailFrom(response.body),
+                    // 404 is the path being wrong, which is exactly what another
+                    // candidate URL is for; anything else is worth not repeating.
+                    fatal = response.code != 404,
                 )
 
                 else -> {
                     val models = parseModels(response.body, endpoint.modelsPath)
                     if (models.isEmpty()) {
+                        // Not fatal: the host answered, just not in a shape this
+                        // walk recognises — another path may still be the one.
                         ModelDiscovery.Failure(
                             "${endpoint.host()} answered with no model ids. It may have changed " +
                                 "its response format; pi's own catalog is used instead.",
@@ -447,6 +513,9 @@ class ModelDiscoveryClient(
                 }
             }
         } catch (e: Exception) {
+            // A refused connection or a timeout is worth one more path, not a
+            // second identical wait: `fatal` is left false so a `/v1` candidate
+            // can still be tried after a bare `/models` hung up.
             ModelDiscovery.Failure("Could not reach ${endpoint.host()}: ${e.message ?: e::class.java.simpleName}")
         }
     }
@@ -472,26 +541,16 @@ class ModelDiscoveryClient(
         }
     }
 
-    /** Pulls `id` out of whichever shape the provider answered with. */
-    private fun parseModels(body: String, modelsPath: List<String>): List<String> {
-        val root = runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject
-            ?: return emptyList()
-
-        var node: Any = root
-        modelsPath.forEach { key ->
-            node = (node as? JsonObject)?.get(key) ?: return emptyList()
-        }
-        val entries = node as? JsonArray ?: return emptyList()
-
-        return entries.mapNotNull { element ->
-            when (element) {
-                is JsonObject -> element.string("id") ?: element.string("name")
-                else -> element.jsonPrimitive.contentOrNull
-            }
-        }.map { it.removePrefix("models/") }
-            .filter { it.isNotBlank() }
-            .distinct()
-    }
+    /**
+     * Pulls `id` out of whichever shape the provider answered with.
+     *
+     * [modelsPath] is a list of *candidate* paths rather than one walk: OpenAI
+     * answers `{"data":[…]}`, several relays answer `{"models":[…]}`, and a few
+     * answer a bare array. The first shape that yields ids wins, so a relay that
+     * changed its envelope is still readable.
+     */
+    private fun parseModels(body: String, modelsPath: List<String>): List<String> =
+        parseModelIds(body, modelsPath)
 
     private fun JsonObject.string(key: String): String? =
         this[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
@@ -698,7 +757,11 @@ private class ModelsEndpoint(
     val provider: PiProvider,
     /** Built per request because some providers carry the key in the URL. */
     val url: (String) -> String,
-    /** Keys to walk from the response root to the array of entries. */
+    /**
+     * Candidate paths from the response root to the array of entries — `data`
+     * for OpenAI-shaped bodies, `models` for the other common envelope. Each is
+     * tried in turn; see [parseModelIds].
+     */
     val modelsPath: List<String>,
     val headers: (String) -> Map<String, String>,
 ) {
@@ -809,6 +872,70 @@ private fun PiProvider.bearer(url: String): ModelsEndpoint = ModelsEndpoint(
     modelsPath = listOf("data"),
     headers = { key -> mapOf("Authorization" to "Bearer $key") },
 )
+
+/**
+ * Candidate response envelopes a model list can arrive in, most common first.
+ *
+ * OpenAI and every relay that copies it answer `{"data":[…]}`; several gateways
+ * answer `{"models":[…]}` instead. Both are tried for a user-supplied endpoint,
+ * because guessing wrong used to read as "the key cannot see any models" for a
+ * relay that listed them happily under the other key.
+ */
+private val MODELS_RESPONSE_PATHS = listOf("data", "models")
+
+/**
+ * The model-list URLs a user-supplied base URL might serve, most likely first.
+ *
+ * Top-level and pure so the path shapes are pinned by a test rather than by
+ * whichever relay the next report happens to use. [normalizeApiBaseUrl] runs
+ * first, so a bare host is already `…/v1` when the candidates are built — which
+ * is why `$base/models` leads and `$base/v1/models` is the fallback for a base
+ * that named some other path.
+ */
+internal fun modelListUrls(rawBase: String): List<String> {
+    val base = normalizeApiBaseUrl(rawBase)
+    if (base.isEmpty()) return emptyList()
+    val candidates = linkedSetOf("$base/models")
+    if (base.endsWith("/v1")) {
+        candidates += "${base.removeSuffix("/v1")}/models"
+    } else if (!base.endsWith("/v1beta") && !base.endsWith("/compatible-mode/v1")) {
+        candidates += "$base/v1/models"
+    }
+    return candidates.toList()
+}
+
+/**
+ * Model ids out of a `/models` body, trying each candidate envelope in turn.
+ *
+ * Top-level and pure, like [modelListUrls]: the three shapes this accepts are
+ * the three a relay actually produces, and a change here is a change to what
+ * "the provider listed no models" means. A bare array is tried last — least
+ * common, and the easiest to mistake for something else.
+ */
+internal fun parseModelIds(body: String, modelsPath: List<String>): List<String> {
+    val root = runCatching { Json.parseToJsonElement(body) }.getOrNull() ?: return emptyList()
+
+    fun fromArray(entries: JsonArray): List<String> = entries.mapNotNull { element ->
+        when (element) {
+            is JsonObject -> element["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: element["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            is JsonPrimitive -> element.contentOrNull
+            else -> null
+        }
+    }.map { it.removePrefix("models/") }
+        .filter { it.isNotBlank() }
+        .distinct()
+
+    for (path in modelsPath) {
+        var node: Any = root
+        for (key in path.split('.')) {
+            node = (node as? JsonObject)?.get(key) ?: break
+        }
+        val models = (node as? JsonArray)?.let(::fromArray).orEmpty()
+        if (models.isNotEmpty()) return models
+    }
+    return (root as? JsonArray)?.let(::fromArray).orEmpty()
+}
 
 /**
  * Each catalogued model's own definition, keyed by id, from pi's `get_available_models`

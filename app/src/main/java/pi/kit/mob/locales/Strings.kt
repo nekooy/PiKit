@@ -796,11 +796,21 @@ interface Strings {
         val removeModelTitle: String
         fun removeModelBody(model: String): String
 
-        /** The endpoint a custom provider is served from. */
+        /**
+         * The endpoint a provider is served from.
+         *
+         * Required for a custom endpoint; optional for a built-in one, where it
+         * overrides pi's own URL (a proxy or relay in front of the real API).
+         */
         val baseUrl: String
         val baseUrlPlaceholder: String
+        /** Shown when the provider is a custom endpoint — the field is required. */
         val baseUrlNote: String
+        /** Shown for a built-in provider — blank means pi's own endpoint. */
+        val baseUrlOptionalNote: String
         val needBaseUrl: String
+        /** Shown when the profile reached memory but not disk; the change is gone on relaunch. */
+        val saveFailed: String
 
         val fetchModels: String
         val fetching: String

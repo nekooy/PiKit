@@ -434,8 +434,12 @@ internal object ChineseStrings : Strings {
         override val baseUrlPlaceholder = "https://relay.example.com/v1"
         override val baseUrlNote =
             "API 的基础地址，要包含服务商文档里写的版本段，例如 https://relay.example.com/v1。" +
-                "下面的模型 ID 会发送到这个地址。"
+                "下面的模型 ID 会发送到这个地址。仅主机名时会自动补上 /v1。"
+        override val baseUrlOptionalNote =
+            "可选。留空则使用该供应商的默认地址；填写后请求会发到这个地址" +
+                "（代理/中转），例如 https://relay.example.com/v1。仅主机名时会自动补上 /v1。"
         override val needBaseUrl = "自定义接口需要填写基础地址。"
+        override val saveFailed = "保存失败：配置文件写入磁盘失败，重新启动应用后本次修改会丢失。"
         override val fetchModels = "获取模型列表"
         override val fetching = "获取中…"
         override val chooseProviderFirst = "请先选择供应商。"

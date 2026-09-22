@@ -201,8 +201,18 @@ class ModelsJsonTest {
         wanted: List<ModelEntry>,
         ours: List<String> = wanted.map { it.id },
         overrides: Map<String, ModelSettings> = emptyMap(),
+        baseUrl: String = "",
+        writtenBaseUrl: String = "",
     ): Map<String, ModelDefinitions> =
-        mapOf("deepseek" to ModelDefinitions(wanted = wanted, ours = ours, overrides = overrides))
+        mapOf(
+            "deepseek" to ModelDefinitions(
+                wanted = wanted,
+                ours = ours,
+                overrides = overrides,
+                baseUrl = baseUrl,
+                writtenBaseUrl = writtenBaseUrl,
+            ),
+        )
 
     private fun entry(id: String, settings: ModelSettings = ModelSettings()) =
         ModelEntry(id = id, facts = facts, settings = settings)
@@ -659,7 +669,7 @@ class ModelsJsonTest {
     }
 
     @Test
-    fun `an entry is wanted only while the catalogue basis it was checked against holds`() {
+    fun `a moved catalogue re-routes through the store instead of dropping declarations`() {
         val profile = ModelProfile(
             id = "p1",
             provider = "deepseek",
@@ -678,14 +688,34 @@ class ModelsJsonTest {
             listOf("vision-v1", "vision-v2"),
             modelDefinitions(PiProvider.DEEPSEEK, profile, "1.2.3|abc")["deepseek"]!!.wanted.map { it.id },
         )
-        // pi updated, or `models-store.json` moved: nothing is written until the model
-        // page checks again. Fail closed — an entry written for an id pi has since
-        // learned about replaces what pi knows about it.
+        // pi updated, or `models-store.json` moved. The previous rule emptied every
+        // definition until the model page was visited again, which is what made a
+        // refresh silently return the user's numbers to pi's defaults while the form
+        // still showed them. The store the refresh just rewrote is the freshest
+        // "pi knows this id" answer: an id it holds becomes an override (merge), and
+        // one it does not keep the record's verdict and stay a definition.
         listOf("1.2.4|abc", "1.2.3|def").forEach { basis ->
-            val moved = modelDefinitions(PiProvider.DEEPSEEK, profile, basis)["deepseek"]!!
-            assertEquals(emptyList<String>(), moved.wanted.map { it.id })
-            // ...but the app still owns the entry, so the withdrawal can take it out.
-            assertEquals(listOf("vision-v1", "vision-v2"), moved.ours)
+            val storeKnowsVision = modelDefinitions(
+                PiProvider.DEEPSEEK,
+                profile,
+                basis,
+                currentCatalogueIds = setOf("vision-v1"),
+            )["deepseek"]!!
+            assertEquals(
+                "an id the store now holds is an override, so pi's own entry survives",
+                listOf("vision-v2"),
+                storeKnowsVision.wanted.map { it.id },
+            )
+            assertEquals(mapOf("vision-v1" to ModelSettings(images = true)), storeKnowsVision.overrides)
+
+            val storeSilent = modelDefinitions(PiProvider.DEEPSEEK, profile, basis)["deepseek"]!!
+            assertEquals(
+                "an id neither the record nor the store holds is still a definition",
+                listOf("vision-v1", "vision-v2"),
+                storeSilent.wanted.map { it.id },
+            )
+            // ...and the app still owns the entries either way, so withdrawal works.
+            assertEquals(listOf("vision-v1", "vision-v2"), storeSilent.ours)
         }
     }
 
@@ -750,23 +780,34 @@ class ModelsJsonTest {
     }
 
     @Test
-    fun `a profile whose catalogue check never answered writes no entry`() {
-        // No facts means the check did not run or did not answer, and an entry written
-        // without them would name pi's hard-coded 128k/16k for a model whose real window
-        // nobody asked pi about. The model page's controls are disabled in exactly this
-        // state, so refusing here refuses nothing the user was able to ask for.
+    fun `a profile whose catalogue check never answered still carries the user's numbers`() {
+        // No facts means the check did not run or did not answer. The previous rule
+        // wrote nothing, which dropped a `modelSettings` map the form had already
+        // accepted — the controls are withheld in this state, so the map can only be
+        // one a previous visit established, and throwing it away is how "custom
+        // parameters" looked lost again after a failed probe. The entry now names the
+        // user's own fields and pi's defaults for the rest (`pikitModelDefinition`).
         val profile = ModelProfile(
             id = "p1",
             provider = "deepseek",
             modelId = "vision-v1",
             models = listOf("vision-v1"),
-            modelSettings = mapOf("vision-v1" to ModelSettings(images = true)),
+            modelSettings = mapOf(
+                "vision-v1" to ModelSettings(
+                    images = true,
+                    contextWindow = 200_000,
+                    maxTokens = 32_000,
+                ),
+            ),
             writtenModels = listOf("vision-v1"),
             catalogueBasis = "basis",
         )
 
         val definitions = modelDefinitions(PiProvider.DEEPSEEK, profile, "basis")["deepseek"]!!
-        assertEquals(emptyList<String>(), definitions.wanted.map { it.id })
+        val entry = definitions.wanted.single()
+        assertEquals(listOf("vision-v1"), definitions.wanted.map { it.id })
+        assertEquals(200_000L, entry.settings.contextWindow)
+        assertEquals(32_000L, entry.settings.maxTokens)
         assertEquals(listOf("vision-v1"), definitions.ours)
     }
 
@@ -1028,5 +1069,83 @@ class ModelsJsonTest {
         val entry = json(legacyRegistration("vision-v1"))
         assertTrue(isPikitModelDefinition(entry))
         assertFalse(isPikitModelDefinition(json(legacyRegistration("x").replace("\"input\": [\"text\", \"image\"]", "\"input\": [\"text\"]"))))
+    }
+
+    /**
+     * The provider-level `baseUrl` is how a built-in provider is pointed at a proxy.
+     *
+     * pi's `applyModelsJson` rewrites every model's own `baseUrl` from it
+     * (`config.baseUrl ?? model.baseUrl`), which is the supported override and the
+     * one that keeps the catalogue's cost table and thinking map. The field is
+     * owned here the same way `models` is — but withdrawal is keyed on
+     * `writtenBaseUrl`, because a `baseUrl` the user wrote into `models.json` by
+     * hand is not this app's to remove.
+     */
+    @Test
+    fun `a profile's endpoint override is written onto the built-in provider`() {
+        val result = modelsJsonWith(
+            existing = userDocument,
+            customProviderId = CustomEndpoint.PROVIDER_ID,
+            customProvider = null,
+            definitions = definitions(
+                wanted = emptyList(),
+                baseUrl = "https://proxy.example.com/v1",
+                writtenBaseUrl = "https://proxy.example.com/v1",
+            ),
+        )
+
+        assertEquals(
+            "https://proxy.example.com/v1",
+            text(result.provider("deepseek"), "baseUrl"),
+        )
+        // The user's own keys of that provider are untouched.
+        assertEquals("My DeepSeek", text(result.provider("deepseek"), "name"))
+    }
+
+    @Test
+    fun `clearing the field withdraws this app's override and leaves a hand-written one`() {
+        val ours = modelsJsonWith(
+            existing = json("""{"providers":{"deepseek":{"name":"Keep me"}}}"""),
+            customProviderId = CustomEndpoint.PROVIDER_ID,
+            customProvider = null,
+            definitions = definitions(
+                wanted = emptyList(),
+                baseUrl = "https://proxy.example.com/v1",
+                writtenBaseUrl = "https://proxy.example.com/v1",
+            ),
+        )
+        assertEquals("https://proxy.example.com/v1", text(ours.provider("deepseek"), "baseUrl"))
+
+        val cleared = modelsJsonWith(
+            existing = ours,
+            customProviderId = CustomEndpoint.PROVIDER_ID,
+            customProvider = null,
+            definitions = definitions(
+                wanted = emptyList(),
+                baseUrl = "",
+                writtenBaseUrl = "https://proxy.example.com/v1",
+            ),
+        )
+        assertNull(
+            "the override this app wrote comes back out",
+            cleared.provider("deepseek")["baseUrl"],
+        )
+        assertEquals("Keep me", text(cleared.provider("deepseek"), "name"))
+
+        val handwritten = modelsJsonWith(
+            existing = userDocument,
+            customProviderId = CustomEndpoint.PROVIDER_ID,
+            customProvider = null,
+            definitions = definitions(
+                wanted = emptyList(),
+                baseUrl = "",
+                writtenBaseUrl = "https://proxy.example.com/v1",
+            ),
+        )
+        assertEquals(
+            "a baseUrl the user wrote is not this app's to remove",
+            "https://api.deepseek.com",
+            text(handwritten.provider("deepseek"), "baseUrl"),
+        )
     }
 }

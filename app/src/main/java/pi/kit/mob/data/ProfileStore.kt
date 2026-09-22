@@ -70,10 +70,24 @@ data class ModelProfile(
     @SerialName("models") val models: List<String> = emptyList(),
     /**
      * The endpoint for a provider whose URL is not built in — a relay, a gateway
-     * or a self-hosted server. Ignored by the built-in providers, which is why it
-     * is blank in a profile that was never pointed anywhere.
+     * or a self-hosted server. For a built-in provider this is an *optional*
+     * override: blank means pi's own URL. See [normalizeApiBaseUrl] for how a
+     * bare host is completed.
      */
     @SerialName("baseUrl") val baseUrl: String = "",
+    /**
+     * The endpoint override PiKit last wrote into pi's `models.json` for this
+     * provider, which may differ from [baseUrl] after the field was cleared.
+     *
+     * Withdrawal needs the value that was written, not the one the form now
+     * holds: a blank [baseUrl] means "give me the provider's own endpoint", and
+     * the override that is still in pi's file has to come out — but only if it
+     * is *this app's* override. A `baseUrl` the user wrote into `models.json` by
+     * hand is not matched by this record and is left alone. Kept after the field
+     * is emptied so the next launch can still find what to withdraw; a second
+     * withdrawal of an already-gone key is a no-op.
+     */
+    @SerialName("writtenBaseUrl") val writtenBaseUrl: String = "",
     /**
      * The per-model settings, keyed by model id, for the ids pi's catalogue does not
      * contain — see [ModelSettings] for what each one means and `modelDefinitions` for
@@ -252,9 +266,22 @@ object PiConfigFile {
         if (!file.isFile) return null
         return try {
             val parsed = json.decodeFromString(PiConfigSnapshot.serializer(), file.readText())
-            parsed.copy(activeProfileId = parsed.activeProfileId.ifBlank {
-                parsed.profiles.firstOrNull()?.id.orEmpty()
-            })
+            parsed.copy(
+                activeProfileId = parsed.activeProfileId.ifBlank {
+                    parsed.profiles.firstOrNull()?.id.orEmpty()
+                },
+                // A profile written before `writtenBaseUrl` existed still has an
+                // override in pi's file. Seeding the record from the field is what
+                // lets the next clear withdraw that override instead of leaving a
+                // proxy the user turned off in place for ever.
+                profiles = parsed.profiles.map { profile ->
+                    if (profile.writtenBaseUrl.isBlank() && profile.baseUrl.isNotBlank()) {
+                        profile.copy(writtenBaseUrl = profile.baseUrl)
+                    } else {
+                        profile
+                    }
+                },
+            )
         } catch (t: Throwable) {
             Log.e(TAG, "Could not read $FILE_NAME; keeping it as .corrupt and starting over", t)
             runCatching { file.renameTo(File(file.parentFile, "$FILE_NAME.corrupt")) }
@@ -381,14 +408,32 @@ class ProfileStore(
     private fun commit(next: PiConfigSnapshot): Boolean {
         _snapshot.value = next
         applyActive()
-        return PiConfigFile.save(file, next)
+        val persisted = PiConfigFile.save(file, next)
+        lastWriteFailed = !persisted
+        return persisted
     }
+
+    /**
+     * Whether the most recent commit failed to reach disk.
+     *
+     * The snapshot has already moved either way — see [upsert] — so this is the
+     * only way a caller can tell a save that will survive the process from one
+     * that will not. Cleared by the next successful write.
+     */
+    var lastWriteFailed: Boolean = false
+        private set
 
     /**
      * Creates or replaces a profile.
      *
      * Passing a profile with a blank id appends a new one; the returned profile
      * carries the generated id so the caller can select what it just created.
+     *
+     * The in-memory snapshot always moves — the launcher must not keep running
+     * against a profile the user just left — but a caller that cares whether the
+     * change survives the process can read [lastWriteFailed]. `upsert` used to
+     * drop [PiConfigFile.save]'s answer on the floor, so a full disk looked
+     * exactly like a successful save until the next launch re-read the old file.
      */
     fun upsert(profile: ModelProfile): ModelProfile {
         val stored = if (profile.id.isBlank()) profile.copy(id = newId()) else profile

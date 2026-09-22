@@ -10,6 +10,7 @@ import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.SettingsStore
 import pi.kit.mob.data.apiKeyEnvironment
 import pi.kit.mob.data.catalogueRefreshEnvironment
+import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.env.BootstrapInstaller
 import pi.kit.mob.env.BundledExtension
 import pi.kit.mob.env.PrefixPatcher
@@ -1370,6 +1371,16 @@ class PiAgentSession private constructor(context: Context) {
         settingsRestartJob?.cancel()
         settingsRestartJob = scope.launch {
             delay(SETTINGS_RESTART_DEBOUNCE_MS)
+            // A settings save is not a reason to kill the turn that is streaming.
+            // `stopAgent` tears the process down whatever it is doing, and a save
+            // from the model page while an answer is coming used to look exactly
+            // like a disconnect: the text stopped mid-sentence and the banner
+            // said the agent was gone. Wait for the turn to settle instead — the
+            // debounce already coalesces a burst of edits, and this coalesces
+            // "edit while answering" into "restart when the answer is done".
+            while (turnInFlight) {
+                delay(SETTINGS_RESTART_POLL_MS)
+            }
             stopAgent()
             startAgent()
         }
@@ -1513,7 +1524,19 @@ class PiAgentSession private constructor(context: Context) {
         return runCatching {
             val provider = settings.provider
             val customInUse = provider != null && provider in PiProvider.needsBaseUrl
-            val definitions = modelDefinitions(provider, profile, catalogueBasis(env, provider))
+            val basis = catalogueBasis(env, provider)
+            // Read beside the basis so a moved catalogue routes declarations with
+            // the store's *current* answer rather than emptying them — see
+            // [modelDefinitions].
+            val currentCatalogueIds = if (provider != null && !customInUse) {
+                storeModelFacts(
+                    File(env.piConfigDir, CATALOGUE_STORE_NAME),
+                    provider.id,
+                ).keys
+            } else {
+                emptySet()
+            }
+            val definitions = modelDefinitions(provider, profile, basis, currentCatalogueIds)
 
             // Nothing of PiKit's to say and no file of the user's to say it in: the
             // file is created only when something has to go in it. Without this a
@@ -1648,6 +1671,14 @@ class PiAgentSession private constructor(context: Context) {
 
         /** Long enough that typing a model id does not restart per keystroke. */
         private const val SETTINGS_RESTART_DEBOUNCE_MS = 1_500L
+
+        /**
+         * How often a deferred restart checks whether the running turn has settled.
+         *
+         * Short enough that a restart lands the moment the answer stops, long
+         * enough that a turn of several minutes does not spin the coroutine.
+         */
+        private const val SETTINGS_RESTART_POLL_MS = 500L
 
         /** Preferred SharedPreferences file for the pin set. */
         private const val KEY_PINNED = "pinned"
@@ -1954,6 +1985,21 @@ internal fun modelsJsonWith(
         }
 
         val next = LinkedHashMap<String, JsonElement>(current.orEmpty())
+        // The endpoint override is PiKit's statement about where this provider lives.
+        // A non-empty field rewrites every model's `baseUrl`. An empty one withdraws a
+        // previous override *of this app's* — matched against `writtenBaseUrl`, so a
+        // `baseUrl` the user wrote into `models.json` by hand survives a profile that
+        // has never named an endpoint. Leaving a stale override in place after the
+        // field was cleared would keep routing the provider through a proxy the user
+        // had turned off.
+        when {
+            definition.baseUrl.isNotEmpty() ->
+                next["baseUrl"] = JsonPrimitive(definition.baseUrl)
+
+            definition.writtenBaseUrl.isNotEmpty() &&
+                (next["baseUrl"] as? JsonPrimitive)?.contentOrNull == definition.writtenBaseUrl ->
+                next.remove("baseUrl")
+        }
         // A `models` value that is neither absent nor an array is left exactly as the
         // user wrote it, definitions included: pi rejects the document on its schema
         // check either way, and replacing what the app cannot read is not its job.
@@ -2011,11 +2057,22 @@ internal data class ModelEntry(
  *   app's record of the ids it wrote ([ModelProfile.writtenModels]) is the marker.
  *   Overrides need no equivalent, because one is recognised by the `input` value the build
  *   that wrote it always produced (see [modelsJsonWith]).
+ * @param baseUrl the profile's endpoint override, already normalised. Non-empty rewrites
+ *   every model of this provider to that URL (`applyModelsJson`:
+ *   `config.baseUrl ?? model.baseUrl`) — the supported way to put a proxy in front of a
+ *   built-in provider.
+ * @param writtenBaseUrl the override PiKit last wrote, which is what an empty [baseUrl]
+ *   withdraws. See [ModelProfile.writtenBaseUrl] for why withdrawal is keyed on the
+ *   written value rather than on the blank field.
+ *   A custom endpoint never comes through here: its whole provider object is rebuilt by
+ *   [CustomEndpoint.providerObject].
  */
 internal data class ModelDefinitions(
     val wanted: List<ModelEntry> = emptyList(),
     val ours: List<String> = emptyList(),
     val overrides: Map<String, ModelSettings> = emptyMap(),
+    val baseUrl: String = "",
+    val writtenBaseUrl: String = "",
 )
 
 /**
@@ -2026,43 +2083,29 @@ internal data class ModelDefinitions(
  * convenience but the withdrawal: an id that has left the profile, or one whose entry a
  * previous build wrote, is only found by visiting the provider in pi's file.
  *
- * ## Why the `models` half is gated on the catalogue basis
+ * ## How an id is routed, and what a moved catalogue costs
  *
- * [ModelProfile.writtenModels] is the record of a catalogue check, and this is where the
- * record is trusted — or not. What may be *written* as a definition is gated on
- * [catalogueBasis], because pi's catalogue gains models without this app doing anything:
- * `pi update --models` refreshes `models-store.json` from pi.dev, and a `pi` update can add
- * models to the built-in half. A definition left in place after pi learned the model would
- * *replace* pi's own entry for it — window, cost and thinking map included — which is
- * exactly the failure this whole path exists to avoid. So a basis that has moved withdraws
- * the definitions and lets the model page's own check re-write them.
+ * [ModelProfile.knownCatalogueIds] is the recorded check's answer: an id in it is an
+ * override (pi resolved it, so a definition would replace pi's own entry), and an id
+ * outside it is a definition (pi did not, so an override would never be consulted).
+ * While the check's [catalogueBasis] still describes the world, that is the whole rule.
+ *
+ * Once the basis has moved, the record may be wrong in the one direction that matters —
+ * an id it calls unknown may be one pi has since started cataloguing — so "known" is
+ * widened with [currentCatalogueIds], the store on disk the refresh just rewrote. Those
+ * ids are routed to `modelOverrides`, which merges. Ids the store does not hold keep the
+ * record's verdict and stay definitions.
+ *
+ * The previous rule emptied every definition until the model page was visited again. It
+ * prevented the unrecoverable mistake (a `models` entry over a model pi now knows,
+ * window, cost and thinking map included) by making a catalogue refresh silently return
+ * every declared number to pi's default while the form still showed the user's values.
+ * Widening the routing keeps the protection and keeps the declarations.
  *
  * What may be *withdrawn* is deliberately wider than what may be written: [ours] is
- * reported whatever the basis says, because an entry whose basis has moved is precisely
- * the one that must come out of pi's file.
+ * reported whatever the basis says, because an entry whose routing has just changed is
+ * precisely one whose old form must come out of pi's file.
  *
- * ## Why the `modelOverrides` half is gated on it too, and what that costs
- *
- * An override merges, so a stale one cannot do the damage a stale definition can — but the
- * *set* of ids this function routes to `modelOverrides` is
- * [ModelProfile.knownCatalogueIds], and that set is a claim about the catalogue at the
- * moment of the check. A basis that has moved means the set may be wrong in the one
- * direction that matters: an id it calls unknown may be one pi has since started
- * cataloguing, and a `models` entry for such an id replaces pi's own window, cost and
- * thinking map. Gating both halves on the basis is what makes "the check still describes
- * the world" a single condition rather than one per mechanism.
- *
- * The cost is real and worth naming: pi updating its catalogue quietly returns a
- * catalogued model's declared window to pi's value until the model page is visited again.
- * That is the same trade every other declaration in this app makes — the alternative is a
- * number the user set three pi releases ago silently winning over the catalogue's — and
- * the page says what happened rather than reverting in silence.
- *
- * ## Which ids go where
- *
- * [ModelProfile.knownCatalogueIds] decides, and it is the answer the check recorded: an id
- * in it is an override (pi resolved it, so a definition would replace pi's own entry), and
- * an id outside it is a definition (pi did not, so an override would never be consulted).
  * An id that is no longer in [ModelProfile.modelSettings] — the row was removed, or the
  * user put everything back to what pi would have used anyway — is not written either way,
  * so the two lists cannot drift into a statement about a model the profile says nothing
@@ -2076,6 +2119,12 @@ internal fun modelDefinitions(
     provider: PiProvider?,
     profile: ModelProfile?,
     basis: String,
+    /**
+     * The ids pi's store holds *right now* — the freshest "pi knows this id"
+     * answer available without a process. Used to widen the recorded check's
+     * routing when the two disagree; see the body.
+     */
+    currentCatalogueIds: Set<String> = emptySet(),
 ): Map<String, ModelDefinitions> {
     if (provider == null || profile == null) return emptyMap()
     if (provider in PiProvider.needsBaseUrl) return emptyMap()
@@ -2087,31 +2136,47 @@ internal fun modelDefinitions(
         .mapNotNull { id -> profile.modelSettings[id]?.let { id to it } }
     val known = profile.knownCatalogueIds.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
-    val overrides = declared
-        .filter { (id, _) -> id in known }
-        .toMap()
-
     val facts = profile.customModelFacts
     // The facts are the model pi resolves an unknown id to, and without them an entry
-    // cannot be written faithfully — it would name pi's hard-coded defaults for a model
-    // whose real window nobody asked pi about. The model page's controls are in the same
-    // state (undrawable) whenever the check did not answer, so this refuses nothing the
-    // user was able to ask for.
+    // cannot be named faithfully in every field — an unnamed window falls back to
+    // pi's hard-coded 128k. They are therefore preferred, and when they are absent
+    // the entry still carries whatever the user typed: a declaration that names the
+    // user's own numbers is better than no declaration at all, and the model page
+    // withholds the controls whenever the check did not answer, so this refuses
+    // nothing the user was able to ask for.
     //
-    // The basis gate covers the overrides too, and for a reason of its own: the *set* it
-    // was computed from is [ModelProfile.knownCatalogueIds], which is a claim about the
-    // catalogue at that moment. A basis that no longer matches means that set may name an
-    // id pi has since started cataloguing, and writing a definition for such an id is the
-    // one unrecoverable mistake here.
-    val wanted = if (facts == null || profile.catalogueBasis != basis) {
-        emptyList()
+    // Which *mechanism* each id gets is the recorded check's answer while its basis
+    // still matches. Once the catalogue has moved, the record may be wrong in the one
+    // direction that matters — an id it calls unknown may be one pi has since started
+    // cataloguing, and a `models` entry for such an id replaces pi's own window, cost
+    // and thinking map. So a moved basis widens "known" to include what the store on
+    // disk holds *now* (the refresh that moved the basis rewrote it), and routes those
+    // ids to `modelOverrides`, which merges. The alternative — emptying [wanted] until
+    // the model page is visited again — is what made a catalogue refresh silently
+    // return every declared number to pi's default while the form still showed the
+    // user's values.
+    val knownNow = if (profile.catalogueBasis == basis) {
+        known
     } else {
-        declared.filterNot { (id, _) -> id in known }.map { (id, settings) ->
-            ModelEntry(id, facts, settings)
-        }
+        known + currentCatalogueIds
     }
+    val wanted = declared.filterNot { (id, _) -> id in knownNow }.map { (id, settings) ->
+        ModelEntry(id, facts ?: JsonObject(emptyMap()), settings)
+    }
+    val overrides = declared
+        .filter { (id, _) -> id in knownNow }
+        .toMap()
     return mapOf(
-        provider.id to ModelDefinitions(wanted = wanted, ours = ours, overrides = overrides),
+        provider.id to ModelDefinitions(
+            wanted = wanted,
+            ours = ours,
+            overrides = overrides,
+            // A custom endpoint is filtered out above; this is the built-in case, where a
+            // non-empty field is a proxy override and an empty one means "pi's own URL".
+            // Normalised here so the file and the model-list probe agree on the path.
+            baseUrl = normalizeApiBaseUrl(profile.baseUrl),
+            writtenBaseUrl = normalizeApiBaseUrl(profile.writtenBaseUrl),
+        ),
     )
 }
 

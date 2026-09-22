@@ -108,6 +108,35 @@ enum class PiProvider(val id: String, val envVar: String, val label: String) {
 }
 
 /**
+ * The base URL PiKit hands pi, ready for an OpenAI-compatible request path.
+ *
+ * Trailing slashes are trimmed, and `/v1` is appended when the URL names a bare
+ * host. That second half is not politeness: pi's `openai-completions` path posts
+ * to `<baseUrl>/chat/completions`, every documented example in pi's own
+ * `docs/models.md` carries `/v1`, and a relay reached at `https://host` instead
+ * of `https://host/v1` fails as three connection retries — the report of severe
+ * lag and frequent disconnects on a custom endpoint that was one path segment
+ * short. A URL that already names a path is left alone: relays differ on where
+ * the version segment belongs, and `https://gateway.example.com/openai` is a
+ * real shape this must not rewrite.
+ */
+fun normalizeApiBaseUrl(raw: String): String {
+    val base = raw.trim().trimEnd('/')
+    if (base.isEmpty()) return base
+    val uri = runCatching { java.net.URI(base) }.getOrNull() ?: return ""
+    // Anything that is not an absolute http(s) URL is refused rather than
+    // completed: `localhost:11434` has a scheme-like colon and no host from
+    // `URI`'s point of view, and writing it into `models.json` produces a
+    // provider that cannot be reached and an error that names neither the field
+    // nor the missing scheme.
+    val scheme = uri.scheme?.lowercase() ?: return ""
+    if (scheme != "http" && scheme != "https") return ""
+    if (uri.host.isNullOrBlank()) return ""
+    val path = uri.path ?: ""
+    return if (path.isEmpty() || path == "/") "$base/v1" else base
+}
+
+/**
  * The `models.json` entry PiKit writes for a custom endpoint.
  *
  * ## Why this file and not a command-line flag
@@ -156,9 +185,10 @@ object CustomEndpoint {
     /**
      * The document pi expects, or null when there is nothing to register.
      *
-     * A trailing slash is trimmed and `/v1` is **not** appended: relays differ on
-     * whether the version segment belongs in the base URL, and a user who copies
-     * `https://example.com/v1` from a provider's dashboard means exactly that.
+     * A trailing slash is trimmed. A bare host also gains `/v1` — see
+     * [normalizeApiBaseUrl], which is what turns `https://relay.example.com` into
+     * the path pi's OpenAI client actually posts to. A user who copies
+     * `https://example.com/v1` from a provider's dashboard is left alone.
      *
      * [modelIds] is *every* model the profile offers, not only the active one.
      * pi answers `set_model` by looking the model up in the catalog it built at
@@ -181,7 +211,7 @@ object CustomEndpoint {
         modelIds: List<String>,
         settings: Map<String, ModelSettings> = emptyMap(),
     ): JsonObject? {
-        val base = baseUrl.trim().trimEnd('/')
+        val base = normalizeApiBaseUrl(baseUrl)
         val models = modelIds.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (base.isEmpty() || models.isEmpty()) return null
 
@@ -216,23 +246,32 @@ object CustomEndpoint {
     ): String? = providerObject(baseUrl, modelIds, settings)
         ?.let { DOCUMENT_JSON.encodeToString(JsonObject.serializer(), it) + "\n" }
 
-    /** One model of a custom provider, as pi's catalog wants it. */
-    private fun entry(modelId: String, settings: ModelSettings): JsonObject = buildJsonObject {
-        put("id", modelId)
-        put("name", modelId)
-        put("reasoning", true)
-        put(
-            "input",
-            buildJsonArray {
-                add(JsonPrimitive("text"))
-                if (settings.images == true) add(JsonPrimitive("image"))
-            },
-        )
-        // pi's own defaults for a definition that names neither, which is what an empty
-        // field means here: there is no fallback model to inherit them from.
-        put("contextWindow", settings.contextWindow ?: 128_000L)
-        put("maxTokens", settings.maxTokens ?: 16_384L)
-    }
+        /**
+         * One model of a custom provider, as pi's catalog wants it.
+         *
+         * [settings] is the *whole* per-model map this app holds — the three
+         * controls' output — and an id with nothing said about it resolves
+         * through pi's own defaults for a definition that names nothing
+         * (`contextWindow: 128000`, `maxTokens: 16384`, text-only input). Those
+         * numbers are written out rather than left absent so the document is
+         * complete on its own; [settings] on top is what the user actually chose.
+         */
+        private fun entry(modelId: String, settings: ModelSettings): JsonObject = buildJsonObject {
+            put("id", modelId)
+            put("name", modelId)
+            put("reasoning", true)
+            put(
+                "input",
+                buildJsonArray {
+                    add(JsonPrimitive("text"))
+                    if (settings.images == true) add(JsonPrimitive("image"))
+                },
+            )
+            // pi's own defaults for a definition that names neither, which is what an empty
+            // field means here: there is no fallback model to inherit them from.
+            put("contextWindow", settings.contextWindow ?: 128_000L)
+            put("maxTokens", settings.maxTokens ?: 16_384L)
+        }
 
     /**
      * 2-space indent, the shape every other pi config file has.
@@ -254,9 +293,15 @@ data class PiSettings(
     val modelId: String = "",
     val apiKey: String = "",
     /**
-     * The endpoint a custom provider is served from, e.g.
-     * `https://relay.example.com/v1`. Blank for every built-in provider, whose
-     * endpoint pi already knows.
+     * The endpoint a provider is served from — a relay, a gateway, or a
+     * self-hosted server.
+     *
+     * For [PiProvider.CUSTOM] this is the only endpoint and is required. For a
+     * built-in provider it is an *optional* override: blank means pi's own URL,
+     * and a value routes every model of that provider through it
+     * (`applyModelsJson` rewrites each model's `baseUrl` from the provider-level
+     * one). That is how a proxy in front of DeepSeek or OpenAI is configured
+     * without giving up the provider's catalogue, cost table and thinking map.
      */
     val baseUrl: String = "",
     val thinkingLevel: String = "medium",
@@ -309,12 +354,17 @@ data class PiSettings(
      * A custom provider needs its endpoint as well as a model, and reporting
      * "configured" without one is how the launch ends up failing with pi saying
      * it does not know the provider — an error that names neither the cause nor
-     * the field to fill in.
+     * the field to fill in. A built-in provider needs its key for the same
+     * reason: pi will start, answer every prompt with an auth error, and the
+     * chat page has no way to point at the empty field.
      */
     val isConfigured: Boolean
         get() = provider != null &&
             modelId.isNotBlank() &&
-            (provider !in PiProvider.needsBaseUrl || baseUrl.isNotBlank())
+            (provider !in PiProvider.needsBaseUrl || baseUrl.isNotBlank()) &&
+            // A relay may sit in front of a gateway that needs no key of its own;
+            // every built-in provider does.
+            (provider in PiProvider.needsBaseUrl || apiKey.isNotBlank())
 }
 
 /**
