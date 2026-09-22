@@ -15,6 +15,12 @@ fetch after the APK is installed. A prompt still travels to the provider it runs
 only connection needed is one that can reach that provider. Kotlin and Jetpack Compose over
 a vendored Termux terminal, and no WebView anywhere.
 
+<p align="center">
+  <img src="docs/assets/preview-0.2.0.webp" width="60%" alt="PiKit 0.2.0 — the Chat, Terminal, Files and Settings tabs">
+</p>
+
+<p align="center"><sub>PiKit 0.2.0 interface preview</sub></p>
+
 ## Features
 
 - **A simple idea, an elegant native interface.** Kotlin and Jetpack Compose, four tabs,

@@ -15,6 +15,7 @@ Every document in this repository, and the rule for adding one.
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores: upstream pi, packages, dependencies, the device pass | Periodically, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
 | [assets/icon.svg](assets/icon.svg) | The launcher icon, as the README shows it — **generated** | Never by hand |
+| [assets/preview-0.2.0.webp](assets/preview-0.2.0.webp) | The four tabs, as the README shows them — a screenshot of the running app, compressed and not generated | When the interface it shows changes |
 | [../AGENTS.md](../AGENTS.md) | Commands, hard constraints and commit conventions for a change to this repository | Before writing code |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | How to propose a change, and where the rules that matter live | Before opening a pull request |
 | [../SECURITY.md](../SECURITY.md) | How to report a vulnerability, what is in scope, and what goes upstream | Before reporting one |

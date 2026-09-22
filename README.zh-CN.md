@@ -14,6 +14,12 @@ Termux 环境、Node.js、`ripgrep`、`fd` 和 `pi` 命令行都烘焙在 APK �
 需要的连接只有「能连上那家供应商」这一条。Kotlin 和 Jetpack Compose 架在一个引入的 Termux
 终端之上，任何地方都没有 WebView。
 
+<p align="center">
+  <img src="docs/assets/preview-0.2.0.webp" width="60%" alt="PiKit 0.2.0——对话、终端、文件、设置四个标签页">
+</p>
+
+<p align="center"><sub>PiKit 0.2.0 界面预览</sub></p>
+
 ## 特色
 
 - **简洁的理念，原生优雅的界面。** Kotlin 与 Jetpack Compose，四个标签页，没有 WebView。
