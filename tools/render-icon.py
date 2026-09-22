@@ -13,8 +13,16 @@ say — which is what `tools/build-apks.py` runs:
     python tools/render-icon.py           # write docs/assets/icon.svg
     python tools/render-icon.py --check   # fail if it is out of date
 
+The picture is the launcher's own viewport, not the layers' full 108 units. An
+adaptive icon draws each 108-unit layer with its bounds extended by a quarter on
+every side (`AdaptiveIconDrawable.getExtraInsetFraction()`), so what a launcher
+shows is the layer's centre 72 units, magnified 1.5x — and a copy drawn as the
+whole 108 puts the mark at two thirds the size it has on a device. The crop is
+the platform's number, not a redraw: the path data below is still the layer's.
+
 Two things here are the README's own and are deliberately not in the launcher
-icon. The corner radius (24 of 108 units) stands in for the mask an Android
+icon. The corner radius (24 of those 108 units, kept at the same roundness in
+the 72-unit frame the picture is drawn in) stands in for the mask an Android
 launcher applies — an unmasked square reads as a bug next to other projects'
 icons. The hairline border exists because the icon is black and GitHub renders
 README images on a near-black card in the dark theme, where a black square with
@@ -35,10 +43,17 @@ COLORS = Path("app/src/main/res/values/colors.xml")
 OUTPUT = Path("docs/assets/icon.svg")
 
 #: The README's stand-ins for the launcher's mask and for the dark theme's card.
-CORNER_RADIUS = 24
+#: The radius is 24 of the layer's 108 units, which is 16 of the 72 the picture is
+#: drawn in — the roundness of the icon is unchanged, the frame it is drawn in is not.
+CORNER_RADIUS = 16
 BORDER = "#2A2F3A"
-#: Rendered size. The viewBox stays the icon's own 108 units, so every coordinate
-#: below is the icon's, not a rescaled copy of it.
+#: The layer is 108 units square; the masked viewport shows its centre 72, because an
+#: adaptive icon draws each layer with its bounds extended by a quarter on every side.
+LAYER = 108
+VIEWPORT = 72
+CROP = (LAYER - VIEWPORT) // 2
+#: Rendered size. The viewBox is the icon's own units and every coordinate below is the
+#: icon's, not a rescaled copy of it.
 SIZE = 512
 
 PATH_PATTERN = re.compile(r"<path\b([^>]*?)/>", re.DOTALL)
@@ -115,9 +130,11 @@ def build_svg() -> str:
             "    `python tools/render-icon.py`.",
             "-->",
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{SIZE}" height="{SIZE}"',
-            '    viewBox="0 0 108 108" role="img" aria-label="PiKit">',
-            f'    <rect width="108" height="108" rx="{CORNER_RADIUS}" fill="{background}" />',
-            f'    <rect x="0.5" y="0.5" width="107" height="107" rx="{CORNER_RADIUS - 0.5}"',
+            f'    viewBox="{CROP} {CROP} {VIEWPORT} {VIEWPORT}" role="img" aria-label="PiKit">',
+            f'    <rect x="{CROP}" y="{CROP}" width="{VIEWPORT}" height="{VIEWPORT}"',
+            f'        rx="{CORNER_RADIUS}" fill="{background}" />',
+            f'    <rect x="{CROP + 0.5}" y="{CROP + 0.5}" width="{VIEWPORT - 1}"',
+            f'        height="{VIEWPORT - 1}" rx="{CORNER_RADIUS - 0.5}"',
             f'        fill="none" stroke="{BORDER}" stroke-width="1" />',
             f'    <g transform="translate({translate_x} {translate_y})" fill="{fill}">',
             *paths,
