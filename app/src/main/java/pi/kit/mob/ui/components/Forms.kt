@@ -77,6 +77,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.pi.PiLaunchOptions
 import pi.kit.mob.ui.settings.SettingsRow
@@ -327,20 +328,22 @@ internal fun PickerBody(
 /**
  * A heading over a run of [PickerOption]s that share a group.
  *
- * The same shape as `SettingsSection`'s label — a small uppercase muted line —
- * so a grouped picker reads like the page the sheet was opened from. It is a
- * heading and not a selectable row: it carries no tick column and no ripple, or
- * a group name would look like one more thing to choose.
+ * The same shape as `SettingsSection`'s label — a primary-coloured section
+ * title — so a grouped picker reads like the page the sheet was opened from. It
+ * is a heading and not a selectable row: it carries no tick column and no ripple,
+ * or a group name would look like one more thing to choose.
  */
 @Composable
 private fun PickerGroupHeading(label: String) {
     Text(
         text = label.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        letterSpacing = 0.8.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp, bottom = 4.dp),
+        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 6.dp),
     )
 }
 

@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import pi.kit.mob.locales.LocalStrings
 import pi.kit.mob.ui.components.PageHeader
 
@@ -60,6 +61,12 @@ fun SettingsPageHeader(
  * a glance: the previous flat page gave every setting the same weight and the
  * model fields — the thing that actually stops the agent from working — were
  * indistinguishable from the licence text.
+ *
+ * The label used to be `labelMedium` in `onSurfaceVariant` — 12sp at caption
+ * contrast — which read as a footnote rather than as the heading of the card
+ * under it. `titleSmall` at SemiBold in the primary colour is the size and the
+ * weight of a real section title, and the colour is what makes the break between
+ * two sections visible before the words are read.
  */
 @Composable
 fun SettingsSection(
@@ -70,9 +77,11 @@ fun SettingsSection(
     Column(modifier.fillMaxWidth()) {
         Text(
             text = label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp, bottom = 6.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 0.8.sp,
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
         )
         Surface(
             color = MaterialTheme.colorScheme.surface,
