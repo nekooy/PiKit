@@ -16,7 +16,7 @@ only connection needed is one that can reach that provider. Kotlin and Jetpack C
 a vendored Termux terminal, and no WebView anywhere.
 
 <p align="center">
-  <img src="docs/assets/preview-0.2.0.webp" width="60%" alt="PiKit 0.2.0 — the Chat, Terminal, Files and Settings tabs">
+  <img src="docs/assets/preview-0.2.0.webp" width="90%" alt="PiKit 0.2.0 — the Chat, Terminal, Files and Settings tabs">
 </p>
 
 <p align="center"><sub>PiKit 0.2.0 interface preview</sub></p>

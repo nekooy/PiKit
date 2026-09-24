@@ -15,7 +15,7 @@ Termux 环境、Node.js、`ripgrep`、`fd` 和 `pi` 命令行都烘焙在 APK �
 终端之上，任何地方都没有 WebView。
 
 <p align="center">
-  <img src="docs/assets/preview-0.2.0.webp" width="60%" alt="PiKit 0.2.0——对话、终端、文件、设置四个标签页">
+  <img src="docs/assets/preview-0.2.0.webp" width="90%" alt="PiKit 0.2.0——对话、终端、文件、设置四个标签页">
 </p>
 
 <p align="center"><sub>PiKit 0.2.0 界面预览</sub></p>
