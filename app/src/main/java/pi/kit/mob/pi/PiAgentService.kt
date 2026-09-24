@@ -36,6 +36,7 @@ class PiAgentService : LifecycleService() {
                 stopForegroundCompat()
                 stopSelf()
             }
+            // A deliberate stop must not be undone by a sticky restart.
             return START_NOT_STICKY
         }
 
@@ -52,9 +53,13 @@ class PiAgentService : LifecycleService() {
             }
         }
 
-        // Not START_STICKY: a restart with no Intent and no user present would
-        // relaunch an agent nobody asked for.
-        return START_NOT_STICKY
+        // Sticky: if the OS reclaims the process mid-turn, the service comes
+        // back and `startAgent` restores the remembered session. A null intent
+        // after that reclaim is not "nobody asked for an agent" — it is "the
+        // agent was already supposed to be running" (the report of a turn
+        // interrupted by 切后台/锁屏). The explicit stop path above is the one
+        // that must stay `START_NOT_STICKY`.
+        return START_STICKY
     }
 
     private fun promoteToForeground() {

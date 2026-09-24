@@ -56,4 +56,27 @@ under three decisions:
 `SessionMetadata.snippet()` bounds the shown window to about 120 characters with ellipses,
 which is what stops a match in the middle of a chapter from putting the chapter in a list row.
 
+## Coming back to the session after the process dies
+
+pi has no resume flag: every `pi --mode rpc` launch opens a **new** session file under
+`--session-dir`. The handshake only folds `get_state` into the conversation — including that
+new `sessionFile` — while `items` and `turns` from the previous process stay on screen. The
+reader therefore saw their conversation and typed into a different one: after 切后台/锁屏 and
+a few failed retries, the next message started a new conversation in the same UI.
+
+The fix is to remember the session path in force and, after every launch, `switch_session`
+back to it (and re-read `get_messages`) when the handshake opened a different file. The rule
+is pure (`sessionRestoreTarget`) and pinned by `SessionRestoreTest`: a remembered path wins
+only when the file still exists and is not already the one pi opened. A deleted file is
+cleared rather than chased.
+
+Two neighbours of that rule matter for the same report:
+
+- **A partial wake lock for the length of one turn** (`agent_start` → `agent_settled`).
+  Without it the CPU sleeps when the screen goes off, the child's stdout is no longer
+  drained, and the turn looks interrupted when the user returns.
+- **One automatic restart after an unexpected exit**, not a loop, and never after a
+  deliberate `stopAgent`. Combined with the restore above, a background kill comes back to
+  the same conversation instead of a blank new one.
+
 ---

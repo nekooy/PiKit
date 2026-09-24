@@ -1,6 +1,7 @@
 package pi.kit.mob.pi
 
 import android.content.Context
+import android.os.PowerManager
 import android.util.Log
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
@@ -16,6 +17,7 @@ import pi.kit.mob.env.BundledExtension
 import pi.kit.mob.env.PrefixPatcher
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.env.TermuxEnv
+import pi.kit.mob.locales.stringsFor
 import pi.kit.mob.pi.NoticeKind
 import pi.kit.mob.terminal.TerminalSessionManager
 import kotlinx.coroutines.CoroutineScope
@@ -120,6 +122,27 @@ class PiAgentSession private constructor(context: Context) {
 
     private var client: PiRpcClient? = null
     private var recordJob: Job? = null
+
+    /**
+     * True between a deliberate [stopAgent] and the next [startAgent].
+     *
+     * An unexpected exit schedules one automatic restart; a stop the user asked
+     * for must not be undone by it. Cleared at the top of every start.
+     */
+    @Volatile
+    private var stopRequested = false
+
+    private var autoRestartJob: Job? = null
+
+    private val powerManager =
+        appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+
+    private var turnWakeLock: PowerManager.WakeLock? = null
+
+    /** The session the user is in, so a relaunch can rebind to it. */
+    private val sessionPrefs by lazy {
+        appContext.getSharedPreferences("pikit_agent_session", Context.MODE_PRIVATE)
+    }
 
     private val environmentLock = Mutex()
 
@@ -303,6 +326,7 @@ class PiAgentSession private constructor(context: Context) {
 
     private suspend fun startAgentLocked(): Boolean {
         if (_agent.value is AgentStatus.Running || _agent.value is AgentStatus.Starting) return true
+        stopRequested = false
         if (!ensureEnvironment()) return false
 
         val cliEntry = PiInstallation.cliEntry(env)
@@ -373,6 +397,11 @@ class PiAgentSession private constructor(context: Context) {
             val sessionState = newClient.handshake()
             logSessionState("handshake", sessionState)
             _conversation.update { ConversationReducer.reduce(it, sessionState) }
+            // Every `pi --mode rpc` launch opens a *new* session file. Without
+            // this the UI kept the previous transcript on screen while every
+            // prompt after a restart landed in that fresh file — the report of
+            // "同一界面，但是实际上已经新开了对话". See [restoreRememberedSession].
+            restoreRememberedSession()
 
             _agent.value = AgentStatus.Running
             // The settings page's own model list is one tap away and the thinking
@@ -607,18 +636,28 @@ class PiAgentSession private constructor(context: Context) {
         recordJob = scope.launch {
             source.records.collect { record ->
                 _conversation.update { ConversationReducer.reduce(it, record) }
-                // pi changed the model by itself — a `/model` command typed into the
-                // composer, a scoped-model cycle, an extension calling
-                // `pi.setModel`. Every model-shaped fact the app holds came from a
-                // `get_state` reply that nothing else re-asks for, so the context
-                // meter kept reporting the previous model's window and the thinking
-                // picker kept offering the previous model's levels. `model_select` is
-                // emitted by `session.setModel` (`agent-session.js`,
-                // `_emitModelSelect`) and streamed like any other event, so one
-                // refresh here covers every way the model can move. The app's own
-                // switch is the same event plus its own refresh, which is one small
-                // round trip on a rare action rather than a correctness question.
-                if (record is PiRecord.Event && record.type == "model_select") refreshState()
+                // The CPU has to stay awake for the length of a turn: without a
+                // partial wake lock the device sleeps when the screen goes off,
+                // the child's stdout stops being drained, and the answer looks
+                // dead when the user comes back.
+                if (record is PiRecord.Event) {
+                    when (record.type) {
+                        "agent_start" -> holdCpuDuringTurn()
+                        "agent_settled" -> releaseCpuDuringTurn()
+                        // pi changed the model by itself — a `/model` command typed into the
+                        // composer, a scoped-model cycle, an extension calling
+                        // `pi.setModel`. Every model-shaped fact the app holds came from a
+                        // `get_state` reply that nothing else re-asks for, so the context
+                        // meter kept reporting the previous model's window and the thinking
+                        // picker kept offering the previous model's levels. `model_select` is
+                        // emitted by `session.setModel` (`agent-session.js`,
+                        // `_emitModelSelect`) and streamed like any other event, so one
+                        // refresh here covers every way the model can move. The app's own
+                        // switch is the same event plus its own refresh, which is one small
+                        // round trip on a rare action rather than a correctness question.
+                        "model_select" -> refreshState()
+                    }
+                }
             }
             // Reached when the flow completes, which happens on stdout EOF —
             // i.e. the agent process is gone.
@@ -635,11 +674,17 @@ class PiAgentSession private constructor(context: Context) {
             // the honest test: after a restart this source is not the attached one
             // any more.
             if (client !== source) return@launch
+            releaseCpuDuringTurn()
             val code = source.exitCodeOrNull()
+            // `isStreaming` has to go with the process: a turn killed mid-flight
+            // never emits `agent_settled`, and leaving the flag up locked the
+            // composer into "steer" mode for the next send.
+            _conversation.update { it.copy(isStreaming = false, statusMessage = null) }
             _agent.value = AgentStatus.Failed(
                 if (code != null) "pi exited with code $code\n${source.stderrSnapshot().trim()}"
                 else "pi stopped unexpectedly",
             )
+            scheduleAutoRestart()
         }
     }
 
@@ -651,6 +696,10 @@ class PiAgentSession private constructor(context: Context) {
 
     /** Stops the agent gracefully. Closing stdin is the only clean shutdown. */
     suspend fun stopAgent() {
+        stopRequested = true
+        autoRestartJob?.cancel()
+        autoRestartJob = null
+        releaseCpuDuringTurn()
         val current = client ?: return
         detach()
         withContext(Dispatchers.IO) { current.close() }
@@ -662,11 +711,29 @@ class PiAgentSession private constructor(context: Context) {
     fun sendPrompt(text: String, images: List<ImageAttachment> = emptyList()) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() && images.isEmpty()) return
-        val busy = _conversation.value.isStreaming
         runCommand {
+            // A dead connection used to be a silent no-op (`client?.request` on
+            // null) and, after a bare relaunch, a prompt into a *new* session.
+            // Come back first — [startAgent] restores the remembered session —
+            // and only then deliver.
+            if (client == null && !startAgent()) {
+                val reason = stringsFor(settingsStore.read().language).chat.agentStopped
+                _conversation.update { it.copy(lastError = reason) }
+                return@runCommand
+            }
+            val live = client
+            if (live == null) {
+                val reason = stringsFor(settingsStore.read().language).chat.agentStopped
+                _conversation.update { it.copy(lastError = reason) }
+                return@runCommand
+            }
+            // `turnInFlight` rather than bare `isStreaming`: a process that died
+            // mid-turn left the flag up, and the next prompt was sent as `steer`
+            // into a session that was not running anything.
+            val busy = turnInFlight
             // pi rejects a plain prompt while streaming and requires an explicit
             // queueing behaviour, so only the idle case may omit it.
-            client?.request("prompt", timeout = null) { id ->
+            live.request("prompt", timeout = null) { id ->
                 PiCommand.prompt(
                     id = id,
                     message = trimmed,
@@ -1019,20 +1086,145 @@ class PiAgentSession private constructor(context: Context) {
     fun switchSession(target: SessionSummary, interrupt: Boolean = false) {
         if (turnInFlight && !interrupt) return
         runCommand {
-            val response = client?.requestOrThrow("switch_session") {
-                PiCommand.switchSession(it, target.path)
-            } ?: return@runCommand
-            // Refused by a `session_before_switch` handler: pi still answers
-            // `success: true`, so without this the transcript on screen was replaced
-            // by the messages of a session pi never opened.
-            if (response.cancelled()) return@runCommand
-            // pi rebinds to a different session, so stale UI state would be wrong.
-            _conversation.value = ConversationState()
-            refreshState()
-            val messages = client?.request("get_messages") { PiCommand.getMessages(it) }
-            _conversation.update {
-                ConversationReducer.replaceWithMessages(it, messages?.data)
+            switchSessionTo(target.path)
+        }
+    }
+
+    /**
+     * Rebinds the live process to [path] and re-reads its transcript.
+     *
+     * Shared by the history list and by [restoreRememberedSession]: one
+     * implementation, so a restored session and a chosen one cannot drift.
+     * The transcript is re-fetched because switching rebinds pi's state —
+     * messages shown afterwards must come from `get_messages`, not from what
+     * the UI still held.
+     */
+    private suspend fun switchSessionTo(path: String) {
+        val live = client ?: return
+        val response = live.requestOrThrow("switch_session") {
+            PiCommand.switchSession(it, path)
+        }
+        // Refused by a `session_before_switch` handler: pi still answers
+        // `success: true`, so without this the transcript on screen was replaced
+        // by the messages of a session pi never opened.
+        if (response.cancelled()) {
+            rememberSessionPath(_conversation.value.sessionFile)
+            return
+        }
+        // pi rebinds to a different session, so stale UI state would be wrong.
+        _conversation.value = ConversationState()
+        val state = live.request("get_state") { PiCommand.getState(it) }
+        _conversation.update { ConversationReducer.reduce(it, state) }
+        refreshThinkingLevels()
+        loadCurrentMessages(live)
+    }
+
+    /** Folds `get_messages` into the transcript and records the session path. */
+    private suspend fun loadCurrentMessages(live: PiRpcClient) {
+        val messages = runCatching {
+            live.request("get_messages") { PiCommand.getMessages(it) }
+        }.getOrNull()
+        _conversation.update { ConversationReducer.replaceWithMessages(it, messages?.data) }
+        rememberSessionPath(_conversation.value.sessionFile)
+    }
+
+    /**
+     * Rebinds a freshly launched agent to the session the user was last in.
+     *
+     * ## Why this exists
+     *
+     * pi has no resume flag: every `pi --mode rpc` launch opens a **new**
+     * session file. The handshake only folds `get_state` into the conversation
+     * — including that new `sessionFile` — while `items` and `turns` from the
+     * previous process stay on screen. The reader therefore saw their
+     * conversation and typed into a different one. Measured as the report:
+     * after 切后台/锁屏 and a few failed retries, the next message "在同一界面"
+     * started a new conversation.
+     *
+     * The path in force is remembered across restarts (including process
+     * death), and after every launch the agent is switched back to it and its
+     * messages re-read. [sessionRestoreTarget] is the pure rule.
+     */
+    private suspend fun restoreRememberedSession() {
+        val live = client ?: return
+        val remembered = lastRememberedSession()
+        val opened = _conversation.value.sessionFile
+        if (remembered.isNullOrBlank() && !opened.isNullOrBlank()) {
+            rememberSessionPath(opened)
+            return
+        }
+        val target = sessionRestoreTarget(remembered, opened) { File(it).isFile }
+        if (target == null) {
+            // A remembered path whose file is gone is a stale key: clear it so
+            // the next launch does not chase a deleted conversation. When the
+            // handshake already opened the right file (or there is nothing to
+            // restore), just note whatever is in force and reload if the UI is
+            // empty — a cold start with the same path still needs the messages.
+            if (!remembered.isNullOrBlank() && !File(remembered).isFile) {
+                rememberSessionPath(null)
             }
+            rememberSessionPath(opened ?: remembered)
+            if (_conversation.value.items.isEmpty() && opened != null) {
+                loadCurrentMessages(live)
+            }
+            return
+        }
+        Log.i(TAG, "restoring session $target (pi opened $opened)")
+        switchSessionTo(target)
+    }
+
+    private fun rememberSessionPath(path: String?) {
+        sessionPrefs.edit().apply {
+            if (path.isNullOrBlank()) remove(KEY_LAST_SESSION) else putString(KEY_LAST_SESSION, path)
+            apply()
+        }
+    }
+
+    private fun lastRememberedSession(): String? =
+        sessionPrefs.getString(KEY_LAST_SESSION, null)?.takeIf { it.isNotBlank() }
+
+    /**
+     * Holds a partial wake lock for the length of one turn.
+     *
+     * Without it the CPU sleeps when the screen goes off, the child's stdout is
+     * no longer drained, and the turn looks interrupted when the user returns —
+     * the "切后台或者锁屏有时会导致中断对话" report. Released on `agent_settled`,
+     * on process exit and on [stopAgent]; the timed acquire is a safety net so a
+     * missing settle cannot hold the lock forever.
+     */
+    private fun holdCpuDuringTurn() {
+        val lock = turnWakeLock ?: powerManager
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "pikit:agent-turn")
+            .also {
+                it.setReferenceCounted(false)
+                turnWakeLock = it
+            }
+        if (!lock.isHeld) lock.acquire(TURN_WAKE_LOCK_MAX_MS)
+    }
+
+    private fun releaseCpuDuringTurn() {
+        turnWakeLock?.takeIf { it.isHeld }?.release()
+    }
+
+    /**
+     * One automatic recovery after an unexpected process death.
+     *
+     * Backgrounding and locking the screen can kill the child even behind the
+     * foreground service. Leaving the agent on `Failed` until the user found
+     * Retry meant the next send either did nothing or, after a bare relaunch,
+     * went into a new session. One attempt, not a loop: a pi that dies on
+     * startup is a configuration failure and a retry storm only hides it.
+     * [stopRequested] keeps a deliberate stop from coming back.
+     */
+    private fun scheduleAutoRestart() {
+        if (stopRequested) return
+        autoRestartJob?.cancel()
+        autoRestartJob = scope.launch {
+            delay(AUTO_RESTART_DELAY_MS)
+            if (stopRequested) return@launch
+            if (_agent.value !is AgentStatus.Failed) return@launch
+            Log.i(TAG, "restarting the agent after an unexpected exit")
+            startAgent()
         }
     }
 
@@ -1063,6 +1255,9 @@ class PiAgentSession private constructor(context: Context) {
                 ?: return@runCommand
             logSessionState("refresh", response)
             _conversation.update { ConversationReducer.reduce(it, response) }
+            // The session in force is whatever this reply names: a `new_session`
+            // or a clone lands here, and the next relaunch has to come back to it.
+            rememberSessionPath(_conversation.value.sessionFile)
             // The supported levels follow the model, so a state refresh is also the
             // moment they are re-read: switching the model on the composer changes
             // which levels exist without touching anything else.
@@ -1273,10 +1468,12 @@ class PiAgentSession private constructor(context: Context) {
             val cancelled = response.data?.jsonObject?.get("cancelled")
                 ?.jsonPrimitive?.booleanOrNull == true
             if (cancelled) return@runCommand
+            val live = client ?: return@runCommand
             _conversation.value = ConversationState()
-            refreshState()
-            val messages = client?.request("get_messages") { PiCommand.getMessages(it) }
-            _conversation.update { ConversationReducer.replaceWithMessages(it, messages?.data) }
+            val state = live.request("get_state") { PiCommand.getState(it) }
+            _conversation.update { ConversationReducer.reduce(it, state) }
+            refreshThinkingLevels()
+            loadCurrentMessages(live)
         }
     }
 
@@ -1343,10 +1540,23 @@ class PiAgentSession private constructor(context: Context) {
             try {
                 block()
             } catch (e: PiProcessExitedException) {
-                _conversation.update { it.copy(lastError = e.message) }
+                releaseCpuDuringTurn()
+                _conversation.update {
+                    it.copy(lastError = e.message, isStreaming = false, statusMessage = null)
+                }
                 _agent.value = AgentStatus.Failed(e.message ?: "pi exited")
+                scheduleAutoRestart()
             } catch (t: Throwable) {
                 _conversation.update { it.copy(lastError = t.message ?: t.toString()) }
+                // A failed stdin write is a dead process even if the exit has not
+                // been reaped yet. Treat it like one so Retry and the auto-restart
+                // both see `Failed` instead of a `Running` agent that cannot talk.
+                if (t is PiRpcException && t.cause is java.io.IOException) {
+                    releaseCpuDuringTurn()
+                    _conversation.update { it.copy(isStreaming = false, statusMessage = null) }
+                    _agent.value = AgentStatus.Failed(t.message ?: "pi exited")
+                    scheduleAutoRestart()
+                }
             }
         }
     }
@@ -1770,6 +1980,25 @@ class PiAgentSession private constructor(context: Context) {
 
         /** How much of a session file's tail to read when finding its last id. */
         private const val SESSION_TAIL_BYTES = 64 * 1024L
+
+        /** Where the session the user is in is remembered across process death. */
+        private const val KEY_LAST_SESSION = "last_session"
+
+        /**
+         * How long after an unexpected exit the agent comes back on its own.
+         *
+         * Long enough that a crash loop cannot spin, short enough that a
+         * background kill while the user is typing does not leave them staring
+         * at a dead composer until they notice Retry.
+         */
+        private const val AUTO_RESTART_DELAY_MS = 1_500L
+
+        /**
+         * Safety net on the turn's wake lock, so a missing `agent_settled` cannot
+         * hold the CPU awake forever. Six hours: longer than any real answer, and
+         * the lock is re-acquired on each `agent_start`.
+         */
+        private const val TURN_WAKE_LOCK_MAX_MS = 6 * 60 * 60 * 1000L
 
         private val ENVELOPE_ID = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"")
 
@@ -2513,6 +2742,25 @@ internal const val CATALOGUE_UNREADABLE = "\u0000unreadable"
  */
 internal fun PiRecord.Response.cancelled(): Boolean =
     (data as? JsonObject)?.get("cancelled")?.jsonPrimitive?.booleanOrNull == true
+
+/**
+ * The session an agent launch should rebind to, or null to keep the one pi opened.
+ *
+ * Pure so the rule is pinned by a test: a remembered path wins only when the file
+ * is still there and is not already the session the handshake reported. A path
+ * whose file is gone returns null *and* is worth clearing in the caller — chasing
+ * a deleted conversation is how a restore becomes a hang.
+ */
+internal fun sessionRestoreTarget(
+    remembered: String?,
+    opened: String?,
+    exists: (String) -> Boolean,
+): String? {
+    if (remembered.isNullOrBlank()) return null
+    if (!exists(remembered)) return null
+    if (remembered == opened) return null
+    return remembered
+}
 
 /**
  * The text of the messages `clear_queue` dropped, or null when there were none.
