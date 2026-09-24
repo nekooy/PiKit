@@ -375,9 +375,7 @@ internal object JapaneseStrings : Strings {
                 "エージェントを今すぐ再起動します。"
         override val storageGuardOffConfirm = "オフにする"
 
-        override val agentContextTitle = "エージェントのコンテキスト"
-        override val agentContextSubtitle = "モデルが毎回のリクエストで受け取る内容"
-        override val agentContextSection = "コンテキストの内容"
+        override val agentContextSection = "コンテキスト"
         override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
         override val agentContextSystemTitle = "システムプロンプト"
         override val agentContextSystemBody =
@@ -390,7 +388,7 @@ internal object JapaneseStrings : Strings {
                 "ファイルで、ここで編集できます。\n" +
                 "・ワークスペース：プロジェクトが作業ディレクトリに置く AGENTS.md（例：" +
                 "~/workspace/AGENTS.md）。pi は作業ディレクトリから上へたどるので、プロジェクトに" +
-                "近いものほど具体的です。プロジェクトが自前で持つこともできます（今はまだありません）。"
+                "近いものほど具体的です。"
         override val agentContextRuntimeTitle = "実行環境"
         override val agentContextRuntimeBody =
             "モデルとプロバイダー、思考レベル、セッション ID とセッションファイルのパス、ワーク" +
@@ -407,14 +405,8 @@ internal object JapaneseStrings : Strings {
                 "セッションファイルに書き込まれます。"
         override val agentContextInstructions = "グローバル AGENTS.md"
         override val agentContextInstructionsEditable = "編集可"
-        override val agentContextNote =
-            "このファイルは pi が起動のたびに読み込み、保存するとエージェントが再起動します。" +
-                "それ以外はここでは読み取り専用です。モデルと思考レベルは「モデルとプロバイダー」、" +
-                "ワークスペースは「エージェントのプロセス」、共有ストレージは「共有ストレージ」の" +
-                "各ページで変更します。"
-        override val agentContextEditorNote =
-            "pi は起動時にこのファイルを読みます。保存するとエージェントが再起動し、変更が反映" +
-                "されます。"
+        override val agentContextNote = "pi が起動時に読み込みます。保存するとエージェントが再起動します。"
+        override val agentContextEditorNote = "保存するとエージェントが再起動し、変更が反映されます。"
         override val agentContextSave = "保存"
         override val agentContextSaved = "保存しました。エージェントを再起動しています"
         override val agentContextFailed = "保存できませんでした。ファイルは変更されていません"

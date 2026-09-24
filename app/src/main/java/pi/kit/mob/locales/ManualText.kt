@@ -299,8 +299,7 @@ of it.
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
-| Agent context | The system prompt, the global AGENTS.md, the runtime, the tools and the conversation |
-| Agent process | Start, stop, restart, working directory |
+| Agent process | Start, stop, restart, working directory, AGENTS.md |
 | Maintenance & repair | Model list, relocation, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
 
