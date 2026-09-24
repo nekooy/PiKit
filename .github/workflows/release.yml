@@ -4,9 +4,10 @@
 # afford to: the runtime image is not committed (~285 MB of binaries per ABI), so it
 # is assembled here from upstream — the Termux bootstrap, its .deb dependencies and
 # the npm packages for pi, roughly 200 MB of downloads — and then the two release
-# APKs are built, four Gradle invocations in all. Budget around an hour cold; the
-# `.runtime-build/cache` cache below is what keeps a re-run from paying the download
-# again.
+# APKs are built. `tools/build-apks.py --release-only` is one Gradle invocation for
+# the JVM suites and one for both release APKs (the four-variant batch is two
+# tasks here). Budget around an hour cold; the `.runtime-build/cache` cache below is
+# what keeps a re-run from paying the download again.
 #
 # The version is not an input. It is `pikit.versionName`/`pikit.versionCode` in
 # `gradle.properties` — one place, bumped in the commit being released — and this

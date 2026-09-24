@@ -22,11 +22,14 @@ It does, in order:
      relocator against real `.deb` files, the manual's reflow and the terminal
      banners, and the agent's delete guard. `--skip-tests` bypasses them, which is
      the only reason that flag exists.
-  4. **The four APKs** — `arm64`/`x64` × `debug`/`release` — one Gradle invocation
-     each, so a failure names the variant it happened to, and so the packaging
-     guard's known failure mode (a stale APK left by the build cache) can be
-     repaired for that variant alone and retried. That failure is written up in
-     `docs/BUILDING.md`; this script applies its remedy automatically, once.
+  4. **The four APKs** — `arm64`/`x64` × `debug`/`release` — **one Gradle
+     invocation for all of them**, so they share one configuration phase and the
+     four variant pipelines run in parallel (`org.gradle.parallel=true`). A
+     failure still names the variant (`verifyApkPackaging<Flavour><BuildType>`),
+     and the packaging guard's known failure mode (a stale APK left by the build
+     cache) is repaired for that variant alone and retried. That failure is
+     written up in `docs/BUILDING.md`; this script applies its remedy
+     automatically, once.
   5. **The APKs that were just built**, once. `check-release-math.py` reads a
      release APK's dex and fails when R8 has removed the formula renderer's
      reflective command table — a failure that is invisible in every test and on
@@ -54,6 +57,7 @@ import shutil
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -82,6 +86,12 @@ STALE_APK_MARKERS = (
     "stale artifact",
     "cannot be read as a zip at all",
 )
+
+#: How a packaging-guard failure names the variant it fired on, as
+#: `verifyApkPackagingArm64Debug` and friends. Used to retry only the variants
+#: that actually failed when several were built in one invocation; a log that
+#: carries no match falls back to retrying every requested variant.
+STALE_TASK_RE = re.compile(r"verifyApkPackaging(Arm64|X64)(Debug|Release)")
 
 #: The three files a complete runtime image directory holds.
 #:
@@ -545,20 +555,10 @@ def run_tests() -> bool:
 
     # The app's unit tests are ABI-independent — one flavour's task runs all of them
     # — and the vendored VT parser is a separate module with its own suite.
-    code, _ = gradle([":app:testX64DebugUnitTest", ":terminal-emulator:testDebugUnitTest"])
-    if code != 0:
-        log("FAIL the JVM test suites (see the output above)")
-        failures.append("the JVM test suites")
-    else:
-        results = APP / "build" / "test-results" / "testX64DebugUnitTest"
-        total = sum(
-            int(part)
-            for file in results.glob("*.xml")
-            for part in [_attribute(file, "tests")]
-            if part
-        )
-        log(f"ok   the JVM test suites ({total} tests in {len(list(results.glob('*.xml')))} suites)")
-
+    # The checkers below run *alongside* this call rather than after it: each is a
+    # short independent process, and under a multi-minute Gradle suite their wall
+    # time is free. They capture their output, so the streaming above is still only
+    # Gradle's.
     checks = [
         ("the runtime images", lambda: python_tool("verify-runtime-image.py")),
         # The rule that decides whether the agent's manual — and the extension's only
@@ -576,24 +576,49 @@ def run_tests() -> bool:
         # and it exists for the same reason as the checks above it.
         ("the README icon", lambda: python_tool("render-icon.py", "--check")),
     ]
+    runnable: list[tuple[str, object]] = []
     for name, check in checks:
+        # The relocator's fixture is the image builder's `.deb` cache; without it
+        # the suite would report a failure for a missing input rather than for a
+        # broken relocator.
         if name == "the relocator" and not (REPO_ROOT / ".runtime-build" / "cache" / "debs").is_dir():
             log(f"skip {name}: no .deb cache under .runtime-build/cache/debs, which the image "
                 "builder fills")
             continue
-        code, output = check()
-        if code == 0:
-            # Each tool prints its own verdict line last; that one line is enough
-            # here, and the whole output follows when it is not.
-            verdict = next(
-                (line.strip() for line in reversed(output.splitlines()) if line.strip()),
-                "ok",
-            )
-            log(f"ok   {name}: {verdict}")
+        runnable.append((name, check))
+
+    with ThreadPoolExecutor(max_workers=max(1, len(runnable))) as pool:
+        check_futures = {pool.submit(check): name for name, check in runnable}
+
+        code, _ = gradle([":app:testX64DebugUnitTest", ":terminal-emulator:testDebugUnitTest"])
+        if code != 0:
+            log("FAIL the JVM test suites (see the output above)")
+            failures.append("the JVM test suites")
         else:
-            print(output)
-            log(f"FAIL {name}")
-            failures.append(name)
+            results = APP / "build" / "test-results" / "testX64DebugUnitTest"
+            total = sum(
+                int(part)
+                for file in results.glob("*.xml")
+                for part in [_attribute(file, "tests")]
+                if part
+            )
+            log(f"ok   the JVM test suites ({total} tests in {len(list(results.glob('*.xml')))} suites)")
+
+        for future in as_completed(check_futures):
+            name = check_futures[future]
+            code, output = future.result()
+            if code == 0:
+                # Each tool prints its own verdict line last; that one line is enough
+                # here, and the whole output follows when it is not.
+                verdict = next(
+                    (line.strip() for line in reversed(output.splitlines()) if line.strip()),
+                    "ok",
+                )
+                log(f"ok   {name}: {verdict}")
+            else:
+                print(output)
+                log(f"FAIL {name}")
+                failures.append(name)
 
     if failures:
         log("FAILED: " + ", ".join(failures))
@@ -632,46 +657,102 @@ def clear_apk_outputs(variants: tuple[tuple[str, str], ...] = VARIANTS) -> int:
     return removed
 
 
-def build_variant(flavor: str, build_type: str) -> bool:
-    """Builds one variant, retrying once when the packaging guard flags a stale APK."""
-    # `capitalize()` on both, so the task is Gradle's `assembleArm64Debug` rather
-    # than the `assemblearm64Debug` that the flavour name alone would spell. Gradle
-    # matches task names case-insensitively, so both work — and a log line that
-    # looks like a typo is not worth relying on that.
-    task = f":app:assemble{flavor.capitalize()}{build_type.capitalize()}"
+def assemble_task(flavor: str, build_type: str) -> str:
+    """
+    Gradle's task name for one variant.
 
-    code, output = gradle([task])
-    if code == 0:
-        return True
+    `capitalize()` on both, so the task is `assembleArm64Debug` rather than the
+    `assemblearm64Debug` that the flavour name alone would spell. Gradle matches
+    task names case-insensitively, so both work — and a log line that looks like a
+    typo is not worth relying on that.
+    """
+    return f":app:assemble{flavor.capitalize()}{build_type.capitalize()}"
 
-    if any(marker in output for marker in STALE_APK_MARKERS):
-        log(f"{task}: the packaging guard caught a stale APK; deleting it and retrying "
-            "without the build cache — the remedy in docs/BUILDING.md")
-        removed = clear_apk_outputs(((flavor, build_type),))
-        log(f"removed {removed} APK(s) for this variant")
-        code, _ = gradle([task], extra=["--no-build-cache"])
-        if code == 0:
-            return True
 
-    log(f"FAILED: {task}")
-    return False
+def variants_flagged_stale(
+    output: str, requested: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """
+    The requested variants whose packaging guard fired, in request order.
+
+    The guard's task name carries the variant (`verifyApkPackagingArm64Debug`), so
+    a batch of four can be repaired for the one that failed. A log with no such
+    name — a marker that arrived through some other line — returns every requested
+    variant: the remedy is a slower rebuild, and a partial guess would leave a
+    stale APK in place.
+    """
+    found: set[tuple[str, str]] = set()
+    for match in STALE_TASK_RE.finditer(output):
+        flavor = "arm64" if match.group(1) == "Arm64" else "x64"
+        found.add((flavor, match.group(2).lower()))
+    if not found:
+        return list(requested)
+    return [variant for variant in requested if variant in found]
+
+
+def collect_apks(variants: list[tuple[str, str]]) -> list[Path] | None:
+    """Every requested variant's APKs, or None when one variant produced none."""
+    built: list[Path] = []
+    for flavor, build_type in variants:
+        apks = sorted((APK_ROOT / flavor / build_type).glob("*.apk"))
+        if not apks:
+            return None
+        built.extend(apks)
+    return built
 
 
 def build_apks(variants: list[tuple[str, str]]) -> tuple[bool, list[Path]]:
-    built: list[Path] = []
-    for flavor, build_type in variants:
-        banner(f"APK: {flavor} {build_type}")
-        started = time.monotonic()
-        if not build_variant(flavor, build_type):
-            return False, built
-        apks = sorted((APK_ROOT / flavor / build_type).glob("*.apk"))
-        if not apks:
-            log(f"FAILED: {APK_ROOT / flavor / build_type} has no APK after a successful build")
-            return False, built
-        for apk in apks:
-            log(f"built {apk.name} — {apk.stat().st_size / 1e6:.1f} MB "
-                f"in {time.monotonic() - started:.0f}s")
-            built.append(apk)
+    """
+    Builds every requested variant in one Gradle invocation.
+
+    One invocation rather than one per variant is the difference between four
+    AGP configuration phases serialised and one, with the four variant pipelines
+    running in parallel under `org.gradle.parallel`. Four sequential `gradlew`
+    calls spent most of their wall time configuring and re-resolving the same
+    project four times; the compile work itself is already incremental and cached.
+
+    `--continue` on the first pass so one variant's packaging failure does not
+    cancel the others' work: a fail-fast stop would discard minutes of parallel
+    compile to repair a single stale APK. Failure attribution is unchanged — the
+    guard's task name still names its variant — and the remedy is still per
+    variant ([variants_flagged_stale]).
+    """
+    if not variants:
+        return True, []
+
+    banner("APKs: " + ", ".join(f"{flavor} {build_type}" for flavor, build_type in variants))
+    started = time.monotonic()
+    tasks = [assemble_task(flavor, build_type) for flavor, build_type in variants]
+    code, output = gradle(tasks, extra=["--continue"])
+
+    if code != 0 and any(marker in output for marker in STALE_APK_MARKERS):
+        stale = variants_flagged_stale(output, variants)
+        log("the packaging guard caught a stale APK in: "
+            + ", ".join(f"{flavor} {build_type}" for flavor, build_type in stale)
+            + "; deleting those and retrying without the build cache — the remedy in "
+            "docs/BUILDING.md")
+        removed = clear_apk_outputs(tuple(stale))
+        log(f"removed {removed} APK(s)")
+        retry = [assemble_task(flavor, build_type) for flavor, build_type in stale]
+        code, output = gradle(retry, extra=["--no-build-cache", "--continue"])
+
+    built = collect_apks(variants)
+    if built is None or code != 0:
+        missing = [
+            f"{flavor} {build_type}"
+            for flavor, build_type in variants
+            if not any((APK_ROOT / flavor / build_type).glob("*.apk"))
+        ]
+        if missing:
+            log("FAILED: no APK for " + ", ".join(missing))
+        else:
+            log("FAILED: one or more assemble tasks failed (see the output above)")
+        return False, built or []
+
+    elapsed = time.monotonic() - started
+    log(f"built {len(built)} APK(s) in {elapsed:.0f}s")
+    for apk in built:
+        log(f"  {apk.name} — {apk.stat().st_size / 1e6:.1f} MB")
     return True, built
 
 
