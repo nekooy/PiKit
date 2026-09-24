@@ -289,7 +289,7 @@ sentence about one release is wrong in the next.
 | 手机、平板 | `PiKit-<version>-arm64.apk` |
 | `x86_64` 模拟器 | `PiKit-<version>-x64.apk` |
 
-<one sentence: whether this release installs over the previous one, and why>
+此版本和上版本使用同一把签名密钥，且无破坏性变更，可以直接覆盖安装升级。
 
 **Full Changelog**: https://github.com/nekooy/PiKit/compare/v<previous>...v<version>
 ```
@@ -301,8 +301,9 @@ sentence about one release is wrong in the next.
 - **A bullet is one line**, and it says what changed rather than how. The measurement
   that settled a design belongs in the chapter that describes it, and the commit list is
   behind the compare link.
-- **The sentence between the table and the changelog link is a claim about *this*
-  release**, not a formality to copy forward: "the same signing key and no breaking
-  changes" is a statement about the keystore secrets and about `versionCode`, and it has
-  to be true of the two artefacts either side of the link.
+- **The sentence between the table and the changelog link is the standard upgrade
+  claim**, kept as-is unless this release *is* a special case (a new keystore, a
+  breaking storage or id change) — then rewrite it to say what the reader has to
+  do instead. The claim is about the keystore secrets and about `versionCode`,
+  and it has to be true of the two artefacts either side of the link.
 
