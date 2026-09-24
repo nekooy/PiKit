@@ -722,6 +722,7 @@ internal object EnglishStrings : Strings {
             "tinyfish" -> "Needs a TinyFish key"
             "parallel" -> "Needs a Parallel key"
             "parallel-mcp" -> "Parallel, over its MCP endpoint"
+            "baizhi" -> "Baizhi MCP; used only when selected explicitly"
             "anysearch" -> "Needs an AnySearch key"
             "xcrawl" -> "Needs an XCrawl key"
             "brightdata" -> "Needs a Bright Data key and a zone name"

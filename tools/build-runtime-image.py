@@ -145,7 +145,7 @@ PI_PACKAGE = "@earendil-works/pi-coding-agent"
 #: failed outright (`Failed to load extension "…/pi-safety-guard.ts": Cannot find
 #: module 'jiti'`). A version that ships in the image cannot be half-installed.
 #: ARCHITECTURE §2 has the reasoning.
-PI_VERSION = "0.86.1"
+PI_VERSION = "0.87.1"
 
 PI_ENTRY_RELATIVE = f"lib/node_modules/{PI_PACKAGE}/dist/bundle/cli.js"
 
@@ -163,7 +163,7 @@ VENDORED_MARKER = "pikit-vendored.json"
 #: a new version changes the extension's tools and its config, so it is bumped
 #: with the image and by hand, exactly as BOOTSTRAP_TAG is.
 WEB_ACCESS_PACKAGE = "pi-web-access"
-WEB_ACCESS_VERSION = "0.30.0"
+WEB_ACCESS_VERSION = "0.31.0"
 
 #: Where the bundled extension lives inside the prefix, relative to `$PREFIX`.
 #: Its own `node_modules` is a separate tree from pi's so that npm cannot touch

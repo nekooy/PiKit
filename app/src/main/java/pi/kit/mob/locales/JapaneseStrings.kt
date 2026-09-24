@@ -670,6 +670,7 @@ internal object JapaneseStrings : Strings {
             "tinyfish" -> "TinyFish のキーが必要です"
             "parallel" -> "Parallel のキーが必要です"
             "parallel-mcp" -> "Parallel。MCP エンドポイント経由です"
+            "baizhi" -> "Baizhi MCP。明示的に選んだ場合のみ使われます"
             "anysearch" -> "AnySearch のキーが必要です"
             "xcrawl" -> "XCrawl のキーが必要です"
             "brightdata" -> "Bright Data のキーと Zone 名が必要です"

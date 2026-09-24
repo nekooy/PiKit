@@ -26,13 +26,15 @@ package pi.kit.mob.locales
  *
  * ## The facts, and where they come from
  *
- * Every row is the extension **0.30.0** — the version the runtime image vendors
+ * Every row is the extension **0.31.0** — the version the runtime image vendors
  * (`tools/build-runtime-image.py`'s `WEB_ACCESS_VERSION`, recorded in the image's
  * `build-metadata.json`) — read from its own source rather than from its README. The
  * keys were checked against 0.30.0's modules one by one when the pin moved: it adds
  * six (`serplyApiKey`, `fetch.defaultMode`, `fetch.allowedModes`,
  * `webSearch.allowedProviders`, `openaiUseProviderBaseUrl`, `openaiUseAlphaSearch`)
  * and removes none, which is why the rows below could grow rather than be rewritten.
+ * 0.31.0's Baizhi MCP is a *provider* the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`)
+ * rather than a new document key; its lazy `web_enable` tool is tool surface, not config.
  *
  * The provider, type and description of each row were taken from the extension's
  * per-feature modules, which each re-parse the file with their own partial
