@@ -1,7 +1,9 @@
 package pi.kit.mob.pi
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -10,7 +12,9 @@ import org.junit.Test
  * pi opens a **new** session on every `pi --mode rpc` start. Restoring the one
  * the user was in is what keeps a Retry after 切后台/锁屏 from silently starting
  * a different conversation in the same UI — the report this rule exists for.
- * Pure, so the three cases are pinned without a process.
+ * Pure, so the three cases are pinned without a process. The cold-start
+ * preference is the one case that skips that restore entirely; see
+ * [shouldRestoreRememberedSession].
  */
 class SessionRestoreTest {
 
@@ -68,5 +72,21 @@ class SessionRestoreTest {
                 exists = ::exists,
             ),
         )
+    }
+
+    @Test
+    fun `a cold start that opens a new conversation skips the restore`() {
+        assertFalse(shouldRestoreRememberedSession(openNewOnColdStart = true, coldStart = true))
+    }
+
+    @Test
+    fun `a cold start that continues the talk restores as before`() {
+        assertTrue(shouldRestoreRememberedSession(openNewOnColdStart = false, coldStart = true))
+    }
+
+    @Test
+    fun `an agent restart restores even when a cold start would open new`() {
+        assertTrue(shouldRestoreRememberedSession(openNewOnColdStart = true, coldStart = false))
+        assertTrue(shouldRestoreRememberedSession(openNewOnColdStart = false, coldStart = false))
     }
 }

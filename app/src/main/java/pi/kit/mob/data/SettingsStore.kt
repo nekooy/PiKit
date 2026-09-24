@@ -287,6 +287,27 @@ object CustomEndpoint {
     }
 }
 
+/**
+ * How the interface chooses between the light and dark palettes.
+ *
+ * [code] is what is written to preferences. An absent or unrecognised code
+ * resolves to [DEFAULT] — the system's own dark-mode setting — which is also
+ * what this app has always done before the choice existed.
+ */
+enum class ThemeMode(val code: String) {
+    SYSTEM("system"),
+    LIGHT("light"),
+    DARK("dark"),
+    ;
+
+    companion object {
+        val DEFAULT = SYSTEM
+
+        fun fromCode(code: String?): ThemeMode =
+            entries.firstOrNull { it.code == code } ?: DEFAULT
+    }
+}
+
 /** Immutable snapshot of user configuration. */
 data class PiSettings(
     val provider: PiProvider? = null,
@@ -338,6 +359,16 @@ data class PiSettings(
     val workingDir: String = "",
     /** Interface language. Persisted here because it is not part of a profile. */
     val language: Lang = Lang.DEFAULT,
+    /**
+     * Whether a cold start opens a new conversation instead of the last one.
+     *
+     * On by default: a launch is a new question, and the previous conversation is
+     * one tap away in the history. Off restores the remembered session the way
+     * every launch used to — see `PiAgentSession.restoreRememberedSession`.
+     */
+    val openNewOnLaunch: Boolean = true,
+    /** Interface theme. Persisted here because it is not part of a profile. */
+    val themeMode: ThemeMode = ThemeMode.DEFAULT,
     /**
      * Whether PiKit's tool-call guard is in force.
      *
@@ -477,6 +508,8 @@ class SettingsStore(context: Context) {
             thinkingLevel = prefs.getString(KEY_THINKING, "medium").orEmpty().ifBlank { "medium" },
             workingDir = prefs.getString(KEY_WORKDIR, "").orEmpty(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
+            openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
+            themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
@@ -549,6 +582,8 @@ class SettingsStore(context: Context) {
             .putString(KEY_LEVELS_FOR, next.availableThinkingLevelsFor)
             .putString(KEY_WORKDIR, next.workingDir)
             .putString(KEY_LANGUAGE, next.language.code)
+            .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
+            .putString(KEY_THEME, next.themeMode.code)
             .putBoolean(KEY_SAFETY, next.safetyExtension)
             .apply()
         // The model fields are read back from the active profile rather than
@@ -559,6 +594,8 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = next.availableThinkingLevelsFor,
             workingDir = next.workingDir,
             language = next.language,
+            openNewOnLaunch = next.openNewOnLaunch,
+            themeMode = next.themeMode,
             safetyExtension = next.safetyExtension,
         )
         return resolved
@@ -575,6 +612,8 @@ class SettingsStore(context: Context) {
         availableThinkingLevelsFor: String = current.get().availableThinkingLevelsFor,
         workingDir: String = current.get().workingDir,
         language: Lang = current.get().language,
+        openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
+        themeMode: ThemeMode = current.get().themeMode,
         safetyExtension: Boolean = current.get().safetyExtension,
     ): PiSettings {
         val next = current.updateAndGet {
@@ -588,6 +627,8 @@ class SettingsStore(context: Context) {
                 availableThinkingLevelsFor = availableThinkingLevelsFor,
                 workingDir = workingDir,
                 language = language,
+                openNewOnLaunch = openNewOnLaunch,
+                themeMode = themeMode,
                 safetyExtension = safetyExtension,
             )
         }
@@ -622,6 +663,12 @@ class SettingsStore(context: Context) {
         private const val KEY_LEVELS_FOR = "thinking_levels_for"
         private const val KEY_WORKDIR = "working_dir"
         private const val KEY_LANGUAGE = "language"
+
+        /** True unless the user asked for a cold start to continue the last talk. */
+        private const val KEY_OPEN_NEW_ON_LAUNCH = "open_new_on_launch"
+
+        /** [ThemeMode.code]; absent means [ThemeMode.DEFAULT]. */
+        private const val KEY_THEME = "theme_mode"
 
         /** True unless the user switched the tool-call guard off; see [PiSettings]. */
         private const val KEY_SAFETY = "safety_extension"

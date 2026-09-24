@@ -258,6 +258,22 @@ internal object JapaneseStrings : Strings {
         override val aboutSubtitle = "バージョン・ライセンス・アプリの更新確認"
         override val language = "言語"
         override val languageSubtitle = "インターフェースの表示言語"
+        override val personalization = "パーソナライズ"
+        override val personalizationSubtitle = "起動時の挙動とテーマ"
+        override val personalizationConversation = "会話"
+        override val personalizationAppearance = "外観"
+        override val openNewOnLaunch = "起動時に新しい会話を開く"
+        override val openNewOnLaunchSubtitle =
+            "アプリを開くと新しい会話になります。オフにすると前回の会話を続けます"
+        override val theme = "テーマ"
+        override val themeSubtitle = "ライト・ダーク・システムに合わせる"
+        override val themeSystem = "システムに合わせる"
+        override val themeLight = "ライト"
+        override val themeDark = "ダーク"
+        override val personalizationNote =
+            "「起動時」とは、アプリを完全に閉じてから開き直すときです。セッション途中の" +
+                "エージェント再起動（設定変更など）では、いまの会話が続きます。テーマは" +
+                "すぐに反映されます。"
         override val essentials = "基本設定"
         override val advancedSection = "詳細"
         override val bundlesNote =

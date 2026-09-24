@@ -566,6 +566,34 @@ interface Strings {
         val aboutSubtitle: String
         val language: String
         val languageSubtitle: String
+
+        /**
+         * Personalization: how a launch lands, and which palette draws it.
+         *
+         * Neither is about the agent, so they share one page rather than sitting
+         * as two one-row pages on the root.
+         */
+        val personalization: String
+        val personalizationSubtitle: String
+        val personalizationConversation: String
+        val personalizationAppearance: String
+
+        /**
+         * On: a cold start opens a new conversation. Off: the last one is restored.
+         *
+         * On is the default because a launch is usually a new question, and the
+         * previous conversation is one tap away in the history.
+         */
+        val openNewOnLaunch: String
+        val openNewOnLaunchSubtitle: String
+        val theme: String
+        val themeSubtitle: String
+        val themeSystem: String
+        val themeLight: String
+        val themeDark: String
+
+        /** Under the two rows: what "cold start" means here, and when a theme change applies. */
+        val personalizationNote: String
         val essentials: String
         val advancedSection: String
         val bundlesNote: String

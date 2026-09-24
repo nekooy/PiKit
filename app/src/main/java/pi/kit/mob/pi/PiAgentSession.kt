@@ -144,6 +144,16 @@ class PiAgentSession private constructor(context: Context) {
         appContext.getSharedPreferences("pikit_agent_session", Context.MODE_PRIVATE)
     }
 
+    /**
+     * Whether the next restore is this process's first.
+     *
+     * Set once per process, not per activity or composition: "cold start" is the
+     * launch of the app, and a later `restartAgent` — a crash, a settings change —
+     * is the same conversation continuing under a new pi process. See
+     * [shouldRestoreRememberedSession].
+     */
+    private val coldStartRestore = java.util.concurrent.atomic.AtomicBoolean(true)
+
     private val environmentLock = Mutex()
 
     /**
@@ -1147,6 +1157,20 @@ class PiAgentSession private constructor(context: Context) {
      */
     private suspend fun restoreRememberedSession() {
         val live = client ?: return
+        // A cold start that opens a new conversation leaves the handshake's
+        // fresh session alone. Every later start of the agent still restores:
+        // abandoning a conversation already on screen is the bug this preference
+        // is not meant to bring back.
+        val coldStart = coldStartRestore.getAndSet(false)
+        if (!shouldRestoreRememberedSession(
+                openNewOnColdStart = settingsStore.read().openNewOnLaunch,
+                coldStart = coldStart,
+            )
+        ) {
+            val opened = _conversation.value.sessionFile
+            if (!opened.isNullOrBlank()) rememberSessionPath(opened)
+            return
+        }
         val remembered = lastRememberedSession()
         val opened = _conversation.value.sessionFile
         if (remembered.isNullOrBlank() && !opened.isNullOrBlank()) {
@@ -2742,6 +2766,20 @@ internal const val CATALOGUE_UNREADABLE = "\u0000unreadable"
  */
 internal fun PiRecord.Response.cancelled(): Boolean =
     (data as? JsonObject)?.get("cancelled")?.jsonPrimitive?.booleanOrNull == true
+
+/**
+ * Whether a launch should rebind to the remembered session.
+ *
+ * A cold start with "open a new conversation" leaves pi's freshly opened session
+ * alone. Every later start of the agent — a restart after a crash, a settings
+ * change — still restores, because abandoning a conversation already on screen is
+ * the bug this preference is not meant to reintroduce. Pure so the three cases
+ * are pinned without a process.
+ */
+internal fun shouldRestoreRememberedSession(
+    openNewOnColdStart: Boolean,
+    coldStart: Boolean,
+): Boolean = !(openNewOnColdStart && coldStart)
 
 /**
  * The session an agent launch should rebind to, or null to keep the one pi opened.

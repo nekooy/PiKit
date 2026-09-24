@@ -261,6 +261,20 @@ internal object ChineseStrings : Strings {
         override val aboutSubtitle = "版本、许可、检查应用更新"
         override val language = "语言"
         override val languageSubtitle = "界面显示语言"
+        override val personalization = "个性化"
+        override val personalizationSubtitle = "启动行为与界面主题"
+        override val personalizationConversation = "对话"
+        override val personalizationAppearance = "外观"
+        override val openNewOnLaunch = "冷启动时打开新对话"
+        override val openNewOnLaunchSubtitle = "打开 App 时开始新对话；关闭则回到上次的对话"
+        override val theme = "主题"
+        override val themeSubtitle = "浅色、深色或跟随系统"
+        override val themeSystem = "跟随系统"
+        override val themeLight = "浅色"
+        override val themeDark = "深色"
+        override val personalizationNote =
+            "「冷启动」指完全关闭后再次打开 App。中途重启 Agent（例如改了设置）" +
+                "仍会回到当前对话。主题改动立即生效。"
         override val essentials = "常用设置"
         override val advancedSection = "高级"
         override val bundlesNote =
