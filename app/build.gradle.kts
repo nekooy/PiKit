@@ -313,10 +313,7 @@ runtimeImagesByFlavor.forEach { (flavor, abi) ->
     val imageDir = layout.projectDirectory.dir("src/$flavor/assets/runtime/$abi")
     val requiredFiles = listOf("bootstrap.zip", "overlay.zip")
 
-    fun missingRuntimeFiles(): List<String> =
-        requiredFiles.filterNot { imageDir.file(it).asFile.isFile }
-
-    if (missingRuntimeFiles().isNotEmpty()) {
+    if (requiredFiles.any { !imageDir.file(it).asFile.isFile }) {
         logger.warn(
             "PiKit: the bundled runtime image for $abi has not been built yet. " +
                 "Run `python tools/build-runtime-image.py --all` before installing " +
@@ -327,8 +324,12 @@ runtimeImagesByFlavor.forEach { (flavor, abi) ->
     tasks.register("verifyRuntimeImage${flavor.replaceFirstChar(Char::uppercaseChar)}") {
         group = "verification"
         description = "Checks that the bundled runtime image for $abi exists."
+        // Captured as plain values and a Directory, never `Project`/`layout`:
+        // the configuration cache cannot serialize those in a task action.
+        val dir = imageDir
+        val required = requiredFiles
         doLast {
-            val missing = missingRuntimeFiles()
+            val missing = required.filterNot { dir.file(it).asFile.isFile }
             if (missing.isNotEmpty()) {
                 throw GradleException(
                     "The bundled runtime image for $abi is incomplete (missing " +
@@ -365,27 +366,34 @@ androidComponents {
         val flavor = variant.productFlavors.firstOrNull { it.first == "abi" }?.second ?: return@onVariants
         val abi = runtimeImagesByFlavor[flavor] ?: return@onVariants
         val injected = providers.gradleProperty("android.injected.build.abi")
+        // Built here, while `runtimeImagesByFlavor` is in scope: the task action
+        // must not close over the script (the configuration cache refuses it).
+        val abiChoices = runtimeImagesByFlavor.entries.joinToString("\n") { (name, target) ->
+            "    ${name}Debug  for $target"
+        }
         val check = tasks.register("verifyInjectedAbi${variant.name.replaceFirstChar(Char::uppercaseChar)}") {
             group = "verification"
             description = "Checks that $variant is not being built for another device's ABI."
+            val wantedAbi = abi
+            val flavorName = flavor
+            val property = injected
+            val choices = abiChoices
             doLast {
-                val deviceAbis = injected.orNull
+                val deviceAbis = property.orNull
                     ?.split(',')
                     ?.map { it.trim() }
                     ?.filter { it.isNotEmpty() }
                     .orEmpty()
-                if (deviceAbis.isNotEmpty() && abi !in deviceAbis) {
+                if (deviceAbis.isNotEmpty() && wantedAbi !in deviceAbis) {
                     throw GradleException(
-                        "The '$flavor' variant carries the $abi runtime image, but Android " +
+                        "The '$flavorName' variant carries the $wantedAbi runtime image, but Android " +
                             "Studio is building for ${deviceAbis.joinToString()} — the ABI of the " +
                             "device it is deploying to.\n" +
                             "The two cannot be mixed: the APK would install and then report that " +
                             "its runtime image is missing.\n" +
                             "Pick the variant that matches the device (in Android Studio, " +
                             "Build → Select Build Variant):\n" +
-                            runtimeImagesByFlavor.entries.joinToString("\n") { (name, target) ->
-                                "    ${name}Debug  for $target"
-                            },
+                            choices,
                     )
                 }
             }
@@ -415,50 +423,18 @@ androidComponents {
  * The test compares the file's length with what its entries account for, with room
  * for a stored entry's 4 KB page alignment, the local headers and the central
  * directory. It is deliberately loose: it catches megabytes of slack, not bytes.
- */
-private fun apkSlackBytes(apk: File): Long? {
-    // `java.util.zip.ZipFile` spelled out does not resolve here: in a Gradle Kotlin
-    // script `java` is the Java plugin's extension, not a package. Hence the imports.
-    return try {
-        ZipFile(apk).use { zip ->
-            var accounted = 0L
-            var entries = 0
-            val iterator = zip.entries()
-            while (iterator.hasMoreElements()) {
-                val entry = iterator.nextElement()
-                accounted += entry.compressedSize + 30L + entry.name.toByteArray().size +
-                    (entry.extra?.size ?: 0)
-                entries++
-            }
-            // zipalign pads each stored entry to a page, every entry has a local
-            // header, and the central directory, its zip64 records and its comment are
-            // not entries at all. A megabyte on top of that is slack no APK should
-            // have.
-            val accountedFor =
-                accounted + entries * (PAGE_ALIGNMENT + LOCAL_HEADER_ALLOWANCE) + 1_048_576L
-            apk.length() - accountedFor
-        }
-    } catch (notAZip: ZipException) {
-        // The stronger failure: trailing bytes have hidden the central directory, so
-        // nothing can read the file at all — not this check, and not the installer.
-        null
-    }
-}
-
-/**
- * `zipalign -p` aligns a stored entry's data to 4 KB.
  *
- * Plain `val`s rather than `const val`s: a `.gradle.kts` file is a script, and
- * `const` is not allowed outside a class or an object there.
+ * The slack test is a *local* function inside the task action, not a script helper:
+ * a method on a `.gradle.kts` script closes over the script itself, and with it
+ * `Project` — which the configuration cache cannot serialize into a task action.
  */
-val PAGE_ALIGNMENT = 4096L
-
-/** Room for extra fields and the data descriptor an entry may carry. */
-val LOCAL_HEADER_ALLOWANCE = 512L
-
 androidComponents {
     onVariants { variant ->
         val variantName = variant.name.replaceFirstChar(Char::uppercaseChar)
+        // The output directory, resolved now: `layout` and `variant` must not be
+        // captured by the task action — the configuration cache rejects both
+        // (`DefaultProject` and `ApplicationVariantImpl` are not serializable).
+        val apkDir = layout.buildDirectory.dir("outputs/apk/${variant.flavorName}/${variant.buildType}")
         val check = tasks.register("verifyApkPackaging$variantName") {
             group = "verification"
             description = "Checks that the $variant APK holds nothing beyond its own entries."
@@ -466,11 +442,44 @@ androidComponents {
             // nothing about the order of the two, and a check that reads the previous
             // build's APK — or a half-written one — is worse than no check.
             dependsOn("package$variantName")
+            val directoryProperty = apkDir
+            val name = variantName
             doLast {
-                val directory = layout.buildDirectory
-                    .dir("outputs/apk/${variant.flavorName}/${variant.buildType}")
-                    .get()
-                    .asFile
+                // `zipalign -p` aligns a stored entry's data to 4 KB; 512 leaves
+                // room for extra fields and the data descriptor an entry may carry.
+                // `java.util.zip.ZipFile` spelled out does not resolve in a Gradle
+                // Kotlin script: `java` is the Java plugin's extension, not a package.
+                fun apkSlackBytes(apk: File): Long? {
+                    val pageAlignment = 4096L
+                    val localHeaderAllowance = 512L
+                    return try {
+                        ZipFile(apk).use { zip ->
+                            var accounted = 0L
+                            var entries = 0
+                            val iterator = zip.entries()
+                            while (iterator.hasMoreElements()) {
+                                val entry = iterator.nextElement()
+                                accounted += entry.compressedSize + 30L + entry.name.toByteArray().size +
+                                    (entry.extra?.size ?: 0)
+                                entries++
+                            }
+                            // zipalign pads each stored entry to a page, every entry has a
+                            // local header, and the central directory, its zip64 records and
+                            // its comment are not entries at all. A megabyte on top of that is
+                            // slack no APK should have.
+                            val accountedFor =
+                                accounted + entries * (pageAlignment + localHeaderAllowance) + 1_048_576L
+                            apk.length() - accountedFor
+                        }
+                    } catch (notAZip: ZipException) {
+                        // The stronger failure: trailing bytes have hidden the central
+                        // directory, so nothing can read the file at all — not this check,
+                        // and not the installer.
+                        null
+                    }
+                }
+
+                val directory = directoryProperty.get().asFile
                 val apks = directory.listFiles { file -> file.isFile && file.name.endsWith(".apk") }
                     .orEmpty()
                 apks.forEach { apk ->
@@ -489,7 +498,7 @@ androidComponents {
                             "an APK like it does not install: a zip reader looks for the central " +
                             "directory at the end.\n" +
                             "Rebuild it without the cache:\n" +
-                            "    ./gradlew :app:assemble$variantName --no-build-cache\n" +
+                            "    ./gradlew :app:assemble$name --no-build-cache\n" +
                             "or delete the APK and this task's output first.",
                     )
                 }

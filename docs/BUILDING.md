@@ -44,9 +44,12 @@ assets do not have them *or whose sources have changed since they were assembled
 (below), runs the unit suites and the tools that check what Gradle cannot see — the
 images, the relocator against real `.deb` files, the manual's reflow, the terminal
 banners, the agent's delete guard, the README icon — and then builds
-**`arm64`/`x64` × `debug`/`release`**, one Gradle invocation per variant so a failure
-names the one it happened to. Every step streams its output, and the summary at the
-end is the list of files to install. The last thing it does is read the release APKs
+**`arm64`/`x64` × `debug`/`release`** in **one Gradle invocation**, so the four
+variant pipelines share one configuration phase and run in parallel. A failure
+still names the variant it happened to (`verifyApkPackaging<Flavour><BuildType>`).
+The unit suites and the checker tools run alongside each other rather than one
+after another. Every step streams its output, and the summary at the end is the
+list of files to install. The last thing it does is read the release APKs
 it has just built: `tools/check-release-math.py` fails the build when R8 has removed
 the formula renderer's reflective command table — a failure that no JVM test and no
 debug device can see (ARCHITECTURE §12.2).
@@ -58,9 +61,19 @@ debug device can see (ARCHITECTURE §12.2).
 | `--refresh-images` | rebuild the runtime image even when it is already there |
 | `--clean` | delete the built APKs first |
 
-It also repairs the one failure the packaging guard is known to catch: if a variant
-fails with a stale APK (see *The size of an APK is checked*), it deletes that
-variant's APK and retries it once with `--no-build-cache`.
+`gradle.properties` turns the **configuration cache** on: the second and later
+builds of the same task set skip Gradle's configuration phase. A build script edit
+(or a changed input the script reads) invalidates it on purpose; force a clean
+recalculation with `--no-configuration-cache` when a task graph looks stale. The
+custom verification tasks (`verifyApkPackaging*`, `verifyRuntimeImage*`,
+`verifyInjectedAbi*`) capture only plain values and directories in their actions
+for the same reason — closing over `Project` or a variant object is what the cache
+refuses to serialize.
+
+It also repairs the one failure the packaging guard is known to catch: if a
+variant fails with a stale APK (see *The size of an APK is checked*), it deletes
+that variant's APK and retries it once with `--no-build-cache` — only the variants
+the guard named, so a four-variant build does not redo the three that were fine.
 
 The same steps by hand, when one of them needs its own flags or its own output:
 
