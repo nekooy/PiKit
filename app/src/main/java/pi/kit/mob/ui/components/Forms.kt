@@ -260,7 +260,10 @@ internal fun PickerBody(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    // Top padding as well as bottom: without it the field sat
+                    // hard against the title's hairline, which read as the
+                    // sheet's chrome rather than as the list's first control.
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
             )
         }
 

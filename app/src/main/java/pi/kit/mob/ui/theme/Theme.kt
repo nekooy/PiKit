@@ -1,11 +1,14 @@
 package pi.kit.mob.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 /**
  * PiKit's palette.
@@ -101,6 +104,23 @@ private val PiKitDark = darkColorScheme(
     onErrorContainer = Color(0xFFFFDAD6),
 )
 
+/**
+ * PiKit's corner radii.
+ *
+ * Material3's stock `medium` is 12dp and a 16dp step was still read as almost
+ * square; the radii below are one notch further. A settings section card and its
+ * rows now share a 22dp corner, so the press ripple and the card outline stop
+ * looking like two different controls. Small keeps a tighter radius for chips
+ * and grabbers; large and extraLarge step up from it toward the sheet corner.
+ */
+private val PiKitShapes = Shapes(
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(22.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(36.dp),
+)
+
 @Composable
 fun PiKitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -108,6 +128,7 @@ fun PiKitTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) PiKitDark else PiKitLight,
+        shapes = PiKitShapes,
         content = content,
     )
 }

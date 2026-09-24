@@ -11,8 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +53,7 @@ import pi.kit.mob.ui.components.PageHeader
 import pi.kit.mob.ui.components.ReadOnlyBody
 import pi.kit.mob.ui.components.ReadOnlySheetRow
 import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.settings.SettingsDivider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -189,7 +189,7 @@ fun SessionsScreen(
             placeholder = { Text(text.sessions.searchHint) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             singleLine = true,
-            shape = RoundedCornerShape(14.dp),
+            shape = MaterialTheme.shapes.medium,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -235,85 +235,99 @@ fun SessionsScreen(
             return@Column
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 12.dp),
+        // One card around the list, the same shape every settings section uses:
+        // rounded outer corners, rows clipped to that radius on press, and
+        // `SettingsDivider` between them. The flat edge-to-edge list was the
+        // report — no corners on the tap target, and a full-bleed hairline that
+        // did not match the settings pages the rest of the app reads as one with.
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 12.dp),
         ) {
-            items(visible, key = { it.path }) { summary ->
-                SessionRow(
-                    item = summary,
-                    text = text,
-                    selecting = selecting,
-                    checked = summary.path in selected,
-                    snippet = snippets[summary.path],
-                    onToggleChecked = {
-                        selected = if (summary.path in selected) {
-                            selected - summary.path
-                        } else {
-                            selected + summary.path
-                        }
-                    },
-                    onOpen = {
-                        // A turn in flight makes this a question rather than a
-                        // switch: pi aborts the running answer as the first step of
-                        // its own `switch_session` (`RuntimeHost.teardownCurrent`),
-                        // so the tap would stop an answer the reader may still want.
-                        // It used to be a flat refusal with a notice explaining why,
-                        // and the notice was the report — a tap that did nothing the
-                        // reader could act on. See [InterruptTurnDialog].
-                        if (session.turnInFlight) {
-                            pendingSwitch = summary
-                        } else {
-                            session.switchSession(summary)
-                            onOpened()
-                        }
-                    },
-                    // The row's actions are a menu, and every menu in PiKit is a
-                    // sheet body on the root's modal layer rather than a
-                    // `DropdownMenu` anchored to the button. An anchored menu is not
-                    // a view in the row: `Popup` is a focusable second window and it
-                    // leaves a zero-size layout node in this Row, which
-                    // `Arrangement.spacedBy` then charges a gap for — so tapping the
-                    // button moved it 4dp and the menu opened at the row's left edge
-                    // instead of under the button.
-                    onActions = {
-                        sheets.show(
-                            Sheet(key = "session-actions:${summary.path}") {
-                                ReadOnlyBody(title = summary.title.ifBlank { text.sessions.emptyTitle }) {
-                                    item {
-                                        ReadOnlySheetRow(
-                                            label = text.sessions.rename,
-                                            value = null,
-                                            onClick = { renaming = summary },
-                                        )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 4.dp),
+            ) {
+                itemsIndexed(visible, key = { _, it -> it.path }) { index, summary ->
+                    SessionRow(
+                        item = summary,
+                        text = text,
+                        selecting = selecting,
+                        checked = summary.path in selected,
+                        snippet = snippets[summary.path],
+                        onToggleChecked = {
+                            selected = if (summary.path in selected) {
+                                selected - summary.path
+                            } else {
+                                selected + summary.path
+                            }
+                        },
+                        onOpen = {
+                            // A turn in flight makes this a question rather than a
+                            // switch: pi aborts the running answer as the first step of
+                            // its own `switch_session` (`RuntimeHost.teardownCurrent`),
+                            // so the tap would stop an answer the reader may still want.
+                            // It used to be a flat refusal with a notice explaining why,
+                            // and the notice was the report — a tap that did nothing the
+                            // reader could act on. See [InterruptTurnDialog].
+                            if (session.turnInFlight) {
+                                pendingSwitch = summary
+                            } else {
+                                session.switchSession(summary)
+                                onOpened()
+                            }
+                        },
+                        // The row's actions are a menu, and every menu in PiKit is a
+                        // sheet body on the root's modal layer rather than a
+                        // `DropdownMenu` anchored to the button. An anchored menu is not
+                        // a view in the row: `Popup` is a focusable second window and it
+                        // leaves a zero-size layout node in this Row, which
+                        // `Arrangement.spacedBy` then charges a gap for — so tapping the
+                        // button moved it 4dp and the menu opened at the row's left edge
+                        // instead of under the button.
+                        onActions = {
+                            sheets.show(
+                                Sheet(key = "session-actions:${summary.path}") {
+                                    ReadOnlyBody(title = summary.title.ifBlank { text.sessions.emptyTitle }) {
+                                        item {
+                                            ReadOnlySheetRow(
+                                                label = text.sessions.rename,
+                                                value = null,
+                                                onClick = { renaming = summary },
+                                            )
+                                        }
+                                        item {
+                                            ReadOnlySheetRow(
+                                                label = if (summary.pinned) {
+                                                    text.sessions.unpin
+                                                } else {
+                                                    text.sessions.pin
+                                                },
+                                                value = null,
+                                                onClick = {
+                                                    session.setPinned(summary, !summary.pinned)
+                                                    reload++
+                                                },
+                                            )
+                                        }
+                                        item {
+                                            ReadOnlySheetRow(
+                                                label = text.sessions.delete,
+                                                value = null,
+                                                onClick = { confirmingDelete = listOf(summary) },
+                                            )
+                                        }
                                     }
-                                    item {
-                                        ReadOnlySheetRow(
-                                            label = if (summary.pinned) {
-                                                text.sessions.unpin
-                                            } else {
-                                                text.sessions.pin
-                                            },
-                                            value = null,
-                                            onClick = {
-                                                session.setPinned(summary, !summary.pinned)
-                                                reload++
-                                            },
-                                        )
-                                    }
-                                    item {
-                                        ReadOnlySheetRow(
-                                            label = text.sessions.delete,
-                                            value = null,
-                                            onClick = { confirmingDelete = listOf(summary) },
-                                        )
-                                    }
-                                }
-                            },
-                        )
-                    },
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                },
+                            )
+                        },
+                    )
+                    if (index < visible.lastIndex) SettingsDivider()
+                }
             }
         }
     }
@@ -400,6 +414,9 @@ private fun SessionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // Clipped to the card's radius before the ripple, so first and last
+            // rows keep the rounded press outline the way settings rows do.
+            .clip(MaterialTheme.shapes.medium)
             .clickable { if (selecting) onToggleChecked() else onOpen() }
             .padding(start = if (selecting) 4.dp else 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
