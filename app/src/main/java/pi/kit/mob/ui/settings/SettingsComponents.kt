@@ -303,28 +303,30 @@ private const val DISABLED_ALPHA = 0.38f
  *
  * A divider separates two *rows*: a switch, a picker, a statement of fact. A text
  * field is not one of those, because it already draws its own boundary — and it is
- * inset 12dp inside the card while the divider spans the card's full width, so a
- * line under or over a field runs edge to edge *past* the rounded corners of the
- * box it is supposed to separate from, with 4dp of air on each side. On the search
- * page that was seven key fields with a divider over every one of them — six between
- * the boxes and one under the note — which reads as a rendering fault rather than as
- * a list. So a field follows whatever is
- * above it directly, the way it does on `ModelPages` and `AgentPage`, and a run of
- * fields is separated by their own outlines and by the 8dp that two `vertical = 4.dp`
- * paddings add up to.
+ * inset 12dp inside the card while the divider used to span the card's full width,
+ * so a line under or over a field runs edge to edge *past* the rounded corners of
+ * the box it is supposed to separate from, with 4dp of air on each side.
  *
- * Insetting the divider to the field's own 12dp was the other candidate (that is
- * what Material's list insets do) and is worse: it still leaves a line floating in
- * the gap between two borders, only now it also stops short of the card's edges and
- * matches nothing else on the page.
+ * Inset [DIVIDER_INSET] from each side rather than edge-to-edge: a full-bleed rule
+ * is longer than the text it separates and reads as a second card border. The
+ * inset matches the row's own horizontal padding, so the rule starts and stops
+ * with the content above and below it. This is also what the history list uses
+ * ([pi.kit.mob.ui.SessionsScreen]), so the two pages share one rule style.
+ *
+ * Still never beside a text field: a run of fields is separated by their own
+ * outlines and by the 8dp that two `vertical = 4.dp` paddings add up to.
  */
 @Composable
 fun SettingsDivider() {
     HorizontalDivider(
+        modifier = Modifier.padding(horizontal = DIVIDER_INSET),
         color = MaterialTheme.colorScheme.outlineVariant,
         thickness = 1.dp,
     )
 }
+
+/** How far a [SettingsDivider] stops short of the card's edges — the row's own gutter. */
+private val DIVIDER_INSET = 16.dp
 
 /**
  * The scrolling body every settings page shares.
