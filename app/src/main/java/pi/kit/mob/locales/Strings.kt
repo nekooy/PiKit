@@ -703,24 +703,21 @@ interface Strings {
         val storageGuardOffBody: String
         val storageGuardOffConfirm: String
 
-        // Agent context: a short explanation of what the model is given, and the one
-        // control on the page — the global AGENTS.md.
-        val agentContextTitle: String
-        val agentContextSubtitle: String
-
-        /** The label over the explanation: "what the context holds". */
+        // Agent context, a section of the agent process page: what the model is
+        // given, as numbered points, and the one part of it the user owns.
         val agentContextSection: String
 
-        /**
-         * The explanation, as numbered points: a lead line and five parts, each a
-         * title and a body.
-         *
-         * One block of strings rather than a row per part: this is a description of
-         * what the model receives, not a control panel, and a row with a value column
-         * and a chevron promises something to read or to open. The one part that *is*
-         * a control — the global `AGENTS.md` — is a row on the same card.
-         */
+        /** The lead over the numbered points. */
         val agentContextLead: String
+
+        /**
+         * Five parts of the request, each a title and a body.
+         *
+         * Points rather than a single sentence: a reader checking whether
+         * something is in the context at all is looking for a heading, not for a
+         * clause in the middle of a run-on list. The number is drawn by the page,
+         * so the catalogs cannot disagree about how many parts there are.
+         */
         val agentContextSystemTitle: String
         val agentContextSystemBody: String
         val agentContextInstructionsTitle: String
@@ -744,7 +741,7 @@ interface Strings {
         val agentContextInstructions: String
         val agentContextInstructionsEditable: String
 
-        /** Under the card: the file is read at startup, and what stays read-only. */
+        /** Under the row: the file is read at startup, and what stays read-only. */
         val agentContextNote: String
 
         val agentContextEditorNote: String

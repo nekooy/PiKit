@@ -402,9 +402,7 @@ internal object EnglishStrings : Strings {
                 "agent restarts now so the change takes effect."
         override val storageGuardOffConfirm = "Switch off"
 
-        override val agentContextTitle = "Agent context"
-        override val agentContextSubtitle = "What the model is given with every request"
-        override val agentContextSection = "What the context holds"
+        override val agentContextSection = "Context"
         override val agentContextLead = "With every request, pi sends the model:"
         override val agentContextSystemTitle = "System prompt"
         override val agentContextSystemBody =
@@ -414,12 +412,11 @@ internal object EnglishStrings : Strings {
         override val agentContextInstructionsTitle = "Instruction files, AGENTS.md"
         override val agentContextInstructionsBody =
             "pi reads AGENTS.md from two places:\n" +
-                "\u00b7 Global: \$HOME/.pi/agent/AGENTS.md, written by PiKit at install time — the " +
+                "· Global: \$HOME/.pi/agent/AGENTS.md, written by PiKit at install time — the " +
                 "row below, editable here;\n" +
-                "\u00b7 Workspace: an AGENTS.md a project keeps in the working directory, such as " +
+                "· Workspace: an AGENTS.md a project keeps in the working directory, such as " +
                 "~/workspace/AGENTS.md. pi looks from the working directory upwards, so the " +
-                "closest one is the most specific. A project may bring its own; there is none " +
-                "yet."
+                "closest one is the most specific."
         override val agentContextRuntimeTitle = "Runtime"
         override val agentContextRuntimeBody =
             "The model and provider, the thinking level, the session id and session file path, " +
@@ -436,14 +433,8 @@ internal object EnglishStrings : Strings {
                 "written to the session file."
         override val agentContextInstructions = "Global AGENTS.md"
         override val agentContextInstructionsEditable = "Editable"
-        override val agentContextNote =
-            "pi reads this file at every start, and the agent restarts after a save. " +
-                "Everything else here is read-only: the model and the thinking level are " +
-                "changed on Model & provider, the workspace on Agent process, and shared " +
-                "storage on Shared storage."
-        override val agentContextEditorNote =
-            "pi reads this file when it starts. The agent restarts after a save so the change " +
-                "takes effect."
+        override val agentContextNote = "pi reads this file at startup; the agent restarts after a save."
+        override val agentContextEditorNote = "The agent restarts after a save so the change takes effect."
         override val agentContextSave = "Save"
         override val agentContextSaved = "Saved; the agent is restarting"
         override val agentContextFailed = "Could not save; the file is unchanged"

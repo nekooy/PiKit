@@ -131,7 +131,7 @@ startup — and the installer writes it **only when it is missing**. That is the
 `models.json` and `settings.json`, which the launcher rewrites on every start, and the difference is
 what the file *is*: those are projections of what the app knows, where a hand edit is a change the
 app cannot see and would otherwise have no way back from, while this is a document. It is editable
-from **Settings → Agent context**, which also offers the default text back, and an update that
+from **Settings → Agent process**, which also offers the default text back, and an update that
 silently replaced it would throw away the sentences a user added about their own project. A stale
 default costs a less well-informed agent rather than an unguarded one, because the rules that have
 to hold are enforced by the extension rather than by the file.
