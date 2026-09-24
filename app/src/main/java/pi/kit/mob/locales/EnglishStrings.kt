@@ -281,6 +281,22 @@ internal object EnglishStrings : Strings {
         override val aboutSubtitle = "Version, licence and app updates"
         override val language = "Language"
         override val languageSubtitle = "The language of the interface"
+        override val personalization = "Personalization"
+        override val personalizationSubtitle = "Launch behaviour and theme"
+        override val personalizationConversation = "Conversation"
+        override val personalizationAppearance = "Appearance"
+        override val openNewOnLaunch = "Open a new conversation on launch"
+        override val openNewOnLaunchSubtitle =
+            "Start fresh when the app opens; turn off to continue where you left off"
+        override val theme = "Theme"
+        override val themeSubtitle = "Light, dark, or follow the system"
+        override val themeSystem = "Follow system"
+        override val themeLight = "Light"
+        override val themeDark = "Dark"
+        override val personalizationNote =
+            "A cold start is opening the app after it has been fully closed. Restarting the " +
+                "agent mid-session (after a settings change, say) still keeps the conversation " +
+                "you are in. A theme change applies immediately."
         override val essentials = "Essentials"
         override val advancedSection = "Advanced"
         override val bundlesNote =

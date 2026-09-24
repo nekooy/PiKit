@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.SdCard
@@ -76,6 +77,9 @@ internal sealed interface SettingsPage {
     /** The bundled web-access extension's options, in pi's own config file. */
     data object Search : SettingsPage
 
+    /** Cold-start conversation behaviour and the interface theme. */
+    data object Personalization : SettingsPage
+
     /**
      * Where the system back button goes from here. Root has no parent.
      *
@@ -135,6 +139,7 @@ private val SettingsPageSaver: Saver<SettingsPage, String> = Saver(
             encoded == "Manual" -> SettingsPage.Manual
             encoded == "About" -> SettingsPage.About
             encoded == "Search" -> SettingsPage.Search
+            encoded == "Personalization" -> SettingsPage.Personalization
             else -> SettingsPage.Root
         }
     },
@@ -151,6 +156,7 @@ private fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
     SettingsPage.Search -> "Search"
+    SettingsPage.Personalization -> "Personalization"
 }
 
 /**
@@ -293,6 +299,11 @@ fun SettingsScreen(session: PiAgentSession) {
                     onBack = { open(SettingsPage.Root) },
                 )
 
+                SettingsPage.Personalization -> PersonalizationPage(
+                    session = session,
+                    onBack = { open(SettingsPage.Root) },
+                )
+
                 SettingsPage.About -> AboutPage(
                     session = session,
                     onBack = { open(SettingsPage.Root) },
@@ -363,17 +374,28 @@ private fun RootPage(
                     onClick = { onOpen(SettingsPage.Model) },
                 )
                 SettingsDivider()
-                // Search sits between the model and the language because those are
-                // the three settings that decide what the agent *is* to the user:
-                // which model answers, what it may reach for, and which language
-                // the app speaks. It used to be last in the group, which read as an
-                // afterthought to a feature that ships switched on and working.
+                // Search, personalization and language sit together because they
+                // are the three settings that decide what the agent *is* to the
+                // user: what it may reach for, how a launch lands, and which
+                // language the app speaks. Personalization is between search and
+                // language so launch behaviour is beside the other two things a
+                // user changes before their first question. Search used to be
+                // last in the group, which read as an afterthought to a feature
+                // that ships switched on and working.
                 SettingsRow(
                     title = text.settings.searchTitle,
                     subtitle = text.settings.searchSubtitle,
                     icon = Icons.Filled.Search,
                     showChevron = true,
                     onClick = { onOpen(SettingsPage.Search) },
+                )
+                SettingsDivider()
+                SettingsRow(
+                    title = text.settings.personalization,
+                    subtitle = text.settings.personalizationSubtitle,
+                    icon = Icons.Filled.Palette,
+                    showChevron = true,
+                    onClick = { onOpen(SettingsPage.Personalization) },
                 )
                 SettingsDivider()
                 PickerRow(

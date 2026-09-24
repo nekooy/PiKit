@@ -295,6 +295,7 @@ of it.
 | --- | --- |
 | Model & provider | Provider, key, models, thinking level |
 | Search settings | Web search: how, where, limits, keys |
+| Personalization | New conversation on launch; light, dark or follow system |
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
