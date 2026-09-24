@@ -636,6 +636,7 @@ internal object ChineseStrings : Strings {
             "tinyfish" -> "需要 TinyFish 的 Key"
             "parallel" -> "需要 Parallel 的 Key"
             "parallel-mcp" -> "Parallel，走它的 MCP 接口"
+            "baizhi" -> "百炼 MCP；显式选择才会使用"
             "anysearch" -> "需要 AnySearch 的 Key"
             "xcrawl" -> "需要 XCrawl 的 Key"
             "brightdata" -> "需要 Bright Data 的 Key 和 Zone 名称"
