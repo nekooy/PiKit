@@ -954,7 +954,7 @@ private fun ChatPage(
                                     is TranscriptRow.Message -> when (val item = row.item) {
                                         is ChatItem.User -> UserBubble(item, text)
                                         is ChatItem.Assistant ->
-                                            AssistantBubble(item, text, row.showReasoning)
+                                            AssistantBubble(item, text, row.showReasoning, row.showMeta)
 
                                         is ChatItem.Tool -> ToolCard(item = item, text = text)
 
@@ -1257,6 +1257,24 @@ internal sealed interface TranscriptRow {
          * so it comes back with the turn.
          */
         val showReasoning: Boolean = true,
+        /**
+         * Whether this row draws the copy button and the timestamp under it.
+         *
+         * False for the step replies in the middle of a turn, and only ever for
+         * those: nothing reads it but the assistant row, so a prompt (which always
+         * wears both) and a row that draws no meta row at all — a tool card, a
+         * notice — are left at its default. A tool-using turn is several assistant
+         * messages — "let me look", a tool card, "here it is" — and the sentence in
+         * the middle is a fragment of the answer rather than an answer, so a copy
+         * glyph and a time under each of them made one answer read as three. The row
+         * that keeps both is the turn's own
+         * [pi.kit.mob.pi.ChatTurn.finalReplyKey], which is what folding already
+         * collapses a finished turn to: a collapsed turn and an expanded one then
+         * agree about which message is the answer.
+         *
+         * See [MessageMeta] for what that costs.
+         */
+        val showMeta: Boolean = true,
     ) : TranscriptRow {
         override val key: String get() = item.key
     }
@@ -1333,6 +1351,14 @@ internal fun transcriptRows(
 
     val now = System.currentTimeMillis()
     val rows = ArrayList<TranscriptRow>(items.size + state.turns.size)
+
+    // The rows that may draw the copy button and the timestamp: every turn's own
+    // answer, which is the key folding already collapses to. Nothing else about the
+    // turn is needed for the decision — `finalReplyKey` is by definition the last
+    // message with text inside the turn — so this is a set lookup on the row rather
+    // than a scan of the turn's items per row.
+    val finalReplies = state.turns.mapNotNullTo(HashSet()) { it.finalReplyKey }
+
     // One summary per turn.
     val summarised = BooleanArray(state.turns.size)
     fun summaryRow(turn: Int) = TranscriptRow.TurnSummary(
@@ -1378,7 +1404,17 @@ internal fun transcriptRows(
             return@forEachIndexed
         }
 
-        rows += TranscriptRow.Message(item, showReasoning = !folded)
+        rows += TranscriptRow.Message(
+            item,
+            showReasoning = !folded,
+            // A prompt always, a reply only when it is what its turn settled on. A
+            // message attributed to no turn at all — the leading assistant greeting
+            // a resumed session can open with (`replaceWithMessages` deliberately
+            // leaves those outside every turn) — is nobody's step, so it keeps the
+            // row: with one assistant message and no question, dropping it would
+            // leave no way to copy the only thing on the page.
+            showMeta = item !is ChatItem.Assistant || turn < 0 || item.key in finalReplies,
+        )
 
         if (record != null && record.isComplete && isPrompt && !summarised[turn]) {
             summarised[turn] = true
@@ -1705,6 +1741,27 @@ private const val PROMPT_MAX_SHARE = 0.86f
 /**
  * What a message carries under it: when it was sent, and a copy button.
  *
+ * ## Which messages wear it
+ *
+ * A prompt and **the reply its turn settled on** — nothing else. Every message used
+ * to, and a tool-using turn is five or six assistant messages: "let me look at the
+ * file", a tool card, "found it", another card, the answer. Under each of those sat
+ * a copy glyph and a time, so one answer read as five, and the furniture was denser
+ * than the text it belonged to. The row that keeps both is the one folding already
+ * treats as the turn's answer (`ChatTurn.finalReplyKey`), which is what makes a
+ * collapsed turn and an expanded one agree about which message is the answer —
+ * expanding a turn adds the steps, it does not move the button.
+ *
+ * The prompt keeps both: it is a message the reader wrote, and its time is the only
+ * record of when the question was asked.
+ *
+ * What that costs is worth naming. [transcriptContextMenu] drops the platform's own
+ * "Select all" — a `LazyColumn`'s uncomposed items cannot be reached by it — and
+ * the per-message button was the compensation. A *turn* still has one, at its
+ * answer, so copying what was asked and what was answered is unchanged; copying a
+ * mid-turn fragment, or a leading assistant greeting that belongs to no turn, means
+ * dragging a selection over it.
+ *
  * ## Why the row is not always drawn
  *
  * A message with no timestamp — a restored session whose records carried none, or a
@@ -1854,6 +1911,8 @@ private fun AssistantBubble(
     item: ChatItem.Assistant,
     text: Strings,
     showReasoning: Boolean = true,
+    /** See [TranscriptRow.Message.showMeta]: false for a turn's intermediate steps. */
+    showMeta: Boolean = true,
 ) {
     // `rememberSaveable`: a `LazyColumn` disposes the rows that scroll out of its
     // viewport, so a plain `remember` lost the opened reasoning block — the reader
@@ -1921,12 +1980,17 @@ private fun AssistantBubble(
 
         // Under everything the message has, and after the error: a failed answer's
         // copy button is how the reader gets the partial reply and its error out of
-        // the app, which is exactly when they want it.
-        MessageMeta(
-            item = item,
-            text = text,
-            alignment = Alignment.Start,
-        )
+        // the app, which is exactly when they want it. Only the reply that ends the
+        // turn draws it — the steps in between are fragments, and their own buttons
+        // were what made a turn read as three separate answers (see
+        // [TranscriptRow.Message.showMeta]).
+        if (showMeta) {
+            MessageMeta(
+                item = item,
+                text = text,
+                alignment = Alignment.Start,
+            )
+        }
     }
 }
 
