@@ -72,6 +72,25 @@ class TermuxEnv private constructor(context: Context) {
     val home: File = File(filesDir, "home")
 
     /**
+     * `$HOME/export` — what a reply's own `/export` writes.
+     *
+     * Under `$HOME` and not hidden, because the Files tab is rooted at `$HOME` and
+     * a folder nobody can see is a folder nobody opens. Named here rather than
+     * spelled at its call site because the backup page names it too, and a second
+     * spelling of one path is how a backup comes to miss a directory.
+     */
+    val exportDir: File = File(home, EXPORT_DIR_NAME)
+
+    /**
+     * `files/pi-sessions` — the conversation transcripts pi writes.
+     *
+     * Outside `$HOME` on purpose: a user who changes the working directory, or
+     * deletes it, must not take their history with it. Named here for the same
+     * reason as [exportDir] — the backup page and the session listing both need it.
+     */
+    val sessionDir: File = File(filesDir, SESSION_DIR_NAME)
+
+    /**
      * `$HOME/workspace` — where the agent is meant to work.
      *
      * The working directory used to default to `$HOME` itself, which put every
@@ -162,6 +181,12 @@ class TermuxEnv private constructor(context: Context) {
 
         /** The directory under `$HOME` the agent works in; see [workspace]. */
         const val WORKSPACE_DIR_NAME = "workspace"
+
+        /** Where a reply's `/export` writes; see [exportDir]. */
+        const val EXPORT_DIR_NAME = "export"
+
+        /** Where pi writes a conversation; see [sessionDir]. */
+        const val SESSION_DIR_NAME = "pi-sessions"
 
         /**
          * The prefix the bundled image was compiled for. Termux packages bake

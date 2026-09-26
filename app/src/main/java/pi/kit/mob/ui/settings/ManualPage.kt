@@ -66,6 +66,13 @@ import pi.kit.mob.ui.MarkdownText
  *    runtime being ready, and the Agent page is where the process is started, stopped
  *    and restarted — so a copy here was a third place to read them that could disagree.
  *  * **Not repeated:** the licence and the credits are still sections of this page.
+ *
+ * The two cards are split by what a row belongs *to*, not by which page it came from:
+ * **应用** is the app and its own facts, **运行环境** is the runtime the app carries. pi's
+ * version and the tool list therefore sit in the second, because both live inside
+ * `$PREFIX` and arrive with the unpacked image. Under the app's own version row they
+ * read as three versions of one thing released together — which is the confusion §3
+ * exists to prevent, and the reason the image's revision is the row they now sit under.
  */
 @Composable
 internal fun AboutPage(
@@ -108,26 +115,6 @@ internal fun AboutPage(
                     // every bug report are read against; it is monospace and
                     // wraps rather than being cut at one line.
                     monospace = true,
-                )
-                SettingsDivider()
-                SettingsRow(
-                    title = text.settings.bundledPi,
-                    subtitle = PiInstallation.CLI_ENTRY_RELATIVE,
-                    icon = Icons.Filled.Build,
-                    value = PiInstallation.installedVersion(env) ?: text.settings.unknown,
-                    // 74 characters of path. It measured 699 px on one line and
-                    // fits at font scale 1.0 only; monospace and three lines is
-                    // what keeps it readable when the user's font is larger.
-                    monospace = true,
-                    monospaceValue = true,
-                )
-                SettingsDivider()
-                SettingsRow(
-                    title = text.settings.bundledTools,
-                    subtitle = tools.entries.joinToString(", ") { (tool, present) ->
-                        if (present) tool else "$tool (${text.settings.bundledToolsMissing})"
-                    },
-                    icon = Icons.AutoMirrored.Filled.MenuBook,
                 )
                 SettingsDivider()
                 // The last row of this section rather than a section of its own: it
@@ -206,6 +193,35 @@ internal fun AboutPage(
                     // wrong in proportional type, and one line of it is wider than
                     // the value column is allowed to be.
                     monospaceValue = true,
+                )
+                SettingsDivider()
+                // The two rows about what the image *carries*, directly under the
+                // revision that names it. They were in the application section, and
+                // that was the wrong drawer: pi and `rg`/`fd` are not parts of this
+                // app — they live inside `$PREFIX`, they arrive with the unpacked
+                // image, and the row above says which image that is. Read together
+                // the three answer one question ("what runtime is this and what is in
+                // it"); split across two cards they answered two half-questions, and
+                // pi's version sat under "PiKit 0.2.1" as though the two came from the
+                // same place.
+                SettingsRow(
+                    title = text.settings.bundledPi,
+                    subtitle = PiInstallation.CLI_ENTRY_RELATIVE,
+                    icon = Icons.Filled.Build,
+                    value = PiInstallation.installedVersion(env) ?: text.settings.unknown,
+                    // 74 characters of path. It measured 699 px on one line and
+                    // fits at font scale 1.0 only; monospace and three lines is
+                    // what keeps it readable when the user's font is larger.
+                    monospace = true,
+                    monospaceValue = true,
+                )
+                SettingsDivider()
+                SettingsRow(
+                    title = text.settings.bundledTools,
+                    subtitle = tools.entries.joinToString(", ") { (tool, present) ->
+                        if (present) tool else "$tool (${text.settings.bundledToolsMissing})"
+                    },
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
                 )
                 SettingsDivider()
                 SettingsRow(

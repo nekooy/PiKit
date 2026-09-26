@@ -576,6 +576,66 @@ internal object EnglishStrings : Strings {
                 "has a key and that the model id exists for that provider. The manual has " +
                 "a longer checklist."
 
+        override val backupTitle = "Backup & restore"
+        override val backupSubtitle = "Export the data to a file, restore it later"
+        override val backupExportSection = "Export"
+        override val backupImportSection = "Import"
+        override val backupCategorySettings = "Basic settings"
+        override val backupCategorySettingsSubtitle =
+            "Theme, language, working directory, the tool-call guard, shared-storage access, " +
+                "and every other preference this app stores"
+        override val backupCategoryModels = "Models & providers"
+        override val backupCategoryModelsSubtitle =
+            "Every saved profile with the key in it, and the files pi reads them from: " +
+                "models.json, settings.json, web-search.json"
+        override val backupCategoryConversations = "All conversations"
+        override val backupCategoryConversationsSubtitle =
+            "Every saved conversation — one .jsonl per talk under pi-sessions — and which " +
+                "of them are pinned"
+        override val backupCategoryAgentPrompt = "Agent prompt"
+        override val backupCategoryAgentPromptSubtitle =
+            "\$HOME/.pi/agent/AGENTS.md — the file the Agent process page lets you edit"
+        override val backupCategoryWorkspace = "Workspace files"
+        override val backupCategoryWorkspaceSubtitle =
+            "Everything under \$HOME/workspace, which may be a whole project tree — the " +
+                "archive gets large"
+        override val backupCategoryExports = "HTML exports"
+        override val backupCategoryExportsSubtitle =
+            "The .html files /export wrote into \$HOME/export"
+        override val backupApiKeys = "Include API keys"
+        override val backupApiKeysSubtitle =
+            "Off strips the keys out of the model profiles and the search options. Turn it " +
+                "off when the file is going to someone else."
+        override val backupExport = "Export archive"
+        override fun backupExportRunning(entries: Int) = "Packing… $entries entries written"
+        override fun backupExportDone(name: String, entries: Int) =
+            "Wrote $name — $entries entries."
+        override val backupImport = "Choose an archive…"
+        override fun backupImportRunning(entries: Int) = "Reading the archive… $entries entries read"
+        override fun backupImportDone(entries: Int) =
+            "$entries entries restored. The agent was restarted on the restored configuration."
+        override val backupNotAnArchive =
+            "That file is not a PiKit backup, or it was written by a newer format."
+        override fun backupFailed(message: String) = "Failed: $message"
+        override val backupReviewTitle = "This archive holds"
+        override fun backupReviewFrom(version: String, date: String) =
+            "Written by PiKit $version on $date"
+        override val backupReviewKeys = "API keys included"
+        override val backupReviewNoKeys = "No API keys"
+        override val backupReviewEmpty = "There is nothing in this archive this build can restore."
+        override val backupImportConfirm = "Restore"
+        override val backupImportNote =
+            "A restore only overwrites files of the same name and deletes nothing: what is " +
+                "in the archive replaces what the device has, and every other file stays. " +
+                "The agent is stopped for the restore and started again on the restored " +
+                "configuration."
+        override val backupNothingSelected =
+            "Tick at least one group — an archive of nothing is an empty contents list."
+        override val backupNote =
+            "The archive does not carry the runtime itself: that is unpacked from the APK, " +
+                "so a reinstall brings it back. Where the file goes is up to the system file " +
+                "picker, so Downloads or a cloud drive both work."
+
         override val environment = "Runtime"
         override val prefix = "Prefix"
         override val home = "Home"

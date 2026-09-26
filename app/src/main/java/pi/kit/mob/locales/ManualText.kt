@@ -16,12 +16,12 @@ package pi.kit.mob.locales
  *
  * ## Structure
  *
- * Nine numbered sections, in the order a user needs them: what to set up, the
+ * Ten numbered sections, in the order a user needs them: what to set up, the
  * two ways to drive the agent (a prompt and a shell), the chat page, the
  * terminal, the files page, what the agent can reach, web search, a table of the
- * settings rows, and troubleshooting. Every section is a list, a table or a few
- * short paragraphs — a wall of prose is a screen the reader has to scroll past
- * without learning anything from its shape.
+ * settings rows, backup and restore, and troubleshooting. Every section is a
+ * list, a table or a few short paragraphs — a wall of prose is a screen the
+ * reader has to scroll past without learning anything from its shape.
  *
  * Brevity is a requirement here, not a preference: the manual is read on the
  * phone it documents, so a paragraph that could be a sentence is a screen the
@@ -300,10 +300,57 @@ of it.
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
 | Agent process | Start, stop, restart, working directory, AGENTS.md |
+| Backup & restore | What to pack into one file, and putting it back |
 | Maintenance & repair | Model list, relocation, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
 
-## 9. Troubleshooting
+## 9. Backup and restore
+
+Uninstalling PiKit deletes the profiles and
+their keys, every conversation and the whole
+workspace, and the app deliberately keeps none
+of it in a cloud backup. **Settings → Backup &
+restore** is therefore the only way to keep
+them.
+
+The export card lists six groups — basic
+settings (the storage grant included), models
+and providers, all conversations and their pins,
+AGENTS.md, workspace files, HTML exports. The
+first three are ticked to begin with; the other
+three are off because the workspace alone can be
+a whole project tree. Tick what you want and
+press **Export archive**. The system's own file
+picker asks where to put it, so Downloads, a
+cloud drive or an SD card all work; nothing else
+on the device is touched.
+
+**Include API keys** is on unless you turn it
+off. With it off the archive carries no key at
+all: the model profiles and the search options
+are written without them, and the archive's own
+contents list records which of the two you made.
+
+Restoring is the same list. **Choose an
+archive…** reads the file and shows you what is
+inside it —which groups, which day, which app
+version, and whether keys are in it — before
+anything is applied. A restore overwrites files
+of the same name and deletes nothing: your
+current conversations and workspace files stay,
+and the ones in the archive join them.
+Conversations keep their own dates, so the
+history list reads the same as it did on the
+device they came from. The agent stops for the
+restore and starts again on the restored
+configuration.
+
+The archive does not carry the runtime itself.
+`usr` is hundreds of megabytes rebuilt out of
+the APK, so reinstalling is what brings that
+back.
+
+## 10. Troubleshooting
 
 **The agent will not start.** Check the
 profile's key and model; **Settings → Agent

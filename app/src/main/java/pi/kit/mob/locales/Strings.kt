@@ -1062,6 +1062,97 @@ interface Strings {
         val stopAgent: String
         val failedStartNote: String
 
+        // Backup & restore: the row between the agent process and the maintenance
+        // pair, and the page behind it.
+        //
+        // The page exists because uninstalling takes everything with it — the
+        // profiles with their keys, every conversation, the workspace — and
+        // `android:allowBackup="false"` is deliberate, so the platform will not put
+        // any of it back. This is the only way a user has to keep it.
+        val backupTitle: String
+
+        /**
+         * The row's caption on the tab root, and the page's own subtitle.
+         *
+         * Short enough to stay on **one line** in the value-less row it sits in: the
+         * first version was a sentence ("pack a selection of it into one file, and
+         * put it back later") and drew two lines at every font scale, which is a
+         * shape no other row on that page has and reads as a different kind of row.
+         * The page's own header has room for a longer sentence and takes its own
+         * string if it ever wants one.
+         */
+        val backupSubtitle: String
+        val backupExportSection: String
+        val backupImportSection: String
+
+        /** The six tick boxes: what each group is, and what is inside it. */
+        val backupCategorySettings: String
+        val backupCategorySettingsSubtitle: String
+        val backupCategoryModels: String
+        val backupCategoryModelsSubtitle: String
+        val backupCategoryConversations: String
+        val backupCategoryConversationsSubtitle: String
+        val backupCategoryAgentPrompt: String
+        val backupCategoryAgentPromptSubtitle: String
+        val backupCategoryWorkspace: String
+        val backupCategoryWorkspaceSubtitle: String
+        val backupCategoryExports: String
+        val backupCategoryExportsSubtitle: String
+
+        /**
+         * Whether the archive carries the API keys.
+         *
+         * On by default, because a backup that cannot bring the agent back is not a
+         * backup; off is for one that is going to be handed to someone else, and
+         * the caption says so rather than leaving the user to work it out. What it
+         * takes out per file is `BackupArchive`'s business — a key in a profile, a
+         * key in the web-access extension's options — and the answer travels in the
+         * archive's manifest, so the reader of an archive someone else made is told
+         * which of the two they have instead of inferring it from an empty field.
+         */
+        val backupApiKeys: String
+        val backupApiKeysSubtitle: String
+
+        /** The button that writes the archive, and what it says while and after. */
+        val backupExport: String
+
+        /**
+         * Shown while the archive is being written.
+         *
+         * [entries] is how many have gone in so far, which is the only progress
+         * there is: a workspace backup walks thousands of files, and a button that
+         * only greys out reads as a button that did nothing. The same shape
+         * [relocateScanning] has, for the same reason.
+         */
+        fun backupExportRunning(entries: Int): String
+        fun backupExportDone(name: String, entries: Int): String
+
+        /** The button that picks one to read back, and what it says. */
+        val backupImport: String
+        fun backupImportRunning(entries: Int): String
+        fun backupImportDone(entries: Int): String
+        val backupNotAnArchive: String
+        fun backupFailed(message: String): String
+
+        /** The review, shown once a picked archive has been read. */
+        val backupReviewTitle: String
+        fun backupReviewFrom(version: String, date: String): String
+        val backupReviewKeys: String
+        val backupReviewNoKeys: String
+        val backupReviewEmpty: String
+        val backupImportConfirm: String
+
+        /**
+         * What a restore does to what is already on the device.
+         *
+         * An entry replaces the file of that name and nothing is deleted, which is
+         * the one fact a user has to know before pressing the button — "restore"
+         * sounds like it wipes first, and it does not.
+         */
+        val backupImportNote: String
+        val backupNothingSelected: String
+        val backupNote: String
+
         // About PiKit: the app's own facts and, since the environment's page was
         // folded into it, what the runtime is and where it lives.
         val environment: String
