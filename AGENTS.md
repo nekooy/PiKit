@@ -210,6 +210,19 @@ then five more sets — before an SVG pasted into the conversation (`ic_copy.xml
 `ic_check.xml` is Lucide's check at about the weight of its walls, and `CopyButton.kt` is the one
 composable both copy buttons use. ARCHITECTURE §12.3 has the four rounds.
 
+**A launcher icon is a manifest resource, so offering a choice of one is offering a choice of entry
+point.** The manifest declares one `activity-alias` per icon over `MainActivity` — today
+`pi.kit.mob.ui.LauncherDark` and `pi.kit.mob.ui.LauncherLight` — and the activity carries **no**
+`MAIN`/`LAUNCHER` filter of its own, because with one it is a third home-screen entry.
+`data/LauncherIcon.kt` is the only thing that enables one and disables the other, and it names both
+aliases as strings: renaming one in the manifest is renaming it there too, or the choice silently
+does nothing. A third icon is a third alias, a third `@mipmap/ic_launcher*` pair, one more enum
+entry with its own `declaredEnabled`, and one more line in each catalog. The two foregrounds must
+be one mark — `ic_launcher_foreground_light.xml` is `ic_launcher_foreground.xml`'s path data and
+nothing else — and `tools/render-icon.py` fails the build on divergence, including the case where
+the white icon's ink is the field it is drawn on, in both of its modes rather than only under
+`--check`. ARCHITECTURE §9.2 has the rest.
+
 **`Modifier.fillMaxWidth()` sets the *minimum* width, not just the maximum.** Inside a
 parent that caps the width — `Box(Modifier.widthIn(max = …))` over a `BoxWithConstraints`
 — it therefore asks for exactly the cap and gets it, which is how a two-character prompt

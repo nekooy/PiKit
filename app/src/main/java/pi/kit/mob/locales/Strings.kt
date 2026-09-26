@@ -568,10 +568,11 @@ interface Strings {
         val languageSubtitle: String
 
         /**
-         * Personalization: how a launch lands, and which palette draws it.
+         * Personalization: how a launch lands, which palette draws it, and which
+         * of the two marks the home screen shows.
          *
-         * Neither is about the agent, so they share one page rather than sitting
-         * as two one-row pages on the root.
+         * None of the three is about the agent, so they share one page rather than
+         * sitting as three one-row pages on the root.
          */
         val personalization: String
         val personalizationSubtitle: String
@@ -592,7 +593,30 @@ interface Strings {
         val themeLight: String
         val themeDark: String
 
-        /** Under the two rows: what "cold start" means here, and when a theme change applies. */
+        /**
+         * The launcher icon: the black mark or the white one.
+         *
+         * Named by their colours rather than by "light" and "dark", because the
+         * two words the theme row above uses already mean the interface palette,
+         * and the icon does not follow it — a user on the light theme can have the
+         * black icon.
+         */
+        val launcherIcon: String
+        val launcherIconSubtitle: String
+        val launcherIconBlack: String
+        val launcherIconWhite: String
+
+        /**
+         * The icon picker's footnote: what happens to the home screen on a switch.
+         *
+         * The icon is not repainted but *re-declared*, so the launcher is free to
+         * take a moment over it and to put it somewhere other than where it was.
+         * Saying so in advance is the whole of the difference between a preference
+         * and a fault.
+         */
+        val launcherIconFootnote: String
+
+        /** Under the rows: what "cold start" means here, and when a theme change applies. */
         val personalizationNote: String
         val essentials: String
         val advancedSection: String

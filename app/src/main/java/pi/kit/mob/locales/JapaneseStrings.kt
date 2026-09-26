@@ -259,7 +259,7 @@ internal object JapaneseStrings : Strings {
         override val language = "言語"
         override val languageSubtitle = "インターフェースの表示言語"
         override val personalization = "パーソナライズ"
-        override val personalizationSubtitle = "起動時の挙動とテーマ"
+        override val personalizationSubtitle = "起動時の挙動・テーマ・アプリアイコン"
         override val personalizationConversation = "会話"
         override val personalizationAppearance = "外観"
         override val openNewOnLaunch = "起動時に新しい会話を開く"
@@ -270,6 +270,13 @@ internal object JapaneseStrings : Strings {
         override val themeSystem = "システムに合わせる"
         override val themeLight = "ライト"
         override val themeDark = "ダーク"
+        override val launcherIcon = "アプリアイコン"
+        override val launcherIconSubtitle = "ホーム画面での見た目"
+        override val launcherIconBlack = "黒地に白"
+        override val launcherIconWhite = "白地に黒"
+        override val launcherIconFootnote =
+            "切り替えるとホーム画面のアイコンが作り直されます。ランチャーによっては" +
+                "反映に数秒かかり、アイコンの位置が変わることがあります。"
         override val personalizationNote =
             "「起動時」とは、アプリを完全に閉じてから開き直すときです。セッション途中の" +
                 "エージェント再起動（設定変更など）では、いまの会話が続きます。テーマは" +

@@ -100,7 +100,11 @@ your time*, which is the list a change is written against.
   after a re-measurement).
 - **The README icon is generated** (`tools/render-icon.py`), and the build fails when
   it and the launcher icon have drifted apart. Edit the vector, regenerate, commit
-  both.
+  both. The same script holds the app's *two* launcher icons to being one mark: the
+  white one is the black one's path data in the opposite ink, and it fails on a
+  difference in the geometry, in a `fillType`, or in an ink that is the field it is
+  drawn on — in both of the script's modes, because that is a property of two files
+  rather than of the SVG.
 - **Rejected designs are not deleted.** When a behaviour is removed, its reasoning
   moves into the chapter that describes it, with the number that settled it.
 - **Nothing in this repository writes to git on its own.** Commits, tags and

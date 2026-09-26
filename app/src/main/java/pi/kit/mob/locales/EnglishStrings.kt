@@ -282,7 +282,7 @@ internal object EnglishStrings : Strings {
         override val language = "Language"
         override val languageSubtitle = "The language of the interface"
         override val personalization = "Personalization"
-        override val personalizationSubtitle = "Launch behaviour and theme"
+        override val personalizationSubtitle = "Launch behaviour, theme and app icon"
         override val personalizationConversation = "Conversation"
         override val personalizationAppearance = "Appearance"
         override val openNewOnLaunch = "Open a new conversation on launch"
@@ -293,6 +293,13 @@ internal object EnglishStrings : Strings {
         override val themeSystem = "Follow system"
         override val themeLight = "Light"
         override val themeDark = "Dark"
+        override val launcherIcon = "App icon"
+        override val launcherIconSubtitle = "How it looks on the home screen"
+        override val launcherIconBlack = "White on black"
+        override val launcherIconWhite = "Black on white"
+        override val launcherIconFootnote =
+            "Switching recreates the icon on your home screen: some launchers take " +
+                "a few seconds to catch up, and may move it somewhere else."
         override val personalizationNote =
             "A cold start is opening the app after it has been fully closed. Restarting the " +
                 "agent mid-session (after a settings change, say) still keeps the conversation " +

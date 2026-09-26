@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The same Pi mark, inked black for the white icon the personalization page
+    offers (`LauncherIcon.LIGHT`). The geometry is *not* redrawn: the path data,
+    the evenOdd bowl and the group's translation are `ic_launcher_foreground`'s
+    character for character, and the fill colour is the only difference — which
+    is the one thing a vector cannot inherit from another vector, and the reason
+    this is a second file rather than a second colour somewhere.
+
+    A second copy is a thing that drifts, so the copy is checked rather than
+    trusted: `tools/render-icon.py` reads both files, compares their path data
+    and their translation, and fails the build when they disagree. A glyph that
+    was edited in one of them and not the other is two icons that are not the
+    same mark, and it is exactly the kind of change nobody re-reads this comment
+    to remember.
+
+    No `<monochrome>` of its own: the themed-icon layer is recoloured by the
+    system, so the black icon and the white icon share `ic_launcher_monochrome`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="5.3" android:translateY="-4.8">
+        <path
+            android:fillColor="#FF000000"
+            android:fillType="evenOdd"
+            android:pathData="M29.9,40 L58.1,40 L58.1,58.8 L48.7,58.8 L48.7,68.2 L39.3,68.2 L39.3,77.6 L29.9,77.6 Z M39.3,49.4 L39.3,58.8 L48.7,58.8 L48.7,49.4 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M58.1,58.8 L67.5,58.8 L67.5,77.6 L58.1,77.6 Z" />
+    </group>
+</vector>

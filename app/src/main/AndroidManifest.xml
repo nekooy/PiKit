@@ -62,17 +62,61 @@
         android:theme="@style/Theme.PiKit"
         tools:targetApi="28">
 
+        <!--
+            The activity has no launcher filter of its own, and the two aliases
+            below are what the home screen shows.
+
+            A launcher icon is a *manifest* resource — there is no API that
+            changes one at run time — so a choice between two of them is a choice
+            between two entry points: one alias per icon, each naming its own,
+            and exactly one of them enabled. That enable/disable is `LauncherIcon`
+            in the app, through `PackageManager`; the aliases exist only for it.
+
+            `exported` stays true on the activity even though nothing filters to
+            it any more. The launcher resolves the *alias*, and an alias that
+            delegates to a component with a different visibility is one more
+            platform rule to be wrong about; leaving it as it was keeps this
+            change to the icon and nothing else.
+
+            The labels are spelled out on the aliases rather than left to the
+            target's, because the name under the icon is read off the alias and a
+            fallback that is documented but not obvious is the kind of thing that
+            goes missing in a merge.
+        -->
         <activity
             android:name=".ui.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode|density|fontScale"
             android:exported="true"
             android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity-alias
+            android:name=".ui.LauncherDark"
+            android:targetActivity=".ui.MainActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ui.LauncherLight"
+            android:targetActivity=".ui.MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_light"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round_light">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!--
             Owns the lifecycle of the agent child process (pi in RPC mode).
