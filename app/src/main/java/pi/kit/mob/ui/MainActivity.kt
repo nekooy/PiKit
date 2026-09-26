@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import pi.kit.mob.data.ThemeMode
+import pi.kit.mob.data.applyLauncherIcon
 import pi.kit.mob.pi.PiAgentService
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.theme.PiKitTheme
@@ -31,6 +32,20 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
             }
+
+            // The launcher icon is the system's to draw, so choosing one is a
+            // component switch rather than a redraw. Keyed on the preference,
+            // which makes one call do both jobs: it applies the choice the moment
+            // the picker is tapped, and it re-states it on every launch, where it
+            // writes nothing unless the installed aliases have drifted from it.
+            //
+            // Here rather than in `PiKitRoot`, whose body is not composed until
+            // the runtime is ready: this is two binder calls and has no business
+            // waiting for the image to unpack.
+            LaunchedEffect(settings.launcherIcon) {
+                applyLauncherIcon(this@MainActivity, settings.launcherIcon)
+            }
+
             PiKitTheme(darkTheme = darkTheme) {
                 // The foreground service is what keeps a long turn alive while the
                 // user is in another app, so it starts as soon as there is a frame

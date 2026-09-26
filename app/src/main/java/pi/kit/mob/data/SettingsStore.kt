@@ -370,6 +370,15 @@ data class PiSettings(
     /** Interface theme. Persisted here because it is not part of a profile. */
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
     /**
+     * Which launcher icon the home screen shows. Persisted here for the same
+     * reason [themeMode] is: it is not part of a profile.
+     *
+     * The app itself does not draw this — the system does, from the alias
+     * [applyLauncherIcon] enables — so the only thing this field decides is which
+     * alias it turns on.
+     */
+    val launcherIcon: LauncherIcon = LauncherIcon.DEFAULT,
+    /**
      * Whether PiKit's tool-call guard is in force.
      *
      * An environment fact rather than a preference the app acts on: the value is
@@ -510,6 +519,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
@@ -584,6 +594,7 @@ class SettingsStore(context: Context) {
             .putString(KEY_LANGUAGE, next.language.code)
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
             .putString(KEY_THEME, next.themeMode.code)
+            .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
             .putBoolean(KEY_SAFETY, next.safetyExtension)
             .apply()
         // The model fields are read back from the active profile rather than
@@ -596,6 +607,7 @@ class SettingsStore(context: Context) {
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
+            launcherIcon = next.launcherIcon,
             safetyExtension = next.safetyExtension,
         )
         return resolved
@@ -614,6 +626,7 @@ class SettingsStore(context: Context) {
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
+        launcherIcon: LauncherIcon = current.get().launcherIcon,
         safetyExtension: Boolean = current.get().safetyExtension,
     ): PiSettings {
         val next = current.updateAndGet {
@@ -629,6 +642,7 @@ class SettingsStore(context: Context) {
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
+                launcherIcon = launcherIcon,
                 safetyExtension = safetyExtension,
             )
         }
@@ -669,6 +683,9 @@ class SettingsStore(context: Context) {
 
         /** [ThemeMode.code]; absent means [ThemeMode.DEFAULT]. */
         private const val KEY_THEME = "theme_mode"
+
+        /** [LauncherIcon.code]; absent means [LauncherIcon.DEFAULT]. */
+        private const val KEY_LAUNCHER_ICON = "launcher_icon"
 
         /** True unless the user switched the tool-call guard off; see [PiSettings]. */
         private const val KEY_SAFETY = "safety_extension"

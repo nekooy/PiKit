@@ -4,6 +4,17 @@
     <!--
         The launcher icon is black with a white mark, so the window that appears
         before Compose draws matches the icon instead of flashing a lighter grey.
+
+        The icon the *default* is — the white one is a choice made from inside the
+        app, and the window the system puts up before the app runs is drawn from
+        this theme, which nothing at run time has been able to consult yet.
     -->
     <color name="ic_launcher_background">#FF000000</color>
+    <!--
+        The other face of that icon: the field the personalization page's second
+        choice paints behind the mark, with `ic_launcher_foreground_light`'s black
+        ink on it. Plain white rather than a near-white, because this is the whole
+        of what "on white" means on a home screen.
+    -->
+    <color name="ic_launcher_background_light">#FFFFFFFF</color>
 </resources>

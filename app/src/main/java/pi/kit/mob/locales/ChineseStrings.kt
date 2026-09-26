@@ -262,7 +262,7 @@ internal object ChineseStrings : Strings {
         override val language = "语言"
         override val languageSubtitle = "界面显示语言"
         override val personalization = "个性化"
-        override val personalizationSubtitle = "启动行为与界面主题"
+        override val personalizationSubtitle = "启动行为、界面主题与应用图标"
         override val personalizationConversation = "对话"
         override val personalizationAppearance = "外观"
         override val openNewOnLaunch = "冷启动时打开新对话"
@@ -272,6 +272,13 @@ internal object ChineseStrings : Strings {
         override val themeSystem = "跟随系统"
         override val themeLight = "浅色"
         override val themeDark = "深色"
+        override val launcherIcon = "应用图标"
+        override val launcherIconSubtitle = "桌面上的样子"
+        override val launcherIconBlack = "黑底白字"
+        override val launcherIconWhite = "白底黑字"
+        override val launcherIconFootnote =
+            "切换后桌面上的图标会被重新创建：有的桌面要过几秒才刷新，" +
+                "也可能把图标挪到别的位置。"
         override val personalizationNote =
             "「冷启动」指完全关闭后再次打开 App。中途重启 Agent（例如改了设置）" +
                 "仍会回到当前对话。主题改动立即生效。"
