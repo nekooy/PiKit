@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
@@ -51,6 +52,15 @@ internal sealed interface SettingsPage {
     data class ModelEdit(val profileId: String) : SettingsPage
 
     data object Maintenance : SettingsPage
+
+    /**
+     * Backing the app's own data up, and putting it back.
+     *
+     * A page of its own rather than a card on [Maintenance]: that page repairs a
+     * runtime rebuilt from the APK, where the worst outcome is a reinstall, and
+     * this one moves the only copy of the user's data. See `BackupPage`.
+     */
+    data object Backup : SettingsPage
 
     /** Which of the user's folders the agent may reach. */
     data object Storage : SettingsPage
@@ -129,6 +139,7 @@ private val SettingsPageSaver: Saver<SettingsPage, String> = Saver(
             // root rather than to a page this one does not have.
             encoded == "Advanced" -> SettingsPage.Root
             encoded == "Maintenance" -> SettingsPage.Maintenance
+            encoded == "Backup" -> SettingsPage.Backup
             encoded == "Storage" -> SettingsPage.Storage
             // Context is a section of the agent process page now. A state saved by
             // a build that had its own page lands there rather than at the root.
@@ -148,6 +159,7 @@ private fun SettingsPage.encode(): String = when (this) {
     is SettingsPage.ModelEdit -> "ModelEdit:$profileId"
     SettingsPage.Agent -> "Agent"
     SettingsPage.Maintenance -> "Maintenance"
+    SettingsPage.Backup -> "Backup"
     SettingsPage.Storage -> "Storage"
     SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
@@ -275,6 +287,11 @@ fun SettingsScreen(session: PiAgentSession) {
                     session = session,
                     catalogue = catalogue,
                     selfTest = storageSelfTest,
+                    onBack = { open(SettingsPage.Root) },
+                )
+
+                SettingsPage.Backup -> BackupPage(
+                    session = session,
                     onBack = { open(SettingsPage.Root) },
                 )
 
@@ -439,6 +456,21 @@ private fun RootPage(
                     icon = Icons.Filled.PlayArrow,
                     showChevron = true,
                     onClick = { onOpen(SettingsPage.Agent) },
+                )
+                SettingsDivider()
+                // Between the agent process and the maintenance pair, and that is
+                // where it belongs rather than a matter of taste: the two rows
+                // either side of it change things the APK can put back — the
+                // runtime, the process, the pi install — and this one is the only
+                // row on this page whose subject does not survive an uninstall.
+                // What the archive does *not* hold is the reason it sits with
+                // them: a backup is what you take before touching the other two.
+                SettingsRow(
+                    title = text.settings.backupTitle,
+                    subtitle = text.settings.backupSubtitle,
+                    icon = Icons.Filled.Backup,
+                    showChevron = true,
+                    onClick = { onOpen(SettingsPage.Backup) },
                 )
                 SettingsDivider()
                 SettingsRow(

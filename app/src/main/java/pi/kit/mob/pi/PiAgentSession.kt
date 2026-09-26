@@ -162,7 +162,8 @@ class PiAgentSession private constructor(context: Context) {
      */
     private val startLock = Mutex()
 
-    val sessionDir: File get() = File(env.filesDir, "pi-sessions")
+    /** Where pi writes a conversation; the path lives in [TermuxEnv] with the rest. */
+    val sessionDir: File get() = env.sessionDir
 
     /**
      * PTY sessions shown in the terminal tab.
@@ -1448,7 +1449,7 @@ class PiAgentSession private constructor(context: Context) {
     fun exportHtml() {
         runCommand {
             val current = client ?: return@runCommand
-            val directory = File(env.home, EXPORT_DIRECTORY).apply { mkdirs() }
+            val directory = env.exportDir.apply { mkdirs() }
             val stem = conversation.value.sessionFile?.let { File(it).nameWithoutExtension }
                 ?.takeIf { it.isNotBlank() }
                 ?: "session"
@@ -1711,6 +1712,68 @@ class PiAgentSession private constructor(context: Context) {
 
     fun clearRepairResult() {
         _repair.value = null
+    }
+
+    // ----------------------------------------------------------------- backup
+
+    /**
+     * Exporting the app's own data to a file, and putting it back.
+     *
+     * Owned by the session rather than by the settings page that draws it, for the
+     * same reason [repairInstalledPackages] is: a run is long — a workspace backup
+     * is a whole project tree — and the page is one tab that leaves the composition
+     * the moment the user looks at another one. See [BackupManager].
+     */
+    val backup: BackupManager by lazy { BackupManager(appContext, env, scope, this) }
+
+    /**
+     * Re-reads everything a restore may have changed underneath this process.
+     *
+     * Every store in this app read its file once, when the process started, and
+     * every one of them then holds a *copy*: `SharedPreferences` hands out a single
+     * cached instance to whoever asks, [SettingsStore] publishes a `StateFlow` built
+     * from an `AtomicReference`, and the conversation listing caches what it parsed.
+     * Writing the files is only half a restore; this is the other half, and without
+     * it a restored theme, language, model or conversation looks exactly like a
+     * restore that did nothing at all.
+     *
+     * Called once the files are in place and **before** the agent is started again:
+     * the launch path rewrites `models.json` and `settings.json` from the restored
+     * profile, so the profile has to be in memory by the time it runs.
+     *
+     * The restore is the only caller. Every other write in the app goes through the
+     * store that owns the file, and that is what keeps each of them its one writer.
+     */
+    suspend fun reloadAfterRestore() {
+        settingsStore.reload()
+        // pi's own `web-search.json` travels with MODELS, and the store holds the
+        // document it read at startup — the search page would otherwise keep
+        // showing the old options while the file on disk was the restored one.
+        webSearch.reload()
+        // Entries are keyed by (path, modified, length), which a restored file
+        // usually misses on; cleared because an extracted file's mtime is the
+        // moment it was extracted, and two restores in the same second would
+        // otherwise be served the first one's metadata.
+        sessionMetaCache.clear()
+        reloadPinnedSessions()
+        // The policy decides which of the phone's own folders are linked into
+        // `$HOME`, so a restored one changes the tree the agent sees, not just the
+        // list on the storage page.
+        syncStorageLinks()
+        // The welcome banner is written in the interface language: a restored
+        // language has to reach the shell as well as the screen.
+        refreshTerminalBanner()
+    }
+
+    /**
+     * Re-reads the pin set.
+     *
+     * The preferences instance is shared with the write path, so its values are
+     * already the restored ones; the flow beside it is a copy taken at
+     * construction, and the history page reads *that*.
+     */
+    private fun reloadPinnedSessions() {
+        _pinnedSessions.value = pinnedPrefs.getStringSet(KEY_PINNED, emptySet()).orEmpty().toSet()
     }
 
     /**
@@ -1990,16 +2053,8 @@ class PiAgentSession private constructor(context: Context) {
         internal const val CATALOGUE_STORE_NAME = "models-store.json"
 
         /**
-         * Where `/export` writes its HTML, under `$HOME`.
-         *
-         * `$HOME/export` rather than a hidden directory, because the Files tab is
-         * rooted at `$HOME` and a folder nobody can see is a folder nobody opens.
-         * pi is handed an absolute path inside the runtime's own filesystem, which
-         * is the same filesystem this process writes the runtime into.
+         * pi entry ids are eight hex characters.
          */
-        private const val EXPORT_DIRECTORY = "export"
-
-        /** pi entry ids are eight hex characters. */
         private val ENTRY_ID_ALPHABET = ('0'..'9') + ('a'..'f')
 
         /** How much of a session file's tail to read when finding its last id. */

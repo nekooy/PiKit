@@ -405,6 +405,25 @@ class ProfileStore(
         applyToSettings(activeProfile)
     }
 
+    /**
+     * Re-reads the file and applies it.
+     *
+     * For the restore path, which writes `pikit-config.json` itself: this store
+     * holds the only snapshot the launcher reads, so a file that changed underneath
+     * it would otherwise be a profile set the app believed in until the next
+     * launch — the row on the settings page would keep naming the old model, and
+     * the agent would be started with the old provider, while the file said
+     * otherwise.
+     *
+     * Not for any other caller. Every other change to this document goes through
+     * [upsert], [setActive] or [delete], and that is what keeps this class the
+     * file's one writer.
+     */
+    fun reload() {
+        _snapshot.value = loadOrMigrate()
+        applyActive()
+    }
+
     private fun commit(next: PiConfigSnapshot): Boolean {
         _snapshot.value = next
         applyActive()

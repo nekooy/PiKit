@@ -514,7 +514,7 @@ class SettingsStore(context: Context) {
         PiSettings(
             // Only the values that are not part of a profile come from
             // preferences; the model fields arrive with the active profile.
-            thinkingLevel = prefs.getString(KEY_THINKING, "medium").orEmpty().ifBlank { "medium" },
+            thinkingLevel = thinkingLevel(),
             workingDir = prefs.getString(KEY_WORKDIR, "").orEmpty(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -613,6 +613,40 @@ class SettingsStore(context: Context) {
         return resolved
     }
 
+    /** The thinking level stored in preferences, or the default when none is. */
+    private fun thinkingLevel(): String =
+        prefs.getString(KEY_THINKING, DEFAULT_THINKING_LEVEL).orEmpty().ifBlank { DEFAULT_THINKING_LEVEL }
+
+    /**
+     * Re-reads preferences and the profile file and publishes the result.
+     *
+     * The restore path needs this and nothing else does. This store is the only
+     * reader of `pikit_settings`, and it read the file once, when the process
+     * started; `SharedPreferences` hands the same cached instance to everyone, so a
+     * restore that wrote through it would leave every value on screen — the theme,
+     * the language, the working directory — exactly as it was at launch.
+     *
+     * The profile file is re-read through [ProfileStore.reload] rather than opened
+     * again here, so the store stays the one reader of its own file, and the order
+     * matters: the profiles' `applyToSettings` publishes the model fields by
+     * defaulting the rest to what is already published, so the preference fields
+     * have to be in place before it runs.
+     */
+    fun reload(): PiSettings {
+        profiles.reload()
+        return publish(
+            thinkingLevel = thinkingLevel(),
+            availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
+            availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
+            workingDir = prefs.getString(KEY_WORKDIR, "").orEmpty(),
+            language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
+            openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
+            themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
+            safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
+        )
+    }
+
     /** Replaces the snapshot and pushes it to observers. */
     private fun publish(
         provider: PiProvider? = current.get().provider,
@@ -673,6 +707,16 @@ class SettingsStore(context: Context) {
         private const val KEY_MODEL = "model"
         private const val KEY_API_KEY = "api_key"
         private const val KEY_THINKING = "thinking_level"
+
+        /**
+         * What pi is asked for when nothing has been chosen.
+         *
+         * Named rather than written at both call sites: the constructor and
+         * [reload] both have to answer this, and two spellings of the default is a
+         * restore that changes the thinking level by accident.
+         */
+        private const val DEFAULT_THINKING_LEVEL = "medium"
+
         private const val KEY_LEVELS = "thinking_levels"
         private const val KEY_LEVELS_FOR = "thinking_levels_for"
         private const val KEY_WORKDIR = "working_dir"

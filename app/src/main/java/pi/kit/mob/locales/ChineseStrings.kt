@@ -517,6 +517,57 @@ internal object ChineseStrings : Strings {
             "启动失败几乎总是配置问题：确认当前配置填写了 Key，并且该供应商确实存在这个模型 ID。" +
                 "手册里有更完整的排查清单。"
 
+        override val backupTitle = "备份与恢复"
+        override val backupSubtitle = "把数据打包导出，需要时倒回"
+        override val backupExportSection = "导出"
+        override val backupImportSection = "导入"
+        override val backupCategorySettings = "基础设置"
+        override val backupCategorySettingsSubtitle =
+            "主题、语言、工作目录、工具调用守卫、共享存储授权，以及本应用保存的其他全部偏好"
+        override val backupCategoryModels = "模型与供应商配置"
+        override val backupCategoryModelsSubtitle =
+            "每个已保存的配置档案和其中的 Key，以及 pi 读取的 models.json、settings.json、" +
+                "web-search.json"
+        override val backupCategoryConversations = "全部历史对话"
+        override val backupCategoryConversationsSubtitle =
+            "pi-sessions 目录下的每一个 .jsonl 会话记录，以及哪些对话被置顶"
+        override val backupCategoryAgentPrompt = "Agent 提示词"
+        override val backupCategoryAgentPromptSubtitle =
+            "\$HOME/.pi/agent/AGENTS.md，就是「Agent 进程」里可以编辑的那份"
+        override val backupCategoryWorkspace = "工作区文件"
+        override val backupCategoryWorkspaceSubtitle =
+            "\$HOME/workspace 下的全部内容——可能是一整个项目目录，备份包会很大"
+        override val backupCategoryExports = "HTML 导出"
+        override val backupCategoryExportsSubtitle =
+            "\$HOME/export 下由 /export 生成的 HTML 文件"
+        override val backupApiKeys = "包含 API Key"
+        override val backupApiKeysSubtitle =
+            "不勾选时会从备份包里去掉模型配置和搜索选项中的 Key。想把这个文件发给别人" +
+                "排查问题时关掉它。"
+        override val backupExport = "导出备份包"
+        override fun backupExportRunning(entries: Int) = "正在打包…已写入 $entries 项"
+        override fun backupExportDone(name: String, entries: Int) =
+            "已导出 $name，共 $entries 项。"
+        override val backupImport = "选择备份包…"
+        override fun backupImportRunning(entries: Int) = "正在读取备份包…已处理 $entries 项"
+        override fun backupImportDone(entries: Int) = "已恢复 $entries 项。Agent 已按新配置重启。"
+        override val backupNotAnArchive = "这个文件不是 PiKit 的备份包，或者版本比本应用新。"
+        override fun backupFailed(message: String) = "失败：$message"
+        override val backupReviewTitle = "备份包里有"
+        override fun backupReviewFrom(version: String, date: String) =
+            "由 PiKit $version 于 $date 生成"
+        override val backupReviewKeys = "包含 API Key"
+        override val backupReviewNoKeys = "不含 API Key"
+        override val backupReviewEmpty = "这个备份包里没有本应用能恢复的内容。"
+        override val backupImportConfirm = "恢复"
+        override val backupImportNote =
+            "恢复只覆盖同名文件，不会删除任何东西：备份包里的文件会盖掉设备上的同名文件，" +
+                "其余文件原样保留。恢复期间 Agent 会先停止，结束后按恢复的配置重新启动。"
+        override val backupNothingSelected = "至少勾选一类，否则备份包里只有一个空名单。"
+        override val backupNote =
+            "备份包不带运行环境本身——它由 APK 解包得到，重新安装就有了。文件位置由系统" +
+                "文件选择器决定，可以放进下载目录或网盘。"
+
         override val environment = "运行环境"
         override val prefix = "前缀目录"
         override val home = "主目录"

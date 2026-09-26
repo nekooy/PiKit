@@ -541,6 +541,60 @@ internal object JapaneseStrings : Strings {
                 "そのプロバイダーにモデル ID が存在するかを確認してください。" +
                 "マニュアルに詳しいチェックリストがあります。"
 
+        override val backupTitle = "バックアップと復元"
+        override val backupSubtitle = "ファイルに書き出して、戻せるように"
+        override val backupExportSection = "エクスポート"
+        override val backupImportSection = "インポート"
+        override val backupCategorySettings = "基本設定"
+        override val backupCategorySettingsSubtitle =
+            "テーマ、言語、作業ディレクトリ、ツール呼び出しガード、共有ストレージの許可など、" +
+                "このアプリが保存する設定の全部"
+        override val backupCategoryModels = "モデルとプロバイダー"
+        override val backupCategoryModelsSubtitle =
+            "保存済みの各プロファイルとそのキー、および pi が読む models.json、settings.json、" +
+                "web-search.json"
+        override val backupCategoryConversations = "会話履歴の全部"
+        override val backupCategoryConversationsSubtitle =
+            "pi-sessions にある .jsonl を 1 件ずつ、すべてと、どれをピンしているか"
+        override val backupCategoryAgentPrompt = "エージェントのプロンプト"
+        override val backupCategoryAgentPromptSubtitle =
+            "\$HOME/.pi/agent/AGENTS.md。「エージェントのプロセス」で編集できるファイルです"
+        override val backupCategoryWorkspace = "ワークスペースのファイル"
+        override val backupCategoryWorkspaceSubtitle =
+            "\$HOME/workspace の内容すべて。プロジェクト一式のこともあり、アーカイブは大きくなります"
+        override val backupCategoryExports = "HTML エクスポート"
+        override val backupCategoryExportsSubtitle =
+            "/export が \$HOME/export に書き出した .html"
+        override val backupApiKeys = "API キーを含める"
+        override val backupApiKeysSubtitle =
+            "オフにすると、プロファイルと検索設定からキーを抜き取ります。このファイルを他の人に" +
+                "渡すときはオフにしてください。"
+        override val backupExport = "バックアップを作成"
+        override fun backupExportRunning(entries: Int) = "まとめています… $entries 件"
+        override fun backupExportDone(name: String, entries: Int) =
+            "$name に書き出しました（$entries 件）。"
+        override val backupImport = "バックアップを選ぶ…"
+        override fun backupImportRunning(entries: Int) = "アーカイブを読んでいます… $entries 件"
+        override fun backupImportDone(entries: Int) = "$entries 件を復元しました。エージェントは再起動済みです。"
+        override val backupNotAnArchive = "このファイルは PiKit のバックアップではないか、新しい形式です。"
+        override fun backupFailed(message: String) = "失敗：$message"
+        override val backupReviewTitle = "このバックアップの中身"
+        override fun backupReviewFrom(version: String, date: String) =
+            "PiKit $version が $date に作成"
+        override val backupReviewKeys = "API キーを含む"
+        override val backupReviewNoKeys = "API キーなし"
+        override val backupReviewEmpty = "このビルドで復元できる内容が入っていません。"
+        override val backupImportConfirm = "復元"
+        override val backupImportNote =
+            "復元は同名のファイルを上書きするだけで、何も削除しません。アーカイブの中身が端末の" +
+                "同名ファイルを置き換え、それ以外はそのまま残ります。復元の間はエージェントを停止し、" +
+                "終わってから復元後の設定で起動し直します。"
+        override val backupNothingSelected = "少なくとも 1 つ選んでください。空の一覧を書き出すだけになります。"
+        override val backupNote =
+            "アーカイブに実行環境そのものは入りません。APK から展開されるものなので、" +
+                "入れ直せば戻ります。保存先はシステムのファイル選択で決めるので、" +
+                "ダウンロードでもクラウドでも構いません。"
+
         override val environment = "実行環境"
         override val prefix = "プレフィックス"
         override val home = "ホーム"
