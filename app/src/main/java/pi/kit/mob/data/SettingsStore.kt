@@ -67,6 +67,7 @@ enum class PiProvider(val id: String, val envVar: String, val label: String) {
     KIMI_CODING("kimi-coding", "KIMI_API_KEY", "Kimi For Coding"),
     MINIMAX("minimax", "MINIMAX_API_KEY", "MiniMax"),
     MINIMAX_CN("minimax-cn", "MINIMAX_CN_API_KEY", "MiniMax CN"),
+    META("meta", "META_API_KEY", "Meta (Muse)"),
     XIAOMI("xiaomi", "XIAOMI_API_KEY", "Xiaomi (MiMo)"),
     XIAOMI_TOKEN_PLAN_CN("xiaomi-token-plan-cn", "XIAOMI_TOKEN_PLAN_CN_API_KEY", "Xiaomi Token Plan CN"),
     XIAOMI_TOKEN_PLAN_AMS("xiaomi-token-plan-ams", "XIAOMI_TOKEN_PLAN_AMS_API_KEY", "Xiaomi Token Plan AMS"),
