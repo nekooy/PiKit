@@ -68,6 +68,25 @@ class NormalizeApiBaseUrlTest {
     }
 
     @Test
+    fun `a query or fragment is stripped rather than appended to`() {
+        // `$base/models` is how every model-list URL is built. A query left in
+        // the base becomes `https://h/v1?x=1/models` — a path the provider never
+        // named — and the request fails for a URL that looked correct on screen.
+        assertEquals(
+            "https://relay.example.com/v1",
+            normalizeApiBaseUrl("https://relay.example.com/v1?token=abc"),
+        )
+        assertEquals(
+            "https://relay.example.com/v1",
+            normalizeApiBaseUrl("https://relay.example.com?token=abc"),
+        )
+        assertEquals(
+            "https://relay.example.com/v1",
+            normalizeApiBaseUrl("https://relay.example.com/v1#frag"),
+        )
+    }
+
+    @Test
     fun `a custom endpoint's registered baseUrl is completed`() {
         val provider = CustomEndpoint.providerObject(
             baseUrl = "https://relay.example.com",

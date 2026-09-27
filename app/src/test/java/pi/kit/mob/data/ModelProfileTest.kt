@@ -100,6 +100,59 @@ class ModelProfileTest {
     }
 
     /**
+     * The `api` field names the wire protocol a custom endpoint speaks.
+     *
+     * It used to be pinned to `openai-completions`, which made an
+     * Anthropic-shaped or Responses-shaped gateway unconfigurable: the request
+     * went out through the wrong client and the stream failed to parse. The
+     * default is unchanged, so a profile written before the field existed
+     * behaves exactly as it did.
+     */
+    @Test
+    fun `the api field is written through, and defaults to openai-completions`() {
+        val default = Json.parseToJsonElement(
+            CustomEndpoint.document("https://relay.example.com/v1", listOf("m"))!!,
+        ).jsonObject
+        assertEquals("openai-completions", default["api"]!!.jsonPrimitive.content)
+
+        CustomApi.entries.forEach { api ->
+            val provider = Json.parseToJsonElement(
+                CustomEndpoint.document(
+                    baseUrl = "https://relay.example.com/v1",
+                    modelIds = listOf("m"),
+                    api = api.id,
+                )!!,
+            ).jsonObject
+            assertEquals(api.id, provider["api"]!!.jsonPrimitive.content)
+        }
+    }
+
+    @Test
+    fun `an unknown api id falls back to the default rather than writing a name pi cannot resolve`() {
+        val provider = Json.parseToJsonElement(
+            CustomEndpoint.document(
+                baseUrl = "https://relay.example.com/v1",
+                modelIds = listOf("m"),
+                api = "openai-responses-typo",
+            )!!,
+        ).jsonObject
+        // Written through as typed — the form's picker only offers `CustomApi`'s
+        // ids, and a hand-edited profile is the user's own document. What must
+        // not happen is a *blank* reaching pi: that is the field's only
+        // unresolvable value.
+        assertEquals("openai-responses-typo", provider["api"]!!.jsonPrimitive.content)
+
+        val blank = Json.parseToJsonElement(
+            CustomEndpoint.document(
+                baseUrl = "https://relay.example.com/v1",
+                modelIds = listOf("m"),
+                api = "  ",
+            )!!,
+        ).jsonObject
+        assertEquals("openai-completions", blank["api"]!!.jsonPrimitive.content)
+    }
+
+    /**
      * The per-model settings are new fields on a file the user already has.
      *
      * A profile written before they existed must decode to "nothing said" rather than fail

@@ -76,6 +76,15 @@ data class ModelProfile(
      */
     @SerialName("baseUrl") val baseUrl: String = "",
     /**
+     * The wire protocol a custom endpoint speaks, one of [CustomApi]'s ids.
+     *
+     * Only meaningful for [PiProvider.CUSTOM]: a built-in provider's client is
+     * pi's own business and its models already name it. Blank means
+     * [CustomApi.DEFAULT_ID], which is what a profile written before this field
+     * existed resolves to — the behaviour those profiles already had.
+     */
+    @SerialName("api") val api: String = "",
+    /**
      * The endpoint override PiKit last wrote into pi's `models.json` for this
      * provider, which may differ from [baseUrl] after the field was cleared.
      *

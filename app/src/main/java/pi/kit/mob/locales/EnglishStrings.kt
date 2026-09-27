@@ -501,12 +501,31 @@ internal object EnglishStrings : Strings {
         override val baseUrlNote =
             "The base URL of the API, including any version segment the provider " +
                 "documents — for example https://relay.example.com/v1. The model id " +
-                "below is sent to this endpoint. A bare host gains /v1 automatically."
+                "below is sent to this endpoint. A bare host gains /v1 automatically." +
+                " The provider list's `Custom endpoint` row is a self-configured " +
+                "endpoint for any compatible relay, and its API protocol can be " +
+                "changed."
         override val baseUrlOptionalNote =
             "Optional. Leave empty to use the provider's own endpoint; fill it in to " +
                 "send requests through a proxy or relay (for example " +
-                "https://relay.example.com/v1). A bare host gains /v1 automatically."
+                "https://relay.example.com/v1). A bare host gains /v1 automatically." +
+                " The provider list's `Custom endpoint` row is a self-configured " +
+                "endpoint for any compatible relay, and its API protocol can be " +
+                "changed."
         override val needBaseUrl = "A custom endpoint needs its base URL."
+        override val invalidBaseUrl =
+            "The endpoint must be an http(s) URL with a host name, for example " +
+                "https://relay.example.com/v1. `localhost:11434` is missing its scheme."
+        override val apiType = "API"
+        override val apiTypeNote =
+            "The wire protocol this endpoint speaks. Most relays are " +
+                "`openai-completions`; pick `anthropic-messages` for an Anthropic-style " +
+                "gateway and `openai-responses` for a Responses-style one. The wrong " +
+                "choice produces a stream that fails to parse rather than a clear error."
+        override val modelsJsonWriteFailed =
+            "Could not write pi's models.json, so this profile's endpoint and model " +
+                "settings will not reach pi. Check the endpoint URL and the app's " +
+                "storage, then Retry."
         override val saveFailed =
             "Save failed: the config file could not be written. This change will be " +
                 "lost on the next launch."
@@ -528,6 +547,51 @@ internal object EnglishStrings : Strings {
         override val needProviderSubtitle =
             "Choose a provider first — a model id means nothing without one."
         override val needModel = "A model id is required before saving."
+
+        override fun discoveryProblem(problem: DiscoveryProblem): String = when (problem) {
+            DiscoveryProblem.NeedApiKey ->
+                "Enter an API key first — a model list cannot be fetched without one."
+            DiscoveryProblem.NeedBaseUrl ->
+                "Enter the endpoint's base URL first — the model list is fetched from " +
+                    "`<endpoint>/models`."
+            DiscoveryProblem.InvalidBaseUrl ->
+                "The endpoint is not a URL this app can use: it must be an http(s) URL " +
+                    "with a host name, for example https://relay.example.com/v1."
+            is DiscoveryProblem.NoModelsEndpoint ->
+                "${problem.provider} has no models endpoint pi knows how to read, so the " +
+                    "list comes from pi's own catalog — type the id by hand if it is missing."
+            is DiscoveryProblem.HttpRejected -> {
+                val head =
+                    "${problem.host} rejected the request: HTTP ${problem.code}" +
+                        problem.detail
+                if (problem.viaOverride) {
+                    head + "\n\nThis is the endpoint from the profile's URL field. A wrong " +
+                        "URL answers 401 just like a wrong key does — check the base URL " +
+                        "(it must be the API root, for example https://relay.example.com/v1) " +
+                        "before replacing the key."
+                } else {
+                    head
+                }
+            }
+            is DiscoveryProblem.NoModelIds ->
+                "${problem.host} answered with no model ids. It may have changed its " +
+                    "response format; pi's own catalog is used instead."
+            is DiscoveryProblem.Unreachable ->
+                "Could not reach ${problem.host}: ${problem.cause}"
+            is DiscoveryProblem.PiRefused ->
+                "pi refused to list models: ${problem.detail}"
+            is DiscoveryProblem.CatalogEmpty ->
+                "pi's catalog returned no models for ${problem.provider}. Type the model " +
+                    "id directly if you know it."
+            is DiscoveryProblem.CliMissing ->
+                "pi's catalog is not available either: the CLI is missing from the " +
+                    "bundled runtime."
+            is DiscoveryProblem.PiCannotStart ->
+                "pi could not start to read its catalog: ${problem.cause}"
+            DiscoveryProblem.ScratchDirFailed ->
+                "PiKit could not prepare the scratch agent directory pi reads its catalog " +
+                    "from."
+        }
         override val unsavedTitle = "Save your changes?"
         override val unsavedBody = "This profile has changes that have not been saved."
         override val discard = "Discard"
