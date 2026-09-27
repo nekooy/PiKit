@@ -41,10 +41,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import pi.kit.mob.data.CustomApi
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
 import pi.kit.mob.data.PiProvider
+import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.data.rememberedThinkingLevels
+import pi.kit.mob.locales.DiscoveryProblem
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.DiscoveredModel
@@ -351,6 +354,11 @@ internal fun ModelEditPage(
     var provider by remember { mutableStateOf(existing?.providerEntry) }
     var apiKey by remember { mutableStateOf(existing?.apiKey.orEmpty()) }
     var baseUrl by remember { mutableStateOf(existing?.baseUrl.orEmpty()) }
+    // The wire protocol a custom endpoint speaks. Only drawn for `pikit-custom`;
+    // a built-in provider's client is pi's own. Blank resolves to
+    // `CustomApi.DEFAULT_ID`, which is what a profile written before the field
+    // existed already did.
+    var api by remember { mutableStateOf(existing?.api.orEmpty()) }
 
     // The models this provider may answer with, and which of them the agent is
     // launched with. Held as a list rather than as one field because a provider is
@@ -371,6 +379,10 @@ internal fun ModelEditPage(
     var saveMessage by remember { mutableStateOf<String?>(null) }
 
     var fetching by remember { mutableStateOf(false) }
+    // The fetch failure, already worded: [DiscoveryProblem]s are rendered through
+    // `Strings.discoveryProblem` at the point of capture, so the state holds text the
+    // interface owns rather than the throw site's English. `chooseProviderFirst` lands
+    // here too, which is why this is a string and not a problem list.
     var discoveryError by remember { mutableStateOf<String?>(null) }
 
     // Whether pi's own catalogue already contains each model id, what pi resolves an id
@@ -393,8 +405,9 @@ internal fun ModelEditPage(
     var catalogueFallback by remember { mutableStateOf<JsonObject?>(null) }
     // Why the check did not answer, when it did not. Shown in the status row so the reader
     // is told what to do rather than only that nothing can be declared yet — see
-    // `CatalogueProbe.error`.
-    var catalogueError by remember { mutableStateOf<String?>(null) }
+    // `CatalogueProbe.error`. A [DiscoveryProblem] rather than a string so the wording is
+    // the interface's own.
+    var catalogueError by remember { mutableStateOf<DiscoveryProblem?>(null) }
     // The catalogue state the answer above was read in, recorded on save. See
     // `CatalogueProbe.basis` for why it is the probe's own snapshot and not a later one.
     var catalogueSeen by remember { mutableStateOf<String?>(null) }
@@ -525,6 +538,7 @@ internal fun ModelEditPage(
      */
     val dirty = if (existing == null) {
         name.isNotBlank() || provider != null || apiKey.isNotBlank() || baseUrl.isNotBlank() ||
+            api.isNotBlank() ||
             models.isNotEmpty() || activeModel.isNotBlank() || settings.isNotEmpty() ||
             draft.isNotBlank()
     } else {
@@ -532,6 +546,7 @@ internal fun ModelEditPage(
             provider != existing.providerEntry ||
             apiKey != existing.apiKey ||
             baseUrl != existing.baseUrl ||
+            api != existing.api ||
             models != existing.selectableModels ||
             activeModel != existing.modelId ||
             settings != existing.modelSettings ||
@@ -590,6 +605,14 @@ internal fun ModelEditPage(
             // names the provider, not the missing field, and the user has no way to tell
             // the two apart.
             chosen in PiProvider.needsBaseUrl && baseUrl.isBlank() -> text.settings.needBaseUrl
+            // A filled field that normalises to nothing is the same trap from the other
+            // side. `localhost:11434` has a scheme-looking colon and no host; saved as
+            // it is, the launch path drops it and a custom endpoint dies with
+            // `Unknown provider "pikit-custom"` — neither of which names the field.
+            // The check is on the *normalised* value because that is what the writer
+            // stores; asking "is the field non-blank" is how the two disagree.
+            baseUrl.isNotBlank() && normalizeApiBaseUrl(baseUrl).isEmpty() ->
+                text.settings.invalidBaseUrl
             // A provider with a list but nothing ticked would launch with no model. The
             // row's mark is the choice, so this asks for one rather than picking for the
             // user — and the id typed in the field counts, because Save adds it.
@@ -682,6 +705,7 @@ internal fun ModelEditPage(
                 modelId = activeModel,
                 models = listed,
                 baseUrl = baseUrl.trim(),
+                api = if (isCustomEndpoint) api else "",
                 // The withdrawal record follows the write, not the field: an emptied
                 // field means "use the provider's own endpoint", and the override this
                 // app last put in pi's file is what has to come out next launch. A
@@ -835,6 +859,10 @@ internal fun ModelEditPage(
                             // blank one here would leave that provider's override in
                             // pi's file for ever.
                             baseUrl = ""
+                            // Same reason as the URL: an `anthropic-messages` choice
+                            // left on the form after a switch to DeepSeek is a statement
+                            // about a relay this profile no longer has.
+                            api = ""
                         }
                     },
                 )
@@ -865,6 +893,34 @@ internal fun ModelEditPage(
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 )
+
+                // The wire protocol, only for a custom endpoint: a built-in
+                // provider's client is pi's own and its models already name it.
+                // Offering it there would be a second answer to a question pi
+                // has already settled. The labels are pi's identifiers because
+                // those are the values the relay's own docs name — see
+                // `CustomApi`.
+                //
+                // The explanation is a note *below* the row rather than the row's
+                // own subtitle: `SettingsRow` sizes to its subtitle, and three
+                // sentences there made one picker taller than the whole provider
+                // section around it.
+                if (isCustomEndpoint) {
+                    PickerRow(
+                        title = text.settings.apiType,
+                        value = CustomApi.fromId(api).id,
+                        icon = Icons.Filled.Key,
+                        options = CustomApi.entries.map { entry ->
+                            PickerOption(id = entry.id, label = entry.id)
+                        },
+                        selectedId = CustomApi.fromId(api).id,
+                        onPick = { api = it },
+                    )
+                    SettingsNote(
+                        text.settings.apiTypeNote,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
 
                 OutlinedTextField(
                     value = apiKey,
@@ -1009,7 +1065,9 @@ internal fun ModelEditPage(
                                             },
                                         )
                                     }
-                                    is ModelDiscovery.Failure -> discoveryError = result.message
+                                    is ModelDiscovery.Failure ->
+                                        discoveryError = result.problems
+                                            .joinToString("\n\n") { text.settings.discoveryProblem(it) }
                                 }
                                 fetching = false
                             }
@@ -1123,7 +1181,8 @@ internal fun ModelEditPage(
                         // answer are three different problems with three different fixes.
                         subtitle = when {
                             catalogueChecking -> text.settings.imageInputChecking
-                            catalogueError != null -> catalogueError.orEmpty()
+                            catalogueError != null ->
+                                text.settings.discoveryProblem(catalogueError!!)
                             else -> text.settings.imageInputUnavailable
                         },
                         // The subject of the row is the catalogue, so the mark is the

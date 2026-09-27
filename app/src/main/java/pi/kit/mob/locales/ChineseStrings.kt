@@ -453,11 +453,24 @@ internal object ChineseStrings : Strings {
         override val baseUrlPlaceholder = "https://relay.example.com/v1"
         override val baseUrlNote =
             "API 的基础地址，要包含服务商文档里写的版本段，例如 https://relay.example.com/v1。" +
-                "下面的模型 ID 会发送到这个地址。仅主机名时会自动补上 /v1。"
+                "下面的模型 ID 会发送到这个地址。仅主机名时会自动补上 /v1。" +
+                "供应商列表中的「Custom endpoint」是自定义端点，可接入任意兼容中转，并支持更换 API 协议。"
         override val baseUrlOptionalNote =
             "可选。留空则使用该供应商的默认地址；填写后请求会发到这个地址" +
-                "（代理/中转），例如 https://relay.example.com/v1。仅主机名时会自动补上 /v1。"
+                "（代理/中转），例如 https://relay.example.com/v1。仅主机名时会自动补上 /v1。" +
+                "供应商列表中的「Custom endpoint」是自定义端点，可接入任意兼容中转，并支持更换 API 协议。"
         override val needBaseUrl = "自定义接口需要填写基础地址。"
+        override val invalidBaseUrl =
+            "接口地址必须是带主机名的 http(s) 地址，例如 https://relay.example.com/v1。" +
+                "localhost:11434 这种写法缺少协议头。"
+        override val apiType = "API 协议"
+        override val apiTypeNote =
+            "这个接口使用的线上协议。多数中转是 `openai-completions`；" +
+                "Anthropic 风格的网关选 `anthropic-messages`，" +
+                "Responses 风格的选 `openai-responses`。选错会得到解析失败的流，而不是清晰的报错。"
+        override val modelsJsonWriteFailed =
+            "无法写入 pi 的 models.json，本次配置的接口地址和模型设置不会生效。" +
+                "请检查接口地址和应用存储权限，然后点重试。"
         override val saveFailed = "保存失败：配置文件写入磁盘失败，重新启动应用后本次修改会丢失。"
         override val fetchModels = "获取模型列表"
         override val fetching = "获取中…"
@@ -474,6 +487,44 @@ internal object ChineseStrings : Strings {
         override val needProvider = "保存前请先选择供应商。"
         override val needProviderSubtitle = "请先选择供应商——没有供应商，模型 id 无从判断"
         override val needModel = "保存前必须填写模型 ID。"
+
+        override fun discoveryProblem(problem: DiscoveryProblem): String = when (problem) {
+            DiscoveryProblem.NeedApiKey ->
+                "请先填写 API Key——没有 Key 无法获取模型列表。"
+            DiscoveryProblem.NeedBaseUrl ->
+                "请先填写接口地址——模型列表从 <接口地址>/models 获取。"
+            DiscoveryProblem.InvalidBaseUrl ->
+                "接口地址不是本应用能使用的 URL：必须是带主机名的 http(s) 地址，" +
+                    "例如 https://relay.example.com/v1。"
+            is DiscoveryProblem.NoModelsEndpoint ->
+                "${problem.provider} 没有 pi 已知的模型列表接口，列表改从 pi 自带目录读取——" +
+                    "如果缺少你要的模型，可手动输入 ID。"
+            is DiscoveryProblem.HttpRejected -> {
+                val head = "${problem.host} 拒绝了请求：HTTP ${problem.code}" + problem.detail
+                if (problem.viaOverride) {
+                    head + "\n\n这是配置里「接口地址」指向的地址。地址写错也会返回 401，" +
+                        "和 Key 错误看起来一样——请先核对基础地址" +
+                        "（应当是 API 根地址，例如 https://relay.example.com/v1），再考虑换 Key。"
+                } else {
+                    head
+                }
+            }
+            is DiscoveryProblem.NoModelIds ->
+                "${problem.host} 有响应，但没有解析出模型 ID。可能改过返回格式；" +
+                    "改用 pi 自带的模型目录。"
+            is DiscoveryProblem.Unreachable ->
+                "无法连接 ${problem.host}：${problem.cause}"
+            is DiscoveryProblem.PiRefused ->
+                "pi 拒绝列出模型：${problem.detail}"
+            is DiscoveryProblem.CatalogEmpty ->
+                "pi 的模型目录里没有 ${problem.provider} 的任何模型。如果你知道模型 ID，可以直接输入。"
+            is DiscoveryProblem.CliMissing ->
+                "pi 的模型目录也不可用：打包的运行时里缺少 pi CLI。"
+            is DiscoveryProblem.PiCannotStart ->
+                "pi 未能启动以读取模型目录：${problem.cause}"
+            DiscoveryProblem.ScratchDirFailed ->
+                "PiKit 无法准备 pi 读取模型目录所需的临时代理目录。"
+        }
         override val unsavedTitle = "保存这次修改？"
         override val unsavedBody = "这个配置的修改还没有保存。"
         override val discard = "放弃修改"

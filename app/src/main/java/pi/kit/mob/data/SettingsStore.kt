@@ -134,7 +134,53 @@ fun normalizeApiBaseUrl(raw: String): String {
     if (scheme != "http" && scheme != "https") return ""
     if (uri.host.isNullOrBlank()) return ""
     val path = uri.path ?: ""
-    return if (path.isEmpty() || path == "/") "$base/v1" else base
+    val completed = if (path.isEmpty() || path == "/") "$base/v1" else base
+    // A query or fragment is not part of the API root. Left in place it is
+    // *appended to* by every path this app builds — `https://h/v1?x=1/models`
+    // is what `$base/models` becomes — and the request goes somewhere the
+    // provider never named. Rebuilt without them rather than truncated at `?`,
+    // so a base that legitimately carries userinfo or a port survives.
+    if (uri.rawQuery == null && uri.fragment == null) return completed
+    return runCatching {
+        java.net.URI(uri.scheme, uri.userInfo, uri.host, uri.port, uri.path, null, null).toString()
+            .trimEnd('/')
+            .let { if (uri.path.isNullOrEmpty() || uri.path == "/") "$it/v1" else it }
+    }.getOrDefault("")
+}
+
+/**
+ * The wire protocol a custom endpoint speaks, written into `models.json`'s `api`.
+ *
+ * pi reaches a model through a named client, and the name is the one thing a
+ * relay cannot negotiate: an `anthropic-messages` gateway reached through the
+ * `openai-completions` client produces a stream that fails to parse rather than
+ * a clear error. It used to be pinned to `openai-completions` on the argument
+ * that "that is what relays speak" — true of most, and wrong for the growing
+ * set of Anthropic- and Responses-shaped gateways (Meta's Muse among them), which
+ * were unconfigurable as a result.
+ *
+ * The labels are pi's own identifiers rather than translations: they are the
+ * values in `models.json`, in pi's `docs/models.md`, and in the error a mismatch
+ * produces, and a user reading a relay's docs needs the two to match. The prose
+ * that says *which* one to pick is `Strings`'s.
+ */
+enum class CustomApi(val id: String) {
+    /** OpenAI chat completions — `<baseUrl>/chat/completions`. The common case. */
+    OPENAI_COMPLETIONS("openai-completions"),
+
+    /** Anthropic Messages API — the `/v1/messages` shape. */
+    ANTHROPIC_MESSAGES("anthropic-messages"),
+
+    /** OpenAI Responses API — `/v1/responses`. */
+    OPENAI_RESPONSES("openai-responses"),
+    ;
+
+    companion object {
+        const val DEFAULT_ID = "openai-completions"
+
+        fun fromId(id: String?): CustomApi =
+            entries.firstOrNull { it.id == id } ?: OPENAI_COMPLETIONS
+    }
 }
 
 /**
@@ -149,10 +195,9 @@ fun normalizeApiBaseUrl(raw: String): String {
  *
  * ## The fields, and what each is for
  *
- * `api` is pinned to `openai-completions` because that is what relays speak; a
- * custom Anthropic-compatible endpoint is a real case but a rarer one, and
- * guessing wrong produces a stream that fails to parse rather than a clear error,
- * so it is not guessed at.
+ * `api` names the wire protocol the relay speaks — see [CustomApi]. It is the
+ * one field a relay cannot be guessed for: the wrong name produces a stream that
+ * fails to parse rather than a clear error, which is why the form offers it.
  *
  * `apiKey` is `$PIKIT_API_KEY`, not the key itself: the file is plain text in the
  * app's data directory, and the key already reaches the process through the
@@ -211,6 +256,7 @@ object CustomEndpoint {
         baseUrl: String,
         modelIds: List<String>,
         settings: Map<String, ModelSettings> = emptyMap(),
+        api: String = CustomApi.DEFAULT_ID,
     ): JsonObject? {
         val base = normalizeApiBaseUrl(baseUrl)
         val models = modelIds.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -223,7 +269,7 @@ object CustomEndpoint {
         return buildJsonObject {
             put("name", "PiKit custom endpoint")
             put("baseUrl", base)
-            put("api", "openai-completions")
+            put("api", api.ifBlank { CustomApi.DEFAULT_ID })
             put("apiKey", API_KEY_ENV)
             put(
                 "models",
@@ -244,7 +290,8 @@ object CustomEndpoint {
         baseUrl: String,
         modelIds: List<String>,
         settings: Map<String, ModelSettings> = emptyMap(),
-    ): String? = providerObject(baseUrl, modelIds, settings)
+        api: String = CustomApi.DEFAULT_ID,
+    ): String? = providerObject(baseUrl, modelIds, settings, api)
         ?.let { DOCUMENT_JSON.encodeToString(JsonObject.serializer(), it) + "\n" }
 
         /**
@@ -402,7 +449,11 @@ data class PiSettings(
     val isConfigured: Boolean
         get() = provider != null &&
             modelId.isNotBlank() &&
-            (provider !in PiProvider.needsBaseUrl || baseUrl.isNotBlank()) &&
+            // The *normalised* URL is what the launch writes into `models.json`;
+            // a non-blank field that normalises to nothing (`localhost:11434`) is
+            // no endpoint at all, and reporting "configured" here is how a custom
+            // endpoint reached pi as `Unknown provider "pikit-custom"`.
+            (provider !in PiProvider.needsBaseUrl || normalizeApiBaseUrl(baseUrl).isNotEmpty()) &&
             // A relay may sit in front of a gateway that needs no key of its own;
             // every built-in provider does.
             (provider in PiProvider.needsBaseUrl || apiKey.isNotBlank())

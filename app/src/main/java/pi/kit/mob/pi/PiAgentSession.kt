@@ -357,13 +357,15 @@ class PiAgentSession private constructor(context: Context) {
         // rendered `web-search.json` on the main thread, between the user's tap and
         // the next frame. Everything below is filesystem work; the `_agent` writes
         // above and below are safe from any thread.
-        val (settings, workingDir) = withContext(Dispatchers.IO) {
+        val (settings, workingDir, modelsJsonFailure) = withContext(Dispatchers.IO) {
             val settings = settingsStore.read()
             // Same lifecycle as `models.json`: rewritten on every launch, because
             // these files live in `$HOME` while the profile lives in the app's
             // config, and a user who edits one by hand would otherwise have no way
-            // back.
-            writeModelsJson(settings)
+            // back. A write that had to land and did not stops the launch here —
+            // see [writeModelsJson]'s return contract for why the alternative is
+            // an `Unknown provider` exit or a `401` that reads as a bad key.
+            val modelsJsonFailure = writeModelsJson(settings)
             writePiDefaults(settings)
             // The bundled extension's own default is `workflow: "summary-review"`,
             // which opens its result curator in a browser; there is no browser here,
@@ -378,7 +380,20 @@ class PiAgentSession private constructor(context: Context) {
             val workingDir = File(settings.workingDir.ifBlank { env.workspacePath })
             workingDir.mkdirs()
             sessionDir.mkdirs()
-            settings to workingDir
+            Triple(settings, workingDir, modelsJsonFailure)
+        }
+
+        if (modelsJsonFailure != null) {
+            // The write that had to land did not. Starting pi anyway is what used
+            // to happen, and it produced the two symptoms this replaces: `Unknown
+            // provider "pikit-custom"` with a `pi exit with code 1` banner, or a
+            // built-in provider whose relay URL never reached pi and answered
+            // `401` from the official address — which reads as "the key is wrong".
+            Log.e(TAG, "models.json write failed; not starting the agent", modelsJsonFailure)
+            _agent.value = AgentStatus.Failed(
+                stringsFor(settingsStore.read().language).settings.modelsJsonWriteFailed,
+            )
+            return false
         }
 
         return try {
@@ -1824,57 +1839,87 @@ class PiAgentSession private constructor(context: Context) {
      * Written only when the encoded document differs, so an untouched file keeps
      * its bytes, its mtime and its comments.
      *
-     * Failure is logged and ignored: a missing `models.json` breaks a custom
-     * provider, and pi reports that itself with a message naming the provider —
-     * better than refusing to start the agent at all.
+     * A failure used to be logged and ignored, on the argument that pi reports a
+     * missing provider itself. It does — as `Unknown provider "pikit-custom"` and
+     * `process.exit(1)`, which the chat page shows as `pi exit with code 1` — and
+     * for a built-in provider's relay URL it reports nothing at all: the override
+     * is simply absent and every prompt answers `401` from the official address,
+     * which reads as "the key is wrong" for a write that failed underneath. So a
+     * registration that *had* to land and did not is now a launch failure with a
+     * message naming the file and the fields to look at. A write that was not
+     * needed (nothing of PiKit's to say) is still a no-op, not a failure.
      *
-     * @return true when the file was actually rewritten. Nothing in the app waits on
-     *   that any more — the answer used to decide whether a running pi had to be
-     *   restarted to read a declaration that had just been discovered — but a caller
-     *   that wants to know whether the file moved still can.
+     * @return null when the file is in the state the profile needs — written,
+     *   already matching, or deliberately untouched — and the failure otherwise.
+     *   Only a *required* registration reports one: [CustomEndpoint.PROVIDER_ID]
+     *   for a custom endpoint, or a non-empty [hasModelsJsonEntries] for a
+     *   built-in. A withdrawal that could not run leaves a stale entry behind,
+     *   which is a mess and not a reason to refuse to start.
      */
-    private fun writeModelsJson(settings: PiSettings): Boolean {
+    private fun writeModelsJson(settings: PiSettings): Throwable? {
         val target = File(env.home, CustomEndpoint.MODELS_FILE_RELATIVE)
         val profile = settingsStore.profiles.activeProfile
 
-        return runCatching {
-            val provider = settings.provider
-            val customInUse = provider != null && provider in PiProvider.needsBaseUrl
-            val basis = catalogueBasis(env, provider)
-            // Read beside the basis so a moved catalogue routes declarations with
-            // the store's *current* answer rather than emptying them — see
-            // [modelDefinitions].
-            val currentCatalogueIds = if (provider != null && !customInUse) {
+        // Read before the body so the failure path can consult it: a registration
+        // that had to land and did not is a launch failure, a withdrawal that could
+        // not run is not.
+        val provider = settings.provider
+        val customInUse = provider != null && provider in PiProvider.needsBaseUrl
+        val definitions = modelDefinitions(
+            provider,
+            profile,
+            catalogueBasis(env, provider),
+            if (provider != null && !customInUse) {
                 storeModelFacts(
                     File(env.piConfigDir, CATALOGUE_STORE_NAME),
                     provider.id,
                 ).keys
             } else {
                 emptySet()
-            }
-            val definitions = modelDefinitions(provider, profile, basis, currentCatalogueIds)
+            },
+        )
+        val required = customInUse || hasModelsJsonEntries(definitions)
 
+        return runCatching {
             // Nothing of PiKit's to say and no file of the user's to say it in: the
             // file is created only when something has to go in it. Without this a
             // built-in provider on a fresh install would leave an empty
             // `{"providers":{}}` behind, which reads as an app-written file rather
             // than as one the user made.
             //
-            // "Nothing to say" is about *entries*, not about the map's keys: the active
-            // provider is always in it so that an entry turned off — or one a previous
-            // build wrote — can be withdrawn, and that is only worth doing to a file that
-            // exists.
-            if (!target.isFile && !customInUse && definitions.values.all { it.wanted.isEmpty() }) {
-                return false
+            // "Something to say" is about *entries to write*, not about the map's
+            // keys and not about withdrawals: the active provider is always in the
+            // map so that an entry turned off — or one a previous build wrote — can
+            // be withdrawn, and that is only worth doing to a file that exists.
+            // The same is true of a cleared `baseUrl`: `writtenBaseUrl` alone must
+            // not conjure a file. But a non-empty `baseUrl` *is* an entry to write
+            // — the whole point of pointing a built-in provider at a relay — and
+            // an `overrides` map is one too. Checking only `wanted` used to drop
+            // both on a fresh install: Xiaomi with a relay URL and no per-model
+            // numbers never created the file, the override was never written, and
+            // pi requested the official address and answered `401` for a key that
+            // was correct for the relay.
+            if (!target.isFile && !customInUse && !hasModelsJsonEntries(definitions)) {
+                return null
             }
 
             val existing = if (target.isFile) {
-                val read = Json.parseToJsonElement(target.readText()) as? JsonObject
+                val read = runCatching {
+                    Json.parseToJsonElement(target.readText()) as? JsonObject
+                }.getOrNull()
                 if (read == null) {
                     // Unreadable to us, and it is the user's: leave it exactly as it
                     // is rather than replacing it with PiKit's idea of the document.
+                    // A registration that has to land in it is a launch failure
+                    // rather than a silent drop — see the return contract above.
                     Log.w(TAG, "left ${CustomEndpoint.MODELS_FILE_RELATIVE} alone: not a JSON object")
-                    return false
+                    return if (required) {
+                        IllegalStateException(
+                            "${CustomEndpoint.MODELS_FILE_RELATIVE} is not a JSON object",
+                        )
+                    } else {
+                        null
+                    }
                 }
                 read
             } else {
@@ -1890,6 +1935,7 @@ class PiAgentSession private constructor(context: Context) {
                     // the model it would launch with.
                     modelIds = profile?.selectableModels.orEmpty().ifEmpty { listOf(settings.modelId) },
                     settings = profile?.modelSettings.orEmpty(),
+                    api = profile?.api.orEmpty(),
                 )
             } else {
                 null
@@ -1920,12 +1966,17 @@ class PiAgentSession private constructor(context: Context) {
                 target.parentFile?.mkdirs()
                 target.writeText(encoded)
                 Log.i(TAG, "wrote ${CustomEndpoint.MODELS_FILE_RELATIVE}")
-                true
-            } else {
-                false
             }
-        }.onFailure { Log.w(TAG, "could not merge ${CustomEndpoint.MODELS_FILE_RELATIVE}", it) }
-            .getOrDefault(false)
+            null
+        }.fold(
+            onSuccess = { it },
+            onFailure = {
+                Log.w(TAG, "could not merge ${CustomEndpoint.MODELS_FILE_RELATIVE}", it)
+                // A write that was not needed is a no-op that happened to fail — a
+                // stale withdrawal is a mess, not a reason to refuse to start.
+                if (required) it else null
+            },
+        )
     }
 
     /**
@@ -2180,6 +2231,27 @@ internal fun settingsWithPiDefaults(
     }
     return merged
 }
+
+/**
+ * Whether [definitions] carry anything PiKit would *write* into a `models.json`
+ * that does not exist yet.
+ *
+ * Withdrawals are deliberately absent: an id in [ModelDefinitions.ours], or a
+ * [ModelDefinitions.writtenBaseUrl] with a blank [ModelDefinitions.baseUrl], are
+ * statements about a file that is already there, and conjuring a file to take
+ * something back out of it is nonsense. What *is* present is the three things
+ * the writer puts in: `models` entries, `modelOverrides` entries, and the
+ * provider-level `baseUrl` that points a built-in provider at a relay.
+ *
+ * Checking only `wanted` used to be enough while a custom endpoint was the only
+ * reason to create the file — `customInUse` guards that separately. Once a
+ * built-in provider gained an endpoint field, the same check started dropping
+ * that override on a fresh install: no `models.json`, no `baseUrl`, and pi
+ * requested the provider's official address and answered `401` for a key that
+ * belonged to the relay.
+ */
+internal fun hasModelsJsonEntries(definitions: Map<String, ModelDefinitions>): Boolean =
+    definitions.values.any { it.wanted.isNotEmpty() || it.overrides.isNotEmpty() || it.baseUrl.isNotEmpty() }
 
 /**
  * `models.json` with PiKit's own entries merged in.

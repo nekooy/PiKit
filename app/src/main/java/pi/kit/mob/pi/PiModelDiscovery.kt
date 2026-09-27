@@ -6,6 +6,7 @@ import pi.kit.mob.data.PiProvider
 import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.env.SafeDelete
 import pi.kit.mob.env.TermuxEnv
+import pi.kit.mob.locales.DiscoveryProblem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -48,17 +49,31 @@ sealed interface ModelDiscovery {
     data class Success(val models: List<DiscoveredModel>) : ModelDiscovery
 
     /**
-     * [message] is what the user is shown. Several things can go wrong on the
-     * way to a model list and the user needs to see all of them, because the
-     * fix differs: a rejected key, a provider without a models endpoint, or a
-     * pi catalog that refused to start.
+     * [problems] is what the user is shown, each worded in the interface's own
+     * language by `Strings.discoveryProblem`. Several things can go wrong on the
+     * way to a model list and the user needs to see all of them, because the fix
+     * differs: a rejected key, a provider without a models endpoint, or a pi
+     * catalog that refused to start. They were English sentences built at the
+     * throw site once, which is why the one that mattered — "a wrong URL answers
+     * 401 just like a wrong key" — reached nobody who needed it.
      *
      * [fatal] is true when trying another URL cannot help — a rejected key is
      * rejected on every path — so the caller stops after one instead of burning
      * another timeout. A 404 is not fatal: that is the case a second path shape
      * exists for.
+     *
+     * [credentialRejected] is narrower than [fatal]: it is a `401`/`403` from
+     * the provider's *own* address, which is the only place one means the key.
+     * The same status from a user-supplied proxy is just as often a wrong path
+     * — gateways answer `401` where a well-behaved server answers `404` — so it
+     * is neither fatal nor a verdict on the key, and the provider's own endpoint
+     * is still worth asking. See [ModelsEndpoint.isOverride].
      */
-    data class Failure(val message: String, val fatal: Boolean = false) : ModelDiscovery
+    data class Failure(
+        val problems: List<DiscoveryProblem> = emptyList(),
+        val fatal: Boolean = false,
+        val credentialRejected: Boolean = false,
+    ) : ModelDiscovery
 }
 
 /**
@@ -115,9 +130,11 @@ data class CatalogueProbe(
      * what to do about it.
      *
      * A caller must not read an empty [ids] from one of these as "pi catalogues nothing":
-     * the difference between "no models" and "no answer" is exactly this field.
+     * the difference between "no models" and "no answer" is exactly this field. The reason
+     * is a [DiscoveryProblem] so the page words it in the interface's language rather than
+     * printing the throw site's English.
      */
-    val error: String? = null,
+    val error: DiscoveryProblem? = null,
 ) {
     /** Whether the check answered at all. See [error]. */
     val answered: Boolean get() = error == null
@@ -190,10 +207,10 @@ class ModelDiscoveryClient(
         // every built-in provider does, and saying so up front beats a 401 that reads
         // as "your key was rejected" for a field that was never filled in.
         if (key.isEmpty() && !isCustom) {
-            return ModelDiscovery.Failure("Enter an API key first — a model list cannot be fetched without one.")
+            return ModelDiscovery.Failure(listOf(DiscoveryProblem.NeedApiKey))
         }
 
-        val failures = mutableListOf<String>()
+        val failures = mutableListOf<DiscoveryProblem>()
         val override = normalizeApiBaseUrl(baseUrl)
 
         // A user-supplied endpoint is asked first: for a custom provider it is the only
@@ -210,25 +227,33 @@ class ModelDiscoveryClient(
         }
 
         if (endpoints.isEmpty()) {
-            failures += if (isCustom) {
-                "Enter the endpoint's base URL first — the model list is fetched from " +
-                    "`<endpoint>/models`."
-            } else {
-                "${provider.label} has no models endpoint pi knows how to read."
+            failures += when {
+                // A filled field that normalises to nothing is not "empty" — it is a
+                // URL this app refuses, and saying "enter the base URL first" for a
+                // field the user did fill in is the one message that sends them away
+                // from the actual problem.
+                isCustom && baseUrl.isNotBlank() -> DiscoveryProblem.InvalidBaseUrl
+                isCustom -> DiscoveryProblem.NeedBaseUrl
+                else -> DiscoveryProblem.NoModelsEndpoint(provider.label)
             }
         }
 
-        // 401/403 are the key, not the path: trying another path after one only burns
-        // another timeout on a request that cannot succeed. 404 is the path, and is the
-        // one case where the next candidate is worth asking.
+        // 401/403 from the provider's own address are the key, not the path: trying
+        // another path after one only burns another timeout on a request that cannot
+        // succeed. 404 is the path, and is the one case where the next candidate is
+        // worth asking. A 401/403 from a user-supplied proxy is neither — see
+        // [ModelDiscovery.Failure.credentialRejected].
         var rejectedCredential = false
         for (endpoint in endpoints) {
             when (val result = fetchFromProvider(endpoint, key)) {
                 is ModelDiscovery.Success -> return result
                 is ModelDiscovery.Failure -> {
-                    failures += result.message
-                    if (result.fatal) {
+                    failures += result.problems
+                    if (result.credentialRejected) {
                         rejectedCredential = true
+                        break
+                    }
+                    if (result.fatal) {
                         break
                     }
                 }
@@ -242,7 +267,10 @@ class ModelDiscoveryClient(
             provider.modelsEndpoint()?.let { endpoint ->
                 when (val result = fetchFromProvider(endpoint, key)) {
                     is ModelDiscovery.Success -> return result
-                    is ModelDiscovery.Failure -> failures += result.message
+                    is ModelDiscovery.Failure -> {
+                        failures += result.problems
+                        if (result.credentialRejected) rejectedCredential = true
+                    }
                 }
             }
         }
@@ -250,15 +278,25 @@ class ModelDiscoveryClient(
         // pi's own catalog is meaningless for a relay: it lists built-in
         // providers' models, none of which the relay is serving.
         if (isCustom) {
-            return ModelDiscovery.Failure(failures.joinToString("\n\n"))
+            return ModelDiscovery.Failure(failures, credentialRejected = rejectedCredential)
         }
 
-        when (val result = fetchFromPiCatalog(provider, key)) {
-            is ModelDiscovery.Success -> return result
-            is ModelDiscovery.Failure -> failures += result.message
+        // A rejected credential is rejected here too, and `fetchFromPiCatalog`
+        // pays a node start (seconds, on a slow phone) to discover that. The
+        // catalogue lists models the key cannot use — the whole reason
+        // [discover] asks the provider first — so skipping it is both faster
+        // and the more honest answer.
+        if (!rejectedCredential) {
+            when (val result = fetchFromPiCatalog(provider, key)) {
+                is ModelDiscovery.Success -> return result
+                is ModelDiscovery.Failure -> failures += result.problems
+            }
         }
 
-        return ModelDiscovery.Failure(failures.joinToString("\n\n"))
+        return ModelDiscovery.Failure(
+            failures,
+            credentialRejected = rejectedCredential,
+        )
     }
 
     /**
@@ -377,9 +415,11 @@ class ModelDiscoveryClient(
                 fallback = null,
                 basis = basis,
                 facts = stored,
+                // With a store full of facts the page has everything it needs and the
+                // scratch directory cost nothing the reader can see, so the failure is
+                // reported only when it actually withheld an answer.
                 error = if (stored.isEmpty()) {
-                    "PiKit could not prepare the scratch agent directory pi reads " +
-                        "its catalog from."
+                    DiscoveryProblem.ScratchDirFailed
                 } else {
                     null
                 },
@@ -420,7 +460,7 @@ class ModelDiscoveryClient(
                             ids = emptySet(),
                             fallback = null,
                             basis = basis,
-                            error = result.message,
+                            error = result.problems.firstOrNull() ?: DiscoveryProblem.PiCannotStart("unknown"),
                         )
                     } else {
                         CatalogueProbe(stored.keys, fallback, basis, stored)
@@ -470,6 +510,7 @@ class ModelDiscoveryClient(
                 headers = { key ->
                     if (key.isEmpty()) emptyMap() else mapOf("Authorization" to "Bearer $key")
                 },
+                isOverride = true,
             )
         }
 
@@ -482,17 +523,39 @@ class ModelDiscoveryClient(
         try {
             val response = get(endpoint, key)
             when {
-                response.code == 401 || response.code == 403 -> ModelDiscovery.Failure(
-                    "${endpoint.host()} rejected the request: HTTP ${response.code} ${response.message}" +
-                        detailFrom(response.body),
-                    fatal = true,
-                )
+                response.code == 401 || response.code == 403 -> {
+                    // A proxy's 401 is not a verdict on the key. Gateways answer
+                    // 401 for a path they do not serve where a well-behaved server
+                    // answers 404, so the path walk continues and — for a built-in
+                    // provider — the provider's own endpoint is still asked. Only
+                    // the provider's own address can say the key is wrong.
+                    val fromOverride = endpoint.isOverride
+                    ModelDiscovery.Failure(
+                        listOf(
+                            DiscoveryProblem.HttpRejected(
+                                host = endpoint.host(),
+                                code = response.code,
+                                detail = detailFrom(response.body),
+                                viaOverride = fromOverride,
+                            ),
+                        ),
+                        fatal = !fromOverride,
+                        credentialRejected = !fromOverride,
+                    )
+                }
 
                 response.code !in 200..299 -> ModelDiscovery.Failure(
-                    "${endpoint.host()} rejected the request: HTTP ${response.code} ${response.message}" +
-                        detailFrom(response.body),
+                    listOf(
+                        DiscoveryProblem.HttpRejected(
+                            host = endpoint.host(),
+                            code = response.code,
+                            detail = detailFrom(response.body),
+                            viaOverride = endpoint.isOverride,
+                        ),
+                    ),
                     // 404 is the path being wrong, which is exactly what another
                     // candidate URL is for; anything else is worth not repeating.
+                    // Not a verdict on the key either way.
                     fatal = response.code != 404,
                 )
 
@@ -502,8 +565,7 @@ class ModelDiscoveryClient(
                         // Not fatal: the host answered, just not in a shape this
                         // walk recognises — another path may still be the one.
                         ModelDiscovery.Failure(
-                            "${endpoint.host()} answered with no model ids. It may have changed " +
-                                "its response format; pi's own catalog is used instead.",
+                            listOf(DiscoveryProblem.NoModelIds(endpoint.host())),
                         )
                     } else {
                         ModelDiscovery.Success(
@@ -515,8 +577,21 @@ class ModelDiscoveryClient(
         } catch (e: Exception) {
             // A refused connection or a timeout is worth one more path, not a
             // second identical wait: `fatal` is left false so a `/v1` candidate
-            // can still be tried after a bare `/models` hung up.
-            ModelDiscovery.Failure("Could not reach ${endpoint.host()}: ${e.message ?: e::class.java.simpleName}")
+            // can still be tried after a bare `/models` hung up. A name that does
+            // not resolve or a TLS handshake that fails is the *host*, not the
+            // path — every candidate under it is the same host — so the walk
+            // stops instead of paying two more connect timeouts for the same
+            // `ENOTFOUND`.
+            val hostLevel = e is java.net.UnknownHostException || e is javax.net.ssl.SSLException
+            ModelDiscovery.Failure(
+                listOf(
+                    DiscoveryProblem.Unreachable(
+                        host = endpoint.host(),
+                        cause = e.message ?: e::class.java.simpleName,
+                    ),
+                ),
+                fatal = hostLevel,
+            )
         }
     }
 
@@ -593,9 +668,7 @@ class ModelDiscoveryClient(
         onCatalog: ((Map<String, JsonObject>) -> Unit)? = null,
     ): ModelDiscovery = withContext(Dispatchers.IO) {
         val cliEntry = PiInstallation.cliEntry(env)
-            ?: return@withContext ModelDiscovery.Failure(
-                "pi's catalog is not available either: the CLI is missing from the bundled runtime.",
-            )
+            ?: return@withContext ModelDiscovery.Failure(listOf(DiscoveryProblem.CliMissing))
 
         val workingDir = env.workspace.also { it.mkdirs() }
         var client: PiRpcClient? = null
@@ -637,14 +710,17 @@ class ModelDiscoveryClient(
                 PiCommand.getAvailableModels(it)
             }
             if (!response.success) {
-                ModelDiscovery.Failure("pi refused to list models: ${response.error ?: "unknown reason"}")
+                ModelDiscovery.Failure(
+                    listOf(
+                        DiscoveryProblem.PiRefused(response.error ?: "unknown reason"),
+                    ),
+                )
             } else {
                 onCatalog?.invoke(catalogFacts(response))
                 val models = parseCatalog(response)
                 if (models.isEmpty()) {
                     ModelDiscovery.Failure(
-                        "pi's catalog returned no models for ${provider.label}. " +
-                            "Type the model id directly if you know it.",
+                        listOf(DiscoveryProblem.CatalogEmpty(provider.label)),
                     )
                 } else {
                     ModelDiscovery.Success(models)
@@ -653,8 +729,9 @@ class ModelDiscoveryClient(
         } catch (t: Throwable) {
             Log.w(TAG, "pi catalog lookup failed", t)
             ModelDiscovery.Failure(
-                "pi could not start to read its catalog: " +
-                    (t.message ?: t::class.java.simpleName),
+                listOf(
+                    DiscoveryProblem.PiCannotStart(t.message ?: t::class.java.simpleName),
+                ),
             )
         } finally {
             // Closing stdin is pi's clean shutdown; the client escalates to a
@@ -764,6 +841,19 @@ private class ModelsEndpoint(
      */
     val modelsPath: List<String>,
     val headers: (String) -> Map<String, String>,
+    /**
+     * Whether this URL came from the profile's endpoint field rather than from
+     * pi's own provider table.
+     *
+     * It changes what a `401` means. At the provider's own address a `401` is
+     * the key. At a user-supplied proxy it is just as often the *path* — a
+     * gateway that has no `/models` route answers `401` where a well-behaved
+     * server would answer `404` — so the walk continues and the provider's own
+     * endpoint is still worth asking. Treating both as "the key was rejected"
+     * used to skip that fallback and report the wrong cause for a typo in the
+     * URL field.
+     */
+    val isOverride: Boolean = false,
 ) {
     private val host: String by lazy {
         runCatching { URL(url.invoke("")).host }.getOrDefault(provider.label)

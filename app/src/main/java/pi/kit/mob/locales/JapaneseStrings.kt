@@ -470,12 +470,29 @@ internal object JapaneseStrings : Strings {
         override val baseUrlNote =
             "API のベース URL です。プロバイダーのドキュメントにあるバージョン部分も含めて" +
                 "ください（例：https://relay.example.com/v1）。下のモデル ID がここに送られます。" +
-                "ホスト名のみの場合は /v1 が自動的につきます。"
+                "ホスト名のみの場合は /v1 が自動的につきます。" +
+                "プロバイダー一覧の「Custom endpoint」は自前で設定するエンドポイントで、" +
+                "任意の互換リレーに繋げられ、API プロトコルも変更できます。"
         override val baseUrlOptionalNote =
             "任意です。空欄ならプロバイダー既定のエンドポイントを使います。" +
                 "埋めるとリクエストはこのアドレス（プロキシ／リレー）へ送られます" +
-                "（例：https://relay.example.com/v1）。ホスト名のみの場合は /v1 が自動的につきます。"
+                "（例：https://relay.example.com/v1）。ホスト名のみの場合は /v1 が自動的につきます。" +
+                "プロバイダー一覧の「Custom endpoint」は自前で設定するエンドポイントで、" +
+                "任意の互換リレーに繋げられ、API プロトコルも変更できます。"
         override val needBaseUrl = "カスタムエンドポイントにはベース URL が必要です。"
+        override val invalidBaseUrl =
+            "エンドポイントはホスト名付きの http(s) URL でなければなりません" +
+                "（例：https://relay.example.com/v1）。localhost:11434 はスキームがありません。"
+        override val apiType = "API"
+        override val apiTypeNote =
+            "このエンドポイントが話すプロトコルです。ほとんどのリレーは " +
+                "`openai-completions` です。Anthropic 系のゲートウェイは " +
+                "`anthropic-messages`、Responses 系は `openai-responses` を選んでください。" +
+                "選ぶものを誤ると、明確なエラーではなくパースできないストリームになります。"
+        override val modelsJsonWriteFailed =
+            "pi の models.json を書き込めなかったため、このプロフィールのエンドポイントと" +
+                "モデル設定は pi に届きません。エンドポイントとアプリの保存領域を確認してから" +
+                "再試行してください。"
         override val saveFailed =
             "保存できませんでした：設定ファイルを書き込めませんでした。" +
                 "次回起動時に今回の変更は失われます。"
@@ -496,6 +513,48 @@ internal object JapaneseStrings : Strings {
         override val needProviderSubtitle =
             "まずプロバイダーを選択してください。モデル ID は単体では判断できません。"
         override val needModel = "保存するにはモデル ID が必要です。"
+
+        override fun discoveryProblem(problem: DiscoveryProblem): String = when (problem) {
+            DiscoveryProblem.NeedApiKey ->
+                "先に API キーを入力してください——キーがないとモデル一覧を取得できません。"
+            DiscoveryProblem.NeedBaseUrl ->
+                "先にエンドポイントのベース URL を入力してください——モデル一覧は " +
+                    "`<endpoint>/models` から取得します。"
+            DiscoveryProblem.InvalidBaseUrl ->
+                "このエンドポイントは使用できません。ホスト名付きの http(s) URL が必要です" +
+                    "（例：https://relay.example.com/v1）。"
+            is DiscoveryProblem.NoModelsEndpoint ->
+                "${problem.provider} には pi が知るモデル一覧のルートがないため、" +
+                    "pi のカタログから読みます——必要なモデルがなければ ID を手入力できます。"
+            is DiscoveryProblem.HttpRejected -> {
+                val head = "${problem.host} がリクエストを拒否しました：HTTP ${problem.code}" +
+                    problem.detail
+                if (problem.viaOverride) {
+                    head + "\n\nこれはプロフィールの URL 欄に設定したエンドポイントです。" +
+                        "URL の誤りもキーの誤りと同じく 401 を返します——キーを変える前に" +
+                        "ベース URL（API のルート。例：https://relay.example.com/v1）を" +
+                        "確認してください。"
+                } else {
+                    head
+                }
+            }
+            is DiscoveryProblem.NoModelIds ->
+                "${problem.host} は応答しましたが、モデル ID を読み取れませんでした。" +
+                    "応答形式が変わった可能性があります。pi のカタログを使います。"
+            is DiscoveryProblem.Unreachable ->
+                "${problem.host} に接続できませんでした：${problem.cause}"
+            is DiscoveryProblem.PiRefused ->
+                "pi がモデル一覧の取得を拒否しました：${problem.detail}"
+            is DiscoveryProblem.CatalogEmpty ->
+                "pi のカタログに ${problem.provider} のモデルがありません。" +
+                    "ID が分かっていれば直接入力できます。"
+            is DiscoveryProblem.CliMissing ->
+                "pi のカタログも利用できません：同梱ランタイムに pi CLI がありません。"
+            is DiscoveryProblem.PiCannotStart ->
+                "pi がカタログ読み取り用に起動できませんでした：${problem.cause}"
+            DiscoveryProblem.ScratchDirFailed ->
+                "PiKit が pi のカタログ読み取り用の一時ディレクトリを用意できませんでした。"
+        }
         override val unsavedTitle = "変更を保存しますか？"
         override val unsavedBody = "このプロファイルには保存されていない変更があります。"
         override val discard = "破棄"

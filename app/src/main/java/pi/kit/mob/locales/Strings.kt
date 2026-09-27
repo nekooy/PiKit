@@ -876,6 +876,45 @@ interface Strings {
         /** Shown for a built-in provider — blank means pi's own endpoint. */
         val baseUrlOptionalNote: String
         val needBaseUrl: String
+
+        /**
+         * The save refusal when the endpoint field is filled in but is not a URL
+         * this app can hand pi.
+         *
+         * [needBaseUrl] is about an empty field. This one is about a filled one
+         * that [pi.kit.mob.data.normalizeApiBaseUrl] refuses — `localhost:11434`,
+         * which has a scheme-looking colon and no host. Saved as it is, the
+         * launch path normalises it to nothing and the override silently never
+         * reaches pi; a custom endpoint then dies with `Unknown provider`, which
+         * names neither the field nor the missing scheme.
+         */
+        val invalidBaseUrl: String
+
+        /**
+         * The custom endpoint's wire protocol row — `models.json`'s `api`.
+         *
+         * The value labels are `CustomApi`'s identifiers and are not translated:
+         * they are the strings in pi's `docs/models.md` and in the relay's own
+         * documentation, and the two have to match. [apiTypeNote] is the sentence
+         * that says which one to pick, drawn as a note under the row rather than
+         * as the row's subtitle — a subtitle is sized to, and three sentences
+         * there made one picker taller than the section around it.
+         */
+        val apiType: String
+        val apiTypeNote: String
+
+        /**
+         * The launch failure for a `models.json` that had to be written and could
+         * not be.
+         *
+         * Silent before: the writer logged and the agent started anyway, so a
+         * custom endpoint reached pi with no `pikit-custom` entry and died with
+         * `Unknown provider` — or a built-in provider's relay URL never landed and
+         * every prompt answered `401` from the official address. Either reads as
+         * "the key is wrong", for a write that failed underneath.
+         */
+        val modelsJsonWriteFailed: String
+
         /** Shown when the profile reached memory but not disk; the change is gone on relaunch. */
         val saveFailed: String
 
@@ -901,6 +940,17 @@ interface Strings {
          */
         val needProviderSubtitle: String
         val needModel: String
+
+        /**
+         * The wording for a model-list fetch that failed.
+         *
+         * The reason is a [DiscoveryProblem] rather than a string so that the
+         * sentence is *this* interface's and not the throw site's English. What
+         * each case says is up to the catalogs, but the shape is fixed: what
+         * happened, and where that leaves the user (a wrong URL looks like a
+         * wrong key; type the id by hand; pi's own catalog is what is left).
+         */
+        fun discoveryProblem(problem: DiscoveryProblem): String
 
         /**
          * The question asked when a form with unsaved edits is left.

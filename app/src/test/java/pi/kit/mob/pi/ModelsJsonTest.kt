@@ -1148,4 +1148,71 @@ class ModelsJsonTest {
             text(handwritten.provider("deepseek"), "baseUrl"),
         )
     }
+
+    /**
+     * The gate that decides whether a `models.json` that does not exist is created.
+     *
+     * The old gate checked `wanted` alone, which was right while a custom endpoint
+     * was the only reason to create the file (`customInUse` guards that separately).
+     * Once a built-in provider could carry an endpoint override, the same check
+     * dropped it on a fresh install: Xiaomi with a relay URL and no per-model
+     * numbers never created the file, so the override was never written and pi
+     * requested the official address — `401` for a key that was correct for the
+     * relay, which reads as "the key is wrong".
+     */
+    @Test
+    fun `a baseUrl override alone is enough to create a missing models json`() {
+        assertTrue(
+            "the endpoint override is an entry to write",
+            hasModelsJsonEntries(
+                definitions(
+                    wanted = emptyList(),
+                    baseUrl = "https://relay.example.com/v1",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `a model override alone is enough to create a missing models json`() {
+        assertTrue(
+            hasModelsJsonEntries(
+                definitions(
+                    wanted = emptyList(),
+                    overrides = mapOf("deepseek-chat" to ModelSettings(contextWindow = 200_000L)),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `a withdrawal alone does not conjure a file`() {
+        assertFalse(
+            "an id to take back out needs a file that is already there",
+            hasModelsJsonEntries(
+                definitions(wanted = emptyList(), ours = listOf("gone-v1")),
+            ),
+        )
+        assertFalse(
+            "a cleared override needs a file that is already there",
+            hasModelsJsonEntries(
+                definitions(
+                    wanted = emptyList(),
+                    baseUrl = "",
+                    writtenBaseUrl = "https://proxy.example.com/v1",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `nothing to say and nothing to withdraw is not enough`() {
+        assertFalse(hasModelsJsonEntries(definitions(wanted = emptyList())))
+        assertFalse(hasModelsJsonEntries(emptyMap()))
+    }
+
+    @Test
+    fun `a wanted entry is still enough`() {
+        assertTrue(hasModelsJsonEntries(definitions(listOf(entry("vision-v1")))))
+    }
 }
