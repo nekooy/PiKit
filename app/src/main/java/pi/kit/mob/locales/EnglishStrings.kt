@@ -173,8 +173,11 @@ internal object EnglishStrings : Strings {
         override val searching = "Searching conversations…"
         override fun contentMatch(snippet: String) = "Matched in the conversation: $snippet"
         override val select = "Select conversations"
+        override val selectAll = "Select all"
+        override val deselectAll = "Clear selection"
         override val deleteSelected = "Delete selected"
         override val cancelSelection = "Cancel selection"
+        override val recent = "Recent"
         override val back = "Back"
         override val empty =
             "No saved conversations yet.\nA conversation is written to disk once pi replies."

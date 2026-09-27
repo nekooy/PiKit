@@ -1,5 +1,6 @@
 package pi.kit.mob.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,9 +17,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Deselect
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,11 +42,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.locales.Strings
@@ -161,6 +166,35 @@ fun SessionsScreen(
             backContentDescription = text.sessions.back,
             actions = {
                 if (selecting) {
+                    // Scoped to `visible` rather than every saved conversation:
+                    // a search that has narrowed the page to three rows is a
+                    // list of three, and a button that silently selected rows
+                    // nobody can see would make the next delete a surprise.
+                    // Tapping again drops exactly those rows, so a selection
+                    // built up under an earlier filter is not thrown away by
+                    // clearing one list's worth of it.
+                    val visiblePaths = visible.map { it.path }.toSet()
+                    val allVisibleSelected =
+                        visiblePaths.isNotEmpty() && visiblePaths.all { it in selected }
+                    IconButton(
+                        onClick = {
+                            selected = if (allVisibleSelected) {
+                                selected - visiblePaths
+                            } else {
+                                selected + visiblePaths
+                            }
+                        },
+                        enabled = visiblePaths.isNotEmpty(),
+                    ) {
+                        Icon(
+                            if (allVisibleSelected) Icons.Filled.Deselect else Icons.Filled.SelectAll,
+                            contentDescription = if (allVisibleSelected) {
+                                text.sessions.deselectAll
+                            } else {
+                                text.sessions.selectAll
+                            },
+                        )
+                    }
                     IconButton(
                         onClick = {
                             confirmingDelete = summaries.filter { it.path in selected }
@@ -240,6 +274,27 @@ fun SessionsScreen(
         // `SettingsDivider` between them. The flat edge-to-edge list was the
         // report — no corners on the tap target, and a full-bleed hairline that
         // did not match the settings pages the rest of the app reads as one with.
+        //
+        // Pinned and unpinned are two labelled groups rather than one flat list
+        // with a glyph stuck on every pinned title. The old mark — a filled
+        // pushpin at 14dp in `primary`, hard against a bold title — was the
+        // whole of the "this is pinned" signal and it fought the title for
+        // attention on every row. Grouping does that work once, at the heading,
+        // and a pinned row only has to look slightly lifted (`primaryContainer`
+        // at half strength) to stay easy to pick out inside its group.
+        val pinnedVisible = visible.filter { it.pinned }
+        val otherVisible = visible.filter { !it.pinned }
+        val rows = buildList<ListRow> {
+            if (pinnedVisible.isNotEmpty()) {
+                add(ListRow.Section(text.sessions.pinned, showPin = true))
+                pinnedVisible.forEach { add(ListRow.Session(it, elevated = true)) }
+                if (otherVisible.isNotEmpty()) {
+                    add(ListRow.Section(text.sessions.recent, showPin = false))
+                }
+            }
+            otherVisible.forEach { add(ListRow.Session(it, elevated = false)) }
+        }
+
         Surface(
             color = MaterialTheme.colorScheme.surface,
             shape = MaterialTheme.shapes.medium,
@@ -252,81 +307,100 @@ fun SessionsScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 4.dp),
             ) {
-                itemsIndexed(visible, key = { _, it -> it.path }) { index, summary ->
-                    SessionRow(
-                        item = summary,
-                        text = text,
-                        selecting = selecting,
-                        checked = summary.path in selected,
-                        snippet = snippets[summary.path],
-                        onToggleChecked = {
-                            selected = if (summary.path in selected) {
-                                selected - summary.path
-                            } else {
-                                selected + summary.path
-                            }
-                        },
-                        onOpen = {
-                            // A turn in flight makes this a question rather than a
-                            // switch: pi aborts the running answer as the first step of
-                            // its own `switch_session` (`RuntimeHost.teardownCurrent`),
-                            // so the tap would stop an answer the reader may still want.
-                            // It used to be a flat refusal with a notice explaining why,
-                            // and the notice was the report — a tap that did nothing the
-                            // reader could act on. See [InterruptTurnDialog].
-                            if (session.turnInFlight) {
-                                pendingSwitch = summary
-                            } else {
-                                session.switchSession(summary)
-                                onOpened()
-                            }
-                        },
-                        // The row's actions are a menu, and every menu in PiKit is a
-                        // sheet body on the root's modal layer rather than a
-                        // `DropdownMenu` anchored to the button. An anchored menu is not
-                        // a view in the row: `Popup` is a focusable second window and it
-                        // leaves a zero-size layout node in this Row, which
-                        // `Arrangement.spacedBy` then charges a gap for — so tapping the
-                        // button moved it 4dp and the menu opened at the row's left edge
-                        // instead of under the button.
-                        onActions = {
-                            sheets.show(
-                                Sheet(key = "session-actions:${summary.path}") {
-                                    ReadOnlyBody(title = summary.title.ifBlank { text.sessions.emptyTitle }) {
-                                        item {
-                                            ReadOnlySheetRow(
-                                                label = text.sessions.rename,
-                                                value = null,
-                                                onClick = { renaming = summary },
-                                            )
+                itemsIndexed(rows, key = { index, row ->
+                    when (row) {
+                        is ListRow.Section -> "section-$index-${row.title}"
+                        is ListRow.Session -> row.item.path
+                    }
+                }) { index, row ->
+                    when (row) {
+                        is ListRow.Section -> SessionsSectionLabel(
+                            text = row.title,
+                            showPin = row.showPin,
+                            extraTop = row.title == text.sessions.recent,
+                        )
+                        is ListRow.Session -> SessionRow(
+                            item = row.item,
+                            text = text,
+                            selecting = selecting,
+                            checked = row.item.path in selected,
+                            snippet = snippets[row.item.path],
+                            elevated = row.elevated,
+                            onToggleChecked = {
+                                selected = if (row.item.path in selected) {
+                                    selected - row.item.path
+                                } else {
+                                    selected + row.item.path
+                                }
+                            },
+                            onOpen = {
+                                // A turn in flight makes this a question rather than a
+                                // switch: pi aborts the running answer as the first step of
+                                // its own `switch_session` (`RuntimeHost.teardownCurrent`),
+                                // so the tap would stop an answer the reader may still want.
+                                // See [InterruptTurnDialog].
+                                if (session.turnInFlight) {
+                                    pendingSwitch = row.item
+                                } else {
+                                    session.switchSession(row.item)
+                                    onOpened()
+                                }
+                            },
+                            // The row's actions are a menu, and every menu in PiKit is a
+                            // sheet body on the root's modal layer rather than a
+                            // `DropdownMenu` anchored to the button. An anchored menu is not
+                            // a view in the row: `Popup` is a focusable second window and it
+                            // leaves a zero-size layout node in this Row, which
+                            // `Arrangement.spacedBy` then charges a gap for.
+                            onActions = {
+                                val summary = row.item
+                                sheets.show(
+                                    Sheet(key = "session-actions:${summary.path}") {
+                                        ReadOnlyBody(title = summary.title.ifBlank { text.sessions.emptyTitle }) {
+                                            item {
+                                                ReadOnlySheetRow(
+                                                    label = text.sessions.rename,
+                                                    value = null,
+                                                    onClick = { renaming = summary },
+                                                )
+                                            }
+                                            item {
+                                                ReadOnlySheetRow(
+                                                    label = if (summary.pinned) {
+                                                        text.sessions.unpin
+                                                    } else {
+                                                        text.sessions.pin
+                                                    },
+                                                    value = null,
+                                                    onClick = {
+                                                        session.setPinned(summary, !summary.pinned)
+                                                        reload++
+                                                    },
+                                                )
+                                            }
+                                            item {
+                                                ReadOnlySheetRow(
+                                                    label = text.sessions.delete,
+                                                    value = null,
+                                                    onClick = { confirmingDelete = listOf(summary) },
+                                                )
+                                            }
                                         }
-                                        item {
-                                            ReadOnlySheetRow(
-                                                label = if (summary.pinned) {
-                                                    text.sessions.unpin
-                                                } else {
-                                                    text.sessions.pin
-                                                },
-                                                value = null,
-                                                onClick = {
-                                                    session.setPinned(summary, !summary.pinned)
-                                                    reload++
-                                                },
-                                            )
-                                        }
-                                        item {
-                                            ReadOnlySheetRow(
-                                                label = text.sessions.delete,
-                                                value = null,
-                                                onClick = { confirmingDelete = listOf(summary) },
-                                            )
-                                        }
-                                    }
-                                },
-                            )
-                        },
-                    )
-                    if (index < visible.lastIndex) SettingsDivider()
+                                    },
+                                )
+                            },
+                        )
+                    }
+                    // A hairline between two conversation rows only. A section
+                    // heading is the break — a divider after one would draw a
+                    // line under the label and another under the same gap.
+                    if (
+                        row is ListRow.Session &&
+                        index < rows.lastIndex &&
+                        rows[index + 1] is ListRow.Session
+                    ) {
+                        SettingsDivider()
+                    }
                 }
             }
         }
@@ -396,6 +470,62 @@ fun SessionsScreen(
     }
 }
 
+/** One line of the list card: a group heading, or a conversation row. */
+private sealed interface ListRow {
+    data class Section(val title: String, val showPin: Boolean) : ListRow
+
+    data class Session(
+        val item: PiAgentSession.SessionSummary,
+        val elevated: Boolean,
+    ) : ListRow
+}
+
+/**
+ * A group heading inside the list card.
+ *
+ * Same voice as `SettingsSection`'s label — `titleSmall`, SemiBold, `primary`,
+ * letterspaced uppercase — because the break between "已置顶" and "最近" is the
+ * same kind of break as the one between two settings cards. The pin glyph rides
+ * with the *heading* rather than with every row: one mark at the group is the
+ * whole signal, and the row is left to carry its title.
+ */
+@Composable
+private fun SessionsSectionLabel(
+    text: String,
+    showPin: Boolean,
+    extraTop: Boolean = false,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = if (extraTop) 18.dp else 12.dp,
+                bottom = 6.dp,
+            ),
+    ) {
+        if (showPin) {
+            Icon(
+                Icons.Filled.PushPin,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(end = 6.dp)
+                    .size(13.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            text = text.uppercase(),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 0.8.sp,
+        )
+    }
+}
+
 @Composable
 private fun SessionRow(
     item: PiAgentSession.SessionSummary,
@@ -403,6 +533,7 @@ private fun SessionRow(
     selecting: Boolean,
     checked: Boolean,
     snippet: String?,
+    elevated: Boolean,
     onToggleChecked: () -> Unit,
     onOpen: () -> Unit,
     onActions: () -> Unit,
@@ -417,6 +548,16 @@ private fun SessionRow(
             // Clipped to the card's radius before the ripple, so first and last
             // rows keep the rounded press outline the way settings rows do.
             .clip(MaterialTheme.shapes.medium)
+            // Half-strength `primaryContainer` is the row's only "pinned" mark
+            // left after the heading took over the job of saying so. Full
+            // strength read as a selected row; this is a lift, not a state.
+            .background(
+                if (elevated) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                } else {
+                    Color.Transparent
+                },
+            )
             .clickable { if (selecting) onToggleChecked() else onOpen() }
             .padding(start = if (selecting) 4.dp else 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -426,24 +567,12 @@ private fun SessionRow(
             Checkbox(checked = checked, onCheckedChange = { onToggleChecked() })
         }
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (item.pinned) {
-                    Icon(
-                        Icons.Filled.PushPin,
-                        contentDescription = text.sessions.pinned,
-                        modifier = Modifier
-                            .padding(end = 6.dp)
-                            .size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Text(
-                    item.title.ifBlank { text.sessions.emptyTitle },
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            Text(
+                item.title.ifBlank { text.sessions.emptyTitle },
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 buildString {
                     append(formatter.format(Date(item.modifiedAt)))

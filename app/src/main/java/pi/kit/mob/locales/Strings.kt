@@ -420,8 +420,26 @@ interface Strings {
         /** The snippet line's spoken name; the visible text is the match itself. */
         fun contentMatch(snippet: String): String
         val select: String
+
+        /**
+         * Select every row currently listed, or drop those that are checked.
+         *
+         * Scoped to the visible list rather than every saved conversation: a
+         * search that has narrowed the page to three rows is a list of three,
+         * and a button that silently selected rows nobody can see would make
+         * the next delete a surprise.
+         */
+        val selectAll: String
+        val deselectAll: String
         val deleteSelected: String
         val cancelSelection: String
+
+        /**
+         * The unpinned section's heading, shown only when something above it is
+         * pinned. Without that break a mixed list has no way to say where the
+         * pinned group ends.
+         */
+        val recent: String
         val back: String
         val empty: String
         fun nothingMatches(query: String): String
