@@ -841,8 +841,12 @@ private fun PiProvider.modelsEndpoint(): ModelsEndpoint? = when (this) {
     //    `ant-ling` are OpenAI-compatible in shape but their `/models` route is not
     //    documented anywhere this app can check, and an unverified guess costs a
     //    rejected key's worth of confusion when the key is in fact fine.
+    //  * `meta` speaks `openai-responses` at `api.meta.ai/v1` and authenticates
+    //    with a key, but whether that base serves a `/models` list is likewise
+    //    unverified — its models are in pi's own catalogue either way.
     PiProvider.MINIMAX,
     PiProvider.MINIMAX_CN,
+    PiProvider.META,
     PiProvider.XIAOMI,
     PiProvider.XIAOMI_TOKEN_PLAN_CN,
     PiProvider.XIAOMI_TOKEN_PLAN_AMS,

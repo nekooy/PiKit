@@ -13,9 +13,14 @@ import org.junit.Test
  * provider reports "no authentication method configured" or answers `401` with a key that
  * is perfectly good — with the wrong variable name nowhere in the message. So the table
  * below is pi's, copied from `getApiKeyEnvVars` in the bundled
- * `@earendil-works/pi-ai/providers/all` (`dist/bundle/chunks/chunk-JVUZSMYM.js`,
- * the same table pi's help text prints), and this test is what makes a typo in the enum a
+ * `@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-OJP47DM6.js`
+ * (the same table pi's help text prints), and this test is what makes a typo in the enum a
  * failing build rather than a support question.
+ *
+ * The copy is a copy: a pi release that adds a provider does not fail this test, and the
+ * symptom of that drift is a provider the picker simply does not have — which is how
+ * `meta` sat missing for one release cycle while `getApiKeyEnvVars` already listed it.
+ * `tools/check-provider-table.py` is the half that notices.
  *
  * It also pins the *scope* of the list, which is a decision rather than an omission: a
  * provider is here when a phone form with one key field can configure it. Pi's OAuth-only
@@ -37,6 +42,7 @@ class PiProviderTest {
         "groq" to "GROQ_API_KEY",
         "huggingface" to "HF_TOKEN",
         "kimi-coding" to "KIMI_API_KEY",
+        "meta" to "META_API_KEY",
         "minimax" to "MINIMAX_API_KEY",
         "minimax-cn" to "MINIMAX_CN_API_KEY",
         "mistral" to "MISTRAL_API_KEY",

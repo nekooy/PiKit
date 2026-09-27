@@ -569,6 +569,12 @@ def run_tests() -> bool:
         ("the relocator", lambda: python_tool("test-relocate.py")),
         ("the manual's reflow", lambda: python_tool("reflow-manual.py", "--check")),
         ("the terminal banners", lambda: python_tool("check-locales.py")),
+        # The provider table is a copy of pi's, and a copy is a thing that drifts:
+        # a pi release that adds a provider does not fail `PiProviderTest`, which
+        # compares against the copy. This reads the table out of the bundled pi
+        # and is the half that notices — `meta` sat missing for one release cycle
+        # while the bundle already shipped it.
+        ("the provider table", lambda: python_tool("check-provider-table.py")),
         ("the agent guard", lambda: node_tool("test-safety-guard.mjs")),
         # The README's icon is a second copy of the launcher icon, which is a thing
         # that drifts: nothing about editing the vector would remind anyone that the
@@ -583,6 +589,14 @@ def run_tests() -> bool:
         # broken relocator.
         if name == "the relocator" and not (REPO_ROOT / ".runtime-build" / "cache" / "debs").is_dir():
             log(f"skip {name}: no .deb cache under .runtime-build/cache/debs, which the image "
+                "builder fills")
+            continue
+        # The provider table is read out of the bundled pi; without that cache the
+        # checker has nothing to compare against, same as the relocator above.
+        if name == "the provider table" and not (
+            REPO_ROOT / ".runtime-build" / "cache" / "pi"
+        ).is_dir():
+            log(f"skip {name}: no pi bundle under .runtime-build/cache/pi, which the image "
                 "builder fills")
             continue
         runnable.append((name, check))
