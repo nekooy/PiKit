@@ -415,6 +415,25 @@ class PiAgentSession private constructor(context: Context) {
             restoreRememberedSession()
 
             _agent.value = AgentStatus.Running
+            // The foreground service is what keeps this process alive while the
+            // UI is backgrounded. `MainActivity` starts one on every launch, but
+            // that is not the only way a start happens: the Agent page's
+            // Restart, `scheduleRestart` after a settings edit, the one
+            // automatic recovery after a crash, and a prompt into a dead
+            // connection all land here, and the service is gone after a
+            // deliberate stop or after a first start that failed and tore it
+            // down. Without this the turn that most needed keep-alive was the
+            // one running with none. Idempotent: a service already supervising
+            // just re-syncs its notification.
+            //
+            // `runCatching` because Android 8+ refuses `startService` from the
+            // background and 12+ restricts `startForegroundService` there: a
+            // start that happens to land after the user has left the app must
+            // not fail the agent launch over a keep-alive nicety. The child is
+            // already up at this point; the service is only the shade entry and
+            // the reclaim protection.
+            runCatching { PiAgentService.start(appContext) }
+                .onFailure { Log.w(TAG, "Could not bring the agent service up", it) }
             // The settings page's own model list is one tap away and the thinking
             // picker needs the level list pi derives from the model, so it is loaded
             // as soon as the process can answer. `get_available_models` used to be

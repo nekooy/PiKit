@@ -17,6 +17,35 @@ The reducer is a pure function over `(ConversationState, PiRecord)`, so the stat
 testable on the JVM against captured wire traffic — no device, no live model. The service owns no
 state, so the UI can bind and unbind freely and a turn keeps running when you leave the app.
 
+## The keep-alive is the notification, and the notification is the system's to hide
+
+A foreground service exists *because* of its notification: that is the deal Android offers. There
+is deliberately **no in-app switch** for the shade entry. An "hide it" switch would have to either
+drop the foreground claim — and with it the keep-alive, which is the only thing the service is for —
+or call `startForeground` and then pretend the notification is silent, which Android 12+ forbids
+with `ForegroundServiceDidNotStartInTimeException`. A user who does not want to see the entry turns
+the *Agent* channel (or the app's notifications) off in system settings instead: `startForeground`
+still succeeds, the service stays a foreground service, and the notification is merely not shown.
+That is strictly better than anything an in-app switch could offer, and it is the one answer that
+keeps both the silence and the keep-alive.
+
+Two lifecycle facts are load-bearing, and both were measured on a device rather than reasoned:
+
+- **`startForeground` is owed before the agent is up, not when it is.** A cold launch is in
+  `Stopped` while the runtime image unpacks, which is far longer than Android 12+'s five-second
+  deadline. Waiting for `Running` before promoting is a
+  `ForegroundServiceDidNotStartInTimeException` on first run. The service promotes as soon as it is
+  started and the status collector takes the entry away again if the agent is not actually up — a
+  brief "running" during `Starting` is the cheaper lie.
+- **The service tracks `AgentStatus` rather than deciding once in `onStartCommand`.** Deciding once
+  meant a start that later succeeded from the UI — the Agent page's Restart, `scheduleRestart`
+  after a settings edit, the one automatic recovery after a crash — never brought the service back,
+  so the turn that needed keep-alive most was the one running without it; and a deliberate stop from
+  the Agent page left the shade claiming "running". The collector keeps the notification honest,
+  tears the service down when a stop the user asked for lands (debounced, because the two restart
+  helpers stop and start in one breath), and `startAgent` itself asks for the service on success,
+  which is what covers every caller that is not `MainActivity`.
+
 ## Where state lives
 
 | What | Where |
