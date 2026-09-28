@@ -162,11 +162,13 @@ two dispatches racing to create the same tag is the failure that guard exists fo
 from a job of its own, which needs only `contents: write` and can be re-run alone ("Re-run failed
 jobs") without rebuilding anything.
 
-**The assets are named `PiKit-<version>-<abi>.apk`**, renamed in place after the signing check —
-one directory, one candidate for "the APK", which is what the checksum file, the artifact and the
-publishing job all pick up. The step refuses to write a
-`SHA256SUMS` with no checksum line in it, and writes the checksums to the run's step summary as
-well.
+**The assets keep Gradle's names** (`app-arm64-release.apk`, `app-x64-release.apk`), so
+`https://github.com/<owner>/<repo>/releases/latest/download/<name>` is a stable link
+across versions — the URL resolves the newest release, never a filename pattern. An
+earlier `PiKit-<version>-<abi>.apk` rename said what a file in Downloads was; it is what
+made the latest link unusable. The release title and tag carry the version instead. The
+checksum step refuses to write a `SHA256SUMS` with no checksum line in it, and writes the
+checksums to the run's step summary as well.
 
 **The signing check is not a formality**: a release with none of the four
 `pikit.keystore.*` properties is signed with the debug key, which is why the workflow
@@ -249,7 +251,7 @@ users, never for a version people will install and keep.
    is the upgrade path a real user takes, and it is the one thing the build itself
    cannot check — a change to the application id, to the keystore or to the runtime
    revision's comparison shows up here and nowhere else.
-3. **Check the assets**: `PiKit-<version>-arm64.apk`, `PiKit-<version>-x64.apk` and
+3. **Check the assets**: `app-arm64-release.apk`, `app-x64-release.apk` and
    `SHA256SUMS`, and that the sizes on the release page match the local ones rather than a
    truncated upload.
 4. **Confirm the signing**, if it matters: `apksigner verify --print-certs` on the
@@ -286,8 +288,8 @@ sentence about one release is wrong in the next.
 
 | 设备 | 文件 |
 | --- | --- |
-| 手机、平板 | `PiKit-<version>-arm64.apk` |
-| `x86_64` 模拟器 | `PiKit-<version>-x64.apk` |
+| 手机、平板 | `app-arm64-release.apk` |
+| `x86_64` 模拟器 | `app-x64-release.apk` |
 
 此版本和上版本使用同一把签名密钥，且无破坏性变更，可以直接覆盖安装升级。
 
