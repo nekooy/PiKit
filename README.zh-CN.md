@@ -4,15 +4,13 @@
 
 <h1 align="center">PiKit</h1>
 
-<p align="center"><strong>上游 pi 与 Termux，装进同一个 APK 的简洁安卓 AI agent。</strong></p>
+<p align="center"><strong>一个基于 pi 和 Termux、开箱即用、界面干净的安卓 AI Agent。</strong></p>
 
-[English](README.md) | 简体中文
+<p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上，事先不需要安装任何东西：一个
-Termux 环境、Node.js、`ripgrep`、`fd` 和 `pi` 命令行都烘焙在 APK 里，首次启动时从里面解包——
-装好 APK 之后不需要再连任何软件源，也没有任何包要下载。提问本身仍要送到它所在的供应商，所以
-需要的连接只有「能连上那家供应商」这一条。Kotlin 和 Jetpack Compose 架在一个引入的 Termux
-终端之上，任何地方都没有 WebView。
+PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux 环境、Node.js 与
+`pi` 命令行全部烘焙在 APK 里，首次启动解包即用，无需软件源或额外下载——唯一要连的是模型
+供应商。
 
 <p align="center">
   <img src="docs/assets/preview-0.2.0.webp" width="90%" alt="PiKit 0.2.0——对话、终端、文件、设置四个标签页">
@@ -37,20 +35,20 @@ Termux 环境、Node.js、`ripgrep`、`fd` 和 `pi` 命令行都烘焙在 APK �
 
 ## 安装
 
-从 [releases 页面](https://github.com/nekooy/PiKit/releases/latest) 下载——每个 CPU 架构一个
-APK，约 107 MB，并且有意不上架 Google Play。
+<p align="center">点击下方图标下载</p>
 
-| 设备 | 文件 |
-| --- | --- |
-| 手机、平板 | `PiKit-<version>-arm64.apk` |
-| `x86_64` 模拟器 | `PiKit-<version>-x64.apk` |
+<p align="center">
+  <a href="https://github.com/nekooy/PiKit/releases/latest/download/app-arm64-release.apk">
+    <img src="https://img.shields.io/badge/Download%20APK-arm64-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="下载 APK">
+  </a>
+</p>
 
-`adb shell getprop ro.product.cpu.abi` 会告诉你属于哪种，装错也不会出事：应用会报告这个包没有
-该设备的运行时镜像，而不是等到启动后才失败。用 `sha256sum -c SHA256SUMS` 校验，点文件安装或者用
-`adb install PiKit-<version>-arm64.apk`，并且给首次启动一分钟——它会解包运行时（约 285 MB），
-然后询问通知权限和「所有文件访问」（只有 **设置 → 手机存储** 需要它）。**设置 → 模型与供应商**
-填 API Key，或者在有订阅时到终端标签页运行 `pi /login`。更新同样是手动的：**关于 PiKit →
-检查更新** 在你点它时才去问 GitHub，新 APK 覆盖安装即可保留数据。
+<p align="center"><sub>手机和平板 · 约 107 MB</sub></p>
+
+首次启动会解包运行时（约几秒）。到 **设置 → 模型与供应商** 填 API Key，或在有订阅时
+于终端标签页运行 `pi /login`。更新时覆盖安装即可保留数据——需要时点 **关于 PiKit →
+检查更新**。其他架构和校验文件见 [releases 页面](https://github.com/nekooy/PiKit/releases/latest)；
+`adb shell getprop ro.product.cpu.abi` 会告诉你该下哪个文件。
 
 ## 构建
 
