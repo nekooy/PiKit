@@ -65,4 +65,64 @@ class LatexCompatTest {
         // whole command name before it looks it up.
         assertEquals("\\centering x", LatexCompat.rewrite("\\centering x"))
     }
+
+    @Test
+    fun `rows with no environment of their own are wrapped in aligned`() {
+        // The report "多行公式不显示": `&` and `\\` outside an environment are a parse
+        // error to JLaTeXMath, and a writer who omits `\begin{aligned}` still means
+        // two rows.
+        assertEquals(
+            "\\begin{aligned}\na &= b \\\\\nc &= d\n\\end{aligned}",
+            LatexCompat.wrapRows("a &= b \\\\\nc &= d"),
+        )
+    }
+
+    @Test
+    fun `a body that already opens an environment is left alone`() {
+        val cases = "\\begin{cases}\nx = 1 & y = 2 \\\\\nz = 3\n\\end{cases}"
+        assertEquals(cases, LatexCompat.wrapRows(cases))
+    }
+
+    @Test
+    fun `a one-line formula is left alone`() {
+        assertEquals("\\frac{a}{b}", LatexCompat.wrapRows("\\frac{a}{b}"))
+    }
+
+    @Test
+    fun `row-break spacing is dropped even inside an environment`() {
+        // The wrap is skipped when the body already opens one, but the dimension
+        // goes either way: JLaTeXMath refuses `\\[6pt]` wherever it appears.
+        assertEquals(
+            "\\begin{aligned}\na &= b \\\\\nc &= d\n\\end{aligned}",
+            LatexCompat.wrapRows("\\begin{aligned}\na &= b \\\\[6pt]\nc &= d\n\\end{aligned}"),
+        )
+    }
+
+    @Test
+    fun `a row break's spacing argument is dropped and the break kept`() {
+        // `\\[6pt]` is a row break with extra vertical space. JLaTeXMath refuses the
+        // optional dimension, and the report "换行间距指令如[6pt]不会正常渲染" is that
+        // refusal. The break is the mathematics; the dimension is layout.
+        assertEquals("a &= b \\\\ c &= d", LatexCompat.rewrite("a &= b \\\\[6pt] c &= d"))
+        assertEquals("a \\\\ b", LatexCompat.rewrite("a \\\\[1em] b"))
+        assertEquals("a \\\\ b", LatexCompat.rewrite("a \\\\* b"))
+    }
+
+    @Test
+    fun `vertical space is dropped like horizontal space`() {
+        assertEquals("xy", LatexCompat.rewrite("x\\vspace{6pt}y"))
+        assertEquals("x  y", LatexCompat.rewrite("x \\vspace{6pt} y"))
+    }
+
+    @Test
+    fun `a starred command drops its group like the unstarred one`() {
+        assertEquals("xy", LatexCompat.rewrite("x\\hspace*{6pt}y"))
+    }
+
+    @Test
+    fun `sqrt's optional root is kept`() {
+        // `\sqrt[3]{x}` is a cube root, not a row break: the bracket rule only
+        // applies after `\\`.
+        assertEquals("\\sqrt[3]{x}", LatexCompat.rewrite("\\sqrt[3]{x}"))
+    }
 }

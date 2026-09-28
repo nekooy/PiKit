@@ -383,10 +383,12 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
             //
             // The delimiters are **put back**, and that is the whole of why this works
             // rather than a formality: `MdBlock.Formula` holds the body with its
-            // `$$`/`\[`/`\begin{}` markers already stripped (see `displayFormula`), and the
+            // `$$`/`\[` markers already stripped (see `displayFormula`), and the
             // inline path decides what is mathematics by looking for a delimiter. Handed the
             // bare body it sees prose, and a display formula draws as its own LaTeX source —
-            // which is exactly what the first version of this did.
+            // which is exactly what the first version of this did. A `\begin{}` body already
+            // carries its own environment and is re-fenced the same way, which is what makes
+            // `&` and `\\` mean something to the renderer.
             //
             // The measurement is off the UI thread (`MathCache`), so this draws the
             // formula when it is ready and its own source until then. Deferring the *draw*
@@ -1084,23 +1086,28 @@ private fun collect(lines: List<String>, index: Int, close: String, first: Strin
     return FormulaSource(body.toString().trim(), next)
 }
 
-/** The body of a `\begin{env} … \end{env}`, without the markers. */
+/** The body of a `\begin{env} … \end{env}`, **markers included**. */
 private fun environment(lines: List<String>, index: Int): FormulaSource? {
     val opening = lines[index].trim()
     val name = environmentOf(opening) ?: return null
     val closing = "$ENVIRONMENT_CLOSE$name}"
 
-    val body = StringBuilder(opening.substringAfter('}', "").trim())
+    // The environment is kept whole, markers and all. JLaTeXMath needs
+    // `\begin{cases}`/`\end{cases}` around an `&` and a `\\` to know they are a
+    // two-row cases rather than two tokens with no meaning; stripping the
+    // markers and re-fencing the body as `$$…$$` handed the renderer a bare
+    // `x = 1 & y = 2 \\ z = 3`, which it refuses — the report "多行公式不显示".
+    val body = StringBuilder(opening)
     var next = index + 1
     while (next < lines.size) {
         val candidate = lines[next].trim()
         val end = candidate.indexOf(closing)
         if (end >= 0) {
-            if (body.isNotEmpty()) body.append('\n')
-            body.append(candidate.substring(0, end).trim())
+            body.append('\n')
+            body.append(candidate, 0, end + closing.length)
             return FormulaSource(body.toString().trim(), next + 1)
         }
-        if (body.isNotEmpty()) body.append('\n')
+        body.append('\n')
         body.append(candidate)
         next++
     }
@@ -2295,7 +2302,16 @@ private fun looksLikeMath(body: String): Boolean {
     body.forEachIndexed { index, char ->
         when (char) {
             '^', '_', '{', '}', '=', '+', '<', '>' -> return true
-            '\\' -> if (body.getOrNull(index + 1)?.isLetter() == true) return true
+            '\\' -> {
+                val next = body.getOrNull(index + 1)
+                // A command name, a row break (`\\`), or a math-space (`\,`, `\;`, `\!`,
+                // `\quad`). The row break is the one that was missing: a padded
+                // `$ a \\[6pt] b $` carries no other markup, and without this it stayed
+                // prose — which is how `[6pt]` ended up parsed as a Markdown link
+                // instead of the line-break's own spacing (the report "换行间距指令如
+                // [6pt]不会正常渲染").
+                if (next?.isLetter() == true || next == '\\') return true
+            }
         }
     }
     return false
@@ -2403,10 +2419,16 @@ private fun AnnotatedString.Builder.drawTokens(
                     append(token.source)
                 } else {
                     val id = "math${key()}"
-                    // The alternative text is the source, delimiters included: it is
-                    // what a screen reader announces and what a `TextMeasurer` uses
-                    // for the placeholder's width.
-                    appendInlineContent(id, token.source)
+                    // The alternative text is the source, delimiters included, with every
+                    // newline flattened to a space. `appendInlineContent` tags one *run of
+                    // characters*, and Compose's inline content cannot span a line break: a
+                    // multi-line body (`\begin{aligned}…\\…\end{aligned}`, or a `$$` block
+                    // fenced across lines) put its newlines inside the range and the
+                    // placeholder never drew — the report "多行公式不显示". The source is what
+                    // a screen reader announces and what a `TextMeasurer` uses for the
+                    // placeholder's width; neither needs the original line breaks, and the
+                    // renderer is handed `unescapeMath` of the *token*, which still has them.
+                    appendInlineContent(id, token.source.replace('\n', ' '))
                     content[id] = measured
                 }
             }

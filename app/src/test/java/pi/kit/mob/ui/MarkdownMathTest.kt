@@ -52,11 +52,12 @@ class MarkdownMathTest {
         // The rows are *not* separated here: `cases`, `aligned`, `gather` and the
         // matrix environments are all supported by the renderer, which needs the
         // environment intact to know what to do with an `&` and a `\\`. Splitting
-        // them in the parser would hand it N unrelated one-line formulas instead of
-        // one two-row `cases`, which is a different picture.
+        // them in the parser — or stripping the `\begin{}`/`\end{}` and handing the
+        // renderer a bare `x = 1 & y = 2 \\ z = 3` — both produce the report
+        // "多行公式不显示": the `&` and `\\` only mean something inside the environment.
         val block = blocks("\\begin{cases}\nx = 1 & y = 2 \\\\\nz = 3\n\\end{cases}")
             .single() as MdBlock.Formula
-        assertEquals("x = 1 & y = 2 \\\\\nz = 3", block.body)
+        assertEquals("\\begin{cases}\nx = 1 & y = 2 \\\\\nz = 3\n\\end{cases}", block.body)
     }
 
     @Test
@@ -91,6 +92,14 @@ class MarkdownMathTest {
         assertTrue(containsInlineMath("The area is $\\pi r^2$ exactly."))
         assertTrue(containsInlineMath("The area is \\(\\pi r^2\\) exactly."))
         assertTrue(containsInlineMath("\$\$x^2\$\$ written inside a sentence"))
+    }
+
+    @Test
+    fun `a row break alone is enough to make a padded formula mathematics`() {
+        // `$ a \\[6pt] b $` carries no other markup. Without `\\` counting, the
+        // padded body stayed prose and `[6pt]` was parsed as a Markdown link —
+        // the report "换行间距指令如[6pt]不会正常渲染".
+        assertTrue(containsInlineMath("$ a \\\\[6pt] b $"))
     }
 
     @Test
@@ -337,6 +346,29 @@ class MarkdownMathTest {
         assertTrue(
             "and the link is a link",
             rendered.text.getLinkAnnotations(0, rendered.text.length).isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun `a multi-line formula's placeholder carries no newline`() {
+        // `appendInlineContent` tags one run of characters, and Compose's inline
+        // content cannot span a line break. The body of a multi-line formula is full
+        // of them (`\begin{aligned}…\\…`, a `$$` block fenced across lines), and
+        // putting the source in unchanged left the newlines inside the range — the
+        // placeholder never drew, which is the report "多行公式不显示". The renderer
+        // still receives the body with its line breaks; only the placeholder's
+        // alternative text is flattened.
+        val source = "\$\$\\begin{aligned}\na &= b \\\\\nc &= d\n\\end{aligned}\$\$"
+        val rendered = renderInline(
+            text = source,
+            style = style,
+            method = { _, _ -> stubContent() },
+        )
+        assertEquals(1, rendered.inlineContent.size)
+        val alternate = rendered.text.text
+        assertFalse(
+            "the placeholder's alternative text is one line, got: ${alternate.replace("\n", "\\n")}",
+            alternate.contains('\n'),
         )
     }
 

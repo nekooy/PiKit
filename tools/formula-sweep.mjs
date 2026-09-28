@@ -67,6 +67,12 @@ const CONSTRUCTS = [
   '$\\substack{a \\\\ b}$',
   '$\\mid$ $\\nmid$ $\\shortmid$',
   '$P(A_i\\mid B)=\\dfrac{P(A_i)P(B\\mid A_i)}{\\sum_j P(A_j)P(B\\mid A_j)}$',
+  // Row-break spacing and vertical space: `\\[6pt]` is what a writer reaches for
+  // when two rows of a derivation sit too close. JLaTeXMath refuses the dimension
+  // (the report "换行间距指令如[6pt]不会正常渲染"), so `LatexCompat` drops it and
+  // keeps the break — these two are here so the sweep shows the rewrite's effect.
+  '$\\begin{aligned} a &= b \\\\[6pt] c &= d \\end{aligned}$',
+  '$x \\vspace{6pt} y$',
 ]
 
 // The id and timestamp decide where the session sorts in 历史对话; a fixed one keeps the run
