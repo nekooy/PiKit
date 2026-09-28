@@ -262,24 +262,15 @@ jobs:
             echo "$apk carries the release key"
           done
 
-      # The APKs are named for the release, not for Gradle. `app-arm64-release.apk` says nothing
-      # about what it is or which version it belongs to, and that name is what a reader sees on
-      # the release page and in their downloads folder — measured before this step existed, and
-      # the reason for the report "你gh发布apk的文件名带不带PiKit和版本". `PiKit-0.1.0-arm64.apk`
-      # says both, and sorts beside the checksum file it belongs to.
+      # The APKs keep Gradle's names (`app-arm64-release.apk`). A stable name is what
+      # `https://github.com/<owner>/<repo>/releases/latest/download/<name>` needs — the
+      # URL resolves the newest release but never a filename pattern — so a name that
+      # carries the version breaks every "always the newest APK" link the moment the
+      # version moves. The release title and tag carry the version instead.
       #
-      # Renamed **in place** rather than copied: the checksum step, the artifact and the publishing
-      # job all work off `*/release/*.apk` by glob, so one directory keeps one candidate for "the
-      # APK". Renaming happens after the fingerprint check, because that check should name the file
-      # the build produced if it fails.
-      - name: Name the APKs for the release
-        run: |
-          version="${{ steps.version.outputs.name }}"
-          for apk in app/build/outputs/apk/*/release/*.apk; do
-            abi="$(basename "$(dirname "$(dirname "$apk")")")"
-            mv "$apk" "$(dirname "$apk")/PiKit-$version-$abi.apk"
-          done
-          ls -l app/build/outputs/apk/*/release/
+      # The earlier `PiKit-<version>-<abi>.apk` rename existed so a file in Downloads
+      # said what it was; it is what made the latest link unusable, and the trade was
+      # made in favour of the link.
 
       - name: Checksums
         run: |
@@ -391,6 +382,6 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "PiKit ${{ needs.release.outputs.version }}" \
             --generate-notes \
-            app/build/outputs/apk/arm64/release/PiKit-${{ needs.release.outputs.version }}-arm64.apk \
-            app/build/outputs/apk/x64/release/PiKit-${{ needs.release.outputs.version }}-x64.apk \
+            app/build/outputs/apk/arm64/release/app-arm64-release.apk \
+            app/build/outputs/apk/x64/release/app-x64-release.apk \
             SHA256SUMS
