@@ -4,16 +4,14 @@
 
 <h1 align="center">PiKit</h1>
 
-<p align="center"><strong>Upstream pi and Termux, sealed in one APK — a lean Android AI agent.</strong></p>
+<p align="center"><strong>A clean, out-of-the-box Android AI agent built on pi and Termux.</strong></p>
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-PiKit runs the [pi](https://pi.dev) coding agent on an Android phone with nothing to
-install first: a Termux environment, Node.js, `ripgrep`, `fd` and the `pi` CLI are baked
-into the APK and unpacked from it on first launch — no repository to reach, no package to
-fetch after the APK is installed. A prompt still travels to the provider it runs on, so the
-only connection needed is one that can reach that provider. Kotlin and Jetpack Compose over
-a vendored Termux terminal, and no WebView anywhere.
+PiKit runs the [pi](https://pi.dev) coding agent on an Android phone. The Termux
+environment, Node.js and the `pi` CLI are baked into the APK and unpacked on first
+launch — no repository to reach, no package to fetch. The only connection needed is one
+that can reach the model provider.
 
 <p align="center">
   <img src="docs/assets/preview-0.2.0.webp" width="90%" alt="PiKit 0.2.0 — the Chat, Terminal, Files and Settings tabs">
@@ -42,23 +40,22 @@ a vendored Termux terminal, and no WebView anywhere.
 
 ## Install
 
-Download from the [releases page](https://github.com/nekooy/PiKit/releases/latest) — one
-APK per CPU architecture, about 107 MB, and no Play Store listing by design.
+<p align="center">Click the icon below to download</p>
 
-| Device | File |
-| --- | --- |
-| phone, tablet | `PiKit-<version>-arm64.apk` |
-| `x86_64` emulator | `PiKit-<version>-x64.apk` |
+<p align="center">
+  <a href="https://github.com/nekooy/PiKit/releases/latest/download/app-arm64-release.apk">
+    <img src="https://img.shields.io/badge/Download%20APK-arm64-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Download APK">
+  </a>
+</p>
 
-`adb shell getprop ro.product.cpu.abi` says which is yours, and the wrong one is
-harmless: the app reports that the build carries no image for the device instead of
-starting. Verify with `sha256sum -c SHA256SUMS`, install by tapping the file or with
-`adb install PiKit-<version>-arm64.apk`, and give the first launch a minute — it unpacks the
-runtime (about 285 MB), then asks about notifications and "all files access" (needed only for
-**Settings → Shared storage**). **Settings → Model & provider** takes an API key, or
-`pi /login` in the Terminal tab for a subscription. Updating is manual too: **About PiKit
-→ Check for updates** asks GitHub when you tap it, and a newer APK installs over the old
-one with your data intact.
+<p align="center"><sub>Phones and tablets · about 107 MB</sub></p>
+
+First launch unpacks the runtime (a few seconds). Give it the API key under
+**Settings → Model & provider**, or `pi /login` in the Terminal tab for a subscription.
+Updates install over the old APK with your data intact — **About PiKit → Check for
+updates** when you want one. Other builds and checksums live on the
+[releases page](https://github.com/nekooy/PiKit/releases/latest); `adb shell getprop
+ro.product.cpu.abi` tells you which file is yours.
 
 ## Build
 
