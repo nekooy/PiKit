@@ -1795,9 +1795,11 @@ private const val PROMPT_MAX_SHARE = 0.86f
  * written down twice, and the row is moved by it so the glyph lands on the column the
  * message's text starts at. The timestamp keeps the distance from the button it had.
  *
- * Which side is pulled depends on what actually ends the row: a left-aligned row ends
- * with the button, so it moves left; a right-aligned one ends with the timestamp when
- * there is one — its own ink is already flush — and with the button when there is not.
+ * Which side is pulled depends on which side the *button* ends: a left-aligned row
+ * starts with it, a right-aligned one ends with it (the timestamp is inboard either
+ * way, so the two rows are mirror images — time toward the bubble, the glyph at the
+ * outer edge). The button's ink is smaller than its box, so both sides move out by
+ * [CopyButtonInkInset].
  *
  * ## Why the row is the accent colour
  *
@@ -1827,12 +1829,10 @@ private fun MessageMeta(
         if (item.createdAt > 0L) text.chat.messageTime(item.createdAt, now) else null
     }
 
-    // See "Why the row is pulled out by the glyph's inset" above.
-    val pull = when {
-        alignment != Alignment.End -> -CopyButtonInkInset
-        stamp == null -> CopyButtonInkInset
-        else -> 0.dp
-    }
+    // See "Why the row is pulled out by the glyph's inset" above. The button sits at
+    // the row's outer edge on both sides — left for an answer, right for a prompt —
+    // so the pull is on that side and the same magnitude either way.
+    val pull = if (alignment == Alignment.End) CopyButtonInkInset else -CopyButtonInkInset
 
     Row(
         modifier = Modifier
@@ -1846,12 +1846,25 @@ private fun MessageMeta(
         },
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Mirrored order: an answer is [button][time] at the left, a prompt is
+        // [time][button] at the right. The button is always the outer glyph, which
+        // is what "copy sits under the bubble's edge" means on either side.
+        val timeThenButton = alignment == Alignment.End
+        if (timeThenButton && stamp != null) {
+            Text(
+                text = stamp,
+                modifier = Modifier.padding(end = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = accent,
+                maxLines = 1,
+            )
+        }
         CopyButton(
             onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(messageSource(item))) } },
             contentDescription = text.chat.copyMessage,
             tint = accent,
         )
-        if (stamp != null) {
+        if (!timeThenButton && stamp != null) {
             Text(
                 text = stamp,
                 modifier = Modifier.padding(start = 2.dp),
