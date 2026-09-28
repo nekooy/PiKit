@@ -240,11 +240,16 @@ private const val PAD = 2
  * goes, and the numbers it returns are all the text layout needs.
  */
 private fun typeset(body: String, spec: MathSpec): Formula {
+    // Rows first: `&` and `\\` outside an environment are not multi-line mathematics to
+    // the renderer, they are a parse error (the report "多行公式不显示"). `wrapRows` is
+    // the writer's missing `\begin{aligned}`; the rewrites below are for constructs the
+    // renderer does not know at all.
+    val prepared = LatexCompat.wrapRows(body)
     // The first formula is also what loads JLaTeXMath's predefined command table, which is what
     // the aliases in `LatexCompat` need; installing them once, here, is the earliest they can work.
-    val drawable = runCatching { buildDrawable(body, spec) }.getOrElse { failure ->
-        val rewritten = LatexCompat.rewrite(body)
-        if (rewritten == body) throw failure
+    val drawable = runCatching { buildDrawable(prepared, spec) }.getOrElse { failure ->
+        val rewritten = LatexCompat.rewrite(prepared)
+        if (rewritten == prepared) throw failure
         Log.i("PiKit", "formula rewritten to typeset it: $body  ->  $rewritten")
         buildDrawable(rewritten, spec)
     }

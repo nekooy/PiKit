@@ -38,13 +38,16 @@ import android.util.Log
 import org.scilab.forge.jlatexmath.MacroInfo
 
 /** Commands that draw nothing: dropped with the group that follows them. */
-private val DROPPED = setOf("tag", "label", "nonumber", "notag", "hfill", "hspace")
+private val DROPPED = setOf("tag", "label", "nonumber", "notag", "hfill", "hspace", "vspace")
 
 /** Commands that decorate their argument: the argument is kept, the decoration is dropped. */
 private val UNWRAPPED = setOf("cancel", "hcancel", "sout", "xout", "mathclap", "phantom")
 
 /** Commands whose name is the only thing wrong with them. */
 private val RENAMED = mapOf("ce" to "text", "color" to "textcolor")
+
+/** The opening of a `\begin{…}`, read as a plain prefix — see `Markdown.kt` on regexes. */
+private const val ENVIRONMENT_OPEN = "\\begin{"
 
 internal object LatexCompat {
 
@@ -63,6 +66,51 @@ internal object LatexCompat {
                 commands["textcolor"]?.let { commands["color"] = it }
             }
         }.onFailure { Log.w(TAG, "could not install the LaTeX command aliases", it) }
+    }
+
+    /**
+     * Wraps a body that uses `&` or `\\` with no environment of its own, and drops the
+     * spacing a row break carries.
+     *
+     * A writer who means two rows and omits `\begin{aligned}` gets a formula JLaTeXMath
+     * refuses: `&` and `\\` only lay out inside `aligned`/`cases`/`matrix`. Wrapping in
+     * `aligned` is the shape the writer meant. A body that already opens an environment
+     * — or that has `\\` only inside a command like `\substack` — is left alone on the
+     * wrap, but the `\\[6pt]` dimension is dropped either way: JLaTeXMath refuses it
+     * (the report "换行间距指令如[6pt]不会正常渲染"), and the break is the mathematics.
+     */
+    fun wrapRows(body: String): String {
+        val spaced = dropRowBreakSpacing(body)
+        if (spaced.contains(ENVIRONMENT_OPEN)) return spaced
+        if (!spaced.contains('&') && !spaced.contains("\\\\")) return spaced
+        return "\\begin{aligned}\n$spaced\n\\end{aligned}"
+    }
+
+    /** [body] with every `\\[6pt]`/`\\*` reduced to the `\\` it decorates. */
+    private fun dropRowBreakSpacing(body: String): String {
+        if (!body.contains("\\\\")) return body
+        val out = StringBuilder(body.length)
+        var index = 0
+        var changed = false
+        while (index < body.length) {
+            if (body[index] != '\\' || body.getOrNull(index + 1) != '\\') {
+                out.append(body[index])
+                index++
+                continue
+            }
+            out.append("\\\\")
+            index += 2
+            if (body.getOrNull(index) == '*') {
+                index++
+                changed = true
+            }
+            val after = skipBracketDimension(body, index)
+            if (after != index) {
+                index = after
+                changed = true
+            }
+        }
+        return if (changed) out.toString() else body
     }
 
     /**
@@ -85,10 +133,33 @@ internal object LatexCompat {
                 index++
                 continue
             }
+            // `\\` is a row break. Its optional `[6pt]` and its starred `\\*` are
+            // spacing, not mathematics: JLaTeXMath refuses `\\[6pt]` outright, and
+            // the report "换行间距指令如[6pt]不会正常渲染" is that refusal. The break
+            // itself is what the writer needs, so the dimension is dropped and `\\`
+            // is kept. Handled before the name scan because a `\\` has no name.
+            if (body.getOrNull(index + 1) == '\\') {
+                out.append("\\\\")
+                index += 2
+                if (body.getOrNull(index) == '*') {
+                    index++
+                    changed = true
+                }
+                val afterDimension = skipBracketDimension(body, index)
+                if (afterDimension != index) {
+                    index = afterDimension
+                    changed = true
+                }
+                continue
+            }
             val nameStart = index + 1
             var nameEnd = nameStart
             while (nameEnd < body.length && body[nameEnd].isLetter()) nameEnd++
             val name = body.substring(nameStart, nameEnd)
+            // A starred spelling (`\hspace*{…}`) is the same command; the star is
+            // part of the name's tail, not a separate token, and without this the
+            // group that follows is left behind as literal `{…}`.
+            if (body.getOrNull(nameEnd) == '*') nameEnd++
             val groupStart = groupAt(body, nameEnd)
             when {
                 name in DROPPED -> {
@@ -115,6 +186,13 @@ internal object LatexCompat {
             }
         }
         return if (changed) out.toString() else body
+    }
+
+    /** The index just past a `[6pt]`-shaped dimension at [from], or [from] when there is none. */
+    private fun skipBracketDimension(text: String, from: Int): Int {
+        if (text.getOrNull(from) != '[') return from
+        val close = text.indexOf(']', from + 1)
+        return if (close in (from + 1) until text.length) close + 1 else from
     }
 
     /** The index of a `{` at or after [from], skipping nothing but spaces, or -1. */
