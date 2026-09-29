@@ -78,6 +78,11 @@ a document is exactly the change that forgets them.
 - **The index is updated in the same change as the file.** Nothing in the build
   parses Markdown, so a link to a file that no longer exists is found by reading,
   not by CI.
+- **A behaviour change updates its chapter in the same change.** A code change that
+  alters what a `docs/architecture/` chapter describes — a new rewrite rule, a
+  measurement that moved, a layout that was tried and failed — edits that chapter in
+  the same commit. The release checklist asks the same question late; answering it
+  late is how three chapters went stale after the multi-line formula fix.
 - **Prose is English; the interface is not.** Documentation, comments and commit
   messages are English. Anything the user reads goes through `locales/`.
 
