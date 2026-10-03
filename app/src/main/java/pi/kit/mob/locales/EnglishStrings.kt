@@ -804,16 +804,17 @@ internal object EnglishStrings : Strings {
         override val checkForUpdates = "Check for updates"
         override val checkForUpdatesSubtitle = "Looks for a newer release on GitHub"
         override val updateChecking = "Asking GitHub…"
-        override val updateUpToDate = "This is the newest release"
+        override val updateFailedShort = "Check failed"
+        override val updateUpToDate = "Up to date"
         override val updateAvailable = "A newer release is available"
-        override val updateNoReleases = "No release has been published yet"
+        override val updateNoReleases = "No releases yet"
         override val updateNote =
             "Asks github.com for this app's newest release only when you tap the row, then " +
                 "opens its release page in a browser. PiKit downloads nothing by itself."
 
         override val searchTitle = "Search settings"
         override val searchSubtitle = "Web search for the agent"
-        override val searchPageSubtitle = "The bundled web-access extension"
+        override val searchPageSubtitle = "Bundled web-access extension"
         override val searchFreeNote =
             "You can leave this page exactly as it is. With no key configured the " +
                 "extension searches through Exa's free endpoint, which needs no account " +

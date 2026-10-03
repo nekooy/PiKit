@@ -709,6 +709,7 @@ internal object ChineseStrings : Strings {
         override val checkForUpdates = "检查更新"
         override val checkForUpdatesSubtitle = "到 GitHub 上看看有没有新版本"
         override val updateChecking = "正在询问 GitHub…"
+        override val updateFailedShort = "检查失败"
         override val updateUpToDate = "已经是最新版本"
         override val updateAvailable = "有新版本可以更新"
         override val updateNoReleases = "还没有发布过版本"

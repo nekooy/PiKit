@@ -750,9 +750,10 @@ internal object JapaneseStrings : Strings {
         override val checkForUpdates = "更新を確認"
         override val checkForUpdatesSubtitle = "GitHub に新しいリリースがあるか問い合わせます"
         override val updateChecking = "GitHub に問い合わせ中…"
-        override val updateUpToDate = "これが最新リリースです"
+        override val updateFailedShort = "確認に失敗"
+        override val updateUpToDate = "最新リリースです"
         override val updateAvailable = "新しいリリースがあります"
-        override val updateNoReleases = "まだリリースが公開されていません"
+        override val updateNoReleases = "リリースはまだありません"
         override val updateNote =
             "この行をタップしたときだけ github.com に本アプリの最新リリースを問い合わせ、" +
                 "そのリリースページをブラウザで開きます。PiKit が自分でダウンロードすることは" +
