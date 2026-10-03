@@ -584,6 +584,13 @@ internal object ChineseStrings : Strings {
         override val failedStartNote =
             "启动失败几乎总是配置问题：确认当前配置填写了 Key，并且该供应商确实存在这个模型 ID。" +
                 "手册里有更完整的排查清单。"
+        override val keepAliveTitle = "后台保活"
+        override val keepAliveGranted = "已关闭电池优化"
+        override val keepAliveDenied = "仍受电池优化限制"
+        override val keepAliveAsk = "申请保活白名单"
+        override val keepAliveNote =
+            "息屏或切后台时，系统可能回收 Agent 进程导致对话中断。加入电池优化白名单后，" +
+                "前台服务与唤醒锁才能真正把回合保住。"
 
         override val backupTitle = "备份与恢复"
         override val backupSubtitle = "把数据打包导出，需要时倒回"
