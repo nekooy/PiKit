@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
@@ -107,7 +109,6 @@ internal fun ModelPage(
     val config by store.snapshots.collectAsState()
     val profiles = config.profiles
     val activeId = config.activeProfileId
-    val settings by session.settingsStore.settings.collectAsState()
     val text = strings
     val context = LocalContext.current
 
@@ -902,7 +903,13 @@ internal fun ModelEditPage(
                 // different control than the rows it sits between. It used to grow
                 // only here, which made this picker one size and every other picker
                 // another.
+                //
+                // 8dp under the base-URL field: the field's own 4dp bottom pad
+                // and the row's top pad met as one dense block, so the protocol
+                // control looked attached to the input above it rather than a
+                // separate decision.
                 if (isCustomEndpoint) {
+                    Spacer(Modifier.height(8.dp))
                     PickerRow(
                         title = text.settings.apiType,
                         subtitle = text.settings.apiTypeSubtitle,
