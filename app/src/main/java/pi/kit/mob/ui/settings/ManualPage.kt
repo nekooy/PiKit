@@ -124,10 +124,12 @@ internal fun AboutPage(
                 // network.
                 SettingsRow(
                     title = text.settings.checkForUpdates,
-                    // One short status line. A failure's reason used to sit here
-                    // and wrapped to two or three lines, so tapping the row grew
-                    // it — the height of the row depended on what the network
-                    // said. The reason is a `SettingsNote` under the section now.
+                    // One short status line, and the idle text is kept short enough
+                    // to stay on it: a failure's reason used to sit here and wrapped
+                    // to two or three lines, so tapping the row grew it — the height
+                    // of the row depended on what the network said. The reason is a
+                    // `SettingsNote` under the section now, and the idle subtitle is
+                    // worded to the same one-line budget so the row never resizes.
                     subtitle = when (val state = updateState) {
                         UpdateRow.Idle -> text.settings.checkForUpdatesSubtitle
                         UpdateRow.Checking -> text.settings.updateChecking
@@ -179,11 +181,13 @@ internal fun AboutPage(
                 )
             }
             // The failure's reason, in full, outside the row: a note can wrap
-            // without changing the height of anything above or below it.
+            // without changing the height of anything above or below it. The
+            // only note under this section — the standing paragraph that used
+            // to sit here explained the check in three sentences and was the
+            // page's second thing to read after the row it described.
             (updateState as? UpdateRow.Failed)?.let { failed ->
                 SettingsNote(text.settings.failedWith(failed.reason))
             }
-            SettingsNote(text.settings.updateNote)
 
             SettingsSection(text.settings.environment) {
                 SettingsRow(

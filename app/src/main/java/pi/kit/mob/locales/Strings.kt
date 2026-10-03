@@ -1486,9 +1486,11 @@ interface Strings {
 
         /**
          * The update check's row, and the one thing on this page that reaches the
-         * network. It looks only when it is tapped: see `data/UpdateCheck.kt` for why
-         * that is not a background check, and [updateNote] for what the row says
-         * about it.
+         * network. It looks only when it is tapped: see `data/UpdateCheck.kt` for
+         * why that is not a background check.
+         *
+         * [checkForUpdatesSubtitle] is the idle line and is written to a one-line
+         * budget: the row must not grow when the text under the title is read.
          */
         val checkForUpdates: String
         val checkForUpdatesSubtitle: String
@@ -1508,16 +1510,6 @@ interface Strings {
 
         /** A repository that exists and has published nothing, which is its state before the first release. */
         val updateNoReleases: String
-
-        /**
-         * Under the row: where the check goes, that it happens only when asked, and
-         * that the APK comes from a browser rather than from this app.
-         *
-         * All three in one paragraph because they are one answer — "what happens if I
-         * tap this" — and a page that states the traffic it makes is the reason the
-         * rest of the app can say it makes none.
-         */
-        val updateNote: String
 
         // Search settings: the `pi-web-access` extension PiKit bundles for the
         // agent. Its options live in pi's own `$HOME/.pi/agent/web-search.json`
