@@ -119,6 +119,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.ChatItem
+import pi.kit.mob.pi.ChatTurn
 import pi.kit.mob.pi.ConversationState
 import pi.kit.mob.pi.ImageAttachment
 import pi.kit.mob.pi.PiAgentSession
@@ -1331,17 +1332,20 @@ internal sealed interface TranscriptRow {
         /**
          * Whether this row draws the copy button and the timestamp under it.
          *
-         * False for the step replies in the middle of a turn, and only ever for
-         * those: nothing reads it but the assistant row, so a prompt (which always
-         * wears both) and a row that draws no meta row at all — a tool card, a
-         * notice — are left at its default. A tool-using turn is several assistant
-         * messages — "let me look", a tool card, "here it is" — and the sentence in
-         * the middle is a fragment of the answer rather than an answer, so a copy
-         * glyph and a time under each of them made one answer read as three. The row
-         * that keeps both is the turn's own
-         * [pi.kit.mob.pi.ChatTurn.finalReplyKey], which is what folding already
-         * collapses a finished turn to: a collapsed turn and an expanded one then
-         * agree about which message is the answer.
+         * False for the step replies in the middle of a turn, and false for every
+         * assistant row while the turn is still streaming — including the one
+         * `finalReplyKey` currently names, which is the newest *finished* fragment
+         * and not yet the answer. Nothing reads it but the assistant row, so a
+         * prompt (which always wears both) and a row that draws no meta row at all
+         * — a tool card, a notice — are left at its default. A tool-using turn is
+         * several assistant messages — "let me look", a tool card, "here it is" —
+         * and the sentence in the middle is a fragment of the answer rather than an
+         * answer, so a copy glyph and a time under each of them made one answer read
+         * as three. The row that keeps both is the turn's own
+         * [pi.kit.mob.pi.ChatTurn.finalReplyKey], once the turn has settled (or the
+         * agent stopped), which is what folding already collapses a finished turn to:
+         * a collapsed turn and an expanded one then agree about which message is the
+         * answer.
          *
          * See [MessageMeta] for what that costs.
          */
@@ -1428,7 +1432,15 @@ internal fun transcriptRows(
     // turn is needed for the decision — `finalReplyKey` is by definition the last
     // message with text inside the turn — so this is a set lookup on the row rather
     // than a scan of the turn's items per row.
+    //
+    // The key moves *while* a turn is still open: `message_end` records the newest
+    // text-bearing message so a fold is right even if `agent_settled` never arrives,
+    // which is also what let an intermediate step wear the furniture the moment it
+    // finished and before the next one started. A reply therefore counts only once
+    // the turn is closed, or once the agent is no longer streaming (a stop, a killed
+    // process) — "输出完成后或者停止后" is when the last answer is known.
     val finalReplies = state.turns.mapNotNullTo(HashSet()) { it.finalReplyKey }
+    val turnSettled = { record: ChatTurn? -> record == null || record.isComplete || !state.isStreaming }
 
     // One summary per turn.
     val summarised = BooleanArray(state.turns.size)
@@ -1478,13 +1490,16 @@ internal fun transcriptRows(
         rows += TranscriptRow.Message(
             item,
             showReasoning = !folded,
-            // A prompt always, a reply only when it is what its turn settled on. A
-            // message attributed to no turn at all — the leading assistant greeting
-            // a resumed session can open with (`replaceWithMessages` deliberately
-            // leaves those outside every turn) — is nobody's step, so it keeps the
-            // row: with one assistant message and no question, dropping it would
-            // leave no way to copy the only thing on the page.
-            showMeta = item !is ChatItem.Assistant || turn < 0 || item.key in finalReplies,
+            // A prompt always, a reply only when the turn has settled on it — not
+            // while the turn is still streaming, when `finalReplyKey` names the
+            // newest finished fragment rather than the answer. A message attributed
+            // to no turn at all — the leading assistant greeting a resumed session
+            // can open with (`replaceWithMessages` deliberately leaves those outside
+            // every turn) — is nobody's step, so it keeps the row: with one assistant
+            // message and no question, dropping it would leave no way to copy the
+            // only thing on the page.
+            showMeta = item !is ChatItem.Assistant || turn < 0 ||
+                (item.key in finalReplies && turnSettled(record)),
         )
 
         if (record != null && record.isComplete && isPrompt && !summarised[turn]) {
