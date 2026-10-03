@@ -13,13 +13,15 @@ import java.io.File
 /**
  * What the user has said about one model id pi's own catalogue does not contain.
  *
- * Three fields, and each one is a thing pi cannot work out for itself. An id pi's
- * catalogue does not contain is resolved from a copy of the provider's **default** model
- * (`buildFallbackModel`), and the only mechanism that reaches such an id at all is a
- * `models` entry, which *replaces* that copy: every field the entry does not name falls
- * back to pi's hard-coded default (`modelFromJson`), so an entry that named only `input`
- * silently cut a 1M-window model down to 128k. PiKit therefore writes the fallback's own
- * facts into the entry (`ModelProfile.customModelFacts`) and these three on top.
+ * Three fields the UI owns, plus [inherited] — the catalogue facts a
+ * same-named id is known for — and each one is a thing pi cannot work out for
+ * itself. An id pi's catalogue does not contain is resolved from a copy of the
+ * provider's **default** model (`buildFallbackModel`), and the only mechanism
+ * that reaches such an id at all is a `models` entry, which *replaces* that
+ * copy: every field the entry does not name falls back to pi's hard-coded
+ * default (`modelFromJson`), so an entry that named only `input` silently cut a
+ * 1M-window model down to 128k. PiKit therefore writes the fallback's own facts
+ * into the entry (`ModelProfile.customModelFacts`) and these three on top.
  *
  * @param images the switch, in three states rather than two. null is "nothing said", and
  *   the entry then repeats the fallback's own `input` — which is what makes a model whose
@@ -33,12 +35,20 @@ import java.io.File
  *   the entry falls back to the fallback model's window rather than to a number this app
  *   invented.
  * @param maxTokens the same, for the largest answer the model may produce.
+ * @param inherited the catalogue facts for this id, taken from a same-named model in
+ *   pi's store — `cost`, `thinkingLevelMap`, `reasoning`, `samplingParams`, and the two
+ *   numbers the controls above override. A custom endpoint has no catalogue of its own,
+ *   so without this a relay's `claude-sonnet-4-5` would lose the price table and the
+ *   thinking levels of the id it shares ("自动匹配相同id，并填写" — every parameter, not
+ *   just the three the page draws). `api` and `baseUrl` are never in here: those belong
+ *   to the relay, not to the model.
  */
 @Serializable
 data class ModelSettings(
     @SerialName("images") val images: Boolean? = null,
     @SerialName("contextWindow") val contextWindow: Long? = null,
     @SerialName("maxTokens") val maxTokens: Long? = null,
+    @SerialName("inherited") val inherited: JsonObject? = null,
 )
 
 /**

@@ -197,6 +197,57 @@ class ModelProfileTest {
     }
 
     /**
+     * A custom endpoint inherits the *whole* catalogue entry for a same-named id
+     * — cost, thinkingLevelMap, reasoning, samplingParams — not just the three
+     * numbers the page draws. The report "自动匹配相同id，并填写…价格思维等等所有
+     * 参数都会一并带上" is about a relay's `claude-sonnet-4-5` losing the price
+     * table and the thinking levels of the id it shares.
+     *
+     * `api`/`baseUrl` must *not* travel: those name the host, and the host is
+     * the relay.
+     */
+    @Test
+    fun `a custom entry carries the inherited catalogue facts`() {
+        val inherited = Json.parseToJsonElement(
+            """
+            {
+              "reasoning": true,
+              "thinkingLevelMap": {"off": "off", "high": "high", "max": "max"},
+              "cost": {"input": 0.28, "output": 0.42, "cacheRead": 0.028, "cacheWrite": 1.0},
+              "samplingParams": {"temperature": 0.7},
+              "contextWindow": 200000,
+              "maxTokens": 64000
+            }
+            """.trimIndent(),
+        ).jsonObject
+        val provider = Json.parseToJsonElement(
+            CustomEndpoint.document(
+                baseUrl = "https://relay.example.com/v1",
+                modelIds = listOf("claude-sonnet-4-5"),
+                settings = mapOf(
+                    "claude-sonnet-4-5" to ModelSettings(
+                        images = true,
+                        // The user's own number wins over the inherited one.
+                        contextWindow = 128_000,
+                        inherited = inherited,
+                    ),
+                ),
+            )!!,
+        ).jsonObject
+        val entry = (provider["models"] as JsonArray).single().jsonObject
+
+        assertEquals("the thinking levels come along", "high", (entry["thinkingLevelMap"]!!.jsonObject)["high"]!!.jsonPrimitive.content)
+        assertEquals("and so does the price table", "0.28", (entry["cost"]!!.jsonObject)["input"]!!.jsonPrimitive.content)
+        assertEquals("and the sampling params", "0.7", (entry["samplingParams"]!!.jsonObject)["temperature"]!!.jsonPrimitive.content)
+        assertEquals("reasoning is inherited", true, entry["reasoning"]!!.jsonPrimitive.content.toBoolean())
+        assertEquals("the user's window wins", "128000", entry["contextWindow"]!!.jsonPrimitive.content)
+        assertEquals("but the inherited max-out is kept", "64000", entry["maxTokens"]!!.jsonPrimitive.content)
+        assertEquals("and the switch still controls input", listOf("text", "image"), (entry["input"] as JsonArray).map { it.jsonPrimitive.content })
+        assertNull("the catalogue's host never travels with the facts", entry["baseUrl"])
+        assertNull(entry["api"])
+    }
+
+    /**
      * The withdrawal record is read under the key the build that introduced it used.
      *
      * That build called it `customImageModels` and stored it for a narrower declaration.

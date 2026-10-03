@@ -7,10 +7,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.util.concurrent.atomic.AtomicReference
 
@@ -298,28 +301,70 @@ object CustomEndpoint {
          * One model of a custom provider, as pi's catalog wants it.
          *
          * [settings] is the *whole* per-model map this app holds — the three
-         * controls' output — and an id with nothing said about it resolves
-         * through pi's own defaults for a definition that names nothing
-         * (`contextWindow: 128000`, `maxTokens: 16384`, text-only input). Those
-         * numbers are written out rather than left absent so the document is
-         * complete on its own; [settings] on top is what the user actually chose.
+         * controls' output plus the catalogue facts a same-named id inherited —
+         * and an id with nothing said about it resolves through pi's own
+         * defaults for a definition that names nothing (`contextWindow: 128000`,
+         * `maxTokens: 16384`, text-only input). Those numbers are written out
+         * rather than left absent so the document is complete on its own;
+         * [settings] on top is what the user actually chose.
+         *
+         * The inherited facts come first and the controls override them: a
+         * relay's `claude-sonnet-4-5` is the same model as the catalogue's, and
+         * dropping its `cost`, `thinkingLevelMap`, `reasoning` and
+         * `samplingParams` on the floor is how a custom endpoint lost the price
+         * table and the thinking levels of an id it shares. `api` and `baseUrl`
+         * are never inherited — those name the host, and the host is the relay.
          */
-        private fun entry(modelId: String, settings: ModelSettings): JsonObject = buildJsonObject {
-            put("id", modelId)
-            put("name", modelId)
-            put("reasoning", true)
-            put(
-                "input",
-                buildJsonArray {
-                    add(JsonPrimitive("text"))
-                    if (settings.images == true) add(JsonPrimitive("image"))
-                },
-            )
-            // pi's own defaults for a definition that names neither, which is what an empty
-            // field means here: there is no fallback model to inherit them from.
-            put("contextWindow", settings.contextWindow ?: 128_000L)
-            put("maxTokens", settings.maxTokens ?: 16_384L)
+        private fun entry(modelId: String, settings: ModelSettings): JsonObject {
+            val inherited = settings.inherited.orEmpty()
+            return buildJsonObject {
+                put("id", modelId)
+                put("name", modelId)
+                // Every inherited fact the entry does not set itself. Written
+                // first so the controls below win where the two overlap.
+                for ((key, value) in inherited) {
+                    if (key in ENTRY_OWNED_KEYS) continue
+                    put(key, value)
+                }
+                put("reasoning", inherited["reasoning"] ?: JsonPrimitive(true))
+                put(
+                    "input",
+                    buildJsonArray {
+                        add(JsonPrimitive("text"))
+                        val wantsImages = settings.images
+                            ?: (inherited["input"] as? JsonArray)
+                                ?.any { (it as? JsonPrimitive)?.contentOrNull == "image" }
+                                ?: false
+                        if (wantsImages) add(JsonPrimitive("image"))
+                    },
+                )
+                // The user's number, else the catalogue's, else pi's own default
+                // for a definition that names neither — which is what an empty
+                // field and no inheritance mean here.
+                put(
+                    "contextWindow",
+                    settings.contextWindow
+                        ?: (inherited["contextWindow"] as? JsonPrimitive)?.longOrNull
+                        ?: 128_000L,
+                )
+                put(
+                    "maxTokens",
+                    settings.maxTokens
+                        ?: (inherited["maxTokens"] as? JsonPrimitive)?.longOrNull
+                        ?: 16_384L,
+                )
+            }
         }
+
+        /**
+         * Keys this entry always states itself, and therefore never takes from
+         * [ModelSettings.inherited]. `api` and `baseUrl` are on the list even
+         * though the inherited map should not carry them: a fact source that
+         * leaked one would send the relay's traffic to the catalogue's host.
+         */
+        private val ENTRY_OWNED_KEYS = setOf(
+            "id", "name", "input", "contextWindow", "maxTokens", "api", "baseUrl",
+        )
 
     /**
      * 2-space indent, the shape every other pi config file has.

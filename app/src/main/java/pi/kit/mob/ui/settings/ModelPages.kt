@@ -55,9 +55,11 @@ import pi.kit.mob.pi.ModelDiscovery
 import pi.kit.mob.pi.ModelDiscoveryClient
 import pi.kit.mob.pi.ModelSource
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.pi.anyProviderModelFacts
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.modelDefinitionFacts
 import pi.kit.mob.pi.thinkingLevelsFor
+import pi.kit.mob.ui.components.InlineError
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.PiIcons
@@ -67,15 +69,18 @@ import pi.kit.mob.ui.components.PickerRow
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.thinkingLevelFootnote
 import pi.kit.mob.ui.components.thinkingLevelOptions
+import java.io.File
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 
 /**
  * The profile list, with the active one marked, and the model's thinking level.
@@ -439,6 +444,22 @@ internal fun ModelEditPage(
     // questions this section asks: there is nothing to check the ids against, and there is
     // no fallback model to fill the three controls from.
     val isCustomEndpoint = provider in PiProvider.needsBaseUrl
+    // What pi's store says about an id a custom endpoint happens to share with a
+    // built-in provider — `claude-sonnet-4-5` behind a relay is the same model, and
+    // its window/max-out/image facts belong to the *id*, not to the host. Loaded from
+    // `models-store.json` across every provider (see `anyProviderModelFacts`); a match
+    // fills the three controls on add, and only an id nothing names falls back to pi's
+    // hard-coded 128k/16k. Keyed on the custom flag so switching *to* a custom
+    // endpoint loads the store rather than keeping a built-in provider's empty map.
+    var customIdFacts by remember(isCustomEndpoint) {
+        mutableStateOf(
+            if (isCustomEndpoint) {
+                anyProviderModelFacts(File(session.env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME))
+            } else {
+                emptyMap()
+            },
+        )
+    }
     // What the section's status row has to say, if anything.
     //
     // A provider has to be chosen before a model id means anything — the ids are the
@@ -467,8 +488,10 @@ internal fun ModelEditPage(
     // it names nothing rather than pi's hard-coded 128k/16k, which is the bug this whole path
     // is written around.
     //
-    // A custom endpoint has no such model at all, so pi's own defaults for a definition that
-    // names nothing are what its boxes show.
+    // A custom endpoint has no such model at all — unless the id it is offering is
+    // one pi already catalogues under another provider, in which case those facts
+    // are the right starting point. `customIdFacts` is that lookup; an id nothing
+    // names still falls back to pi's hard-coded 128k/16k.
     val fallbackFacts = if (isCustomEndpoint) null else catalogueFallback
 
     /**
@@ -561,14 +584,46 @@ internal fun ModelEditPage(
      * the active model — the field, the fetched list and Save all put the user's
      * attention on that model, and leaving the tick where it was would make the row
      * they just added look inert.
+     *
+     * [prefill] fills the three parameter controls from a catalogue or `/models`
+     * answer. For a custom endpoint that is the difference between a row that says
+     * "unknown" and one that already carries the window the id is known for — the
+     * report "自定义端点…也不会自动填写参数等，应该自动匹配相同id，并填写". A
+     * prefill only lands when the user has said nothing about that id yet, so
+     * re-adding a model never overwrites their numbers.
      */
-    fun addModel(raw: String): List<String> {
+    fun addModel(raw: String, prefill: ModelSettings? = null): List<String> {
         val model = raw.trim()
         if (model.isBlank()) return models
         models = if (model in models) models else models + model
         activeModel = model
+        if (prefill != null && model !in settings) {
+            settings = settings + (model to prefill)
+        }
         draft = ""
         return models
+    }
+
+    /** [ModelSettings] taken off a catalogue fact object, or null when it names none of them. */
+    fun prefillFrom(facts: JsonObject?): ModelSettings? {
+        if (facts == null) return null
+        val window = facts.number("contextWindow")
+        val max = facts.number("maxTokens")
+        val images = facts.hasImageInput()
+        val inherited = JsonObject(
+            facts.filterKeys { it != "api" && it != "baseUrl" },
+        )
+        if (window == null && max == null && !images && inherited.isEmpty()) return null
+        return ModelSettings(
+            images = images.takeIf { it },
+            contextWindow = window,
+            maxTokens = max,
+            // The whole catalogue entry minus the host: `cost`,
+            // `thinkingLevelMap`, `reasoning`, `samplingParams` and the two
+            // numbers travel with the id so a custom endpoint does not lose the
+            // price table or the thinking levels of a model it shares a name with.
+            inherited = inherited.takeIf { it.isNotEmpty() },
+        )
     }
 
     /**
@@ -637,7 +692,10 @@ internal fun ModelEditPage(
         // and pressing Save is the obvious way to add one, and
         // losing it because the button beside the field was not
         // pressed would be a trap.
-        val listed = addModel(draft)
+        val listed = addModel(
+            draft,
+            prefill = if (isCustomEndpoint) prefillFrom(customIdFacts[draft.trim()]) else null,
+        )
         val wasActive = store.activeId == existing?.id
         // Everything the user has said about every id still in the list, catalogued or not.
         // Which *mechanism* carries each statement — a `models` entry that has to stand
@@ -1052,7 +1110,41 @@ internal fun ModelEditPage(
                                                     onPick = { id ->
                                                         result.models
                                                             .firstOrNull { "${it.source}:${it.id}" == id }
-                                                            ?.let { addModel(it.id) }
+                                                            ?.let { model ->
+                                                                // The picker already shows each
+                                                                // model's window and image
+                                                                // capability; picking one is the
+                                                                // moment those become the
+                                                                // controls' starting point rather
+                                                                // than a caption that vanishes.
+                                                                //
+                                                                // A catalogue match wins over the
+                                                                // `/models` answer: the store
+                                                                // carries `cost`,
+                                                                // `thinkingLevelMap` and
+                                                                // `samplingParams` too, and those
+                                                                // are what the entry has to name
+                                                                // for the id to behave like the
+                                                                // model it shares a name with.
+                                                                addModel(
+                                                                    model.id,
+                                                                    prefill = prefillFrom(customIdFacts[model.id])
+                                                                        ?: ModelSettings(
+                                                                            images = model.supportsImages
+                                                                                .takeIf { it },
+                                                                            contextWindow = model.contextWindow,
+                                                                            maxTokens = null,
+                                                                            inherited = buildJsonObject {
+                                                                                if (model.reasoning) {
+                                                                                    put("reasoning", true)
+                                                                                }
+                                                                                model.contextWindow?.let {
+                                                                                    put("contextWindow", it)
+                                                                                }
+                                                                            }.takeIf { it.isNotEmpty() },
+                                                                        ),
+                                                                )
+                                                            }
                                                     },
                                                     footnote = if (
                                                         result.models.any { it.source == ModelSource.PROVIDER }
@@ -1236,11 +1328,16 @@ internal fun ModelEditPage(
                         // *starting point*, and there was no way to say the catalogue's
                         // window is wrong for the endpoint in front of you.
                         val known = catalogueIds?.contains(current) == true
-                        // The numbers this model actually has, as pi's own catalogue
-                        // reports them. For an id the catalogue does not contain there is
-                        // no such entry, so the fallback model's numbers stand in — that
-                        // *is* what pi resolved the id to.
-                        val facts = catalogueIdFacts[current]
+                        // The numbers this model actually has. A built-in provider answers
+                        // from its own catalogue; a custom endpoint answers from
+                        // `customIdFacts` — the same id under whichever provider catalogues
+                        // it — and only an id nothing names falls through to the fallback
+                        // model (which a custom endpoint does not have either).
+                        val facts = if (isCustomEndpoint) {
+                            customIdFacts[current]
+                        } else {
+                            catalogueIdFacts[current]
+                        }
                         val window = facts.number("contextWindow") ?: fallbackFacts.number("contextWindow")
                         val max = facts.number("maxTokens") ?: fallbackFacts.number("maxTokens")
                         SettingsRow(
