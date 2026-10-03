@@ -42,7 +42,7 @@ env:
   # workflows: the release one installs these build-tools and then runs `apksigner`
   # out of them, and it used to name the version twice — once here and once in the
   # signing check — which is how a check ends up running a binary nobody installed.
-  BUILD_TOOLS_VERSION: "36.0.0"
+  BUILD_TOOLS_VERSION: "36.1.0"
 
 jobs:
   verify:

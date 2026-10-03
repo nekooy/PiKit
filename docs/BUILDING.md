@@ -20,7 +20,7 @@ runtime image has to exist at all is in
 - **Android SDK** with `compileSdk 36` and its build-tools, plus **NDK r29** — the
   vendored terminal emulator builds a small PTY shim through `ndk-build`. The 36 is
   an AAR floor rather than a preference: the formula renderer's own metadata requires
-  it, and CI installs exactly `platforms;android-36` + `build-tools;36.0.0`
+  it, and CI installs exactly `platforms;android-36` + `build-tools;36.1.0`
   (ARCHITECTURE §12.2). `targetSdk` is a separate property and stays 28.
 - **Python 3.10+** with the `zstandard` module (`python -m pip install zstandard`).
   Only the runtime image builder needs it.
