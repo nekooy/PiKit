@@ -955,13 +955,23 @@ internal fun ModelEditPage(
                 // those are the values the relay's own docs name — see
                 // `CustomApi`.
                 //
-                // The explanation is a note *below* the row rather than the row's
-                // own subtitle: `SettingsRow` sizes to its subtitle, and three
+                // The explanation is a note *below* the row, and the row carries
+                // the one line of it that decides the choice — what a wrong value
+                // costs. `SettingsRow` sizes to its subtitle, and all three
                 // sentences there made one picker taller than the whole provider
                 // section around it.
+                //
+                // That line is also what the row was missing. With a title and a
+                // value and nothing else it drew one line where the picker above
+                // it and the two outlined fields below it draw two (`SettingsRow`
+                // has no height floor), so the protocol row read as a smaller,
+                // different control than the rows it sits between. It used to grow
+                // only here, which made this picker one size and every other picker
+                // another.
                 if (isCustomEndpoint) {
                     PickerRow(
                         title = text.settings.apiType,
+                        subtitle = text.settings.apiTypeSubtitle,
                         value = CustomApi.fromId(api).id,
                         icon = Icons.Filled.Key,
                         options = CustomApi.entries.map { entry ->

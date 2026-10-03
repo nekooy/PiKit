@@ -500,6 +500,7 @@ internal object JapaneseStrings : Strings {
             "エンドポイントはホスト名付きの http(s) URL でなければなりません" +
                 "（例：https://relay.example.com/v1）。localhost:11434 はスキームがありません。"
         override val apiType = "API"
+        override val apiTypeSubtitle = "誤るとパースに失敗します"
         override val apiTypeNote =
             "このエンドポイントが話すプロトコルです。ほとんどのリレーは " +
                 "`openai-completions` です。Anthropic 系のゲートウェイは " +
