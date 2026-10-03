@@ -252,7 +252,6 @@ internal fun PickerBody(
                 placeholder = { Text(searchHint) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
-                shape = MaterialTheme.shapes.medium,
                 // A key name is machine text: an autocorrected `xaiApiKey` is a
                 // filter that silently matches nothing.
                 keyboardOptions = KeyboardOptions(
@@ -261,10 +260,13 @@ internal fun PickerBody(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    // Top padding as well as bottom: without it the field sat
-                    // hard against the title's hairline, which read as the
-                    // sheet's chrome rather than as the list's first control.
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                    // 12h/4v, the inset every other field uses, so the field's box
+                    // lines up with the rows under it. The top padding is the gap
+                    // under the title's hairline — without it the field sat hard
+                    // against the rule and read as sheet chrome rather than as the
+                    // list's first control.
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .padding(top = 8.dp),
             )
         }
 
@@ -720,11 +722,14 @@ private fun PickerSheetRow(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = DISABLED_ALPHA)
                     },
-                    // No cap, unlike the label above it: a capability line ("1M
-                    // context · images · reasoning") is the row's explanation, and
-                    // two lines with an ellipsis cut the third fact off exactly when
-                    // it was the one the reader was looking for. The list scrolls, so
-                    // a taller row costs nothing but a swipe.
+                    // Two lines, and that is a cap: an uncapped description made
+                    // one picker row three lines taller than its neighbour, and a
+                    // list of models is a rhythm the eye scans. The full note is
+                    // still readable in the option's own value sheet when it has
+                    // one, and two lines hold the capability line this was written
+                    // for (`1M context · images · reasoning`).
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
