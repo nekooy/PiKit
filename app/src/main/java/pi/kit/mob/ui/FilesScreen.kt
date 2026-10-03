@@ -51,11 +51,13 @@ import androidx.core.content.FileProvider
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
+import pi.kit.mob.ui.components.InlineError
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.PageHeader
 import pi.kit.mob.ui.components.PageSwap
 import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.settings.SettingsDivider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -311,11 +313,9 @@ private fun PreviewSheet(file: File, text: Strings) {
 
         HorizontalDivider()
         if (openFailed) {
-            Text(
+            InlineError(
                 text.files.openFailed,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
             )
         }
         Row(

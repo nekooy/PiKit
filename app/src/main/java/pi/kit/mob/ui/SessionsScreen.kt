@@ -53,6 +53,7 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
+import pi.kit.mob.ui.components.ErrorBanner
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PageHeader
 import pi.kit.mob.ui.components.ReadOnlyBody
@@ -230,20 +231,7 @@ fun SessionsScreen(
         )
 
         message?.let {
-            Surface(
-                color = MaterialTheme.colorScheme.errorContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    it,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { message = null }
-                        .padding(12.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            ErrorBanner(message = it, onDismiss = { message = null })
         }
 
         if (loading) {
