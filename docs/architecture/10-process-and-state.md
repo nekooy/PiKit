@@ -19,15 +19,32 @@ state, so the UI can bind and unbind freely and a turn keeps running when you le
 
 ## The keep-alive is the notification, and the notification is the system's to hide
 
-A foreground service exists *because* of its notification: that is the deal Android offers. There
-is deliberately **no in-app switch** for the shade entry. An "hide it" switch would have to either
-drop the foreground claim — and with it the keep-alive, which is the only thing the service is for —
-or call `startForeground` and then pretend the notification is silent, which Android 12+ forbids
-with `ForegroundServiceDidNotStartInTimeException`. A user who does not want to see the entry turns
-the *Agent* channel (or the app's notifications) off in system settings instead: `startForeground`
-still succeeds, the service stays a foreground service, and the notification is merely not shown.
-That is strictly better than anything an in-app switch could offer, and it is the one answer that
-keeps both the silence and the keep-alive.
+A foreground service exists *because* of its notification: that is the deal Android offers. What
+the app does control is *when* that entry is up. [PiAgentService] drops the shade entry the moment
+a window of the app is in front — the Activity is already keeping the process alive, and a
+persistent "agent is running" over a turn the reader is watching is noise ("去除 agent is running
+的通知"). `MainActivity.onStart`/`onStop` tell the service which side of that line the UI is on;
+the status collector keeps the claim honest on the other axis (running vs failed vs stopped).
+
+When the entry *is* up it is silent and empty of prose: `PRIORITY_MIN`, an `IMPORTANCE_MIN` channel
+with no sound or badge, and no title. It is the price of the foreground claim, not an
+announcement. A user who wants even that gone turns the *Agent* channel off in system settings:
+`startForeground` still succeeds and the service stays a foreground service.
+
+Keep-alive has three layers, and the report "息屏后会直接 terminated" is what made the third one
+necessary:
+
+1. **The foreground service**, with `android:stopWithTask="false"` so a swipe-away does not take
+   the child with it. The shade entry only appears while the UI is gone.
+2. **Two wake locks.** The turn lock (`pikit:agent-turn`) is acquired on `agent_start` and
+   released on `agent_settled` — it keeps the CPU awake *and* the child's stdout drained for the
+   length of one turn. The background lock (`pikit:agent-bg`) is held while the UI is gone and
+   the agent is up, which covers the screen-off with nothing streaming that the turn lock never
+   saw.
+3. **The battery-optimisation exemption.** Neither of the above survives a power manager that has
+   already decided to reclaim the process. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is the system's
+   own dialog and cannot be granted by the app; the Agent page's keep-alive row reports whether
+   it is held and offers the ask.
 
 Two lifecycle facts are load-bearing, and both were measured on a device rather than reasoned:
 

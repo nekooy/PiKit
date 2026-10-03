@@ -66,4 +66,16 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        // A window is in front: the shade's "running" marker is noise the reader
+        // did not ask for. See `PiAgentService.onUiVisible`.
+        PiAgentService.onUiVisible(this, true)
+    }
+
+    override fun onStop() {
+        PiAgentService.onUiVisible(this, false)
+        super.onStop()
+    }
 }
