@@ -13,7 +13,7 @@ import org.junit.Test
  * provider reports "no authentication method configured" or answers `401` with a key that
  * is perfectly good — with the wrong variable name nowhere in the message. So the table
  * below is pi's, copied from `getApiKeyEnvVars` in the bundled
- * `@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-OJP47DM6.js`
+ * `@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-VIV3CWXG.js`
  * (the same table pi's help text prints), and this test is what makes a typo in the enum a
  * failing build rather than a support question.
  *
@@ -57,6 +57,7 @@ class PiProviderTest {
         "qwen-token-plan-cn" to "QWEN_TOKEN_PLAN_CN_API_KEY",
         "qwen-token-plan-individual" to "QWEN_TOKEN_PLAN_API_KEY",
         "together" to "TOGETHER_API_KEY",
+        "typesafe" to "TYPESAFE_API_KEY",
         "vercel-ai-gateway" to "AI_GATEWAY_API_KEY",
         "xai" to "XAI_API_KEY",
         "xiaomi" to "XIAOMI_API_KEY",
