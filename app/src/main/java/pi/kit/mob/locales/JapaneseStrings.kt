@@ -269,7 +269,6 @@ internal object JapaneseStrings : Strings {
         override val none = "なし"
         override val manageProfiles = "モデルとプロバイダー"
         override val manageProfilesSubtitle = "Pi が使うキーとモデル"
-        override val thinkingLevel = "思考レベル"
         override val workingDirectory = "作業ディレクトリ"
         override val updateAndRepair = "メンテナンスと修復"
         override val updateAndRepairSubtitle = "モデル一覧、パッケージの修復"
@@ -601,8 +600,6 @@ internal object JapaneseStrings : Strings {
             "同じプロバイダー・モデル・キーは pi 自身の settings.json にも書き込まれるため、" +
                 "ターミナルタブで起動した pi も同じモデルを使います。"
 
-        override val modelBehaviour = "思考"
-        override val thinkingSubtitle = "回答前の推論量。すぐ反映されます"
         override val workspace = "ワークスペース"
         override fun workingDirSubtitle(workspace: String) = "空欄の場合、エージェントは $workspace で作業します"
         override val workingDirNote =

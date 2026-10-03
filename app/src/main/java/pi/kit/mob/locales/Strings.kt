@@ -628,7 +628,6 @@ interface Strings {
         val none: String
         val manageProfiles: String
         val manageProfilesSubtitle: String
-        val thinkingLevel: String
         val workingDirectory: String
         val updateAndRepair: String
         val updateAndRepairSubtitle: String
@@ -1189,8 +1188,6 @@ interface Strings {
         val terminalModelNote: String
 
         // Agent page
-        val modelBehaviour: String
-        val thinkingSubtitle: String
         val workspace: String
 
         /**

@@ -64,10 +64,10 @@ import pi.kit.mob.ui.components.Sheet
  * downstream is invalidated by a half-typed value, and there is no provider to
  * bill for a mistake.
  *
- * Thinking level used to live here. It is a property of the model answering —
- * pi combines it with the model's own reasoning capability, and the two are
- * meaningless apart — so it moved to the model page, which is also where the
- * value it applies *to* is chosen.
+ * Thinking level used to live here, then on the model page. It is a property of
+ * the model answering — pi combines it with the model's own reasoning
+ * capability, and the two are meaningless apart — and the conversation changes
+ * it mid-turn, so the control is the composer's chip.
  *
  * The context description used to be a page of its own. It is a section here
  * now: the answer to "what does the agent know?" sits with the workspace it

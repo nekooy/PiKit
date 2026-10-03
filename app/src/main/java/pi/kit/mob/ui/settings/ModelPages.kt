@@ -49,7 +49,6 @@ import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
 import pi.kit.mob.data.PiProvider
 import pi.kit.mob.data.normalizeApiBaseUrl
-import pi.kit.mob.data.rememberedThinkingLevels
 import pi.kit.mob.locales.DiscoveryProblem
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -59,9 +58,7 @@ import pi.kit.mob.pi.ModelDiscoveryClient
 import pi.kit.mob.pi.ModelSource
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.anyProviderModelFacts
-import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.modelDefinitionFacts
-import pi.kit.mob.pi.thinkingLevelsFor
 import pi.kit.mob.ui.components.InlineError
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PageBackHandler
@@ -70,11 +67,7 @@ import pi.kit.mob.ui.components.PickerBody
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.PickerRow
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.components.thinkingLevelFootnote
-import pi.kit.mob.ui.components.thinkingLevelOptions
 import java.io.File
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -86,15 +79,16 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
 /**
- * The profile list, with the active one marked, and the model's thinking level.
+ * The profile list, with the active one marked.
  *
  * Selecting a profile is a separate tap from editing it: editing writes on Save,
  * so making "activate" an implicit part of opening the form would leave the user
  * unable to look at a profile without switching to it.
  *
- * Thinking level is here rather than on the agent page because it is a property
- * of the model: pi maps it through the selected model's own reasoning capability,
- * and the level and the model it applies to are meaningless apart.
+ * Thinking level is deliberately not on this page. It used to be the row at the
+ * top, beside the profile it applies to — but the composer's chip is where a
+ * conversation changes it, and two controls for one setting are two places to
+ * look. The chip's sheet is the only one now.
  */
 @Composable
 internal fun ModelPage(
@@ -140,38 +134,10 @@ internal fun ModelPage(
         discovery.catalogueProbe(chosen, "")
     }
 
-    // What the thinking row is showing. pi reports the level once it is running
-    // and that is the truthful answer; before that the saved value is, already
-    // clamped to the levels the model was last seen to support — see
-    // `clampThinkingLevel` and `thinkingLevelsFor`.
-    //
-    // Read as narrowed flows rather than as the whole conversation state: this page
-    // is reachable while a turn is running, and collecting the state itself re-ran
-    // this entire body on every streamed token of that turn for values that change
-    // once per model — the text, the profile list and every row on the page were
-    // rebuilt along with them. One flow rather than two because the levels belong to
-    // the model: a level list read without the model it was measured for is a list
-    // this page has no business showing to anyone.
-    val levelsFlow = remember(session) {
-        session.conversation
-            .map { Triple(it.availableThinkingLevels, it.model?.id, it.thinkingLevel) }
-            .distinctUntilChanged()
-    }
-    val live by levelsFlow.collectAsState(
-        initial = with(session.conversation.value) {
-            Triple(availableThinkingLevels, model?.id, thinkingLevel)
-        },
-    )
-    val (liveLevels, liveModelId, reportedLevel) = live
-    val available = thinkingLevelsFor(
-        liveLevels,
-        // Before pi has answered for a model the profile names but the agent has not
-        // resolved yet, the profile's own id is what the stored list would have been
-        // recorded against.
-        settings.rememberedThinkingLevels(liveModelId ?: settings.modelId),
-    )
-    val thinking = reportedLevel?.takeIf { it.isNotBlank() }
-        ?: clampThinkingLevel(settings.thinkingLevel, available)
+    // What the thinking row used to show lived here — the live levels, the
+    // remembered ones and the clamped preference. The row is gone: the composer's
+    // chip is the one control for the setting. `thinkingLevelsFor` and
+    // `clampThinkingLevel` are still what that sheet and the chip's label use.
 
     Column(Modifier.fillMaxSize()) {
         SettingsPageHeader(
@@ -181,45 +147,6 @@ internal fun ModelPage(
         )
 
         SettingsBody {
-            SettingsSection(text.settings.modelBehaviour) {
-                // The same row-and-sheet the language setting uses, and the same
-                // list the composer's chip offers — built by `thinkingLevelOptions`
-                // so the two cannot disagree about a level or a description.
-                //
-                // It was a `SegmentedChoice` here, which was wrong twice over.
-                // Seven Han labels do not fit one row of a phone: the control's own
-                // documentation says two to five. And it rendered as an empty box —
-                // the control sizes itself from its first segment, so seven of them
-                // came out 36dp wide each and every label ellipsised to nothing.
-                // Measured on the emulator: a blank 150px rounded rectangle where
-                // the seven levels should be, and not one text node in the
-                // `uiautomator` dump.
-                //
-                // The options are the *model's* levels once pi has answered, not
-                // pi's seven: a model with four of them clamps a request it cannot
-                // honour to the next one above, so a list of seven would be a menu
-                // whose rows do not do what they say.
-                PickerRow(
-                    title = text.settings.thinkingLevel,
-                    subtitle = text.settings.thinkingSubtitle,
-                    // pi's own name for the level, not a translation of it: the same
-                    // string the chip above the composer shows and the same one pi
-                    // prints in its own model list.
-                    value = thinking,
-                    icon = PiIcons.Thinking,
-                    options = thinkingLevelOptions(text, available),
-                    selectedId = thinking,
-                    footnote = thinkingLevelFootnote(text, available),
-                    onPick = { level ->
-                        // Applied to the running process immediately: pi accepts
-                        // the change over RPC, so unlike the provider and model it
-                        // needs no restart.
-                        session.settingsStore.update { it.copy(thinkingLevel = level) }
-                        session.setThinkingLevel(level)
-                    },
-                )
-            }
-
             SettingsSection(text.settings.savedProfiles) {
                 profiles.forEachIndexed { index, profile ->
                     if (index > 0) SettingsDivider()
