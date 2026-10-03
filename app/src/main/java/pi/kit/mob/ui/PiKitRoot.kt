@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
@@ -86,6 +87,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
 import pi.kit.mob.R
+import pi.kit.mob.env.BatteryOptimisation
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.locales.Lang
 import pi.kit.mob.locales.LocalLanguage
@@ -186,12 +188,14 @@ private object NotificationPrompt {
 }
 
 /**
- * The two first-launch prompts, in order, driven by answers.
+ * The first-launch prompts, in order, driven by answers.
  *
  * Notifications first (a system dialog), then the storage explanation (an in-app
  * dialog that offers the system settings page, because "all files access" has no
- * runtime dialog). The second is raised from the first one's result callback, so
- * the order cannot invert and neither can be skipped by a lost effect.
+ * runtime dialog), then the battery-optimisation exemption (an in-app dialog in
+ * front of the platform's own yes/no box). Each is raised from the previous one's
+ * answer *or* its result callback, so the order cannot invert and none of them can
+ * be skipped by a lost effect.
  *
  * Raised only once the runtime is ready, and only once per process: asking over
  * the unpacking screen means asking while the app's own window is still settling,
@@ -199,6 +203,11 @@ private object NotificationPrompt {
  * `key(language)` in [PiKitRoot] for the second half of that. A prompt the platform
  * closes on its own frame — which is what happens on the emulator — is asked again
  * at most twice; see the callback.
+ *
+ * The keep-alive step was added last and it is the only one of the three whose
+ * absence was invisible: the other two gate features the user tries immediately,
+ * while a process reclaimed with the screen off looks like the answer simply
+ * stopping. It used to be reachable only from the agent page, three taps in.
  */
 @Composable
 private fun PermissionPrompts(session: PiAgentSession) {
@@ -210,6 +219,12 @@ private fun PermissionPrompts(session: PiAgentSession) {
     var step by remember { mutableStateOf(PromptStep.None) }
     var attempts by remember { mutableIntStateOf(0) }
     var askedAt by remember { mutableLongStateOf(0L) }
+
+    // What is still owed after the storage dialog is answered, in one place: the
+    // answer arrives from two buttons and the sequence has to continue the same way
+    // from either of them.
+    fun afterStorage(): PromptStep =
+        if (BatteryOptimisation.needsAsk(context)) PromptStep.KeepAlive else PromptStep.None
 
     // Asking for the notification permission is left to the app rather than to the
     // platform. This app targets SDK 28, and for such an app Android 13+ is
@@ -236,11 +251,11 @@ private fun PermissionPrompts(session: PiAgentSession) {
             !granted && elapsed < INSTANT_ANSWER_MS && attempts < MAX_NOTIFICATION_ATTEMPTS ->
                 attempts += 1
 
-            // Answered, however it was answered. The storage explanation is owed
-            // only if it is still owed — the grant may already be held, since the
-            // app-op survives a reinstall.
+            // Answered, however it was answered. The two explanations behind it are
+            // each owed only if they are still owed — the storage grant may already
+            // be held, since the app-op survives a reinstall.
             needsStoragePrompt(context) -> step = PromptStep.Storage
-            else -> step = PromptStep.None
+            else -> step = afterStorage()
         }
     }
 
@@ -251,7 +266,7 @@ private fun PermissionPrompts(session: PiAgentSession) {
                 PromptStep.Notification
 
             needsStoragePrompt(context) -> PromptStep.Storage
-            else -> PromptStep.None
+            else -> afterStorage()
         }
     }
 
@@ -272,16 +287,45 @@ private fun PermissionPrompts(session: PiAgentSession) {
             text = { Text(text.settings.storageAskBody) },
             confirmButton = {
                 TextButton(onClick = {
-                    step = PromptStep.None
                     StorageAccess.markPrompted(context)
+                    step = afterStorage()
                     runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
                 }) { Text(text.settings.storageAskOpen) }
             },
             dismissButton = {
                 TextButton(onClick = {
-                    step = PromptStep.None
                     StorageAccess.markPrompted(context)
+                    step = afterStorage()
                 }) { Text(text.settings.storageAskLater) }
+            },
+        )
+    }
+
+    if (step == PromptStep.KeepAlive) {
+        AlertDialog(
+            onDismissRequest = { },
+            icon = { Icon(Icons.Filled.BatterySaver, contentDescription = null) },
+            // The row on the agent page says the same two things, from the same
+            // key as this title: the state there and the ask here are one subject.
+            title = { Text(text.settings.keepAliveTitle) },
+            text = { Text(text.settings.keepAliveAskBody) },
+            confirmButton = {
+                TextButton(onClick = {
+                    // Recorded before the system box is opened, not after: there is
+                    // no result callback for it — the user may answer it, ignore it,
+                    // or come back through the recents list — and an app that asked
+                    // again on the next launch would be nagging about a question the
+                    // user has already seen.
+                    BatteryOptimisation.markAsked(context)
+                    step = PromptStep.None
+                    BatteryOptimisation.request(context)
+                }) { Text(text.settings.keepAliveAskOpen) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    BatteryOptimisation.markAsked(context)
+                    step = PromptStep.None
+                }) { Text(text.settings.keepAliveAskLater) }
             },
         )
     }
@@ -767,13 +811,15 @@ private fun MessageScreen(
 }
 
 /**
- * The first-launch permission sequence, in the order it is shown.
+ * The first-launch sequence, in the order it is shown.
  *
- * A step rather than two booleans because the second prompt is owed to the answer
- * of the first: see the block in [PermissionPrompts] for the measurement that made
- * this necessary.
+ * A step rather than three booleans because each prompt is owed to the answer of the
+ * one before it: see the block in [PermissionPrompts] for the measurement that made
+ * the ordering necessary. [KeepAlive] is last because it is the only one of the three
+ * that is not about reaching something — the other two gate features the user tries
+ * in the first minute, and this one is about a run that gets cut short later.
  */
-private enum class PromptStep { None, Notification, Storage }
+private enum class PromptStep { None, Notification, Storage, KeepAlive }
 
 /** An answer faster than this is the platform, not a person. See the retry. */
 private const val INSTANT_ANSWER_MS = 1_200L

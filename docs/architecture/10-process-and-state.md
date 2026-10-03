@@ -70,6 +70,7 @@ Two lifecycle facts are load-bearing, and both were measured on a device rather 
 | Profiles, API keys, conversations, runtime | `<app files>/pikit-config.json`, `pi-sessions/*.jsonl` (written by pi), `usr` |
 | Thinking level, working directory, language, pins | SharedPreferences `pikit_settings`, `pikit_session_pins` |
 | Which folders the agent may reach | SharedPreferences `pikit_storage` (absent means **none**); whether the first-launch prompt was answered |
+| Whether the battery-optimisation exemption was asked for | SharedPreferences `pikit_power`; the exemption itself is the platform's (`isIgnoringBatteryOptimizations`) |
 | Agent instructions and guard | `<app files>/home/.pi/agent/AGENTS.md`, `.../extensions/pi-safety-guard.ts` |
 | The agent's workspace | `<app files>/home/workspace` (the default working directory) |
 | Shared storage links | `<app files>/home/storage/*` → `/storage/emulated/0/...`, one per folder switched on |

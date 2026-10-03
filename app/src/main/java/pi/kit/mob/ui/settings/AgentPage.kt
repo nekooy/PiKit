@@ -1,10 +1,6 @@
 package pi.kit.mob.ui.settings
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.PowerManager
-import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,8 +42,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import pi.kit.mob.env.AgentContext
+import pi.kit.mob.env.BatteryOptimisation
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
@@ -253,20 +254,33 @@ private fun ContextPoint(number: Int, title: String, body: String) {
 /**
  * The battery-optimisation exemption: the one keep-alive lever the OS owns.
  *
- * The foreground service and the turn wake lock do nothing for a process the
- * OEM's power manager has already decided to reclaim the moment the screen goes
- * off — which is the report "息屏后会直接 terminated". `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
- * opens the system's own dialog; the app cannot draw it and cannot grant itself
- * the exemption. The row is a status and a button, because the state is worth
- * seeing and the action is one tap when it is missing.
+ * The state and the ask are [BatteryOptimisation]'s, which the first-launch dialog
+ * uses too — this row is the *report* and the way back to it. The foreground service
+ * and the turn wake lock do nothing for a process the OEM's power manager has already
+ * decided to reclaim the moment the screen goes off, which is the report "息屏后会直接
+ * terminated"; the row is a status and a button because the state is worth seeing and
+ * the action is one tap when it is missing.
  */
 @Composable
 private fun KeepAliveRow(text: Strings) {
     val context = LocalContext.current
-    // Re-read on every recomposition rather than cached: the answer can change
-    // in the system settings app while this page is open, and coming back to a
-    // stale "not exempt" is exactly the confusion the row exists to remove.
-    val exempt = remember(context) { isIgnoringBatteryOptimizations(context) }
+    // Re-read when the user comes back from the system's battery-optimisation
+    // dialog or settings page. There is no result callback for either, so the
+    // lifecycle is what tells us to look again — the same treatment StoragePage
+    // gives "all files access". A `remember` here cached the answer for the life
+    // of the page: granting the exemption and returning left the row saying
+    // "not exempt" with the button still enabled until the page was reopened.
+    var exempt by remember { mutableStateOf(BatteryOptimisation.isExempt(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                exempt = BatteryOptimisation.isExempt(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(
@@ -294,7 +308,7 @@ private fun KeepAliveRow(text: Strings) {
         // exemption was missing made the section jump a button taller and then
         // shorter again as the answer changed.
         OutlinedButton(
-            onClick = { requestIgnoreBatteryOptimizations(context) },
+            onClick = { BatteryOptimisation.request(context) },
             enabled = !exempt,
             modifier = Modifier.padding(top = 8.dp),
         ) {
@@ -302,38 +316,6 @@ private fun KeepAliveRow(text: Strings) {
             Text(text.settings.keepAliveAsk, Modifier.padding(start = 8.dp))
         }
     }
-}
-
-/**
- * Whether the OS is allowed to leave this app alone in the background.
- *
- * Below M every app is exempt by construction — there is no optimisation to
- * opt out of — so the answer is true rather than "the API does not exist".
- */
-private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
-    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return true
-    val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
-    return power.isIgnoringBatteryOptimizations(context.packageName)
-}
-
-/**
- * Asks the system for the exemption.
- *
- * `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is the one that shows a
- * yes/no dialog for *this* package; the bare `ACTION_IGNORE_BATTERY_OPTIMIZATIONS`
- * settings screen is the fallback for a device that refuses the direct ask
- * (some OEMs do), and failing even to open either is silent — the row simply
- * keeps saying the exemption is missing.
- */
-private fun requestIgnoreBatteryOptimizations(context: Context) {
-    val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-        .setData(Uri.parse("package:${context.packageName}"))
-    // The settings screen is the fallback for a device that refuses the direct
-    // ask; spelled as a literal because some SDK stubs do not surface the
-    // constant even though the activity exists.
-    val fallback = Intent("android.settings.IGNORE_BATTERY_OPTIMIZATIONS_SETTINGS")
-    runCatching { context.startActivity(direct) }
-        .onFailure { runCatching { context.startActivity(fallback) } }
 }
 
 /**

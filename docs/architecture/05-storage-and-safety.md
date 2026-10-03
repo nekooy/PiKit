@@ -266,11 +266,12 @@ and matched none of the configured roots, which is why "open with" on a file und
 now. The lesson is the same one the link farm teaches: the same file has several names,
 and the one that decides is the one at the boundary being crossed.
 
-## The first launch asks for both permissions, in order
+## The first launch asks three things, in order
 
-Two prompts are owed on a fresh install — notifications, and the storage
-explanation — and they cannot be raised by two independent one-shot effects. The
-first version was exactly that, and the notification prompt was **lost**: it was
+Three prompts are owed on a fresh install — notifications, the storage
+explanation, and the battery-optimisation exemption — and they cannot be raised by
+three independent one-shot effects. The first version was exactly that, and the
+notification prompt was **lost**: it was
 requested from `MainActivity.onCreate`'s first composition, ~0.6 s after `onResume`,
 while the splash was still exiting and the foreground service was starting. Measured
 from the platform's own event log, with nothing else touching the device:
@@ -292,7 +293,8 @@ the cancellation in 235 ms, so the two prompts are not competing for one window.
 What replaced it, in `PiKitRoot`:
 
 - **One owner, ordered, above the language key.** A `PromptStep` state — `None`,
-  `Notification`, `Storage` — raised behind the same runtime gate the storage prompt
+  `Notification`, `Storage`, `KeepAlive` — raised behind the same runtime gate the
+  storage prompt
   already sat behind, so the first prompt appears when the app is *usable* rather
   than over the unpacking screen. It sits *above* `key(language)` because that key
   rebuilds its subtree when the language arrives, and a rebuild disposes the
@@ -300,7 +302,8 @@ What replaced it, in `PiKitRoot`:
   that produced `Can request only one set of permissions at a time` 66 ms after the
   first.
 - **Answer-driven.** The sequence advances from the notification launcher's result
-  callback, never from an effect that fires once.
+  callback and from the storage dialog's own buttons, never from an effect that fires
+  once.
 - **Bounded retry.** This emulator's platform closes the dialog on its own frame:
   measured across every app state tried — from the first composition, from the first
   *usable* frame, and from a fully idle app twenty seconds later — the dialog lived
@@ -311,8 +314,22 @@ What replaced it, in `PiKitRoot`:
   Not asking at all was tried and is worse: with the request removed, Android 16 did **not**
   raise the prompt for this legacy-target app when it created its notification channel, so
   the user was never asked.
-- **The storage step is still one-shot by design**: either button marks it prompted,
-  and `Settings → Shared storage` is where a user changes their mind later.
+- **The storage and keep-alive steps are one-shot by design**: every button of either
+  records the answer, and `Settings → Shared storage` and `Settings → Agent process`
+  are where a user changes their mind later. Both are recorded on the *answer* rather
+  than on the showing, which is why the keep-alive dialog appears once per install —
+  it is in front of the platform's own `RequestIgnoreBatteryOptimizations` box, and
+  there is no result callback for that box (the user may answer it, ignore it, or come
+  back through the recents list), so a state that waited for one would ask again on
+  every launch.
+
+The keep-alive step is the third one because it is the only one of the three that is
+not about *reaching* something: a missing notification or storage grant fails in front
+of the user within the first minute, while a process reclaimed with the screen off
+looks like the answer simply stopping. It was reachable only from the agent page
+before, three taps in, which is the state that made it worth a prompt. `BatteryOptimisation`
+holds the state, the ask and the record of having asked, because the agent page's
+keep-alive row reports the same fact for ever after.
 
 `MANAGE_EXTERNAL_STORAGE` is an **app-op**: `appops get --uid pi.kit.mob
 MANAGE_EXTERNAL_STORAGE` reads `allow` on an app that `dumpsys package` reports as

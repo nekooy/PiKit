@@ -662,6 +662,13 @@ internal object EnglishStrings : Strings {
             "With the screen off or the app in the background the OS may reclaim the agent " +
                 "and cut the turn short. The battery-optimisation exemption is what lets the " +
                 "foreground service and the wake lock actually hold it."
+        override val keepAliveAskBody =
+            "With the screen off or the app in the background, the system may reclaim the " +
+                "agent and cut a running answer short. Adding PiKit to the battery-optimisation " +
+                "allowlist avoids that, at the cost of staying resident and draining a little " +
+                "more. The next box is the system's own; PiKit cannot answer it for you."
+        override val keepAliveAskOpen = "Open settings"
+        override val keepAliveAskLater = "Not now"
 
         override val backupTitle = "Backup & restore"
         override val backupSubtitle = "Export and restore app data"

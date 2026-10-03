@@ -594,6 +594,12 @@ internal object ChineseStrings : Strings {
         override val keepAliveNote =
             "息屏或切后台时，系统可能回收 Agent 进程导致对话中断。加入电池优化白名单后，" +
                 "前台服务与唤醒锁才能真正把回合保住。"
+        override val keepAliveAskBody =
+            "系统可能在你息屏或切到后台时回收 Agent 进程，让正在进行的回答中断。把 PiKit " +
+                "加入电池优化白名单可以避免这一点，代价是它会一直驻留后台、略微更耗电。" +
+                "接下来是系统自己的确认框，PiKit 无法代你同意。"
+        override val keepAliveAskOpen = "去设置"
+        override val keepAliveAskLater = "以后再说"
 
         override val backupTitle = "备份与恢复"
         override val backupSubtitle = "把数据打包导出，需要时倒回"
