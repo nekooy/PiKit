@@ -34,6 +34,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -2257,6 +2259,14 @@ private fun AssistantBubble(
     // block is one tap away.
     var showThinking by rememberSaveable(item.key) { mutableStateOf(false) }
 
+    // The expanded block is below the toggle, so a tap near the foot of the
+    // viewport opens a panel that is entirely under the fold — the reader could
+    // see that something opened (everything below moved) and then had to scroll
+    // to find out what. `bringIntoView` on the block itself is the scroll, and
+    // it is the block rather than the toggle that is asked for: the toggle was
+    // already on screen, which is what made the tap possible.
+    val reasoningBringIntoView = remember { BringIntoViewRequester() }
+
     // `isStreaming` is deliberately not part of this any more. It was, because the
     // row drew a live cursor for as long as the answer was on its way and was
     // therefore never empty; with the cursor removed (see below) a streaming row
@@ -2279,7 +2289,12 @@ private fun AssistantBubble(
                 // opened were flush against each other, so the first line of the
                 // reasoning read as part of the button.
                 Spacer(Modifier.height(6.dp))
-                ReasoningBlock(item.thinking)
+                Box(Modifier.bringIntoViewRequester(reasoningBringIntoView)) {
+                    ReasoningBlock(item.thinking)
+                }
+                LaunchedEffect(showThinking) {
+                    reasoningBringIntoView.bringIntoView()
+                }
             }
             // Only when something follows it. This spacer separates the reasoning
             // control from the answer under it, and it used to be unconditional —
