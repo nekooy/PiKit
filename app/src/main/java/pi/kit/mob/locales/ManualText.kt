@@ -84,19 +84,6 @@ not expand `${'$'}VARIABLE` for a provider it
 does not know, and anything reading this app's
 process list can see it.
 
-### Thinking level
-
-At the top of **Settings → Model & provider**.
-The picker offers the levels the chosen model
-has, because pi moves a level the model lacks up
-to the next one it does. It applies at once,
-with no restart.
-
-The names are pi's own — `off`, `minimal`,
-`low`, `medium`, `high`, `xhigh`, `max` — so the
-chip here and `pi --list-models` in the terminal
-use the same word for the same level.
-
 ## 2. Commands
 
 A chat message starting with `!` runs in the
@@ -133,6 +120,14 @@ change while talking:
 | Model | Which model answers. Immediate. |
 | Context | Window use. Tap for the numbers. |
 | Cache | Share served by the prompt cache. |
+
+The thinking slider offers the levels the chosen
+model has, because pi moves a level the model
+lacks up to the next one it does. The names are
+pi's own — `off`, `minimal`, `low`, `medium`,
+`high`, `xhigh`, `max` — so the chip here and
+`pi --list-models` in the terminal use the same
+word for the same level.
 
 The `/` button lists the agent's commands,
 PiKit's own `/new`, `/compact` and `/stop`
@@ -293,7 +288,7 @@ of it.
 
 | Row | What it holds |
 | --- | --- |
-| Model & provider | Provider, key, models, thinking level |
+| Model & provider | Provider, key, models |
 | Search settings | Web search: how, where, limits, keys |
 | Personalization | New conversation on launch; theme; home-screen icon |
 | Language | English, 简体中文 or 日本語; immediate |

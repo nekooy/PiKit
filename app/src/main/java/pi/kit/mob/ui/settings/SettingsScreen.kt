@@ -346,8 +346,8 @@ private val SettingsPage.depth: Int
  *
  * Thinking level is deliberately *not* here. It is a property of the model
  * answering — pi combines the level with that model's own reasoning capability,
- * and neither means anything without the other — so it lives on the model page,
- * beside the profile it applies to.
+ * and neither means anything without the other — so the control is the
+ * composer's chip, the one place a conversation changes it while talking.
  */
 @Composable
 private fun RootPage(

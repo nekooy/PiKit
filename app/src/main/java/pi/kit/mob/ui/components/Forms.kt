@@ -2,7 +2,7 @@
  * The app's one selection vocabulary.
  *
  * Every picker in PiKit used to be a `DropdownMenu` anchored to a row, written
- * out separately at each call site: language and thinking level in Settings, the
+ * out separately at each call site: language in Settings, the
  * provider and the fetched model list in the model form, the terminal's open
  * sessions in the terminal header. They rendered as 2014 context menus — nine
  * items of language in a floating dropdown, a 280dp-wide menu that cut a long
@@ -127,10 +127,11 @@ data class PickerOption(
 /**
  * The thinking levels as picker options.
  *
- * Built once for the two places that offer them — the composer's chip and the
- * model page's row — because the label, the explanation and the footnote are the
- * same three things, and two copies would drift on the first rewording. It is not a
- * `Composable`: it is a list of data, and both callers hand it to [PickerBody].
+ * Built once for the two places that offer them — the composer's slider sheet and
+ * (historically) the model page's row — because the label, the explanation and the
+ * footnote are the same three things, and two copies would drift on the first
+ * rewording. It is not a `Composable`: it is a list of data. The composer reads
+ * the ids and descriptions off it for `ThinkingLevelSheet`'s track.
  *
  * The **label is the level's id**, not a translation of it: `off`, `minimal`, `low`,
  * `medium`, `high`, `xhigh`, `max` are the strings `set_thinking_level` carries, the

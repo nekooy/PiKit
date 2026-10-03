@@ -71,12 +71,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -108,6 +110,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -156,6 +159,7 @@ import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.StatusNotice
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * What a picked file is until it is actually sent.
@@ -478,8 +482,9 @@ internal fun ChatScreen(
                     val saved by session.settingsStore.settings.collectAsState()
                     // Live levels once the agent has answered for the model that is
                     // running, the remembered ones otherwise — see
-                    // `thinkingLevelsFor`. The menu and the tick come from the one
-                    // answer, so the menu cannot offer a list the tick is not in.
+                    // `thinkingLevelsFor`. The slider and the committed step come
+                    // from the one answer, so the track cannot offer a level the
+                    // model does not have.
                     val available = thinkingLevelsFor(
                         live.availableThinkingLevels,
                         // The saved model id as the fallback, for the same reason
@@ -487,23 +492,17 @@ internal fun ChatScreen(
                         // is no live model, and a lookup by null finds nothing.
                         saved.rememberedThinkingLevels(live.model?.id ?: saved.modelId),
                     )
-                    PickerBody(
-                        title = text.chat.thinkingLevelLabel,
-                        // The same list the settings page's row shows; built once so
-                        // the two cannot disagree about a level or its description.
-                        // `available` is what pi says this model has — see
-                        // `thinkingLevelOptions` for why the seven are not offered
-                        // over it.
-                        options = thinkingLevelOptions(text, available),
-                        selectedId = thinkingLevelOf(live, saved),
-                        footnote = thinkingLevelFootnote(text, available),
-                        onPick = { level ->
+                    ThinkingLevelSheet(
+                        available = available,
+                        current = thinkingLevelOf(live, saved),
+                        onChange = { level ->
                             // Applied to the running process immediately: pi
                             // accepts the change over RPC, so unlike the provider
                             // and model it needs no restart.
                             session.settingsStore.update { it.copy(thinkingLevel = level) }
                             session.setThinkingLevel(level)
                         },
+                        text = text,
                     )
                 },
             )
@@ -1240,6 +1239,134 @@ private fun thinkingLevelOf(state: ConversationState, saved: PiSettings): String
             saved.rememberedThinkingLevels(state.model?.id ?: saved.modelId),
         ),
     )
+
+/**
+ * The thinking-level sheet: a title, the level under the thumb, and a discrete
+ * slider — the same shape as the personalization page's font-size sheet.
+ *
+ * It used to be a [PickerBody] of the model's levels, one row per id. A level is
+ * a *range* from `off` to `max`, so it is a track with ticks rather than a list
+ * of names; the row of names made the seven ids look like seven unrelated
+ * choices when the thing being set is how long to think before answering.
+ *
+ * ## The drag is not applied until it is released
+ *
+ * Same rule as `FontSizeSheet`, and for the same reason that gesture must not be
+ * interrupted mid-drag: here the commit is one settings write plus one RPC
+ * (`set_thinking_level`), which is cheap, but a level applied on every tick would
+ * still send a command per pixel of travel. The draft moves the thumb, the
+ * ticks and the big name under the title; the level is committed on release.
+ *
+ * ## The ends are the first and last level names
+ *
+ * `FontSizeSheet` puts a sample glyph at each end; a thinking level has no
+ * sample to draw, so the ends are pi's own ids — `off` and `max` on a full
+ * track — which is also the only pair that says which way is "more". The big
+ * name is that same id: the chip shows it, `set_thinking_level` carries it, and
+ * translating it would be two names for one wire string.
+ *
+ * ## One level is not a slider
+ *
+ * A model without reasoning answers `["off"]` and there is no choice to make.
+ * A one-tick track is a control that does nothing, so the case draws the name
+ * and [Strings.Chat.thinkingDisabled] and no track at all.
+ */
+@Composable
+private fun ThinkingLevelSheet(
+    available: List<String>,
+    current: String,
+    onChange: (String) -> Unit,
+    text: Strings,
+) {
+    // The same list the model page's row offers — built once so the two cannot
+    // disagree about a level or its description. Empty means no agent has
+    // answered yet, and `thinkingLevelOptions` falls back to pi's seven.
+    val options = thinkingLevelOptions(text, available)
+    val steps = options.map { it.id }
+    val startIndex = steps.indexOf(current).takeIf { it >= 0 }
+        ?: 0
+    // The step under the finger. Keyed on the committed one, so a change made
+    // anywhere else — the model page, a model switch — lands in the slider.
+    var draft by remember(current, steps) {
+        mutableFloatStateOf(startIndex.toFloat())
+    }
+    var committed by remember(current, steps) { mutableStateOf(current) }
+    val shown = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
+
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Text(
+            text = text.chat.thinkingLevelLabel,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
+        )
+        Text(
+            text = shown,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+        )
+        // The meaning of the level under the thumb, not a second name for it:
+        // "medium" is the wire string, and this sentence is what it costs.
+        val description = options.firstOrNull { it.id == shown }?.description
+        if (!description.isNullOrBlank()) {
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            )
+        }
+        if (steps.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // A fixed-width column for each end, so the two ids read as the
+                // ends of one track and the track keeps its width as the thumb
+                // moves. The id, not a translation: `off` is what pi accepts.
+                Text(
+                    text = steps.first(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                Slider(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    onValueChangeFinished = {
+                        val chosen = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
+                        if (chosen != committed) {
+                            committed = chosen
+                            onChange(chosen)
+                        }
+                    },
+                    valueRange = 0f..steps.lastIndex.toFloat(),
+                    // Material3 counts the ticks *between* the ends, so n
+                    // positions is n-2 of them.
+                    steps = steps.size - 2,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = steps.last(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+        thinkingLevelFootnote(text, available)?.let { footnote ->
+            Text(
+                text = footnote,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
 
 /**
  * A profile's provider, as the heading it groups its models under.

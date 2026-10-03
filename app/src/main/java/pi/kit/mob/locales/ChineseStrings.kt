@@ -269,7 +269,6 @@ internal object ChineseStrings : Strings {
         override val none = "无"
         override val manageProfiles = "模型与供应商"
         override val manageProfilesSubtitle = "Pi 使用的 Key 与模型"
-        override val thinkingLevel = "思考等级"
         override val workingDirectory = "工作目录"
         override val updateAndRepair = "维护与修复"
         override val updateAndRepairSubtitle = "模型列表、修复软件包"
@@ -571,9 +570,6 @@ internal object ChineseStrings : Strings {
             "同一套供应商、模型和 Key 也会写入 pi 自己的 settings.json，因此终端页手动启动的" +
                 "pi 用的也是同一个模型。"
 
-        override val modelBehaviour = "思考"
-        // Row subtitle stays one short line; the rules are in the picker's footnote.
-        override val thinkingSubtitle = "回答前的推理投入，改完即生效"
         override val workspace = "工作区"
         override fun workingDirSubtitle(workspace: String) = "留空时，Agent 在 $workspace 中工作"
         override val workingDirNote =

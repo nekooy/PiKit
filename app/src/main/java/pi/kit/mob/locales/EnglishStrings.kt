@@ -290,7 +290,6 @@ internal object EnglishStrings : Strings {
         override val none = "None"
         override val manageProfiles = "Model & provider"
         override val manageProfilesSubtitle = "The key and model Pi answers with"
-        override val thinkingLevel = "Thinking level"
         override val workingDirectory = "Working directory"
         override val updateAndRepair = "Maintenance & repair"
         override val updateAndRepairSubtitle = "Model list, repair packages"
@@ -637,8 +636,6 @@ internal object EnglishStrings : Strings {
             "The same provider, model and key are written into pi's own settings.json, so a " +
                 "pi you start in the Terminal tab answers with the same model."
 
-        override val modelBehaviour = "Thinking"
-        override val thinkingSubtitle = "Reasoning effort; applies at once"
         override val workspace = "Workspace"
         override fun workingDirSubtitle(workspace: String) = "Left blank, the agent works in $workspace"
         override val workingDirNote =
