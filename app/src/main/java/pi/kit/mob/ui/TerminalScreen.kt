@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -154,6 +155,11 @@ fun TerminalScreen(session: PiAgentSession) {
     // claims. A single live shell keeps the idle line, which is the hint about
     // what this page is rather than a count.
     val running = sessions.count { it.running }
+
+    // Measured here rather than inside the bar, because two things have to agree on
+    // it: the bar's own height, and the room the terminal leaves under its last line.
+    val keys = rememberKeySize(t, LocalDensity.current.fontScale)
+    val keysHeight = barHeight(keys)
 
     Box(Modifier.fillMaxSize().background(TERMINAL_BACKGROUND)) {
         Column(Modifier.fillMaxSize()) {
@@ -274,8 +280,10 @@ fun TerminalScreen(session: PiAgentSession) {
                     AndroidView(
                         modifier = Modifier
                             .fillMaxSize()
-                            // Leave room for the extra keys row underneath.
-                            .padding(bottom = EXTRA_KEYS_HEIGHT)
+                            // Leave room for the extra keys row underneath — the same
+                            // derived height the bar itself is drawn at, so the last
+                            // line of the terminal can never sit under a key.
+                            .padding(bottom = keysHeight)
                             // Compose's after-layout hook. `updateSize()` is what
                             // creates the emulator the renderer paints from, and
                             // it bails out on a zero-sized view — so it has to run
@@ -357,6 +365,7 @@ fun TerminalScreen(session: PiAgentSession) {
                 ExtraKeysRow(
                     modifier = Modifier.align(Alignment.BottomCenter),
                     text = t,
+                    size = keys,
                     ctrlOn = ctrlOn,
                     altOn = altOn,
                     autoScroll = autoScroll,
@@ -407,28 +416,47 @@ private fun ScreenRepaintAnchor(
 }
 
 /**
- * The extra-keys bar's height.
+ * The bar's height, derived from the keys in it.
  *
- * Two chip rows plus the gap between them and the padding around them: 30dp of
- * chip, 6dp of gap, 30dp of chip, and 5dp above and below. The arrows make the bar
- * two deep by themselves — up has to sit above down for the pad to mean anything —
- * and once one key needs a second row the rest may as well use it, which is how the
- * bar went from a horizontally scrolling strip to two rows that fit on screen.
+ * Two chip rows plus the gap between them and the padding around them. The arrows
+ * make the bar two deep by themselves — up has to sit above down for the pad to mean
+ * anything — and once one key needs a second row the rest may as well use it, which
+ * is how the bar went from a horizontally scrolling strip to two rows that fit on
+ * screen.
+ *
+ * It is a function of [KeySize] rather than a constant, and that is a fix rather than
+ * tidiness. It used to be a flat 76dp derived from 30dp chips, and the chips grew to
+ * 34dp without it: the bar has been 8dp shorter than its own contents ever since, so
+ * the second row sat on the bar's bottom edge and at font scale 1.8 the whole bar
+ * overflowed — measured on the emulator, the labels of the row underneath were drawn
+ * over by the tab strip. Nothing about the bar is a fixed size: the keys scale with
+ * the interface, so the space holding two of them has to.
  */
-private val EXTRA_KEYS_HEIGHT = 76.dp
+private fun barHeight(size: KeySize): Dp = size.height * 2 + KEY_GAP + KEY_BAR_PADDING * 2
 
-/** One chip's height, and the gap between chips in both directions. */
-private val KEY_HEIGHT = 30.dp
+/** One chip's height floor, and the gap between chips in both directions. */
+// 34dp and `labelLarge` to match the composer's `ControlChip`: the two are the
+// app's tappable pills above a keyboard, and they were 30dp/`labelMedium` here
+// against 34dp/`labelLarge` there — the report that "同类控件高度等样式不一致".
+// A floor rather than the height: `labelLarge` is scaled by the system font size, so
+// the chip is the larger of this and its own label's line box.
+private val KEY_HEIGHT = 34.dp
 private val KEY_GAP = 6.dp
+
+/** The bar's padding around its two rows, on each side of each axis. */
+private val KEY_BAR_PADDING = 5.dp
+private val KEY_BAR_SIDE_PADDING = 6.dp
 
 /**
  * The corner every key in the bar is drawn with.
  *
  * One value, because two things have to agree: the `Surface`'s shape and the clip
- * that bounds the key's ripple (see [ExtraKeyChip]). Two spellings of "7dp" is how
- * they would come apart.
+ * that bounds the key's ripple (see [ExtraKeyChip]). 10dp, the same figure as
+ * `MaterialTheme.shapes.extraSmall` and the composer's chips — written as a
+ * constant because it is used from two non-composable call sites and because two
+ * spellings of one radius is how they would come apart.
  */
-private val EXTRA_KEY_SHAPE = RoundedCornerShape(7.dp)
+private val EXTRA_KEY_SHAPE = RoundedCornerShape(10.dp)
 
 /**
  * One arrow: the escape sequence it sends, and the glyph it shows.
@@ -479,6 +507,14 @@ private val ARROW_LEFT = ArrowKey("\u001b[D", "\u2190")
  * the row scrolls at font scale 1.0 rather than fitting. The ceiling exists for
  * exactly that reason: past it the bar would scroll *more*, not fit more, so a long
  * translation is better served by a bound than by a wider key.
+ *
+ * The bound is where the longest shipped label ends, not a round number below it.
+ * `Scroll` is 6 characters and `滚动` two, but `スクロール` is five full-width glyphs —
+ * measured at 184px, 70dp, against a 64dp ceiling — so the Japanese bar drew `スク`
+ * and cut the rest of the word off mid-glyph. At 96dp the bar takes that label in
+ * full and the ones it shipped with are unaffected, because the width every key is
+ * given is still the *widest* label's: a language whose labels are short pays nothing
+ * for the ceiling being high.
  */
 private data class KeySize(val width: Dp, val height: Dp)
 
@@ -493,7 +529,7 @@ private fun rememberKeySize(
     text: pi.kit.mob.locales.Strings,
     fontScale: Float,
 ): KeySize {
-    val style = MaterialTheme.typography.labelMedium
+    val style = MaterialTheme.typography.labelLarge
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val labels = remember(text) {
@@ -517,23 +553,42 @@ private fun rememberKeySize(
     val widest = remember(labels, style, fontScale) {
         labels.maxOf { measurer.measure(it, style).size.width }
     }
+    val tallest = remember(labels, style, fontScale) {
+        labels.maxOf { measurer.measure(it, style).size.height }
+    }
     val width = with(density) { widest.toDp() } + KEY_TEXT_PADDING
+    // The height follows the label for the same reason the width does, and it is the
+    // half that was missed: `labelLarge`'s line box is scaled by the system font size
+    // (20sp at 1.0, 36sp at 1.8) while the chip was drawn at a flat 34dp, so at 1.8
+    // every key in the bar clipped its own label top and bottom. Measured on the
+    // emulator in Japanese at 1.8: the labels were cut to the height of the chip,
+    // `スクロール` to `スク`, and the second row of the bar ended up under the tab strip.
+    val height = with(density) { tallest.toDp() } + KEY_VERTICAL_PADDING
     // The floor keeps a one-glyph label's key from being a sliver, and the ceiling
     // keeps a long translation from making the row scroll further than it has to.
     return KeySize(
         width = width.coerceIn(MIN_KEY_WIDTH, MAX_KEY_WIDTH),
-        height = KEY_HEIGHT,
+        height = height.coerceAtLeast(KEY_HEIGHT),
     )
 }
 
 /** The four arrow glyphs, named once so the size measurement and the pad agree. */
 private val ARROW_GLYPHS = listOf("\u2190", "\u2191", "\u2193", "\u2192")
 
-/** A chip's own horizontal padding, on both sides together. */
+/** A chip's own padding, on both axes together: 11dp beside the label, 7dp above it. */
 private val KEY_TEXT_PADDING = 22.dp
+private val KEY_VERTICAL_PADDING = 14.dp
 
 private val MIN_KEY_WIDTH = 34.dp
-private val MAX_KEY_WIDTH = 64.dp
+
+/**
+ * The widest a key may be drawn, whatever its label measures.
+ *
+ * 96dp is `スクロール` — the longest label the bar ships, five full-width glyphs at
+ * 184px — plus the chip's own padding, rounded up. See [KeySize] for why the bound is
+ * worth having and why this is where it sits.
+ */
+private val MAX_KEY_WIDTH = 96.dp
 
 /**
  * The arrow pad: up directly above down, left and right flanking them, with the
@@ -673,7 +728,7 @@ private fun ScrollToggle(
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelLarge,
                 fontFamily = FontFamily.Monospace,
                 color = if (following) {
                     MaterialTheme.colorScheme.primary
@@ -681,6 +736,9 @@ private fun ScrollToggle(
                     MaterialTheme.colorScheme.error
                 },
                 maxLines = 1,
+                // The same rule as the bar's other chips: an ellipsis if the label
+                // ever outgrows the ceiling, never a word cut in half.
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -751,6 +809,7 @@ private val EXTRA_KEYS_ROW_TWO: List<ExtraKey> = listOf(
 private fun ExtraKeysRow(
     modifier: Modifier = Modifier,
     text: pi.kit.mob.locales.Strings,
+    size: KeySize,
     ctrlOn: Boolean,
     altOn: Boolean,
     autoScroll: Boolean,
@@ -759,12 +818,10 @@ private fun ExtraKeysRow(
     onToggleAutoScroll: () -> Unit,
     onSend: (String) -> Unit,
 ) {
-    val size = rememberKeySize(text, LocalDensity.current.fontScale)
-
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(EXTRA_KEYS_HEIGHT),
+            .height(barHeight(size)),
         // Light, like the header above it and the navigation bar below. The
         // terminal itself stays dark — that is the transcript, not chrome.
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -772,7 +829,7 @@ private fun ExtraKeysRow(
         LazyRow(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 5.dp),
+                .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = KEY_BAR_PADDING),
             horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -864,7 +921,7 @@ private fun ExtraKeyChip(
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelLarge,
                 fontFamily = FontFamily.Monospace,
                 color = if (active) {
                     MaterialTheme.colorScheme.onPrimary
@@ -872,6 +929,10 @@ private fun ExtraKeyChip(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 maxLines = 1,
+                // A label past the ceiling is marked as truncated rather than cut
+                // mid-glyph: `TextOverflow.Clip` is the default, and it is what drew
+                // `スクロール` as `スク` with nothing to say the word was longer.
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
