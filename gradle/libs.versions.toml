@@ -2,20 +2,21 @@
 # AGP 8.x, deliberately not 9: see `pikit.targetSdk` in gradle.properties and
 # ARCHITECTURE §1. AGP 9 turns on built-in Kotlin and defaults
 # `defaultTargetSdkToCompileSdkIfUnset`, neither of which this project wants.
-# 8.13.2 is the last 8.x on Google's Maven. AndroidX releases after mid-2026
-# require AGP 9.1 and compileSdk 37 (measured on core-ktx 1.19.1 / Compose 1.12.1
-# / compose-bom 2026.09.00 — 26 AAR-metadata failures at once), so the pins below
-# are the newest that still build against AGP 8.13 and compileSdk 36.
+# 8.13.2 is the last 8.x on Google's Maven. AndroidX from mid-2026 on
+# (core-ktx 1.19.x, Compose 1.12.x / compose-bom 2026.08.00+, lifecycle 2.11.0)
+# requires AGP 9.1 and compileSdk 37 — measured as 22 AAR-metadata failures on
+# core-ktx 1.19.0 / Compose 1.12.0 and again on 1.19.1 / 1.12.1 / 2026.09.00.
+# The pins below are the newest that still build against AGP 8.13 and compileSdk 36.
 agp = "8.13.2"
-kotlin = "2.2.10"
-coreKtx = "1.16.0"
-annotation = "1.9.1"
-lifecycle = "2.9.4"
-activityCompose = "1.12.4"
-composeBom = "2026.03.00"
+kotlin = "2.3.21"
+coreKtx = "1.18.0"
+annotation = "1.11.0"
+lifecycle = "2.10.0"
+activityCompose = "1.13.0"
+composeBom = "2026.06.01"
 coroutines = "1.10.2"
-serialization = "1.8.1"
-okio = "3.9.0"
+serialization = "1.9.0"
+okio = "3.12.0"
 # JLaTeXMath's Android port: the typesetter, and the OpenType metrics it carries as
 # its own font files. It replaced `io.github.huarangmeng:latex-*`, whose KaTeX
 # metrics were correct and 21.7 ms per formula — the measurement is in

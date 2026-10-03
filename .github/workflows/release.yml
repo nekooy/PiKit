@@ -50,7 +50,7 @@ env:
   NDK_VERSION: "29.0.14033849"
   # One spelling for the build-tools the workflow installs and the apksigner it
   # then runs out of them. `ci.yml` carries the same pair.
-  BUILD_TOOLS_VERSION: "36.0.0"
+  BUILD_TOOLS_VERSION: "36.1.0"
 
 jobs:
   release:
