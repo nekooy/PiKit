@@ -1,6 +1,7 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -231,6 +234,11 @@ internal fun ModelPage(
                                         Icons.Filled.Check,
                                         contentDescription = text.settings.active,
                                         tint = MaterialTheme.colorScheme.primary,
+                                        // 20dp, the size the picker's own tick is
+                                        // drawn at. It was unsized (24dp), so the
+                                        // "selected" mark was bigger here than in
+                                        // every picker in the app.
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
                                 IconButton(onClick = { onEdit(profile.id) }) {
@@ -933,8 +941,7 @@ internal fun ModelEditPage(
                         text.settings.baseUrlNote
                     } else {
                         text.settings.baseUrlOptionalNote
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    }
                 )
                 OutlinedTextField(
                     value = baseUrl,
@@ -981,8 +988,7 @@ internal fun ModelEditPage(
                         onPick = { api = it },
                     )
                     SettingsNote(
-                        text.settings.apiTypeNote,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        text.settings.apiTypeNote
                     )
                 }
 
@@ -1001,8 +1007,7 @@ internal fun ModelEditPage(
                 // a `pi` the user starts by hand in the terminal answers with this
                 // model instead of reporting none.
                 SettingsNote(
-                    text.settings.terminalModelNote,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    text.settings.terminalModelNote
                 )
             }
 
@@ -1037,6 +1042,9 @@ internal fun ModelEditPage(
                                         Icons.Filled.Check,
                                         contentDescription = text.settings.active,
                                         tint = MaterialTheme.colorScheme.primary,
+                                        // 20dp, the size the picker's own tick is
+                                        // drawn at (was unsized 24dp).
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
                                 IconButton(onClick = { pendingRemove = model }) {
@@ -1073,11 +1081,21 @@ internal fun ModelEditPage(
                 )
 
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    // 12h/10v, the same button-row inset the agent, maintenance and
+                    // backup pages use. It was 8v here, which put these two buttons
+                    // 2dp closer to the field above and the note below than every
+                    // other action row in the settings.
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(
-                        onClick = { addModel(draft) },
+                        onClick = {
+                            val id = draft.trim()
+                            addModel(
+                                id,
+                                prefill = if (isCustomEndpoint) prefillFrom(customIdFacts[id]) else null,
+                            )
+                        },
                         enabled = draft.isNotBlank() && provider != null,
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = null)
@@ -1172,26 +1190,30 @@ internal fun ModelEditPage(
                         },
                         enabled = !fetching && provider != null,
                     ) {
-                        Icon(Icons.Filled.Search, contentDescription = null)
+                        // The label stays put while the call runs: swapping
+                        // "获取模型列表" for "获取中…" resized the button and shifted
+                        // the one beside it. The mark carries the busy state.
+                        if (fetching) {
+                            CircularProgressIndicator(
+                                Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Filled.Search, contentDescription = null)
+                        }
                         Text(
-                            if (fetching) text.settings.fetching else text.settings.fetchModels,
+                            text.settings.fetchModels,
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
                 }
 
                 SettingsNote(
-                    text.settings.fetchNote,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    text.settings.fetchNote
                 )
 
                 discoveryError?.let { message ->
-                    Text(
-                        message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
+                    InlineError(message)
                 }
             }
 
@@ -1252,13 +1274,11 @@ internal fun ModelEditPage(
                 // model. Here it sits under the heading, where it explains everything below
                 // it.
                 SettingsNote(
-                    text.settings.imageInputNote,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    text.settings.imageInputNote
                 )
                 if (isCustomEndpoint) {
                     SettingsNote(
-                        text.settings.imageInputCustomNote,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        text.settings.imageInputCustomNote
                     )
                 }
                 if (needsProvider) {
@@ -1295,8 +1315,11 @@ internal fun ModelEditPage(
                         // the first.
                         trailing = if (catalogueChecking) {
                             {
+                                // 20dp, the same box the chevron it replaces draws
+                                // in, so the row does not change size when the mark
+                                // swaps from spinner to arrow.
                                 CircularProgressIndicator(
-                                    Modifier.size(18.dp),
+                                    Modifier.size(20.dp),
                                     strokeWidth = 2.dp,
                                 )
                             }
@@ -1599,7 +1622,11 @@ private fun ModelNumberSheet(
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 2.dp),
+            // SemiBold, the weight `SheetScaffold` gives every sheet title. It was
+            // Regular here, so this title was lighter than the picker titles two
+            // taps away in the same modal layer.
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 2.dp),
         )
         Text(
             text = model,
@@ -1615,7 +1642,8 @@ private fun ModelNumberSheet(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                // 12/4, the inset every other value field uses (was 12/6).
+                .padding(horizontal = 12.dp, vertical = 4.dp),
         )
         Text(
             text = text.settings.modelNumbersNote,
@@ -1630,7 +1658,7 @@ private fun ModelNumberSheet(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = host::dismiss) { Text(text.common.cancel) }
+            OutlinedButton(onClick = host::dismiss) { Text(text.common.cancel) }
             Button(
                 onClick = {
                     // Null for an emptied field, which `withWindow`/`withMaxTokens` turn

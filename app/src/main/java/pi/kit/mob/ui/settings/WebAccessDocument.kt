@@ -1,6 +1,7 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -150,10 +152,26 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
+                // 12h/8t, the same sheet-footer inset the two value sheets use, and
+                // primary on the right like every other confirm row in the app. It
+                // was 4t/12b with Save on the left, which reversed the muscle memory
+                // the rest of the settings had just taught.
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        draft = store.documentText()
+                        outcome = null
+                    }
+                },
+                enabled = value != null && !saving,
+            ) {
+                Text(text.settings.searchConfigRevert)
+            }
+            Box(Modifier.weight(1f))
             Button(
                 onClick = {
                     scope.launch {
@@ -186,17 +204,6 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
             ) {
                 Text(text.settings.searchConfigSave)
             }
-            TextButton(
-                onClick = {
-                    scope.launch {
-                        draft = store.documentText()
-                        outcome = null
-                    }
-                },
-                enabled = value != null && !saving,
-            ) {
-                Text(text.settings.searchConfigRevert)
-            }
         }
     }
 }
@@ -222,7 +229,9 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
 internal fun ConfigNote(message: String, color: Color) {
     Text(
         text = message,
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        // 16h/4v, the same inset as [SettingsNote]: a status line under a card's
+        // buttons lines up with a row's title rather than floating 4dp to its left.
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         style = MaterialTheme.typography.bodySmall,
         color = color,
     )

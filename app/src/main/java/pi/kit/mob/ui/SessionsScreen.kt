@@ -547,7 +547,9 @@ private fun SessionRow(
                 },
             )
             .clickable { if (selecting) onToggleChecked() else onOpen() }
-            .padding(start = if (selecting) 4.dp else 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            // Same floor as `SettingsRow`, and the same 12dp vertical padding: a
+            // session row and a settings row are the same kind of page-list line.
+            .padding(start = if (selecting) 4.dp else 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -558,6 +560,8 @@ private fun SessionRow(
             Text(
                 item.title.ifBlank { text.sessions.emptyTitle },
                 fontWeight = FontWeight.Medium,
+                // Two lines: a session title is the user's own words and a one-line
+                // cap cut the middle out of names that matter.
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -571,10 +575,6 @@ private fun SessionRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                // One line is right for a date and a count, but the default
-                // overflow is `Clip`, which cuts a glyph in half rather than
-                // saying it did. A translated date and a long "untitled" suffix
-                // are the two ways this line can outgrow its row.
                 overflow = TextOverflow.Ellipsis,
             )
             snippet?.let { match ->
@@ -582,6 +582,9 @@ private fun SessionRow(
                     text = match,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
+                    // Two lines, and only while searching: every result carries a
+                    // snippet, so the list stays one rhythm in each mode. Capped
+                    // so a match deep in a long reply cannot open a tall row.
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier

@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -99,7 +100,7 @@ internal fun MaintenancePage(
                     if (catalogueStatus !is CatalogueStatus.Idle &&
                         catalogueStatus !is CatalogueStatus.Running
                     ) {
-                        TextButton(onClick = { catalogue.dismiss(); catalogue.refreshVersion() }) {
+                        OutlinedButton(onClick = { catalogue.dismiss(); catalogue.refreshVersion() }) {
                             Text(text.settings.dismiss)
                         }
                     }
@@ -107,8 +108,7 @@ internal fun MaintenancePage(
 
                 when (val current = catalogueStatus) {
                     CatalogueStatus.Idle -> SettingsNote(
-                        text.settings.modelListNote,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        text.settings.modelListNote
                     )
 
                     CatalogueStatus.Running -> Column(
@@ -123,7 +123,7 @@ internal fun MaintenancePage(
                         )
                     }
 
-                    is CatalogueStatus.Done -> Text(
+                    is CatalogueStatus.Done -> SettingsNote(
                         // The changed case also restarted the agent, so the sentence
                         // says both; the unchanged case is a success too — the model the
                         // user came for may simply not exist yet — and saying so is what
@@ -133,16 +133,12 @@ internal fun MaintenancePage(
                         } else {
                             text.settings.modelListUnchanged
                         },
-                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
 
-                    is CatalogueStatus.Failed -> Text(
+                    is CatalogueStatus.Failed -> SettingsNote(
                         text = current.message,
-                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -177,7 +173,7 @@ internal fun MaintenancePage(
                     ) { Text(text.settings.relocateNow) }
 
                     if (repair != null && !repairRunning) {
-                        TextButton(onClick = { session.clearRepairResult() }) {
+                        OutlinedButton(onClick = { session.clearRepairResult() }) {
                             Text(text.settings.dismiss)
                         }
                     }
@@ -199,7 +195,7 @@ internal fun MaintenancePage(
                 }
 
                 repair?.let { result ->
-                    Text(
+                    SettingsNote(
                         text = when {
                             // Checked before `errors` because it is the one outcome
                             // the walk cannot repair from the inside: the relocator
@@ -222,13 +218,11 @@ internal fun MaintenancePage(
 
                             else -> text.settings.nothingToRelocate
                         },
-                        style = MaterialTheme.typography.bodySmall,
                         color = if (result.errors.isNotEmpty() || result.relocatorDamaged) {
                             MaterialTheme.colorScheme.error
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
 
@@ -237,8 +231,7 @@ internal fun MaintenancePage(
                 // "repair a package" has to say what the second one is for, and the
                 // row's caption alone cannot.
                 SettingsNote(
-                    text.settings.relocateNote,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    text.settings.relocateNote
                 )
             }
 
@@ -272,7 +265,7 @@ internal fun MaintenancePage(
                     ) { Text(text.settings.storageCheckRun) }
 
                     if (storageCheck is StorageSelfTest.Status.Finished) {
-                        TextButton(onClick = { selfTest.dismiss() }) {
+                        OutlinedButton(onClick = { selfTest.dismiss() }) {
                             Text(text.settings.dismiss)
                         }
                     }
@@ -281,8 +274,7 @@ internal fun MaintenancePage(
                 val finished = storageCheck as? StorageSelfTest.Status.Finished
                 if (finished == null) {
                     SettingsNote(
-                        text.settings.storageCheckNote,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        text.settings.storageCheckNote
                     )
                 } else {
                     // The verdict and the failures, never the whole transcript. The
@@ -291,8 +283,8 @@ internal fun MaintenancePage(
                     // them pushed this page's own buttons off the screen and buried
                     // the one line the user came for. The full list is still one
                     // command away, and the note below says which.
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                        Text(
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        SettingsNote(
                             text = finished.output
                                 .lastOrNull { it.startsWith(STORAGE_CHECK_TALLY) }
                                 ?: if (finished.passed) {
@@ -300,7 +292,6 @@ internal fun MaintenancePage(
                                 } else {
                                     text.settings.storageCheckFailed
                                 },
-                            style = MaterialTheme.typography.bodySmall,
                             color = if (finished.passed) {
                                 MaterialTheme.colorScheme.primary
                             } else {
@@ -308,16 +299,19 @@ internal fun MaintenancePage(
                             },
                         )
                         finished.output.filter { FAILURE_MARKER in it }.forEach { line ->
+                            // Monospace, because the line is the script's own
+                            // output; same 16dp inset as the note above it.
                             Text(
                                 text = line,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                             )
                         }
                         SettingsNote(
                             text.settings.storageCheckTerminalHint,
-                            modifier = Modifier.padding(top = 6.dp),
+                            modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                 }

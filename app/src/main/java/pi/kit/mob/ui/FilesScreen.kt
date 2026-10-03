@@ -32,6 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -263,6 +266,8 @@ private fun PreviewSheet(file: File, text: Strings) {
                     file.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    // Two lines: the preview's header names the file the body is
+                    // about, and a one-line cap cut long names in half.
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -288,7 +293,7 @@ private fun PreviewSheet(file: File, text: Strings) {
                     .heightIn(min = 160.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 3.dp)
+                CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
             }
         } else {
             // The body takes the space left over after the header and the
@@ -325,7 +330,7 @@ private fun PreviewSheet(file: File, text: Strings) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = host::dismiss) { Text(text.files.close) }
+            OutlinedButton(onClick = host::dismiss) { Text(text.files.close) }
             Box(Modifier.weight(1f))
             Button(onClick = { openFailed = !openExternally(context, file) }) {
                 Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)

@@ -419,13 +419,16 @@ private fun InstructionsEditor(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                // 12/4, the inset every other field in the app uses. It was 16/12,
+                // which put this editor's box 4dp right of and 8dp taller-spaced
+                // than the web-search editor that does the same job.
+                .padding(horizontal = 12.dp, vertical = 4.dp)
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
         Text(
             text = text.settings.agentContextEditorNote,
-            modifier = Modifier.padding(horizontal = 20.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -448,11 +451,12 @@ private fun InstructionsEditor(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                // 12h/8t, the same sheet-footer inset the two value sheets use.
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onClose) { Text(text.common.cancel) }
+            OutlinedButton(onClick = onClose) { Text(text.common.cancel) }
             TextButton(onClick = { confirmRestore = true }) {
                 Text(text.settings.agentContextRestore)
             }
@@ -524,10 +528,11 @@ private fun InstructionsEditor(
 /**
  * The editor's height bounds.
  *
- * The same pair the web-search document editor uses, and for the same reason: a floor
- * so it reads as a document rather than a field, and a cap so the buttons stay on
- * screen — past the cap the field scrolls itself. The default text is about seventy
- * lines.
+ * The same pair the web-search document editor uses (240/440), and for the same
+ * reason: a floor so it reads as a document rather than a field, and a cap so the
+ * buttons stay on screen — past the cap the field scrolls itself. The numbers used
+ * to be 260/460 here against 240/440 there, which is the report that two editors
+ * doing the same job stood at two heights.
  */
-private val EDITOR_MIN_HEIGHT = 260.dp
-private val EDITOR_MAX_HEIGHT = 460.dp
+private val EDITOR_MIN_HEIGHT = 240.dp
+private val EDITOR_MAX_HEIGHT = 440.dp
