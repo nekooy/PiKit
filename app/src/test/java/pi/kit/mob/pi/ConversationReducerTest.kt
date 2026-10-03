@@ -285,6 +285,26 @@ class ConversationReducerTest {
     }
 
     @Test
+    fun `does not put its own prefix on a compaction failure pi already named`() {
+        // pi 0.87 answers a failed manual compaction with the prefix already on the
+        // message, and the transcript read `Compaction failed: Compaction failed:
+        // Nothing to compact (session too small)`.
+        val named = fold(
+            """{"type":"compaction_end","reason":"manual","errorMessage":"Compaction failed: Nothing to compact (session too small)"}""",
+        ).items.filterIsInstance<ChatItem.Notice>().single()
+        val bare = fold(
+            """{"type":"compaction_end","reason":"manual","errorMessage":"session too small"}""",
+        ).items.filterIsInstance<ChatItem.Notice>().single()
+
+        assertEquals(
+            "Compaction failed: Nothing to compact (session too small)",
+            named.text,
+        )
+        // A message that does not say what failed still has to be told.
+        assertEquals("Compaction failed: session too small", bare.text)
+    }
+
+    @Test
     fun `tracks the session name from the undocumented event`() {
         val state = fold("""{"type":"session_info_changed","name":"refactor auth"}""")
         assertEquals("refactor auth", state.sessionName)
