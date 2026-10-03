@@ -11,7 +11,6 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -19,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,8 +32,10 @@ import pi.kit.mob.data.ThemeMode
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.PickerRow
+import pi.kit.mob.ui.components.Sheet
 import kotlin.math.roundToInt
 
 /**
@@ -130,19 +132,17 @@ internal fun PersonalizationPage(
 }
 
 /**
- * The text-size row: a title, a percentage, and a seven-position slider that
- * opens on the row.
+ * The text-size row: tap to open a sheet with the seven-position slider.
  *
- * ## Why the slider opens on tap
+ * ## Why a sheet, like every other choice on the page
  *
- * Every other choice on this page is a `PickerRow` — tap the row, pick from a
- * sheet. The slider used to sit open under the title always, which made the
- * page's appearance section one control taller than the rest before anything
- * was touched. A size is still a *range*, not a list of names, so a sheet of
- * seven numbers would be the wrong shape; the answer is the picker's gesture
- * with the range's control: tap the row to reveal the slider, tap again to
- * hide it. The page it changes stays visible either way — that part of the
- * original reasoning still holds.
+ * Theme and launcher icon are both `PickerRow` — tap the row, pick from a
+ * bottom sheet. The slider used to sit open under the title always (and then,
+ * briefly, expand on the row), which made this control a different shape from
+ * its neighbours before anything was touched. A size is still a *range*, not a
+ * list of names, so the sheet carries a slider rather than seven numbered rows;
+ * the *gesture* is the picker's. The row itself is a `SettingsRow` so the three
+ * appearance rows stay one visual family.
  *
  * ## The drag is not applied until it is released, and that is a measurement
  *
@@ -153,9 +153,10 @@ internal fun PersonalizationPage(
  * re-laid the page out under the pointer and the gesture stopped being delivered. A
  * single MOVE of the same total distance moved four steps (90% → 130%), which is what
  * shows the mapping is fine and the interruption is the live update. So the drag moves
- * a local draft — the thumb, the ticks and the percentage, all of which are this row's
- * own — and the step is committed on release, which is one re-measure per gesture
- * instead of one per pixel.
+ * a local draft — the thumb, the ticks and the percentage, all of which are the
+ * sheet's own — and the step is committed on release, which is one re-measure per
+ * gesture instead of one per pixel. The sheet stays open so the step can be
+ * adjusted again; the scrim and a downward swipe dismiss it.
  *
  * ## The labels
  *
@@ -163,17 +164,44 @@ internal fun PersonalizationPage(
  * the words "small" and "large": it is a sample of what the slider does, it needs no
  * translation, and it grows with the choice — the ends are `sp` like everything else,
  * so they redraw at the new scale as soon as the step is committed. The value column
- * shows the step as a percentage of the app's own sizes, which is the one number a
- * reader can check against nothing at all: `100%` is what a fresh install has.
- *
- * The row is built here rather than as a `SettingsRow` with a control under it,
- * because the slider is not the row's trailing control — it is a second line under
- * the row's own, spanning the width the title does not. The icon, the 14dp gap and
- * the 16dp gutters match `SettingsRow` so the row sits in the card with its
- * neighbours; see that function for what each of the three is for.
+ * and the sheet's percentage show the step as a percentage of the app's own sizes,
+ * which is the one number a reader can check against nothing at all: `100%` is what
+ * a fresh install has.
  */
 @Composable
 private fun FontSizeRow(
+    current: FontSize,
+    onChange: (FontSize) -> Unit,
+    text: Strings,
+) {
+    val sheets = LocalSheetHost.current
+    SettingsRow(
+        title = text.settings.fontSize,
+        subtitle = text.settings.fontSizeSubtitle,
+        icon = Icons.Filled.FormatSize,
+        value = "${current.percent}%",
+        showChevron = true,
+        onClick = {
+            sheets.show(
+                Sheet(key = "font-size") {
+                    FontSizeSheet(current = current, onChange = onChange, text = text)
+                },
+            )
+        },
+    )
+}
+
+/**
+ * The font-size sheet: a title, the seven-step slider, and the percentage.
+ *
+ * Same title voice as every other sheet (`titleMedium`, SemiBold). The body is
+ * not a [pi.kit.mob.ui.components.PickerBody]: there is no list of rows to
+ * choose from, and re-expressing a range as seven tappable numbers would throw
+ * away the one thing a slider is for. The note under the track is the catalog's
+ * own subtitle, because the sheet is where the "let go to apply" rule is read.
+ */
+@Composable
+private fun FontSizeSheet(
     current: FontSize,
     onChange: (FontSize) -> Unit,
     text: Strings,
@@ -183,53 +211,34 @@ private fun FontSizeRow(
     // anywhere else — a restore, a rebuild — lands in the slider, and so that the
     // draft after a release is the value that was released.
     var draft by remember(current) { mutableFloatStateOf(current.ordinal.toFloat()) }
+    // The last step this sheet wrote. The sheet body is built once when it opens
+    // and `current` is that moment's snapshot, so comparing a later release
+    // against it would refuse to write the step the user just left. This is the
+    // sheet's own answer to "did I already send this".
+    var committed by remember(current) { mutableStateOf(current) }
     val shown = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.FormatSize,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = text.settings.fontSize,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = text.settings.fontSizeSubtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                // The draft's percentage, not the committed one: the number is the
-                // only part of the app that may follow the finger while the rest of
-                // it waits for the release.
-                text = "${shown.percent}%",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Text(
+            text = text.settings.fontSize,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
+        )
+        Text(
+            text = "${shown.percent}%",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // 6dp above the slider and 12dp below the title: the control
-                // belongs to the row above it, not to the next card.
-                .padding(top = 6.dp),
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // A fix-sized column for each end, so the two samples read as the ends of
-            // one track and the track keeps the same width as the thumb moves.
+            // A fixed-width column for each end, so the two samples read as the ends
+            // of one track and the track keeps the same width as the thumb moves.
             Text(
                 text = "A",
                 fontSize = 11.sp,
@@ -246,7 +255,10 @@ private fun FontSizeRow(
                 // user never chose.
                 onValueChangeFinished = {
                     val chosen = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
-                    if (chosen != current) onChange(chosen)
+                    if (chosen != committed) {
+                        committed = chosen
+                        onChange(chosen)
+                    }
                 },
                 valueRange = 0f..steps.lastIndex.toFloat(),
                 // Material3 counts the ticks *between* the ends, so seven positions is
@@ -261,6 +273,12 @@ private fun FontSizeRow(
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
+        Text(
+            text = text.settings.fontSizeSubtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+        )
     }
 }
 
