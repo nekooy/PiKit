@@ -1,8 +1,8 @@
 /*
  * The copy control, in one place.
  *
- * Two callers draw it — the meta row under a message and the header of a code block — and they are
- * the same action on the same page: put this text on the clipboard.
+ * Three callers draw it — the meta row under a message, a code block's header and a tool card's
+ * output — and they are the same action on the same page: put this text on the clipboard.
  *
  * ## What it is
  *
