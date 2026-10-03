@@ -26,6 +26,17 @@ internal object JapaneseStrings : Strings {
         override val agentStopped = "エージェント停止中"
         override val removeAttachment = "削除"
         override fun attachmentCount(count: Int) = "画像 $count 枚"
+        override fun extrasCount(fileCount: Int, noteCount: Int): String {
+            val parts = buildList {
+                if (fileCount > 0) add("ファイル $fileCount 件")
+                if (noteCount > 0) add("画像メモ $noteCount 件")
+            }
+            return parts.joinToString(" · ")
+        }
+        override val extrasTitle = "添付の詳細"
+        override val extrasFiles = "ファイルパス"
+        override val extrasNotes = "画像メモ"
+        override val extrasOpen = "添付の詳細を表示"
         override val placeholder = "Pi に質問する…"
         override val placeholderAttachment = "この画像についての指示を入力…"
         override val send = "送信"

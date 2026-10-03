@@ -1721,11 +1721,114 @@ private const val APP_NAME = "PiKit"
  * same offset `Alignment.CenterEnd` and `Alignment.End` both produce. The alignment
  * was never the bug.
  */
+
+// ------------------------------------------------------------------ prompt extras
+
+/**
+ * What a prompt carries besides the words the reader typed.
+ *
+ * File paths and the `[Image: …]` notes pi stamps on a picture are *machinery*:
+ * they travel with the prompt so the model can open the file or map coordinates,
+ * and they are not prose the reader wrote. They used to sit in the bubble as
+ * plain text — the paths as a trailing list, the image note as a bracketed
+ * English sentence in the middle of the message — which is the report that the
+ * bubble is "a wall of paths". Parsed out here, drawn as one chip, and shown in
+ * full only when that chip is tapped.
+ */
+internal data class PromptExtras(
+    val displayText: String,
+    val filePaths: List<String> = emptyList(),
+    val imageNotes: List<String> = emptyList(),
+) {
+    val hasExtras: Boolean get() = filePaths.isNotEmpty() || imageNotes.isNotEmpty()
+}
+
+/**
+ * `[Image: original 1200x2670, displayed at 899x2000. Multiply coordinates by …]`
+ * and its cousins. pi writes these in English whatever the interface language;
+ * the `图像`/`画像` alternates are there so a note that was translated does not
+ * leak into the bubble either.
+ */
+private val IMAGE_NOTE_REGEX = Regex("""\[(?:Image|图像|画像)[^\]]*\]""")
+
+/** One attachment path as the prompt prints it: an absolute path with no spaces. */
+private val ABSOLUTE_PATH_REGEX = Regex("""^/\S+$""")
+
+/**
+ * The heading each catalog puts above a file attachment's paths.
+ *
+ * Matched by the three strings the app itself writes, not by a shape: a reader
+ * who typed a sentence ending in a colon and a path on the next line would
+ * otherwise lose that sentence to the parser. A session restored in another
+ * language still matches, because all three are checked.
+ */
+private val ADDRESS_HEADERS = setOf(
+    "以下文件已就绪，请按路径读取：",
+    "These files are ready; read them by path:",
+    "次のファイルは準備できました。パスで読んでください：",
+)
+
+/**
+ * Splits a stored prompt into the sentence the reader wrote and the machinery
+ * around it.
+ *
+ * Image notes are removed wherever they sit. The file-path block is the app's
+ * own `addressHeader` followed by one absolute path per line — at the front of
+ * the prompt now, at the end of one written before that change — and the header
+ * goes with the paths, so the display text is only what the reader typed.
+ */
+internal fun parsePromptExtras(raw: String): PromptExtras {
+    if (raw.isBlank()) return PromptExtras("")
+
+    val imageNotes = mutableListOf<String>()
+    val withoutNotes = IMAGE_NOTE_REGEX.replace(raw) { match ->
+        imageNotes += match.value.trim()
+        ""
+    }
+        // The notes leave holes; collapse the blank runs they opened so the
+        // display text does not grow a ragged edge around every picture.
+        .replace(Regex("""[ \t]{2,}"""), " ")
+        .replace(Regex("""\n{3,}"""), "\n\n")
+
+    val lines = withoutNotes.lines()
+    val remove = BooleanArray(lines.size)
+    val filePaths = mutableListOf<String>()
+
+    var i = 0
+    while (i < lines.size) {
+        if (lines[i].trim() in ADDRESS_HEADERS) {
+            remove[i] = true
+            var j = i + 1
+            while (j < lines.size && ABSOLUTE_PATH_REGEX.matches(lines[j].trim())) {
+                filePaths += lines[j].trim()
+                remove[j] = true
+                j++
+            }
+            // One blank line on each side of the block is the separator, not
+            // the reader's paragraph spacing.
+            if (j < lines.size && lines[j].isBlank()) remove[j] = true
+            if (i > 0 && lines[i - 1].isBlank()) remove[i - 1] = true
+            i = j
+        } else {
+            i++
+        }
+    }
+
+    val displayText = lines.filterIndexed { index, _ -> !remove[index] }
+        .joinToString("\n")
+        .replace(Regex("""\n{3,}"""), "\n\n")
+        .trim()
+
+    return PromptExtras(displayText, filePaths, imageNotes)
+}
+
 @Composable
 private fun UserBubble(item: ChatItem.User, text: Strings) {
     // The prompt is the last thing the reader wrote; what follows it is the other
     // speaker. The space *below* it is `rowGap`'s job now — it is the only place
     // that knows whether an answer, a fold band or a tool card comes next.
+    val extras = remember(item.key, item.text) { parsePromptExtras(item.text) }
+    val sheets = LocalSheetHost.current
     Column(Modifier.fillMaxWidth()) {
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth(),
@@ -1762,10 +1865,29 @@ private fun UserBubble(item: ChatItem.User, text: Strings) {
                     modifier = Modifier,
                 ) {
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
+                        // The machinery first: file paths and image notes are one
+                        // chip above the words, the same position the image-count
+                        // chip has always held. Tapping it opens the full paths and
+                        // the `[Image: …]` notes in a sheet — neither belongs in
+                        // the sentence the reader typed.
+                        if (extras.hasExtras) {
+                            PromptExtrasChip(
+                                extras = extras,
+                                text = text,
+                                onClick = {
+                                    sheets.show(Sheet(key = "prompt-extras-${item.key}") {
+                                        PromptExtrasSheet(extras, text)
+                                    })
+                                },
+                            )
+                        }
                         if (item.imageCount > 0) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(bottom = if (item.text.isBlank()) 0.dp else 6.dp),
+                                modifier = Modifier.padding(
+                                    top = if (extras.hasExtras) 6.dp else 0.dp,
+                                    bottom = if (extras.displayText.isBlank()) 0.dp else 6.dp,
+                                ),
                             ) {
                                 Icon(
                                     Icons.Filled.Image,
@@ -1781,9 +1903,14 @@ private fun UserBubble(item: ChatItem.User, text: Strings) {
                                 )
                             }
                         }
-                        if (item.text.isNotBlank()) {
+                        if (extras.displayText.isNotBlank()) {
+                            val topPad = when {
+                                extras.hasExtras || item.imageCount > 0 -> 6.dp
+                                else -> 0.dp
+                            }
                             Text(
-                                item.text,
+                                extras.displayText,
+                                modifier = Modifier.padding(top = topPad),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
@@ -1796,6 +1923,107 @@ private fun UserBubble(item: ChatItem.User, text: Strings) {
             text = text,
             alignment = Alignment.End,
         )
+    }
+}
+
+/**
+ * The chip that replaces a prompt's file-path list and its image notes.
+ *
+ * Same shape as the image-count chip beside it — a 14dp glyph and a
+ * `labelMedium` label — and the chevron is what says this one opens something.
+ * The label is a count rather than a title (`2 files · 1 image note`) because
+ * that is the fact the reader wants before deciding whether to look inside.
+ */
+@Composable
+private fun PromptExtrasChip(
+    extras: PromptExtras,
+    text: Strings,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(
+                onClickLabel = text.chat.extrasOpen,
+                onClick = onClick,
+            )
+            .padding(end = 2.dp),
+    ) {
+        Icon(
+            Icons.Filled.AttachFile,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        Text(
+            text.chat.extrasCount(extras.filePaths.size, extras.imageNotes.size),
+            modifier = Modifier.padding(start = 4.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            modifier = Modifier
+                .padding(start = 2.dp)
+                .size(16.dp),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
+}
+
+/** The sheet a [PromptExtrasChip] opens: every path and every note, in full. */
+@Composable
+private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
+    ReadOnlyBody(title = text.chat.extrasTitle) {
+        if (extras.filePaths.isNotEmpty()) {
+            item(key = "files-label") {
+                Text(
+                    text.chat.extrasFiles,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 22.dp, top = 6.dp, bottom = 2.dp),
+                )
+            }
+            extras.filePaths.forEachIndexed { index, path ->
+                item(key = "file-$index") {
+                    Text(
+                        path,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+        if (extras.imageNotes.isNotEmpty()) {
+            item(key = "notes-label") {
+                Text(
+                    text.chat.extrasNotes,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        start = 22.dp,
+                        top = if (extras.filePaths.isEmpty()) 6.dp else 12.dp,
+                        bottom = 2.dp,
+                    ),
+                )
+            }
+            extras.imageNotes.forEachIndexed { index, note ->
+                item(key = "note-$index") {
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

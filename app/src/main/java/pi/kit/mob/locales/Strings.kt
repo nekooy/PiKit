@@ -102,6 +102,26 @@ interface Strings {
         val agentStopped: String
         val removeAttachment: String
         fun attachmentCount(count: Int): String
+
+        /**
+         * The chip on a prompt that carries file paths or image annotations.
+         *
+         * `2 files` / `1 image note` / `2 files · 1 image note`. File paths and
+         * the `[Image: …]` notes pi stamps on a picture are not the reader's
+         * prose — they travel with the prompt so the model can open the file or
+         * map coordinates — so they are collected into this one chip and shown
+         * in full only when the chip is tapped.
+         */
+        fun extrasCount(fileCount: Int, noteCount: Int): String
+
+        /** The sheet those extras open into, and its two sections. */
+        val extrasTitle: String
+        val extrasFiles: String
+        val extrasNotes: String
+
+        /** Tap label for the chip: what opening it will show. */
+        val extrasOpen: String
+
         val placeholder: String
         val placeholderAttachment: String
         val send: String
