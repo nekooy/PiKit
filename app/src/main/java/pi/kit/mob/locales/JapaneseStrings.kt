@@ -767,16 +767,12 @@ internal object JapaneseStrings : Strings {
 
         override val termuxEnvironment = "Termux 環境"
         override val checkForUpdates = "更新を確認"
-        override val checkForUpdatesSubtitle = "GitHub に新しいリリースがあるか問い合わせます"
+        override val checkForUpdatesSubtitle = "GitHub の新リリースを確認"
         override val updateChecking = "GitHub に問い合わせ中…"
         override val updateFailedShort = "確認に失敗"
         override val updateUpToDate = "最新リリースです"
         override val updateAvailable = "新しいリリースがあります"
         override val updateNoReleases = "リリースはまだありません"
-        override val updateNote =
-            "この行をタップしたときだけ github.com に本アプリの最新リリースを問い合わせ、" +
-                "そのリリースページをブラウザで開きます。PiKit が自分でダウンロードすることは" +
-                "ありません。"
 
         override val searchTitle = "検索設定"
         override val searchSubtitle = "エージェントのウェブ検索"

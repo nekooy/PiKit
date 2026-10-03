@@ -821,15 +821,12 @@ internal object EnglishStrings : Strings {
 
         override val termuxEnvironment = "Termux environment"
         override val checkForUpdates = "Check for updates"
-        override val checkForUpdatesSubtitle = "Looks for a newer release on GitHub"
+        override val checkForUpdatesSubtitle = "Look for a new release"
         override val updateChecking = "Asking GitHub…"
         override val updateFailedShort = "Check failed"
         override val updateUpToDate = "Up to date"
         override val updateAvailable = "A newer release is available"
         override val updateNoReleases = "No releases yet"
-        override val updateNote =
-            "Asks github.com for this app's newest release only when you tap the row, then " +
-                "opens its release page in a browser. PiKit downloads nothing by itself."
 
         override val searchTitle = "Search settings"
         override val searchSubtitle = "Web search for the agent"

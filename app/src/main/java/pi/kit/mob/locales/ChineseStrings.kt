@@ -725,15 +725,12 @@ internal object ChineseStrings : Strings {
 
         override val termuxEnvironment = "Termux 环境"
         override val checkForUpdates = "检查更新"
-        override val checkForUpdatesSubtitle = "到 GitHub 上看看有没有新版本"
+        override val checkForUpdatesSubtitle = "到 GitHub 查看新版本"
         override val updateChecking = "正在询问 GitHub…"
         override val updateFailedShort = "检查失败"
         override val updateUpToDate = "已经是最新版本"
         override val updateAvailable = "有新版本可以更新"
         override val updateNoReleases = "还没有发布过版本"
-        override val updateNote =
-            "只在你点这一行时，才会向 github.com 询问本应用的最新版本，然后在浏览器里打开它的" +
-                "发布页。PiKit 自己不会下载任何东西。"
 
         override val searchTitle = "搜索设置"
         override val searchSubtitle = "Agent 的联网搜索"
