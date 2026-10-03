@@ -760,8 +760,15 @@ private fun pickerForeground(selected: Boolean, enabled: Boolean): Color = when 
 /** The sheet's list stops growing here, as a share of the height the sheet may take. */
 private const val SHEET_LIST_FRACTION = 0.6f
 
-/** A row's floor, so a picker of one-line entries is still a comfortable target. */
-private val PICKER_ROW_MIN_HEIGHT = 52.dp
+/**
+ * A row's floor, so a picker of one-line entries is still a comfortable target.
+ *
+ * Not private: `StoragePage`'s folder tree draws its own rows — a picker row would
+ * dismiss the sheet on every step into a directory — and claims to be the same row
+ * as this one. It was not, because it was missing this floor; the figure is shared
+ * so the claim cannot come apart again.
+ */
+internal val PICKER_ROW_MIN_HEIGHT = 52.dp
 
 /**
  * A [ReadOnlyBody] row's floor.
