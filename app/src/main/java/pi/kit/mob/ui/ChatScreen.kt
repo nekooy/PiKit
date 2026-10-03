@@ -140,6 +140,7 @@ import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.components.PageHeader
 import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.components.CopyButtonInkInset
+import pi.kit.mob.ui.components.ErrorBanner
 import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.PiIcons
 import pi.kit.mob.ui.components.PickerOption
@@ -1128,63 +1129,19 @@ private fun ChatPage(
         // provider "does not load it" until the app is restarted.
         val failure = (agent as? AgentStatus.Failed)?.message
         if (failure != null) {
-            Surface(
-                color = MaterialTheme.colorScheme.errorContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        failure,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 10.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = FAILURE_BANNER_LINES,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    TextButton(onClick = { session.restartAgent() }) {
-                        Text(
-                            text.common.retry,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                    }
-                }
-            }
+            ErrorBanner(
+                message = failure,
+                actionLabel = text.common.retry,
+                onAction = { session.restartAgent() },
+            )
         } else {
             state.lastError?.let { error ->
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { session.clearError() },
-                ) {
-                    Text(
-                        error,
-                        modifier = Modifier.padding(12.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                }
+                ErrorBanner(message = error, onDismiss = { session.clearError() })
             }
         }
 
         notice?.let { message ->
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onDismissNotice),
-            ) {
-                Text(
-                    message,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            StatusNotice(message = message, onDismiss = onDismissNotice)
         }
 
         Composer(
@@ -2987,7 +2944,6 @@ private val REASONING_ANSWER_GAP = 5.dp
  * the banner would take the transcript's height to report something the terminal
  * tab shows in full.
  */
-private const val FAILURE_BANNER_LINES = 4
 
 /**
  * How much blank transcript sits under the last line of an answer.

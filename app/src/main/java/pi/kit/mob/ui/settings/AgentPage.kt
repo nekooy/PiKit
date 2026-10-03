@@ -40,9 +40,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import pi.kit.mob.env.AgentContext
+import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.ui.components.InlineError
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.Sheet
 
@@ -117,8 +119,7 @@ internal fun AgentPage(
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 )
                 SettingsNote(
-                    text.settings.workingDirNote,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    text.settings.workingDirNote
                 )
             }
 

@@ -275,11 +275,7 @@ internal fun ModelPage(
             }
 
             deleteError?.let { message ->
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                InlineError(message)
             }
         }
     }
@@ -1420,28 +1416,24 @@ internal fun ModelEditPage(
             }
 
             saveMessage?.let { message ->
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                )
+                InlineError(message)
             }
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    // 12h/8t, the same action-row inset the rest of the settings
+                    // use; Cancel on the left and the primary on the right, the
+                    // order every other confirm row in the app already reads.
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(
-                    onClick = { if (save()) leave() },
-                    modifier = Modifier.weight(1f),
-                ) { Text(text.settings.save) }
-
                 // Asks the same question the back arrow does, because it is the same
                 // action: this button has always meant "leave without saving".
-                TextButton(onClick = ::requestLeave) { Text(text.settings.cancel) }
+                OutlinedButton(onClick = ::requestLeave) { Text(text.settings.cancel) }
+                Box(Modifier.weight(1f))
+                Button(onClick = { if (save()) leave() }) { Text(text.settings.save) }
             }
         }
     }
