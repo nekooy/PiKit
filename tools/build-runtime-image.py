@@ -83,7 +83,7 @@ CACHE_DIR = BUILD_ROOT / "cache"
 STAGING_ROOT = BUILD_ROOT / "staging"
 
 #: Bootstrap release pinned by this project. Bump deliberately, then rebuild.
-BOOTSTRAP_TAG = "bootstrap-2026.09.20-r1+apt.android-7"
+BOOTSTRAP_TAG = "bootstrap-2026.09.27-r1+apt.android-7"
 
 #: Termux apt repository. `Packages.xz` does not exist; `.bz2` is the smallest.
 APT_BASE = "https://packages.termux.dev/apt/termux-main"
@@ -145,7 +145,7 @@ PI_PACKAGE = "@earendil-works/pi-coding-agent"
 #: failed outright (`Failed to load extension "…/pi-safety-guard.ts": Cannot find
 #: module 'jiti'`). A version that ships in the image cannot be half-installed.
 #: ARCHITECTURE §2 has the reasoning.
-PI_VERSION = "0.87.1"
+PI_VERSION = "1.0.1"
 
 PI_ENTRY_RELATIVE = f"lib/node_modules/{PI_PACKAGE}/dist/bundle/cli.js"
 
@@ -163,7 +163,7 @@ VENDORED_MARKER = "pikit-vendored.json"
 #: a new version changes the extension's tools and its config, so it is bumped
 #: with the image and by hand, exactly as BOOTSTRAP_TAG is.
 WEB_ACCESS_PACKAGE = "pi-web-access"
-WEB_ACCESS_VERSION = "0.31.0"
+WEB_ACCESS_VERSION = "0.35.0"
 
 #: Where the bundled extension lives inside the prefix, relative to `$PREFIX`.
 #: Its own `node_modules` is a separate tree from pi's so that npm cannot touch
@@ -633,6 +633,46 @@ def read_vendored_marker(marker: Path) -> dict:
     except (OSError, ValueError):
         return {}
     return held if isinstance(held, dict) else {}
+
+
+def copy_hoisted_dependencies(source_modules: Path, package_root: Path) -> None:
+    """
+    Nests a hoisted `node_modules` under the package that `require`s it.
+
+    `npm install` places a package's dependencies beside it in the project's
+    `node_modules` (hoisted), which is what `vendor_pi`'s cache holds. The image
+    ships the package at `$PREFIX/lib/node_modules/<name>`, so those siblings have
+    to move under `<name>/node_modules` — Node's first lookup, and the tree shape
+    `trim_vendor_tree` and `tools/test-vendor-trim.py` are written against.
+
+    `.bin` goes along: the shims are how a dependency's own scripts find their
+    executables. The package itself is skipped; it is already `package_root`.
+    """
+    destination_modules = package_root / "node_modules"
+    destination_modules.mkdir(parents=True, exist_ok=True)
+
+    def is_own_package(path: Path) -> bool:
+        return path.name == package_root.name and path.parent.name == package_root.parent.name
+
+    for entry in sorted(source_modules.iterdir()):
+        if not entry.is_dir():
+            continue
+        if entry.name == ".bin":
+            shutil.copytree(entry, destination_modules / ".bin", symlinks=True)
+            continue
+        if entry.name.startswith("@"):
+            scope = destination_modules / entry.name
+            scope.mkdir(parents=True, exist_ok=True)
+            for package in sorted(entry.iterdir()):
+                if not package.is_dir() or is_own_package(package):
+                    continue
+                shutil.copytree(package, scope / package.name, symlinks=True)
+            continue
+        if is_own_package(entry):
+            continue
+        shutil.copytree(entry, destination_modules / entry.name, symlinks=True)
+    nested = sum(1 for path in destination_modules.rglob("*") if path.is_file() or path.is_symlink())
+    log(f"  nested {nested} dependency files under the package")
 
 
 
@@ -1108,6 +1148,18 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     pi_destination.parent.mkdir(parents=True, exist_ok=True)
     log("copying pi into the overlay")
     shutil.copytree(pi_source, pi_destination, symlinks=True)
+
+    # npm installs pi's dependencies hoisted beside the package
+    # (`cache/pi/node_modules/jiti`, `…/@earendil-works/pi-ai`, …). Copying only
+    # `PI_PACKAGE` put the agent in the image without the tree it `require`s:
+    # pi 0.86.x loads the bundled TypeScript guard through `jiti`, so every agent
+    # start failed with `Cannot find module 'jiti'` — the same failure a
+    # half-completed on-device `npm install -g` used to leave behind. They are
+    # nested under the package (`…/pi-coding-agent/node_modules/…`), which is
+    # where Node looks first and the shape `trim_vendor_tree` and
+    # `tools/test-vendor-trim.py` are written against (a package root with a
+    # `node_modules/` inside it).
+    copy_hoisted_dependencies(pi_cache / "node_modules", pi_destination)
 
     # The same trim the web-access tree gets, and for the same reason: pi's dependency
     # tree ships source maps, test fixtures, type declarations and the npm page of a

@@ -35,6 +35,17 @@ Two details in that script are load-bearing:
   dropping 26 `@esbuild/*` platform packages and the desktop clipboard binaries,
   none of which are loaded at runtime on Android. `--ignore-scripts` is safe
   because pi declares no install lifecycle scripts.
+- **pi's dependencies are nested under the package, not copied beside it.** npm
+  hoists them (`cache/pi/node_modules/jiti`, `…/@earendil-works/pi-ai`, …); the
+  image ships the package at `$PREFIX/lib/node_modules/<name>`, so
+  `copy_hoisted_dependencies` moves that hoisted tree to
+  `<name>/node_modules/` — Node's first lookup, and the shape `trim_vendor_tree`
+  is written against. Copying only the package put the agent in the image without
+  the tree it `require`s: pi 0.86.x loads the bundled TypeScript guard through
+  `jiti`, so every agent start failed with `Cannot find module 'jiti'` — the same
+  failure a half-completed on-device `npm install -g` used to leave behind
+  (ARCHITECTURE §2). Measured: 13,794 nested dependency files, and a trim that
+  now removes 50.3 MB of source material from them.
 
 `tools/verify-runtime-image.py` rebuilds the tree the installer would produce and asserts
 against it: all 1291 symlinks on `arm64-v8a` (1293 on `x86_64`) resolve, every shebang
@@ -101,7 +112,7 @@ PiKit has to *write* (section 9), and the extension documents and validates them
 ## The extension's licence, and why it is named on the About page
 
 `pi-web-access` is **MIT** (Nico Bailon, `github.com/nicobailon/pi-web-access`,
-pinned by `WEB_ACCESS_VERSION = "0.30.0"` in the image builder), and so are the packages
+pinned by `WEB_ACCESS_VERSION = "0.35.0"` in the image builder), and so are the packages
 npm resolves under it — `turndown`, `@mozilla/readability`, `defuddle`, `linkedom`,
 `unpdf`, `undici`, `p-limit`, `typebox`. MIT is compatible with this app's GPLv3 as long
 as the notice travels with the code, and it does: the APK contains each package's own
@@ -186,7 +197,7 @@ files and a device shows no error when they are absent:
 - `verify-runtime-image.py` asserts three entry points by path — the manual's
   `docs/index.md` and its `docs.json` index, and the extension's `README.md` — and then
   compares the image against the vendoring cache: **every file the tree holds and the rule
-  keeps must be in the image, by name** (7,618 in pi's tree at 0.86.1, 5,449 in the
+  keeps must be in the image, by name** (742 in pi's tree at 1.0.1, 5,936 in the
   extension's). The expectation is computed from the tree and from `vendor_junk`, the same
   predicate the trim deletes by, so a release that adds, renames or retires anything moves
   no constant here and a file the image is missing is named. **A symlink counts on both
