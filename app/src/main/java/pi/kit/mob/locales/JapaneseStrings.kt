@@ -85,8 +85,14 @@ internal object JapaneseStrings : Strings {
         override val attachFile = "ファイル"
         override val attachCamera = "写真を撮る"
         override val attachImageHint = "すでにある画像を選ぶ"
-        override val attachFileHint = "ファイルから書類や画像を選ぶ"
+        override val attachFileHint =
+            "任意のファイルを選び、一時フォルダへコピーしてパスを AI に渡します"
         override val attachCameraHint = "その場で撮影してメッセージに追加する"
+        override val addressHeader =
+            "次のファイルは準備できました。パスで読んでください："
+        override val addressCopyFailed =
+            "ファイルをコピーできませんでした。追加していません。"
+        override val addressFallbackName = "名前のないファイル"
         override val cameraDenied =
             "カメラの権限がないため撮影できません。システム設定でこのアプリに権限を与えてください。"
         override val cameraUnavailable = "この端末には撮影できるカメラアプリがありません。"

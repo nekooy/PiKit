@@ -86,8 +86,12 @@ internal object EnglishStrings : Strings {
         override val attachFile = "File"
         override val attachCamera = "Take a photo"
         override val attachImageHint = "Pick an image you already have"
-        override val attachFileHint = "Pick a document or an image from your files"
+        override val attachFileHint =
+            "Pick any file; it is copied to a temp folder and the AI gets its path"
         override val attachCameraHint = "Take a photo now and add it to the message"
+        override val addressHeader = "These files are ready; read them by path:"
+        override val addressCopyFailed = "Could not copy the file; nothing was added."
+        override val addressFallbackName = "unnamed file"
         override val cameraDenied =
             "PiKit does not have the camera permission, so it cannot take a photo. " +
                 "You can turn it on for this app in the system settings."

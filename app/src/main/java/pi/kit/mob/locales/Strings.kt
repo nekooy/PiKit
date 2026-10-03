@@ -259,6 +259,17 @@ interface Strings {
         /** The `+` sheet title. */
         val attachTitle: String
         val attachImage: String
+
+        /**
+         * The `+` sheet's file row: pick any file and hand the AI its path
+         * rather than its bytes.
+         *
+         * The only way a PDF, an archive or a binary reaches the agent at all:
+         * the image channel carries images, and stuffing a document into it
+         * produced something pi dropped. The file is copied into a temporary
+         * folder and the prompt names that path, so the model reads it with its
+         * own tools.
+         */
         val attachFile: String
 
         /**
@@ -274,7 +285,7 @@ interface Strings {
         /**
          * What each entry of the `+` sheet does, under its label.
          *
-         * The three rows are one line each and the labels alone do not say where the
+         * The rows are one line each and the labels alone do not say where the
          * picture comes from: "Image" and "Take a photo" are the same destination and
          * two different beginnings, and a reader who has never used an attach menu
          * has no way to tell them apart from the nouns.
@@ -282,6 +293,18 @@ interface Strings {
         val attachImageHint: String
         val attachFileHint: String
         val attachCameraHint: String
+
+        /**
+         * Heading above the temp-folder paths a file attachment contributes to the
+         * prompt. The paths themselves follow one per line.
+         */
+        val addressHeader: String
+
+        /** A file pick that could not be copied into the temp folder at all. */
+        val addressCopyFailed: String
+
+        /** Name used when the provider will not say what the picked file is called. */
+        val addressFallbackName: String
 
         /**
          * Shown when the camera permission is refused, or no camera app answers.
