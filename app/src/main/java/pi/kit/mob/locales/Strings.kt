@@ -1417,6 +1417,9 @@ interface Strings {
         val checkForUpdatesSubtitle: String
         val updateChecking: String
 
+        /** One-line status for a check that failed; the reason is a note below. */
+        val updateFailedShort: String
+
         /**
          * The two answers, with the version itself in the row's *value* column
          * rather than repeated in the sentence: this page's other rows put versions

@@ -124,18 +124,23 @@ internal fun AboutPage(
                 // network.
                 SettingsRow(
                     title = text.settings.checkForUpdates,
+                    // One short status line. A failure's reason used to sit here
+                    // and wrapped to two or three lines, so tapping the row grew
+                    // it — the height of the row depended on what the network
+                    // said. The reason is a `SettingsNote` under the section now.
                     subtitle = when (val state = updateState) {
                         UpdateRow.Idle -> text.settings.checkForUpdatesSubtitle
                         UpdateRow.Checking -> text.settings.updateChecking
                         UpdateRow.NoReleases -> text.settings.updateNoReleases
                         is UpdateRow.UpToDate -> text.settings.updateUpToDate
                         is UpdateRow.Available -> text.settings.updateAvailable
-                        is UpdateRow.Failed -> text.settings.failedWith(state.reason)
+                        is UpdateRow.Failed -> text.settings.updateFailedShort
                     },
                     icon = Icons.Filled.Refresh,
                     // Where the check goes while there is no answer to show, and the
                     // version once there is one: a value column that changes subject
-                    // is better than two rows saying one thing each.
+                    // is better than two rows saying one thing each. One line either
+                    // way, so the row does not resize when the answer lands.
                     value = when (val state = updateState) {
                         is UpdateRow.UpToDate -> state.version
                         is UpdateRow.Available -> state.version
@@ -144,8 +149,10 @@ internal fun AboutPage(
                     monospaceValue = true,
                     trailing = if (updateState == UpdateRow.Checking) {
                         {
+                            // 20dp, the chevron's own box, so the row does not
+                            // change size when the mark swaps.
                             CircularProgressIndicator(
-                                Modifier.size(18.dp),
+                                Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
                             )
                         }
@@ -170,6 +177,11 @@ internal fun AboutPage(
                         }
                     },
                 )
+            }
+            // The failure's reason, in full, outside the row: a note can wrap
+            // without changing the height of anything above or below it.
+            (updateState as? UpdateRow.Failed)?.let { failed ->
+                SettingsNote(text.settings.failedWith(failed.reason))
             }
             SettingsNote(text.settings.updateNote)
 
