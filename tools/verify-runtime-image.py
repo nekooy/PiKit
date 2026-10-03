@@ -510,6 +510,10 @@ def map_pi_cache_path(name: str) -> str | None:
     # directories only, so the image has no copy of it and needs none.
     if name == "node_modules/.package-lock.json":
         return None
+    # npm's CLI shims. They are symlinks into the package being nested (`.bin/pi`
+    # points at it) and the builder leaves them behind on purpose.
+    if name.startswith("node_modules/.bin/"):
+        return None
     if name.startswith("node_modules/"):
         return name
     return None
