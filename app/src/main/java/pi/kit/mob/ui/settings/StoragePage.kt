@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -51,6 +52,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
+import pi.kit.mob.ui.components.PICKER_ROW_MIN_HEIGHT
 import pi.kit.mob.ui.components.ReadOnlyBody
 import pi.kit.mob.ui.components.Sheet
 import java.io.File
@@ -383,8 +385,7 @@ fun StoragePage(
                 ) { Text(text.common.confirm) }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
+                TextButton(onClick = {
                         pendingGrant = null
                         confirmGrant = null
                     },
