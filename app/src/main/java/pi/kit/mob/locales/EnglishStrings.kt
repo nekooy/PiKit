@@ -25,6 +25,17 @@ internal object EnglishStrings : Strings {
         override val agentStopped = "Agent stopped"
         override val removeAttachment = "Remove"
         override fun attachmentCount(count: Int) = plural(count, "image", "images")
+        override fun extrasCount(fileCount: Int, noteCount: Int): String {
+            val parts = buildList {
+                if (fileCount > 0) add(plural(fileCount, "file", "files"))
+                if (noteCount > 0) add(plural(noteCount, "image note", "image notes"))
+            }
+            return parts.joinToString(" · ")
+        }
+        override val extrasTitle = "Attachment details"
+        override val extrasFiles = "File paths"
+        override val extrasNotes = "Image notes"
+        override val extrasOpen = "Show attachment details"
         override val placeholder = "Ask Pi…"
         override val placeholderAttachment = "Add a message for these images…"
         override val send = "Send"

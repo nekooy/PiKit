@@ -33,6 +33,17 @@ internal object ChineseStrings : Strings {
         override val agentStopped = "Agent 已停止"
         override val removeAttachment = "移除"
         override fun attachmentCount(count: Int) = "$count 张图片"
+        override fun extrasCount(fileCount: Int, noteCount: Int): String {
+            val parts = buildList {
+                if (fileCount > 0) add("$fileCount 个文件")
+                if (noteCount > 0) add("$noteCount 条图片说明")
+            }
+            return parts.joinToString(" · ")
+        }
+        override val extrasTitle = "附件详情"
+        override val extrasFiles = "文件路径"
+        override val extrasNotes = "图片说明"
+        override val extrasOpen = "查看附件详情"
         override val placeholder = "问 Pi 任何问题…"
         override val placeholderAttachment = "给这些图片补充说明…"
         override val send = "发送"
