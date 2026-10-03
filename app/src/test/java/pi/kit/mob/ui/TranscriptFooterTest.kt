@@ -1,6 +1,7 @@
 package pi.kit.mob.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlinx.serialization.json.Json
 import pi.kit.mob.pi.ChatItem
@@ -103,6 +104,37 @@ class TranscriptFooterTest {
             "which is both answers, since expanding hides nothing about them",
             listOf("There are two files.", "Both are empty."),
             answersWearing(folded),
+        )
+    }
+
+    /**
+     * While a turn is still streaming, `finalReplyKey` names the newest *finished*
+     * fragment — not the answer — so nothing under an assistant row is drawn yet.
+     * The furniture appears only once the turn settles (or the agent stops).
+     */
+    @Test
+    fun `an unfinished turn wears nothing until it settles`() {
+        val inFlight = state(
+            *turn("list the files", "Let me look.", "There are two files.", "call_1")
+                .dropLast(1) // no agent_settled
+                .toTypedArray(),
+        )
+        assertTrue(inFlight.isStreaming)
+        assertEquals(
+            "the finished fragment is not yet the answer",
+            emptyList<String>(),
+            answersWearing(transcriptRows(inFlight, expanded = setOf(0))),
+        )
+
+        val settled = ConversationReducer.reduce(
+            inFlight,
+            PiRecordParser.parse("""{"type":"agent_settled"}"""),
+            System.currentTimeMillis(),
+        )
+        assertEquals(
+            "after settle the turn's reply wears both",
+            listOf("There are two files."),
+            answersWearing(transcriptRows(settled, expanded = setOf(0))),
         )
     }
 
