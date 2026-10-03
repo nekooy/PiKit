@@ -254,6 +254,7 @@ internal object JapaneseStrings : Strings {
         override val close = "閉じる"
         override val openWith = "他のアプリで開く"
         override val notAFile = "ファイルではありません"
+        override val empty = "このフォルダーは空です"
         override fun tooLarge(size: String) =
             "ファイルサイズは $size です。プレビューは 64 KB までです。\nターミナルから開いてください。"
         override fun binary(size: String) = "バイナリファイル（$size）"

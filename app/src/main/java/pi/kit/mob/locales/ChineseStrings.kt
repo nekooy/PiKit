@@ -255,6 +255,7 @@ internal object ChineseStrings : Strings {
         override val close = "关闭"
         override val openWith = "用其它应用打开"
         override val notAFile = "不是普通文件"
+        override val empty = "这个文件夹是空的"
         override fun tooLarge(size: String) =
             "文件大小为 $size，预览上限 64 KB。\n请在终端中打开它。"
         override fun binary(size: String) = "二进制文件（$size）"

@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -167,6 +168,15 @@ fun FilesScreen(session: PiAgentSession) {
  * of these at once for the length of the slide: the listing has to be a function
  * of the directory it belongs to, or the outgoing page would show the incoming
  * page's files on the way out.
+ *
+ * ## One card, like every other list
+ *
+ * The rows were drawn edge to edge with a full-bleed hairline, 16dp from the screen
+ * instead of the 28dp a settings row sits at, and the tap target had square corners
+ * where every other row in the app has the card's. The conversations list was the
+ * same flat list and the same complaint — "a full-bleed hairline that did not match
+ * the settings pages the rest of the app reads as one with" — so this is that fix
+ * applied to the last list that had not had it.
  */
 @Composable
 private fun DirectoryList(
@@ -182,44 +192,79 @@ private fun DirectoryList(
         }
     }
 
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(entries, key = { it.absolutePath }) { file ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpen(file) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(
-                    imageVector = if (file.isDirectory) {
-                        Icons.Filled.Folder
-                    } else {
-                        Icons.Filled.Description
-                    },
-                    contentDescription = null,
-                )
-                Text(
-                    file.name,
-                    modifier = Modifier.weight(1f),
-                    // Two lines, not one: a file the agent wrote can be
-                    // named after what it did — a 60-character name is
-                    // ordinary — and the name is this row's whole content.
-                    // The name already holds the weighted column, so the
-                    // size beside it gives up width first; the second line
-                    // is what the name gets when even that is not enough.
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!file.isDirectory) {
-                    Text(
-                        humanSize(file.length()),
-                        style = MaterialTheme.typography.bodySmall,
+    if (entries.isEmpty()) {
+        // An empty directory and an unreadable one draw the same thing here, which
+        // is why the sentence says only that there is nothing to show: the list is
+        // `listFiles()`'s answer either way, and a folder the user cannot read is
+        // usually one they did not mean to open. Before this the page was blank —
+        // no list, no message, nothing to say whether the folder was empty or the
+        // app was broken.
+        Text(
+            text = text.files.empty,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(24.dp),
+        )
+        return
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp),
+    ) {
+        LazyColumn(Modifier.fillMaxSize()) {
+            itemsIndexed(entries, key = { _, file -> file.absolutePath }) { index, file ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // Clipped to the card's radius before the ripple: the first
+                        // and last rows of the card keep the rounded press outline,
+                        // which is the other half of what the flat list got wrong.
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable { onOpen(file) }
+                        // 16h/12v and a 14dp gap, the geometry `SettingsRow` and
+                        // `SessionRow` use: a file line and a session line are the
+                        // same kind of page-list row.
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Icon(
+                        imageVector = if (file.isDirectory) {
+                            Icons.Filled.Folder
+                        } else {
+                            Icons.Filled.Description
+                        },
+                        contentDescription = null,
                     )
+                    Text(
+                        file.name,
+                        modifier = Modifier.weight(1f),
+                        // Two lines: a file name is how the row is told apart from
+                        // its neighbour, and a one-line cap ellipsised the suffix that
+                        // does the telling (`report-2024` vs `report-2025`).
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (!file.isDirectory) {
+                        Text(
+                            humanSize(file.length()),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                // Between two rows only: a hairline after the last one is drawn
+                // along the card's own bottom edge, which is the rule the
+                // conversation list follows for the same reason.
+                if (index < entries.lastIndex) {
+                    SettingsDivider()
                 }
             }
-            HorizontalDivider()
         }
     }
 }
