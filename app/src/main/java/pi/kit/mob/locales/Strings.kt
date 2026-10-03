@@ -1173,6 +1173,21 @@ interface Strings {
         val stopAgent: String
         val failedStartNote: String
 
+        /**
+         * The keep-alive row: opting the app out of battery optimisation.
+         *
+         * The foreground service and the turn wake lock keep a *running* turn
+         * alive; this is what stops the OS from reclaiming the whole process
+         * when the screen goes off on an aggressive OEM build. The system dialog
+         * is the platform's own — the app cannot draw it — and the row reports
+         * whether the exemption is already held.
+         */
+        val keepAliveTitle: String
+        val keepAliveGranted: String
+        val keepAliveDenied: String
+        val keepAliveAsk: String
+        val keepAliveNote: String
+
         // Backup & restore: the row between the agent process and the maintenance
         // pair, and the page behind it.
         //

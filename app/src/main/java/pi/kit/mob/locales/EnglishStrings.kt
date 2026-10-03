@@ -657,9 +657,17 @@ internal object EnglishStrings : Strings {
             "A failed start is almost always configuration: check that the active profile " +
                 "has a key and that the model id exists for that provider. The manual has " +
                 "a longer checklist."
+        override val keepAliveTitle = "Keep alive"
+        override val keepAliveGranted = "Battery optimisation is off for this app"
+        override val keepAliveDenied = "Still subject to battery optimisation"
+        override val keepAliveAsk = "Ask for the exemption"
+        override val keepAliveNote =
+            "With the screen off or the app in the background the OS may reclaim the agent " +
+                "and cut the turn short. The battery-optimisation exemption is what lets the " +
+                "foreground service and the wake lock actually hold it."
 
         override val backupTitle = "Backup & restore"
-        override val backupSubtitle = "Export the data to a file, restore it later"
+        override val backupSubtitle = "Export and restore app data"
         override val backupExportSection = "Export"
         override val backupImportSection = "Import"
         override val backupCategorySettings = "Basic settings"

@@ -619,6 +619,14 @@ internal object JapaneseStrings : Strings {
             "起動失敗のほとんどは設定が原因です。使用中のプロファイルにキーがあるか、" +
                 "そのプロバイダーにモデル ID が存在するかを確認してください。" +
                 "マニュアルに詳しいチェックリストがあります。"
+        override val keepAliveTitle = "バックグラウンド保護"
+        override val keepAliveGranted = "バッテリー最適化はオフです"
+        override val keepAliveDenied = "まだバッテリー最適化の対象です"
+        override val keepAliveAsk = "除外を申請する"
+        override val keepAliveNote =
+            "画面オフやバックグラウンド時に OS がエージェントを回収し、ターンが途切れることが" +
+                "あります。バッテリー最適化の除外があると、フォアグラウンドサービスと" +
+                "ウェイクロックがターンを保持できます。"
 
         override val backupTitle = "バックアップと復元"
         override val backupSubtitle = "ファイルに書き出して、戻せるように"

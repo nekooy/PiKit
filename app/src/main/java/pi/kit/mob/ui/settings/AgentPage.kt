@@ -1,5 +1,10 @@
 package pi.kit.mob.ui.settings
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +19,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -202,13 +209,15 @@ internal fun AgentPage(
                 }
 
                 if (agent is AgentStatus.Failed) {
-                    Text(
-                        agent.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
+                    InlineError(agent.message)
                 }
+
+                // Keep-alive: the foreground service and the turn wake lock only
+                // work if the OS is not allowed to reclaim the process the moment
+                // the screen goes off. The exemption is the system's own dialog;
+                // this row reports whether it is already held and offers the ask.
+                SettingsDivider()
+                KeepAliveRow(text = text)
             }
 
             SettingsNote(text.settings.failedStartNote)
@@ -239,6 +248,92 @@ private fun ContextPoint(number: Int, title: String, body: String) {
             modifier = Modifier.padding(top = 3.dp),
         )
     }
+}
+
+/**
+ * The battery-optimisation exemption: the one keep-alive lever the OS owns.
+ *
+ * The foreground service and the turn wake lock do nothing for a process the
+ * OEM's power manager has already decided to reclaim the moment the screen goes
+ * off — which is the report "息屏后会直接 terminated". `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+ * opens the system's own dialog; the app cannot draw it and cannot grant itself
+ * the exemption. The row is a status and a button, because the state is worth
+ * seeing and the action is one tap when it is missing.
+ */
+@Composable
+private fun KeepAliveRow(text: Strings) {
+    val context = LocalContext.current
+    // Re-read on every recomposition rather than cached: the answer can change
+    // in the system settings app while this page is open, and coming back to a
+    // stale "not exempt" is exactly the confusion the row exists to remove.
+    val exempt = remember(context) { isIgnoringBatteryOptimizations(context) }
+
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(
+            text = text.settings.keepAliveTitle,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = if (exempt) text.settings.keepAliveGranted else text.settings.keepAliveDenied,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (exempt) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(top = 3.dp),
+        )
+        Text(
+            text = text.settings.keepAliveNote,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+        // Always drawn, disabled once held: a button that appeared when the
+        // exemption was missing made the section jump a button taller and then
+        // shorter again as the answer changed.
+        OutlinedButton(
+            onClick = { requestIgnoreBatteryOptimizations(context) },
+            enabled = !exempt,
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            Icon(Icons.Filled.Settings, contentDescription = null)
+            Text(text.settings.keepAliveAsk, Modifier.padding(start = 8.dp))
+        }
+    }
+}
+
+/**
+ * Whether the OS is allowed to leave this app alone in the background.
+ *
+ * Below M every app is exempt by construction — there is no optimisation to
+ * opt out of — so the answer is true rather than "the API does not exist".
+ */
+private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return true
+    val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+    return power.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+/**
+ * Asks the system for the exemption.
+ *
+ * `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is the one that shows a
+ * yes/no dialog for *this* package; the bare `ACTION_IGNORE_BATTERY_OPTIMIZATIONS`
+ * settings screen is the fallback for a device that refuses the direct ask
+ * (some OEMs do), and failing even to open either is silent — the row simply
+ * keeps saying the exemption is missing.
+ */
+private fun requestIgnoreBatteryOptimizations(context: Context) {
+    val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+        .setData(Uri.parse("package:${context.packageName}"))
+    // The settings screen is the fallback for a device that refuses the direct
+    // ask; spelled as a literal because some SDK stubs do not surface the
+    // constant even though the activity exists.
+    val fallback = Intent("android.settings.IGNORE_BATTERY_OPTIMIZATIONS_SETTINGS")
+    runCatching { context.startActivity(direct) }
+        .onFailure { runCatching { context.startActivity(fallback) } }
 }
 
 /**
