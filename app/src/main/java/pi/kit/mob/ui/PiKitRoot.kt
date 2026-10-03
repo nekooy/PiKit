@@ -20,6 +20,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -738,8 +740,26 @@ private fun MessageScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(title, textAlign = TextAlign.Center)
-        Text(body, modifier = Modifier.padding(top = 12.dp), textAlign = TextAlign.Center)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            // Bounded by what is left of the screen and scrolled inside it. `body` is
+            // the installer's own stderr, which runs to well over a screen — measured
+            // for the same class of string in `ErrorUI` — and this screen said neither
+            // of the two things that fixes: it was not scrollable, and the retry
+            // button under it was pushed off the bottom by it. `fill = false` keeps a
+            // short message the height it needs rather than the height available.
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState()),
+        )
         TextButton(onClick = onAction, modifier = Modifier.padding(top = 16.dp)) {
             Text(actionLabel)
         }
