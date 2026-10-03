@@ -620,7 +620,13 @@ object ConversationReducer {
                 val error = raw.str("errorMessage")
                 val willRetry = raw.bool("willRetry") == true
                 val notice = when {
-                    error != null -> "Compaction failed: $error"
+                    // pi names the failure in the message itself for some paths, and
+                    // the prefix went on regardless: the transcript showed
+                    // `Compaction failed: Compaction failed: Nothing to compact
+                    // (session too small)`. A message that does not name it — pi's own
+                    // reason for a manual compaction, say — still needs to, because
+                    // the notice is one line with no other context around it.
+                    error != null -> error.withPrefix(COMPACTION_FAILED)
                     willRetry -> "Compaction will retry"
                     else -> "Compacted context ($reason)"
                 }
@@ -1003,3 +1009,16 @@ private fun List<ChatTurn>.closeAt(at: Long, items: List<ChatItem>): List<ChatTu
         ?: open.finalReplyKey
     return dropLast(1) + open.copy(finalReplyKey = finalKey, finishedAt = at)
 }
+
+/** What a compaction failure is called when the message does not say. */
+private const val COMPACTION_FAILED = "Compaction failed"
+
+/**
+ * [this] with `"<prefix>: "` in front, unless it already begins with [prefix].
+ *
+ * One message, one statement: a notice is drawn as a single line of transcript, and
+ * `Compaction failed: Compaction failed: …` is what a prefix applied to pi's own
+ * prefix reads as on the phone.
+ */
+private fun String.withPrefix(prefix: String): String =
+    if (startsWith(prefix, ignoreCase = true)) this else "$prefix: $this"
