@@ -297,6 +297,8 @@ internal object JapaneseStrings : Strings {
         override val launcherIconFootnote =
             "切り替えるとホーム画面のアイコンが作り直されます。ランチャーによっては" +
                 "反映に数秒かかり、アイコンの位置が変わることがあります。"
+        override val fontSize = "文字サイズ"
+        override val fontSizeSubtitle = "7 段階。指を離すとすぐ反映されます"
         override val personalizationNote =
             "「起動時」とは、アプリを完全に閉じてから開き直すときです。セッション途中の" +
                 "エージェント再起動（設定変更など）では、いまの会話が続きます。テーマは" +

@@ -297,6 +297,8 @@ internal object ChineseStrings : Strings {
         override val launcherIconFootnote =
             "切换后桌面上的图标会被重新创建：有的桌面要过几秒才刷新，" +
                 "也可能把图标挪到别的位置。"
+        override val fontSize = "字体大小"
+        override val fontSizeSubtitle = "共 7 档，松手即生效"
         override val personalizationNote =
             "「冷启动」指完全关闭后再次打开 App。中途重启 Agent（例如改了设置）" +
                 "仍会回到当前对话。主题改动立即生效。"

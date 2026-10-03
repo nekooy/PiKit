@@ -16,6 +16,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.roundToInt
 
 /**
  * Provider ids pi accepts, mapped to the environment variable each one reads.
@@ -401,8 +402,63 @@ enum class ThemeMode(val code: String) {
     }
 }
 
-/** Immutable snapshot of user configuration. */
-data class PiSettings(
+/**
+ * How large the interface's text is, in seven steps.
+ *
+ * ## Why a multiplier and not a font size
+ *
+ * The value scales `LocalDensity`'s `fontScale`, so every `sp` in the app — every
+ * row title, every subtitle, the chat transcript, the terminal banner — moves
+ * together: nine type styles at seven sizes is 63 decisions, and one multiplier is
+ * one. It multiplies the *platform's* own scale rather than replacing it, so a user
+ * who has already set 1.3 in Android's display settings keeps their preference and
+ * gets the step on top of it.
+ *
+ * ## The seven, and why the default is the fourth
+ *
+ * [M] is `1.0` and is the default, which is what makes the row's value read as a
+ * percentage of "what the app always was". The range is deliberately narrow —
+ * 0.80 to 1.30 — because the layout is a phone's: the measured limits in §9.2 were
+ * taken at font scale 1.8 and they are where a row's label starts being clipped,
+ * not where it looks best. A step below 0.8 stops being readable at 12sp, which is
+ * already the smallest style the app draws.
+ */
+enum class FontSize(val code: String, val scale: Float) {
+    /** 0.80 — 12sp captions at 9.6sp. The floor of what stays legible. */
+    XXS("xxs", 0.80f),
+
+    /** 0.90 */
+    XS("xs", 0.90f),
+
+    /** 0.95 */
+    S("s", 0.95f),
+
+    /** 1.00 — the app's own sizes, and the default. */
+    M("m", 1.00f),
+
+    /** 1.10 */
+    L("l", 1.10f),
+
+    /** 1.20 */
+    XL("xl", 1.20f),
+
+    /** 1.30 — the ceiling §9.2's measurements leave room for. */
+    XXL("xxl", 1.30f),
+    ;
+
+    /** The step as the interface prints it: `100%`, `80%`, `130%`. */
+    val percent: Int get() = (scale * 100f).roundToInt()
+
+    companion object {
+        /** The fourth of seven, and what an install that never touched the row has. */
+        val DEFAULT = M
+
+        fun fromCode(code: String?): FontSize =
+            entries.firstOrNull { it.code == code } ?: DEFAULT
+    }
+}
+
+/** Immutable snapshot of user configuration. */data class PiSettings(
     val provider: PiProvider? = null,
     val modelId: String = "",
     val apiKey: String = "",
@@ -462,6 +518,15 @@ data class PiSettings(
     val openNewOnLaunch: Boolean = true,
     /** Interface theme. Persisted here because it is not part of a profile. */
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
+    /**
+     * The interface's text size. Persisted here for the same reason [themeMode] is:
+     * it is not part of a profile, and it applies to the app rather than to a launch.
+     *
+     * It is read once, in `MainActivity`, where it scales the composition's
+     * `LocalDensity` — so a change is visible on the page that made it, without a
+     * restart and without a single call site asking about it.
+     */
+    val fontSize: FontSize = FontSize.DEFAULT,
     /**
      * Which launcher icon the home screen shows. Persisted here for the same
      * reason [themeMode] is: it is not part of a profile.
@@ -616,6 +681,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
@@ -691,6 +757,7 @@ class SettingsStore(context: Context) {
             .putString(KEY_LANGUAGE, next.language.code)
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
             .putString(KEY_THEME, next.themeMode.code)
+            .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
             .putBoolean(KEY_SAFETY, next.safetyExtension)
             .apply()
@@ -704,6 +771,7 @@ class SettingsStore(context: Context) {
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
+            fontSize = next.fontSize,
             launcherIcon = next.launcherIcon,
             safetyExtension = next.safetyExtension,
         )
@@ -739,6 +807,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
         )
@@ -757,6 +826,7 @@ class SettingsStore(context: Context) {
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
+        fontSize: FontSize = current.get().fontSize,
         launcherIcon: LauncherIcon = current.get().launcherIcon,
         safetyExtension: Boolean = current.get().safetyExtension,
     ): PiSettings {
@@ -773,6 +843,7 @@ class SettingsStore(context: Context) {
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
+                fontSize = fontSize,
                 launcherIcon = launcherIcon,
                 safetyExtension = safetyExtension,
             )
@@ -824,6 +895,9 @@ class SettingsStore(context: Context) {
 
         /** [ThemeMode.code]; absent means [ThemeMode.DEFAULT]. */
         private const val KEY_THEME = "theme_mode"
+
+        /** [FontSize.code]; absent means [FontSize.DEFAULT] — the fourth of seven. */
+        private const val KEY_FONT_SIZE = "font_size"
 
         /** [LauncherIcon.code]; absent means [LauncherIcon.DEFAULT]. */
         private const val KEY_LAUNCHER_ICON = "launcher_icon"

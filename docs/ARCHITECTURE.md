@@ -29,7 +29,7 @@ of everything under `docs/`.
 | 7.4 | [The terminal's key bar](architecture/07.4-terminal-keys.md) | Uniform keys, an arrow pad, and the word that toggles |
 | 8 | [Restoring a conversation](architecture/08-restoring-a-conversation.md) | How a reopened conversation gets its turns, durations and folding back |
 | 9.1 | [Pages, and which moves are one](architecture/09.1-pages-and-moves.md) | Back behaviour, the flattened settings root, and what is a page and what is not |
-| 9.2 | [The settings pages, and the furniture of a page](architecture/09.2-settings-pages.md) | The header band's fixed height, dividers, the row that acts, the shape a list and its rows share, forms that ask before leaving, and the one choice that is a manifest component |
+| 9.2 | [The settings pages, and the furniture of a page](architecture/09.2-settings-pages.md) | The header band's fixed height, dividers, the row that acts, the shape a list and its rows share, forms that ask before leaving, the text-size slider, and the one choice that is a manifest component |
 | 9.3 | [The web-access and maintenance pages](architecture/09.3-web-access-and-maintenance.md) | The six keys PiKit owns of the extension's hundred, the document that is not the file, and the three repair runs that are now one shape |
 | 10 | [Process and state ownership](architecture/10-process-and-state.md) | Who owns the agent process, the session and the saved state, what a backup carries, and why a restore has to re-read everything |
 | 11 | [Vendored code](architecture/11-vendored-code.md) | The two Termux modules, why only those two, and their licence |

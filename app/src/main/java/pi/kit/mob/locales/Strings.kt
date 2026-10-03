@@ -688,6 +688,19 @@ interface Strings {
          */
         val launcherIconFootnote: String
 
+        /**
+         * The interface's text size: one row above the theme, in seven steps.
+         *
+         * Seven because the useful range is narrow and a phone has no room for a
+         * preview: the row is a slider whose ends are the smallest and the largest
+         * step, and the value column carries the chosen step as a percentage of the
+         * default. The percentage is built in `PersonalizationPage` rather than
+         * spelled here — it is a number and a sign, and its own value in every
+         * language is that number.
+         */
+        val fontSize: String
+        val fontSizeSubtitle: String
+
         /** Under the rows: what "cold start" means here, and when a theme change applies. */
         val personalizationNote: String
         val essentials: String
