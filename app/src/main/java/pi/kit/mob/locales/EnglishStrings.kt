@@ -318,6 +318,8 @@ internal object EnglishStrings : Strings {
         override val launcherIconFootnote =
             "Switching recreates the icon on your home screen: some launchers take " +
                 "a few seconds to catch up, and may move it somewhere else."
+        override val fontSize = "Text size"
+        override val fontSizeSubtitle = "Seven steps, applied when you let go"
         override val personalizationNote =
             "A cold start is opening the app after it has been fully closed. Restarting the " +
                 "agent mid-session (after a settings change, say) still keeps the conversation " +
