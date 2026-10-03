@@ -17,6 +17,7 @@ import pi.kit.mob.ui.MainActivity
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Keeps the agent process alive and privileged while the UI is backgrounded.
@@ -27,15 +28,21 @@ import kotlinx.coroutines.launch
  * alone, and deliberately owns no state of its own — [PiAgentSession] is the
  * single source of truth, so the UI can bind, unbind and re-attach freely.
  *
- * ## Why there is no in-app switch for the notification
+ * ## Why the shade entry only exists while the UI does not
  *
- * The shade entry is not a cosmetic preference: a foreground service exists
- * *because* of its notification, so an in-app "hide it" switch would either
- * have to drop the foreground claim (and with it the keep-alive) or lie about
- * a service being silent when Android 12+ forbids that. A user who does not
- * want to see it turns the channel off in system settings instead — the
- * service stays a foreground service and the notification is merely hidden,
- * which is strictly better than anything an in-app switch could offer.
+ * The report "去除 agent is running 的通知" is about a persistent entry that
+ * said nothing the reader did not already know — they were *in* the app watching
+ * the turn. A foreground service exists *because* of its notification, so the
+ * notification cannot be deleted while the claim is held; what it can do is
+ * appear only when the claim is doing work. [onUiVisible] drops the shade entry
+ * the moment a window is in front (the Activity is already keeping the process
+ * alive), and the status collector puts it back when the UI leaves. The
+ * keep-alive is unchanged; the noise is not.
+ *
+ * When the entry *is* up it is silent: one short line of text so the shade
+ * entry is not a blank icon, and nothing more. A user who wants even that gone
+ * turns the *Agent* channel off in system settings — `startForeground` still
+ * succeeds and the service stays a foreground service.
  *
  * ## Why the service tracks [AgentStatus]
  *
@@ -47,8 +54,8 @@ import kotlinx.coroutines.launch
  * most was the one running without it. And a deliberate stop from the Agent
  * page left the shade claiming "running". The collector below is the fix: the
  * service stays as long as the agent has something to supervise, drops the
- * notification the moment it is not running, and tears itself down when the
- * agent is deliberately stopped.
+ * notification the moment it is not running (or the UI covers it), and tears
+ * itself down when the agent is deliberately stopped.
  */
 class PiAgentService : LifecycleService() {
 
@@ -113,6 +120,12 @@ class PiAgentService : LifecycleService() {
             return START_NOT_STICKY
         }
 
+        if (intent?.action == ACTION_UI_VISIBLE) {
+            uiVisible.set(intent.getBooleanExtra(EXTRA_VISIBLE, true))
+            syncNotification()
+            return START_STICKY
+        }
+
         // A service entered through `startForegroundService` owes the system a
         // `startForeground` call inside its deadline (5 s on Android 12+), and
         // it owes one even while the agent is still `Stopped` — which is the
@@ -120,8 +133,7 @@ class PiAgentService : LifecycleService() {
         // for `Running` before promoting is what turned a first-run install into
         // `ForegroundServiceDidNotStartInTimeException`. Promote first, then let
         // [syncNotification] take the notification away again if the agent is
-        // not actually up; a brief shade entry that says "running" during
-        // `Starting` is the cheaper lie.
+        // not actually up *or* the UI already covers it.
         promoteToForeground()
 
         syncNotification()
@@ -148,15 +160,21 @@ class PiAgentService : LifecycleService() {
     }
 
     /**
-     * Shows the ongoing notification only while the agent is actually up.
+     * Shows the ongoing notification only while the agent is actually up *and*
+     * the UI is not already in front.
      *
-     * Called from [onStartCommand] and from the status collector, so the shade
-     * never keeps claiming "running" across a crash or a deliberate stop.
+     * Called from [onStartCommand], from the status collector and from
+     * [onUiVisible], so the shade never keeps claiming anything across a crash,
+     * a deliberate stop, or the user simply looking at the app.
      */
     private fun syncNotification() {
         val status = PiAgentSession.of(this).agent.value
         val active = status is AgentStatus.Starting || status is AgentStatus.Running
-        if (active) promoteToForeground() else stopForegroundCompat()
+        if (active && !uiVisible.get()) {
+            promoteToForeground()
+        } else {
+            stopForegroundCompat()
+        }
     }
 
     private fun promoteToForeground() {
@@ -176,6 +194,17 @@ class PiAgentService : LifecycleService() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     }
 
+    /**
+     * The ongoing keep-alive marker.
+     *
+     * `PRIORITY_MIN` + a `MIN`-importance channel means no peek, no sound, no
+     * badge — it sits at the bottom of the shade as the price of the foreground
+     * claim. The title and body are one short English sentence so a shade entry
+     * with nothing on it does not read as a rendering fault; a user who wants
+     * even that gone turns the *Agent* channel off in system settings —
+     * `startForeground` still succeeds and the service stays a foreground
+     * service.
+     */
     private fun buildNotification(): Notification {
         val openApp = PendingIntent.getActivity(
             this,
@@ -191,21 +220,27 @@ class PiAgentService : LifecycleService() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.notification_agent_title))
-            .setContentText(getString(R.string.notification_agent_text))
             .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText(getString(R.string.notification_text))
             .setOngoing(true)
             .setContentIntent(openApp)
             .addAction(0, getString(R.string.notification_stop), stopAgent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setSilent(true)
             .build()
     }
 
     companion object {
         const val ACTION_STOP = "pi.kit.mob.action.STOP_AGENT"
+        const val ACTION_UI_VISIBLE = "pi.kit.mob.action.UI_VISIBLE"
+        const val EXTRA_VISIBLE = "visible"
 
         private const val CHANNEL_ID = "pikit_agent"
         private const val NOTIFICATION_ID = 1
+
+        /** True while a window of this app is in front. */
+        private val uiVisible = AtomicBoolean(false)
 
         /**
          * How long a deliberate stop waits before the service dies, so a
@@ -220,10 +255,12 @@ class PiAgentService : LifecycleService() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 context.getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_MIN,
             ).apply {
                 description = context.getString(R.string.notification_channel_description)
                 setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
             }
             manager.createNotificationChannel(channel)
         }
@@ -237,6 +274,65 @@ class PiAgentService : LifecycleService() {
                 context.startService(intent)
             }
         }
+
+        /**
+         * Tells the service whether a window is in front, so the shade entry
+         * appears only when the keep-alive claim is actually doing work.
+         *
+         * [MainActivity] calls this from `onStart`/`onStop`. A service that is
+         * not up yet ignores the message: the next `start`/`syncNotification`
+         * reads the flag for itself.
+         *
+         * Also the moment to hold (or drop) the background wake lock: the turn
+         * lock is owned by [PiAgentSession] and only covers a live turn, while
+         * the "息屏后 terminated" report is about the process going away
+         * *between* turns as well. A partial lock while the UI is gone and the
+         * agent is up keeps the child's stdout drained for as long as the user
+         * has actually left.
+         */
+        fun onUiVisible(context: Context, visible: Boolean) {
+            uiVisible.set(visible)
+            syncBackgroundWakeLock(context, visible)
+            val intent = Intent(context, PiAgentService::class.java)
+                .setAction(ACTION_UI_VISIBLE)
+                .putExtra(EXTRA_VISIBLE, visible)
+            runCatching { context.startService(intent) }
+        }
+
+        /**
+         * A partial wake lock held while the UI is gone and the agent is up.
+         *
+         * Separate from the turn lock on purpose: that one is acquired on
+         * `agent_start` and released on `agent_settled`, so a screen-off with
+         * nothing streaming had nothing holding the CPU. This one is the
+         * "user left the app" lock, and it is what the keep-alive is for.
+         */
+        private var backgroundWakeLock: android.os.PowerManager.WakeLock? = null
+
+        private fun syncBackgroundWakeLock(context: Context, uiGone: Boolean) {
+            val agentUp = runCatching {
+                PiAgentSession.of(context).agent.value
+            }.getOrNull().let {
+                it is AgentStatus.Starting || it is AgentStatus.Running
+            }
+            if (uiGone && agentUp) {
+                val lock = backgroundWakeLock ?: (context.getSystemService(Context.POWER_SERVICE)
+                    as android.os.PowerManager)
+                    .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "pikit:agent-bg")
+                    .also {
+                        it.setReferenceCounted(false)
+                        backgroundWakeLock = it
+                    }
+                // Timed for the same reason the turn lock is: a lock the app
+                // forgets to release must not outlive a day. Re-acquired on
+                // every return to the background.
+                if (!lock.isHeld) lock.acquire(BACKGROUND_WAKE_LOCK_MAX_MS)
+            } else {
+                backgroundWakeLock?.takeIf { it.isHeld }?.release()
+            }
+        }
+
+        private const val BACKGROUND_WAKE_LOCK_MAX_MS = 6 * 60 * 60 * 1000L
 
         fun stop(context: Context) {
             context.startService(

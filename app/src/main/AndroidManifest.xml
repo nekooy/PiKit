@@ -121,11 +121,13 @@
         <!--
             Owns the lifecycle of the agent child process (pi in RPC mode).
             Declared as a foreground service so the agent survives the UI going
-            to the background and is not killed mid-turn by the OS.
+            to the background and is not killed mid-turn by the OS. The shade
+            entry is only up while the UI is *not* — see PiAgentService.
         -->
         <service
             android:name=".pi.PiAgentService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
 
         <!--
