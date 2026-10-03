@@ -88,6 +88,7 @@ enum class PiProvider(val id: String, val envVar: String, val label: String) {
     FIREWORKS("fireworks", "FIREWORKS_API_KEY", "Fireworks"),
     BASETEN("baseten", "BASETEN_API_KEY", "Baseten"),
     HUGGINGFACE("huggingface", "HF_TOKEN", "Hugging Face"),
+    TYPESAFE("typesafe", "TYPESAFE_API_KEY", "TypeSafe"),
     VERCEL_AI_GATEWAY("vercel-ai-gateway", "AI_GATEWAY_API_KEY", "Vercel AI Gateway"),
     OPENCODE("opencode", "OPENCODE_API_KEY", "OpenCode Zen"),
     OPENCODE_GO("opencode-go", "OPENCODE_API_KEY", "OpenCode Go"),

@@ -934,9 +934,12 @@ private fun PiProvider.modelsEndpoint(): ModelsEndpoint? = when (this) {
     //  * `meta` speaks `openai-responses` at `api.meta.ai/v1` and authenticates
     //    with a key, but whether that base serves a `/models` list is likewise
     //    unverified — its models are in pi's own catalogue either way.
+    //  * `typesafe` is a classifier-model host (pi's `jev-latest`); its chat
+    //    `/models` shape is not documented for this app, and the catalogue has it.
     PiProvider.MINIMAX,
     PiProvider.MINIMAX_CN,
     PiProvider.META,
+    PiProvider.TYPESAFE,
     PiProvider.XIAOMI,
     PiProvider.XIAOMI_TOKEN_PLAN_CN,
     PiProvider.XIAOMI_TOKEN_PLAN_AMS,
