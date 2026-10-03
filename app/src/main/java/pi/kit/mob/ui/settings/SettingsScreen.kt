@@ -394,6 +394,15 @@ private fun RootPage(
                     title = text.settings.searchTitle,
                     subtitle = text.settings.searchSubtitle,
                     icon = Icons.Filled.Search,
+                    // The bundled `pi-web-access` extension's version, which is a
+                    // file in the runtime image and otherwise a terminal away. The
+                    // page behind this row shows the same string on its own master
+                    // switch; this is the row that names the feature, so this is
+                    // where a reader looks for it first. Absent — the image carries
+                    // no extension — leaves the value empty rather than printing a
+                    // placeholder, which is what the search page itself does.
+                    value = session.webSearch.extension?.version,
+                    monospaceValue = true,
                     showChevron = true,
                     onClick = { onOpen(SettingsPage.Search) },
                 )
