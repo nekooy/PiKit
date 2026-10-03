@@ -661,6 +661,10 @@ internal object ChineseStrings : Strings {
         override val modelListRefreshing = "正在联系各服务商…"
         override val modelListChanged = "模型列表有更新，Agent 正在重启以读取。"
         override val modelListUnchanged = "模型列表已是最新。"
+        override val modelListStateRefreshing = "刷新中"
+        override val modelListStateUpdated = "已更新"
+        override val modelListStateCurrent = "已是最新"
+        override val modelListStateFailed = "刷新失败"
         override val modelListNote =
             "一般不需要手动点：模型列表每 4 小时自动刷新一次，只有想立刻用到刚发布的新模型时才需要" +
                 "点这个按钮。刷新会向每个已配置的服务商请求一次目录，因此需要联网；其余功能离线" +
@@ -685,6 +689,10 @@ internal object ChineseStrings : Strings {
             }
         override val nothingToRelocate = "无需重定位：所有文件都已匹配本应用的前缀。"
         override val relocateProblems = "完成，但存在问题："
+        override val relocateStateScanning = "检测中"
+        override val relocateStateRepaired = "已修复"
+        override val relocateStateClean = "无需修复"
+        override val relocateStateFailed = "修复失败"
 
         override val storageCheck = "检查存储"
         override val storageCheckSubtitle = "实测读写与防误删是否真的有效"

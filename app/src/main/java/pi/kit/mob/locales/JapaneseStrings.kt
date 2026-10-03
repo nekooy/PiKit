@@ -696,6 +696,10 @@ internal object JapaneseStrings : Strings {
         override val modelListChanged =
             "モデル一覧が更新されました。読み込むためエージェントを再起動します。"
         override val modelListUnchanged = "モデル一覧は最新です。"
+        override val modelListStateRefreshing = "更新中"
+        override val modelListStateUpdated = "更新済み"
+        override val modelListStateCurrent = "最新"
+        override val modelListStateFailed = "更新失敗"
         override val modelListNote =
             "通常は何も押す必要はありません。モデル一覧は 4 時間ごとに自動で更新され、" +
                 "このボタンが要るのは公開されたばかりのモデルを今すぐ使いたいときだけです。" +
@@ -723,6 +727,10 @@ internal object JapaneseStrings : Strings {
             }
         override val nothingToRelocate = "再配置は不要です。すべてのファイルがこのアプリのプレフィックスと一致しています。"
         override val relocateProblems = "完了しましたが問題があります："
+        override val relocateStateScanning = "確認中"
+        override val relocateStateRepaired = "修復済み"
+        override val relocateStateClean = "修復不要"
+        override val relocateStateFailed = "修復失敗"
 
         override val storageCheck = "ストレージを確認"
         override val storageCheckSubtitle = "読み書きと削除の安全性を実測します"

@@ -1,28 +1,23 @@
 package pi.kit.mob.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VerifiedUser
-import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import pi.kit.mob.env.PrefixPatcher
+import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.CatalogueStatus
 import pi.kit.mob.pi.CatalogueUpdater
@@ -44,6 +39,17 @@ import pi.kit.mob.pi.StorageSelfTest
  * metadata: the providers' model catalogues, which pi's launch path refreshes on its
  * own four-hour window and which the button forces when a just-released model is
  * wanted now.
+ *
+ * ## The three runs are one shape
+ *
+ * The page has three things that run and report: the catalogue refresh, the
+ * relocation walk, and the storage self-test. Each is a `SettingsRow` carrying the
+ * run's state in its value column, a [SettingsActionStrip] with the button and the
+ * bar, and then the verdict in a [SettingsNote] above the standing explanation. That
+ * shape is not a preference — it is what the three were *not*: one showed its state
+ * in the row and two only in prose, one drew a progress bar and one did not, and the
+ * buttons of one started 4dp left of the note under them. `SettingsActionStrip` is
+ * the shared half, so the three cannot drift apart again.
  */
 @Composable
 internal fun MaintenancePage(
@@ -87,41 +93,39 @@ internal fun MaintenancePage(
                     title = text.settings.modelList,
                     subtitle = text.settings.modelListRefreshSubtitle,
                     icon = Icons.Filled.Refresh,
+                    // The run's state, in the value column, which is where the two
+                    // blocks below carry theirs. It used to be in the paragraph under
+                    // the button and nowhere else, so the page's three runs reported
+                    // themselves three different ways.
+                    value = catalogueState(catalogueStatus, text),
                 )
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = { catalogue.start() },
-                        enabled = catalogueStatus !is CatalogueStatus.Running,
-                    ) { Text(text.settings.modelListRefresh) }
-
-                    if (catalogueStatus !is CatalogueStatus.Idle &&
-                        catalogueStatus !is CatalogueStatus.Running
+                SettingsActionStrip(
+                    actionLabel = text.settings.modelListRefresh,
+                    onAction = { catalogue.start() },
+                    dismissLabel = text.settings.dismiss,
+                    actionEnabled = catalogueStatus !is CatalogueStatus.Running,
+                    onDismiss = if (catalogueStatus is CatalogueStatus.Done ||
+                        catalogueStatus is CatalogueStatus.Failed
                     ) {
-                        OutlinedButton(onClick = { catalogue.dismiss(); catalogue.refreshVersion() }) {
-                            Text(text.settings.dismiss)
+                        {
+                            catalogue.dismiss()
+                            catalogue.refreshVersion()
                         }
-                    }
-                }
+                    } else {
+                        null
+                    },
+                    progress = if (catalogueStatus is CatalogueStatus.Running) {
+                        text.settings.modelListRefreshing
+                    } else {
+                        null
+                    },
+                )
 
                 when (val current = catalogueStatus) {
-                    CatalogueStatus.Idle -> SettingsNote(
-                        text.settings.modelListNote
-                    )
-
-                    CatalogueStatus.Running -> Column(
-                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    ) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(
-                            text.settings.modelListRefreshing,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
+                    // No verdict yet: the value column and the bar say the run is going,
+                    // and the note under them says what the button is for. A paragraph
+                    // repeating "refreshing" would be the third telling.
+                    CatalogueStatus.Idle, CatalogueStatus.Running -> Unit
 
                     is CatalogueStatus.Done -> SettingsNote(
                         // The changed case also restarted the agent, so the sentence
@@ -141,6 +145,13 @@ internal fun MaintenancePage(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+
+                // Last in the block, always, and in the same position in all three:
+                // what the button is for. The relocation block below has carried its
+                // note this way from the start, and this one drew the same sentence
+                // *instead of* the verdict while idle — so the two blocks put a
+                // paragraph in two different places.
+                SettingsNote(text.settings.modelListNote)
             }
 
             // Relocation is not something the user should have to think about: a
@@ -159,40 +170,31 @@ internal fun MaintenancePage(
                     title = text.settings.relocate,
                     subtitle = text.settings.relocateSubtitle,
                     icon = Icons.Filled.Extension,
+                    value = relocateState(repair, repairRunning, text),
                 )
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = { session.repairInstalledPackages() },
-                        // Guarded on the walk, not on the last result being on
-                        // screen: the run takes long enough that a button disabled
-                        // until Dismiss reads as broken.
-                        enabled = !repairRunning,
-                    ) { Text(text.settings.relocateNow) }
-
-                    if (repair != null && !repairRunning) {
-                        OutlinedButton(onClick = { session.clearRepairResult() }) {
-                            Text(text.settings.dismiss)
-                        }
-                    }
-                }
-
-                if (repairRunning) {
+                SettingsActionStrip(
+                    actionLabel = text.settings.relocateNow,
+                    onAction = { session.repairInstalledPackages() },
+                    dismissLabel = text.settings.dismiss,
+                    // Guarded on the walk, not on the last result being on
+                    // screen: the run takes long enough that a button disabled
+                    // until Dismiss reads as broken.
+                    actionEnabled = !repairRunning,
+                    onDismiss = if (repair != null && !repairRunning) {
+                        { session.clearRepairResult() }
+                    } else {
+                        null
+                    },
                     // The walk reads every file under `$PREFIX` — 22 000 on a
-                    // freshly installed image — so it gets the same progress
-                    // treatment the catalogue refresh uses rather than a dead button.
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(
-                            text.settings.relocateScanning(repairScanned),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                }
+                    // freshly installed image — so it reports what it has read
+                    // rather than a bar that appears frozen. Same treatment as the
+                    // catalogue refresh above.
+                    progress = if (repairRunning) {
+                        text.settings.relocateScanning(repairScanned)
+                    } else {
+                        null
+                    },
+                )
 
                 repair?.let { result ->
                     SettingsNote(
@@ -221,7 +223,10 @@ internal fun MaintenancePage(
                         color = if (result.errors.isNotEmpty() || result.relocatorDamaged) {
                             MaterialTheme.colorScheme.error
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            // Success, same primary as the catalogue and storage
+                            // verdicts above: a grey "已修复" read as muted metadata
+                            // beside two blue result lines and looked unfinished.
+                            MaterialTheme.colorScheme.primary
                         },
                     )
                 }
@@ -255,21 +260,26 @@ internal fun MaintenancePage(
                             }
                     },
                 )
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = { selfTest.start() },
-                        enabled = storageCheck !is StorageSelfTest.Status.Running,
-                    ) { Text(text.settings.storageCheckRun) }
-
-                    if (storageCheck is StorageSelfTest.Status.Finished) {
-                        OutlinedButton(onClick = { selfTest.dismiss() }) {
-                            Text(text.settings.dismiss)
-                        }
-                    }
-                }
+                SettingsActionStrip(
+                    actionLabel = text.settings.storageCheckRun,
+                    onAction = { selfTest.start() },
+                    dismissLabel = text.settings.dismiss,
+                    actionEnabled = storageCheck !is StorageSelfTest.Status.Running,
+                    onDismiss = if (storageCheck is StorageSelfTest.Status.Finished) {
+                        { selfTest.dismiss() }
+                    } else {
+                        null
+                    },
+                    // The third run gets the same bar the other two draw. It used to
+                    // have none — the value column said "checking" and nothing moved —
+                    // which is the one place on this page where a run in flight and a
+                    // run that never started looked the same.
+                    progress = if (storageCheck is StorageSelfTest.Status.Running) {
+                        text.settings.storageCheckRunning
+                    } else {
+                        null
+                    },
+                )
 
                 val finished = storageCheck as? StorageSelfTest.Status.Finished
                 if (finished == null) {
@@ -318,6 +328,45 @@ internal fun MaintenancePage(
             }
         }
     }
+}
+
+/**
+ * The catalogue run's state, as the row's value: null while there is nothing to say.
+ *
+ * A word rather than the sentence the note carries, because the value column caps its
+ * text at 0.35 of the row (see `SettingsRow`): `modelListChanged` is 19 characters and
+ * would be an ellipsis there, while "Updated" is the whole fact.
+ */
+private fun catalogueState(status: CatalogueStatus, text: Strings): String? = when (status) {
+    CatalogueStatus.Idle -> null
+    CatalogueStatus.Running -> text.settings.modelListStateRefreshing
+    is CatalogueStatus.Done -> if (status.changed) {
+        text.settings.modelListStateUpdated
+    } else {
+        text.settings.modelListStateCurrent
+    }
+
+    is CatalogueStatus.Failed -> text.settings.modelListStateFailed
+}
+
+/**
+ * The relocation walk's state, as the row's value.
+ *
+ * The same three outcomes the note under the button reports, in one word each. The
+ * damaged-relocator case is a failure here and not a fourth word: from the row's point
+ * of view it is a walk that came back with something the user has to act on, and the
+ * note is where the action is named.
+ */
+private fun relocateState(
+    result: PrefixPatcher.Result?,
+    running: Boolean,
+    text: Strings,
+): String? = when {
+    running -> text.settings.relocateStateScanning
+    result == null -> null
+    result.relocatorDamaged || result.errors.isNotEmpty() -> text.settings.relocateStateFailed
+    result.changed -> text.settings.relocateStateRepaired
+    else -> text.settings.relocateStateClean
 }
 
 /**

@@ -1338,6 +1338,22 @@ interface Strings {
         val modelListUnchanged: String
 
         /**
+         * The run's state, as the row's own value — one word, never a sentence.
+         *
+         * The state belongs in the value column and the sentence in the note under the
+         * button, which is the split the storage row already used
+         * ([storageCheckRunning] and its two neighbours). A sentence here would be an
+         * ellipsis: `SettingsRow` caps its value at 0.35 of the row, which is about
+         * eleven characters at the default text size. [modelListChanged] and
+         * [modelListUnchanged] stay where they are — under the buttons, where there is
+         * room for the whole of what happened.
+         */
+        val modelListStateRefreshing: String
+        val modelListStateUpdated: String
+        val modelListStateCurrent: String
+        val modelListStateFailed: String
+
+        /**
          * The paragraph under the button.
          *
          * Its whole job is to stop the button being pressed for no reason: the list is
@@ -1387,6 +1403,20 @@ interface Strings {
         fun relocated(occurrences: Int, files: Int, symlinks: Int, modes: Int): String
         val nothingToRelocate: String
         val relocateProblems: String
+
+        /**
+         * The walk's state, as the row's own value — the same split as
+         * [modelListStateRefreshing], and for the same reason: the verdict under the
+         * button is a sentence and this is the one word the row can hold.
+         *
+         * [relocateStateRepaired] is not the count: the count is in [relocated], which
+         * is a sentence with four numbers in it. The row says only whether the last
+         * walk changed anything.
+         */
+        val relocateStateScanning: String
+        val relocateStateRepaired: String
+        val relocateStateClean: String
+        val relocateStateFailed: String
 
         // Storage self-test
         val storageCheck: String

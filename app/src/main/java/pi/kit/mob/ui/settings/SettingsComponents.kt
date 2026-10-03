@@ -15,9 +15,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -290,6 +293,96 @@ fun SettingsRow(
         }
     }
 }
+
+/**
+ * The action strip under an action row: the button, the dismiss, and the progress
+ * line while a run is going.
+ *
+ * ## Why this is one component
+ *
+ * The maintenance page has three action rows — refresh the model list, repair the
+ * installed packages, run the storage self-test — and each of the three was written
+ * out at its call site. They had drifted into three different blocks: one drew its
+ * button at a 12dp gutter while the note under it was at 16dp, one showed its
+ * verdict in a paragraph and another in the row's own value column, and the third
+ * drew no progress at all while the first two drew a bar. A reader looking at the
+ * page sees three things that are the same *kind* of thing (a button, a run, a
+ * verdict) laid out three ways, which is the report this answers.
+ *
+ * So the strip is the shared half and the row above it is a [SettingsRow]: a state
+ * in the value column, one primary button, one optional dismiss, one bar. What
+ * differs between the three — the wording, and what the verdict says — is passed in.
+ *
+ * ## The details, each of which was a drift
+ *
+ *  - **[ACTION_INSET], the same 16dp the rows and [SettingsNote] use.** The buttons
+ *    used to start at 12dp, which put them 4dp left of the note under them and 4dp
+ *    left of the row's own icon — near enough to look like a mistake rather than like
+ *    a decision. The vertical padding is the row's own 12dp, so a button sits the
+ *    same distance under its row as a subtitle sits under its title.
+ *  - **[progress] is the bar *and* its line.** Both blocks that had a bar drew it the
+ *    same way, and the difference between a bar with no word and a word with no bar
+ *    is the difference between "working" and "stuck". Passing the sentence in means
+ *    the two cannot be separated at one call site and not another.
+ *  - **The dismiss is optional and its label is not.** `relocate`'s result can be
+ *    dismissed, `storage`'s can, `catalogue`'s can — but only while there is a result,
+ *    so the button is present exactly when [onDismiss] is not null. It is drawn as
+ *    `OutlinedButton`, the shape every non-primary action in this app uses.
+ *  - **The bar is animated by the caller's state, not by this component.** A run that
+ *    reports nothing between its start and its end draws an indeterminate bar, which
+ *    is what `LinearProgressIndicator` without a `progress` is: the two runs that walk
+ *    a tree (the relocation walk, the self-test) have no fraction to report at all,
+ *    and inventing one would be a bar that lies.
+ */
+@Composable
+fun SettingsActionStrip(
+    actionLabel: String,
+    onAction: () -> Unit,
+    dismissLabel: String,
+    modifier: Modifier = Modifier,
+    actionEnabled: Boolean = true,
+    onDismiss: (() -> Unit)? = null,
+    progress: String? = null,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = ACTION_INSET, vertical = 12.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(onClick = onAction, enabled = actionEnabled) { Text(actionLabel) }
+            if (onDismiss != null) {
+                OutlinedButton(onClick = onDismiss) { Text(dismissLabel) }
+            }
+        }
+        if (progress != null) {
+            LinearProgressIndicator(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp),
+            )
+            Text(
+                text = progress,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The gutter a row's control starts at: the same 16dp the icon column and a
+ * [SettingsNote]'s text do.
+ *
+ * Not 12dp, which is what the buttons on the maintenance page used and what a *text
+ * field* uses — a field has its own outline and is inset to sit inside its card,
+ * while a button has no box of its own and lines up with the content above it.
+ */
+private val ACTION_INSET = 16.dp
 
 /**
  * The most of a row its value may take.
