@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -209,8 +210,9 @@ fun SettingsScreen(session: PiAgentSession) {
     }
 
     // Re-read when the user comes back from the system's "All files access"
-    // page. There is no result callback for that screen, so the lifecycle is
-    // what tells us to look again.
+    // page, and when they return from the storage sub-page: the folder toggles
+    // live only in `session.storagePolicy()`, and a summary snapshotted on the
+    // way in kept saying "none" after the user had already chosen folders.
     var storageGranted by remember { mutableStateOf(StorageAccess.isGranted()) }
     var storageSummary by remember { mutableStateOf(session.storagePolicy()) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -227,6 +229,14 @@ fun SettingsScreen(session: PiAgentSession) {
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // The lifecycle does not fire for a move between settings sub-pages, so the
+    // root re-reads the two facts its storage row prints whenever it is shown.
+    LaunchedEffect(page) {
+        if (page == SettingsPage.Root) {
+            storageGranted = StorageAccess.isGranted()
+            storageSummary = session.storagePolicy()
+        }
     }
 
     // Without this the system back button falls through to the Activity and
