@@ -23,11 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,6 +59,7 @@ import pi.kit.mob.pi.ChatItem
 import pi.kit.mob.pi.NoticeKind
 import pi.kit.mob.pi.ToolState
 import pi.kit.mob.ui.clipEntryFor
+import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.components.PiIcons
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -413,7 +412,11 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
         else -> MaterialTheme.colorScheme.primary
     }
 
-    val shape = RoundedCornerShape(7.dp)
+    // One radius for every disclosure row and the panel it opens: the turn
+    // band, a tool card and a message's reasoning used to clip at 7dp, 6dp and
+    // 12dp respectively, so three rows that are the same gesture drew three
+    // different corners when they landed in one viewport.
+    val shape = RoundedCornerShape(DISCLOSURE_RADIUS)
     val summary = remember(item.argumentsJson) { toolSummary(item) }
     // Counted once per output rather than once per recomposition: a tool that dumps
     // thousands of lines streams `output` a chunk at a time, so an unremembered
@@ -542,10 +545,11 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
             // The panel is the only filled surface a tool call has, so it says "this
             // is the thing you opened" without decorating every closed row in the
             // turn. It starts where the row's own text starts — there is no inset any
-            // more, because no row has one.
+            // more, because no row has one. Same radius as the reasoning panel it
+            // sits beside: two expanded blocks in one turn are one shape.
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = shape,
+                shape = RoundedCornerShape(PANEL_RADIUS),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 6.dp)) {
@@ -565,16 +569,15 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                             )
-                            IconButton(
+                            // The same `CopyButton` the meta row and a code block
+                            // use: one glyph set, one weight, one confirmation. It
+                            // was a Material `ContentCopy` at 15dp in a 28dp
+                            // `IconButton`, which read as a different control from
+                            // the Lucide copy two rows above it.
+                            CopyButton(
                                 onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(item.output)) } },
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Icon(
-                                    Icons.Filled.ContentCopy,
-                                    contentDescription = text.chat.copyOutput,
-                                    modifier = Modifier.size(15.dp),
-                                )
-                            }
+                                contentDescription = text.chat.copyOutput,
+                            )
                         }
                         // Capped and scrollable: a tool that returns thousands
                         // of lines must not push the rest of the conversation
@@ -619,6 +622,26 @@ private val TOOL_CHEVRON_GAP = 4.dp
  * press rather than only the glyphs.
  */
 internal val ROW_PADDING = 3.dp
+
+/**
+ * One radius for the transcript's three disclosure rows.
+ *
+ * The turn band, a tool card and a message's reasoning are the same gesture and
+ * used to clip at 7dp, 6dp and 6dp — two of the three agreed and the third was
+ * a hair different, which is exactly the kind of drift a reader feels as "not
+ * one system" without being able to name it.
+ */
+private val DISCLOSURE_RADIUS = 6.dp
+
+/**
+ * One radius for a disclosure's expanded panel.
+ *
+ * The tool output panel and the reasoning block are the two filled surfaces a
+ * turn draws under its bare rows. They were 7dp and 12dp; one shape at 10dp —
+ * `shapes.extraSmall` — is the small card radius the rest of the app already
+ * uses for chips and tiles.
+ */
+private val PANEL_RADIUS = 10.dp
 
 /**
  * A tool card's line height, for its preview and for its output.
@@ -756,7 +779,7 @@ internal fun ReasoningToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(DISCLOSURE_RADIUS))
             .disclosureClickable(
                 onClickLabel = if (expanded) text.chat.hideReasoning else text.chat.showReasoning,
                 onClick = onToggle,
@@ -823,7 +846,7 @@ internal fun ReasoningToggle(
 internal fun ReasoningBlock(thinking: String) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(PANEL_RADIUS),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -967,7 +990,7 @@ internal fun TurnSummaryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(DISCLOSURE_RADIUS))
             .disclosureClickable(
                 enabled = foldable,
                 onClickLabel = if (expanded) text.chat.stepsHide else text.chat.stepsShow,

@@ -660,7 +660,7 @@ private fun CodeBlock(block: MdBlock.Code, background: Color) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(background, RoundedCornerShape(8.dp))
+                .background(background, MaterialTheme.shapes.extraSmall)
                 // Long lines scroll rather than wrap: wrapped code is much harder
                 // to read than clipped code.
                 .horizontalScroll(rememberScrollState())
@@ -795,7 +795,7 @@ private fun MarkdownTable(block: MdBlock.Table, style: InlineStyle) {
     }
 
     val borderColor = MaterialTheme.colorScheme.outlineVariant
-    val shape = RoundedCornerShape(8.dp)
+    val shape = MaterialTheme.shapes.extraSmall
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val available = maxWidth
