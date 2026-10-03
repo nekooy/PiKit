@@ -1096,3 +1096,34 @@ internal fun storeModelFacts(store: File, providerId: String): Map<String, JsonO
     val models = entry["models"] as? JsonArray ?: return emptyMap()
     return cataloguedModelFacts(models.mapNotNull { it as? JsonObject })
 }
+
+/**
+ * Every id pi's store describes, across **every** provider, keyed by model id.
+ *
+ * A custom endpoint has no provider entry of its own, but the id the user types
+ * is often one pi already catalogues under DeepSeek or Anthropic — a relay that
+ * fronts `claude-sonnet-4-5` is the same model, and the window/max-out/image
+ * facts belong to the *id*, not to the host. [cataloguedModelFacts] already
+ * strips `api` and `baseUrl` for exactly this inheritance, and this is the
+ * lookup that finally uses it: the model page fills a custom endpoint's three
+ * controls from here when the id matches, and only falls back to pi's
+ * hard-coded 128k/16k when nothing in the store names it.
+ *
+ * First writer wins on a duplicate id (a store should not have one, and if it
+ * does the earlier provider's entry is as good a guess as the later one).
+ */
+internal fun anyProviderModelFacts(store: File): Map<String, JsonObject> {
+    val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
+    if (text.isNullOrBlank()) return emptyMap()
+    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+        ?: return emptyMap()
+    val merged = LinkedHashMap<String, JsonObject>()
+    for (value in root.values) {
+        val entry = value as? JsonObject ?: continue
+        val models = entry["models"] as? JsonArray ?: continue
+        for ((id, facts) in cataloguedModelFacts(models.mapNotNull { it as? JsonObject })) {
+            merged.putIfAbsent(id, facts)
+        }
+    }
+    return merged
+}

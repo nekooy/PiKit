@@ -171,6 +171,26 @@ class CatalogueFactsTest {
     }
 
     @Test
+    fun `a custom endpoint inherits an id's facts from whichever provider catalogues it`() {
+        // The report: adding `deepseek-v4-pro` to a relay filled none of the three
+        // controls, because a custom endpoint has no provider entry to probe. The
+        // facts belong to the *id* — `api`/`baseUrl` are already stripped — so the
+        // lookup walks every provider rather than one.
+        val facts = anyProviderModelFacts(store(storeDocument))
+
+        assertEquals(setOf("deepseek-v4-pro", "deepseek-v4-flash"), facts.keys)
+        assertEquals(
+            "1000000",
+            facts.getValue("deepseek-v4-pro")["contextWindow"]!!.jsonPrimitive.content,
+        )
+        assertEquals(
+            "384000",
+            facts.getValue("deepseek-v4-pro")["maxTokens"]!!.jsonPrimitive.content,
+        )
+        assertNull("and the catalogue's host does not travel with them", facts.getValue("deepseek-v4-pro")["baseUrl"])
+    }
+
+    @Test
     fun `a store that is missing, blank or not an object answers nothing`() {
         // Each of these leaves the process as the only recourse, which is the behaviour
         // before there was a store to read at all. None of them may throw: this runs on the
