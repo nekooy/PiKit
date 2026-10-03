@@ -336,18 +336,32 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
         }
 
         is MdBlock.Heading -> {
+            // Chapter titles need to read as breaks, not as body text: `##` is the
+            // manual's section level and was `titleMedium` — the same 16sp as body
+            // — so the ten chapters ran together. Level 2 sits between titleLarge
+            // and titleMedium, and the gap above a heading is the chapter's edge:
+            // `BLOCK_GAP` alone left a manual section looking like the paragraph
+            // before it.
             val textStyle = when (block.level) {
-                1 -> MaterialTheme.typography.titleLarge
-                2 -> MaterialTheme.typography.titleMedium
-                else -> MaterialTheme.typography.titleSmall
+                1 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                2 -> MaterialTheme.typography.titleLarge.copy(
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                else -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            }
+            val topGap = when (block.level) {
+                1 -> 12.dp
+                2 -> 18.dp
+                else -> 10.dp
             }
             val rendered = rememberMathInline(block.text, style, textStyle)
             CodeChipText(
                 text = rendered.text,
                 style = textStyle,
                 background = style.codeBackground,
-                fontWeight = FontWeight.SemiBold,
                 inlineContent = rendered.inlineContent,
+                modifier = Modifier.padding(top = topGap),
             )
         }
 
