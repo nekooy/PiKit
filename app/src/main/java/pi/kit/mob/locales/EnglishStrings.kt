@@ -741,6 +741,10 @@ internal object EnglishStrings : Strings {
             "The model list changed. The agent is restarting to read it."
         override val modelListUnchanged =
             "The model list is already up to date."
+        override val modelListStateRefreshing = "Refreshing"
+        override val modelListStateUpdated = "Updated"
+        override val modelListStateCurrent = "Up to date"
+        override val modelListStateFailed = "Refresh failed"
         override val modelListNote =
             "Usually nothing to do here: the list refreshes by itself every four hours, " +
                 "and a model released since then is the only reason to press the button. " +
@@ -775,6 +779,10 @@ internal object EnglishStrings : Strings {
         override val nothingToRelocate =
             "Nothing to relocate: every file already matches this app's prefix."
         override val relocateProblems = "Finished with problems:"
+        override val relocateStateScanning = "Checking"
+        override val relocateStateRepaired = "Repaired"
+        override val relocateStateClean = "Nothing to fix"
+        override val relocateStateFailed = "Repair failed"
 
         override val storageCheck = "Check storage"
         override val storageCheckSubtitle = "Read, write and delete safety, measured"
