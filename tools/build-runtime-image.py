@@ -645,8 +645,13 @@ def copy_hoisted_dependencies(source_modules: Path, package_root: Path) -> None:
     to move under `<name>/node_modules` — Node's first lookup, and the tree shape
     `trim_vendor_tree` and `tools/test-vendor-trim.py` are written against.
 
-    `.bin` goes along: the shims are how a dependency's own scripts find their
-    executables. The package itself is skipped; it is already `package_root`.
+    `.bin` is left behind. Those shims are npm's CLI links (`node_modules/.bin/pi`
+    points at the package being nested, which this function deliberately skips),
+    and a copied link is a dangling symlink: `write_zip` then dies on
+    `os.stat` of a file that is not there. Measured on the CI runner — the only
+    place npm writes real symlinks rather than Windows cmd shims.
+
+    The package itself is skipped; it is already `package_root`.
     """
     destination_modules = package_root / "node_modules"
     destination_modules.mkdir(parents=True, exist_ok=True)
@@ -658,7 +663,6 @@ def copy_hoisted_dependencies(source_modules: Path, package_root: Path) -> None:
         if not entry.is_dir():
             continue
         if entry.name == ".bin":
-            shutil.copytree(entry, destination_modules / ".bin", symlinks=True)
             continue
         if entry.name.startswith("@"):
             scope = destination_modules / entry.name
@@ -1555,6 +1559,12 @@ def write_zip(root: Path, destination: Path) -> None:
                 if path.suffix in {".gz", ".xz", ".bz2", ".zst", ".zip", ".png", ".wasm"}
                 else zipfile.ZIP_DEFLATED
             )
+            # A dangling symlink has nothing to store and `os.stat` raises on one.
+            # The image's real links are recorded in SYMLINKS.txt and recreated by
+            # the installer; a link this walk cannot follow is one the image does
+            # not need (npm's `.bin` shims, left behind by copy_hoisted_dependencies).
+            if path.is_symlink() and not path.exists():
+                continue
             archive.write(path, relative, compress_type=compression)
 
 
