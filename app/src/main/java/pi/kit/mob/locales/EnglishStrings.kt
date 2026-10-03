@@ -275,6 +275,7 @@ internal object EnglishStrings : Strings {
         override val close = "Close"
         override val openWith = "Open with"
         override val notAFile = "Not a file"
+        override val empty = "This folder is empty"
         override fun tooLarge(size: String) =
             "File is $size; preview is limited to 64 KB.\nOpen it from the terminal instead."
         override fun binary(size: String) = "Binary file ($size)"

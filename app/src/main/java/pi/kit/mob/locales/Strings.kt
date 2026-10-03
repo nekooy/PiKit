@@ -594,6 +594,17 @@ interface Strings {
         val close: String
         val openWith: String
         val notAFile: String
+
+        /**
+         * The directory with nothing in it — and the one that cannot be read.
+         *
+         * One sentence for both, because the page has one answer to work from: a
+         * directory it may not open and an empty one are the same empty list and the
+         * same null from `listFiles()`. Before this both drew a blank page — no rows,
+         * no message, nothing to tell the reader whether the folder was empty or the
+         * app had failed.
+         */
+        val empty: String
         fun tooLarge(size: String): String
         fun binary(size: String): String
         fun unreadable(reason: String): String
