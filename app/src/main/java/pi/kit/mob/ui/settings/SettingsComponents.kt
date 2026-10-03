@@ -226,23 +226,33 @@ fun SettingsRow(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = titleColor,
+                    // Two lines of room, and no more: a model id is a title here
+                    // and runs past one line on providers that namespace their ids.
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!subtitle.isNullOrBlank()) {
-                    // No `maxLines`, and that is the fix for a report rather than a
-                    // style choice: the subtitle is the row's *explanation*, and it is
-                    // the one thing in the row with no competitor for width — the icon
-                    // and the chevron are fixed, and the value column's cap is what
-                    // keeps the title's share. Cut at two lines it read as
-                    // "小字没显示完全" on the maintenance page, whose subtitle lists the
-                    // two commands the button runs: the sentence that says what the
-                    // control does was the sentence that was missing its end.
+                    // Height follows the text. Three lines of room is the safety
+                    // cap, not a reserved box — a one-line subtitle is one line
+                    // tall again, and a long sentence gets as many lines as it
+                    // needs up to three.
+                    //
+                    // Two was the cap, and it cut the backup page's category rows
+                    // mid-list: each subtitle there is a sentence with a list
+                    // inside it ("主题、语言、工作目录、工具调用守卫、共享存储授权，以及本应用
+                    // 保存的其他全部偏好" is one of them), those rows carry no value so
+                    // the label column is the row less an icon and a switch, and
+                    // the list still runs onto a third line once the text is set
+                    // any larger than the default. Three is where the longest of
+                    // them ends, and an ellipsis was taking the item the reader
+                    // was looking for.
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
                         fontFamily = if (monospace) FontFamily.Monospace else null,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
