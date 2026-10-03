@@ -792,6 +792,8 @@ internal object ChineseStrings : Strings {
             "xcrawl" -> "需要 XCrawl 的 Key"
             "brightdata" -> "需要 Bright Data 的 Key 和 Zone 名称"
             "serpdive" -> "需要 SERPdive 的 Key，可选检索深度"
+            "you" -> "You.com 索引；需要 Key，且不会被自动选中"
+            "zai" -> "Z.ai web_search_prime MCP；需要 Key 和端点（国际或中国）"
             else -> ""
         }
 

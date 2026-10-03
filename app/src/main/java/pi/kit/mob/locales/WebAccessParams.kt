@@ -26,15 +26,15 @@ package pi.kit.mob.locales
  *
  * ## The facts, and where they come from
  *
- * Every row is the extension **0.31.0** — the version the runtime image vendors
+ * Every row is the extension **0.35.0** — the version the runtime image vendors
  * (`tools/build-runtime-image.py`'s `WEB_ACCESS_VERSION`, recorded in the image's
  * `build-metadata.json`) — read from its own source rather than from its README. The
- * keys were checked against 0.30.0's modules one by one when the pin moved: it adds
- * six (`serplyApiKey`, `fetch.defaultMode`, `fetch.allowedModes`,
- * `webSearch.allowedProviders`, `openaiUseProviderBaseUrl`, `openaiUseAlphaSearch`)
- * and removes none, which is why the rows below could grow rather than be rewritten.
- * 0.31.0's Baizhi MCP is a *provider* the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`)
- * rather than a new document key; its lazy `web_enable` tool is tool surface, not config.
+ * keys were checked against 0.31.0's modules one by one when the pin moved: 0.35.0
+ * adds `youApiKey`, `zaiApiKey` and `zaiEndpoint` for its two new explicit-only
+ * search providers (You.com and Z.ai's web_search_prime MCP) and removes none, so
+ * the rows below grow rather than get rewritten. Baizhi MCP remains a *provider*
+ * the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`) rather than a document
+ * key; its lazy `web_enable` tool is tool surface, not config.
  *
  * The provider, type and description of each row were taken from the extension's
  * per-feature modules, which each re-parse the file with their own partial
@@ -618,6 +618,19 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "Retrieval depth: `krill`, `mako` or `moby`. An unknown value falls back to krill.",
         "检索深度：krill、mako 或 moby；无法识别的值退回 krill。",
         "検索の深さ：krill、mako、moby。不明な値は krill になります。",
+    ),
+    // 0.35.0: You.com's index API and Z.ai's web_search_prime MCP. Both are
+    // explicit-only providers (`auto` never routes to them), like Serply and Baizhi.
+    key("youApiKey", "You.com", "YOU_API_KEY", "key, for You.com's index search."),
+    key("zaiApiKey", "Z.ai", "ZAI_API_KEY", "key, for Z.ai's web_search_prime MCP."),
+    p(
+        "zaiEndpoint", "string", "\"global\"",
+        "`global` (api.z.ai) or `china` (open.bigmodel.cn). GLM Coding Plan keys are " +
+            "issued per site, so pick the matching endpoint.",
+        "global（api.z.ai）或 china（open.bigmodel.cn）。GLM Coding Plan 的 Key 按站点发放，" +
+            "请选对应端点。",
+        "global（api.z.ai）または china（open.bigmodel.cn）。GLM Coding Plan のキーはサイトごとに" +
+            "発行されるため、対応するエンドポイントを選んでください。",
     ),
     key("xaiApiKey", "xAI", "XAI_API_KEY"),
     p(

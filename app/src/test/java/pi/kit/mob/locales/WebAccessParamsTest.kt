@@ -135,6 +135,10 @@ class WebAccessParamsTest {
             "openaiUseProviderBaseUrl",
             "openaiUseAlphaSearch",
             "serplyApiKey",
+            // 0.35.0's two new explicit-only search providers.
+            "youApiKey",
+            "zaiApiKey",
+            "zaiEndpoint",
         ).forEach { path ->
             assertTrue("$path is documented", path in paths)
         }
