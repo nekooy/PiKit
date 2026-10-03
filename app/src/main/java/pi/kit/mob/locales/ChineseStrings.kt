@@ -479,6 +479,7 @@ internal object ChineseStrings : Strings {
             "接口地址必须是带主机名的 http(s) 地址，例如 https://relay.example.com/v1。" +
                 "localhost:11434 这种写法缺少协议头。"
         override val apiType = "API 协议"
+        override val apiTypeSubtitle = "选错会解析失败"
         override val apiTypeNote =
             "这个接口使用的线上协议。多数中转是 `openai-completions`；" +
                 "Anthropic 风格的网关选 `anthropic-messages`，" +

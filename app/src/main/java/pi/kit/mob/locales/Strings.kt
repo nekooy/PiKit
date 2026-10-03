@@ -942,12 +942,20 @@ interface Strings {
          *
          * The value labels are `CustomApi`'s identifiers and are not translated:
          * they are the strings in pi's `docs/models.md` and in the relay's own
-         * documentation, and the two have to match. [apiTypeNote] is the sentence
-         * that says which one to pick, drawn as a note under the row rather than
-         * as the row's subtitle — a subtitle is sized to, and three sentences
-         * there made one picker taller than the section around it.
+         * documentation, and the two have to match.
+         *
+         * [apiTypeSubtitle] is the one line the row itself carries, and it is the
+         * fact that decides the choice rather than a description of the row: what
+         * a wrong value costs. [apiTypeNote] is the paragraph under the row that
+         * says which one to pick — three sentences, and a subtitle sized to all
+         * three of them made one picker taller than the section around it, which
+         * is why the explanation is not all in the row.
          */
         val apiType: String
+
+        /** The protocol row's own line, under its title. Not for the picker's rows. */
+        val apiTypeSubtitle: String
+
         val apiTypeNote: String
 
         /**

@@ -530,6 +530,7 @@ internal object EnglishStrings : Strings {
             "The endpoint must be an http(s) URL with a host name, for example " +
                 "https://relay.example.com/v1. `localhost:11434` is missing its scheme."
         override val apiType = "API"
+        override val apiTypeSubtitle = "The wrong choice fails to parse"
         override val apiTypeNote =
             "The wire protocol this endpoint speaks. Most relays are " +
                 "`openai-completions`; pick `anthropic-messages` for an Anthropic-style " +
