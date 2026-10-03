@@ -44,9 +44,11 @@ import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Compress
@@ -146,11 +148,31 @@ import pi.kit.mob.ui.components.ReadOnlySheetRow
 import pi.kit.mob.ui.components.thinkingLevelFootnote
 import pi.kit.mob.ui.components.thinkingLevelOptions
 import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.components.StatusNotice
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** What a picked file is until it is actually sent. */
-internal data class PendingImage(val id: String, val uri: Uri, val name: String)
+/**
+ * What a picked file is until it is actually sent.
+ *
+ * [workspacePath] marks a file attachment: the bytes have been copied into a
+ * temporary folder and the AI is told that path instead of receiving the file
+ * as an image. That is the channel for *any* format — a PDF, a zip, a binary
+ * the model could never take as an image — and it is why the `+` sheet has a
+ * separate row for it: the image path only ever carried images.
+ *
+ * The copy lands in the cache rather than in the agent's workspace on purpose:
+ * an attachment is staging, not project content, and a workspace that fills up
+ * with every document the user ever mentioned is a workspace the agent has to
+ * wade through. The path is absolute and the agent runs as this app's uid, so
+ * the model can open it from wherever it is working.
+ */
+internal data class PendingImage(
+    val id: String,
+    val uri: Uri,
+    val name: String,
+    val workspacePath: String? = null,
+)
 
 /**
  * Everything the chat page owns that has to survive a tab switch.
@@ -286,6 +308,33 @@ internal fun ChatScreen(
         }
     }
 
+    /**
+     * Copies picked files into a temporary folder and attaches their *paths*.
+     *
+     * This is the `文件` row: any format at all. The image channel is images
+     * only, and a document stuffed into it becomes an attachment pi drops or
+     * misreads. The copy lands in the cache rather than the agent's workspace
+     * — an attachment is staging, not project content — and the prompt names
+     * the path when the message is sent, so the model opens it with its own
+     * tools.
+     */
+    fun acceptPaths(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        scope.launch {
+            val copied = withContext(Dispatchers.IO) {
+                uris.mapNotNull { uri -> copyToTemp(context, uri, text) }
+            }
+            val room = (MAX_ATTACHMENTS - composer.attachments.size).coerceAtLeast(0)
+            val taken = copied.take(room)
+            composer.notice = when {
+                copied.isEmpty() -> text.chat.addressCopyFailed
+                copied.size > taken.size -> text.chat.imageLimit(MAX_ATTACHMENTS)
+                else -> null
+            }
+            composer.attachments = composer.attachments + taken
+        }
+    }
+
     // The picker itself is the system's "recent images + any app that can supply
     // one" sheet on Android 13+, and a normal file picker below that, so the gallery
     // half needs no permission and no menu of its own.
@@ -293,12 +342,12 @@ internal fun ChatScreen(
         ActivityResultContracts.GetMultipleContents(),
     ) { uris -> accept(uris) }
 
-    // The same pipeline for a document, so the `+` menu's second entry needs no
-    // second code path: `prepareImage` only reads a display name and a size, and
-    // an image picked here is simply one that happens to decode as a thumbnail.
+    // The file row: any type at all. The result is a copy in a temp folder plus a
+    // path — never an image attachment. It is the only non-image channel, which
+    // is why the sheet no longer carries a second "file" row beside it.
     val pickFiles = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
-    ) { uris -> accept(uris) }
+    ) { uris -> acceptPaths(uris) }
 
     // ---- taking a photo ----------------------------------------------------
     //
@@ -708,10 +757,32 @@ internal fun ChatScreen(
                         session.runBash(prompt.removePrefix("!").trim())
                     } else {
                         scope.launch {
-                            val payload = withContext(Dispatchers.IO) {
-                                images.mapNotNull { encodeImage(context, it) }
+                            // Two channels: images go in as bytes, a file attachment
+                            // goes in as the path its copy already has under the
+                            // cache dir. The path is prepended to the prompt rather
+                            // than sent as an attachment — pi's wire format has
+                            // images only — and is worded so the model treats it as
+                            // something to open, not as prose about a file. Front of
+                            // the prompt rather than the tail: the model reads the
+                            // paths before the question that needs them, and the
+                            // bubble's extras chip is where the reader sees them.
+                            val (pathed, pictured) = images.partition { it.workspacePath != null }
+                            val pathNote = if (pathed.isEmpty()) {
+                                prompt
+                            } else {
+                                buildString {
+                                    append(text.chat.addressHeader)
+                                    pathed.forEach { append('\n').append(it.workspacePath) }
+                                    if (prompt.isNotBlank()) {
+                                        append("\n\n")
+                                        append(prompt)
+                                    }
+                                }
                             }
-                            session.sendPrompt(prompt, payload)
+                            val payload = withContext(Dispatchers.IO) {
+                                pictured.mapNotNull { encodeImage(context, it) }
+                            }
+                            session.sendPrompt(pathNote, payload)
                         }
                     }
                 },
@@ -3249,6 +3320,61 @@ private fun prepareImage(context: Context, uri: Uri, text: Strings): PendingImag
         name = queryName(context, uri) ?: text.chat.imageAttached,
     )
 }.getOrNull()
+
+/**
+ * Copies a picked file into a temporary folder and returns a path attachment.
+ *
+ * The cache directory, not the agent's workspace: an attachment is staging for
+ * one message, not project content, and a workspace that collected every
+ * document ever mentioned would be a workspace the agent has to wade through.
+ * The path is absolute and the agent runs as this app's uid, so the model can
+ * open it from wherever it is working. A name that is already taken gets a
+ * numeric suffix rather than overwriting: two documents called `report.pdf` in
+ * one prompt are two documents.
+ *
+ * Size is capped the same way an image is, because the copy is a real file on
+ * the app's private disk and the alternative is a pick of a 2 GB video filling
+ * it. Past the cap the file is not copied and the pick reports as a failure.
+ */
+private fun copyToTemp(
+    context: Context,
+    uri: Uri,
+    text: Strings,
+): PendingImage? = runCatching {
+    val declared = context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+    val size = if (declared >= 0) declared else measure(context, uri)
+    if (size <= 0 || size > MAX_IMAGE_BYTES) return@runCatching null
+    val name = queryName(context, uri) ?: text.chat.addressFallbackName
+    val dir = java.io.File(context.cacheDir, TEMP_ATTACHMENT_DIRECTORY).apply { mkdirs() }
+    val target = uniqueChild(dir, name)
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        target.outputStream().use { output -> input.copyTo(output) }
+    } ?: return@runCatching null
+    PendingImage(
+        id = uri.toString() + "#" + System.nanoTime(),
+        uri = uri,
+        name = target.name,
+        workspacePath = target.absolutePath,
+    )
+}.getOrNull()
+
+/** `report.pdf`, then `report-2.pdf`, then `report-3.pdf` — never an overwrite. */
+private fun uniqueChild(dir: java.io.File, name: String): java.io.File {
+    val direct = java.io.File(dir, name)
+    if (!direct.exists()) return direct
+    val dot = name.lastIndexOf('.')
+    val stem = if (dot > 0) name.substring(0, dot) else name
+    val ext = if (dot > 0) name.substring(dot) else ""
+    var n = 2
+    while (true) {
+        val candidate = java.io.File(dir, "$stem-$n$ext")
+        if (!candidate.exists()) return candidate
+        n++
+    }
+}
+
+/** Where file attachments land: under the cache dir, which the OS may prune. */
+private const val TEMP_ATTACHMENT_DIRECTORY = "pikit-attachments"
 
 /** How much of a stream can be read, when the provider does not say. */
 private fun measure(context: Context, uri: Uri): Long = runCatching {
