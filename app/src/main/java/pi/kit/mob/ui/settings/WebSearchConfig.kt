@@ -17,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -380,7 +382,9 @@ private fun WebSearchValueSheet(
         Text(
             text = text.settings.searchConfigValueTitle(param.path),
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+            // SemiBold, the weight `SheetScaffold` gives every sheet title.
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
         )
         Text(
             text = param.note(language),
@@ -412,7 +416,8 @@ private fun WebSearchValueSheet(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                // 12/4, the inset every other value field uses (was 12/6).
+                .padding(horizontal = 12.dp, vertical = 4.dp),
         )
 
         Text(
@@ -433,7 +438,7 @@ private fun WebSearchValueSheet(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = host::dismiss) { Text(text.common.cancel) }
+            OutlinedButton(onClick = host::dismiss) { Text(text.common.cancel) }
             Button(
                 onClick = {
                     val parsed = parseValue(param, draft)

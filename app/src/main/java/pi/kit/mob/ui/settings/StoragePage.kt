@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -565,7 +568,7 @@ private fun FolderRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -582,11 +585,16 @@ private fun FolderRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
                 color = if (enabled) {
                     MaterialTheme.colorScheme.onSurface
                 } else {
                     MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
                 },
+                // Two lines, the budget `SettingsRow` gives a title: a long
+                // folder name wraps rather than being cut mid-glyph.
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = path,
@@ -623,19 +631,37 @@ private fun PickerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // The same floor as `PickerSheetRow`, which is what the row below claims
+            // and did not have: 10dp above and below a one-line label is 44dp, under
+            // the 48dp a target needs and 8dp shorter than the two navigation rows
+            // beside it — so every plain folder in the tree was the small row in its
+            // own list.
+            .heightIn(min = PICKER_ROW_MIN_HEIGHT)
             .clip(MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            // 12h/10v and a 12dp gap, the same geometry as `PickerSheetRow`: both
+            // are tappable rows in the app's one modal layer, and this one was
+            // 12v/14gap against 10v/12gap there.
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         Icon(
             imageVector = leading,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                // Two lines, like every other row's primary text. Uncapped, a
+                // folder name long enough to wrap set the height of every row
+                // around it — this list is a tree of directories, and a name with
+                // no spaces in it wraps wherever the width runs out.
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (!description.isNullOrBlank()) {
                 Text(
                     description,

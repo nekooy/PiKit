@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -138,8 +139,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 StatusLine(status = status, kind = BackupStatus.Kind.EXPORT)
                 if (selection.isEmpty()) {
                     SettingsNote(
-                        text.settings.backupNothingSelected,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        text.settings.backupNothingSelected
                     )
                 }
             }
@@ -175,8 +175,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                     if (available.isEmpty()) {
                         SettingsDivider()
                         SettingsNote(
-                            text.settings.backupReviewEmpty,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            text.settings.backupReviewEmpty
                         )
                     } else {
                         SettingsDivider()
@@ -209,8 +208,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                     )
                     StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
                     SettingsNote(
-                        text.settings.backupImportNote,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        text.settings.backupImportNote
                     )
                 }
             }
@@ -271,7 +269,10 @@ private fun ActionRow(
     ) {
         Button(onClick = onClick, enabled = enabled) { Text(label) }
         if (onDismiss != null) {
-            TextButton(onClick = onDismiss) { Text(dismissLabel) }
+            // Outlined, not a bare TextButton: the secondary beside a primary in
+            // every action row carries the same edge the primary does, so the two
+            // read as a pair rather than as a button and a link.
+            OutlinedButton(onClick = onDismiss) { Text(dismissLabel) }
         }
     }
 }
@@ -324,15 +325,13 @@ private fun StatusLine(status: BackupStatus, kind: BackupStatus.Kind) {
         }
     }
 
-    Text(
+    SettingsNote(
         text = message,
-        style = MaterialTheme.typography.bodySmall,
         color = when (tone) {
             Tone.OK -> MaterialTheme.colorScheme.primary
             Tone.ERROR -> MaterialTheme.colorScheme.error
             Tone.PROGRESS -> MaterialTheme.colorScheme.onSurfaceVariant
         },
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
 }
 

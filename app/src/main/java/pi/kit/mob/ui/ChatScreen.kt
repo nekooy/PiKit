@@ -70,6 +70,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -3479,7 +3480,7 @@ private fun ShellCommandSheet(
             ) {
                 Text(text.common.ok)
             }
-            TextButton(onClick = { host.dismiss() }) { Text(text.common.cancel) }
+            OutlinedButton(onClick = { host.dismiss() }) { Text(text.common.cancel) }
         }
     }
 }

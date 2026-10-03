@@ -199,11 +199,6 @@ fun SettingsRow(
                         // the first and last row of a card it painted square corners outside
                         // the rounded ones, which is the "no rounded corners on the tap
                         // feedback" a reader reported on the model page's two number rows.
-                        // Every row that is tappable had it; the two numbers were simply the
-                        // ones with nothing else on them to look at.
-                        //
-                        // The radius is the section's own shape rather than a second number,
-                        // so a theme change moves both.
                         Modifier
                             .clip(MaterialTheme.shapes.medium)
                             .clickable(enabled = enabled, onClick = onClick)
@@ -260,11 +255,12 @@ fun SettingsRow(
                         else MaterialTheme.colorScheme.onSurfaceVariant
                         ).copy(alpha = contentAlpha),
                     fontFamily = if (monospaceValue) FontFamily.Monospace else null,
-                    // End-aligned inside the cap, so a short value still sits on
-                    // the row's trailing edge exactly where it did before the cap
-                    // existed and the whole column keeps one right margin.
                     textAlign = TextAlign.End,
-                    maxLines = if (monospaceValue) 3 else 2,
+                    // Two lines: a machine string in the value column — a
+                    // revision, a repository path — needs the second line, and
+                    // one line cut `x86_64-440db5bca1496c14` into something that
+                    // could not be checked against a bug report.
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .widthIn(max = valueCap)
@@ -359,13 +355,32 @@ fun SettingsBody(
     )
 }
 
-/** A paragraph of explanation, for the pages that need one. */@Composable
-fun SettingsNote(text: String, modifier: Modifier = Modifier) {
+/**
+ * A paragraph of explanation, for the pages that need one.
+ *
+ * The one note voice in the settings: `bodySmall` in `onSurfaceVariant`, inset
+ * 16dp horizontally so its text lines up with a [SettingsRow]'s title whether it
+ * sits inside a card or directly on the page body. Call sites add no horizontal
+ * padding of their own — that was the drift (4dp here, +12dp at half the call
+ * sites, +16dp at two more), and it put the same sentence at three different
+ * left edges on one screen.
+ *
+ * [color] is for a note that is a *result* rather than an explanation — a save
+ * that landed, a check that failed — so the status lines on the maintenance and
+ * web-config pages can be this component instead of a bare `Text` with its own
+ * padding.
+ */
+@Composable
+fun SettingsNote(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(horizontal = 4.dp),
+        color = color,
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
 }
 
