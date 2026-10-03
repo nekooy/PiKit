@@ -896,6 +896,8 @@ internal object EnglishStrings : Strings {
             "xcrawl" -> "Needs an XCrawl key"
             "brightdata" -> "Needs a Bright Data key and a zone name"
             "serpdive" -> "Needs a SERPdive key; a retrieval depth can be chosen"
+            "you" -> "You.com index; needs a key, and is never chosen automatically"
+            "zai" -> "Z.ai web_search_prime MCP; needs a key and an endpoint (global or China)"
             else -> ""
         }
 

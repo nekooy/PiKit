@@ -836,6 +836,8 @@ internal object JapaneseStrings : Strings {
             "xcrawl" -> "XCrawl のキーが必要です"
             "brightdata" -> "Bright Data のキーと Zone 名が必要です"
             "serpdive" -> "SERPdive のキーが必要です。検索の深さも選べます"
+            "you" -> "You.com インデックス。キーが必要で、自動選択はされません"
+            "zai" -> "Z.ai web_search_prime MCP。キーとエンドポイント（グローバルまたは中国）が必要です"
             else -> ""
         }
 
