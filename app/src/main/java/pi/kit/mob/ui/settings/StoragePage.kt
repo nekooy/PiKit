@@ -318,7 +318,7 @@ fun StoragePage(
                 SettingsSection(text.settings.storageRevokeAll) {
                     SettingsRow(
                         title = text.settings.storageRevokeAll,
-                        subtitle = text.settings.storageRevokeAllBody,
+                        subtitle = text.settings.storageRevokeAllSubtitle,
                         icon = Icons.Filled.DeleteForever,
                         danger = true,
                         onClick = { confirmRevoke = true },

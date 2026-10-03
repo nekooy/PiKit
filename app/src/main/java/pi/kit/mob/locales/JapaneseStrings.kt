@@ -279,12 +279,11 @@ internal object JapaneseStrings : Strings {
         override val language = "言語"
         override val languageSubtitle = "インターフェースの表示言語"
         override val personalization = "パーソナライズ"
-        override val personalizationSubtitle = "起動時の挙動・テーマ・アプリアイコン"
+        override val personalizationSubtitle = "テーマ・起動・アイコン"
         override val personalizationConversation = "会話"
         override val personalizationAppearance = "外観"
         override val openNewOnLaunch = "起動時に新しい会話を開く"
-        override val openNewOnLaunchSubtitle =
-            "アプリを開くと新しい会話になります。オフにすると前回の会話を続けます"
+        override val openNewOnLaunchSubtitle = "起動時に新規会話。オフで前回を続行"
         override val theme = "テーマ"
         override val themeSubtitle = "ライト・ダーク・システムに合わせる"
         override val themeSystem = "システムに合わせる"
@@ -313,7 +312,7 @@ internal object JapaneseStrings : Strings {
         override val notInstalled = "未インストール"
         override val notFound = "同梱の実行環境に見つかりません"
         override val storageTitle = "共有ストレージ"
-        override val storageSubtitle = "エージェントに許可するフォルダーを選びます"
+        override val storageSubtitle = "許可するフォルダー"
         override val storageGrant = "許可する"
         override val storageMissing = "未許可"
         override val storageNote =
@@ -334,8 +333,7 @@ internal object JapaneseStrings : Strings {
         override val storageAskLater = "あとで"
 
         override val storagePageTitle = "共有ストレージ"
-        override val storagePageSubtitle =
-            "オンにしたフォルダーだけをエージェントに許可し、それ以外のアクセスは PiKit が拒否します。"
+        override val storagePageSubtitle = "オンにしたフォルダーのみ"
         override val storageNoAccessBody =
             "エージェントは自身のホームディレクトリの中だけで読み書きできます。端末のファイルには" +
                 "一切触れず、参照もできません。"
@@ -370,6 +368,7 @@ internal object JapaneseStrings : Strings {
         override val storageCustomPickUse = "このフォルダーを使う"
         override val storageCustomPickUp = "親フォルダー"
         override val storageRevokeAll = "すべてのアクセスを解除"
+        override val storageRevokeAllSubtitle = "環境のフォルダーリンクをすべて外します"
         override val storageRevokeAllTitle = "すべてのアクセスを解除しますか？"
         override val storageRevokeAllBody =
             "エージェントはホームディレクトリの中で作業を続けます。端末上のファイルは削除されません" +
@@ -443,7 +442,7 @@ internal object JapaneseStrings : Strings {
         override val agentContextRestoreConfirm = "戻す"
 
         override val profilesTitle = "モデルとプロバイダー"
-        override val profilesSubtitle = "使用中のプロファイルでエージェントが起動します"
+        override val profilesSubtitle = "起動時に使う設定"
         override val savedProfiles = "保存済みのプロファイル"
         override val active = "使用中"
         override val editProfile = "プロファイルを編集"
@@ -468,13 +467,13 @@ internal object JapaneseStrings : Strings {
         override val provider = "プロバイダー"
         override val providerSubtitle = "このプロファイルのプロバイダーを選択します"
         override val providerPickSearch = "プロバイダーを検索"
-        override fun keyPassedAs(envVar: String) = "キーは $envVar として pi に渡されます"
+        override fun keyPassedAs(envVar: String) = "環境変数 $envVar"
         override val notChosen = "未選択"
         override val apiKey = "API キー"
         override val modelId = "モデル ID"
         override val modelIdPlaceholder = "例：deepseek-chat"
         override val models = "モデル"
-        override val modelsSubtitle = "モデルをタップすると、エージェントはそれで答えます"
+        override val modelsSubtitle = "回答に使うモデルをタップ"
         override val addModel = "モデルを追加"
         override val removeModel = "モデルを削除"
         override val removeModelTitle = "このモデルを削除しますか？"
@@ -521,9 +520,7 @@ internal object JapaneseStrings : Strings {
                 "一覧を提供しない場合は pi のカタログにフォールバックします。ID を手入力もできます。"
         override fun modelCount(count: Int) = "$count 個のモデル"
         override val fromProvider = "プロバイダーが返した一覧です。このキーで使用できます。"
-        override val fromCatalog =
-            "pi のカタログの内容です。pi はキーとの照合を行わないため、最初のプロンプトで" +
-                "拒否される可能性があります。"
+        override val fromCatalog = "pi カタログの内容。キー未照合"
         override val save = "保存"
         override val cancel = "キャンセル"
         override val needProvider = "保存する前にプロバイダーを選択してください。"
@@ -601,10 +598,7 @@ internal object JapaneseStrings : Strings {
                 "ターミナルタブで起動した pi も同じモデルを使います。"
 
         override val modelBehaviour = "思考"
-        override val thinkingSubtitle =
-            "回答前にモデルへ求める推論の量です。変更はすぐ反映され、再起動は不要です。" +
-                "選べるレベルは使用中のモデルによります。モデルにないレベルを頼むと、" +
-                "pi がより近い上位のレベルに置き換えます。"
+        override val thinkingSubtitle = "回答前の推論量。すぐ反映されます"
         override val workspace = "ワークスペース"
         override fun workingDirSubtitle(workspace: String) = "空欄の場合、エージェントは $workspace で作業します"
         override val workingDirNote =
@@ -653,9 +647,7 @@ internal object JapaneseStrings : Strings {
         override val backupCategoryExportsSubtitle =
             "/export が \$HOME/export に書き出した .html"
         override val backupApiKeys = "API キーを含める"
-        override val backupApiKeysSubtitle =
-            "オフにすると、プロファイルと検索設定からキーを抜き取ります。このファイルを他の人に" +
-                "渡すときはオフにしてください。"
+        override val backupApiKeysSubtitle = "オフでキーをアーカイブから除外"
         override val backupExport = "バックアップを作成"
         override fun backupExportRunning(entries: Int) = "まとめています… $entries 件"
         override fun backupExportDone(name: String, entries: Int) =
@@ -690,7 +682,7 @@ internal object JapaneseStrings : Strings {
         override val installedImageSubtitle = "APK から展開された実行環境のリビジョン"
         override val bundledTools = "同梱ツール"
         override val runtimePrefixNote = "ここで入れたパッケージは自動的にこのプレフィックスへ再配置されます。"
-        override val maintenanceSubtitle = "モデル一覧と、インストール済みパッケージの修復"
+        override val maintenanceSubtitle = "モデル一覧とパッケージ修復"
         override val piAgent = "Pi エージェント"
         override val installedVersion = "インストール済みバージョン"
         override val installedVersionSubtitle = "実行環境内のパッケージから読み取ります"
@@ -848,8 +840,7 @@ internal object JapaneseStrings : Strings {
                 "ファイルにある残りのキーです。追加は既存の設定を置き換えず、有効な設定の上に" +
                 "1 項目を足します。"
         override val searchConfigAdd = "設定項目を追加"
-        override val searchConfigAddBody =
-            "拡張が読むキーを 1 つ選び、値を入れてファイルに追加します。"
+        override val searchConfigAddBody = "キーを選び値を入力"
         override val searchConfigEmpty = "まだ何も追加していません。上のコントロールが設定のすべてです。"
         override val searchConfigPickTitle = "拡張が読む項目"
         override val searchConfigPickSearch = "項目を絞り込む"
@@ -892,8 +883,7 @@ internal object JapaneseStrings : Strings {
         override val searchConfigSave = "保存"
         override val searchConfigRevert = "変更を破棄"
         override val searchConfigRestore = "既定に戻す"
-        override val searchConfigRestoreSubtitle =
-            "web-search.json をインストール直後の内容に戻します。上の設定はすべてリセットされます。"
+        override val searchConfigRestoreSubtitle = "インストール時既定に戻す"
         override val searchConfigRestoreTitle = "既定のファイルに戻しますか？"
         override val searchConfigRestoreBody =
             "web-search.json をインストール直後の内容で置き換えます。入力した API キーと設定した項目は" +

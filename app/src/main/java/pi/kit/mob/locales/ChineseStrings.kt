@@ -283,7 +283,7 @@ internal object ChineseStrings : Strings {
         override val personalizationConversation = "对话"
         override val personalizationAppearance = "外观"
         override val openNewOnLaunch = "冷启动时打开新对话"
-        override val openNewOnLaunchSubtitle = "打开 App 时开始新对话；关闭则回到上次的对话"
+        override val openNewOnLaunchSubtitle = "打开时开新对话；关闭则续上次"
         override val theme = "主题"
         override val themeSubtitle = "浅色、深色或跟随系统"
         override val themeSystem = "跟随系统"
@@ -311,7 +311,7 @@ internal object ChineseStrings : Strings {
         override val notInstalled = "未安装"
         override val notFound = "在内置运行环境中未找到"
         override val storageTitle = "手机存储"
-        override val storageSubtitle = "选择允许 Agent 访问哪些文件夹"
+        override val storageSubtitle = "允许 Agent 访问的文件夹"
         override val storageGrant = "去授权"
         override val storageMissing = "未授权"
         override val storageNote =
@@ -330,7 +330,7 @@ internal object ChineseStrings : Strings {
         override val storageAskLater = "稍后再说"
 
         override val storagePageTitle = "手机存储"
-        override val storagePageSubtitle = "Agent 只能访问你打开的文件夹，其它访问会被 PiKit 拒绝。"
+        override val storagePageSubtitle = "仅可访问已打开的文件夹"
         override val storageNoAccessBody =
             "Agent 只能在它自己的主目录里读写。你的文件不会被碰，它也完全看不到。"
         override val storageAccessLevel = "访问范围"
@@ -363,6 +363,7 @@ internal object ChineseStrings : Strings {
         override val storageCustomPickUp = "上一级目录"
         override val storageRevokeAll = "收回全部权限"
         override val storageRevokeAllTitle = "收回全部权限？"
+        override val storageRevokeAllSubtitle = "取消环境里的全部文件夹链接"
         override val storageRevokeAllBody =
             "Agent 会继续在自己的主目录里工作。手机上的文件不会被删除——只是取消了环境里的链接。"
         override val storageGrantPromptTitle = "需要 Android 权限"
@@ -426,7 +427,7 @@ internal object ChineseStrings : Strings {
         override val agentContextRestoreConfirm = "恢复"
 
         override val profilesTitle = "模型与供应商"
-        override val profilesSubtitle = "当前配置就是 Agent 启动时使用的配置"
+        override val profilesSubtitle = "Agent 启动时使用的配置"
         override val savedProfiles = "已保存的配置"
         override val active = "当前使用"
         override val editProfile = "编辑配置"
@@ -449,13 +450,13 @@ internal object ChineseStrings : Strings {
         override val provider = "供应商"
         override val providerSubtitle = "选择该配置对应的供应商"
         override val providerPickSearch = "搜索供应商"
-        override fun keyPassedAs(envVar: String) = "Key 会通过 $envVar 传给 pi"
+        override fun keyPassedAs(envVar: String) = "环境变量 $envVar"
         override val notChosen = "未选择"
         override val apiKey = "API Key"
         override val modelId = "模型 ID"
         override val modelIdPlaceholder = "例如：deepseek-chat"
         override val models = "模型"
-        override val modelsSubtitle = "点击某个模型，Agent 之后就用它回答"
+        override val modelsSubtitle = "点选 Agent 使用的模型"
         override val addModel = "添加模型"
         override val removeModel = "移除模型"
         override val removeModelTitle = "移除这个模型？"
@@ -494,12 +495,11 @@ internal object ChineseStrings : Strings {
                 "pi 自带的模型目录。你也可以手动输入模型 ID。"
         override fun modelCount(count: Int) = "$count 个模型"
         override val fromProvider = "由供应商直接返回，这个 Key 可以使用它们。"
-        override val fromCatalog =
-            "来自 pi 的模型目录。pi 不会用你的 Key 校验它们，因此其中某个可能在第一次对话时被拒绝。"
+        override val fromCatalog = "来自 pi 的目录；未用你的 Key 校验"
         override val save = "保存"
         override val cancel = "取消"
         override val needProvider = "保存前请先选择供应商。"
-        override val needProviderSubtitle = "请先选择供应商——没有供应商，模型 id 无从判断"
+        override val needProviderSubtitle = "先选供应商，模型 id 才有意义"
         override val needModel = "保存前必须填写模型 ID。"
 
         override fun discoveryProblem(problem: DiscoveryProblem): String = when (problem) {
@@ -568,9 +568,8 @@ internal object ChineseStrings : Strings {
                 "pi 用的也是同一个模型。"
 
         override val modelBehaviour = "思考"
-        override val thinkingSubtitle =
-            "要求模型回答前投入多少推理。改完立即生效，不用重启。可选等级取决于当前模型：" +
-                "模型没有的等级，pi 会自动往上取最接近的一档。"
+        // Row subtitle stays one short line; the rules are in the picker's footnote.
+        override val thinkingSubtitle = "回答前的推理投入，改完即生效"
         override val workspace = "工作区"
         override fun workingDirSubtitle(workspace: String) = "留空时，Agent 在 $workspace 中工作"
         override val workingDirNote =
@@ -616,9 +615,7 @@ internal object ChineseStrings : Strings {
         override val backupCategoryExportsSubtitle =
             "\$HOME/export 下由 /export 生成的 HTML 文件"
         override val backupApiKeys = "包含 API Key"
-        override val backupApiKeysSubtitle =
-            "不勾选时会从备份包里去掉模型配置和搜索选项中的 Key。想把这个文件发给别人" +
-                "排查问题时关掉它。"
+        override val backupApiKeysSubtitle = "关闭后备份包不含任何 Key"
         override val backupExport = "导出备份包"
         override fun backupExportRunning(entries: Int) = "正在打包…已写入 $entries 项"
         override fun backupExportDone(name: String, entries: Int) =
@@ -799,7 +796,7 @@ internal object ChineseStrings : Strings {
                 "上面的控件会写它们自己的键；下面的列表是文件里其余的键。添加不会覆盖任何东西，" +
                 "而是在现有生效配置的基础上加一项。"
         override val searchConfigAdd = "添加配置项"
-        override val searchConfigAddBody = "从扩展能读的键里选一项，填好值加进配置文件。"
+        override val searchConfigAddBody = "选一项键名并填入值"
         override val searchConfigEmpty = "还没有添加任何配置项。上面的控件就是全部配置。"
         override val searchConfigPickTitle = "扩展可读的配置项"
         override val searchConfigPickSearch = "筛选配置项"
@@ -840,8 +837,7 @@ internal object ChineseStrings : Strings {
         override val searchConfigSave = "保存"
         override val searchConfigRevert = "撤销修改"
         override val searchConfigRestore = "恢复默认"
-        override val searchConfigRestoreSubtitle =
-            "把 web-search.json 换回刚安装时的内容：上面所有配置都会重置。"
+        override val searchConfigRestoreSubtitle = "换回安装时的默认配置"
         override val searchConfigRestoreTitle = "恢复默认配置文件？"
         override val searchConfigRestoreBody =
             "会用刚安装时的内容替换 web-search.json：你填过的 API Key 和所有自定义项都会从文件里消失，" +

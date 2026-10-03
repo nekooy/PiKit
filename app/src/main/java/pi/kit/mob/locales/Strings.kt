@@ -763,6 +763,10 @@ interface Strings {
         val storageCustomPickUp: String
         val storageRevokeAll: String
         val storageRevokeAllTitle: String
+
+        /** One-line row caption; [storageRevokeAllBody] is the confirm dialog's text. */
+        val storageRevokeAllSubtitle: String
+
         val storageRevokeAllBody: String
         val storageGrantPromptTitle: String
         val storageGrantPromptBody: String

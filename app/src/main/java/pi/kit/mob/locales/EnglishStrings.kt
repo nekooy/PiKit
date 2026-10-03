@@ -294,18 +294,17 @@ internal object EnglishStrings : Strings {
         override val updateAndRepair = "Maintenance & repair"
         override val updateAndRepairSubtitle = "Model list, repair packages"
         override val userManual = "User manual"
-        override val userManualSubtitle = "How this app works, start to finish"
+        override val userManualSubtitle = "How this app works"
         override val about = "About PiKit"
         override val aboutSubtitle = "Version, licence and app updates"
         override val language = "Language"
         override val languageSubtitle = "The language of the interface"
         override val personalization = "Personalization"
-        override val personalizationSubtitle = "Launch behaviour, theme and app icon"
+        override val personalizationSubtitle = "Theme, launch and icon"
         override val personalizationConversation = "Conversation"
         override val personalizationAppearance = "Appearance"
         override val openNewOnLaunch = "Open a new conversation on launch"
-        override val openNewOnLaunchSubtitle =
-            "Start fresh when the app opens; turn off to continue where you left off"
+        override val openNewOnLaunchSubtitle = "New chat on open; off resumes"
         override val theme = "Theme"
         override val themeSubtitle = "Light, dark, or follow the system"
         override val themeSystem = "Follow system"
@@ -335,7 +334,7 @@ internal object EnglishStrings : Strings {
         override val notInstalled = "not installed"
         override val notFound = "Not found in the bundled runtime"
         override val storageTitle = "Shared storage"
-        override val storageSubtitle = "Choose which of your folders the agent may reach"
+        override val storageSubtitle = "Folders the agent may access"
         override val storageGrant = "Grant"
         override val storageMissing = "Not granted"
         override val storageNote =
@@ -357,8 +356,7 @@ internal object EnglishStrings : Strings {
         override val storageAskLater = "Not now"
 
         override val storagePageTitle = "Shared storage"
-        override val storagePageSubtitle =
-            "The agent may reach the folders you switch on; PiKit refuses the rest."
+        override val storagePageSubtitle = "Only switched-on folders"
         override val storageNoAccessBody =
             "The agent can read and write only inside its own home directory. Your files are " +
                 "untouched, and it cannot see them at all."
@@ -394,6 +392,7 @@ internal object EnglishStrings : Strings {
         override val storageCustomPickUp = "Parent folder"
         override val storageRevokeAll = "Remove all access"
         override val storageRevokeAllTitle = "Remove all access?"
+        override val storageRevokeAllSubtitle = "Unlink every folder from the environment"
         override val storageRevokeAllBody =
             "The agent will keep working inside its home directory. Nothing on your phone is " +
                 "deleted \u2014 the folders are only unlinked from the environment."
@@ -470,7 +469,7 @@ internal object EnglishStrings : Strings {
         override val agentContextRestoreConfirm = "Restore"
 
         override val profilesTitle = "Model & provider"
-        override val profilesSubtitle = "The active profile is what the agent is launched with"
+        override val profilesSubtitle = "What the agent starts with"
         override val savedProfiles = "Saved profiles"
         override val active = "Active"
         override val editProfile = "Edit profile"
@@ -495,14 +494,13 @@ internal object EnglishStrings : Strings {
         override val provider = "Provider"
         override val providerSubtitle = "Choose the provider this profile is for"
         override val providerPickSearch = "Search providers"
-        override fun keyPassedAs(envVar: String) = "The key is passed to pi as $envVar"
+        override fun keyPassedAs(envVar: String) = "Env var $envVar"
         override val notChosen = "Not chosen"
         override val apiKey = "API key"
         override val modelId = "Model id"
         override val modelIdPlaceholder = "e.g. deepseek-chat"
         override val models = "Models"
-        override val modelsSubtitle =
-            "Tap a model to make it the one the agent answers with"
+        override val modelsSubtitle = "Tap a model to use it"
         override val addModel = "Add model"
         override val removeModel = "Remove model"
         override val removeModelTitle = "Remove this model?"
@@ -553,9 +551,7 @@ internal object EnglishStrings : Strings {
                 "an id by hand."
         override fun modelCount(count: Int) = "$count models"
         override val fromProvider = "Reported by the provider, so this key can use them."
-        override val fromCatalog =
-            "From pi's catalog. pi does not check them against your key, so one of these " +
-                "may be rejected on the first prompt."
+        override val fromCatalog = "From pi's catalog; not checked against your key"
         override val save = "Save"
         override val cancel = "Cancel"
         override val needProvider = "Choose a provider before saving."
@@ -638,10 +634,7 @@ internal object EnglishStrings : Strings {
                 "pi you start in the Terminal tab answers with the same model."
 
         override val modelBehaviour = "Thinking"
-        override val thinkingSubtitle =
-            "How hard the model is asked to reason before it answers. Applied at once, " +
-                "with no restart. The picker offers the levels the chosen model has: pi " +
-                "maps a level it does not have onto the next one it does."
+        override val thinkingSubtitle = "Reasoning effort; applies at once"
         override val workspace = "Workspace"
         override fun workingDirSubtitle(workspace: String) = "Left blank, the agent works in $workspace"
         override val workingDirNote =
@@ -693,9 +686,7 @@ internal object EnglishStrings : Strings {
         override val backupCategoryExportsSubtitle =
             "The .html files /export wrote into \$HOME/export"
         override val backupApiKeys = "Include API keys"
-        override val backupApiKeysSubtitle =
-            "Off strips the keys out of the model profiles and the search options. Turn it " +
-                "off when the file is going to someone else."
+        override val backupApiKeysSubtitle = "Off strips keys from the archive"
         override val backupExport = "Export archive"
         override fun backupExportRunning(entries: Int) = "Packing… $entries entries written"
         override fun backupExportDone(name: String, entries: Int) =
@@ -735,7 +726,7 @@ internal object EnglishStrings : Strings {
         override val bundledTools = "Bundled tools"
         override val runtimePrefixNote =
             "Packages installed here are relocated to this prefix automatically."
-        override val maintenanceSubtitle = "Model list and installed packages"
+        override val maintenanceSubtitle = "Model list and package repair"
         override val piAgent = "Pi agent"
         override val installedVersion = "Installed version"
         override val installedVersionSubtitle = "Read from the package inside the runtime"
@@ -908,8 +899,7 @@ internal object EnglishStrings : Strings {
                 "is every other key the file holds. Adding one does not replace anything — " +
                 "it layers a new key on top of what is already in effect."
         override val searchConfigAdd = "Add an option"
-        override val searchConfigAddBody =
-            "Pick one of the keys the extension reads and give it a value."
+        override val searchConfigAddBody = "Pick a key and give it a value"
         override val searchConfigEmpty =
             "Nothing added yet. The controls above are the whole configuration."
         override val searchConfigPickTitle = "Options the extension reads"
@@ -959,8 +949,7 @@ internal object EnglishStrings : Strings {
         override val searchConfigSave = "Save"
         override val searchConfigRevert = "Discard changes"
         override val searchConfigRestore = "Restore defaults"
-        override val searchConfigRestoreSubtitle =
-            "Puts web-search.json back to what a fresh install has; every option above is reset."
+        override val searchConfigRestoreSubtitle = "Back to the install defaults"
         override val searchConfigRestoreTitle = "Restore the default file?"
         override val searchConfigRestoreBody =
             "This replaces web-search.json with the document a fresh install has. Every " +
