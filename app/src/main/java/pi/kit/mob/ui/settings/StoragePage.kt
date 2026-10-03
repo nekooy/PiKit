@@ -117,7 +117,10 @@ fun StoragePage(
     // Collected rather than read once: the switch is the store's value, so a change
     // made anywhere reaches the row.
     val settings by session.settingsStore.settings.collectAsState()
-    val guardInstalled = remember(session) { SafetyGuard.isInstalled(session.env) }
+    // The guard is a file under `$PREFIX`; reinstalling the runtime (or a restore)
+    // can put it there while this page is open. Same lifecycle refresh as `granted`
+    // below, so the switch is never offered against a stale install answer.
+    var guardInstalled by remember { mutableStateOf(SafetyGuard.isInstalled(session.env)) }
 
     var policy by remember { mutableStateOf(session.storagePolicy()) }
     var granted by remember { mutableStateOf(StorageAccess.isGranted()) }
@@ -139,12 +142,16 @@ fun StoragePage(
     // "All files access" has no result callback — the only signal that the user
     // came back from the system page is the lifecycle. Re-reading here also
     // rebuilds the farm, because the links can only be created once the grant
-    // exists.
+    // exists. The policy and the guard ride along: both can change while the
+    // page is up (a restore, a runtime reinstall), and a row that kept the
+    // answer it was composed with is the "needs a restart" class of bug.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 granted = StorageAccess.isGranted()
+                policy = session.storagePolicy()
+                guardInstalled = SafetyGuard.isInstalled(session.env)
                 if (granted) session.syncStorageLinks()
             }
         }
