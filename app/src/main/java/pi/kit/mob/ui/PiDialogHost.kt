@@ -60,6 +60,10 @@ fun PiDialogHost(
                         value = text,
                         onValueChange = { text = it },
                         placeholder = placeholder?.let { { Text(it) } },
+                        // One line, like every other value entry in the app: a
+                        // multi-line box for a one-line answer grows as the user
+                        // types and is the only field in the app that does.
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -75,6 +79,8 @@ fun PiDialogHost(
             }
         },
         dismissButton = {
+            // TextButton, like the confirm beside it: in a dialog both actions
+            // are text buttons, and a bordered one reads as a different component.
             TextButton(onClick = onCancel) { Text(text0.common.cancel) }
         },
     )
