@@ -119,7 +119,11 @@ fun PageHeader(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = backContentDescription,
-                            modifier = Modifier.size(22.dp),
+                            // 24dp, Material's own icon size — the same figure every
+                            // action glyph in this band already draws at. It used to
+                            // be 22dp, so the back arrow was a shade smaller than the
+                            // three icons opposite it in the same row.
+                            modifier = Modifier.size(24.dp),
                         )
                     }
                 }

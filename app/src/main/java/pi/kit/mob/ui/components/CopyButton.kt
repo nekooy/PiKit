@@ -74,9 +74,10 @@ internal fun CopyButton(
             }
         },
         // 28dp rather than Material's 48dp: this sits in a row of 12sp text, under a message or
-        // across a code block's header, and a full-size disc would be a second bubble. The touch
-        // target is not 28dp — `IconButton` keeps the 48dp minimum around it, which is what the
-        // message meta row was already relying on.
+        // across a code block's header, and a full-size disc would be a second bubble. Note that
+        // `Modifier.size` *replaces* IconButton's 48dp minimum rather than sitting inside it, so
+        // the drawn box is also the touch target; the meta row compensates by pulling the row out
+        // to the glyph's ink (see `CopyButtonInkInset`).
         modifier = modifier.size(COPY_BUTTON_SIZE),
     ) {
         Icon(

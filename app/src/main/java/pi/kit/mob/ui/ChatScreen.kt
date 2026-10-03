@@ -1105,12 +1105,17 @@ private fun ChatPage(
                         // button is drawn over the list, so it has to sit inside the
                         // list's content margin rather than on the edge itself.
                         .padding(end = 10.dp, bottom = 10.dp)
-                        .size(38.dp),
+                        // 40dp, the same drawn size as the composer's icon buttons
+                        // opposite it in the page's thumb zone. It was 38dp, which
+                        // made two "round action over the transcript" controls two
+                        // different sizes.
+                        .size(40.dp),
                 ) {
                     Icon(
                         Icons.Filled.ArrowDownward,
                         contentDescription = text.chat.jumpToLatest,
-                        modifier = Modifier.size(18.dp),
+                        // 20dp, matching the send/stop glyphs in the composer.
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }
@@ -2385,7 +2390,7 @@ private fun Composer(
         else -> text.chat.placeholder
     }
 
-    val shape = RoundedCornerShape(22.dp)
+    val shape = MaterialTheme.shapes.medium
 
     // Read here rather than taken as a parameter: it is only this card's own
     // dismissal that needs it, and the page's `focusManager` is the same object
@@ -2469,7 +2474,10 @@ private fun Composer(
                             Icon(
                                 PiIcons.Thinking,
                                 contentDescription = null,
-                                modifier = Modifier.size(15.dp),
+                                // 14dp, the same small-mark size the transcript's
+                                // tool ticks and the image chip use. Chip glyphs
+                                // were 15dp, a hair larger than every other mark.
+                                modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
@@ -2498,7 +2506,8 @@ private fun Composer(
                                 // model is about to answer. See `PiIcons`.
                                 PiIcons.Model,
                                 contentDescription = null,
-                                modifier = Modifier.size(15.dp),
+                                // 14dp, the app's one small-mark size.
+                                modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
@@ -2524,7 +2533,8 @@ private fun Composer(
                             Icon(
                                 Icons.Filled.Compress,
                                 contentDescription = null,
-                                modifier = Modifier.size(15.dp),
+                                // 14dp, the app's one small-mark size.
+                                modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
@@ -2544,7 +2554,8 @@ private fun Composer(
                             Icon(
                                 Icons.Filled.Bolt,
                                 contentDescription = null,
-                                modifier = Modifier.size(15.dp),
+                                // 14dp, the app's one small-mark size.
+                                modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
@@ -3402,7 +3413,8 @@ private fun AttachmentChip(
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = null,
-                    modifier = Modifier.size(13.dp),
+                    // 14dp, the app's one small-mark size (was 13).
+                    modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

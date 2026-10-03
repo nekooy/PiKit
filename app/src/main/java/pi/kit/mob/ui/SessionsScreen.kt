@@ -500,7 +500,8 @@ private fun SessionsSectionLabel(
                 contentDescription = null,
                 modifier = Modifier
                     .padding(end = 6.dp)
-                    .size(13.dp),
+                    // 14dp, the app's one small-mark size (was 13).
+                    .size(14.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
         }
