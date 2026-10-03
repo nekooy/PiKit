@@ -625,6 +625,13 @@ internal object JapaneseStrings : Strings {
             "画面オフやバックグラウンド時に OS がエージェントを回収し、ターンが途切れることが" +
                 "あります。バッテリー最適化の除外があると、フォアグラウンドサービスと" +
                 "ウェイクロックがターンを保持できます。"
+        override val keepAliveAskBody =
+            "画面オフやバックグラウンド時に OS がエージェントを回収し、実行中の回答が途切れる" +
+                "ことがあります。PiKit をバッテリー最適化の許可リストに入れると防げますが、" +
+                "常駐し消費電力が少し増えます。次に出るのは OS 自身の確認画面で、PiKit が" +
+                "代わりに答えることはできません。"
+        override val keepAliveAskOpen = "設定を開く"
+        override val keepAliveAskLater = "後で"
 
         override val backupTitle = "バックアップと復元"
         override val backupSubtitle = "ファイルに書き出して、戻せるように"

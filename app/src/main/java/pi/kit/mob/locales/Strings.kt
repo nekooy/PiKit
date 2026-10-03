@@ -1224,6 +1224,21 @@ interface Strings {
         val keepAliveAsk: String
         val keepAliveNote: String
 
+        /**
+         * The first-launch dialog that asks for the same exemption as [keepAliveTitle].
+         *
+         * The row above is where the state is read and the ask is repeated; this is the
+         * one moment the app raises it by itself. It has to be a dialog rather than a
+         * silent system call: `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` puts a
+         * yes/no box on screen over whatever the user was doing, and one that arrives
+         * with no explanation reads as malware. [keepAliveAskLater] is the other half
+         * of that — the answer is recorded either way, so this is asked once per
+         * install and the row on the agent page is the way back to it.
+         */
+        val keepAliveAskBody: String
+        val keepAliveAskOpen: String
+        val keepAliveAskLater: String
+
         // Backup & restore: the row between the agent process and the maintenance
         // pair, and the page behind it.
         //
