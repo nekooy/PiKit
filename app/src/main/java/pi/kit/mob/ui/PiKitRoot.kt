@@ -492,7 +492,19 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
                                 contentDescription = entry.label(text),
                             )
                         },
-                        label = { Text(entry.label(text)) },
+                        // One line, always. `NavigationBarItem` measures its label
+                        // with loose constraints, so a label wider than the item
+                        // *wraps* rather than ellipsising: measured on the emulator in
+                        // Japanese at font scale 1.8, `ターミナル` took two lines and
+                        // pushed the strip's contents out of the strip. Every other
+                        // label in the app is capped; this one was the exception.
+                        label = {
+                            Text(
+                                entry.label(text),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                     )
                 }
             }
