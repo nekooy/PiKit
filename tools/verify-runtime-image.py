@@ -126,31 +126,42 @@ REQUIRED_FILES = [
 REQUIRED_ANY = ["bin/sh", "bin/npm", "bin/env"]
 
 #: Documentation the reader has no other copy of, as `(label, root in the image, root in
-#: the vendoring cache, what that tree drops, what it keeps)`. The last three are the
-#: builder's own declarations, and the expectation below is computed from them plus the
-#: cache — so a pi release that adds, renames or retires a chapter moves nothing here and
-#: a file the image is missing is named. A list or a count kept in this file would go
-#: stale on the next bump and, worse, stay green while it did.
+#: the vendoring cache, what that tree drops, what it keeps, how a cache path maps to the
+#: image)`. The middle three are the builder's own declarations, and the expectation
+#: below is computed from them plus the cache — so a pi release that adds, renames or
+#: retires a chapter moves nothing here and a file the image is missing is named. A list
+#: or a count kept in this file would go stale on the next bump and, worse, stay green
+#: while it did.
 #:
 #: The cache is a build host's directory — a machine that only has the assembled assets
 #: does not have it — and the check says so there instead of failing.
+#:
+#: The last element is None when the two trees share a layout. pi's does not: npm
+#: hoists its dependencies beside the package, and `copy_hoisted_dependencies` nests
+#: them under it (`…/pi-coding-agent/node_modules/…`) so Node finds them and
+#: `trim_vendor_tree` sees the shape it is written against. The cache is therefore
+#: the project (`cache/pi`, holding `node_modules/`), and the map turns that into
+#: the image's paths.
 DOCUMENTED_TREES = (
     (
         "pi",
         "lib/node_modules/@earendil-works/pi-coding-agent",
-        ".runtime-build/cache/pi/node_modules/@earendil-works/pi-coding-agent",
+        ".runtime-build/cache/pi",
         BUILDER.PI_DROPS,
         (),
+        "pi-hoisted",
     ),
     # The extension's cache root is the project directory the image installs as
     # `lib/node_modules/pikit-extensions`, which is why one path is relative to the
-    # other: its drops and its kept README are written against that root.
+    # other: its drops and its kept README are written against that root. The two
+    # share a layout, so there is no map.
     (
         "pi-web-access",
         "lib/node_modules/pikit-extensions",
         ".runtime-build/cache/web-access",
         BUILDER.WEB_ACCESS_DROPS,
         BUILDER.WEB_ACCESS_DOCS,
+        None,
     ),
 )
 
@@ -476,6 +487,34 @@ def files_in(root: Path) -> set[str] | None:
     }
 
 
+#: The package the image nests its hoisted dependencies under, as the cache's
+#: `node_modules/` names it.
+PI_CACHE_PACKAGE = "node_modules/@earendil-works/pi-coding-agent/"
+
+
+def map_pi_cache_path(name: str) -> str | None:
+    """
+    A path under pi's cache project, as the image's package root names it, or None
+    when the cache holds it and the image does not ship it.
+
+    npm hoists the dependencies (`cache/pi/node_modules/jiti`, `…/.bin/esbuild`);
+    `copy_hoisted_dependencies` nests them under the package, which is where Node
+    looks first and the shape the trim is written against. The package's own files
+    sit at the package root on both sides. Project files — `package.json`,
+    `package-lock.json`, the vendoring marker — are cache bookkeeping and ship
+    nothing.
+    """
+    if name.startswith(PI_CACHE_PACKAGE):
+        return name[len(PI_CACHE_PACKAGE):]
+    # npm's lock metadata beside the packages. `copy_hoisted_dependencies` copies
+    # directories only, so the image has no copy of it and needs none.
+    if name == "node_modules/.package-lock.json":
+        return None
+    if name.startswith("node_modules/"):
+        return name
+    return None
+
+
 def check_abi(abi: str, flavor: str) -> bool:
     root = REPO_ROOT / "app" / "src" / flavor / "assets" / "runtime" / abi
     print(f"\n=== {abi}  ({root.relative_to(REPO_ROOT)}) ===")
@@ -578,7 +617,8 @@ def check_abi(abi: str, flavor: str) -> bool:
     # `examples/` passed: the rule is a delete list, so "the rest arrived" is the claim.
     for path in ANCHOR_DOCUMENTS:
         report(image.exists(path), f"present: {path}")
-    for label, image_root, cache_root, drop, keep in DOCUMENTED_TREES:
+    for entry in DOCUMENTED_TREES:
+        label, image_root, cache_root, drop, keep, map_name = entry
         held = files_in(REPO_ROOT / cache_root)
         if held is None:
             print(
@@ -586,11 +626,13 @@ def check_abi(abi: str, flavor: str) -> bool:
                 f"tree holds could not be compared"
             )
             continue
-        expected = {
-            name
-            for name in held
-            if BUILDER.vendor_kept(name, keep) or not BUILDER.vendor_junk(name, drop)
-        }
+        expected: set[str] = set()
+        for name in held:
+            mapped = map_pi_cache_path(name) if map_name == "pi-hoisted" else name
+            if mapped is None:
+                continue
+            if BUILDER.vendor_kept(mapped, keep) or not BUILDER.vendor_junk(mapped, drop):
+                expected.add(mapped)
         prefix = f"{image_root}/"
         # Both forms, because either is a correct way for the archive to carry the entry:
         # a symlinked file as its own bytes (what the writer does today) or as a
