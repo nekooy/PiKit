@@ -612,6 +612,27 @@ def check_abi(abi: str, flavor: str) -> bool:
     cli = image.read(overlay, "lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js")
     report(cli is not None and len(cli) > 100, "pi CLI entry point is present and non-trivial")
 
+    # The bundled extension's `pi.extensions` is the image's decision, not npm's:
+    # the published package points at `./dist`, which pi's compact list names
+    # `dist`. See `WEB_ACCESS_ENTRY` in the builder.
+    web_access_manifest = image.read(
+        overlay, "lib/node_modules/pikit-extensions/node_modules/pi-web-access/package.json"
+    )
+    entry_ok = False
+    if web_access_manifest is not None:
+        try:
+            import json as _json
+
+            pi_manifest = _json.loads(web_access_manifest).get("pi") or {}
+            entry_ok = pi_manifest.get("extensions") == [f"./{BUILDER.WEB_ACCESS_ENTRY}"]
+        except Exception:
+            entry_ok = False
+    report(
+        entry_ok,
+        "the web-access package's pi.extensions names "
+        f"./{BUILDER.WEB_ACCESS_ENTRY} (so the plugin list says pi-web-access, not dist)",
+    )
+
     # What the reader has no other copy of (§3): the structure first, then *everything*
     # the vendored tree holds and the rule keeps — documents, `examples/`, the extension's
     # TypeScript, all of it. Both halves come from the builder, `vendor_junk` being the

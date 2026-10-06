@@ -69,6 +69,15 @@ and registered by **absolute path** in pi's global `packages` array — pi's doc
 `$PREFIX` in the app, not written into the image: an absolute path in a build artifact
 would bake the application id in, and the image is otherwise id-independent.
 
+The `pi.extensions` entry is the **image's** choice, not npm's: the published package
+points at `./dist` (`prepublishOnly` swaps the entry to the built bundle for the
+registry, `postpublish` swaps it back), and pi names a local-path extension by the
+shortest unique suffix of its load path — so `.../pi-web-access/dist` appears in the
+plugin list as **`dist`**. `install_web_access` rewrites the shipped `package.json` to
+`./index.ts`, the entry the package itself restores after publish and the one
+`BundledExtension.ENTRY_POINT` already names; `index.ts` is stripped from the label,
+leaving `pi-web-access`.
+
 Four build details carry numbers:
 
 - **`--legacy-peer-deps`**, because the extension declares the `@earendil-works/pi-*`
