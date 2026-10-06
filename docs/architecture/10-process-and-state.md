@@ -126,7 +126,11 @@ model and conversation exactly as they were before it — indistinguishable from
 nothing. It is one function rather than each store watching its own file because `SettingsStore` →
 `ProfileStore` → the agent launcher is a single chain with one reader at its end, and a second watcher
 would be a second answer to "who owns this file". It runs **before** the agent is restarted, because
-the launch path re-derives `models.json` and `settings.json` *from* the restored profile.
+the launch path re-derives `models.json` and `settings.json` *from* the restored profile — and it
+re-derives those two files itself, on the same profile, because a restore that finds the agent
+already stopped never reaches a launch. Without that half, the archive's own `settings.json` is all a
+hand-run `pi` can read, and one taken before the defaults were first written leaves the terminal tab
+typing `pi` into a process with no model at all.
 
 **The archive is refused before anything is written.** The manifest is the first entry of the zip, its
 `format` is the one field an import refuses on, and what is selected is unpacked **in full** into a

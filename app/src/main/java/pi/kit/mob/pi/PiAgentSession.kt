@@ -1761,7 +1761,8 @@ class PiAgentSession private constructor(context: Context) {
     val backup: BackupManager by lazy { BackupManager(appContext, env, scope, this) }
 
     /**
-     * Re-reads everything a restore may have changed underneath this process.
+     * Re-reads everything a restore may have changed underneath this process, and
+     * re-derives pi's launch files from what it found.
      *
      * Every store in this app read its file once, when the process started, and
      * every one of them then holds a *copy*: `SharedPreferences` hands out a single
@@ -1774,6 +1775,15 @@ class PiAgentSession private constructor(context: Context) {
      * Called once the files are in place and **before** the agent is started again:
      * the launch path rewrites `models.json` and `settings.json` from the restored
      * profile, so the profile has to be in memory by the time it runs.
+     *
+     * Those two files are rewritten *here* as well, and that is not redundant with
+     * the launch. A restore that finds the agent already stopped never reaches
+     * [startAgent], so the backup's own `settings.json` would be left as the only
+     * thing a hand-run `pi` can read — and a backup taken before the defaults were
+     * first written, or one whose profile and `settings.json` had drifted apart,
+     * leaves the terminal tab typing `pi` into a process with no model at all.
+     * Re-deriving them from the restored profile is the same statement the launch
+     * makes, made whether or not a launch follows.
      *
      * The restore is the only caller. Every other write in the app goes through the
      * store that owns the file, and that is what keeps each of them its one writer.
@@ -1797,6 +1807,16 @@ class PiAgentSession private constructor(context: Context) {
         // The welcome banner is written in the interface language: a restored
         // language has to reach the shell as well as the screen.
         refreshTerminalBanner()
+        // Last, and on the IO dispatcher for the same reason the launch path is:
+        // two JSON documents under `$HOME`, parsed and rewritten. A failure here is
+        // logged by the writers and does not fail the restore — the archive's own
+        // copies are already in place, and a `pi` typed before the next launch
+        // reads those.
+        withContext(Dispatchers.IO) {
+            val settings = settingsStore.read()
+            writeModelsJson(settings)
+            writePiDefaults(settings)
+        }
     }
 
     /**
