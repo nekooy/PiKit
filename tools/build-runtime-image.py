@@ -1050,6 +1050,20 @@ def install_rewrite_exclusions(overlay_root: Path) -> None:
     log(f"recorded {len(prefix_patch.NEVER_REWRITE)} rewrite exclusion(s)")
 
 
+#: The `pi.extensions` entry the shipped package.json is rewritten to, and the file
+#: [BundledExtension.ENTRY_POINT] names in the app.
+#:
+#: The npm package's own manifest points at `./dist` — `prepublishOnly` swaps the
+#: entry to the built bundle for the registry and `postpublish` swaps it back — so a
+#: tree taken from npm as-is registers the extension at `.../pi-web-access/dist`.
+#: pi's compact extension list names a non-package extension by its shortest unique
+#: path suffix (`getCompactNonPackageExtensionLabel`), and that suffix is `dist`.
+#: Pointing at the source entry the package itself restores after publish puts
+#: `index.ts` on the path, which the same label logic strips, leaving
+#: `pi-web-access`.
+WEB_ACCESS_ENTRY = "index.ts"
+
+
 def install_web_access(overlay_root: Path, vendored: Path) -> None:
     """
     Copies the vendored extension into the overlay, trims the copy, and records how to
@@ -1058,7 +1072,9 @@ def install_web_access(overlay_root: Path, vendored: Path) -> None:
     The trim is here rather than in [vendor_web_access] so that the cache stays the tree
     npm installed: pi's tree has always been trimmed this way, on the copy, and the
     extension's used to be trimmed in place — which made a rule change invisible on a warm
-    cache and cost the marker's `pristine` flag to recover from.
+    cache and cost the marker's `pristine` flag to recover from. The `pi.extensions`
+    rewrite is here for the same reason: the cache is what npm installed, and the
+    entry the image ships is this build's decision.
     """
     destination = overlay_root.joinpath(*WEB_ACCESS_ROOT)
     if destination.exists():
@@ -1066,6 +1082,7 @@ def install_web_access(overlay_root: Path, vendored: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(vendored, destination, symlinks=True)
     trim_vendor_tree(destination, drop=WEB_ACCESS_DROPS, keep=WEB_ACCESS_DOCS)
+    rewrite_web_access_entry(destination / WEB_ACCESS_PACKAGE)
 
     metadata = overlay_root / WEB_ACCESS_METADATA
     metadata.parent.mkdir(parents=True, exist_ok=True)
@@ -1085,6 +1102,30 @@ def install_web_access(overlay_root: Path, vendored: Path) -> None:
         encoding="utf-8",
     )
     log(f"installed the web-access extension at {WEB_ACCESS_RELATIVE}")
+
+
+def rewrite_web_access_entry(package_dir: Path) -> None:
+    """
+    Points the package's `pi.extensions` at [WEB_ACCESS_ENTRY], so pi names it
+    `pi-web-access` rather than `dist`. See [WEB_ACCESS_ENTRY] for the mechanism.
+    """
+    manifest_path = package_dir / "package.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    pi_manifest = manifest.get("pi")
+    if not isinstance(pi_manifest, dict) or "extensions" not in pi_manifest:
+        raise SystemExit(
+            f"{manifest_path} has no pi.extensions entry, so the image would ship "
+            "a package pi cannot load as an extension"
+        )
+    entry = package_dir / WEB_ACCESS_ENTRY
+    if not entry.is_file():
+        raise SystemExit(
+            f"{entry} is missing: the shipped tree is trimmed of what nothing loads, "
+            f"and {WEB_ACCESS_ENTRY} is the entry the rewritten pi.extensions names"
+        )
+    pi_manifest["extensions"] = [f"./{WEB_ACCESS_ENTRY}"]
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    log(f"  pi.extensions -> ./{WEB_ACCESS_ENTRY} (so the plugin list says {WEB_ACCESS_PACKAGE})")
 
 
 # --------------------------------------------------------------------------- #
