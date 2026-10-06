@@ -1082,7 +1082,10 @@ def install_web_access(overlay_root: Path, vendored: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(vendored, destination, symlinks=True)
     trim_vendor_tree(destination, drop=WEB_ACCESS_DROPS, keep=WEB_ACCESS_DOCS)
-    rewrite_web_access_entry(destination / WEB_ACCESS_PACKAGE)
+    # Under the project's own `node_modules`, same as [WEB_ACCESS_RELATIVE] spells
+    # it: `pikit-extensions` is the generated package.json's tree, and the extension
+    # is one of its dependencies rather than a sibling of it.
+    rewrite_web_access_entry(destination / "node_modules" / WEB_ACCESS_PACKAGE)
 
     metadata = overlay_root / WEB_ACCESS_METADATA
     metadata.parent.mkdir(parents=True, exist_ok=True)
