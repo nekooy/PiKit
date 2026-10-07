@@ -512,23 +512,24 @@ internal fun ModelEditPage(
      * Puts [raw] into this provider's model list and returns the new list.
      *
      * A model already in the list is not added twice: picking the same one again is
-     * a way of choosing it, not of duplicating the row. Adding one always makes it
-     * the active model — the field, the fetched list and Save all put the user's
-     * attention on that model, and leaving the tick where it was would make the row
-     * they just added look inert.
+     * a way of choosing it, not of duplicating the row. Re-adding an existing id
+     * therefore *selects* it; a **new** id is only appended and leaves the tick on
+     * the model already chosen — taking it would make every fetch-list pick steal
+     * the selection from the model the user was actually using. It becomes active
+     * only when nothing was selected yet.
      *
      * [prefill] fills the three parameter controls from a catalogue or `/models`
      * answer. For a custom endpoint that is the difference between a row that says
-     * "unknown" and one that already carries the window the id is known for — the
-     * report "自定义端点…也不会自动填写参数等，应该自动匹配相同id，并填写". A
+     * "unknown" and one that already carries the window the id is known for. A
      * prefill only lands when the user has said nothing about that id yet, so
      * re-adding a model never overwrites their numbers.
      */
     fun addModel(raw: String, prefill: ModelSettings? = null): List<String> {
         val model = raw.trim()
         if (model.isBlank()) return models
-        models = if (model in models) models else models + model
-        activeModel = model
+        val already = model in models
+        models = if (already) models else models + model
+        if (already || activeModel.isBlank()) activeModel = model
         if (prefill != null && model !in settings) {
             settings = settings + (model to prefill)
         }
