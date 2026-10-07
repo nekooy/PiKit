@@ -1391,16 +1391,18 @@ internal fun ModelEditPage(
                 modifier = Modifier
                     .fillMaxWidth()
                     // 12h/8t, the same action-row inset the rest of the settings
-                    // use; Cancel on the left and the primary on the right, the
-                    // order every other confirm row in the app already reads.
-                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                    // use. Cancel and Save sit together on the right — the primary
+                    // last — rather than split across the row, which put the
+                    // secondary action on the far left where the eye does not look
+                    // for a pair.
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Box(Modifier.weight(1f))
                 // Asks the same question the back arrow does, because it is the same
                 // action: this button has always meant "leave without saving".
                 OutlinedButton(onClick = ::requestLeave) { Text(text.settings.cancel) }
-                Box(Modifier.weight(1f))
                 Button(onClick = { if (save()) leave() }) { Text(text.settings.save) }
             }
         }
@@ -1589,10 +1591,11 @@ private fun ModelNumberSheet(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Box(Modifier.weight(1f))
             OutlinedButton(onClick = host::dismiss) { Text(text.common.cancel) }
             Button(
                 onClick = {
