@@ -414,7 +414,7 @@ private fun InstructionsEditor(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 4.dp, bottom = 4.dp),
+                .padding(start = 20.dp, end = 4.dp, top = 2.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -432,6 +432,7 @@ private fun InstructionsEditor(
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
             IconButton(onClick = onClose) {
@@ -460,16 +461,16 @@ private fun InstructionsEditor(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                // 12/4, the inset every other field in the app uses. It was 16/12,
-                // which put this editor's box 4dp right of and 8dp taller-spaced
-                // than the web-search editor that does the same job.
-                .padding(horizontal = 12.dp, vertical = 4.dp)
+                // 12h/8v: more air than the 12/4 every other field uses, because
+                // this is a long document rather than a one-line value and the
+                // note under it needs to read as a separate part of the sheet.
+                .padding(horizontal = 12.dp, vertical = 8.dp)
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
         Text(
             text = text.settings.agentContextEditorNote,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -492,16 +493,18 @@ private fun InstructionsEditor(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // 12h/8t, the same sheet-footer inset the two value sheets use.
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                // All three sit together on the right — Cancel, Restore, Save —
+                // rather than split across the row, and with room under them so
+                // the sheet's last control is not against the panel edge.
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Box(Modifier.weight(1f))
             OutlinedButton(onClick = onClose) { Text(text.common.cancel) }
-            TextButton(onClick = { confirmRestore = true }) {
+            OutlinedButton(onClick = { confirmRestore = true }) {
                 Text(text.settings.agentContextRestore)
             }
-            Box(Modifier.weight(1f))
             Button(
                 onClick = {
                     // Written first, reported after: a save that claims to have
