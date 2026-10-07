@@ -218,7 +218,11 @@ private fun FontSizeSheet(
     var committed by remember(current) { mutableStateOf(current) }
     val shown = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
 
-    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+    // 48dp under the last line: this sheet is short — title, percentage, the
+    // track, one note — so the slider's block sits against the panel's bottom
+    // edge and reads as cut off. 16 and then 32 both left it cramped; the extra
+    // air is what a control wants under it, not list padding.
+    Column(Modifier.fillMaxWidth().padding(bottom = 48.dp)) {
         Text(
             text = text.settings.fontSize,
             style = MaterialTheme.typography.titleMedium,

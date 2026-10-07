@@ -1293,7 +1293,9 @@ private fun ThinkingLevelSheet(
     var committed by remember(current, steps) { mutableStateOf(current) }
     val shown = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
 
-    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+    // 48dp under the last line, the same figure `FontSizeSheet` uses: both are
+    // short slider sheets, and less left the track's block against the panel edge.
+    Column(Modifier.fillMaxWidth().padding(bottom = 48.dp)) {
         Text(
             text = text.chat.thinkingLevelLabel,
             style = MaterialTheme.typography.titleMedium,
