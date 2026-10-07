@@ -148,7 +148,7 @@ internal fun AgentPage(
                     showChevron = true,
                     onClick = {
                         sheets.show(Sheet(key = "agent-context-notes") {
-                            ContextNotesSheet(onClose = { sheets.dismiss() })
+                            ContextNotesSheet()
                         })
                     },
                 )
@@ -249,20 +249,21 @@ private fun ContextPoint(number: Int, title: String, body: String) {
 /**
  * What the model is given, as a sheet over the page.
  *
- * Same chrome as [InstructionsEditor] — a title, a close, a hairline — so the two
- * rows on the context section open the same kind of panel. The body is the five
- * numbered points, which used to sit open on the page: as a sheet they are the
- * answer to the row's question rather than a wall of prose the reader scrolls
- * past to reach the one control the section owns.
+ * Same panel shape as [InstructionsEditor] — a title over a hairline — and no
+ * close button of its own: it is read-only, and the scrim, the downward drag and
+ * back already dismiss it. The body is the five numbered points, which used to
+ * sit open on the page: as a sheet they are the answer to the row's question
+ * rather than a wall of prose the reader scrolls past to reach the one control
+ * the section owns.
  */
 @Composable
-private fun ContextNotesSheet(onClose: () -> Unit) {
+private fun ContextNotesSheet() {
     val text = strings
     Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 4.dp, top = 2.dp, bottom = 12.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -280,9 +281,6 @@ private fun ContextNotesSheet(onClose: () -> Unit) {
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
-            IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = text.common.cancel)
-            }
         }
 
         HorizontalDivider()
@@ -291,7 +289,9 @@ private fun ContextNotesSheet(onClose: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                // Clear of the title's hairline: the first point sat against it.
+                .padding(top = 12.dp),
         ) {
             ContextPoint(1, text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
             ContextPoint(
@@ -461,10 +461,11 @@ private fun InstructionsEditor(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                // 12h/8v: more air than the 12/4 every other field uses, because
-                // this is a long document rather than a one-line value and the
-                // note under it needs to read as a separate part of the sheet.
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                // 12h/12t/8b: more air under the title's hairline than the 12/4
+                // every other field uses — the editor box sat against the rule —
+                // and room for the note that follows to read as its own part.
+                .padding(horizontal = 12.dp)
+                .padding(top = 12.dp, bottom = 8.dp)
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
