@@ -5,15 +5,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -71,9 +76,9 @@ import pi.kit.mob.ui.components.Sheet
  *
  * The context description used to be a page of its own. It is a section here
  * now: the answer to "what does the agent know?" sits with the workspace it
- * works in and the process that launches it. The five points stay points — a
- * reader checking whether something is in the context is looking for a heading
- * — and the one part the user owns is the row that follows them.
+ * works in and the process that launches it. The five points open in the same
+ * bottom sheet the AGENTS.md row uses — a panel over the page, not a wall of
+ * prose above the one control the section is for.
  */
 @Composable
 internal fun AgentPage(
@@ -132,36 +137,26 @@ internal fun AgentPage(
             }
 
             SettingsSection(text.settings.agentContextSection) {
-                // The five parts, as numbered points of prose. A numbered title
-                // over a body, rather than one paragraph: the second part names
-                // *two* files and the third is a list of variables, so a reader
-                // who wants to know whether something is in the context at all is
-                // looking for a heading, not for a clause in the middle of a
-                // sentence.
-                Text(
-                    text = text.settings.agentContextLead,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
+                // The five parts live in a sheet, the same panel shape as the
+                // AGENTS.md editor under them. They used to sit open as numbered
+                // points of prose, which is a page of reading before the rows this
+                // section is actually for; the row's title is the question the
+                // sheet answers.
+                SettingsRow(
+                    title = text.settings.agentContextLead,
+                    icon = Icons.Filled.Info,
+                    showChevron = true,
+                    onClick = {
+                        sheets.show(Sheet(key = "agent-context-notes") {
+                            ContextNotesSheet(onClose = { sheets.dismiss() })
+                        })
+                    },
                 )
-                ContextPoint(1, text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
-                ContextPoint(
-                    2,
-                    text.settings.agentContextInstructionsTitle,
-                    text.settings.agentContextInstructionsBody,
-                )
-                ContextPoint(3, text.settings.agentContextRuntimeTitle, text.settings.agentContextRuntimeBody)
-                ContextPoint(4, text.settings.agentContextToolsTitle, text.settings.agentContextToolsBody)
-                ContextPoint(5, text.settings.agentContextHistoryTitle, text.settings.agentContextHistoryBody)
                 SettingsDivider()
                 // The row part 2 points at — the one thing in this section that is
-                // not prose. It is the card's **last** element on purpose: a row
-                // with content under it draws a ripple whose bottom corners are
-                // rounded inside the card, which reads as a detached row (§9.2).
-                //
-                // The whole path is the subtitle, monospace and on its own line:
-                // `AGENTS.md` alone appears in a project directory too, and this is
-                // the *global* one.
+                // not prose. The whole path is the subtitle, monospace and on its
+                // own line: `AGENTS.md` alone appears in a project directory too,
+                // and this is the *global* one.
                 SettingsRow(
                     title = text.settings.agentContextInstructions,
                     subtitle = instructions.absolutePath,
@@ -250,6 +245,70 @@ private fun ContextPoint(number: Int, title: String, body: String) {
         )
     }
 }
+
+/**
+ * What the model is given, as a sheet over the page.
+ *
+ * Same chrome as [InstructionsEditor] — a title, a close, a hairline — so the two
+ * rows on the context section open the same kind of panel. The body is the five
+ * numbered points, which used to sit open on the page: as a sheet they are the
+ * answer to the row's question rather than a wall of prose the reader scrolls
+ * past to reach the one control the section owns.
+ */
+@Composable
+private fun ContextNotesSheet(onClose: () -> Unit) {
+    val text = strings
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 4.dp, top = 2.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = text.settings.agentContextSection,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = text.settings.agentContextLead,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = text.common.cancel)
+            }
+        }
+
+        HorizontalDivider()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            ContextPoint(1, text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
+            ContextPoint(
+                2,
+                text.settings.agentContextInstructionsTitle,
+                text.settings.agentContextInstructionsBody,
+            )
+            ContextPoint(3, text.settings.agentContextRuntimeTitle, text.settings.agentContextRuntimeBody)
+            ContextPoint(4, text.settings.agentContextToolsTitle, text.settings.agentContextToolsBody)
+            ContextPoint(5, text.settings.agentContextHistoryTitle, text.settings.agentContextHistoryBody)
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/** How tall the context sheet's list may grow before it scrolls itself. */
+private val CONTEXT_NOTES_MAX_HEIGHT = 440.dp
 
 /**
  * The battery-optimisation exemption: the one keep-alive lever the OS owns.
