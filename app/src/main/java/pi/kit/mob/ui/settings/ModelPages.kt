@@ -782,7 +782,10 @@ internal fun ModelEditPage(
     Column(Modifier.fillMaxSize()) {
         SettingsPageHeader(
             title = if (isNew) text.settings.newProfile else text.settings.editProfile,
-            subtitle = if (isNew) null else existing?.displayName,
+            // `isNew` is `existing == null`, so a null profile already yields a
+            // null subtitle — the branch that wrote `existing?.displayName` in
+            // the else was a safe call the compiler could prove unnecessary.
+            subtitle = existing?.displayName,
             onBack = ::requestLeave,
         )
 
