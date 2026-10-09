@@ -7,21 +7,24 @@ runtime image has to exist at all is in
 
 ## Prerequisites
 
-- **JDK 17 to 23** (built and tested with JDK 21). **Not JDK 24 or 25:** the
-  wrapper is Gradle 8.14.5, and a Gradle release cannot run on a JVM newer than the
-  one it knows about — Java 25 fails before the build script is even read, which is
-  why the error arrives as an IDE dialog rather than as a task failure. Android
-  Studio keeps its own choice per project: set **Settings → Build, Execution,
-  Deployment → Build Tools → Gradle → Gradle JDK** to 17 or 21 (`gradleJvm` in
-  `.idea/gradle.xml`, with the resolved path in `.gradle/config.properties` — both
-  are untracked, because both are per-machine). Nothing in this project asks for a
-  JVM newer than 17; `sourceCompatibility`/`targetCompatibility`/`jvmTarget` are
-  all 17.
-- **Android SDK** with `compileSdk 36` and its build-tools, plus **NDK r29** — the
-  vendored terminal emulator builds a small PTY shim through `ndk-build`. The 36 is
-  an AAR floor rather than a preference: the formula renderer's own metadata requires
-  it, and CI installs exactly `platforms;android-36` + `build-tools;36.1.0`
-  (ARCHITECTURE §12.2). `targetSdk` is a separate property and stays 28.
+- **JDK 17 to 26** (built and tested with JDK 21). The wrapper is Gradle 9.6.1, and a
+  Gradle release cannot run on a JVM newer than the one it knows about — a too-new
+  Java fails before the build script is even read, which is why the error arrives as
+  an IDE dialog rather than as a task failure. Android Studio keeps its own choice
+  per project: set **Settings → Build, Execution, Deployment → Build Tools → Gradle →
+  Gradle JDK** to 17 or 21 (`gradleJvm` in `.idea/gradle.xml`, with the resolved path
+  in `.gradle/config.properties` — both are untracked, because both are per-machine).
+  Nothing in this project asks for a JVM newer than 17;
+  `sourceCompatibility`/`targetCompatibility`/`jvmTarget` are all 17.
+- **Android SDK** with `compileSdk 37` and its build-tools, plus **NDK r29** — the
+  vendored terminal emulator builds a small PTY shim through `ndk-build`. The 37 is
+  an AAR floor rather than a preference: every AndroidX artifact this build resolves
+  (Compose 1.12.1, material3 1.5.0-beta01) declares `minCompileSdk=37` in its own
+  metadata, the same mechanism that made 36 the floor before it. CI installs exactly
+  `platforms;android-37.0` + `build-tools;37.0.0`. `targetSdk` is
+  a separate property and stays 28 — AGP 9 otherwise defaults a module's `targetSdk`
+  to its `compileSdk`, which is why `gradle.properties` pins that default off and why
+  every variant's merged manifest is worth re-checking after a build-system change.
 - **Python 3.10+** with the `zstandard` module (`python -m pip install zstandard`).
   Only the runtime image builder needs it.
 - **Node.js and npm**, only for vendoring the pi agent into that image.

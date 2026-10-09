@@ -288,15 +288,24 @@ def expected_ndk_version() -> str | None:
     return match.group(1) if match else None
 
 
+def compile_sdk() -> str | None:
+    """The `compileSdk` every module is built against, from `gradle.properties`."""
+    file = REPO_ROOT / "gradle.properties"
+    if not file.is_file():
+        return None
+    match = re.search(r"^pikit\.compileSdk\s*=\s*(\S+)", file.read_text(encoding="utf-8"), re.M)
+    return match.group(1) if match else None
+
+
 def check_prerequisites() -> list[str]:
     """Returns the list of things that are missing, empty when nothing is."""
     missing: list[str] = []
 
     if shutil.which("java") is None:
-        # Gradle needs a JDK (17-23, per docs/BUILDING.md). `JAVA_HOME` alone is not
+        # Gradle needs a JDK (17-26, per docs/BUILDING.md). `JAVA_HOME` alone is not
         # enough to prove it: Gradle reads `org.gradle.java.home` too, so a missing
         # `java` is a hint rather than a verdict.
-        missing.append("java (a JDK 17-23 on PATH, or org.gradle.java.home set)")
+        missing.append("java (a JDK 17-26 on PATH, or org.gradle.java.home set)")
 
     if shutil.which("node") is None:
         missing.append("node (the runtime image builder and the guard tests need it)")
@@ -313,6 +322,29 @@ def check_prerequisites() -> list[str]:
     sdk = android_sdk_dir()
     if sdk is None:
         missing.append("the Android SDK (sdk.dir in local.properties, or ANDROID_HOME)")
+
+    # The SDK *platform* `compileSdk` names. It is an AAR floor rather than a
+    # preference — every AndroidX artifact this build resolves declares
+    # `minCompileSdk=37` (the floor is named in gradle/libs.versions.toml) — and Gradle
+    # reports a missing one as "Failed to find target with hash string
+    # 'android-37'", from inside the task graph, naming a hash string rather than the
+    # `sdkmanager` argument that installs it. The directory is not always
+    # `android-<n>`: a platform with a minor version is `android-37.0`, so both
+    # spellings are accepted.
+    if sdk is not None:
+        wanted = compile_sdk()
+        if wanted:
+            platforms = sdk / "platforms"
+            installed = platforms.is_dir() and any(
+                entry.is_dir()
+                and (entry.name == f"android-{wanted}" or entry.name.startswith(f"android-{wanted}."))
+                for entry in platforms.iterdir()
+            )
+            if not installed:
+                missing.append(
+                    f"the Android SDK platform for compileSdk {wanted} "
+                    f"(`sdkmanager \"platforms;android-{wanted}.0\"`)"
+                )
 
     # The NDK, which the vendored terminal emulator's PTY shim is compiled with. Gradle
     # reports a missing one itself, but only after it has configured every module and

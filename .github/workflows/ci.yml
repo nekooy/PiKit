@@ -1,4 +1,4 @@
-# Everything that can be checked without building the runtime image.
+﻿# Everything that can be checked without building the runtime image.
 #
 # **Dispatch-only on purpose.** Everything below is also a step of
 # `tools/build-apks.py`, which is the one command for a full local build, so an
@@ -42,7 +42,7 @@ env:
   # workflows: the release one installs these build-tools and then runs `apksigner`
   # out of them, and it used to name the version twice — once here and once in the
   # signing check — which is how a check ends up running a binary nobody installed.
-  BUILD_TOOLS_VERSION: "36.1.0"
+  BUILD_TOOLS_VERSION: "37.0.0"
 
 jobs:
   verify:
@@ -80,7 +80,7 @@ jobs:
         run: yes | sdkmanager --licenses > /dev/null || true
 
       - name: Install the SDK components and the NDK
-        run: sdkmanager --install "platforms;android-36" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION"
+        run: sdkmanager --install "platforms;android-37.0" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION"
 
       - name: Set up Node.js
         uses: actions/setup-node@v7

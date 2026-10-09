@@ -1,4 +1,4 @@
-# Publishes a release, by hand, from a tag-worthy commit.
+﻿# Publishes a release, by hand, from a tag-worthy commit.
 #
 # This is the only workflow that builds an APK, because it is the only one that can
 # afford to: the runtime image is not committed (~285 MB of binaries per ABI), so it
@@ -50,7 +50,7 @@ env:
   NDK_VERSION: "29.0.14033849"
   # One spelling for the build-tools the workflow installs and the apksigner it
   # then runs out of them. `ci.yml` carries the same pair.
-  BUILD_TOOLS_VERSION: "36.1.0"
+  BUILD_TOOLS_VERSION: "37.0.0"
 
 jobs:
   release:
@@ -89,7 +89,7 @@ jobs:
         run: yes | sdkmanager --licenses > /dev/null || true
 
       - name: Install the SDK components and the NDK
-        run: sdkmanager --install "platforms;android-36" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION"
+        run: sdkmanager --install "platforms;android-37.0" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION"
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
