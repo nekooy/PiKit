@@ -1,19 +1,37 @@
 [versions]
-# AGP 8.x, deliberately not 9: see `pikit.targetSdk` in gradle.properties and
-# ARCHITECTURE §1. AGP 9 turns on built-in Kotlin and defaults
-# `defaultTargetSdkToCompileSdkIfUnset`, neither of which this project wants.
-# 8.13.2 is the last 8.x on Google's Maven. AndroidX from mid-2026 on
-# (core-ktx 1.19.x, Compose 1.12.x / compose-bom 2026.08.00+, lifecycle 2.11.0)
-# requires AGP 9.1 and compileSdk 37 — measured as 22 AAR-metadata failures on
-# core-ktx 1.19.0 / Compose 1.12.0 and again on 1.19.1 / 1.12.1 / 2026.09.00.
-# The pins below are the newest that still build against AGP 8.13 and compileSdk 36.
-agp = "8.13.2"
+# AGP 9.x, and the pairing with Gradle is not free: AGP 9.4.1 refuses to apply on
+# anything below Gradle 9.6.0 ("Minimum supported Gradle version is 9.6.0"), so the
+# wrapper is 9.6.1 — the patch of the minor AGP names.
+#
+# AGP 9 and not 8.13 because `compileSdk` 37 is an AAR floor, and 37 is a floor
+# because of material3 (see the `material3` entry below): every AndroidX artifact
+# this project resolves declares `minCompileSdk=37` and
+# `minAndroidGradlePluginVersion=9.1.0` in its own AAR metadata. Under AGP 8.13.2 /
+# compileSdk 36 that is 22 AAR-metadata failures, measured on core-ktx 1.19.0 /
+# Compose 1.12.0 and again on 1.19.1 / 1.12.1 / compose-bom 2026.09.00.
+#
+# AGP 9 turns three of its own defaults on, and all three are opted out in
+# `gradle.properties`: built-in Kotlin, the new DSL, and defaulting a module's
+# `targetSdk` to its `compileSdk`. The last is the dangerous one — 28 is a ceiling
+# for this app, not a conservative choice (§1).
+agp = "9.4.1"
 kotlin = "2.3.21"
 coreKtx = "1.18.0"
 annotation = "1.11.0"
 lifecycle = "2.10.0"
 activityCompose = "1.13.0"
-composeBom = "2026.06.01"
+composeBom = "2026.09.00"
+# The Compose BOM ships only stable artifacts, and `material3` is still 1.4.0 in
+# the BOM this build uses — so the Expressive release is named here instead of
+# being inherited. 1.5.0 is where `MaterialShapes`, the fifteen Emphasized text
+# styles, `ButtonGroup`, `LoadingIndicator`, `FloatingToolbar` and
+# `FloatingActionButtonMenu` become public API; 1.4.0 has the structure
+# (`MaterialExpressiveTheme`, `MotionScheme`, the flexible app bars,
+# `ShortNavigationBar`) but none of the widgets. It is an AAR-metadata floor as
+# well as a version: material3 1.5.0-beta01 declares `minCompileSdk=37` and
+# `minAndroidGradlePluginVersion=9.1.0`, which is what fixes this build's AGP
+# and compileSdk.
+material3 = "1.5.0-beta01"
 coroutines = "1.10.2"
 serialization = "1.9.0"
 okio = "3.12.0"
@@ -35,7 +53,7 @@ androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", versi
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
