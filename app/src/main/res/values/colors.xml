@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="pikit_window_background">#FF0E1116</color>
     <!--
-        The launcher icon is black with a white mark, so the window that appears
-        before Compose draws matches the icon instead of flashing a lighter grey.
-
-        The icon the *default* is — the white one is a choice made from inside the
+        The window the system draws before Compose's first frame, matched to the
+        theme's dark `surface` (`PiColor.kt`, `PiDarkScheme`). The launcher icon is
+        black with a white mark, so the window that appears before Compose draws
+        matches the icon instead of flashing a lighter grey — and it now also
+        matches what Compose is about to paint, which is what removes the last
+        visible step between the system's splash and the app.
+    -->
+    <color name="pikit_window_background">#FF131218</color>
+    <!--
+        The launcher icon's field: black with the white mark on it, which is what
+        the icon the *default* is — the white one is a choice made from inside the
         app, and the window the system puts up before the app runs is drawn from
         this theme, which nothing at run time has been able to consult yet.
     -->

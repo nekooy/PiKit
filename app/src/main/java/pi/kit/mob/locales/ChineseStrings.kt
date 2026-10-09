@@ -45,6 +45,9 @@ internal object ChineseStrings : Strings {
         override val extrasNotes = "图片说明"
         override val extrasOpen = "查看附件详情"
         override val placeholder = "问 Pi 任何问题…"
+        override val emptyIntro =
+            "问 Pi 任何问题，或输入以 ! 开头的命令；" +
+                "它会在本机环境里直接执行。"
         override val placeholderAttachment = "给这些图片补充说明…"
         override val send = "发送"
         override val stop = "停止"
@@ -191,8 +194,10 @@ internal object ChineseStrings : Strings {
         override val cancelSelection = "取消选择"
         override val recent = "最近"
         override val back = "返回"
-        override val empty = "还没有保存的对话。\nPi 回复之后，对话才会写入磁盘。"
+        override val emptyHeading = "还没有保存的对话"
+        override val empty = "Pi 回复之后，对话才会写入磁盘。"
         override fun nothingMatches(query: String) = "没有匹配「$query」的对话。"
+        override val searchEmptyNote = "搜索会读取每个已保存对话里的全部消息。"
         override val pinned = "已置顶"
         override val actions = "对话操作"
         override val rename = "重命名"
@@ -256,6 +261,9 @@ internal object ChineseStrings : Strings {
         override val openWith = "用其它应用打开"
         override val notAFile = "不是普通文件"
         override val empty = "这个文件夹是空的"
+        override val emptyBody = "可能是空的，也可能是这个应用无权读取——两种情况都列不出内容。"
+        override val folder = "文件夹"
+        override val file = "文件"
         override fun tooLarge(size: String) =
             "文件大小为 $size，预览上限 64 KB。\n请在终端中打开它。"
         override fun binary(size: String) = "二进制文件（$size）"
@@ -452,6 +460,7 @@ internal object ChineseStrings : Strings {
         override val provider = "供应商"
         override val providerSubtitle = "选择该配置对应的供应商"
         override val providerPickSearch = "搜索供应商"
+        override val modelPickSearch = "搜索模型"
         override fun keyPassedAs(envVar: String) = "环境变量 $envVar"
         override val notChosen = "未选择"
         override val apiKey = "API Key"
@@ -912,5 +921,6 @@ internal object ChineseStrings : Strings {
         override val back = "返回"
         override val confirm = "确定"
         override val retry = "重试"
+        override val clear = "清空"
     }
 }

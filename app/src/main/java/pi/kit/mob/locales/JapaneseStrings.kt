@@ -38,6 +38,9 @@ internal object JapaneseStrings : Strings {
         override val extrasNotes = "画像メモ"
         override val extrasOpen = "添付の詳細を表示"
         override val placeholder = "Pi に質問する…"
+        override val emptyIntro =
+            "Pi に質問するか、! で始めて端末コマンドを書くと、" +
+                "この端末の環境で直接実行されます。"
         override val placeholderAttachment = "この画像についての指示を入力…"
         override val send = "送信"
         override val stop = "停止"
@@ -189,8 +192,10 @@ internal object JapaneseStrings : Strings {
         override val cancelSelection = "選択を解除"
         override val recent = "最近"
         override val back = "戻る"
-        override val empty = "保存された会話はまだありません。\nPi が返信すると、会話がディスクに保存されます。"
+        override val emptyHeading = "保存された会話はありません"
+        override val empty = "Pi が返信すると、会話がディスクに保存されます。"
         override fun nothingMatches(query: String) = "「$query」に一致する会話はありません。"
+        override val searchEmptyNote = "検索は保存された全会話のすべてのメッセージを読みます。"
         override val pinned = "ピン留め"
         override val actions = "会話の操作"
         override val rename = "名前を変更"
@@ -255,6 +260,9 @@ internal object JapaneseStrings : Strings {
         override val openWith = "他のアプリで開く"
         override val notAFile = "ファイルではありません"
         override val empty = "このフォルダーは空です"
+        override val emptyBody = "空か、このアプリが読めないフォルダーか——どちらも一覧には出せません。"
+        override val folder = "フォルダー"
+        override val file = "ファイル"
         override fun tooLarge(size: String) =
             "ファイルサイズは $size です。プレビューは 64 KB までです。\nターミナルから開いてください。"
         override fun binary(size: String) = "バイナリファイル（$size）"
@@ -469,6 +477,7 @@ internal object JapaneseStrings : Strings {
         override val provider = "プロバイダー"
         override val providerSubtitle = "このプロファイルのプロバイダーを選択します"
         override val providerPickSearch = "プロバイダーを検索"
+        override val modelPickSearch = "モデルを検索"
         override fun keyPassedAs(envVar: String) = "環境変数 $envVar"
         override val notChosen = "未選択"
         override val apiKey = "API キー"
@@ -963,5 +972,6 @@ internal object JapaneseStrings : Strings {
         override val back = "戻る"
         override val confirm = "OK"
         override val retry = "再試行"
+        override val clear = "クリア"
     }
 }

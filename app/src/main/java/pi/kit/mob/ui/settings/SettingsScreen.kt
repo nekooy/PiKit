@@ -38,10 +38,12 @@ import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.StorageSelfTest
 import pi.kit.mob.ui.components.PageBackHandler
-import pi.kit.mob.ui.components.PageSwap
 import pi.kit.mob.ui.components.PiIcons
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.PickerRow
+import pi.kit.mob.ui.design.PiAppBarScroll
+import pi.kit.mob.ui.design.PiPageSwap
+import pi.kit.mob.ui.design.PiScaffold
 
 /** Screens reachable from the Settings tab. Navigation state lives here only. */
 internal sealed interface SettingsPage {
@@ -259,12 +261,11 @@ fun SettingsScreen(session: PiAgentSession) {
         page = parent
     }
 
-    Column(Modifier.fillMaxSize()) {
-        PageSwap(
-            key = page,
-            forward = forward,
-            modifier = Modifier.fillMaxSize(),
-        ) { current ->
+    PiPageSwap(
+        key = page,
+        forward = forward,
+        modifier = Modifier.fillMaxSize(),
+    ) { current ->
             when (val shown = current as SettingsPage) {
                 SettingsPage.Root -> RootPage(
                     session = session,
@@ -327,7 +328,6 @@ fun SettingsScreen(session: PiAgentSession) {
                     onBack = { open(SettingsPage.Root) },
                 )
             }
-        }
     }
 }
 
@@ -375,10 +375,15 @@ private fun RootPage(
     val piVersion = PiInstallation.installedVersion(session.env)
     val text = strings
 
-    Column(Modifier.fillMaxSize()) {
-        SettingsPageHeader(title = text.settings.title)
-
-        SettingsBody {
+    // The tab root is a page like every other page now, which is what puts its
+    // title on the app's flexible app bar rather than on a fixed band: the list is
+    // twelve rows, and a title that shrinks out of the way as the reader scrolls
+    // into it is worth more than a title that keeps its height.
+    PiScaffold(
+        title = text.settings.title,
+        scrollBehavior = PiAppBarScroll.Pinned,
+    ) { full ->
+        SettingsBody(full) {
             SettingsSection(text.settings.essentials) {
                 SettingsRow(
                     title = text.settings.manageProfiles,

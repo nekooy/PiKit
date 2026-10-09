@@ -2,18 +2,15 @@ package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +26,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.WebSearchStore
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiCard
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiTone
 import kotlinx.coroutines.launch
 
 /** What the last button press did, which is the only thing the editor reports. */
@@ -40,7 +44,7 @@ private enum class EditorOutcome { Saved, Invalid, Failed }
  * ## When this is on screen
  *
  * Only when `web-search.json` exists and is not a JSON object. The page's normal
- * configuration section is a list plus an "Add an option" button
+ * configuration section is a list plus an "Add an option" row
  * ([WebSearchConfigOptions]), which cannot start from a file it cannot parse: the
  * store refuses to write over one, so every control would be a control that appears
  * to work and does not. This is the way out — the text as it is, editable, with a
@@ -55,20 +59,20 @@ private enum class EditorOutcome { Saved, Invalid, Failed }
  * default document without reading the broken one; this one exists for the user who
  * wants to *keep* what they typed and fix the syntax.
  *
- * ## What is in the box, and what is in the file
+ * ## The document is not the file
  *
- * The bundled extension reads roughly eighty keys and the page above draws controls
- * for six. Everything else is in this box when it is shown: the keys in use are set,
- * and every other key is a comment carrying its path, what it does and a usable
- * example, so the document explains itself. Removing a `//` is how a key is turned on.
+ * The bundled extension reads roughly 110 keys and the page above draws controls for
+ * six. Everything else is in this box when it is shown: the keys in use are set, and
+ * every other key is a comment carrying its path, what it does and a usable example,
+ * so the document explains itself. Removing a `//` is how a key is turned on.
  *
  * The comments are the *editor's*, not the file's, and that is not a detail: the
  * extension parses `web-search.json` with a strict `JSON.parse`, so a comment in the
  * file makes every web tool fail (`Unexpected token '/' … is not valid JSON`). Save
- * therefore writes only the keys that are live here, as plain JSON — see
- * [WebSearchStore] for the whole of it — and the box is re-rendered from the file that
- * resulted, so what is on screen is always what pi has. A comment the user adds is not
- * stored, and the page's note says so.
+ * therefore writes only the keys that are live here, as plain JSON — `strictDocument`
+ * in `pi/WebSearchStore.kt` is the whole of it — and the box is re-rendered from the
+ * file that resulted, so what is on screen is always what pi has. A comment the user
+ * adds is not stored, and the page's note says so.
  *
  * ## What it is careful about
  *
@@ -109,7 +113,16 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
 
     val value = draft
 
-    Column(Modifier.fillMaxWidth()) {
+    // A card and not a group: the document is one subject with a body of its own,
+    // which is the whole distinction between the two containers. A group is a set of
+    // peer rows, and there is exactly one thing here.
+    PiCard(padding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)) {
+        // A `PiTextField` cannot be used here, and the two reasons are both
+        // load-bearing: it has no text style, and this is a machine document whose
+        // indentation is how a nested key is read, and it cannot turn autocorrect
+        // off, which a JSON key name does not survive. Everything else about it is
+        // what `PiTextField` draws — the app's field radius, and no container of its
+        // own — so the two are indistinguishable on screen.
         OutlinedTextField(
             value = value.orEmpty(),
             onValueChange = { next ->
@@ -117,9 +130,8 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
                 outcome = null
             },
             enabled = value != null,
-            // Monospace and small: this is a machine document, and the indentation
-            // is how a nested key is read. `bodySmall` keeps about 46 columns on a
-            // phone, which is the width the file is written at.
+            // Monospace and small: `bodySmall` keeps about 46 columns on a phone,
+            // which is the width the file is written at.
             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Ascii,
@@ -127,9 +139,13 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
                 // setting that silently does nothing.
                 autoCorrectEnabled = false,
             ),
+            shape = PiShapes.card,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp)
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
@@ -152,27 +168,30 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // 12h/8t, the same sheet-footer inset the two value sheets use, and
-                // primary on the right like every other confirm row in the app. It
-                // was 4t/12b with Save on the left, which reversed the muscle memory
-                // the rest of the settings had just taught.
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                // 8 above, and the card's own 12 at the sides: the same inset the
+                // sheet footers use, and primary on the right like every other
+                // confirm row in the app. It was 4t/12b with Save on the left, which
+                // reversed the muscle memory the rest of the settings had just
+                // taught.
+                .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedButton(
+            PiButton(
+                text = text.settings.searchConfigRevert,
                 onClick = {
                     scope.launch {
                         draft = store.documentText()
                         outcome = null
                     }
                 },
+                kind = PiButtonKind.Outlined,
+                size = PiButtonSize.Small,
                 enabled = value != null && !saving,
-            ) {
-                Text(text.settings.searchConfigRevert)
-            }
+            )
             Box(Modifier.weight(1f))
-            Button(
+            PiButton(
+                text = text.settings.searchConfigSave,
                 onClick = {
                     scope.launch {
                         saving = true
@@ -197,43 +216,46 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
                         saving = false
                     }
                 },
+                size = PiButtonSize.Small,
                 // Refused only while the write is in flight: whether the text is a
                 // JSON object is answered by the write's own result, which is where
                 // the reason can be told from a disk failure.
                 enabled = value != null && !saving,
-            ) {
-                Text(text.settings.searchConfigSave)
-            }
+            )
         }
     }
 }
 
 /**
- * One line of this section's own state, in the colour of what it reports.
+ * One line of this section's own state, in the meaning of what it reports.
  *
  * Shared with the add-an-option list next door ([WebSearchConfigOptions]) and with the
  * reset section ([WebSearchResetSection]): all three are the same statement about the
  * same file — what the last press did — so they are one composable rather than three
  * that drift on the first change to any of them.
  *
- * Four dp of vertical padding rather than two, because in both of the sections that
- * are not the editor this note is the last thing in its section: at two the line box sat
- * a hair above the card's rounded bottom edge and read as falling out of the section. 4dp
- * is the inset the app's other trailing notes already use (every `SettingsNote` that ends
- * a card passes `vertical = 4.dp`), so this is that convention rather than a new number.
- * It sits **outside** the card (see [WebSearchConfigOptions] for why: a line under the
- * card's last row squares off that row's press ripple), so what the padding keeps it off
- * is the card's bottom edge rather than the note's own container.
+ * Its callers hand in an ink and this reads it as a *tone* — `error` is a thing that
+ * failed, `primary` is the app's own voice, anything else is a plain fact — because a
+ * status line here and a status line on any other page must not disagree about what
+ * "failed" looks like, and a tone is the only vocabulary that cannot drift.
+ *
+ * It was a bare `Text` at a 16h/4v inset, which is where its alignment with a row's
+ * title came from. A notice carries its own padding and its own container now, so the
+ * 4dp step it used to keep off the card's bottom edge is [PiNotice]'s business rather
+ * than this function's. What survives is the placement: it stays **outside** the group,
+ * because a group is its rows (see [WebSearchConfigOptions]) and a status line under
+ * the row that just acted belongs under that group rather than inside it.
  */
 @Composable
 internal fun ConfigNote(message: String, color: Color) {
-    Text(
+    val scheme = MaterialTheme.colorScheme
+    PiNotice(
         text = message,
-        // 16h/4v, the same inset as [SettingsNote]: a status line under a card's
-        // buttons lines up with a row's title rather than floating 4dp to its left.
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = color,
+        tone = when (color) {
+            scheme.error -> PiTone.Danger
+            scheme.primary -> PiTone.Accent
+            else -> PiTone.Neutral
+        },
     )
 }
 
@@ -245,6 +267,10 @@ internal fun ConfigNote(message: String, color: Color) {
  * scrolls itself, which is what a text field with a fixed height does. The rendered
  * document is around two hundred lines, so the cap is what the reader will see most
  * of the time.
+ *
+ * The field is the one scroller inside the page's own: the page body is a plain
+ * `Column(verticalScroll)`, and a field that scrolls itself inside it is fine — both
+ * are bounded, and neither is a lazy list measured against an unbounded height.
  */
 private val EDITOR_MIN_HEIGHT = 240.dp
 private val EDITOR_MAX_HEIGHT = 440.dp

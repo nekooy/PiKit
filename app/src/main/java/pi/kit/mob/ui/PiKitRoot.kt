@@ -1,9 +1,7 @@
 package pi.kit.mob.ui
 
-import android.app.Activity
 import android.Manifest
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
@@ -20,8 +18,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,28 +30,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -79,13 +79,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowInsetsControllerCompat
 import pi.kit.mob.R
 import pi.kit.mob.env.BatteryOptimisation
 import pi.kit.mob.env.StorageAccess
@@ -101,28 +98,37 @@ import pi.kit.mob.pi.RuntimeStatus
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.SheetHost
 import pi.kit.mob.ui.components.SheetLayer
-import pi.kit.mob.ui.components.TabFade
+import pi.kit.mob.ui.design.PiAgentMark
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiMotion
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiProgress
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiTabFade
+import pi.kit.mob.ui.design.PiTone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
-private enum class Tab {
+/**
+ * The four destinations, in the bar's order.
+ *
+ * The order is by how often the app is opened for each: the conversation first,
+ * then the shell it drives, then what it changed, and the settings last. It is the
+ * order the old navigation bar used and it was arrived at the same way, so it is
+ * kept — a destination that moves because the bar was redesigned is a destination
+ * the reader has to find twice.
+ */
+private enum class Destination {
     Chat,
     Terminal,
     Files,
     Settings,
 }
 
-/** Walks out of any ContextWrapper to reach the hosting Activity. */
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PiKitRoot(session: PiAgentSession) {
     val settings by session.settingsStore.settings.collectAsState()
@@ -280,55 +286,79 @@ private fun PermissionPrompts(session: PiAgentSession) {
     }
 
     if (step == PromptStep.Storage) {
-        AlertDialog(
-            onDismissRequest = { },
-            icon = { Icon(Icons.Filled.Folder, contentDescription = null) },
-            title = { Text(text.settings.storageAskTitle) },
-            text = { Text(text.settings.storageAskBody) },
-            confirmButton = {
-                TextButton(onClick = {
-                    StorageAccess.markPrompted(context)
-                    step = afterStorage()
-                    runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
-                }) { Text(text.settings.storageAskOpen) }
+        PiPromptDialog(
+            title = text.settings.storageAskTitle,
+            body = text.settings.storageAskBody,
+            confirm = text.settings.storageAskOpen,
+            dismiss = text.settings.storageAskLater,
+            onConfirm = {
+                StorageAccess.markPrompted(context)
+                step = afterStorage()
+                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    StorageAccess.markPrompted(context)
-                    step = afterStorage()
-                }) { Text(text.settings.storageAskLater) }
+            onDismiss = {
+                StorageAccess.markPrompted(context)
+                step = afterStorage()
             },
         )
     }
 
     if (step == PromptStep.KeepAlive) {
-        AlertDialog(
-            onDismissRequest = { },
-            icon = { Icon(Icons.Filled.BatterySaver, contentDescription = null) },
+        PiPromptDialog(
+            title = text.settings.keepAliveTitle,
             // The row on the agent page says the same two things, from the same
             // key as this title: the state there and the ask here are one subject.
-            title = { Text(text.settings.keepAliveTitle) },
-            text = { Text(text.settings.keepAliveAskBody) },
-            confirmButton = {
-                TextButton(onClick = {
-                    // Recorded before the system box is opened, not after: there is
-                    // no result callback for it — the user may answer it, ignore it,
-                    // or come back through the recents list — and an app that asked
-                    // again on the next launch would be nagging about a question the
-                    // user has already seen.
-                    BatteryOptimisation.markAsked(context)
-                    step = PromptStep.None
-                    BatteryOptimisation.request(context)
-                }) { Text(text.settings.keepAliveAskOpen) }
+            body = text.settings.keepAliveAskBody,
+            confirm = text.settings.keepAliveAskOpen,
+            dismiss = text.settings.keepAliveAskLater,
+            icon = { Icon(Icons.Filled.BatterySaver, contentDescription = null) },
+            onConfirm = {
+                // Recorded before the system box is opened, not after: there is
+                // no result callback for it — the user may answer it, ignore it,
+                // or come back through the recents list — and an app that asked
+                // again on the next launch would be nagging about a question the
+                // user has already seen.
+                BatteryOptimisation.markAsked(context)
+                step = PromptStep.None
+                BatteryOptimisation.request(context)
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    BatteryOptimisation.markAsked(context)
-                    step = PromptStep.None
-                }) { Text(text.settings.keepAliveAskLater) }
+            onDismiss = {
+                BatteryOptimisation.markAsked(context)
+                step = PromptStep.None
             },
         )
     }
+}
+
+/**
+ * One of the first-launch explanations.
+ *
+ * An `AlertDialog` still, and deliberately: these are the platform's own
+ * conversations — a permission the system will also ask about, and a system
+ * settings page about to open — so they are drawn in the platform's dialog shape
+ * with the app's colours rather than as a sheet in the app's own modal layer. A
+ * sheet that covers the screen to explain a system dialog is a second frame in
+ * front of the first one.
+ */
+@Composable
+private fun PiPromptDialog(
+    title: String,
+    body: String,
+    confirm: String,
+    dismiss: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    icon: (@Composable () -> Unit)? = null,
+) {
+    AlertDialog(
+        onDismissRequest = { },
+        shape = PiShapes.panel,
+        icon = icon,
+        title = { Text(title, style = MaterialTheme.typography.headlineSmallEmphasized) },
+        text = { Text(body, style = MaterialTheme.typography.bodyMedium) },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(confirm) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(dismiss) } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -336,28 +366,30 @@ private fun PermissionPrompts(session: PiAgentSession) {
 private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHost) {
     val runtime by session.runtime.collectAsState()
     val agent by session.agent.collectAsState()
-    var tab by remember { mutableStateOf(Tab.Chat) }
+    var destination by remember { mutableStateOf(Destination.Chat) }
     val scope = rememberCoroutineScope()
     val text = strings
 
     // The chat page's composer, owned here rather than inside `ChatScreen`.
     //
-    // `TabFade` is a `Crossfade`: when the fade finishes, the tab that left is removed
-    // from the composition and its whole subtree with it. So a draft, the images attached
-    // to it, and the transcript's scroll position were all destroyed by a look at the
-    // terminal, and were reported as exactly that. Hoisted to the one scope that outlives
-    // every tab — see [ChatComposerState] for why `rememberSaveable` is not the fix.
+    // `PiTabFade` is a `Crossfade`: when the fade finishes, the destination that
+    // left is removed from the composition and its whole subtree with it. So a
+    // draft, the images attached to it, and the transcript's scroll position were
+    // all destroyed by a look at the terminal, and were reported as exactly that.
+    // Hoisted to the one scope that outlives every destination — see
+    // [ChatComposerState] for why `rememberSaveable` is not the fix.
     val composer = rememberChatComposerState()
 
     // The conversation is *not* read here, and that is a performance decision rather
     // than a style one: a streaming answer changes it several times a second, and a
-    // value read in this body invalidates the whole body — the insets, the tab strip
-    // and its four items, the sheet layer — for a change only the chat page can see.
-    // The page that shows the transcript collects it instead (see [ChatTab]).
+    // value read in this body invalidates the whole body — the insets, the
+    // navigation bar and its four items, the sheet layer — for a change only the
+    // chat page can see. The page that shows the transcript collects it instead
+    // (see [ChatTab]).
     //
     // The one part of it the root does need is a dialog from pi, which can arrive
-    // over any tab. Collected as its own flow so the root recomposes when a dialog
-    // appears or is answered and at no other time.
+    // over any destination. Collected as its own flow so the root recomposes when a
+    // dialog appears or is answered and at no other time.
     val dialogFlow = remember(session) {
         session.conversation.map { it.pendingDialog }.distinctUntilChanged()
     }
@@ -383,7 +415,7 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
         }
 
         is RuntimeStatus.Failed -> {
-            MessageScreen(
+            SetupFailure(
                 title = text.root.couldNotPrepare,
                 body = status.message,
                 actionLabel = text.common.retry,
@@ -395,16 +427,23 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
         is RuntimeStatus.Ready -> Unit
     }
 
+    LaunchedEffect(language) {
+        // Keyed on the language, so it runs once per launch and again whenever the
+        // user switches: the shell's banner is a file, and it should follow the
+        // interface rather than waiting for the next launch.
+        session.refreshTerminalBanner()
+    }
+
     // enableEdgeToEdge() sets decorFitsSystemWindows=false, so the window no
     // longer shrinks for the soft keyboard: the keyboard is drawn *over* the app,
     // the system bars become insets the app has to consume, and the app is
     // responsible for keeping its own content out from under both.
     //
-    // ## Why the tab strip is outside the keyboard's inset
+    // ## Why the navigation bar is outside the keyboard's inset
     //
-    // The strip is pinned to the window's own bottom edge, and the *page* — not
-    // the strip — is padded by the keyboard's inset. So when the keyboard rises it
-    // slides up over the strip and hides it, and the page above shrinks to end
+    // The bar is pinned to the window's own bottom edge, and the *page* — not the
+    // bar — is padded by the keyboard's inset. So when the keyboard rises it
+    // slides up over the bar and hides it, and the page above shrinks to end
     // exactly at the keyboard's top edge.
     //
     // That is the whole mechanism, and it is worth spelling out because three
@@ -423,55 +462,13 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
     //     until now, and it is why the bar never actually disappeared.
     //
     // With the bar outside that inset there is no visibility state, no animation
-    // and no second clock: the strip's disappearance *is* the keyboard's own
+    // and no second clock: the bar's disappearance *is* the keyboard's own
     // motion, so the two can never disagree or drift apart. Swiping the keyboard
-    // down reveals the strip progressively, which is the opposite of a jump.
+    // down reveals the bar progressively, which is the opposite of a jump.
     //
-    // One consequence worth naming: while the keyboard is up the strip is still
+    // One consequence worth naming: while the keyboard is up the bar is still
     // composed, merely covered. That is deliberate — the alternative is removing
     // it from the layout, which is exactly the re-measure this avoids.
-    val view = LocalView.current
-    val context = LocalContext.current
-
-    LaunchedEffect(language) {
-        val window = view.context.findActivity()?.window
-        if (window != null) {
-            // Every page now sits on the light palette, so the status bar icons
-            // are dark everywhere.
-            WindowInsetsControllerCompat(window, view).isAppearanceLightStatusBars = true
-        }
-        // Keyed on the language, so it runs once per launch and again whenever the
-        // user switches: the shell's banner is a file, and it should follow the
-        // interface rather than waiting for the next launch.
-        session.refreshTerminalBanner()
-    }
-
-    // The bar takes the colour of the page it belongs to, and the root Surface
-    // underneath uses the same colour. NavigationBar's container does not reach
-    // the gesture strip below it — that area is filled by the window background —
-    // so without matching them the strip showed through as a paler band under the
-    // bar.
-    val navBarColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    val navItemColors = NavigationBarItemDefaults.colors(
-        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        selectedTextColor = MaterialTheme.colorScheme.onSurface,
-        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    // The page has to clear the tab strip, and the strip's height is 80dp plus the
-    // gesture strip it pads itself by. Measured rather than assumed: the initial
-    // 0 costs one frame, in which the strip is drawn over the composer — both are
-    // the same colour, so it is invisible.
-    //
-    // `navigationBars`, not `safeDrawing`. This is the whole bug the previous
-    // design shipped with: `safeDrawing` is `systemBars + displayCutout + ime`, so
-    // using it as the strip's own inset added the keyboard's height to the strip's
-    // position and pushed it up to sit on top of the keyboard — the strip was
-    // never hidden at all, it just climbed. Measured on the emulator: the strip's
-    // labels landed 826px above the window's bottom edge, and the keyboard's
-    // reported height was 820px.
     val density = LocalDensity.current
     var barHeightPx by remember { mutableIntStateOf(0) }
     val navBarInset = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
@@ -479,42 +476,52 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
         .union(WindowInsets.ime.only(WindowInsetsSides.Bottom))
         .union(WindowInsets(bottom = with(density) { barHeightPx.toDp() }))
 
-    Surface(Modifier.fillMaxSize(), color = navBarColor) {
+    // The bar takes the colour of the page it belongs to, and the root Surface
+    // underneath uses the same colour. The bar's container does not reach the
+    // gesture strip below it — that area is filled by the window background — so
+    // without matching them the strip showed through as a paler band under the bar.
+    val barColor = MaterialTheme.colorScheme.surfaceContainer
+
+    Surface(Modifier.fillMaxSize(), color = barColor) {
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                     // `union` takes the larger inset, which is the point: with the
-                    // keyboard down the page ends at the strip's top edge, and with
+                    // keyboard down the page ends at the bar's top edge, and with
                     // it up the page ends at the keyboard's top edge. Summing them
-                    // instead would leave a dead band one strip tall above the
+                    // instead would leave a dead band one bar tall above the
                     // keyboard.
                     .windowInsetsPadding(pageBottom)
-                    .background(MaterialTheme.colorScheme.background),
+                    .background(MaterialTheme.colorScheme.surface),
             ) {
                 // The crossfade runs inside this box rather than around it, so
                 // that its own `.background(...)` above stays put: for the whole
-                // of the fade both tabs are composed at once, and with a
-                // transparent host the outgoing tab would read through the
+                // of the fade both destinations are composed at once, and with a
+                // transparent host the outgoing page would read through the
                 // incoming one instead of being replaced by it.
-                TabFade(key = tab, modifier = Modifier.fillMaxSize()) { shown ->
-                    when (shown as Tab) {
-                        Tab.Terminal -> TerminalScreen(session = session)
+                PiTabFade(key = destination, modifier = Modifier.fillMaxSize()) { shown ->
+                    when (shown as Destination) {
+                        Destination.Terminal -> TerminalScreen(session = session)
 
-                        Tab.Chat -> ChatTab(session = session, agent = agent, composer = composer)
+                        Destination.Chat -> ChatTab(
+                            session = session,
+                            agent = agent,
+                            composer = composer,
+                        )
 
-                        Tab.Files -> FilesScreen(session = session)
-                        Tab.Settings -> SettingsScreen(session = session)
+                        Destination.Files -> FilesScreen(session = session)
+                        Destination.Settings -> SettingsScreen(session = session)
                     }
                 }
             }
 
-            NavigationBar(
-                containerColor = navBarColor,
-                // The gesture strip only, so the strip's background reaches the
-                // bottom of the window while its icons stay clear of the gesture
-                // area — and the page above it is padded by the strip's full
+            ShortNavigationBar(
+                containerColor = barColor,
+                // The gesture strip only, so the bar's background reaches the
+                // bottom of the window while its items stay clear of the gesture
+                // area — and the page above it is padded by the bar's full
                 // measured height rather than by a constant that would have to be
                 // kept in step with Material's.
                 windowInsets = navBarInset,
@@ -522,44 +529,50 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
                     .align(Alignment.BottomCenter)
                     .onSizeChanged { barHeightPx = it.height },
             ) {
-                Tab.entries.forEach { entry ->
-                    NavigationBarItem(
-                        selected = tab == entry,
-                        onClick = { tab = entry },
-                        colors = navItemColors,
+                Destination.entries.forEach { entry ->
+                    val selected = destination == entry
+                    ShortNavigationBarItem(
+                        selected = selected,
+                        onClick = { destination = entry },
+                        // Filled when it is the destination being shown, outlined
+                        // when it is not. The bar's own indicator already says
+                        // which one is active; the weight of the glyph says it a
+                        // second time, in the form a reader notices without
+                        // reading the labels.
                         icon = {
                             Icon(
-                                imageVector = when (entry) {
-                                    Tab.Chat -> Icons.AutoMirrored.Filled.Chat
-                                    Tab.Terminal -> Icons.Filled.Terminal
-                                    Tab.Files -> Icons.Filled.Folder
-                                    Tab.Settings -> Icons.Filled.Settings
-                                },
-                                contentDescription = entry.label(text),
+                                imageVector = if (selected) entry.filledIcon() else entry.icon(),
+                                contentDescription = null,
                             )
                         },
-                        // One line, always. `NavigationBarItem` measures its label
-                        // with loose constraints, so a label wider than the item
-                        // *wraps* rather than ellipsising: measured on the emulator in
-                        // Japanese at font scale 1.8, `ターミナル` took two lines and
-                        // pushed the strip's contents out of the strip. Every other
-                        // label in the app is capped; this one was the exception.
                         label = {
+                            // One line, always. The item measures its label with
+                            // loose constraints, so a label wider than the item
+                            // *wraps* rather than ellipsising: measured on the
+                            // emulator in Japanese at font scale 1.8, `ターミナル`
+                            // took two lines and pushed the bar's contents out of
+                            // it. Every other label in the app is capped; this one
+                            // was the exception.
                             Text(
                                 entry.label(text),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         },
+                        // No `colors`: the library's own defaults for this bar are
+                        // already the spec's — the active label on `secondary`, the
+                        // indicator a pill on `secondaryContainer`, the rest on
+                        // `onSurfaceVariant` — and naming them here would be a second
+                        // place for the same four roles to drift out of step with it.
                     )
                 }
             }
 
-            // The modal layer, over everything — the tab strip included, which is
-            // what makes a sheet modal. Drawn here rather than inside the page it
-            // belongs to because the page is inset above that strip, and a panel
-            // anchored to the page's bottom edge would float a strip's height
-            // above the window's.
+            // The modal layer, over everything — the navigation bar included, which
+            // is what makes a sheet modal. Drawn here rather than inside the page it
+            // belongs to because the page is inset above that bar, and a panel
+            // anchored to the page's bottom edge would float a bar's height above
+            // the window's.
             SheetLayer(host = sheets, modifier = Modifier.fillMaxSize())
         }
     }
@@ -568,8 +581,19 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
         val warnings = (runtime as RuntimeStatus.Ready).warnings
         AlertDialog(
             onDismissRequest = { },
+            shape = PiShapes.panel,
             title = { Text(text.root.environmentIncomplete) },
-            text = { Text(warnings.joinToString("\n\n")) },
+            text = {
+                Text(
+                    warnings.joinToString("\n\n"),
+                    // Bounded and scrolled inside the bound: this body is the
+                    // installer's own warnings, which run past a screen, and an
+                    // unbounded one pushed the acknowledgement off the bottom.
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            },
             confirmButton = { TextButton(onClick = { }) { Text(text.common.ok) } },
         )
     }
@@ -589,14 +613,14 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
 }
 
 /**
- * The chat tab, which is the one place the conversation state is read.
+ * The chat destination, which is the one place the conversation state is read.
  *
  * A composable of its own rather than three lines inside [RootContent]'s `when`:
  * the transcript changes several times a second while an answer streams, and the
- * read has to happen below the window's chrome — the insets, the tab strip, the
- * sheet layer — or every token re-runs all of it. `Crossfade`'s content lambda is
- * re-invoked when the state it reads changes, so the read belongs in a child whose
- * scope is the page.
+ * read has to happen below the window's chrome — the insets, the navigation bar,
+ * the sheet layer — or every token re-runs all of it. `Crossfade`'s content lambda
+ * is re-invoked when the state it reads changes, so the read belongs in a child
+ * whose scope is the page.
  */
 @Composable
 private fun ChatTab(session: PiAgentSession, agent: AgentStatus, composer: ChatComposerState) {
@@ -605,11 +629,27 @@ private fun ChatTab(session: PiAgentSession, agent: AgentStatus, composer: ChatC
     ChatScreen(session = session, agent = agent, state = state, composer = composer)
 }
 
-private fun Tab.label(text: pi.kit.mob.locales.Strings): String = when (this) {
-    Tab.Chat -> text.tabs.chat
-    Tab.Terminal -> text.tabs.terminal
-    Tab.Files -> text.tabs.files
-    Tab.Settings -> text.tabs.settings
+private fun Destination.label(text: pi.kit.mob.locales.Strings): String = when (this) {
+    Destination.Chat -> text.tabs.chat
+    Destination.Terminal -> text.tabs.terminal
+    Destination.Files -> text.tabs.files
+    Destination.Settings -> text.tabs.settings
+}
+
+/** The outlined glyph, for a destination that is not being shown. */
+private fun Destination.icon(): androidx.compose.ui.graphics.vector.ImageVector = when (this) {
+    Destination.Chat -> Icons.AutoMirrored.Outlined.Chat
+    Destination.Terminal -> Icons.Outlined.Terminal
+    Destination.Files -> Icons.Outlined.Folder
+    Destination.Settings -> Icons.Outlined.Settings
+}
+
+/** The filled glyph, for the destination being shown. */
+private fun Destination.filledIcon(): androidx.compose.ui.graphics.vector.ImageVector = when (this) {
+    Destination.Chat -> Icons.AutoMirrored.Filled.Chat
+    Destination.Terminal -> Icons.Filled.Terminal
+    Destination.Files -> Icons.Filled.Folder
+    Destination.Settings -> Icons.Filled.Settings
 }
 
 /**
@@ -661,7 +701,7 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
     // otherwise arrive in visible lurches.
     val shown by animateFloatAsState(
         targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing),
+        animationSpec = PiMotion.defaultSpatial(),
         label = "fraction",
     )
 
@@ -688,7 +728,7 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
 
             Text(
                 text = text.root.settingUp,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMediumEmphasized,
                 color = SETUP_PRIMARY,
                 textAlign = TextAlign.Center,
             )
@@ -704,25 +744,17 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
 
             Text(
                 text = "${(shown * 100).toInt()}%",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.displaySmallEmphasized,
                 color = SETUP_PRIMARY,
             )
 
             Spacer(Modifier.height(16.dp))
 
-            LinearProgressIndicator(
-                progress = { shown },
+            PiProgress(
+                fraction = shown,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = SETUP_FOREGROUND,
-                trackColor = SETUP_TRACK,
-                // The default indicator draws its own rounded caps and a gap; on a
-                // 6dp track that gap is most of the bar.
-                drawStopIndicator = {},
-                gapSize = 0.dp,
+                    .clip(PiShapes.pill),
             )
 
             Spacer(Modifier.height(14.dp))
@@ -755,23 +787,32 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
 /**
  * The setup screen's palette, fixed rather than taken from the theme.
  *
- * This screen is the only one that is dark while the rest of the app is light, so
- * it cannot use `colorScheme` without depending on the system's dark-mode setting
- * — and a user in light mode would then get a light setup screen again. It is the
- * launcher icon's black and the launcher icon's white, and nothing else: the mark
- * and the progress bar used to be amber, which made the first thing the app shows
- * the one surface whose colours did not come from the icon. The greys below are the
- * same white at lower opacities, which is what keeps the screen monochrome.
+ * This screen is the only one that is dark while the rest of the app may be light,
+ * so it cannot use `colorScheme` without depending on the system's dark-mode
+ * setting — and a user in light mode would then get a light setup screen again. It
+ * is the launcher icon's black and the launcher icon's white, and nothing else: the
+ * mark and the progress bar used to be amber, which made the first thing the app
+ * shows the one surface whose colours did not come from the icon. The greys below
+ * are the same white at lower opacities, and the one departure from monochrome is
+ * the progress bar, which takes the app's own violet because it is the only thing
+ * on the screen that is *moving*.
  */
 private val SETUP_BACKGROUND = Color(0xFF0B0E13)
 private val SETUP_PRIMARY = Color(0xFFF2F4F8)
 private val SETUP_SECONDARY = Color(0xFF9AA3B2)
 private val SETUP_TERTIARY = Color(0xFF69717F)
-private val SETUP_TRACK = Color(0xFF1E242E)
-private val SETUP_FOREGROUND = Color(0xFFFFFFFF)
 
+/**
+ * The screen a runtime that could not be prepared lands on.
+ *
+ * The body is the installer's own stderr, which runs to well over a screen: it is
+ * bounded by what is left of the page and scrolled inside that bound, because an
+ * unbounded one pushed the retry button off the bottom — the screen said neither
+ * of the two things that fixes. `fill = false` keeps a short message the height it
+ * needs rather than the height available.
+ */
 @Composable
-private fun MessageScreen(
+private fun SetupFailure(
     title: String,
     body: String,
     actionLabel: String,
@@ -780,33 +821,32 @@ private fun MessageScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        PiAgentMark(size = 64.dp, container = MaterialTheme.colorScheme.errorContainer)
+        Spacer(Modifier.height(20.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmallEmphasized,
             textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        Text(
+        Spacer(Modifier.height(12.dp))
+        PiNotice(
             text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            // Bounded by what is left of the screen and scrolled inside it. `body` is
-            // the installer's own stderr, which runs to well over a screen — measured
-            // for the same class of string in `ErrorUI` — and this screen said neither
-            // of the two things that fixes: it was not scrollable, and the retry
-            // button under it was pushed off the bottom by it. `fill = false` keeps a
-            // short message the height it needs rather than the height available.
+            tone = PiTone.Danger,
             modifier = Modifier
-                .padding(top = 12.dp)
                 .weight(1f, fill = false)
                 .verticalScroll(rememberScrollState()),
         )
-        TextButton(onClick = onAction, modifier = Modifier.padding(top = 16.dp)) {
-            Text(actionLabel)
-        }
+        Spacer(Modifier.height(20.dp))
+        PiButton(
+            text = actionLabel,
+            onClick = onAction,
+            kind = PiButtonKind.Filled,
+        )
     }
 }
 

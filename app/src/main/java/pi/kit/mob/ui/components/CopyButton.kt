@@ -17,16 +17,23 @@
  * It is [PiIcons.Copy] rather than Material's `ContentCopy` because Material draws two
  * square-cornered sheets as solid shapes, and the rounded outline is what the reader asked for.
  *
+ * The box the glyph sits in is still clipped to `PiShapes.pill` — the app's action voice — so the
+ * press outline is the same round one every other action in the app draws. It is a clip and not a
+ * container: nothing is painted behind the glyph.
+ *
  * ## The confirmation
  *
  * A copy button that does nothing visible leaves the reader wondering whether it worked, so the
  * glyph becomes [PiIcons.Check] for [COPIED_MILLIS] — the same set, the same weight, the same
- * place, so it reads as one control answering rather than as two icons taking turns. Nothing is
+ * place, so it reads as one control answering rather than as two icons taking turns. The swap runs
+ * on `PiMotion`'s fast effects spring rather than by replacing the image, because the two glyphs
+ * are the same control in two states and a cut between them reads as a flicker. Nothing is
  * announced through the semantics tree: the label does not change, and a screen reader that hears
  * "copy message" twice is better than one that hears a state it cannot act on.
  */
 package pi.kit.mob.ui.components
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,10 +45,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import pi.kit.mob.ui.design.PiMotion
+import pi.kit.mob.ui.design.PiShapes
 
 @Composable
 internal fun CopyButton(
@@ -54,11 +64,10 @@ internal fun CopyButton(
     //
     // The default used to be `LocalContentColor`, so the two call sites disagreed by accident: the
     // code block inherited whatever the bubble's `Surface` had set (`onSurface`, near-black in the
-    // light theme) while the meta row asked for `onSurfaceVariant` — the report "代码块边上的复制按钮
-    // 颜色太深了". The default is now stated here, and the meta row passes the **accent** on
-    // purpose, because that row is a finished turn's furniture: the same blue as the
-    // `工作 X 秒 · N 个步骤` line above it and the message's own timestamp beside it. See
-    // `MessageMeta`.
+    // light theme) while the meta row asked for `onSurfaceVariant`. The default is now stated here,
+    // and the meta row passes the **accent** on purpose, because that row is a finished turn's
+    // furniture: the same blue as the `工作 X 秒 · N 个步骤` line above it and the message's own
+    // timestamp beside it. See `MessageMeta`.
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     var copied by remember { mutableStateOf(false) }
@@ -78,17 +87,25 @@ internal fun CopyButton(
         // `Modifier.size` *replaces* IconButton's 48dp minimum rather than sitting inside it, so
         // the drawn box is also the touch target; the meta row compensates by pulling the row out
         // to the glyph's ink (see `CopyButtonInkInset`).
-        modifier = modifier.size(COPY_BUTTON_SIZE),
+        modifier = modifier
+            .size(COPY_BUTTON_SIZE)
+            .clip(PiShapes.pill),
     ) {
-        Icon(
-            imageVector = if (copied) PiIcons.Check else PiIcons.Copy,
-            contentDescription = contentDescription,
-            // 18dp: the glyph is the whole control now, so it carries the weight the 13dp one
-            // could not — and Lucide's sheets are drawn with their own stroke, which thins as the
-            // icon shrinks, so it needs the size more than a filled Material glyph would.
-            modifier = Modifier.size(COPY_GLYPH_SIZE),
-            tint = tint,
-        )
+        Crossfade(
+            targetState = copied,
+            animationSpec = PiMotion.fastEffects(),
+            label = "copyGlyph",
+        ) { shown ->
+            Icon(
+                imageVector = if (shown) PiIcons.Check else PiIcons.Copy,
+                contentDescription = contentDescription,
+                // 18dp: the glyph is the whole control now, so it carries the weight the 13dp one
+                // could not — and Lucide's sheets are drawn with their own stroke, which thins as
+                // the icon shrinks, so it needs the size more than a filled Material glyph would.
+                modifier = Modifier.size(COPY_GLYPH_SIZE),
+                tint = tint,
+            )
+        }
     }
 }
 

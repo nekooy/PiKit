@@ -1,12 +1,9 @@
 package pi.kit.mob.ui.settings
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -15,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
@@ -23,13 +20,10 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,11 +35,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -57,9 +52,26 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.ui.components.InlineError
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.design.PiAppBarScroll
+import pi.kit.mob.ui.design.PiBadge
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPagePadding
+import pi.kit.mob.ui.design.PiRow
+import pi.kit.mob.ui.design.PiRowDivider
+import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiSheetTitle
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiTextField
+import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.design.PiValueRow
+import pi.kit.mob.ui.design.PiNote
 
 /**
  * Working directory, what the model is given, and the process controls.
@@ -79,6 +91,10 @@ import pi.kit.mob.ui.components.Sheet
  * works in and the process that launches it. The five points open in the same
  * bottom sheet the AGENTS.md row uses — a panel over the page, not a wall of
  * prose above the one control the section is for.
+ *
+ * The three sections are three `PiGroup`s under one pinned bar: this page's body
+ * is the page, so the bar keeps its two lines and gives the groups the height
+ * (§13).
  */
 @Composable
 internal fun AgentPage(
@@ -93,22 +109,26 @@ internal fun AgentPage(
     val sheets = LocalSheetHost.current
     val instructions = remember(session) { AgentContext.file(session.env) }
 
-    Column(Modifier.fillMaxSize()) {
-        SettingsPageHeader(
-            // The row this page opens reads "Agent process"
-            // (`text.settings.agentProcess`), and so do the manual and this page's
-            // own section list; only the header said "Agent". Reading the row's key
-            // rather than a second string with the same value is what keeps the two
-            // from drifting apart again. The subtitle is the same status line the
-            // row shows, from the same function.
-            title = text.settings.agentProcess,
-            subtitle = agentDescription(agent, text),
-            onBack = onBack,
-        )
-
-        SettingsBody {
-            SettingsSection(text.settings.workspace) {
-                SettingsRow(
+    PiScaffold(
+        // The row this page opens reads "Agent process"
+        // (`text.settings.agentProcess`), and so do the manual and this page's
+        // own section list; only the header said "Agent". Reading the row's key
+        // rather than a second string with the same value is what keeps the two
+        // from drifting apart again. The subtitle is the same status line the
+        // row shows, from the same function.
+        title = text.settings.agentProcess,
+        subtitle = agentDescription(agent, text),
+        onBack = onBack,
+        scrollBehavior = PiAppBarScroll.Pinned,
+    ) { modifier ->
+        Column(
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(PiPagePadding),
+        ) {
+            PiSectionHeader(text.settings.workspace)
+            PiGroup {
+                PiRow(
                     title = text.settings.workingDirectory,
                     // The default is `$HOME/workspace`, not `$HOME`: the agent's
                     // home also holds pi's own configuration, the saved sessions
@@ -116,54 +136,67 @@ internal fun AgentPage(
                     // recursive delete anywhere outside the workspace. See
                     // `TermuxEnv.workspace`.
                     subtitle = text.settings.workingDirSubtitle(session.env.workspacePath),
-                    icon = Icons.Filled.Folder,
+                    leading = { RowMark(Icons.Filled.Folder) },
                 )
-                OutlinedTextField(
+                PiTextField(
                     value = working,
                     onValueChange = { value ->
                         working = value
                         session.settingsStore.update { it.copy(workingDir = value) }
                     },
-                    label = { Text(text.settings.workingDirectory) },
-                    placeholder = { Text(session.env.workspacePath) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                )
-                SettingsNote(
-                    text.settings.workingDirNote
+                    label = text.settings.workingDirectory,
+                    placeholder = session.env.workspacePath,
+                    // 12/4, the field's own inset inside the group's frame: a field
+                    // brings its own outline, so it is inset to sit inside the group
+                    // rather than drawn edge to edge (§9.2).
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
+            PiNote(text.settings.workingDirNote)
 
-            SettingsSection(text.settings.agentContextSection) {
+            PiSectionHeader(text.settings.agentContextSection)
+            PiGroup {
                 // The five parts live in a sheet, the same panel shape as the
                 // AGENTS.md editor under them. They used to sit open as numbered
                 // points of prose, which is a page of reading before the rows this
                 // section is actually for; the row's title is the question the
                 // sheet answers.
-                SettingsRow(
+                PiRow(
                     title = text.settings.agentContextLead,
-                    icon = Icons.Filled.Info,
-                    showChevron = true,
+                    leading = { RowMark(Icons.Filled.Info) },
                     onClick = {
                         sheets.show(Sheet(key = "agent-context-notes") {
                             ContextNotesSheet()
                         })
                     },
                 )
-                SettingsDivider()
+                PiRowDivider()
                 // The row part 2 points at — the one thing in this section that is
-                // not prose. The whole path is the subtitle, monospace and on its
-                // own line: `AGENTS.md` alone appears in a project directory too,
-                // and this is the *global* one.
-                SettingsRow(
+                // not prose. The whole path is the subtitle, on its own line:
+                // `AGENTS.md` alone appears in a project directory too, and this is
+                // the *global* one. The path is a machine string, which §9.2 keeps
+                // in the subtitle — the row's full width, three lines — because a
+                // third of a row cannot show a path.
+                PiRow(
                     title = text.settings.agentContextInstructions,
                     subtitle = instructions.absolutePath,
-                    monospace = true,
-                    value = text.settings.agentContextInstructionsEditable,
-                    icon = Icons.Filled.Description,
-                    showChevron = true,
+                    leading = { RowMark(Icons.Filled.Description) },
+                    // The badge and the chevron together: `PiRow` draws its chevron
+                    // only when the trailing slot is empty, and a row that says what
+                    // it is *and* opens a sheet needs both.
+                    trailing = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            PiBadge(text.settings.agentContextInstructionsEditable, tone = PiTone.Accent)
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
                     onClick = {
                         sheets.show(Sheet(key = "agent-context") {
                             InstructionsEditor(
@@ -174,68 +207,88 @@ internal fun AgentPage(
                     },
                 )
             }
-            SettingsNote(text.settings.agentContextNote)
+            PiNote(text.settings.agentContextNote)
 
-            SettingsSection(text.settings.process) {
-                SettingsRow(
+            PiSectionHeader(text.settings.process)
+            PiGroup {
+                PiRow(
                     title = text.settings.agentProcess,
                     subtitle = agentDescription(agent, text),
-                    icon = Icons.Filled.PlayArrow,
+                    leading = { RowMark(Icons.Filled.PlayArrow) },
                 )
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Button(
+                    PiButton(
+                        text = text.settings.restartAgent,
                         onClick = {
                             scope.launch {
                                 session.stopAgent()
                                 session.startAgent()
                             }
                         },
-                    ) { Text(text.settings.restartAgent) }
-
-                    OutlinedButton(
+                        kind = PiButtonKind.Filled,
+                        size = PiButtonSize.Small,
+                    )
+                    PiButton(
+                        text = text.settings.stopAgent,
                         onClick = { scope.launch { session.stopAgent() } },
+                        kind = PiButtonKind.Outlined,
+                        size = PiButtonSize.Small,
                         enabled = agent != AgentStatus.Stopped,
-                    ) {
-                        Icon(Icons.Filled.Stop, contentDescription = null)
-                        Text(text.settings.stopAgent, modifier = Modifier.padding(start = 8.dp))
-                    }
+                        leadingIcon = { Icon(Icons.Filled.Stop, contentDescription = null) },
+                    )
                 }
 
                 if (agent is AgentStatus.Failed) {
-                    InlineError(agent.message)
+                    PiNotice(
+                        text = agent.message,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        tone = PiTone.Danger,
+                    )
                 }
 
-                // Keep-alive: the foreground service and the turn wake lock only
-                // work if the OS is not allowed to reclaim the process the moment
-                // the screen goes off. The exemption is the system's own dialog;
-                // this row reports whether it is already held and offers the ask.
-                SettingsDivider()
+                PiRowDivider()
                 KeepAliveRow(text = text)
             }
-
-            SettingsNote(text.settings.failedStartNote)
+            PiNote(text.settings.failedStartNote)
         }
     }
 }
 
 /**
+ * A leading mark, in the muted role a list row draws one in.
+ *
+ * The design package's rows leave the tint to `LocalContentColor`, which a group
+ * sets to `onSurface` — the title's own colour, at which a leading glyph competes
+ * with the words beside it. Every list in this app draws its leading mark in
+ * `onSurfaceVariant`.
+ */
+@Composable
+private fun RowMark(icon: ImageVector) {
+    Icon(
+        icon,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
  * One numbered point of the description: a title and what it holds.
  *
- * Deliberately not a `SettingsRow`: a row is a control — it has a value column, a
- * chevron and a ripple — and four of these five points have nothing to operate. The
+ * Deliberately not a row: a row is a control — it has a value column, a chevron
+ * and a ripple — and four of these five points have nothing to operate. The
  * number is drawn here rather than written into the string, so the three catalogs
  * cannot disagree about how many parts there are.
  */
 @Composable
 private fun ContextPoint(number: Int, title: String, body: String) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+    Column(Modifier.padding(horizontal = 24.dp, vertical = 10.dp)) {
         Text(
             text = "$number. $title",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.bodyMediumEmphasized,
         )
         Text(
             text = body,
@@ -249,49 +302,34 @@ private fun ContextPoint(number: Int, title: String, body: String) {
 /**
  * What the model is given, as a sheet over the page.
  *
- * Same panel shape as [InstructionsEditor] — a title over a hairline — and no
- * close button of its own: it is read-only, and the scrim, the downward drag and
- * back already dismiss it. The body is the five numbered points, which used to
- * sit open on the page: as a sheet they are the answer to the row's question
- * rather than a wall of prose the reader scrolls past to reach the one control
- * the section owns.
+ * Same panel shape as [InstructionsEditor], and no close button of its own: it is
+ * read-only, and the scrim, the downward drag and back already dismiss it. The body is
+ * the five numbered points, which used to sit open on the page: as a sheet they are the
+ * answer to the row's question rather than a wall of prose the reader scrolls past to
+ * reach the one control the section owns.
+ *
+ * The 12dp that used to clear the title's hairline — the first point sat against the
+ * rule — is the sheet title's own bottom padding now: the design system's title
+ * separates itself by space rather than by a rule (§13).
+ *
+ * The body stays a plain scrolling `Column` rather than a `PiSheetList`: the
+ * points are prose blocks, not rows, and the ceiling below is what keeps the
+ * panel a panel.
  */
 @Composable
 private fun ContextNotesSheet() {
     val text = strings
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = text.settings.agentContextSection,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = text.settings.agentContextLead,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-
-        HorizontalDivider()
+        PiSheetTitle(
+            title = text.settings.agentContextSection,
+            subtitle = text.settings.agentContextLead,
+        )
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
-                .verticalScroll(rememberScrollState())
-                // Clear of the title's hairline: the first point sat against it.
-                .padding(top = 12.dp),
+                .verticalScroll(rememberScrollState()),
         ) {
             ContextPoint(1, text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
             ContextPoint(
@@ -314,11 +352,18 @@ private val CONTEXT_NOTES_MAX_HEIGHT = 440.dp
  * The battery-optimisation exemption: the one keep-alive lever the OS owns.
  *
  * The state and the ask are [BatteryOptimisation]'s, which the first-launch dialog
- * uses too — this row is the *report* and the way back to it. The foreground service
- * and the turn wake lock do nothing for a process the OEM's power manager has already
- * decided to reclaim the moment the screen goes off, which is the report "息屏后会直接
- * terminated"; the row is a status and a button because the state is worth seeing and
- * the action is one tap when it is missing.
+ * uses too — this row is the *report* and the way back to it. The exemption is the
+ * system's own dialog, which the app cannot draw: the foreground service and the turn
+ * wake lock only work if the OS is not allowed to reclaim the process the moment the
+ * screen goes off, which is the report "息屏后会直接 terminated", and this row reports
+ * whether the exemption is already held and offers the ask.
+ *
+ * The state is the row's value in a [PiTone]: the accent role when the exemption is
+ * held and the neutral one while it is not, which is the distinction the row used to
+ * draw in `primary` against `onSurfaceVariant` — the state is readable without the
+ * wording having to carry it alone. The consequence is a note under the row rather
+ * than the row's subtitle, because it is a sentence and the value column is a third
+ * of a row (§9.2).
  */
 @Composable
 private fun KeepAliveRow(text: Strings) {
@@ -341,39 +386,28 @@ private fun KeepAliveRow(text: Strings) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Text(
-            text = text.settings.keepAliveTitle,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            text = if (exempt) text.settings.keepAliveGranted else text.settings.keepAliveDenied,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (exempt) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.padding(top = 3.dp),
-        )
-        Text(
-            text = text.settings.keepAliveNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 3.dp),
-        )
+    PiValueRow(
+        title = text.settings.keepAliveTitle,
+        value = if (exempt) text.settings.keepAliveGranted else text.settings.keepAliveDenied,
+        valueTone = if (exempt) PiTone.Accent else PiTone.Neutral,
+        maxValueLines = 2,
+        leading = { RowMark(Icons.Filled.Settings) },
+    )
+    PiNote(text.settings.keepAliveNote)
+    Row(
+        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
+    ) {
         // Always drawn, disabled once held: a button that appeared when the
         // exemption was missing made the section jump a button taller and then
         // shorter again as the answer changed.
-        OutlinedButton(
+        PiButton(
+            text = text.settings.keepAliveAsk,
             onClick = { BatteryOptimisation.request(context) },
+            kind = PiButtonKind.Outlined,
+            size = PiButtonSize.Small,
             enabled = !exempt,
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            Icon(Icons.Filled.Settings, contentDescription = null)
-            Text(text.settings.keepAliveAsk, Modifier.padding(start = 8.dp))
-        }
+            leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+        )
     }
 }
 
@@ -393,6 +427,24 @@ private fun KeepAliveRow(text: Strings) {
  * change the model does not see until the next launch. Saying "restart the agent
  * yourself" would leave the sentence the user just wrote unread, which is worse than
  * a restart they did not ask for: the same trade the storage page already makes.
+ *
+ * ## No close button in the title
+ *
+ * The title is [PiSheetTitle], which has no action slot, and the panel is dismissible
+ * four ways — the scrim, a downward drag, back, and this body's own Cancel. The ✕ that
+ * used to sit on this title's line went with the context sheet's, which is the same
+ * panel shape and the same reasoning: a second way to do what four already do was one
+ * control too many on the one line that says what the sheet is.
+ *
+ * ## Why the field is Material's own and not [PiTextField]
+ *
+ * The design package's field cannot express what a document editor needs, and every
+ * one of the three is a behaviour this file already had: a monospace `textStyle` (the
+ * document's structure is headings and bullets, and a proportional face hides that),
+ * `autoCorrectEnabled = false` (an autocorrected command in a bullet tells the agent
+ * to run something that does not exist) and its own height bounds, which is the scroll
+ * the brief keeps. So the field is `OutlinedTextField` drawn with the design system's
+ * own shape and colours, and the gap is reported rather than papered over.
  */
 @Composable
 private fun InstructionsEditor(
@@ -411,36 +463,10 @@ private fun InstructionsEditor(
     var confirmRestore by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 4.dp, top = 2.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = text.settings.agentContextInstructions,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = file.absolutePath,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-            IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = text.common.cancel)
-            }
-        }
-
-        HorizontalDivider()
+        PiSheetTitle(
+            title = text.settings.agentContextInstructions,
+            subtitle = file.absolutePath,
+        )
 
         OutlinedTextField(
             value = draft,
@@ -459,35 +485,31 @@ private fun InstructionsEditor(
                 // sentence that tells the agent to run something that does not exist.
                 autoCorrectEnabled = false,
             ),
+            shape = PiShapes.card,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
-                // 12h/12t/8b: more air under the title's hairline than the 12/4
-                // every other field uses — the editor box sat against the rule —
-                // and room for the note that follows to read as its own part.
+                // 12h/12t/8b: more air above the box than the 12/4 every other
+                // field uses — the editor sat against the sheet's title — and room
+                // for the note that follows to read as its own part.
                 .padding(horizontal = 12.dp)
                 .padding(top = 12.dp, bottom = 8.dp)
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
-        Text(
-            text = text.settings.agentContextEditorNote,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        PiNote(text.settings.agentContextEditorNote)
         when {
-            failed -> Text(
+            failed -> PiNote(
                 text = text.settings.agentContextFailed,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                tone = PiTone.Danger,
             )
 
-            saved -> Text(
+            saved -> PiNote(
                 text = text.settings.agentContextSaved,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
+                tone = PiTone.Accent,
             )
         }
 
@@ -501,12 +523,21 @@ private fun InstructionsEditor(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.weight(1f))
-            OutlinedButton(onClick = onClose) { Text(text.common.cancel) }
-            OutlinedButton(onClick = { confirmRestore = true }) {
-                Text(text.settings.agentContextRestore)
-            }
-            Button(
+            Spacer(Modifier.weight(1f))
+            PiButton(
+                text = text.common.cancel,
+                onClick = onClose,
+                kind = PiButtonKind.Outlined,
+                size = PiButtonSize.Small,
+            )
+            PiButton(
+                text = text.settings.agentContextRestore,
+                onClick = { confirmRestore = true },
+                kind = PiButtonKind.Outlined,
+                size = PiButtonSize.Small,
+            )
+            PiButton(
+                text = text.settings.agentContextSave,
                 onClick = {
                     // Written first, reported after: a save that claims to have
                     // happened and did not is the one outcome this button must not
@@ -519,9 +550,9 @@ private fun InstructionsEditor(
                     saved = written
                     if (written) session.scheduleRestart()
                 },
-            ) {
-                Text(text.settings.agentContextSave)
-            }
+                kind = PiButtonKind.Filled,
+                size = PiButtonSize.Small,
+            )
         }
     }
 

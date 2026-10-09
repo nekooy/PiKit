@@ -229,11 +229,18 @@ private val CODE_CHIP_PAD_X = 3.dp
 private val CODE_CHIP_PAD_Y = 1.dp
 
 /**
- * The code chip's corner radius.
+ * The code chip's corner radius: `PiShapes.extraSmall`'s step.
  *
- * 6dp rather than the 8dp a block of code uses: a chip is one line tall, and at 8dp
- * on a 22sp line box the corners are nearly half its height and it stops reading as
- * a rounded rectangle. The height clamps it to a pill where the line is shorter
- * than 12dp, which is what the platform would do with a larger number anyway.
+ * It was 6dp, hand-picked, on the measurement that a block of code's 8dp was too
+ * round for a chip one line tall — at 8dp on a 22sp line box the corners are nearly
+ * half its height and the fill stops reading as a rounded rectangle. That
+ * measurement is right and it says *less*, not *more*: 4dp is the design system's
+ * smallest step, it is inside the one-line constraint with room to spare, and it is
+ * a step of the scale rather than a number between two of them. The block it sits
+ * above takes `PiShapes.row`, so the two shapes are four steps apart rather than two,
+ * which is what keeps an inline span reading as a span.
+ *
+ * The value is written as a dp here rather than read off the shape because the fill
+ * is drawn by a `DrawScope`, which wants a radius in pixels — see `CodeChipPen`.
  */
-private val CODE_CHIP_RADIUS = 6.dp
+private val CODE_CHIP_RADIUS = 4.dp

@@ -1,7 +1,6 @@
 package pi.kit.mob.ui.chat
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -61,6 +59,10 @@ import pi.kit.mob.pi.ToolState
 import pi.kit.mob.ui.clipEntryFor
 import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.components.PiIcons
+import pi.kit.mob.ui.design.PiMotion
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.design.PiWorkingPill
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -345,78 +347,89 @@ internal data class TurnSummaryData(
 )
 
 /**
- * One tool call: a single line until it is tapped.
+ * One tool call: a dense row once it is done, the app's live pill while it runs.
  *
- * ## What this replaced, and why
+ * ## Two shapes, because the two states are two different facts
  *
- * The card used to be a filled `surfaceContainer` panel with a header row *and*
- * two lines of the tool's output always visible under it. A turn that used six
- * tools was therefore six panels of three or four lines each, and the answer —
- * the thing the reader asked for — was pushed a screen and a half down by
- * scaffolding. "Too big and too ugly" is the report that came back, and both
- * halves of it are the same cause: the card was designed as something to read
- * rather than as something to notice.
+ * A call that is **running** is drawn as a coral [PiWorkingPill] naming the tool.
+ * That is the app's one live indicator (`PiTone.Live`, `tertiary`, reserved for
+ * "this is still going" and for nothing else) and the brief that produced this
+ * design asks for it by name. The argument stays beside the pill as one line of
+ * muted monospace, because for a call that has not finished yet the argument is
+ * the only thing that says *what* it is doing — `ls -la` is the answer, the tool's
+ * name is not.
  *
- * So the closed state is one line and nothing else — the state mark, the tool's
- * name, and as much of its argument as fits before the chevron — with no
- * background of its own.
+ * A call that has **finished** is a dense row in the dense voice: the state mark,
+ * the tool's name, a middot and as much of its argument as fits before the
+ * chevron, on `PiShapes.row` — one step at a time, never a pill. Nothing else is
+ * on it and it has no background of its own.
  *
- * ## The line, in the reference's shape
+ * The height therefore changes once per call, when it ends, and that reflow is
+ * deliberate rather than overlooked: the pill is 28dp and the row is 22dp, and the
+ * *transition* is what tells the reader a step completed. Every previous attempt to
+ * hold the height still put a second moving thing on a row whose mark already
+ * reported the state.
  *
- * `✓ read · /sdcard/notes.md ⌄` — mark, name, a middot, the argument, chevron —
- * which is the same shape as the reasoning row above it and the turn band above
- * that. Three devices were removed to get here, each of them reported:
+ * ## The state is a tone, not a colour
+ *
+ * `PiTone` carries it: [PiTone.Live] while it runs, [PiTone.Danger] when it failed,
+ * [PiTone.Neutral] once it succeeded. Only the failure is coloured at all, which is
+ * what makes the one red mark in a turn findable — a successful call is a fact and
+ * does not need an accent. The old mark was `primary` while running, `secondary` on
+ * success and `error` on failure, which spent the app's own voice on a step that
+ * had simply finished.
+ *
+ * ## What this replaced, and why each device is still not here
+ *
+ * The card was a filled panel with a header row *and* two lines of the tool's
+ * output always visible under it, so a turn that used six tools was six panels of
+ * three or four lines each and the answer — the thing the reader asked for — was
+ * pushed a screen and a half down by scaffolding. Three devices were removed to get
+ * from there to a bare row, each of them reported, and none of them has come back
+ * in this design:
  *
  *  - **The spinner.** A running call drew a `CircularProgressIndicator` after its
- *    name, which is a second moving thing on a row whose mark already says what
- *    state it is in, and it made the name's own width depend on the state. The
- *    mark carries it: a filled dot while the call runs, a tick or a cross when it
- *    is done.
- *  - **The step rail.** Consecutive calls used to be inset 12dp and joined by a
- *    2dp bar down their left edge, so that a run read as one turn's steps. The
- *    rail cost the reader 12dp of width on every row of a turn and — because the
- *    inset existed on *all* tool rows, rail or not — moved every tool's mark
- *    12dp right of every other row's text. The rows now start at the transcript's
- *    own margin, like the thinking and the answer they belong to, and the rhythm
- *    between them (`STEP_GAP` in `ChatScreen.kt`) is what groups them.
+ *    name — a second moving thing on a row whose mark already says what state it is
+ *    in, and it made the name's own width depend on whether the call had finished.
+ *    The state is carried by the row's own shape now.
+ *  - **The step rail.** Consecutive calls used to be inset 12dp and joined by a 2dp
+ *    bar down their left edge, so that a run read as one turn's steps. The rail cost
+ *    the reader 12dp of width on every row of a turn and — because the inset
+ *    existed on *all* tool rows, rail or not — moved every tool's mark 12dp right of
+ *    every other row's text. The rows now start at the card's own margin, like the
+ *    thinking and the answer they belong to.
  *  - **The ripple.** See [disclosureClickable].
  *
  * The state mark is the app's own tick and cross — `Icons.Filled.Check` and
  * `Icons.Filled.Close`, the glyphs the model list marks an active profile and its
  * remove button with — rather than the `✓`/`✕` characters this used to draw. At
  * `labelSmall` a text check is a thin diagonal that reads as a stray punctuation
- * mark beside the bold icons on every other row in the app; the character was the
- * one part of the card that had never matched anything.
+ * mark beside the bold icons on every other row in the app.
  *
  * The collapsed line is exactly one text line tall and the summary is ellipsised
  * rather than wrapped, so a card cannot change height as an argument streams in
  * one character at a time.
  */
 @Composable
-internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
+internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
     // `rememberSaveable`, not `remember`: a `LazyColumn` disposes the items that
     // scroll out of its viewport, and a plain `remember` goes with them — so a card
     // the reader had opened came back closed as soon as it left the screen and came
     // back. Lazy items are wrapped in a `SaveableStateProvider` keyed by the item's
-    // own key, so a saveable value is restored with the item. The reasoning toggle
-    // in `ChatScreen` had the same bug for the same reason.
+    // own key, so a saveable value is restored with the item.
     var expanded by rememberSaveable(item.key) { mutableStateOf(false) }
     // `LocalClipboard`, not the deprecated `LocalClipboardManager` — the replacement is
     // suspend, so the copy runs in a scope. See `clipEntryFor`.
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
 
-    val accent = when (item.state) {
-        ToolState.Failed -> MaterialTheme.colorScheme.error
-        ToolState.Succeeded -> MaterialTheme.colorScheme.secondary
-        else -> MaterialTheme.colorScheme.primary
+    val tone = when (item.state) {
+        ToolState.Failed -> PiTone.Danger
+        ToolState.Succeeded -> PiTone.Neutral
+        else -> PiTone.Live
     }
+    val ink = tone.ink(MaterialTheme.colorScheme)
 
-    // One radius for every disclosure row and the panel it opens: the turn
-    // band, a tool card and a message's reasoning used to clip at 7dp, 6dp and
-    // 12dp respectively, so three rows that are the same gesture drew three
-    // different corners when they landed in one viewport.
-    val shape = RoundedCornerShape(DISCLOSURE_RADIUS)
     val summary = remember(item.argumentsJson) { toolSummary(item) }
     // Counted once per output rather than once per recomposition: a tool that dumps
     // thousands of lines streams `output` a chunk at a time, so an unremembered
@@ -428,6 +441,34 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
     val lines = remember(item.output) { item.output.lineSequence().count() }
 
     Column(Modifier.fillMaxWidth()) {
+        if (item.state == ToolState.Pending || item.state == ToolState.Running) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = ROW_PADDING),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PiWorkingPill(label = item.name.ifBlank { text.chat.toolFallback })
+                if (summary.isNotBlank()) {
+                    // `weight(1f, fill = false)` — not `fill = true`: the line takes
+                    // only what it needs, so a long path ellipsises at the card's edge
+                    // instead of stretching the pill's row.
+                    Text(
+                        summary,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .padding(start = 6.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = MONO_LINE_HEIGHT),
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            return@Column
+        }
+
         // Only the header row toggles the card. Making the whole card clickable
         // would be tidier, but a clickable consumes the long-press, which would
         // leave the output impossible to select or copy — the opposite of what a
@@ -435,7 +476,7 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(shape)
+                .clip(PiShapes.row)
                 // The label is on the control rather than on the arrow inside it: a
                 // screen reader reaching this row should hear what the row does.
                 .disclosureClickable(
@@ -448,38 +489,27 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
             // The mark, then the name, then as much of the argument as fits.
             //
             // The three *states* are drawn inside one fixed square, because the tick
-            // and the cross are 14dp icons and a `labelSmall` dot's line box is 16dp
-            // tall — without it a running row was a shade taller and a shade wider
-            // than a finished one and a turn's rows did not stack. There is no
-            // per-tool glyph (a magnifier for a read, a terminal for a shell) and
-            // that is the point of the reference this was rebuilt against: the mark
-            // answers "did it work", which is the question a reader has about a step
-            // they did not open, and the name beside it already says which tool ran.
+            // and the cross are 14dp icons — without it a row was a shade taller and
+            // a shade wider than the one below it and a turn's rows did not stack.
+            // There is no per-tool glyph (a magnifier for a read, a terminal for a
+            // shell) and that is the point of the reference this was rebuilt
+            // against: the mark answers "did it work", which is the question a
+            // reader has about a step they did not open, and the name beside it
+            // already says which tool ran.
             Box(
                 modifier = Modifier.size(TOOL_MARK_SIZE),
                 contentAlignment = Alignment.Center,
             ) {
-                when (item.state) {
-                    ToolState.Succeeded -> Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(TOOL_MARK_SIZE),
-                    )
-
-                    ToolState.Failed -> Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(TOOL_MARK_SIZE),
-                    )
-
-                    ToolState.Pending, ToolState.Running -> Text(
-                        "\u25cf",
-                        color = accent,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
+                Icon(
+                    imageVector = if (item.state == ToolState.Failed) {
+                        Icons.Filled.Close
+                    } else {
+                        Icons.Filled.Check
+                    },
+                    contentDescription = null,
+                    tint = ink,
+                    modifier = Modifier.size(TOOL_MARK_SIZE),
+                )
             }
             Text(
                 item.name.ifBlank { text.chat.toolFallback },
@@ -490,7 +520,7 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
                 overflow = TextOverflow.Ellipsis,
             )
             // The one-line preview of what the call was made with: the whole of
-            // the closed card's content, and the reason it is the argument rather
+            // the closed row's content, and the reason it is the argument rather
             // than the output — `ls -la` says what the call is, and the first two
             // lines of a directory listing do not.
             if (summary.isNotBlank()) {
@@ -520,7 +550,7 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
                     // it at, so opening the card does not resize the text the reader
                     // was already looking at.
                     style = MaterialTheme.typography.bodySmall.copy(
-                        lineHeight = TOOL_LINE_HEIGHT,
+                        lineHeight = MONO_LINE_HEIGHT,
                     ),
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -544,19 +574,23 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
 
             // The panel is the only filled surface a tool call has, so it says "this
             // is the thing you opened" without decorating every closed row in the
-            // turn. It starts where the row's own text starts — there is no inset any
-            // more, because no row has one. Same radius as the reasoning panel it
-            // sits beside: two expanded blocks in one turn are one shape.
+            // turn. It is one step past the card it sits in — the card is
+            // `surfaceContainerLow`, so an inset inside it is `…High` — and at the
+            // dense `row` radius, which is the same step and the same shape as the
+            // reasoning panel beside it: two expanded blocks in one turn are one
+            // shape.
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(PANEL_RADIUS),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = PiShapes.row,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 6.dp)) {
+                Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 8.dp)) {
                     if (summary.isNotBlank()) {
                         Text(
                             summary,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                lineHeight = MONO_LINE_HEIGHT,
+                            ),
                             fontFamily = FontFamily.Monospace,
                         )
                     }
@@ -570,10 +604,7 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
                                 modifier = Modifier.weight(1f),
                             )
                             // The same `CopyButton` the meta row and a code block
-                            // use: one glyph set, one weight, one confirmation. It
-                            // was a Material `ContentCopy` at 15dp in a 28dp
-                            // `IconButton`, which read as a different control from
-                            // the Lucide copy two rows above it.
+                            // use: one glyph set, one weight, one confirmation.
                             CopyButton(
                                 onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(item.output)) } },
                                 contentDescription = text.chat.copyOutput,
@@ -594,7 +625,7 @@ internal fun ToolCard(item: ChatItem.Tool, text: Strings) {
                             Text(
                                 item.output,
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    lineHeight = TOOL_LINE_HEIGHT,
+                                    lineHeight = MONO_LINE_HEIGHT,
                                 ),
                                 fontFamily = FontFamily.Monospace,
                             )
@@ -620,37 +651,24 @@ private val TOOL_CHEVRON_GAP = 4.dp
  * and short enough that a turn of six tool calls is still a glance rather than a
  * screen. It is *inside* the tap target, so the whole of that 22dp responds to a
  * press rather than only the glyphs.
+ *
+ * It is also why the tool row is not a `PiRow`: that is 14dp of padding and 52dp
+ * tall, because a settings row is read and tapped one at a time, while the point
+ * of this row is that six of them are one glance.
  */
 internal val ROW_PADDING = 3.dp
 
 /**
- * One radius for the transcript's three disclosure rows.
- *
- * The turn band, a tool card and a message's reasoning are the same gesture and
- * used to clip at 7dp, 6dp and 6dp — two of the three agreed and the third was
- * a hair different, which is exactly the kind of drift a reader feels as "not
- * one system" without being able to name it.
- */
-private val DISCLOSURE_RADIUS = 6.dp
-
-/**
- * One radius for a disclosure's expanded panel.
- *
- * The tool output panel and the reasoning block are the two filled surfaces a
- * turn draws under its bare rows. They were 7dp and 12dp; one shape at 10dp —
- * `shapes.extraSmall` — is the small card radius the rest of the app already
- * uses for chips and tiles.
- */
-private val PANEL_RADIUS = 10.dp
-
-/**
- * A tool card's line height, for its preview and for its output.
+ * The line box every monospace block in the app is drawn at.
  *
  * `bodySmall`'s own 16sp is tight for monospace, whose glyphs are all one width and
- * therefore have no natural word rhythm to read along; 18sp is the same figure the
- * reasoning block uses, and it is what makes a directory listing legible.
+ * therefore have no natural word rhythm to read along; 18sp is what makes a
+ * directory listing legible. One number for a tool's preview, a tool's output, the
+ * reasoning block and a fenced code block in a reply — the three used to hold their
+ * own copy of it, and a code block that disagreed with the terminal beside it by
+ * 2sp is exactly the kind of drift a reader feels without being able to name.
  */
-private val TOOL_LINE_HEIGHT = 18.sp
+internal val MONO_LINE_HEIGHT = 18.sp
 
 /** How much of a tool's output is on screen before the panel scrolls itself. */
 private val TOOL_OUTPUT_MAX_HEIGHT = 240.dp
@@ -707,6 +725,15 @@ internal fun Modifier.disclosureClickable(
  * The label belongs to the *control*, not to the arrow: a screen reader reaching a
  * tappable row should hear what the row does, and an arrow inside it is decoration.
  * Each caller passes its own through `onClickLabel`.
+ *
+ * ## Why the turn is a spring and not the 160 ms tween it was
+ *
+ * The design language's first motion rule is that spatial movement — anything that
+ * moves, rotates or resizes — is animated by the scheme's spatial spring, and that
+ * nothing at a call site names a spring of its own. A chevron turning over is
+ * spatial movement and a small component, so it is the *fast* spatial spec, and the
+ * hand-picked duration it used to carry is gone with it: the same gesture on three
+ * rows should not be the one place in the app with a motion of its own.
  */
 @Composable
 internal fun DisclosureChevron(
@@ -716,7 +743,7 @@ internal fun DisclosureChevron(
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(durationMillis = CHEVRON_TURN_MS),
+        animationSpec = PiMotion.fastSpatial(),
         label = "disclosure-chevron",
     )
     Icon(
@@ -731,9 +758,6 @@ internal fun DisclosureChevron(
 
 /** One size for every disclosure arrow on the page. */
 private val CHEVRON_SIZE = 16.dp
-
-/** Long enough to read as a turn rather than a flicker. */
-private const val CHEVRON_TURN_MS = 160
 
 /**
  * The row that opens a message's reasoning.
@@ -779,7 +803,7 @@ internal fun ReasoningToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(DISCLOSURE_RADIUS))
+            .clip(PiShapes.row)
             .disclosureClickable(
                 onClickLabel = if (expanded) text.chat.hideReasoning else text.chat.showReasoning,
                 onClick = onToggle,
@@ -791,14 +815,17 @@ internal fun ReasoningToggle(
             imageVector = PiIcons.Thinking,
             contentDescription = null,
             modifier = Modifier.size(TOOL_MARK_SIZE),
-            tint = MaterialTheme.colorScheme.primary,
+            // The app's own accent: the thinking mark is primary everywhere it
+            // appears — this row, the composer's thinking-level chip — so the mark
+            // means "reasoning" before the label beside it is read.
+            tint = PiTone.Accent.ink(MaterialTheme.colorScheme),
         )
         Text(
             text = text.chat.reasoningLabel(chars),
             modifier = Modifier.padding(start = 6.dp),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = PiTone.Neutral.ink(MaterialTheme.colorScheme),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -841,12 +868,21 @@ internal fun ReasoningToggle(
  * screen with no way to know it was there. 240dp is about a third of the transcript
  * viewport: enough to read the shape of the thinking, short enough that the answer is
  * always on screen under it, and scrollable in place when it is not.
+ *
+ * ## Why the fill is a step *past* its container
+ *
+ * The block is drawn inside the answer's card, which is `surfaceContainerLow`, so
+ * its own fill is `surfaceContainerHigh`: an inset reads one step away from the
+ * surface it sits on in both schemes, and at three steps it would read as a
+ * different panel rather than as a step — the mistake the palette's own note warns
+ * about. Same shape as the tool output panel beside it, `PiShapes.row`, because the
+ * two are the same thing: an information-dense inset inside a turn.
  */
 @Composable
 internal fun ReasoningBlock(thinking: String) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(PANEL_RADIUS),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = PiShapes.row,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -856,7 +892,7 @@ internal fun ReasoningBlock(thinking: String) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall.copy(
-                lineHeight = REASONING_LINE_HEIGHT,
+                lineHeight = MONO_LINE_HEIGHT,
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -865,9 +901,6 @@ internal fun ReasoningBlock(thinking: String) {
 
 /** How much of the reasoning is on screen before it scrolls on its own. */
 private val REASONING_MAX_HEIGHT = 240.dp
-
-/** Slightly looser than `bodySmall`'s 16sp: a block of dense reasoning needs the air. */
-private val REASONING_LINE_HEIGHT = 18.sp
 
 /**
  * The fold row's label, as a pure function of what the turn knows about itself.
@@ -905,11 +938,17 @@ internal fun turnSummaryLabel(summary: TurnSummaryData, text: Strings): String {
  */
 @Composable
 internal fun NoticeCard(item: ChatItem.Notice) {
-    val color = when (item.kind) {
-        NoticeKind.Info -> MaterialTheme.colorScheme.onSurfaceVariant
-        NoticeKind.Warning -> MaterialTheme.colorScheme.primary
-        NoticeKind.Error -> MaterialTheme.colorScheme.error
+    // `PiTone`'s middle three, and the *ink* accessor rather than a container: a
+    // notice is a remark about the conversation rather than a control, so it wears
+    // its colour as text and rule with no fill of its own. A warning is the app's
+    // own accent and not the live coral — coral means "still running", and nothing
+    // in a notice is.
+    val tone = when (item.kind) {
+        NoticeKind.Info -> PiTone.Neutral
+        NoticeKind.Warning -> PiTone.Accent
+        NoticeKind.Error -> PiTone.Danger
     }
+    val color = tone.ink(MaterialTheme.colorScheme)
     Text(
         item.text,
         modifier = Modifier
@@ -923,7 +962,7 @@ internal fun NoticeCard(item: ChatItem.Notice) {
             }
             .padding(start = NOTICE_TEXT_INSET),
         color = color,
-        style = MaterialTheme.typography.bodySmall.copy(lineHeight = TOOL_LINE_HEIGHT),
+        style = MaterialTheme.typography.bodySmall.copy(lineHeight = MONO_LINE_HEIGHT),
         fontFamily = FontFamily.Monospace,
     )
 }
@@ -990,7 +1029,7 @@ internal fun TurnSummaryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(DISCLOSURE_RADIUS))
+            .clip(PiShapes.row)
             .disclosureClickable(
                 enabled = foldable,
                 onClickLabel = if (expanded) text.chat.stepsHide else text.chat.stepsShow,
@@ -1018,7 +1057,7 @@ internal fun TurnSummaryRow(
             // page's three disclosures" — and the reader's report is that this line, a message's
             // timestamp and its copy button are the furniture of a finished turn and should read
             // as one accent: "把工作几秒、几个步骤、消息时间、消息复制按钮等都变成主题蓝色".
-            color = MaterialTheme.colorScheme.primary,
+            color = PiTone.Accent.ink(MaterialTheme.colorScheme),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1026,7 +1065,7 @@ internal fun TurnSummaryRow(
             DisclosureChevron(
                 expanded = expanded,
                 modifier = Modifier.padding(start = TOOL_CHEVRON_GAP),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = PiTone.Accent.ink(MaterialTheme.colorScheme),
             )
         }
     }

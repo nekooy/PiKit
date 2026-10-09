@@ -75,7 +75,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -103,6 +102,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import pi.kit.mob.ui.design.PiShapes
 import kotlin.math.roundToInt
 
 /**
@@ -382,11 +382,11 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
         ) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                // Square at the bottom, because the bottom two corners sit on the
-                // window's own edge: rounding them would let the scrim show
-                // through underneath. This is Material3's own docked sheet shape
-                // (`CornerExtraLargeTop`).
-                shape = PANEL_SHAPE,
+                // The panel's corners are the app's sheet shape, which is `PiShapes`'s
+                // 28dp pair and square at the bottom: the bottom two corners sit on
+                // the window's own edge, so rounding them would let the scrim show
+                // through underneath.
+                shape = PiShapes.sheetTop,
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = SHEET_MAX_WIDTH)
@@ -464,7 +464,9 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
  *
  * `onSurfaceVariant` at 0.4 rather than at full strength: at full strength a 4dp
  * bar on the near-white sheet reads as a scratch, and the grabber is an
- * affordance, not content.
+ * affordance, not content. Its shape is `PiShapes.pill` — the app's action voice,
+ * and the shape a 4dp bar would take anyway; naming it keeps the one place that
+ * decides what "round" means.
  */
 @Composable
 private fun SheetGrabber() {
@@ -473,14 +475,11 @@ private fun SheetGrabber() {
             modifier = Modifier
                 .padding(top = 10.dp, bottom = 2.dp)
                 .size(width = GRABBER_WIDTH, height = GRABBER_HEIGHT)
-                .clip(MaterialTheme.shapes.small)
+                .clip(PiShapes.pill)
                 .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = GRABBER_ALPHA)),
         )
     }
 }
-
-/** The panel's shape: Material3's docked top corners, square where it meets the window. */
-private val PANEL_SHAPE = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
 /**
  * Material3's own ceiling for a docked sheet (`BottomSheetDefaults.SheetMaxWidth`).

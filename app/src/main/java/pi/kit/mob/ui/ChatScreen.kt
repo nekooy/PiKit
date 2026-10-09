@@ -7,7 +7,6 @@ import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,12 +35,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -55,12 +51,12 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -70,9 +66,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
@@ -88,29 +82,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -135,28 +122,40 @@ import pi.kit.mob.pi.SessionMetadata
 import pi.kit.mob.ui.chat.NoticeCard
 import pi.kit.mob.ui.chat.ReasoningBlock
 import pi.kit.mob.ui.chat.ReasoningToggle
-import pi.kit.mob.ui.chat.ToolCard
+import pi.kit.mob.ui.chat.ToolCallRow
 import pi.kit.mob.ui.chat.TurnSummaryData
 import pi.kit.mob.ui.chat.TurnSummaryRow
 import pi.kit.mob.ui.chat.FollowTailController
 import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
-import pi.kit.mob.ui.components.PageHeader
 import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.components.CopyButtonInkInset
-import pi.kit.mob.ui.components.ErrorBanner
-import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.PiIcons
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.PageSwap
 import pi.kit.mob.ui.components.PickerBody
 import pi.kit.mob.ui.components.ReadOnlyBody
 import pi.kit.mob.ui.components.ReadOnlySheetRow
 import pi.kit.mob.ui.components.thinkingLevelFootnote
 import pi.kit.mob.ui.components.thinkingLevelOptions
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.components.StatusNotice
+import pi.kit.mob.ui.components.PageBackHandler
+import pi.kit.mob.ui.design.PiAgentMark
+import pi.kit.mob.ui.design.PiAppBarScroll
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiCard
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageSwap
+import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiSelectChip
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiSheetActions
+import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.design.PiWorkingPill
+import pi.kit.mob.ui.design.PiEmptyState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -693,8 +692,11 @@ internal fun ChatScreen(
     // used to replace the conversation between two frames, with no transition at
     // all, while every Settings sub-page slid. `forward` is the direction of the
     // move itself: opening the list goes deeper, and the back arrow or the system
-    // gesture that closes it comes back.
-    PageSwap(
+    // gesture that closes it comes back. The move itself is the design system's
+    // `PiPageSwap`, which is the app's one page transition — springs, and the two
+    // pages travelling different distances so their text does not park on the same
+    // pixels mid-slide.
+    PiPageSwap(
         key = showSessions,
         forward = showSessions,
         modifier = Modifier.fillMaxSize(),
@@ -813,13 +815,37 @@ internal fun ChatScreen(
 }
 
 /**
- * The conversation page: the header, the transcript and the composer.
+ * The conversation page: the app bar, the transcript and the composer.
  *
  * Pulled out of [ChatScreen] so that the page swap above can hold two of its
  * destinations at once — the history list and this — without either of them having
  * to be written twice or to re-own the other's state. Everything that must survive
  * a visit to the history list (the draft, the attachments, the transcript's scroll
  * position, which turns are open) is still owned by [ChatScreen] and passed down.
+ *
+ * ## The bar
+ *
+ * The page frame is [PiScaffold] with a *collapsing* bar, which is the variant the
+ * design language names for a page whose title is a moving fact: this page's title
+ * is the first thing the reader asked, and the bar gives its height back to the
+ * transcript as soon as they scroll into the answer.
+ *
+ * The **agent's mark** is drawn in the bar's action row and is the one place the
+ * app's abstract silhouette appears on this page. It is inert, like the status dot
+ * it replaces in the subtitle: the agent's state is a fact rather than a control,
+ * and a row of tappable icons with one inert mark at its head is read as a control
+ * anyway. What it adds to the dot is that it says *which* thing is working — it is
+ * the app's own signature — and that `working` carries the reserved coral while a
+ * turn is in flight, which is the one colour this app spends on "still running".
+ * The three actions after it are ordered compress, history, new: left to right as
+ * "do something to this conversation, look at the others, start another", which is
+ * also the order of how much each disturbs what is on screen.
+ *
+ * The *title* is passed as a `String` rather than as the state it came from, and
+ * that is a performance decision: `ConversationState` is a new object for every
+ * record pi sends — several times a second while an answer streams — so a bar that
+ * took the state could never be skipped and would re-run for every token, while the
+ * two things it draws change once per conversation and once per process lifecycle.
  */
 @Composable
 private fun ChatPage(
@@ -856,6 +882,10 @@ private fun ChatPage(
     // counts these rows as hidden; this only stops them being measured.
     val drawn = remember(rows) { rows.filterNot { it.drawsNothing() } }
 
+    // One card per subject, computed here rather than inside the item so the list
+    // measures one item per turn instead of one per message. See [transcriptCards].
+    val cards = remember(drawn) { transcriptCards(drawn) }
+
     // Follow the tail of the transcript, including while text streams into the
     // last item (whose identity does not change, only its length).
     //
@@ -875,316 +905,376 @@ private fun ChatPage(
         if (state.items.isNotEmpty() && follow.follows && !programmatic.value) {
             programmatic.value = true
             try {
-                listState.scrollToEnd(itemCount = drawn.size, animate = false)
+                listState.scrollToEnd(itemCount = cards.size, animate = false)
             } finally {
                 programmatic.value = false
             }
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            // Tapping anywhere that is not a control gives up the composer's
-            // focus, and clearing focus is what closes the text toolbar — the
-            // floating "粘贴 / 全选" strip Compose shows over a long-pressed field.
-            //
-            // Nothing else did. `BasicTextField` deselects and hides its toolbar
-            // when it *loses* focus, but Compose does not move focus on a tap: a
-            // tap on the transcript is delivered to the `LazyColumn`, which has no
-            // opinion about focus, so the field stayed focused with its selection
-            // live and the toolbar stayed on screen. The report was exactly that —
-            // long-press the input, get the paste button, tap the empty area, and
-            // it will not go away.
-            //
-            // `detectTapGestures` sees the Main pass, which runs **bottom-up**, so
-            // every button, chip and text-selection handle has already consumed its
-            // own press by the time this runs; and because only the *down* is
-            // consumed here, a drag still reaches the list and scrolls it. A tap on
-            // the field itself never reaches this: the text field consumes it.
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { focusManager.clearFocus() })
-            },
-    ) {
-        AgentHeader(
-            session = session,
-            agent = agent,
-            // The *title*, not the whole `ConversationState`.
-            //
-            // This page reads the conversation, and `ConversationState` is a new object for
-            // every record pi sends — several times a second while an answer streams, and
-            // again for every `toolcall_delta`. Passing the state meant passing a value that
-            // is never equal to the last one, so `AgentHeader` could not be skipped: the
-            // header re-ran for every token even though the two things it draws — the
-            // conversation's title and the agent's status — change once per conversation and
-            // once per process lifecycle. The title is a `String`, so the same argument
-            // comparison now skips the whole row, its `InlineTextContent` dot and its three
-            // action buttons for every token that does not change it.
-            //
-            // `state.items` is read for it here, one expression wide, which is what keeps
-            // the transcript's own scrolling and folding decisions out of this call path.
-            title = conversationTitle(state),
-            onOpenSessions = onOpenSessions,
-            onNewSession = onNewSession,
-            onCompact = { session.compact() },
-        )
-
-        // One container for the whole transcript, not one per row.
-        //
-        // Compose keeps the 复制/全选 toolbar up for as long as a selection
-        // exists, and it clears the selection when a tap lands inside the same
-        // container but outside the selected text. With a container per row the
-        // only tap that dismissed the toolbar was a tap on the row that produced
-        // it; tapping any other message left it on screen.
-        //
-        // The weight sits on this Box rather than on the container: a
-        // SelectionContainer sizes itself to its content instead of taking the
-        // space it is offered, so a weight applied to it is ignored and the
-        // transcript collapses to nothing.
-        Box(
+    PiScaffold(
+        title = conversationTitle(state),
+        subtitle = agentSubtitle(agent, text),
+        scrollBehavior = PiAppBarScroll.Collapsing,
+        actions = {
+            AgentMark(agent = agent, working = state.isStreaming || state.isCompacting)
+            IconButton(onClick = { session.compact() }) {
+                Icon(Icons.Filled.Compress, contentDescription = text.chat.compact)
+            }
+            IconButton(onClick = onOpenSessions) {
+                Icon(Icons.Filled.History, contentDescription = text.chat.sessions)
+            }
+            IconButton(onClick = onNewSession) {
+                Icon(Icons.Filled.Add, contentDescription = text.chat.newSession)
+            }
+        },
+    ) { bodyModifier ->
+        Column(
             Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxSize()
+                // Tapping anywhere that is not a control gives up the composer's
+                // focus, and clearing focus is what closes the text toolbar — the
+                // floating "粘贴 / 全选" strip Compose shows over a long-pressed field.
+                //
+                // Nothing else did. `BasicTextField` deselects and hides its toolbar
+                // when it *loses* focus, but Compose does not move focus on a tap: a
+                // tap on the transcript is delivered to the `LazyColumn`, which has no
+                // opinion about focus, so the field stayed focused with its selection
+                // live and the toolbar stayed on screen. The report was exactly that —
+                // long-press the input, get the paste button, tap the empty area, and
+                // it will not go away.
+                //
+                // `detectTapGestures` sees the Main pass, which runs **bottom-up**, so
+                // every button, chip and text-selection handle has already consumed its
+                // own press by the time this runs; and because only the *down* is
+                // consumed here, a drag still reaches the list and scrolls it. A tap on
+                // the field itself never reaches this: the text field consumes it.
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                },
         ) {
-            // The transcript is capped and centred on a window wide enough to need
-            // it, and uncapped on a phone.
+            // One container for the whole transcript, not one per row.
             //
-            // A line of `bodyMedium` on a 411dp phone inside the 12dp gutters is
-            // about 55 Latin characters — inside the 45–75 band, so nothing needs
-            // fixing there. A tablet at 800dp is about 107, and for this app the
-            // count that matters is the CJK one: at 14sp a Han glyph is a full em, so
-            // 800dp is 57 characters against the 40 that WCAG's visual-presentation
-            // criterion allows. 560dp is where 80 Latin characters and 40 Han
-            // characters coincide, so it is the one number that satisfies the rule
-            // in both scripts.
+            // Compose keeps the 复制/全选 toolbar up for as long as a selection
+            // exists, and it clears the selection when a tap lands inside the same
+            // container but outside the selected text. With a container per row the
+            // only tap that dismissed the toolbar was a tap on the row that produced
+            // it; tapping any other message left it on screen.
             //
-            // The cap used to sit on a `Box` that also held the turn rail beside the
-            // list; with the rail gone the wrapper had one child and no job of its
-            // own, so the cap is on the selection container itself and the tree is a
-            // level shorter.
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopCenter,
+            // The weight sits on this Box rather than on the container: a
+            // SelectionContainer sizes itself to its content instead of taking the
+            // space it is offered, so a weight applied to it is ignored and the
+            // transcript collapses to nothing.
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
             ) {
-                SelectionContainer(
-                    modifier = if (maxWidth >= WIDE_TRANSCRIPT_WINDOW) {
-                        Modifier
-                            .widthIn(max = MAX_TRANSCRIPT_WIDTH)
-                            .transcriptContextMenu()
-                    } else {
-                        Modifier
-                            .fillMaxWidth()
-                            .transcriptContextMenu()
-                    },
+                // The transcript is capped and centred on a window wide enough to need
+                // it, and uncapped on a phone.
+                //
+                // A line of `bodyMedium` on a 411dp phone inside the 12dp gutters is
+                // about 55 Latin characters — inside the 45–75 band, so nothing needs
+                // fixing there. A tablet at 800dp is about 107, and for this app the
+                // count that matters is the CJK one: at 14sp a Han glyph is a full em, so
+                // 800dp is 57 characters against the 40 that WCAG's visual-presentation
+                // criterion allows. 560dp is where 80 Latin characters and 40 Han
+                // characters coincide, so it is the one number that satisfies the rule
+                // in both scripts — and the cap is the *prose* measure rather than the
+                // column's width, which is why [MAX_TRANSCRIPT_WIDTH] adds the answer
+                // card's own inset to it: an answer that measured 560dp of text inside
+                // a 16dp frame would be 560dp of text one step too wide.
+                //
+                // The cap used to sit on a `Box` that also held the turn rail beside the
+                // list; with the rail gone the wrapper had one child and no job of its
+                // own, so the cap is on the selection container itself and the tree is a
+                // level shorter.
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // The transcript is a log the reader is watching fill
-                            // up. Without this every streamed token is a silent
-                            // change; with it the platform announces the row once it
-                            // stops growing, which is the one moment the
-                            // announcement is useful.
-                            .semantics { liveRegion = LiveRegionMode.Polite },
-                        // The bottom inset is the transcript's breathing room against
-                        // the composer: the chips row above the field is a band of the
-                        // same colour as the page, and an answer that ended flush
-                        // against it read as cut off rather than as finished. Two
-                        // lines of the body style is what the report asked for, and it
-                        // is also what keeps the last line of an answer clear of the
-                        // jump-to-latest button when that is on screen.
-                        //
-                        // The right inset used to reserve the turn rail's column;
-                        // the rail is gone, so the transcript keeps its own gutter
-                        // on both sides and the answer gets that 26dp of width back.
-                        contentPadding = PaddingValues(
-                            start = TRANSCRIPT_GUTTER,
-                            end = TRANSCRIPT_GUTTER,
-                            top = 10.dp,
-                            bottom = TRANSCRIPT_TAIL_SPACE,
-                        ),
-                        // No uniform gap. See `rowGap`: the space between two rows is
-                        // a statement about what the two rows *are*, and one number
-                        // for every pair is what made a prompt, its band, its steps
-                        // and its answer read as one undifferentiated stream.
-                        verticalArrangement = Arrangement.spacedBy(0.dp),
+                    SelectionContainer(
+                        modifier = if (maxWidth >= WIDE_TRANSCRIPT_WINDOW) {
+                            Modifier
+                                .widthIn(max = MAX_TRANSCRIPT_WIDTH)
+                                .transcriptContextMenu()
+                        } else {
+                            Modifier
+                                .fillMaxWidth()
+                                .transcriptContextMenu()
+                        },
                     ) {
-                        itemsIndexed(drawn, key = { _, row -> row.key }) { index, row ->
-                            // No `animateItem` here, and that is a fix rather
-                            // than an omission. `Modifier.animateItem` replays
-                            // its appearance animation **every time an item
-                            // enters composition** — which for a lazy list is
-                            // every time a row scrolls back into view — so the
-                            // transcript flickered while scrolling, and its
-                            // default placement and disappearance springs fought
-                            // the follow rule, which is scrolling the same list
-                            // on every streamed token. A message list is the one
-                            // list where an entrance animation cannot be afforded:
-                            // the reader is watching it change continuously.
-                            Column(
-                                Modifier.padding(top = rowGap(drawn.getOrNull(index - 1), row)),
+                        // A conversation nothing has been sent to is not a blank
+                        // area: it is the one place the page can say what it is for.
+                        // The mark is the app's single abstract silhouette, the same
+                        // figure the agent draws while it works, so the first thing a
+                        // reader sees is the thing they are about to talk to.
+                        if (cards.isEmpty()) {
+                            PiEmptyState(
+                                title = text.chat.newConversation,
+                                body = text.chat.emptyIntro,
+                            )
+                        } else {
+                            LazyColumn(
+                                state = listState,
+                                modifier = bodyModifier
+                                    .fillMaxWidth()
+                                    // The transcript is a log the reader is watching fill
+                                    // up. Without this every streamed token is a silent
+                                    // change; with it the platform announces the row once it
+                                    // stops growing, which is the one moment the
+                                    // announcement is useful.
+                                    //
+                                    // The scroll connection the app bar needs lives on this
+                                    // node rather than on the page's column, and the design
+                                    // system's scaffold hands it out for exactly this: the
+                                    // nested-scroll link belongs on the scrolling container,
+                                    // and the only thing that knows which container that is
+                                    // is the page.
+                                    .semantics { liveRegion = LiveRegionMode.Polite },
+                                // The bottom inset is the transcript's breathing room against
+                                // the composer. The composer used to be a full-bleed bar of the
+                                // same colour as the page, and an answer that ended flush
+                                // against it read as cut off rather than as finished; the
+                                // report asked for two lines of the body style's air. It is a
+                                // panel with its own margin now, so the separation is carried
+                                // by shape rather than by blank space — what is left is one
+                                // line, enough that the last line of an answer never sits
+                                // against the panel's rounded top edge, and enough to keep it
+                                // clear of the jump-to-latest button when that is on screen.
+                                //
+                                // The right inset used to reserve the turn rail's column;
+                                // the rail is gone, so the transcript keeps its own gutter
+                                // on both sides and the answer gets that 26dp of width back.
+                                contentPadding = PaddingValues(
+                                    start = TRANSCRIPT_GUTTER,
+                                    end = TRANSCRIPT_GUTTER,
+                                    top = 10.dp,
+                                    bottom = TRANSCRIPT_TAIL_SPACE,
+                                ),
+                                // No uniform gap. See `rowGap`: the space between two rows is
+                                // a statement about what the two rows *are*, and one number
+                                // for every pair is what made a prompt, its band, its steps
+                                // and its answer read as one undifferentiated stream.
+                                verticalArrangement = Arrangement.spacedBy(0.dp),
                             ) {
-                                when (row) {
-                                    is TranscriptRow.Message -> when (val item = row.item) {
-                                        is ChatItem.User -> UserBubble(item, text)
-                                        is ChatItem.Assistant ->
-                                            AssistantBubble(item, text, row.showReasoning, row.showMeta)
-
-                                        is ChatItem.Tool -> ToolCard(item = item, text = text)
-
-                                        is ChatItem.Notice -> NoticeCard(item)
+                                itemsIndexed(cards, key = { _, card -> card.key }) { index, card ->
+                                    // No `animateItem` here, and that is a fix rather
+                                    // than an omission. `Modifier.animateItem` replays
+                                    // its appearance animation **every time an item
+                                    // enters composition** — which for a lazy list is
+                                    // every time a row scrolls back into view — so the
+                                    // transcript flickered while scrolling, and its
+                                    // default placement and disappearance springs fought
+                                    // the follow rule, which is scrolling the same list
+                                    // on every streamed token. A message list is the one
+                                    // list where an entrance animation cannot be afforded:
+                                    // the reader is watching it change continuously.
+                                    //
+                                    // The gap is between two *cards*, which is the same
+                                    // question `rowGap` answers between two rows: the two
+                                    // rows that meet here are the last of the previous card
+                                    // and the first of this one, and the three numbers a
+                                    // conversation is readable through are unchanged.
+                                    Column(
+                                        Modifier.padding(
+                                            top = rowGap(
+                                                cards.getOrNull(index - 1)?.rows?.lastOrNull(),
+                                                card.rows.first(),
+                                            ),
+                                        ),
+                                    ) {
+                                        TranscriptCardView(
+                                            card = card,
+                                            text = text,
+                                            expandedTurns = expandedTurns,
+                                            onToggleTurn = onToggleTurn,
+                                        )
                                     }
+                                }
+                                if (state.isCompacting) {
+                                    // The app's own loading indicator rather than a
+                                    // `CircularProgressIndicator`: the design language replaced
+                                    // every spinner in the app with the shape-morphing one, and
+                                    // a pill says *what* is running as well as *that* something
+                                    // is — which is the whole reason it carries a label.
+                                    item(key = "compacting") {
+                                        PiWorkingPill(
+                                            label = text.chat.compacting,
+                                            modifier = Modifier.padding(top = MODULE_GAP),
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
-                                    is TranscriptRow.TurnSummary -> TurnSummaryRow(
-                                        summary = row.summary,
-                                        expanded = row.turnIndex in expandedTurns,
-                                        text = text,
-                                        onToggle = { onToggleTurn(row.turnIndex) },
-                                    )
-                                }
-                            }
-                        }
-                        if (state.isCompacting) {
-                            item(key = "compacting") {
-                                Row(
-                                    modifier = Modifier.padding(top = MODULE_GAP),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                                    Text(text.chat.compacting, Modifier.padding(start = 8.dp))
-                                }
-                            }
-                        }
                     }
+
+                    // The turn rail used to stand here, on the right edge of the
+                    // transcript's own column. It is gone — see ARCHITECTURE.md,
+                    // "The turn rail was removed" — so this box now holds only the list,
+                    // and the jump-to-latest button below is the one control over it.
                 }
 
-                // The turn rail used to stand here, on the right edge of the
-                // transcript's own column. It is gone — see ARCHITECTURE.md,
-                // "The turn rail was removed" — so this box now holds only the list,
-                // and the jump-to-latest button below is the one control over it.
+                // The control appears whenever the end of the transcript is not on
+                // screen — the position decides, and nothing else.
+                //
+                // It used to require `!follow.follows` as well, which hid it exactly
+                // when the reader needed it: the follow rule can be on while the
+                // viewport is still short of the tail — a follow that landed short, an
+                // answer that grew after the last snap, an interrupted animation — and
+                // the button vanished with no way back to the bottom. `canScrollForward`
+                // is the honest test of "not at the bottom": it is false precisely when
+                // the viewport shows the end of the content.
+                //
+                // Reading it here is what a scroll gesture writes to and nothing else
+                // does, so this recomposes only at the two ends of the range rather
+                // than once per frame.
+                if (listState.canScrollForward) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            // The flag is raised *before* the follow flips, so the
+                            // effect above cannot slip a snap in between: on the
+                            // composition that follows this write the follow is on and
+                            // this is already true, and the effect stands aside for the
+                            // animation that is about to run.
+                            programmatic.value = true
+                            follow.enable()
+                            scope.launch {
+                                try {
+                                    listState.scrollToEnd(itemCount = cards.size, animate = true)
+                                } finally {
+                                    programmatic.value = false
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            // Clear of the transcript's own gutter, and of the scrollbar
+                            // the platform draws in the last few dp of the window: the
+                            // button is drawn over the list, so it has to sit inside the
+                            // list's content margin rather than on the edge itself.
+                            .padding(end = 10.dp, bottom = 10.dp)
+                            // 40dp, the same drawn size as the composer's send control
+                            // at the other end of the page. It was 38dp, which made two
+                            // "round action over the transcript" controls two different
+                            // sizes, and `PiShapes.pill` is what makes both of them
+                            // round: an action is the only fully round thing on this
+                            // page, and the two controls the thumb reaches for are the
+                            // ones that say so.
+                            .size(40.dp),
+                        shape = PiShapes.pill,
+                    ) {
+                        Icon(
+                            Icons.Filled.ArrowDownward,
+                            contentDescription = text.chat.jumpToLatest,
+                            // 20dp, matching the send/stop glyphs in the composer.
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
             }
 
-            // The control appears whenever the end of the transcript is not on
-            // screen — the position decides, and nothing else.
+            // One notice for "the agent is not there". A `Failed` agent and a
+            // `lastError` are usually the same event — `runCommand`'s catch writes
+            // both — and two stacked bars made one failure look like two. The agent's
+            // own message is the better half of the pair: it carries the exit code and
+            // pi's stderr.
             //
-            // It used to require `!follow.follows` as well, which hid it exactly
-            // when the reader needed it: the follow rule can be on while the
-            // viewport is still short of the tail — a follow that landed short, an
-            // answer that grew after the last snap, an interrupted animation — and
-            // the button vanished with no way back to the bottom. `canScrollForward`
-            // is the honest test of "not at the bottom": it is false precisely when
-            // the viewport shows the end of the content.
+            // Retry is the action the notice needs and did not have. A failed launch
+            // also disables the composer (`enabled = agent is Running`), so there was
+            // no control anywhere on the chat page that would bring the agent back:
+            // the only recovery was to change a model or a provider and hope something
+            // called `startAgent` — which is exactly the report that switching
+            // provider "does not load it" until the app is restarted. It is the *filled*
+            // kind of button because while the agent is down it is the page's only
+            // available action.
             //
-            // Reading it here is what a scroll gesture writes to and nothing else
-            // does, so this recomposes only at the two ends of the range rather
-            // than once per frame.
-            if (listState.canScrollForward) {
-                FilledTonalIconButton(
-                    onClick = {
-                        // The flag is raised *before* the follow flips, so the
-                        // effect above cannot slip a snap in between: on the
-                        // composition that follows this write the follow is on and
-                        // this is already true, and the effect stands aside for the
-                        // animation that is about to run.
-                        programmatic.value = true
-                        follow.enable()
-                        scope.launch {
-                            try {
-                                listState.scrollToEnd(itemCount = drawn.size, animate = true)
-                            } finally {
-                                programmatic.value = false
-                            }
-                        }
+            // The body is cut to [NOTICE_LINES] lines: pi's stderr is a process dump
+            // measured at well over a screen, and a notice that grows to the whole page
+            // buries the composer under the report it is making. The first three lines
+            // carry the reason and a stack frame or two, and the rest is the Terminal
+            // tab's job.
+            val failure = (agent as? AgentStatus.Failed)?.message
+            if (failure != null) {
+                PiNotice(
+                    text = noticeLines(failure),
+                    tone = PiTone.Danger,
+                    icon = Icons.Filled.Error,
+                    action = {
+                        PiButton(
+                            text = text.common.retry,
+                            onClick = { session.restartAgent() },
+                            kind = PiButtonKind.Filled,
+                            size = PiButtonSize.ExtraSmall,
+                        )
                     },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        // Clear of the transcript's own gutter, and of the scrollbar
-                        // the platform draws in the last few dp of the window: the
-                        // button is drawn over the list, so it has to sit inside the
-                        // list's content margin rather than on the edge itself.
-                        .padding(end = 10.dp, bottom = 10.dp)
-                        // 40dp, the same drawn size as the composer's icon buttons
-                        // opposite it in the page's thumb zone. It was 38dp, which
-                        // made two "round action over the transcript" controls two
-                        // different sizes.
-                        .size(40.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.ArrowDownward,
-                        contentDescription = text.chat.jumpToLatest,
-                        // 20dp, matching the send/stop glyphs in the composer.
-                        modifier = Modifier.size(20.dp),
+                )
+            } else {
+                state.lastError?.let { error ->
+                    PiNotice(
+                        text = noticeLines(error),
+                        tone = PiTone.Danger,
+                        icon = Icons.Filled.Error,
+                        // Tapping the strip puts it away, which is the behaviour the
+                        // banner this replaced had: a failure that has been read is
+                        // clutter, and a close button on a notice that is itself the
+                        // message would be a second control for one action.
+                        modifier = Modifier.clickable(onClick = { session.clearError() }),
                     )
                 }
             }
-        }
 
-        // One banner for "the agent is not there". A `Failed` agent and a
-        // `lastError` are usually the same event — `runCommand`'s catch writes
-        // both — and two stacked bars made one failure look like two. The agent's
-        // own message is the better half of the pair: it carries the exit code and
-        // pi's stderr.
-        //
-        // Retry is the action the banner needs and did not have. A failed launch
-        // also disables the composer (`enabled = agent is Running`), so there was
-        // no control anywhere on the chat page that would bring the agent back:
-        // the only recovery was to change a model or a provider and hope something
-        // called `startAgent` — which is exactly the report that switching
-        // provider "does not load it" until the app is restarted.
-        val failure = (agent as? AgentStatus.Failed)?.message
-        if (failure != null) {
-            ErrorBanner(
-                message = failure,
-                actionLabel = text.common.retry,
-                onAction = { session.restartAgent() },
-            )
-        } else {
-            state.lastError?.let { error ->
-                ErrorBanner(message = error, onDismiss = { session.clearError() })
+            notice?.let { message ->
+                // The composer's own warnings — an image a text-only model will drop, a
+                // pick over the cap — are not failures: the accent tone rather than the
+                // error one, which is what stops a warning and a failure from training
+                // the eye the same way.
+                PiNotice(
+                    text = message,
+                    tone = PiTone.Accent,
+                    icon = Icons.Filled.Info,
+                    modifier = Modifier.clickable(onClick = onDismissNotice),
+                )
             }
-        }
 
-        notice?.let { message ->
-            StatusNotice(message = message, onDismiss = onDismissNotice)
+            Composer(
+                session = session,
+                text = text,
+                value = input,
+                onValueChange = onInputChange,
+                attachments = attachments,
+                onRemoveImage = onRemoveImage,
+                isStreaming = state.isStreaming,
+                // Two flags, because they answer two different questions. The actions
+                // wait for `Running`: `sendPrompt` is `client?.request(…)` and `client`
+                // is null until the handshake is done, so a prompt sent during start-up
+                // is dropped silently — and `onSend` has already cleared the draft by
+                // then. The *field* does not: typing is local, touches no process, and
+                // making the user wait 1.9 s (measured: `launching:` to `handshake
+                // get_state: success`) before they can put their question down is a
+                // delay with nothing behind it.
+                enabled = agent is AgentStatus.Running,
+                inputEnabled = agent is AgentStatus.Running || agent is AgentStatus.Starting,
+                agent = agent,
+                state = state,
+                onOpenSheet = onOpenSheet,
+                onSend = onSend,
+                onStop = {
+                    // The queue behind the run is cleared with it (see
+                    // `PiAgentSession.abort`), and the text of what was dropped comes
+                    // back here rather than disappearing: a prompt typed while the agent
+                    // was streaming is never answered once it is cleared, and the reader
+                    // is the only one who can decide what to do with it. It goes back
+                    // into the field only when the field is empty — a draft being typed
+                    // is what the reader is looking at, and overwriting it would be a
+                    // second surprise on top of the first.
+                    session.abort { dropped ->
+                        if (input.isBlank()) onInputChange(dropped)
+                    }
+                },
+            )
         }
-
-        Composer(
-            session = session,
-            text = text,
-            value = input,
-            onValueChange = onInputChange,
-            attachments = attachments,
-            onRemoveImage = onRemoveImage,
-            isStreaming = state.isStreaming,
-            // Two flags, because they answer two different questions. The actions
-            // wait for `Running`: `sendPrompt` is `client?.request(…)` and `client`
-            // is null until the handshake is done, so a prompt sent during start-up
-            // is dropped silently — and `onSend` has already cleared the draft by
-            // then. The *field* does not: typing is local, touches no process, and
-            // making the user wait 1.9 s (measured: `launching:` to `handshake
-            // get_state: success`) before they can put their question down is a
-            // delay with nothing behind it.
-            enabled = agent is AgentStatus.Running,
-            inputEnabled = agent is AgentStatus.Running || agent is AgentStatus.Starting,
-            agent = agent,
-            state = state,
-            onOpenSheet = onOpenSheet,
-            onSend = onSend,
-            onStop = {
-                // The queue behind the run is cleared with it (see
-                // `PiAgentSession.abort`), and the text of what was dropped comes
-                // back here rather than disappearing: a prompt typed while the agent
-                // was streaming is never answered once it is cleared, and the reader
-                // is the only one who can decide what to do with it. It goes back
-                // into the field only when the field is empty — a draft being typed
-                // is what the reader is looking at, and overwriting it would be a
-                // second surprise on top of the first.
-                session.abort { dropped ->
-                    if (input.isBlank()) onInputChange(dropped)
-                }
-            },
-        )
     }
 }
 
@@ -1298,13 +1388,12 @@ private fun ThinkingLevelSheet(
     Column(Modifier.fillMaxWidth().padding(bottom = 48.dp)) {
         Text(
             text = text.chat.thinkingLevelLabel,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleMediumEmphasized,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
         )
         Text(
             text = shown,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineSmallEmphasized,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
         )
@@ -1444,6 +1533,22 @@ internal sealed interface TranscriptRow {
          * See [MessageMeta] for what that costs.
          */
         val showMeta: Boolean = true,
+        /**
+         * The turn this row belongs to, or [UNGROUPED] for a row that belongs to none.
+         *
+         * Read by [transcriptCards] and by nothing else, and it is what makes the
+         * cards exact: the rule "a user row opens a card and everything else joins
+         * the card it is already in" would put the answer of a turn that began
+         * *without* a prompt — an `agent_start` with no user message, or the leading
+         * assistant greeting a restored session opens with — inside the previous
+         * turn's card. Grouping by the turn the row is attributed to is the same
+         * attribution the fold already computes, so the two cannot disagree about
+         * where one turn ends and the next begins.
+         *
+         * The default is for the rows a caller builds by hand (the tests) and for the
+         * transcript with no turns at all, where every row is its own card anyway.
+         */
+        val turn: Int = UNGROUPED,
     ) : TranscriptRow {
         override val key: String get() = item.key
     }
@@ -1455,6 +1560,107 @@ internal sealed interface TranscriptRow {
         // Prefixed so it cannot collide with an item key.
         override val key: String get() = "turn-summary-$turnIndex"
     }
+}
+
+/** A row that belongs to no turn, or to turns that have not been recorded. */
+internal const val UNGROUPED = -1
+
+/** The turn a row belongs to, or [UNGROUPED]. */
+internal fun turnOfRow(row: TranscriptRow): Int = when (row) {
+    is TranscriptRow.Message -> row.turn
+    is TranscriptRow.TurnSummary -> row.turnIndex
+}
+
+/**
+ * One card of the transcript.
+ *
+ * ## Why the transcript is cards and not a column of rows
+ *
+ * The design language's rule for this page is that a **card** is one subject with
+ * its own body, and that the transcript is the one place a card per turn is right —
+ * "because a turn is a subject". So the card is the turn, and the three things a
+ * turn is made of — the question, the steps the agent took, and the answer — are
+ * inside it rather than floating in the list:
+ *
+ *  - [Prompt] is the reader's own message. One row, one card, and it is the *narrow*
+ *    one: an answer is a body of text laid out as a document, so its card is the
+ *    transcript's full measure, while a prompt is a sentence, and a sentence drawn
+ *    inside a full-width slab is the 86%-wide bar the reader already complained
+ *    about once — arriving from the other direction.
+ *  - [Answer] is everything one turn produced: the fold band, the reasoning, the
+ *    tool calls, the notices and the answer, in one frame. A tool-using turn is
+ *    five or six rows, and drawing each of them as its own surface is what makes a
+ *    turn read as a stack of unrelated slabs rather than as one reply.
+ *
+ * The two are the same rounded rectangle in the same surface step, and what
+ * separates them is width and position rather than a second colour: the question
+ * and its answer are two halves of one exchange, and giving either its own palette
+ * step would say they are two kinds of thing.
+ *
+ * ## Why its key is the turn and not the first row
+ *
+ * A card's rows are recomputed on every streamed token, and the *first* row of a
+ * running turn changes as its steps arrive: the assistant row that carried nothing
+ * but a tool call is dropped by [drawsNothing] until it has text, so a card keyed
+ * by its first row would change identity once per step — which a `LazyColumn` reads
+ * as a different item, disposing and rebuilding the state the reader had opened
+ * inside it. The turn's own index is stable for the whole life of the turn, so the
+ * key is derived from that wherever there is one.
+ */
+internal sealed interface TranscriptCard {
+    val key: String
+    val rows: List<TranscriptRow>
+
+    /** The reader's own message: one card, one row. */
+    data class Prompt(val row: TranscriptRow.Message) : TranscriptCard {
+        override val key: String get() = row.key
+        override val rows: List<TranscriptRow> get() = listOf(row)
+    }
+
+    /** Everything one turn produced, inside one frame. */
+    data class Answer(override val rows: List<TranscriptRow>, val turn: Int) : TranscriptCard {
+        override val key: String
+            get() = if (turn >= 0) "turn-$turn-answer" else rows.first().key
+    }
+}
+
+/**
+ * Groups the transcript's rows into the cards they are drawn in.
+ *
+ * Two rules, and they are the whole of it: **a user row opens a prompt card**, and
+ * **a row whose turn differs from the row before it opens a new answer card**. The
+ * second is what stops two turns from sharing a frame when a turn began without a
+ * prompt, and it is the reason the turn is carried on the row at all.
+ *
+ * Pure and top-level so the rule can be pinned on the JVM: what it decides is where
+ * one frame is drawn and the next begins, which is invisible in a screenshot of a
+ * conversation that happens to be one card tall.
+ */
+internal fun transcriptCards(rows: kotlin.collections.List<TranscriptRow>): kotlin.collections.List<TranscriptCard> {
+    val cards = ArrayList<TranscriptCard>(rows.size)
+    val group = ArrayList<TranscriptRow>()
+    var groupTurn = UNGROUPED
+
+    fun flush() {
+        if (group.isEmpty()) return
+        cards += TranscriptCard.Answer(group.toList(), groupTurn)
+        group.clear()
+    }
+
+    rows.forEach { row ->
+        val message = row as? TranscriptRow.Message
+        if (message?.item is ChatItem.User) {
+            flush()
+            cards += TranscriptCard.Prompt(message)
+            return@forEach
+        }
+        val turn = turnOfRow(row)
+        if (group.isNotEmpty() && turn != groupTurn) flush()
+        groupTurn = turn
+        group += row
+    }
+    flush()
+    return cards
 }
 
 /**
@@ -1594,6 +1800,8 @@ internal fun transcriptRows(
             // only thing on the page.
             showMeta = item !is ChatItem.Assistant || turn < 0 ||
                 (item.key in finalReplies && turnSettled(record)),
+            // Which card this row is drawn in. See [TranscriptCard].
+            turn = turn,
         )
 
         if (record != null && record.isComplete && isPrompt && !summarised[turn]) {
@@ -1644,115 +1852,78 @@ private fun Modifier.transcriptContextMenu(): Modifier =
     }
 
 /**
- * The page title is the conversation, plus whatever the user can do to it.
+ * The agent, as the mark in the app bar.
  *
- * The model, the agent's state and the thinking level used to be a three-row
- * table here. They are controls now, and they live above the composer — where the
- * question "which model is about to answer this" is actually asked, next to the
- * message that will be sent. What is left is the title and three actions.
+ * ## Why the mark and not the status dot
  *
- * The state keeps the marker it had as a table row: a dot in the state's own
- * colour, in front of the words. It is the only thing on the page that says the
- * agent is alive without being read, and dropping it with the table left a subtitle
- * that looked like every other page's.
+ * The header's subtitle used to carry the state twice: as words and as a 5dp dot
+ * drawn *inline* in the text, because a `Row` of a `Box` and a `Text` gives the box
+ * no baseline and the dot sat 3px low at `bodySmall`. The dot is gone with the
+ * inline placeholder that made it work: the design language gives this app one
+ * abstract silhouette and one place to spend it, and an inert mark at the head of
+ * the action row says the same thing in the app's own shape — who is answering, and
+ * whether they are answering right now — rather than in a coloured bullet.
+ *
+ * It is inert on purpose. The agent's state is a fact rather than a control, and a
+ * row of tappable icons with one inert mark at its head is how a page gets a
+ * control nobody can press; the three actions beside it are the ones that do
+ * something.
+ *
+ * ## The colours it carries
+ *
+ * `working` is the turn in flight, and the mark takes the app's reserved coral for
+ * it — the one colour that means *still running* and nothing else. A failed or a
+ * stopped agent takes the error tone instead, which is what the dot's colour used
+ * to say: from the reader's side a stopped agent and a failed one are the same
+ * fact, their question is not being answered. Everything else is the neutral
+ * container, because a ready agent is not news.
  */
 @Composable
-private fun AgentHeader(
-    session: PiAgentSession,
-    agent: AgentStatus,
-    /**
-     * Already computed by the caller, as a `String` rather than as the state it came from.
-     *
-     * `ConversationState` is a fresh object per record, so a header that took one could
-     * never be skipped — see the call site for the whole argument. What the header needs
-     * from it is one title.
-     */
-    title: String,
-    onOpenSessions: () -> Unit,
-    onNewSession: () -> Unit,
-    onCompact: () -> Unit,
-) {
-    val text = strings
-    val subtitle = agentSubtitle(agent, text)
-    val color = statusColor(agent)
-
-    PageHeader(
-        title = title,
-        subtitleContent = { AgentStatusLine(subtitle, color) },
-        actions = {
-            // Compress, history, then new — the order the report asked for. It reads
-            // left-to-right as "do something to this conversation, look at the others,
-            // start another", which is also the order of how much they disturb what is on
-            // screen: a compaction is applied in place, the session list is a page away,
-            // and a new session replaces the transcript.
-            IconButton(onClick = onCompact) {
-                Icon(Icons.Filled.Compress, contentDescription = text.chat.compact)
-            }
-            IconButton(onClick = onOpenSessions) {
-                Icon(Icons.Filled.History, contentDescription = text.chat.sessions)
-            }
-            IconButton(onClick = onNewSession) {
-                Icon(Icons.Filled.Add, contentDescription = text.chat.newSession)
-            }
-        },
+private fun AgentMark(agent: AgentStatus, working: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    val down = agent is AgentStatus.Failed || agent is AgentStatus.Stopped
+    PiAgentMark(
+        size = AGENT_MARK_SIZE,
+        working = working,
+        container = if (down) scheme.errorContainer else scheme.secondaryContainer,
+        ink = if (down) scheme.onErrorContainer else scheme.onSecondaryContainer,
+        // A little air before the first action button: the mark is not a control and
+        // must not look like the first of four.
+        modifier = Modifier.padding(end = 6.dp),
     )
 }
 
 /**
- * The header's state line, with the dot in front of it.
+ * The mark's drawn size: the same 28dp `PiAgentMark` defaults to.
  *
- * The dot is an *inline* composable inside the text rather than a `Box` beside it,
- * and that is the whole reason this is not a `Row`: a `Row` of a `Box` and a
- * `Text` gives the box no baseline, so at bodySmall the 5dp dot sat 3px below the
- * words it belongs to. An `InlineTextContent` placeholder is measured against the
- * text it sits in, so the dot shares the line's own centre whatever the font scale,
- * and the text keeps the whole width for wrapping — measured at font scale 1.8,
- * "Agent 已就绪" plus a failure message still uses both of its two lines.
+ * Named because it is the one number the bar's action row is sized around — the
+ * three `IconButton`s beside it are 48dp touch targets with 24dp glyphs, and a mark
+ * between 20 and 28dp is what reads as a signature rather than as a fourth button.
  */
-@Composable
-private fun AgentStatusLine(message: String, color: Color) {
-    val style = MaterialTheme.typography.bodySmall
-    // In em units, so the dot follows the user's font scale rather than being a
-    // fixed dp that would swallow a line at a large scale. 0.42em is the size the
-    // header table's 6dp dot worked out to at bodySmall.
-    val dot = style.fontSize * 0.42f
-    val box = style.fontSize * 0.95f
+private val AGENT_MARK_SIZE = 28.dp
 
-    Text(
-        text = buildAnnotatedString {
-            appendInlineContent(STATUS_DOT, "\u25CF")
-            append(message)
-        },
-        inlineContent = mapOf(
-            STATUS_DOT to InlineTextContent(
-                Placeholder(
-                    width = box,
-                    height = dot,
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                ),
-            ) {
-                Box(
-                    Modifier
-                        .size(with(LocalDensity.current) { dot.toDp() })
-                        .clip(CircleShape)
-                        .background(color),
-                )
-            },
-        ),
-        style = style,
-        color = color,
-        // One line, because the header's band is a fixed two-line height: a state
-        // that wrapped would push the transcript down and back again every time
-        // the agent started or stopped. A failure message is pi's own stderr and
-        // its first line is the one that names the cause; the rest is on the Agent
-        // page.
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
+/**
+ * How many lines of a failure a notice shows.
+ *
+ * Three: enough for the reason plus a stack frame or two, short enough that the
+ * notice stays one strip. pi's stderr is a process dump measured at well over a
+ * screen, and the Terminal tab shows it in full.
+ */
+private const val NOTICE_LINES = 3
+
+/**
+ * The first [NOTICE_LINES] lines of a process dump, marked as cut.
+ *
+ * The notice's own style carries no line limit — the design system's notice wraps
+ * rather than ellipsising, which is right for a sentence and wrong for stderr — so
+ * the bound is applied to the text. The ellipsis is what keeps a truncated stack
+ * from reading as the whole failure.
+ */
+private fun noticeLines(message: String): String {
+    val lines = message.lineSequence().filter { it.isNotBlank() }.toList()
+    if (lines.size <= NOTICE_LINES) return message
+    return lines.take(NOTICE_LINES).joinToString("\n") + "\u2026"
 }
-
-/** The id of the inline status marker inside the header's state line. */
-private const val STATUS_DOT = "chat-status-dot"
 
 /** The agent's state, in one line. Never blank: the subtitle slot is always there. */
 private fun agentSubtitle(agent: AgentStatus, text: Strings): String = when (agent) {
@@ -1762,13 +1933,6 @@ private fun agentSubtitle(agent: AgentStatus, text: Strings): String = when (age
     // one names the cause, the rest is a stack.
     is AgentStatus.Failed -> agent.message.lineSequence().first()
     AgentStatus.Stopped -> text.chat.agentStopped
-}
-
-/** Stopped shares the error colour: from the user's side both mean "not answering". */
-@Composable
-private fun statusColor(agent: AgentStatus): Color = when (agent) {
-    is AgentStatus.Failed, AgentStatus.Stopped -> MaterialTheme.colorScheme.error
-    else -> MaterialTheme.colorScheme.primary
 }
 
 /**
@@ -1794,42 +1958,116 @@ private fun conversationTitle(state: ConversationState): String {
 private const val APP_NAME = "PiKit"
 
 /**
- * One prompt from the user.
+ * One card of the transcript, drawn: the prompt, or the answer it produced.
  *
- * ## The width is the content's, capped, and it sits at the end
+ * ## Two widths, and that is the whole of the difference between them
  *
- * `fillMaxWidth(0.86f)` was the previous shape and it was wrong in the way a reader
- * notices first: a two-word prompt — "好", "continue", "yes please" — was drawn in
- * a bubble 86% of the screen wide, so the page read as a column of identical bars
- * and the reader's own words looked like a form field.
+ * A **prompt** is sized to what the reader wrote. The card is a `Surface` with a
+ * loose `0..max` constraint, so it settles at its content's width and there is
+ * deliberately no `fillMaxWidth` anywhere inside it: `fillMaxWidth` sets the
+ * *minimum*, so one on the card or on a child of it is what turns "ok" into a
+ * full-width slab. That is the same defect this page has already been through once
+ * — a two-word prompt drawn as an 86%-wide bar, reported twice as "气泡是固定宽度"
+ * and "用户消息靠左了", which were one bug wearing two descriptions — and the shape
+ * of the fix is that the *parent* leaves the minimum at zero and the cap, when there
+ * was one, sits on the parent. There is still one constraint here and it is not a
+ * cap but the transcript's own measure, so the prompt simply takes what it needs.
  *
- * ## Why the cap is a `widthIn` on a `BoxWithConstraints` and not a `wrapContentWidth`
+ * An **answer** is a body of text laid out as a document, so its card is the
+ * transcript's full measure: `fillMaxWidth` on that card means "the column is the
+ * measure", which is a statement about the answer rather than about its content.
  *
- * This is the part that took a wrong turn, so the reasoning is written out. The cap
- * used to sit on a `Box(Modifier.fillMaxWidth(0.86f))` with the bubble below it
- * asking for `wrapContentWidth`. That does not work, and Material3 is why:
- * `Surface` puts its content in a `Box(modifier = modifier..., propagateMinConstraints = true)`.
- * `propagateMinConstraints` makes that inner `Box` **size itself to the minimum
- * width it was handed and pass that minimum on to the content** — so the `0.86f`
- * cap travelled straight through `wrapContentWidth` and every prompt came out an
- * 86%-wide bar again, with its text at the start of it. That is one bug wearing two
- * descriptions: "气泡是固定宽度" and "用户消息靠左了" are the same 86% bar.
+ * The two cards are the same rounded rectangle in the same surface step, and what
+ * separates them is width and position rather than a second colour: a question and
+ * its answer are two halves of one exchange, and giving either its own palette step
+ * would say they are two kinds of thing.
  *
- * `wrapContentWidth` cannot win that argument, because it only rewrites the
- * constraint it is *given*; `Surface` then inflates its own child back to the
- * minimum. So the cap is expressed where `Surface` cannot see it: the `Box` around
- * the bubble is capped with `widthIn(max = …)`, and `fillMaxWidth()` on the
- * `Surface` *is* the bubble. A `Surface` with a loose `0..cap` constraint and
- * `propagateMinConstraints = true` settles at `max(minWidth, contentWidth)`, which
- * is the content's width — and the box's `contentAlignment` then puts that against
- * the end edge.
+ * ## The rhythm inside a card is the rhythm between cards
  *
- * A previous revision of this comment blamed the *alignment* instead, claiming
- * `Alignment.End` centres its content. That is false — `Alignment.End` is
- * `BiasAlignment.Horizontal(1f)`, whose `align(size, space)` is `space - size`, the
- * same offset `Alignment.CenterEnd` and `Alignment.End` both produce. The alignment
- * was never the bug.
+ * Every row is spaced by `rowGap` — the same pure function the list used between
+ * two bare rows, and the same three numbers, so nothing about the transcript's
+ * vertical rhythm changed when the frames arrived. What changed is where the rows
+ * are drawn: the modules of a turn (a fold band, a thought, a call, its answer, a
+ * notice) are now inside one card instead of loose in the list.
  */
+@Composable
+private fun TranscriptCardView(
+    card: TranscriptCard,
+    text: Strings,
+    expandedTurns: Set<Int>,
+    onToggleTurn: (Int) -> Unit,
+) {
+    when (card) {
+        is TranscriptCard.Prompt -> PiCard(
+            container = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = PiShapes.card,
+            padding = PROMPT_CARD_PADDING,
+        ) {
+            TranscriptCardRow(card.row, text, expandedTurns, onToggleTurn)
+        }
+
+        is TranscriptCard.Answer -> PiCard(
+            modifier = Modifier.fillMaxWidth(),
+            container = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = PiShapes.card,
+            padding = PaddingValues(ANSWER_CARD_INSET),
+        ) {
+            card.rows.forEachIndexed { index, row ->
+                Column(Modifier.padding(top = rowGap(card.rows.getOrNull(index - 1), row))) {
+                    TranscriptCardRow(row, text, expandedTurns, onToggleTurn)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The prompt card's inset.
+ *
+ * Tighter than `PiCard`'s own 16dp, which is sized for a paragraph: a prompt is a
+ * sentence or two, and a frame wider than its content is a box with a word in it.
+ * 14dp is still more than the copy glyph's own invisible margin, which is what the
+ * meta row is pulled out by at its foot.
+ */
+private val PROMPT_CARD_PADDING = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+
+/**
+ * The answer card's own inset, on every side.
+ *
+ * `PiCard`'s default padding, written down because [MAX_TRANSCRIPT_WIDTH] has to add
+ * it back: the transcript's cap is a statement about the *prose* measure, and the
+ * card's frame is around that measure rather than out of it.
+ */
+private val ANSWER_CARD_INSET = 16.dp
+
+/** One row of a card, whichever kind it is. */
+@Composable
+private fun TranscriptCardRow(
+    row: TranscriptRow,
+    text: Strings,
+    expandedTurns: Set<Int>,
+    onToggleTurn: (Int) -> Unit,
+) {
+    when (row) {
+        is TranscriptRow.Message -> when (val item = row.item) {
+            is ChatItem.User -> PromptBody(item, text)
+
+            is ChatItem.Assistant ->
+                AssistantBlock(item, text, row.showReasoning, row.showMeta)
+
+            is ChatItem.Tool -> ToolCallRow(item = item, text = text)
+
+            is ChatItem.Notice -> NoticeCard(item)
+        }
+
+        is TranscriptRow.TurnSummary -> TurnSummaryRow(
+            summary = row.summary,
+            expanded = row.turnIndex in expandedTurns,
+            text = text,
+            onToggle = { onToggleTurn(row.turnIndex) },
+        )
+    }
+}
 
 // ------------------------------------------------------------------ prompt extras
 
@@ -1931,117 +2169,122 @@ internal fun parsePromptExtras(raw: String): PromptExtras {
     return PromptExtras(displayText, filePaths, imageNotes)
 }
 
+/**
+ * One prompt from the reader, inside its card.
+ *
+ * ## Why this is not a bubble on the right any more
+ *
+ * It was: a `primaryContainer` pill against the end edge, with the reader's question
+ * on the app's own colour and everything the agent said on the page's. That is the
+ * convention every messaging app uses, and it is the wrong one for this page — the
+ * transcript is not a conversation between two people, it is a document the reader
+ * is reading, and the question is a heading of the section that answers it. So the
+ * prompt is a quiet card at the *start* edge, on the same surface step as the answer
+ * below it, and it earns its identity from three things rather than from its side:
+ * it is the only card sized to its own content, it opens the turn, and it carries
+ * the reader's own furniture — the image count and the extras chip, which nothing
+ * the model says has.
+ *
+ * What was given up with the right alignment is named in the chapter that recorded
+ * it: the *side* was one of three cues (the other two were the fill and the width
+ * cap) and it was the one that cost the most layout — a `BoxWithConstraints` to
+ * measure the cap in dp, a `widthIn` to hold it, a `fillMaxWidth`-sets-the-minimum
+ * trap inside it, and a mirrored timestamp row at the end. All four are gone.
+ *
+ * ## Why the column has no `fillMaxWidth`
+ *
+ * The card is a `Surface`, which measures its content with `propagateMinConstraints`,
+ * so anything asking for the full width inside it makes the *card* full width: a
+ * one-word prompt would be a slab again, arriving from the other direction. Each
+ * child takes the width it needs and wraps at the card's maximum, which is the
+ * transcript's own measure.
+ */
 @Composable
-private fun UserBubble(item: ChatItem.User, text: Strings) {
+private fun PromptBody(item: ChatItem.User, text: Strings) {
     // The prompt is the last thing the reader wrote; what follows it is the other
-    // speaker. The space *below* it is `rowGap`'s job now — it is the only place
-    // that knows whether an answer, a fold band or a tool card comes next.
+    // speaker. The space *between* the two cards is `rowGap`'s job — it is the only
+    // place that knows whether an answer, a fold band or a tool card comes next.
     val extras = remember(item.key, item.text) { parsePromptExtras(item.text) }
     val sheets = LocalSheetHost.current
-    Column(Modifier.fillMaxWidth()) {
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-            // `BoxWithConstraints` is the only place the cap can be computed: a dp
-            // width needs the constraints, and `widthIn(max = …)` needs a dp.
-            val cap = maxWidth * PROMPT_MAX_SHARE
-            Box(Modifier.widthIn(max = cap)) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    // All four corners at the same radius, which is a decision rather than a
-                    // default: this bubble used to square its bottom-end corner (`PROMPT_TAIL`,
-                    // 6dp) on the argument that the corner nearest the answer is what says which
-                    // side of the conversation it came from. The reader's verdict was that the
-                    // irregular shape reads as a rendering fault, and the two other ways the
-                    // bubble is marked as the user's — right alignment and the
-                    // `primaryContainer` fill — all survive the change. See `PROMPT_CORNER`.
-                    shape = RoundedCornerShape(PROMPT_CORNER),
-                    // **No `fillMaxWidth` here**, and that is the whole of this
-                    // widget's layout. `Modifier.fillMaxWidth()` sets the *minimum*
-                    // width to the incoming maximum, so inside the capped `Box` above
-                    // it asked for exactly `cap` and got it: every prompt, "ok"
-                    // included, was an 86%-wide bar with its text at one end. The
-                    // bubble is sized by its own content, and the `Box` above is what
-                    // stops that content from being wider than the cap — its
-                    // `widthIn(max = cap)` leaves the maximum in place and clears the
-                    // minimum, which is the pair of constraints a shrink-wrapping
-                    // child needs.
-                    //
-                    // `wrapContentWidth` on this modifier was the other candidate and
-                    // is a no-op in this position: it rewrites the minimum it is
-                    // *given*, and the minimum arriving here is already 0.
-                    modifier = Modifier,
-                ) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
-                        // The machinery first: file paths and image notes are one
-                        // chip above the words, the same position the image-count
-                        // chip has always held. Tapping it opens the full paths and
-                        // the `[Image: …]` notes in a sheet — neither belongs in
-                        // the sentence the reader typed.
-                        if (extras.hasExtras) {
-                            PromptExtrasChip(
-                                extras = extras,
-                                text = text,
-                                onClick = {
-                                    sheets.show(Sheet(key = "prompt-extras-${item.key}") {
-                                        PromptExtrasSheet(extras, text)
-                                    })
-                                },
-                            )
-                        }
-                        if (item.imageCount > 0) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(
-                                    top = if (extras.hasExtras) 6.dp else 0.dp,
-                                    bottom = if (extras.displayText.isBlank()) 0.dp else 6.dp,
-                                ),
-                            ) {
-                                Icon(
-                                    Icons.Filled.Image,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                                Text(
-                                    text.chat.attachmentCount(item.imageCount),
-                                    modifier = Modifier.padding(start = 4.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                            }
-                        }
-                        if (extras.displayText.isNotBlank()) {
-                            val topPad = when {
-                                extras.hasExtras || item.imageCount > 0 -> 6.dp
-                                else -> 0.dp
-                            }
-                            Text(
-                                extras.displayText,
-                                modifier = Modifier.padding(top = topPad),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-                }
+    Column {
+        // The machinery first: file paths and image notes are one chip above the
+        // words, the same position the image-count chip has always held. Tapping it
+        // opens the full paths and the `[Image: …]` notes in a sheet — neither
+        // belongs in the sentence the reader typed.
+        if (extras.hasExtras) {
+            PromptExtrasChip(
+                extras = extras,
+                text = text,
+                onClick = {
+                    sheets.show(Sheet(key = "prompt-extras-${item.key}") {
+                        PromptExtrasSheet(extras, text)
+                    })
+                },
+            )
+        }
+        if (item.imageCount > 0) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(
+                    top = if (extras.hasExtras) 6.dp else 0.dp,
+                    bottom = if (extras.displayText.isBlank()) 0.dp else 6.dp,
+                ),
+            ) {
+                Icon(
+                    Icons.Filled.Image,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    // Furniture rather than prose: the count of pictures the reader
+                    // attached is a fact about the message, not part of the sentence
+                    // they typed, so it takes the neutral ink and the words under it
+                    // take the card's own.
+                    tint = PiTone.Neutral.ink(MaterialTheme.colorScheme),
+                )
+                Text(
+                    text.chat.attachmentCount(item.imageCount),
+                    modifier = Modifier.padding(start = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = PiTone.Neutral.ink(MaterialTheme.colorScheme),
+                )
             }
         }
-        MessageMeta(
-            item = item,
-            text = text,
-            alignment = Alignment.End,
-        )
+        if (extras.displayText.isNotBlank()) {
+            Text(
+                extras.displayText,
+                modifier = Modifier.padding(
+                    top = when {
+                        extras.hasExtras || item.imageCount > 0 -> 6.dp
+                        else -> 0.dp
+                    },
+                ),
+                // No colour: the card's `Surface` provides `onSurface`, and the
+                // reader's own words are the one thing on this page that must never
+                // be muted.
+            )
+        }
+        MessageMeta(item, text)
     }
 }
 
 /**
  * The chip that replaces a prompt's file-path list and its image notes.
  *
- * Same shape as the image-count chip beside it — a 14dp glyph and a
- * `labelMedium` label — and the chevron is what says this one opens something.
- * The label is a count rather than a title (`2 files · 1 image note`) because
- * that is the fact the reader wants before deciding whether to look inside.
+ * A 14dp glyph and a `labelMedium` label, like the image count beside it, and the
+ * chevron is what says this one opens something. The label is a count rather than a
+ * title (`2 files · 1 image note`) because that is the fact the reader wants before
+ * deciding whether to look inside.
+ *
+ * ## Why it is a pill on a step of its own
+ *
+ * The design language's shape rule is that an *action* is fully round and an
+ * information surface is not, and this is the one control inside a prompt: tapping
+ * it opens the paths and the image notes in a sheet, so it is an action and it takes
+ * `PiShapes.pill`. Its fill is one step past the card it sits on — the card is
+ * `surfaceContainerLow`, so the chip is `Neutral`'s own container,
+ * `surfaceContainerHigh` — because a control drawn *in* a card's colour is a control
+ * the reader has to be told about. The height is the design system's 28dp, which is
+ * what every other pill on the page is (`PiWorkingPill`, `PiBadge`), so the row of
+ * machinery above a prompt cannot change the card's height.
  */
 @Composable
 private fun PromptExtrasChip(
@@ -2049,27 +2292,31 @@ private fun PromptExtrasChip(
     text: Strings,
     onClick: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val ink = PiTone.Neutral.ink(scheme)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(PiShapes.pill)
+            .background(PiTone.Neutral.container(scheme))
             .clickable(
                 onClickLabel = text.chat.extrasOpen,
                 onClick = onClick,
             )
-            .padding(end = 2.dp),
+            .height(28.dp)
+            .padding(start = 10.dp, end = 6.dp),
     ) {
         Icon(
             Icons.Filled.AttachFile,
             contentDescription = null,
             modifier = Modifier.size(14.dp),
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            tint = ink,
         )
         Text(
             text.chat.extrasCount(extras.filePaths.size, extras.imageNotes.size),
             modifier = Modifier.padding(start = 4.dp),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            color = ink,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -2079,24 +2326,26 @@ private fun PromptExtrasChip(
             modifier = Modifier
                 .padding(start = 2.dp)
                 .size(16.dp),
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            tint = ink,
         )
     }
 }
 
-/** The sheet a [PromptExtrasChip] opens: every path and every note, in full. */
+/**
+ * The sheet a [PromptExtrasChip] opens: every path and every note, in full.
+ *
+ * The two headings are `PiSectionHeader`, which is the design system's own heading
+ * for a group inside a sheet: small, emphasized and *secondary* — a heading that
+ * borrowed the primary colour made every label look tappable, which is why it is a
+ * component rather than a styled `Text`. The rows under them are the sheet's own
+ * body, which is not this page's business: `ReadOnlyBody` owns the panel's title,
+ * its scroll and its row insets.
+ */
 @Composable
 private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
     ReadOnlyBody(title = text.chat.extrasTitle) {
         if (extras.filePaths.isNotEmpty()) {
-            item(key = "files-label") {
-                Text(
-                    text.chat.extrasFiles,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 22.dp, top = 6.dp, bottom = 2.dp),
-                )
-            }
+            item(key = "files-label") { PiSectionHeader(text.chat.extrasFiles) }
             extras.filePaths.forEachIndexed { index, path ->
                 item(key = "file-$index") {
                     Text(
@@ -2110,18 +2359,7 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
             }
         }
         if (extras.imageNotes.isNotEmpty()) {
-            item(key = "notes-label") {
-                Text(
-                    text.chat.extrasNotes,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(
-                        start = 22.dp,
-                        top = if (extras.filePaths.isEmpty()) 6.dp else 12.dp,
-                        bottom = 2.dp,
-                    ),
-                )
-            }
+            item(key = "notes-label") { PiSectionHeader(text.chat.extrasNotes) }
             extras.imageNotes.forEachIndexed { index, note ->
                 item(key = "note-$index") {
                     Text(
@@ -2137,17 +2375,14 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
 }
 
 /**
- * How much of the transcript's width a prompt's bubble may claim.
- *
- * The cap the bubble always had, kept as the *maximum* rather than as the width:
- * past 0.86 there is no gap between the prompt and the other speaker's column, and
- * a reader loses the right-alignment cue that says which side of the conversation
- * this is. See [UserBubble] for where it is applied and why not on the bubble.
- */
-private const val PROMPT_MAX_SHARE = 0.86f
-
-/**
  * What a message carries under it: when it was sent, and a copy button.
+ *
+ * ## Where the row is drawn
+ *
+ * Inside the message's own card, at its foot, and the row is the card's — so the
+ * time a question was asked travels with the question rather than sitting under the
+ * frame it belongs to. The row is *not* a row of the transcript list any more: the
+ * card is the item, and everything under a message is part of that message.
  *
  * ## Which messages wear it
  *
@@ -2203,15 +2438,17 @@ private const val PROMPT_MAX_SHARE = 0.86f
  * written down twice, and the row is moved by it so the glyph lands on the column the
  * message's text starts at. The timestamp keeps the distance from the button it had.
  *
- * Which side is pulled depends on which side the *button* ends: a left-aligned row
- * starts with it, a right-aligned one ends with it (the timestamp is inboard either
- * way, so the two rows are mirror images — time toward the bubble, the glyph at the
- * outer edge). The button's ink is smaller than its box, so both sides move out by
- * [CopyButtonInkInset].
+ * The pull used to depend on which side the row was drawn on, because the button was
+ * the outermost element of a mirrored pair — the time inboard, the glyph at the
+ * outer edge, so an answer's copy sat under its left edge and a prompt's under its
+ * right. Both cards are aligned to the same edge now, so there is one arrangement:
+ * **glyph first, then the time**, pulled out by the glyph's own inset. What the
+ * mirror bought was the position of a control inside a bubble that no longer has a
+ * side.
  *
  * ## Why the row is the accent colour
  *
- * The glyph and the timestamp are both `primary`. The reader's report — "把工作几秒、
+ * The glyph and the timestamp are both the app's accent. The reader's report — "把工作几秒、
  * 几个步骤、消息时间、消息复制按钮等都变成主题蓝色，代码块复制按钮不变" — is that the three pieces of
  * furniture a finished turn wears (`工作 X 秒 · N 个步骤`, a message's time, its copy
  * button) should read as one accent, and that the code block's copy button, which is
@@ -2224,12 +2461,11 @@ private const val PROMPT_MAX_SHARE = 0.86f
 private fun MessageMeta(
     item: ChatItem,
     text: Strings,
-    alignment: Alignment.Horizontal,
 ) {
     if (item is ChatItem.Assistant && item.isStreaming) return
     if (item is ChatItem.Assistant && item.text.isBlank()) return
 
-    val accent = MaterialTheme.colorScheme.primary
+    val accent = PiTone.Accent.ink(MaterialTheme.colorScheme)
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val now = remember { System.currentTimeMillis() }
@@ -2237,42 +2473,22 @@ private fun MessageMeta(
         if (item.createdAt > 0L) text.chat.messageTime(item.createdAt, now) else null
     }
 
-    // See "Why the row is pulled out by the glyph's inset" above. The button sits at
-    // the row's outer edge on both sides — left for an answer, right for a prompt —
-    // so the pull is on that side and the same magnitude either way.
-    val pull = if (alignment == Alignment.End) CopyButtonInkInset else -CopyButtonInkInset
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(x = pull)
+            // See "Why the row is pulled out by the glyph's inset" above: the pull is
+            // the button's own invisible margin, taken off so the glyph's ink — not
+            // its box — lands on the column the message's text starts at.
+            .offset(x = -CopyButtonInkInset)
             .padding(top = 2.dp),
-        horizontalArrangement = if (alignment == Alignment.End) {
-            Arrangement.End
-        } else {
-            Arrangement.Start
-        },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Mirrored order: an answer is [button][time] at the left, a prompt is
-        // [time][button] at the right. The button is always the outer glyph, which
-        // is what "copy sits under the bubble's edge" means on either side.
-        val timeThenButton = alignment == Alignment.End
-        if (timeThenButton && stamp != null) {
-            Text(
-                text = stamp,
-                modifier = Modifier.padding(end = 2.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = accent,
-                maxLines = 1,
-            )
-        }
         CopyButton(
             onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(messageSource(item))) } },
             contentDescription = text.chat.copyMessage,
             tint = accent,
         )
-        if (!timeThenButton && stamp != null) {
+        if (stamp != null) {
             Text(
                 text = stamp,
                 modifier = Modifier.padding(start = 2.dp),
@@ -2304,13 +2520,16 @@ private fun messageSource(item: ChatItem): String = when (item) {
  *
  * ## One module, three optional parts
  *
- * The row is stacked, and the `rowGap` rule in `chat/Transcript.kt` treats it as
- * **one** row however many of the three parts are present — which is why the parts
- * are not separated by the transcript's own gap numbers. Everything *inside* here
- * belongs to the same message: the reasoning control opens a block that belongs to
- * the answer under it, so the distances here are one step smaller than the gaps
- * between modules and are written down as constants with the pair they separate in
- * mind ([REASONING_ANSWER_GAP], and the 6dp the block itself opens with).
+ * The row is stacked, and `rowGap` treats it as **one** row however many of the
+ * three parts are present — which is why the parts are not separated by the
+ * transcript's own gap numbers. Everything *inside* here belongs to the same
+ * message: the reasoning control opens a block that belongs to the answer under it,
+ * so the distances here are one step smaller than the gaps between modules and are
+ * written down as constants with the pair they separate in mind
+ * ([REASONING_ANSWER_GAP], and the 6dp the block itself opens with). That is
+ * unchanged by the card this row is drawn in: the card is the *turn's* frame and
+ * this is one module of it, so the gap between two modules and the gap between the
+ * parts of one module are still two different numbers on purpose.
  *
  * ## Why there is no live cursor any more
  *
@@ -2320,15 +2539,16 @@ private fun messageSource(item: ChatItem): String = when (item) {
  * what replaces it as a progress signal: its label carries a character count that
  * moves as the model thinks (`思考 · 1.2k 字`), and it is on screen for the whole of
  * the wait. Nothing is lost with the cursor — the row that draws nothing is dropped
- * by `drawsNothing()` rather than holding a blank line open, and the composer's own
- * stop button is the "something is running" control.
+ * by `drawsNothing()` rather than holding a blank line open, and the two live
+ * signals this page does have are the agent's mark in the bar and the composer's
+ * stop button.
  *
  * A *static* bar was the other candidate and is worse than nothing here: it is the
  * same caret with the only thing that made it read as a caret taken away, sitting
  * on a page whose whole point is that it does not decorate bare rows.
  */
 @Composable
-private fun AssistantBubble(
+private fun AssistantBlock(
     item: ChatItem.Assistant,
     text: Strings,
     showReasoning: Boolean = true,
@@ -2368,7 +2588,12 @@ private fun AssistantBubble(
     val hasBody = item.thinking.isNotBlank() || item.text.isNotBlank() || item.error != null
     if (!hasBody) return
 
-    Column(Modifier.fillMaxWidth()) {
+    // No `fillMaxWidth`: this is a module *of* a card, and the card's own width is
+    // the transcript's measure. A `fillMaxWidth` here is harmless in this position
+    // (the card already fills the column) but it is the same call that turns a
+    // content-sized frame into a slab where the parent is a wrapped surface, so the
+    // rule on this page is that only the card asks for a width.
+    Column {
         if (item.thinking.isNotBlank() && showReasoning) {
             ReasoningToggle(
                 expanded = showThinking,
@@ -2405,7 +2630,12 @@ private fun AssistantBubble(
         }
 
         if (item.text.isNotBlank()) {
-            MarkdownText(item.text, modifier = Modifier.fillMaxWidth())
+            // No `fillMaxWidth`: `MarkdownText` is a `BoxWithConstraints` over a
+            // `Column` that fills its own width, so it takes the card's measure
+            // without being asked — and asking would be the one `fillMaxWidth` that
+            // could travel back out of the card through `Surface`'s propagated
+            // minimum.
+            MarkdownText(item.text)
         }
 
         item.error?.let {
@@ -2419,56 +2649,64 @@ private fun AssistantBubble(
         // were what made a turn read as three separate answers (see
         // [TranscriptRow.Message.showMeta]).
         if (showMeta) {
-            MessageMeta(
-                item = item,
-                text = text,
-                alignment = Alignment.Start,
-            )
+            MessageMeta(item = item, text = text)
         }
     }
 }
 
 /**
- * The composer.
+ * The composer: the page's one **well**.
  *
- * ## What this replaced, and why
+ * ## What a well is, and why this is the one surface on the page that is one
  *
- * The previous bar was a stats line, a pill holding an attachment button and the
- * field, and a send button beside it — and above it, a three-row table in the
- * header carrying the state, the model and the thinking level as *text*. So the
- * three things a user changes most often while talking to the agent were either
- * read-only or nowhere near the message they applied to.
+ * Everything else on this page is a card in the list — the prompt, the answer, the
+ * transcript's own scroll. The composer is not in that list: it is fixed to the
+ * bottom of the page and the reader is *inside* it while typing, so it is drawn as
+ * the app's largest corner radius, `PiShapes.panel`, on a surface step of its own,
+ * with the page showing around it on three sides. That is what makes it read as a
+ * place to write rather than as the next item of the conversation.
  *
- * They are controls now, on a line of their own above the field:
+ * ## Why it is a panel and not a bar
+ *
+ * It used to be a full-bleed bar on `surfaceContainerHighest` with an 8dp elevation
+ * shadow along its top edge. The shadow was chosen over a hairline for a measured
+ * reason — a 1dp `outlineVariant` rule is a *drawn line*, so it competes with the
+ * transcript's own dividers and reads as the top of a box rather than as the bottom
+ * of the page — and the panel answers the same question better: a rounded, inset
+ * surface has an *edge*, which is what a rule was imitating and what a shadow was
+ * standing in for. Nothing is left for the shadow to do, so it is gone with the bar,
+ * and the page around the panel does the separating.
+ *
+ * ## The three rows, and one control
  *
  * ```
- *  ╭─────────╮ ╭──────────────╮ ╭────────────╮ ╭─────────╮
- *  │ 🧠 中   │ │ 🤖 packyapi… │ │ ⤓ 上下文…  │ │ ⚡ 缓存… │
- *  ╰─────────╯ ╰──────────────╯ ╰────────────╯ ╰─────────╯
- *  ┌──────────────────────────────────────┐
- *  │ Ask Pi…                              │
- *  │  ( / )        📎              ( ↑ )  │
- *  └──────────────────────────────────────┘
+ *  ╭────────────────────────────────────────╮
+ *  │ (🧠 中) (🤖 packy…) (⤓ 上下文…) (⚡ 缓存…)│   the settings this message goes with
+ *  │ Ask Pi…                                │   the field, growing upward
+ *  │  ( / )                          (+)(↑) │   the row a thumb reaches
+ *  ╰────────────────────────────────────────╯
  * ```
  *
- * ## Why the controls are above the field and not below it
+ * The four controls are above the field rather than below it: a chip between the
+ * field and the keyboard sits in the busiest strip on a phone screen and reads as
+ * part of the message being written, where a chip above the field reads as the
+ * setting the next message will be sent with. They are `PiSelectChip`s — the design
+ * system's own chip, which is also why the hand-rolled one this replaced is gone:
+ * that one carried a luminance test to decide its own fill, one step off the bar it
+ * sat on, and the design system's chip is now two steps from the well in both
+ * schemes, which is visible without asking the colour a question. They scroll
+ * horizontally once there are four of them, so a long profile name cannot squeeze
+ * the last one off screen.
  *
- * A chip below the field sits between the thing being typed and the keyboard,
- * which is the busiest strip on a phone screen, and it reads as part of the
- * message being written. Above it they read as what they are: the settings the
- * next message will be sent with. They also scroll horizontally once there are
- * four of them, so a long profile name cannot squeeze the last one off screen.
+ * The agent's **state** is not one of them: it is a fact rather than a control, and
+ * it lives in the bar. Nor is the *live* coral — coral means a turn is running, and
+ * nothing in a composer is.
  *
- * The agent's **state** is not one of them. It is a fact, not a control, and a row
- * of tappable chips with one inert chip at its head makes the eye check all four
- * every time; it stays in the header's subtitle, which is where a status belongs.
- *
- * ## Why the field is inside the card and the buttons are on its last line
- *
- * A phone keyboard is one-handed, the row a thumb reaches is the bottom one, and
- * the field above it grows upward as the message gets longer instead of pushing
- * the buttons off screen. The card keeps the navigation bar's colour so the two
- * read as one surface, and a hairline at the top separates it from the transcript.
+ * The field is the only thing inside the well with no frame of its own: a box around
+ * it would be a second container inside `panel`, and the well already says where the
+ * message goes. The buttons sit on the last line because that is the row a one-handed
+ * thumb reaches, and the field grows *upward* out of it rather than pushing them down
+ * the screen.
  */
 @Composable
 private fun Composer(
@@ -2519,8 +2757,6 @@ private fun Composer(
         else -> text.chat.placeholder
     }
 
-    val shape = MaterialTheme.shapes.medium
-
     // Read here rather than taken as a parameter: it is only this card's own
     // dismissal that needs it, and the page's `focusManager` is the same object
     // either way — a `LocalFocusManager` is one per window.
@@ -2533,22 +2769,30 @@ private fun Composer(
     // made possible.
     var fieldFocused by remember { mutableStateOf(false) }
 
-    // The boundary between the transcript and the composer is a shadow, not a
-    // hairline. A 1dp `outlineVariant` rule across the full width was the first
-    // version and it was the wrong tool: a rule is a *drawn line*, so it competes
-    // with the transcript's own dividers and reads as the top of a box rather
-    // than as the bottom of the page. A 8dp elevation shadow says "this bar is
-    // above that one" without adding a third line weight to a screen that already
-    // has tool cards and hairlines.
+    // The composer, as the app's one well: `PiShapes.panel` — the design language
+    // names that step for exactly this surface, along with sheets and dialogs — on
+    // `surfaceContainerLow`, with the page showing around it on three sides.
     //
-    // `Modifier.shadow` ahead of the `Surface` rather than the `Surface`'s own
-    // `shadowElevation`, which would also tint the bar with `surfaceTint` and
-    // lift it a step in the palette. The flag sets `clip = false` so the shadow
-    // is not clipped at the composer's rounded top edge; `clip` there is about
-    // the *background* draw, not the shadow.
+    // The 8dp elevation shadow that used to separate the bar from the transcript is
+    // gone, and it is worth saying why rather than leaving it as an omission: the
+    // shadow was chosen over a hairline because a 1dp rule is a *drawn line* and
+    // competes with the transcript's own dividers. A rounded, inset panel answers
+    // that better than a shadow does — the edge is real rather than imitated — so
+    // the shadow has nothing left to say. And `Modifier.shadow` was placed *ahead*
+    // of the `Surface` rather than given to its own `shadowElevation` for a second
+    // reason that has also gone away with it: `shadowElevation` tints the surface
+    // with `surfaceTint` and lifts it a step in the palette, which is not what a
+    // well wants.
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        modifier = Modifier.shadow(elevation = 8.dp, clip = false),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = PiShapes.panel,
+        modifier = Modifier
+            .fillMaxWidth()
+            // The margin is what makes it a panel rather than a bar, and it is also
+            // what makes the panel's own corner geometry safe: at 28dp the rounded
+            // arc reaches about 8dp in from each edge, so every child below is inset
+            // by at least 12dp and none of them is sliced by a corner.
+            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
@@ -2576,11 +2820,6 @@ private fun Composer(
             // it they read as what they are — the settings the next message will
             // be sent with.
             //
-            // The agent's state is deliberately *not* one of them. It is a fact,
-            // not a control, and a row of tappable chips with one inert chip at
-            // the head of it makes the eye check all four every time. It stays in
-            // the header's subtitle, which is where a status belongs.
-            //
             // Horizontally scrollable so four chips whose values can each be long
             // stay on one line: the alternative is squeezing them, which turns the
             // last one into `缓存命…`. A `LazyRow` rather than a `Row` with
@@ -2590,26 +2829,17 @@ private fun Composer(
             // out at x=966..1048 and was sliced by the window rather than scrolled
             // to, which looks like a layout bug and is not scrollable either. The
             // content padding is what makes a partly-visible chip read as "there is
-            // more to the right" instead of as clipped.
+            // more to the right" instead of as clipped, and it is 12dp rather than
+            // nothing because the row starts against the panel's own rounded corner.
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 item {
                     ControlChip(
-                        glyph = {
-                            Icon(
-                                PiIcons.Thinking,
-                                contentDescription = null,
-                                // 14dp, the same small-mark size the transcript's
-                                // tool ticks and the image chip use. Chip glyphs
-                                // were 15dp, a hair larger than every other mark.
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
+                        glyph = PiIcons.Thinking,
                         // The persisted level, not pi's report alone. pi reports it
                         // only once `get_state` has answered, so a label built from
                         // `state.thinkingLevel` alone was empty for the whole of the
@@ -2618,28 +2848,18 @@ private fun Composer(
                         // became ~89dp with "Medium". The same value the picker ticks
                         // and the settings row shows.
                         label = thinkingLevelOf(state, saved),
-                        contentDescription = text.chat.thinkingLevelLabel,
                         onClick = { onOpenSheet(ComposerSheet.Thinking) },
                     )
                 }
                 item {
                     ControlChip(
-                        glyph = {
-                            Icon(
-                                // The app's own model mark — the same stack of
-                                // layers the settings row and the profile's model
-                                // list use. It was `Hub`, and before that the
-                                // `SmartToy` face: a hub's three spokes at 15dp read
-                                // as a five-pointed star, and a robot head is a
-                                // picture of an assistant rather than of *which*
-                                // model is about to answer. See `PiIcons`.
-                                PiIcons.Model,
-                                contentDescription = null,
-                                // 14dp, the app's one small-mark size.
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
+                        // The app's own model mark — the same stack of layers the
+                        // settings row and the profile's model list use. It was
+                        // `Hub`, and before that the `SmartToy` face: a hub's three
+                        // spokes at 14dp read as a five-pointed star, and a robot
+                        // head is a picture of an assistant rather than of *which*
+                        // model is about to answer. See `PiIcons`.
+                        glyph = PiIcons.Model,
                         // The model that will answer, not the profile's name: this
                         // is the "which model" control, and once one provider can
                         // hold several models the profile name stops saying which
@@ -2649,26 +2869,20 @@ private fun Composer(
                         // is collected rather than read: it is what the picker's
                         // tick shows and what the next launch will use, so a change
                         // made on the settings page appears here at once instead of
-                        // waiting for the agent to come back up.
+                        // waiting for the agent to come back up. Before either has
+                        // answered, the chip says so rather than showing a glyph on
+                        // its own — a chip that grows its label later is a row that
+                        // reflows under the reader's thumb.
                         label = config.activeProfile?.modelId?.takeIf { it.isNotBlank() }
-                            ?: state.model?.id,
-                        contentDescription = text.chat.switchModel,
+                            ?: state.model?.id?.takeIf { it.isNotBlank() }
+                            ?: text.chat.loadingModel,
                         onClick = { onOpenSheet(ComposerSheet.Model) },
                     )
                 }
                 item {
                     ControlChip(
-                        glyph = {
-                            Icon(
-                                Icons.Filled.Compress,
-                                contentDescription = null,
-                                // 14dp, the app's one small-mark size.
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
+                        glyph = Icons.Filled.Compress,
                         label = contextPercentLabel(state, text),
-                        contentDescription = text.chat.contextDetails,
                         onClick = { onOpenSheet(ComposerSheet.Context) },
                     )
                 }
@@ -2679,29 +2893,21 @@ private fun Composer(
                 // reading and it is what makes the number's *movement* visible.
                 item {
                     ControlChip(
-                        glyph = {
-                            Icon(
-                                Icons.Filled.Bolt,
-                                contentDescription = null,
-                                // 14dp, the app's one small-mark size.
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
+                        glyph = Icons.Filled.Bolt,
                         label = text.chat.cacheHit(cacheHitPercent(state)),
-                        contentDescription = text.chat.cacheHitLabel,
                         onClick = { onOpenSheet(ComposerSheet.Context) },
                     )
                 }
             }
 
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = shape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier
+            // The field, and then the row of controls under it. There is no frame
+            // around the field: the well *is* its frame, and a second container
+            // inside `panel` is a box inside a box — which is what the `Surface`
+            // with a hairline border that used to stand here was, on top of a bar.
+            Column(
+                Modifier
                     .fillMaxWidth()
-                    .padding(start = 10.dp, end = 10.dp)
+                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp)
                     // Dismissing the selection toolbar the field's own long-press
                     // raises — the 粘贴 / 全选 strip — is the one thing the field
                     // cannot do for itself: `BasicTextField` consumes a tap on its own
@@ -2762,158 +2968,165 @@ private fun Composer(
                         }
                     },
             ) {
-                Column(Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)) {
-                    BasicTextField(
-                        value = value,
-                        onValueChange = onValueChange,
-                        enabled = inputEnabled,
-                        maxLines = 8,
-                        // `weight` has to be on the field itself, not on a Box
-                        // wrapped around it. `BasicTextField` measures its
-                        // decoration box with `minWidth = 0` and reports *that*
-                        // size, so a chain of `fillMaxWidth` around it is undone:
-                        // measured, the field came out 312px wide inside a 780px
-                        // pill — exactly the width of the placeholder — and the
-                        // rest of the composer did not respond to a tap. The
-                        // fixed width a Column gives it survives because it
-                        // arrives as a *minimum*.
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp)
-                            // 16dp above and 8dp below rather than 10/4. Measured
-                            // against the reference layout: at 10/4 the field's
-                            // own line box was 42dp and the whole card 97dp, so
-                            // the box read as a one-line toolbar with a stray
-                            // glyph in it. The taller inset is what makes it a
-                            // place to write.
-                            .padding(top = 16.dp, bottom = 8.dp)
-                            // The field's own focus, published for the card's tap
-                            // handler below. `onFocusChanged` rather than
-                            // `interactionSource`: focus is what the handler asks
-                            // about, and a press interaction would report a finger
-                            // down on the field even when the field did not take the
-                            // focus.
-                            .onFocusChanged { fieldFocused = it.isFocused },
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface,
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        decorationBox = { inner ->
-                            Box(contentAlignment = Alignment.TopStart) {
-                                if (value.isEmpty()) {
-                                    Text(
-                                        // One short line. The previous hint
-                                        // explained the `!` convention as well,
-                                        // which wrapped to two lines in the field
-                                        // and looked like a rendering fault.
-                                        placeholder,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                inner()
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    enabled = inputEnabled,
+                    maxLines = 8,
+                    // `weight` has to be on the field itself, not on a Box
+                    // wrapped around it. `BasicTextField` measures its
+                    // decoration box with `minWidth = 0` and reports *that*
+                    // size, so a chain of `fillMaxWidth` around it is undone:
+                    // measured, the field came out 312px wide inside a 780px
+                    // pill — exactly the width of the placeholder — and the
+                    // rest of the composer did not respond to a tap. The
+                    // fixed width a Column gives it survives because it
+                    // arrives as a *minimum*.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 14dp above and 6dp below, inside the well's own insets.
+                        // Measured against the reference layout: at 10/4 the field's
+                        // own line box was 42dp and the whole card 97dp, so the box
+                        // read as a one-line toolbar with a stray glyph in it. The
+                        // taller inset is what makes it a place to write — and it is
+                        // what keeps the first line of a long message clear of the
+                        // panel's rounded top corner.
+                        .padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 6.dp)
+                        // The field's own focus, published for the well's tap
+                        // handler above. `onFocusChanged` rather than
+                        // `interactionSource`: focus is what the handler asks
+                        // about, and a press interaction would report a finger
+                        // down on the field even when the field did not take the
+                        // focus.
+                        .onFocusChanged { fieldFocused = it.isFocused },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    decorationBox = { inner ->
+                        Box(contentAlignment = Alignment.TopStart) {
+                            if (value.isEmpty()) {
+                                Text(
+                                    // One short line. The previous hint
+                                    // explained the `!` convention as well,
+                                    // which wrapped to two lines in the field
+                                    // and looked like a rendering fault.
+                                    placeholder,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
-                        },
-                    )
+                            inner()
+                        }
+                    },
+                )
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // The command list, at the field's *left* corner, mirrored by the
+                    // send button at its right, and sharing the `+`'s own style —
+                    // three plain `IconButton`s on one line, with the space between
+                    // the first and the other two held by a weighted spacer so the
+                    // layout does not depend on how wide the field's text is.
+                    //
+                    // It is the same control as the `+` beside it, deliberately.
+                    // It *was* a filled circle carrying the `/` character, and that
+                    // was wrong twice over: the character was a description of the
+                    // list rather than of the button — a reader who has not opened it
+                    // does not know what a slash means — and a filled 40dp disc
+                    // opposite a 40dp plain button made two controls that do the same
+                    // *kind* of thing look like two different kinds.
+                    //
+                    // [PiIcons.Commands] and **not** `Icons.Filled.Terminal`, which is
+                    // the bottom tab strip's terminal tab: a terminal glyph six
+                    // centimetres above it in the composer read as a second way into
+                    // the terminal tab rather than as the command list. It is also no
+                    // longer `Icons.Filled.Code`, which is what this was for two
+                    // rounds and is the report "目前 </> 没有正常显示" — that glyph is
+                    // drawn as an open *stroked* polyline whose stroke width lands on
+                    // zero, so it measured, reported a node to a screen reader, and
+                    // painted nothing. See `PiIcons.Commands` for the read of the
+                    // artefact and the drawable for the replacement geometry.
+                    IconButton(
+                        onClick = { onOpenSheet(ComposerSheet.Commands) },
+                        enabled = enabled,
+                        modifier = Modifier.size(40.dp),
                     ) {
-                        // The command list, at the field's *left* corner, mirrored by the
-                        // send button at its right, and sharing the `+`'s own style —
-                        // three plain `IconButton`s on one line, with the space between
-                        // the first and the other two held by a weighted spacer so the
-                        // layout does not depend on how wide the field's text is.
-                        //
-                        // It is the same control as the `+` beside it, deliberately.
-                        // It *was* a filled circle carrying the `/` character, and that
-                        // was wrong twice over: the character was a description of the
-                        // list rather than of the button — a reader who has not opened it
-                        // does not know what a slash means — and a filled 40dp disc
-                        // opposite a 40dp plain button made two controls that do the same
-                        // *kind* of thing look like two different kinds.
-                        //
-                        // [PiIcons.Commands] and **not** `Icons.Filled.Terminal`, which is
-                        // the bottom tab strip's terminal tab: a terminal glyph six
-                        // centimetres above it in the composer read as a second way into
-                        // the terminal tab rather than as the command list. It is also no
-                        // longer `Icons.Filled.Code`, which is what this was for two
-                        // rounds and is the report "目前 </> 没有正常显示" — that glyph is
-                        // drawn as an open *stroked* polyline whose stroke width lands on
-                        // zero, so it measured, reported a node to a screen reader, and
-                        // painted nothing. See `PiIcons.Commands` for the read of the
-                        // artefact and the drawable for the replacement geometry.
-                        IconButton(
-                            onClick = { onOpenSheet(ComposerSheet.Commands) },
-                            enabled = enabled,
+                        Icon(
+                            PiIcons.Commands,
+                            contentDescription = text.chat.commands,
+                            // 17dp, against the 23dp of the `+` beside it, and that is a
+                            // property of the glyph rather than of the button: Lucide's
+                            // `command` draws its loops out to 21 of its 24 units, where
+                            // Material's `Add` keeps its ink inside 14 — so the same size
+                            // reads as a much bigger mark, which is the report "常用命令图标
+                            // 太大了". Scaled here, at the call site: the vector itself is
+                            // the library's and is not edited (see `PiIcons.Commands`).
+                            modifier = Modifier.size(17.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(
+                        onClick = { onOpenSheet(ComposerSheet.Attach) },
+                        enabled = enabled,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = text.chat.attachTitle,
+                            modifier = Modifier.size(23.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    // The page's one action, and the only fully round control on it:
+                    // `PiShapes.pill` is stated rather than inherited, because
+                    // Material's own default for an icon button varies with its size
+                    // in this release (the smaller sizes are rounded squares) and
+                    // "round" is the whole of what this control is saying. The stop
+                    // state is the same control with the same shape — the reader is
+                    // looking for one button there, not two.
+                    if (isStreaming) {
+                        FilledIconButton(
+                            onClick = onStop,
                             modifier = Modifier.size(40.dp),
+                            shape = PiShapes.pill,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            ),
                         ) {
                             Icon(
-                                PiIcons.Commands,
-                                contentDescription = text.chat.commands,
-                                // 17dp, against the 23dp of the `+` beside it, and that is a
-                                // property of the glyph rather than of the button: Lucide's
-                                // `command` draws its loops out to 21 of its 24 units, where
-                                // Material's `Add` keeps its ink inside 14 — so the same size
-                                // reads as a much bigger mark, which is the report "常用命令图标
-                                // 太大了". Scaled here, at the call site: the vector itself is
-                                // the library's and is not edited (see `PiIcons.Commands`).
-                                modifier = Modifier.size(17.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                Icons.Filled.Stop,
+                                contentDescription = text.chat.stop,
+                                modifier = Modifier.size(20.dp),
                             )
                         }
-                        Spacer(Modifier.weight(1f))
-                        IconButton(
-                            onClick = { onOpenSheet(ComposerSheet.Attach) },
-                            enabled = enabled,
+                    } else {
+                        FilledIconButton(
+                            onClick = onSend,
+                            enabled = enabled && (value.isNotBlank() || attachments.isNotEmpty()),
                             modifier = Modifier.size(40.dp),
+                            shape = PiShapes.pill,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                disabledContentColor = MaterialTheme.colorScheme.outline,
+                            ),
                         ) {
                             Icon(
-                                Icons.Filled.Add,
-                                contentDescription = text.chat.attachTitle,
-                                modifier = Modifier.size(23.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                Icons.Filled.ArrowUpward,
+                                contentDescription = text.chat.send,
+                                modifier = Modifier.size(20.dp),
                             )
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        if (isStreaming) {
-                            FilledIconButton(
-                                onClick = onStop,
-                                modifier = Modifier.size(40.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                ),
-                            ) {
-                                Icon(
-                                    Icons.Filled.Stop,
-                                    contentDescription = text.chat.stop,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        } else {
-                            FilledIconButton(
-                                onClick = onSend,
-                                enabled = enabled && (value.isNotBlank() || attachments.isNotEmpty()),
-                                modifier = Modifier.size(40.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    disabledContentColor = MaterialTheme.colorScheme.outline,
-                                ),
-                            ) {
-                                Icon(
-                                    Icons.Filled.ArrowUpward,
-                                    contentDescription = text.chat.send,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
                         }
                     }
                 }
@@ -2980,9 +3193,17 @@ private val MODULE_GAP = 8.dp
  * of `bodyMedium` is 80 Latin characters *and* 40 Han characters — the two halves
  * of WCAG's visual-presentation limit, which happen to coincide at 14sp. See the
  * note at the transcript's own `BoxWithConstraints`.
+ *
+ * The cap is the **prose's** measure, so the answer card's own 16dp inset on each
+ * side is added to it rather than taken out of it: a column capped at 560dp draws an
+ * answer that is 528dp of text, which is 38 Han characters on a tablet where the
+ * measurement above says 40 is the limit — inside the rule, and no longer the number
+ * the rule was measured at. Capping the *column* so that the text lands on 560dp
+ * keeps one number doing one job, and the prompt card (sized to its content) is
+ * inside the same measure either way.
  */
 private val WIDE_TRANSCRIPT_WINDOW = 600.dp
-private val MAX_TRANSCRIPT_WIDTH = 560.dp
+private val MAX_TRANSCRIPT_WIDTH = 560.dp + ANSWER_CARD_INSET * 2
 
 /**
  * What the follow-the-tail effect keys on: everything that grows while an answer streams,
@@ -3009,29 +3230,21 @@ internal fun transcriptTailKey(items: List<ChatItem>): Triple<Int, Int, Int> {
 }
 
 /**
- * The prompt bubble's corner radius — one value, all four corners.
- *
- * A second constant lived here, `PROMPT_TAIL` (6dp), applied to the bottom-end corner
- * alone so the bubble pointed at the answer below it. It was removed on request: the app's
- * own prompt is the one shape a reader compares against every other rounded box on the
- * page, and one square corner among eighteen rounded ones was read as a fault rather than
- * as a signal. What identifies the bubble is right alignment, its `primaryContainer` fill
- * and its width cap, in that order.
- */
-private val PROMPT_CORNER = 18.dp
-
-/**
  * True for a row whose composable would return without drawing anything.
  *
- * Only an assistant row can: [AssistantBubble] draws nothing when a message has no
+ * Only an assistant row can: [AssistantBlock] draws nothing when a message has no
  * text, no reasoning and no error — which is exactly the row pi opens for the
  * message that carried a tool call and nothing else.
  *
  * `isStreaming` used to be excluded, because a streaming row drew the live cursor
- * and was therefore never empty. The cursor is gone — see [AssistantBubble] — so a
+ * and was therefore never empty. The cursor is gone — see [AssistantBlock] — so a
  * row with nothing in it draws nothing whether or not it is streaming, and the
  * transcript no longer pays 8dp of `MODULE_GAP` for a blank row while the first
  * token is on its way.
+ *
+ * It is asked *before* the rows are grouped into cards, which is what keeps a card
+ * from being measured for a row that draws nothing: a dropped row is not part of any
+ * card, so it costs neither its own height nor the gap in front of it.
  */
 internal fun TranscriptRow.drawsNothing(): Boolean {
     val item = (this as? TranscriptRow.Message)?.item as? ChatItem.Assistant ?: return false
@@ -3078,24 +3291,16 @@ internal fun rowGap(previous: TranscriptRow?, row: TranscriptRow): Dp {
 private val REASONING_ANSWER_GAP = 5.dp
 
 /**
- * How much of a failed launch's message the banner shows.
- *
- * pi's stderr is the second line and is the only part that says *why*; four lines
- * is enough for the usual one-line error plus a stack frame or two, and past that
- * the banner would take the transcript's height to report something the terminal
- * tab shows in full.
- */
-
-/**
  * How much blank transcript sits under the last line of an answer.
  *
- * Two lines of `bodyMedium`, which is 20sp each: the report was that the answer's
- * last line and the top of the composer were "too close together" — the composer
- * begins with a row of chips on the page's own colour, so there was no edge to
- * read the end of the answer against. Roughly two lines is enough for the eye to
- * land on the last line as something that ended.
+ * One line of `bodyMedium` plus its leading, which is what keeps the last line of an
+ * answer clear of the composer's rounded top edge. It was two lines — 40dp — while
+ * the composer was a full-bleed bar of the page's own colour, and the *blank space*
+ * was the only edge an answer had to end against; the composer is a `panel` well with
+ * its own margin and its own outline now, so the shape says where the answer stops
+ * and this only has to keep the two from touching.
  */
-private val TRANSCRIPT_TAIL_SPACE = 40.dp
+private val TRANSCRIPT_TAIL_SPACE = 24.dp
 
 /**
  * How full the context window is.
@@ -3139,97 +3344,61 @@ private fun cacheHitPercent(state: ConversationState): Int {
 }
 
 /**
- * One of the composer's small controls.
+ * One of the composer's four small controls: a chip, on the design system's chip.
  *
- * Sized to be read as a control rather than as a label: a filled, 34dp-tall pill
- * with 12dp of horizontal padding and a 15dp glyph. Two earlier versions were
- * wrong in opposite directions and the colour is what settled it:
+ * ## Why this is a thin wrapper and not a component of its own
  *
- *  - 26dp with a hairline `outlineVariant` border on `surface`. Too small, and a
- *    border says "box" rather than "button", so the row read as tags.
- *  - 34dp filled with `surfaceContainerHigh` and no border. The right shape, but
- *    the fill is one step off the composer's own `surfaceContainerHighest`, and at
- *    that distance the row looked washed out — the user's word for it. Measured
- *    against the theme: `surfaceContainerHigh` is `#E6EBF1` on a `#EDEEF2` bar, a
- *    2% difference.
+ * The chip this used to be was hand-built, and almost every line of it was spent
+ * working out its own *colour*: a 34dp pill on `surfaceContainerHigh` looked washed
+ * out on the composer's own `#EDEEF2` bar — a 2% difference, measured — and the fix
+ * was to step the light palette one further down (`surfaceContainer`, `#DCE3EB`)
+ * while stepping the dark one nowhere, because the same move would have put the chip
+ * at `#1A2028` on a `#171C23` bar and erased it. That is a luminance test at the call
+ * site to answer a question the palette should answer, and it is exactly what the
+ * design language means by a page not inventing a colour.
  *
- * `surfaceVariant` (`#E4E9EF`) is the next real step down and is still inside the
- * light end of the palette, which is what "a little darker, not dark" needs.
- * Nothing else on the row changed with it, so the chips still take the same
- * `onSurface` text the theme gives every other filled control.
+ * `PiSelectChip` is that answer: a pill at 32dp on `surfaceContainerHigh`, which
+ * against this well (`surfaceContainerLow`) is two steps in *both* schemes — visible
+ * without asking the colour anything. It is also the shape rule's own case: an action
+ * is fully round, and these four chips are the actions of the composer.
  *
- * ## The light palette's version of that step was still one short
+ * ## Why `selected` is always false
  *
- * Reported again, and from the light theme only: on the composer's `#EDEEF2` bar a
- * `#E4E9EF` chip is a 9/5/3-per-channel difference, which at 34dp reads as a printed
- * label rather than as a button. [composerChipContainer] takes one more step in that
- * palette — `surfaceContainer`, `#DCE3EB`, another 8/6/4 down — and *no* step in the dark
- * one, where the same move would put the chip at `#1A2028` on a `#171C23` bar and erase
- * it. The threshold is the fill's own luminance rather than a boolean carried down from
- * the theme, because the colour is the question being asked.
+ * A `PiSelectChip` carries a tick when it is selected, and none of these four is a
+ * setting with an on state: each opens a sheet. `selected = false` is therefore the
+ * honest reading, and the tick is not part of the control the reader sees — the
+ * *glyph* is, which is why each chip passes its own mark through `leadingIcon`.
  *
- * ## Why the label is bounded in dp and not in characters
+ * ## Why the chip has no separate accessibility name
  *
- * A character cap was the first attempt and it clipped the wrong language: at 14
- * characters `缓存命中 0%` — seven Han glyphs and three Latin ones, which is
- * *inside* the cap — measured wider than the cap's own 96dp and drew as
- * `缓存命…`, while the same cap left a Latin model name with room to spare. The
- * width a label needs is a property of its glyphs, not of how many there are, so
- * the bound is a width and `maxLines = 1` does the rest. The row still cannot
- * change height as values change, and it scrolls horizontally rather than
- * squeezing its last chip when the values are long.
+ * The chip this replaced took a `contentDescription` and never used it, and the
+ * design system's chip has no slot for one — which is the right answer rather than a
+ * gap: `PiSelectChip`'s row is a `clickable`, so it merges its own label, and the
+ * label is what the control *says* (`high`, `packyapi-custom`, `缓存命中 0%`). A
+ * description on that node would replace the value the reader needs with the noun
+ * they can already infer from where the chip is.
  */
 @Composable
 private fun ControlChip(
-    glyph: @Composable () -> Unit,
-    label: String?,
-    onClick: (() -> Unit)?,
-    contentDescription: String? = null,
+    glyph: ImageVector,
+    label: String,
+    onClick: () -> Unit,
 ) {
-    val shown = label?.takeIf { it.isNotBlank() }
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(composerChipContainer())
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .height(CHIP_HEIGHT)
-            .padding(start = 10.dp, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        glyph()
-        if (shown != null) {
-            Text(
-                text = shown,
-                modifier = Modifier
-                    .padding(start = 6.dp)
-                    .widthIn(max = 124.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+    PiSelectChip(
+        label = label,
+        selected = false,
+        onClick = onClick,
+        leadingIcon = {
+            Icon(
+                imageVector = glyph,
+                contentDescription = null,
+                // 14dp: the app's one small-mark size, which is also the box
+                // `PiSelectChip` gives its leading icon.
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
-}
-
-/** 34dp: two thirds of the 48dp touch minimum, at the height of a real chip. */
-private val CHIP_HEIGHT = 34.dp
-
-/**
- * What a composer chip is filled with: one step darker than its bar in the light palette,
- * and unchanged in the dark one.
- *
- * See [ControlChip] for the measurement. The test is the palette's own luminance because
- * the two schemes need opposite answers from the same one-step move: in the light scheme
- * the chip sits on `surfaceContainerHighest` (`#EDEEF2`) and `surfaceVariant` (`#E4E9EF`)
- * is too close to it, while in the dark scheme that bar is `#171C23` and `surfaceContainer`
- * (`#1A2028`) is too close to *it*. `surfaceVariant` is above 0.5 luminance in the light
- * scheme and far below it in the dark one, so the fill itself answers the question.
- */
-@Composable
-private fun composerChipContainer(): Color {
-    val fill = MaterialTheme.colorScheme.surfaceVariant
-    return if (fill.luminance() > 0.5f) MaterialTheme.colorScheme.surfaceContainer else fill
+        },
+    )
 }
 
 /**
@@ -3468,7 +3637,12 @@ private fun AttachmentChip(
         value = withContext(Dispatchers.IO) { loadThumbnail(context, image.uri) }
     }
 
-    val shape = RoundedCornerShape(10.dp)
+    // `PiShapes.small`: the dense voice's step for a small information tile. It was
+    // 10dp — between the 8dp chip and the 12dp row, which is the middle of the shape
+    // scale the design language does not offer — and the band's own bottom corners
+    // have to repeat the number because a clip rounds *all* four, which on a band
+    // that crosses the tile's foot would notch the picture in half.
+    //
     // The tile's size is fixed on the *Box*, and that is load-bearing rather than
     // tidiness: a `LazyRow` measures its items with an unbounded main axis, so
     // `fillMaxWidth` inside one is a no-op and a weighted child is resolved against
@@ -3478,7 +3652,7 @@ private fun AttachmentChip(
     Box(Modifier.size(ATTACHMENT_TILE)) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = shape,
+            shape = PiShapes.small,
             modifier = Modifier.size(ATTACHMENT_TILE),
         ) {
             val bitmap = thumbnail
@@ -3509,8 +3683,8 @@ private fun AttachmentChip(
                 .fillMaxWidth()
                 .clip(
                     RoundedCornerShape(
-                        bottomStart = 10.dp,
-                        bottomEnd = 10.dp,
+                        bottomStart = ATTACHMENT_CORNER,
+                        bottomEnd = ATTACHMENT_CORNER,
                     ),
                 )
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f))
@@ -3589,11 +3763,19 @@ private fun ShellCommandSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
         )
+        // An `OutlinedTextField` and not the design system's `PiTextField`, and the
+        // reason is a gap in that component rather than a preference: `PiTextField`
+        // fixes its `KeyboardOptions` to a keyboard type and a Done action, and this
+        // field needs `autoCorrectEnabled = false` **and** a monospace `textStyle` —
+        // an autocorrected `git` is a shell error the reader cannot see coming. The
+        // shape it is given is the design system's `card` step, so it is at least the
+        // same rectangle as every other field in the app.
         OutlinedTextField(
             value = line,
             onValueChange = { line = it },
             placeholder = { Text(text.chat.shellCommandPlaceholder) },
             singleLine = true,
+            shape = PiShapes.card,
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Ascii,
@@ -3603,14 +3785,9 @@ private fun ShellCommandSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
+        PiSheetActions {
+            PiButton(
+                text = text.common.ok,
                 // Refused while the line is blank: `bash` with an empty command is a
                 // shell error the user would be reading for a reason they caused.
                 enabled = line.isNotBlank(),
@@ -3618,16 +3795,25 @@ private fun ShellCommandSheet(
                     host.dismiss()
                     onRun(line.trim())
                 },
-            ) {
-                Text(text.common.ok)
-            }
-            OutlinedButton(onClick = { host.dismiss() }) { Text(text.common.cancel) }
+                kind = PiButtonKind.Filled,
+                size = PiButtonSize.Small,
+            )
+            PiButton(
+                text = text.common.cancel,
+                onClick = { host.dismiss() },
+                kind = PiButtonKind.Text,
+                size = PiButtonSize.Small,
+            )
         }
     }
 }
 
 /** One attachment tile's edge — square, as the composer's other tiles are. */
 private val ATTACHMENT_TILE = 64.dp
+
+/** The tile's own corner: `PiShapes.small`'s 8dp, repeated for the name band's foot. */
+private val ATTACHMENT_CORNER = 8.dp
+
 /** The foot band: the file name, and the remove control at its end. */
 private val ATTACHMENT_BAND_HEIGHT = 20.dp
 private val ATTACHMENT_REMOVE_WIDTH = 26.dp

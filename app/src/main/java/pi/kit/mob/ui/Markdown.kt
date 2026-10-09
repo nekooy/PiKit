@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,7 +70,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import pi.kit.mob.locales.strings
+import pi.kit.mob.ui.chat.MONO_LINE_HEIGHT
 import pi.kit.mob.ui.components.CopyButton
+import pi.kit.mob.ui.design.PiShapes
 
 /**
  * A deliberately small Markdown renderer for agent output.
@@ -291,11 +294,21 @@ internal data class InlineStyle(
     val codeBackground: Color = Color.Unspecified,
 )
 
-/** The answer's own inline colours: a code span filled against the page. */
+/**
+ * The answer's own inline colours: a code span filled against the card it is drawn in.
+ *
+ * `surfaceContainerHigh` is one step past the answer's card (`surfaceContainerLow`) —
+ * the inset voice, which is the same tone the fenced block below uses — and it is
+ * deliberately not a `primary`- or `secondary`-tinted fill: a chip that borrowed the
+ * accent would make every identifier in a sentence look like a control. It was
+ * `surfaceContainerHighest`, which was two steps of the *page* in an answer that was
+ * not in a card; a step is measured from the surface it sits on, and the surface a
+ * reply sits on is now its card.
+ */
 @Composable
 internal fun inlineStyle(): InlineStyle = InlineStyle(
     linkColor = MaterialTheme.colorScheme.primary,
-    codeBackground = MaterialTheme.colorScheme.surfaceContainerHighest,
+    codeBackground = MaterialTheme.colorScheme.surfaceContainerHigh,
 )
 
 /**
@@ -338,17 +351,18 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
         is MdBlock.Heading -> {
             // Chapter titles need to read as breaks, not as body text: `##` is the
             // manual's section level and was `titleMedium` — the same 16sp as body
-            // — so the ten chapters ran together. Level 2 sits between titleLarge
-            // and titleMedium, and the gap above a heading is the chapter's edge:
-            // `BLOCK_GAP` alone left a manual section looking like the paragraph
-            // before it.
+            // — so the ten chapters ran together. The three levels are the design
+            // system's own emphasized ladder rather than sizes and weights written
+            // out here: the design language's rule is that emphasized styles carry
+            // *hierarchy* (a page title, a section's count) and not emphasis on a
+            // word, which is exactly what a Markdown heading is — and a hand-picked
+            // 19sp for level 2 was a fourth size the type scale did not have. The gap
+            // above a heading is the chapter's edge: `BLOCK_GAP` alone left a manual
+            // section looking like the paragraph before it.
             val textStyle = when (block.level) {
-                1 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                2 -> MaterialTheme.typography.titleLarge.copy(
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                else -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                1 -> MaterialTheme.typography.headlineSmallEmphasized
+                2 -> MaterialTheme.typography.titleLargeEmphasized
+                else -> MaterialTheme.typography.titleMediumEmphasized
             }
             val topGap = when (block.level) {
                 1 -> 12.dp
@@ -506,11 +520,22 @@ private const val LIST_INDENT = 18
 private const val MAX_LIST_DEPTH = 5
 
 /**
- * A block quote: a left rule and the blocks inside it.
+ * A block quote: a left rule and the blocks inside it, in the muted ink.
  *
  * A left rule reads better than italicising, which loses the visual grouping when
- * several lines are quoted. `IntrinsicSize.Min` on the row is what makes the rule as
- * tall as the quoted content, however many blocks that turns out to be.
+ * several lines are quoted, and it is the one shape in this file that is *not* the
+ * design system's: a quote is not a container and not a control, so it is a rule
+ * rather than a rounded surface. `IntrinsicSize.Min` on the row is what makes the
+ * rule as tall as the quoted content, however many blocks that turns out to be.
+ *
+ * What carries the "quoted" reading besides the rule is the *ink*: the nested blocks
+ * are drawn through `LocalContentColor`, which every `Text` in this file defaults to
+ * (and which a heading or a paragraph inside the quote therefore picks up without
+ * knowing it is inside one). A quote in muted text is one statement — this is
+ * someone else's words — where a rule alone is a line beside body text; italic, the
+ * other convention for it, is not available to this app because the platform
+ * synthesises a slant for a CJK face, which is the same measurement that removed the
+ * italic from the reasoning block.
  */
 @Composable
 private fun MarkdownQuote(block: MdBlock.Quote, style: InlineStyle) {
@@ -526,7 +551,11 @@ private fun MarkdownQuote(block: MdBlock.Quote, style: InlineStyle) {
             Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(BLOCK_GAP),
         ) {
-            block.blocks.forEach { inner -> MdBlockView(inner, style) }
+            CompositionLocalProvider(
+                LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant,
+            ) {
+                block.blocks.forEach { inner -> MdBlockView(inner, style) }
+            }
         }
     }
 }
@@ -643,6 +672,20 @@ private const val MIN_THUMB = 24f
 internal fun clipEntryFor(text: String): ClipEntry =
     ClipEntry(ClipData.newPlainText("PiKit", text))
 
+/**
+ * A fenced code block: a label, a copy button, and the text in a well of its own.
+ *
+ * The well is `PiShapes.row` — the dense voice's step, one below the answer card's
+ * `16dp` — on `surfaceContainerHigh`, which is the same step and the same tone as the
+ * inline chip and the tool output panel beside it. A code block is an information
+ * surface, and the shape guidance is explicit that information-dense surfaces stay
+ * square-ish: a large radius on one eats the first and last character of every line.
+ *
+ * The text is monospace at [MONO_LINE_HEIGHT], the one line box every monospace block
+ * in the app is drawn at — the tool output panel included. It used to be `bodySmall`'s
+ * own 16sp, which is tight for a face whose glyphs are all one width and therefore
+ * have no natural word rhythm to read along.
+ */
 @Composable
 private fun CodeBlock(block: MdBlock.Code, background: Color) {
     // `LocalClipboard`, not the deprecated `LocalClipboardManager`: the replacement
@@ -666,6 +709,8 @@ private fun CodeBlock(block: MdBlock.Code, background: Color) {
             )
             // The same control as the copy button under a message — one composable, `CopyButton`,
             // because the two are the same action and were two different-looking buttons.
+            // Its tint stays the *secondary* ink rather than the meta row's accent: this
+            // button is body content, not the furniture of a finished turn.
             CopyButton(
                 onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(block.body)) } },
                 contentDescription = text.chat.copyCode,
@@ -674,11 +719,11 @@ private fun CodeBlock(block: MdBlock.Code, background: Color) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(background, MaterialTheme.shapes.extraSmall)
+                .background(background, PiShapes.row)
                 // Long lines scroll rather than wrap: wrapped code is much harder
                 // to read than clipped code.
                 .horizontalScroll(rememberScrollState())
-                .padding(10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
             // Monospace and uncoloured. A highlighter used to be here and was removed
             // on request: it cannot cover every language an agent writes a fence for,
@@ -687,7 +732,7 @@ private fun CodeBlock(block: MdBlock.Code, background: Color) {
             // that helps — it says what the block is.
             Text(
                 block.body,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = MONO_LINE_HEIGHT),
                 fontFamily = FontFamily.Monospace,
             )
         }
@@ -809,7 +854,10 @@ private fun MarkdownTable(block: MdBlock.Table, style: InlineStyle) {
     }
 
     val borderColor = MaterialTheme.colorScheme.outlineVariant
-    val shape = MaterialTheme.shapes.extraSmall
+    // The dense voice's step rather than the theme's `extraSmall`: a table is the
+    // densest thing in a reply — every cell is content — and 4dp on a table whose
+    // corners are half a row tall reads as a rectangle that failed to be square.
+    val shape = PiShapes.row
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val available = maxWidth
