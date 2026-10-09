@@ -1,5 +1,7 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.ThemeColor
+
 /** Japanese catalog. */
 internal object JapaneseStrings : Strings {
     override val tabs = object : Strings.Tabs {
@@ -123,11 +125,6 @@ internal object JapaneseStrings : Strings {
             else -> ""
         }
 
-        override fun thinkingModelNote(levels: String) =
-            "このモデルにあるのは $levels だけです。モデルにないレベルを頼むと、pi が" +
-                "より近い上位のレベルに置き換えます。"
-
-        override val thinkingDisabled = "このモデルは思考に対応していません。レベルは off です。"
 
         override val switchModel = "モデル"
         override val contextDetails = "コンテキスト"
@@ -297,6 +294,18 @@ internal object JapaneseStrings : Strings {
         override val themeSystem = "システムに合わせる"
         override val themeLight = "ライト"
         override val themeDark = "ダーク"
+        override val themeColor = "アクセントカラー"
+        override val themeColorSubtitle = "ボタン・選択状態・見出しの色"
+        override fun themeColorName(code: String) = when (code) {
+            ThemeColor.BLUE.code -> "ブルー"
+            ThemeColor.INDIGO.code -> "インディゴ"
+            ThemeColor.TEAL.code -> "ティール"
+            ThemeColor.GREEN.code -> "グリーン"
+            ThemeColor.AMBER.code -> "アンバー"
+            ThemeColor.RED.code -> "レッド"
+            ThemeColor.PINK.code -> "ピンク"
+            else -> "パープル"
+        }
         override val launcherIcon = "アプリアイコン"
         override val launcherIconSubtitle = "ホーム画面での見た目"
         override val launcherIconBlack = "黒地に白"
@@ -304,6 +313,14 @@ internal object JapaneseStrings : Strings {
         override val launcherIconFootnote =
             "切り替えるとホーム画面のアイコンが作り直されます。ランチャーによっては" +
                 "反映に数秒かかり、アイコンの位置が変わることがあります。"
+        override val avatars = "アバター"
+        override val showAvatars = "アバターを表示"
+        override val showAvatarsSubtitle = "各メッセージの上にアバターを表示します"
+        override val aiAvatar = "エージェントのアバター"
+        override val userAvatar = "自分のアバター"
+        override val avatarLabel = "文字"
+        override val avatarLabelHint = "空欄なら既定のマーク"
+        override val avatarColor = "色"
         override val fontSize = "文字サイズ"
         override val fontSizeSubtitle = "7 段階。指を離すとすぐ反映されます"
         override val personalizationNote =
@@ -359,8 +376,6 @@ internal object JapaneseStrings : Strings {
         override val storageFolderDcim = "カメラ"
         override val storageFolderMusic = "音楽"
         override val storageFolderMovies = "動画"
-        override val storageBroadWarning =
-            "通常は復元できないファイルです。エージェントは削除もできるようになります。"
         override val storageConfirmGrantTitle = "エージェントに許可しますか？"
         override fun storageConfirmGrantBody(name: String) =
             "「$name」には取り返しのつかないファイルが含まれている可能性があります。許可すると" +
@@ -413,6 +428,7 @@ internal object JapaneseStrings : Strings {
 
         override val agentContextSection = "コンテキスト"
         override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
+        override val agentContextLeadTitle = "コンテキストの説明"
         override val agentContextSystemTitle = "システムプロンプト"
         override val agentContextSystemBody =
             "pi 自身の役割（コーディングアシスタント）、ツール一覧と呼び出し規則（edit は正確な" +
@@ -442,7 +458,6 @@ internal object JapaneseStrings : Strings {
         override val agentContextInstructions = "グローバル AGENTS.md"
         override val agentContextInstructionsEditable = "編集可"
         override val agentContextNote = "pi が起動時に読み込みます。保存するとエージェントが再起動します。"
-        override val agentContextEditorNote = "保存するとエージェントが再起動し、変更が反映されます。"
         override val agentContextSave = "保存"
         override val agentContextSaved = "保存しました。エージェントを再起動しています"
         override val agentContextFailed = "保存できませんでした。ファイルは変更されていません"
@@ -618,7 +633,6 @@ internal object JapaneseStrings : Strings {
         override val process = "プロセス"
         override val agentProcess = "エージェントのプロセス"
         override val restartAgent = "エージェントを再起動"
-        override val stopAgent = "停止"
         override val failedStartNote =
             "起動失敗のほとんどは設定が原因です。使用中のプロファイルにキーがあるか、" +
                 "そのプロバイダーにモデル ID が存在するかを確認してください。" +
@@ -695,8 +709,6 @@ internal object JapaneseStrings : Strings {
         override val prefix = "プレフィックス"
         override val home = "ホーム"
         override val appFiles = "アプリのファイル"
-        override val installedImage = "インストール済みイメージ"
-        override val installedImageSubtitle = "APK から展開された実行環境のリビジョン"
         override val bundledTools = "同梱ツール"
         override val runtimePrefixNote = "ここで入れたパッケージは自動的にこのプレフィックスへ再配置されます。"
         override val maintenanceSubtitle = "モデル一覧とパッケージ修復"
@@ -705,12 +717,9 @@ internal object JapaneseStrings : Strings {
         override val installedVersionSubtitle = "実行環境内のパッケージから読み取ります"
         override val unknown = "不明"
         override val modelList = "モデル一覧"
-        override val modelListRefresh = "今すぐ更新"
+        override val modelListRefresh = "更新"
         override val modelListRefreshSubtitle = "必要なときにモデル一覧を更新します"
         override val modelListRefreshing = "各プロバイダに問い合わせています…"
-        override val modelListChanged =
-            "モデル一覧が更新されました。読み込むためエージェントを再起動します。"
-        override val modelListUnchanged = "モデル一覧は最新です。"
         override val modelListStateRefreshing = "更新中"
         override val modelListStateUpdated = "更新済み"
         override val modelListStateCurrent = "最新"
@@ -725,7 +734,7 @@ internal object JapaneseStrings : Strings {
         override val installedPackages = "インストール済みパッケージ"
         override val relocate = "パッケージの再配置"
         override val relocateSubtitle = "Termux のパスを指したままのパッケージを直します"
-        override val relocateNow = "確認して修復"
+        override val relocateNow = "修復"
         override val relocateNote =
             "インストールしたものが既に起動できないときだけ必要です。通常は押す必要はありません。" +
                 "pkg や apt で入れたパッケージはインストール時に自動で再配置されます。別の経路で" +
@@ -735,12 +744,6 @@ internal object JapaneseStrings : Strings {
         override val relocateBroken =
             "この実行環境のパッケージ再配置ツールが壊れているため、修復では直りません。" +
                 "PiKit を再インストールしてください（実行環境はアプリから展開し直されます）。"
-        override fun relocated(occurrences: Int, files: Int, symlinks: Int, modes: Int) =
-            buildString {
-                append("$files 個のファイル内の $occurrences 箇所と、$symlinks 個のシンボリックリンクを再配置しました。")
-                if (modes > 0) append(" また $modes 個のファイルの実行権限を復元しました。")
-            }
-        override val nothingToRelocate = "再配置は不要です。すべてのファイルがこのアプリのプレフィックスと一致しています。"
         override val relocateProblems = "完了しましたが問題があります："
         override val relocateStateScanning = "確認中"
         override val relocateStateRepaired = "修復済み"
@@ -749,9 +752,9 @@ internal object JapaneseStrings : Strings {
 
         override val storageCheck = "ストレージを確認"
         override val storageCheckSubtitle = "読み書きと削除の安全性を実測します"
-        override val storageCheckRun = "確認を実行"
-        override val storageCheckRunning = "実行中…"
-        override val storageCheckPassed = "すべての確認に合格"
+        override val storageCheckRun = "確認"
+        override val storageCheckRunning = "確認中…"
+        override val storageCheckPassed = "合格"
         override val storageCheckFailed = "失敗した確認があります"
         override val storageCheckNote =
             "実行環境の中で、このアプリの子プロセスとして動きます。エージェントやターミナルと" +
@@ -792,7 +795,7 @@ internal object JapaneseStrings : Strings {
             "この実行環境には web-access 拡張がありません。「メンテナンスと修復」で" +
                 "実行環境を更新してから、このページを開き直してください。"
         override val webAccess = "ウェブアクセス"
-        override val webAccessSubtitle = "検索・ページ読み込み・GitHub のクローン"
+        override val webAccessSubtitle = "検索・ページ読み込み・GitHub のクローン。変更は次回のエージェント起動時に反映"
         override val searchWorkflow = "検索ワークフロー"
         override val searchWorkflowSubtitle = "検索後にすること"
         override val workflowNone = "結果をそのまま返す"

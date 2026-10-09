@@ -48,24 +48,23 @@ import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.SheetHost
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiEmptyState
 import pi.kit.mob.ui.design.PiLoading
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiScaffold
 import pi.kit.mob.ui.design.PiSearchField
 import pi.kit.mob.ui.design.PiSectionHeader
 import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiSheetActions
 import pi.kit.mob.ui.design.PiSheetList
 import pi.kit.mob.ui.design.PiSheetRow
 import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiTextField
-import pi.kit.mob.ui.design.PiWorkingPill
+import pi.kit.mob.ui.design.PiStatePill
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -85,9 +84,10 @@ import java.util.Locale
  * questions rather than as records: for most of the list the title *is* the
  * reader's own words.
  *
- * The bar is pinned rather than collapsing: the list is the page here, and a
- * bar that folded away as the reader scrolled would be taking a line of the
- * screen for a title that never changes ("Conversations").
+ * The title is one line that never changes ("Conversations") and the subtitle is the
+ * list's own state — how many are saved, how many are selected, whether a search is
+ * still reading. §9.2 has why the header is one fixed strip and not one of Material's
+ * app bars.
  */
 @Composable
 fun SessionsScreen(
@@ -176,7 +176,6 @@ fun SessionsScreen(
         // be the last item in the action row, i.e. next to Delete, which is both
         // unconventional and a hazard.
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Pinned,
         actions = {
             if (selecting) {
                 // Scoped to `visible` rather than every saved conversation:
@@ -272,7 +271,7 @@ fun SessionsScreen(
                     Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    PiWorkingPill(text.sessions.searching)
+                    PiStatePill(text.sessions.searching)
                 }
 
                 visible.isEmpty() -> PiEmptyState(
@@ -442,7 +441,10 @@ private fun ConversationList(
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(bottom = 8.dp),
+        // A gap above the navigation bar, so the last conversation is not read
+        // against the bar's own edge. One constant for every scrolling page:
+        // `PiPageBottom`.
+        contentPadding = PaddingValues(bottom = PiPageBottom),
     ) {
         itemsIndexed(rows, key = { index, row ->
             when (row) {
@@ -617,8 +619,10 @@ private fun ConversationRow(
  * focusable second window, and it leaves a zero-size layout node in the row it
  * hangs from, which `Arrangement.spacedBy` then charges a gap for. Every menu in
  * PiKit is a body on the root's one modal layer for the same reason, and this is
- * a body for it — `PiSheetTitle`, `PiSheetList` and `PiSheetActions` from the
- * design system rather than a shape of its own.
+ * a body for it — `PiSheetTitle` and `PiSheetList` from the design system rather
+ * than a shape of its own, and no dismiss button: the scrim, the back gesture and
+ * the downward drag all close a sheet, so a *Cancel* row was a fourth way to do
+ * what three already did.
  *
  * The title is the question and the subtitle is the conversation it is about,
  * so the reader does not have to look behind the scrim to remember which row
@@ -662,14 +666,6 @@ private fun SessionActionsSheet(
                     onClick = sheetAction(host, onDelete),
                 )
             }
-        }
-        PiSheetActions {
-            PiButton(
-                text = text.sessions.cancel,
-                kind = PiButtonKind.Text,
-                size = PiButtonSize.Small,
-                onClick = host::dismiss,
-            )
         }
     }
 }

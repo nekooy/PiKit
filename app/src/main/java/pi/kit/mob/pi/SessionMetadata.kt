@@ -121,11 +121,14 @@ object SessionMetadata {
             if (!MESSAGE.containsMatchIn(line)) continue
             if (!USER_ROLE.containsMatchIn(line) && !ASSISTANT_ROLE.containsMatchIn(line)) continue
             val spoken = runCatching {
+                // The message object itself, or nothing: returning early is what makes
+                // the two reads below plain `get`s rather than a chain of safe calls —
+                // a record whose `message` is absent has no prose either way.
                 val message = PiRecordParser.json.parseToJsonElement(line)
-                    .jsonObject["message"]?.jsonObject
-                val role = message?.get("role")?.jsonPrimitive?.contentOrNull
+                    .jsonObject["message"]?.jsonObject ?: return@runCatching null
+                val role = message["role"]?.jsonPrimitive?.contentOrNull
                 if (role == "user" || role == "assistant") {
-                    messageText(message?.get("content"))
+                    messageText(message["content"])
                 } else {
                     null
                 }

@@ -13,13 +13,19 @@
  * here morphs through the same three polygons, which is what makes one at the top
  * of a list and one inside a pill recognisably the same component.
  *
- * ## Coral means live
+ * ## One role means live
  *
- * `tertiary` is the app's one reserved hue, and it means *running*: an agent
- * mid-turn, a process that is still going. Everything else that reports state uses
- * a neutral or the primary role. A single-hue vocabulary for one condition is what
- * makes the colour informative instead of merely accentual, and it is the reason
+ * `tertiary` is the app's one role with a single job, and the job is *running*: an
+ * agent mid-turn, a process that is still going. Everything else that reports state
+ * uses a neutral or the primary role. One role for one condition is what makes the
+ * colour informative instead of merely accentual, and it is the reason
  * [PiTone.Live] exists as a distinct tone rather than being an `accent` flag.
+ *
+ * It used to be a reserved coral, and that is the part that did not survive: an
+ * orange patch in a blue interface is a colour the user did not choose and cannot
+ * change. The *hue* now comes from the accent — a neighbour of it, at a lower
+ * saturation (see `PiColor.accentScheme`) — so the role is still tellable from
+ * [PiTone.Accent] without being a colour from outside the scheme.
  */
 package pi.kit.mob.ui.design
 
@@ -39,17 +45,21 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -89,19 +99,29 @@ fun PiLoading(
 }
 
 /**
- * A small working indicator and a word, as one pill.
+ * A small pill that reports the state of one piece of work: a word, and either the
+ * live indicator while it runs or a mark the caller supplies once it has settled.
  *
  * The label is not optional. A bare indicator inside a transcript says "wait" and
  * leaves the reader to guess what for; the three places this is used all have a
  * different answer — the agent is thinking, a tool is running, a session is
  * loading — and the pill is the smallest thing that can carry it.
+ *
+ * [mark] is what makes the pill able to hold a *settled* state as well as a running
+ * one: `null` draws the morphing indicator (the default, and the whole of what a
+ * running thing shows), and a caller that passes something draws it in the
+ * indicator's own footprint instead. A tool call wears the same pill in every state
+ * for exactly this reason — one row, one shape — and only the mark inside it
+ * changes: the indicator while it runs, the tick or the cross when it is done. The
+ * mark is drawn in `LocalContentColor`, which the pill sets to its own ink.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun PiWorkingPill(
+fun PiStatePill(
     label: String,
     modifier: Modifier = Modifier,
     tone: PiTone = PiTone.Live,
+    mark: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val fill = tone.container(MaterialTheme.colorScheme)
@@ -116,11 +136,17 @@ fun PiWorkingPill(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        LoadingIndicator(
-            modifier = Modifier.size(18.dp),
-            color = ink,
-            polygons = indicatorShapes(),
-        )
+        if (mark == null) {
+            LoadingIndicator(
+                modifier = Modifier.size(18.dp),
+                color = ink,
+                polygons = indicatorShapes(),
+            )
+        } else {
+            CompositionLocalProvider(LocalContentColor provides ink) {
+                Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { mark() }
+            }
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
@@ -174,6 +200,54 @@ fun PiAgentMark(
                     .size(size * 0.42f)
                     .clip(PiShapes.agent)
                     .background(content),
+            )
+        }
+    }
+}
+
+/**
+ * A speaker's avatar: a fully round badge carrying a short label or a mark.
+ *
+ * Round rather than one of `PiShapes`' radii, and that is the one shape decision
+ * here: an avatar is the same mark in every app the reader uses, and a squircle in a
+ * row of circles reads as a button. [color] is the whole fill — the reader picks it —
+ * and the ink is chosen from the colour's luminance rather than pinned to white,
+ * because one of the eight seeds is light enough that white on it is a squint.
+ *
+ * [label] wins over [icon] when both are given: a label is the user's own word, and a
+ * blank label is what falls back to the mark (the agent's `PI`, the reader's
+ * silhouette), which the caller resolves before it gets here.
+ */
+@Composable
+fun PiAvatar(
+    color: Color,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    icon: ImageVector? = null,
+    size: Dp = 28.dp,
+    labelStyle: TextStyle = MaterialTheme.typography.labelMedium,
+) {
+    val ink = if (color.luminance() > 0.5f) Color.Black else Color.White
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(color),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (label != null) {
+            Text(
+                text = label,
+                style = labelStyle,
+                color = ink,
+                maxLines = 1,
+            )
+        } else if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = ink,
+                modifier = Modifier.size(size * 0.62f),
             )
         }
     }
@@ -261,7 +335,7 @@ fun PiNotice(
             .fillMaxWidth()
             .clip(PiShapes.row)
             .background(tone.container(MaterialTheme.colorScheme))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -293,7 +367,7 @@ fun PiNotice(
  * fraction is real and the reader is waiting on a measured 110 MB — and by nothing
  * else. A determinate bar for a step count that is not a fraction of the work is a
  * lie told in a progress bar, which is why every other wait in the app is
- * [PiLoading] or [PiWorkingPill].
+ * [PiLoading] or [PiStatePill].
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

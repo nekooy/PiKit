@@ -50,7 +50,10 @@ class MainActivity : ComponentActivity() {
                 applyLauncherIcon(this@MainActivity, settings.launcherIcon)
             }
 
-            PiKitTheme(darkTheme = darkTheme) {
+            // The accent is read here with the theme mode and for the same reason:
+            // it is a preference, and `PiKitTheme` assembles a palette rather than
+            // owning one. Choosing a colour re-themes the page it was chosen on.
+            PiKitTheme(darkTheme = darkTheme, accent = settings.themeColor) {
                 // The text size, applied as one multiplier on the composition's own
                 // density rather than by overriding each type style at each of the
                 // seven steps.

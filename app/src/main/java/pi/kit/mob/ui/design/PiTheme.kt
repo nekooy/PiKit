@@ -44,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import pi.kit.mob.data.ThemeColor
 
 /**
  * PiKit's theme.
@@ -56,9 +57,22 @@ import androidx.core.view.WindowCompat
 @Composable
 fun PiKitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    /**
+     * The accent, from the user's own choice (`ThemeColor`).
+     *
+     * A parameter here rather than a read of the store, for the same reason
+     * [darkTheme] is: this file assembles a theme and does not own a preference.
+     * The default is the app's own accent, so a preview or a test can call this
+     * with one argument.
+     */
+    accent: ThemeColor = ThemeColor.DEFAULT,
     content: @Composable () -> Unit,
 ) {
-    val scheme = if (darkTheme) PiDarkScheme else PiLightScheme
+    val scheme = accentScheme(
+        base = if (darkTheme) PiDarkScheme else PiLightScheme,
+        seed = accent.seed,
+        dark = darkTheme,
+    )
 
     val view = LocalView.current
     if (!view.isInEditMode) {

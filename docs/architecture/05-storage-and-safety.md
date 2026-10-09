@@ -342,14 +342,16 @@ clean first launch.
 
 ---
 
-## Why the shared-storage page shows no warning by default
+## Why the shared-storage page carries no warning at all
 
-The storage page raises its "these files are usually irreplaceable" note
-(`SettingsNote(storageBroadWarning)`) only while the policy is **unrestricted** — the one
-root that means *everything on the phone*. Every row used to carry a warning, including
-Downloads and Pictures, and a page where every row is an alert is a page where no alert is
-read. A folder that is switched off cannot lose anything either, so its row says where it
-points instead. On a fresh install, which is an empty policy, the page is correctly
-warning-free.
+The page raises no note above the folder list. It used to raise one — "these files are usually
+irreplaceable", in the danger tone — while the policy was **unrestricted**, the one root that
+means *everything on the phone*; before that, every row carried a warning, including Downloads
+and Pictures, and a page where every row is an alert is a page where no alert is read. Both
+were removed for the same reason, and the second one is now redundant twice over: the sentence
+is already the *confirmation dialog's* body (`storageConfirmGrantBody`, which asks before the
+root is switched on), so the standing note repeated a question the reader had just answered
+(`去掉那个红色提醒这些文件通常无法找回`). A folder that is switched off cannot lose anything, so
+its row says where it points instead.
 
 ---

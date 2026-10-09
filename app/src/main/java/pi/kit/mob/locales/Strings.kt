@@ -365,27 +365,6 @@ interface Strings {
          */
         fun thinkingLevelDescription(id: String): String
 
-        /**
-         * The thinking picker's footnote when the model offers fewer than pi's seven.
-         *
-         * [levels] is already comma-separated. pi maps a request the model cannot
-         * honour onto the next level it can, so the picker offers only the model's own
-         * levels — and this is the sentence that says why the menu is shorter than the
-         * seven pi knows. The levels themselves are named as pi names them.
-         */
-        fun thinkingModelNote(levels: String): String
-
-        /**
-         * The footnote for a model that does not reason at all.
-         *
-         * Its own sentence rather than [thinkingModelNote] with a one-item list: pi
-         * answers `["off"]` for a model without reasoning support
-         * (`getSupportedThinkingLevels`), and "this model offers only these levels:
-         * off" describes a choice where there is none — there is nothing to pick and
-         * nothing pi would do differently.
-         */
-        val thinkingDisabled: String
-
         /** The model chip's own name. */
         val switchModel: String
 
@@ -707,6 +686,18 @@ interface Strings {
         val themeDark: String
 
         /**
+         * The accent: the one colour the user picks, and everything it reaches.
+         *
+         * The names are per colour and live in [themeColorName] rather than in
+         * eight fields each: the set is the enum's (`ThemeColor`), and a catalog
+         * that enumerated them as fields would have to be edited twice for every
+         * colour added.
+         */
+        val themeColor: String
+        val themeColorSubtitle: String
+        fun themeColorName(code: String): String
+
+        /**
          * The launcher icon: the black mark or the white one.
          *
          * Named by their colours rather than by "light" and "dark", because the
@@ -728,6 +719,28 @@ interface Strings {
          * and a fault.
          */
         val launcherIconFootnote: String
+
+        /**
+         * The transcript's avatars: whether they are drawn, and what each one is.
+         *
+         * Two rows and a switch on the personalization page. The agent's default is
+         * the word `PI` and the reader's is a person silhouette — both drawn by the
+         * app, not stored — so the two never look alike and neither has to be set up
+         * before the first message. A label is a short word or the reader's initials;
+         * blank means the built-in mark.
+         */
+        val avatars: String
+        val showAvatars: String
+        val showAvatarsSubtitle: String
+        val aiAvatar: String
+        val userAvatar: String
+
+        /** In the avatar sheet: the label field's title and its blank-means-default hint. */
+        val avatarLabel: String
+        val avatarLabelHint: String
+
+        /** In the avatar sheet: the row of colour swatches under the label. */
+        val avatarColor: String
 
         /**
          * The interface's text size: one row above the theme, in seven steps.
@@ -790,8 +803,6 @@ interface Strings {
         val storageFolderMusic: String
         val storageFolderMovies: String
 
-        /** The warning under the folder list while the whole tree is granted. */
-        val storageBroadWarning: String
 
         /**
          * The question asked before *any* folder is switched on.
@@ -865,6 +876,15 @@ interface Strings {
         val agentContextLead: String
 
         /**
+         * The row that opens the numbered points.
+         *
+         * Named for what the row *is* rather than for the sentence it opens: the
+         * row is a description of the context, and a title that repeated the
+         * sentence's first clause described neither the row nor the place it leads.
+         */
+        val agentContextLeadTitle: String
+
+        /**
          * Five parts of the request, each a title and a body.
          *
          * Points rather than a single sentence: a reader checking whether
@@ -898,7 +918,6 @@ interface Strings {
         /** Under the row: the file is read at startup, and what stays read-only. */
         val agentContextNote: String
 
-        val agentContextEditorNote: String
         val agentContextSave: String
         val agentContextSaved: String
         val agentContextFailed: String
@@ -1255,7 +1274,6 @@ interface Strings {
         val process: String
         val agentProcess: String
         val restartAgent: String
-        val stopAgent: String
         val failedStartNote: String
 
         /**
@@ -1385,8 +1403,6 @@ interface Strings {
         val prefix: String
         val home: String
         val appFiles: String
-        val installedImage: String
-        val installedImageSubtitle: String
         val bundledTools: String
         val runtimePrefixNote: String
         // Maintenance
@@ -1408,22 +1424,14 @@ interface Strings {
         val modelListRefreshSubtitle: String
         val modelListRefreshing: String
 
-        /** The refresh ran and the catalogue moved; the agent is restarted to read it. */
-        val modelListChanged: String
-
-        /** The refresh ran and nothing moved — which is a success, not a failure. */
-        val modelListUnchanged: String
-
         /**
          * The run's state, as the row's own value — one word, never a sentence.
          *
-         * The state belongs in the value column and the sentence in the note under the
-         * button, which is the split the storage row already used
-         * ([storageCheckRunning] and its two neighbours). A sentence here would be an
-         * ellipsis: `SettingsRow` caps its value at 0.35 of the row, which is about
-         * eleven characters at the default text size. [modelListChanged] and
-         * [modelListUnchanged] stay where they are — under the buttons, where there is
-         * room for the whole of what happened.
+         * The state belongs in the value column and nothing else: a sentence here would
+         * be an ellipsis, because `PiRow` gives its value the natural width and a
+         * sentence would crowd the title beside it. The verdict is the row's word
+         * alone now — the sentence banners that used to sit under the row for the
+         * changed and unchanged cases were the "完成的横幅" the page dropped.
          */
         val modelListStateRefreshing: String
         val modelListStateUpdated: String
@@ -1477,18 +1485,15 @@ interface Strings {
          * restores it is a fresh runtime image.
          */
         val relocateBroken: String
-        fun relocated(occurrences: Int, files: Int, symlinks: Int, modes: Int): String
-        val nothingToRelocate: String
         val relocateProblems: String
 
         /**
          * The walk's state, as the row's own value — the same split as
-         * [modelListStateRefreshing], and for the same reason: the verdict under the
-         * button is a sentence and this is the one word the row can hold.
-         *
-         * [relocateStateRepaired] is not the count: the count is in [relocated], which
-         * is a sentence with four numbers in it. The row says only whether the last
-         * walk changed anything.
+         * [modelListStateRefreshing], and for the same reason: a verdict that is a
+         * sentence belongs in a notice, and this is the one word the row can hold.
+         * The success cases — repaired, nothing to fix — are the row's word alone; the
+         * `relocated(...)` count sentence that used to sit under the row is gone with
+         * the other completion banners.
          */
         val relocateStateScanning: String
         val relocateStateRepaired: String

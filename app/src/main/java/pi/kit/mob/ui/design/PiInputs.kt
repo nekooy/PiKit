@@ -1,6 +1,6 @@
 /*
- * Fields and controls: the two text inputs, the switch row, the slider row, the
- * row that chooses one of a set, and the search field.
+ * Fields and controls: the two text inputs, the switch row, the row that chooses
+ * one of a set, and the search field.
  *
  * ## Every one of these is a row, not a field
  *
@@ -42,12 +42,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -66,7 +64,7 @@ import androidx.compose.ui.unit.dp
 /**
  * The search field: a filled pill with a leading magnifier and a clear button.
  *
- * Filled rather than outlined because it sits directly under the app bar on a page
+ * Filled rather than outlined because it sits directly under the header on a page
  * whose whole body is the list it filters, and an outlined box there reads as a
  * third frame between the bar and the list. The clear button appears only when
  * there is something to clear, which is the one place in the app a control is added
@@ -195,7 +193,7 @@ fun PiSwitchRow(
             .padding(horizontal = 12.dp, vertical = 2.dp)
             .clip(PiShapes.row)
             .clickable(enabled = enabled, role = Role.Switch) { onCheckedChange(!checked) }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -214,59 +212,6 @@ fun PiSwitchRow(
             }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
-}
-
-/**
- * A row with a slider and its value.
- *
- * The value is drawn as a badge on the *end* of the row rather than under the slider,
- * so the number stays here while the thumb moves and the row does not change height
- * as the label's width changes — a value that reflows from "12 pt" to "100 pt"
- * under a moving thumb is the thing that makes a slider feel unsettled.
- */
-@Composable
-fun PiSliderRow(
-    title: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueLabel: String,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    steps: Int = 0,
-    enabled: Boolean = true,
-    leading: (@Composable () -> Unit)? = null,
-) {
-    // Positional, because the third parameter is named differently in this release's
-    // two `rememberSliderState` overloads and only its type is stable between them.
-    val state = rememberSliderState(value, steps, valueRange)
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp)
-            .clip(PiShapes.row)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (leading != null) {
-                Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { leading() }
-            }
-            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            PiBadge(valueLabel, tone = PiTone.Accent)
-        }
-        if (subtitle != null) {
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Slider(
-            state = state,
-            onValueChange = onValueChange,
-            enabled = enabled,
-        )
     }
 }
 
@@ -305,7 +250,7 @@ fun PiChoiceRow(
             .clip(PiShapes.row)
             .background(container)
             .clickable(enabled = enabled, role = role) { onSelect() }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -355,9 +300,9 @@ fun PiValueRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .heightIn(min = 46.dp)
             .padding(horizontal = 12.dp, vertical = 2.dp)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {

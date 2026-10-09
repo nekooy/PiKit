@@ -261,8 +261,10 @@ private fun typeset(body: String, spec: MathSpec): Formula {
     // from the icon alone would leave every formula PAD pixels too high on the line.
     //
     // `icon()` is the library's method, not a Kotlin property: the field behind it is private and
-    // `icon` alone therefore resolves to that field rather than to the getter.
-    val depth = ((drawable.icon()?.iconDepth ?: 0) + PAD).coerceIn(0, height)
+    // `icon` alone therefore resolves to that field rather than to the getter. Both it and
+    // `iconDepth` are non-null in this release — the compiler says so — which is why neither a
+    // `?.` nor an elvis survives here.
+    val depth = ((drawable.icon().iconDepth) + PAD).coerceIn(0, height)
     return Formula(drawable = drawable, widthPx = width, heightPx = height, depthPx = depth)
 }
 

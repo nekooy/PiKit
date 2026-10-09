@@ -62,7 +62,7 @@ import pi.kit.mob.ui.components.PiIcons
 import pi.kit.mob.ui.design.PiMotion
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiWorkingPill
+import pi.kit.mob.ui.design.PiStatePill
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -347,51 +347,38 @@ internal data class TurnSummaryData(
 )
 
 /**
- * One tool call: a dense row once it is done, the app's live pill while it runs.
+ * One tool call: one pill for every state it can be in.
  *
- * ## Two shapes, because the two states are two different facts
+ * ## One shape, and only the mark inside it changes
  *
- * A call that is **running** is drawn as a coral [PiWorkingPill] naming the tool.
- * That is the app's one live indicator (`PiTone.Live`, `tertiary`, reserved for
- * "this is still going" and for nothing else) and the brief that produced this
- * design asks for it by name. The argument stays beside the pill as one line of
- * muted monospace, because for a call that has not finished yet the argument is
- * the only thing that says *what* it is doing — `ls -la` is the answer, the tool's
- * name is not.
+ * A call wears the app's state pill ([PiStatePill]) from the moment it starts until
+ * the reader opens its output — the same pill, in the same place, at the same
+ * height. While it runs the pill carries the morphing live indicator ([PiTone.Live],
+ * `tertiary`, reserved for "this is still going" and for nothing else). When it
+ * settles the indicator is swapped for the app's own tick or cross: the tick on a
+ * success, on a muted [PiTone.Neutral] pill, and the cross on a failure, on
+ * [PiTone.Danger] — the one red mark in a turn. The argument stays beside the pill
+ * as one line of muted monospace, because for a call that has not finished yet the
+ * argument is the only thing that says *what* it is doing — `ls -la` is the answer,
+ * the tool's name is not — and keeping it there once the call is done is what leaves
+ * the row's width unchanged when it ends.
  *
- * A call that has **finished** is a dense row in the dense voice: the state mark,
- * the tool's name, a middot and as much of its argument as fits before the
- * chevron, on `PiShapes.row` — one step at a time, never a pill. Nothing else is
- * on it and it has no background of its own.
+ * The settled pill is also the row's control: it carries the disclosure chevron and
+ * a tap on it opens the call's output, or closes it again. A running call is not
+ * tappable — there is nothing to open yet.
  *
- * The height therefore changes once per call, when it ends, and that reflow is
- * deliberate rather than overlooked: the pill is 28dp and the row is 22dp, and the
- * *transition* is what tells the reader a step completed. Every previous attempt to
- * hold the height still put a second moving thing on a row whose mark already
- * reported the state.
+ * ## What this replaced
  *
- * ## The state is a tone, not a colour
+ * A finished call used to *drop* the pill and become a dense 22dp row: a bare 14dp
+ * mark beside the tool's name, on `PiShapes.row` and with no fill of its own. So the
+ * same call changed shape — and its name moved — at the instant it ended, and the
+ * height change was doing the work of saying "this step finished". The pill is now
+ * kept and the tick says it in place instead; the reader's rule is one shape per
+ * step, with only the mark inside it changing. The live pill's 28dp against the old
+ * dense row's 22dp is the measurement behind the reflow that is gone.
  *
- * `PiTone` carries it: [PiTone.Live] while it runs, [PiTone.Danger] when it failed,
- * [PiTone.Neutral] once it succeeded. Only the failure is coloured at all, which is
- * what makes the one red mark in a turn findable — a successful call is a fact and
- * does not need an accent. The old mark was `primary` while running, `secondary` on
- * success and `error` on failure, which spent the app's own voice on a step that
- * had simply finished.
+ * Two devices removed for reasons that still hold:
  *
- * ## What this replaced, and why each device is still not here
- *
- * The card was a filled panel with a header row *and* two lines of the tool's
- * output always visible under it, so a turn that used six tools was six panels of
- * three or four lines each and the answer — the thing the reader asked for — was
- * pushed a screen and a half down by scaffolding. Three devices were removed to get
- * from there to a bare row, each of them reported, and none of them has come back
- * in this design:
- *
- *  - **The spinner.** A running call drew a `CircularProgressIndicator` after its
- *    name — a second moving thing on a row whose mark already says what state it is
- *    in, and it made the name's own width depend on whether the call had finished.
- *    The state is carried by the row's own shape now.
  *  - **The step rail.** Consecutive calls used to be inset 12dp and joined by a 2dp
  *    bar down their left edge, so that a run read as one turn's steps. The rail cost
  *    the reader 12dp of width on every row of a turn and — because the inset
@@ -428,7 +415,9 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
         ToolState.Succeeded -> PiTone.Neutral
         else -> PiTone.Live
     }
-    val ink = tone.ink(MaterialTheme.colorScheme)
+    // Pending and Running share one shape — the live pill — because from the
+    // reader's side they are one fact: the call has not come back yet.
+    val running = item.state == ToolState.Pending || item.state == ToolState.Running
 
     val summary = remember(item.argumentsJson) { toolSummary(item) }
     // Counted once per output rather than once per recomposition: a tool that dumps
@@ -441,99 +430,77 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
     val lines = remember(item.output) { item.output.lineSequence().count() }
 
     Column(Modifier.fillMaxWidth()) {
-        if (item.state == ToolState.Pending || item.state == ToolState.Running) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = ROW_PADDING),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PiWorkingPill(label = item.name.ifBlank { text.chat.toolFallback })
-                if (summary.isNotBlank()) {
-                    // `weight(1f, fill = false)` — not `fill = true`: the line takes
-                    // only what it needs, so a long path ellipsises at the card's edge
-                    // instead of stretching the pill's row.
-                    Text(
-                        summary,
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .padding(start = 6.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = MONO_LINE_HEIGHT),
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            return@Column
-        }
-
-        // Only the header row toggles the card. Making the whole card clickable
-        // would be tidier, but a clickable consumes the long-press, which would
-        // leave the output impossible to select or copy — the opposite of what a
-        // tool result is for.
+        // One shape for every state of the call — the app's state pill. While the
+        // call runs it is the live indicator; once it settles the indicator becomes
+        // the tick or the cross and the pill becomes the row's control, opening the
+        // output on a tap. The settled call used to drop the pill for a bare 14dp
+        // mark, which moved its name and changed the row's height the moment it
+        // ended; the reader's rule is one shape per step.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(PiShapes.row)
-                // The label is on the control rather than on the arrow inside it: a
-                // screen reader reaching this row should hear what the row does.
-                .disclosureClickable(
-                    onClickLabel = if (expanded) text.chat.collapse else text.chat.expand,
-                    onClick = { expanded = !expanded },
+                .then(
+                    if (running) {
+                        Modifier
+                    } else {
+                        // Only the header row toggles the card. Making the whole card
+                        // clickable would be tidier, but a clickable consumes the
+                        // long-press, which would leave the output impossible to
+                        // select or copy — the opposite of what a tool result is for.
+                        Modifier
+                            .clip(PiShapes.row)
+                            // The label is on the control rather than on the arrow
+                            // inside it: a screen reader reaching this row should hear
+                            // what the row does.
+                            .disclosureClickable(
+                                onClickLabel = if (expanded) {
+                                    text.chat.collapse
+                                } else {
+                                    text.chat.expand
+                                },
+                                onClick = { expanded = !expanded },
+                            )
+                    },
                 )
                 .padding(vertical = ROW_PADDING),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // The mark, then the name, then as much of the argument as fits.
-            //
-            // The three *states* are drawn inside one fixed square, because the tick
-            // and the cross are 14dp icons — without it a row was a shade taller and
-            // a shade wider than the one below it and a turn's rows did not stack.
-            // There is no per-tool glyph (a magnifier for a read, a terminal for a
-            // shell) and that is the point of the reference this was rebuilt
-            // against: the mark answers "did it work", which is the question a
-            // reader has about a step they did not open, and the name beside it
-            // already says which tool ran.
-            Box(
-                modifier = Modifier.size(TOOL_MARK_SIZE),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (item.state == ToolState.Failed) {
-                        Icons.Filled.Close
-                    } else {
-                        Icons.Filled.Check
-                    },
-                    contentDescription = null,
-                    tint = ink,
-                    modifier = Modifier.size(TOOL_MARK_SIZE),
-                )
-            }
-            Text(
-                item.name.ifBlank { text.chat.toolFallback },
-                modifier = Modifier.padding(start = 6.dp),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            // The mark answers "did it work", which is the question a reader has
+            // about a step they did not open, and the pill's label already says which
+            // tool ran. There is no per-tool glyph (a magnifier for a read, a terminal
+            // for a shell) and that is deliberate.
+            PiStatePill(
+                label = item.name.ifBlank { text.chat.toolFallback },
+                tone = tone,
+                mark = when (item.state) {
+                    ToolState.Failed -> {
+                        {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(TOOL_MARK_SIZE),
+                            )
+                        }
+                    }
+
+                    ToolState.Succeeded -> {
+                        {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(TOOL_MARK_SIZE),
+                            )
+                        }
+                    }
+
+                    else -> null
+                },
             )
-            // The one-line preview of what the call was made with: the whole of
-            // the closed row's content, and the reason it is the argument rather
-            // than the output — `ls -la` says what the call is, and the first two
-            // lines of a directory listing do not.
+            // The one-line preview of what the call was made with: the whole of the
+            // closed row's content, and the reason it is the argument rather than the
+            // output — `ls -la` says what the call is, and the first two lines of a
+            // directory listing do not.
             if (summary.isNotBlank()) {
-                // A middot of its own rather than a `·` glued to the front of the
-                // summary: the separator is the row's, not the argument's, and the
-                // preview is monospace — a middot in a monospace cell sits off the
-                // optical centre of the name beside it.
-                Text(
-                    text = "·",
-                    modifier = Modifier.padding(start = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 // `weight(1f, fill = false)` — not `fill = true`: the line takes only
                 // what it needs, so the chevron sits at the end of the text the way it
                 // does on the reasoning row, and `fill = false` still lets a long path
@@ -557,16 +524,18 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            } else {
+            } else if (!running) {
                 Spacer(Modifier.weight(1f))
             }
-            DisclosureChevron(
-                expanded = expanded,
-                modifier = Modifier.padding(start = TOOL_CHEVRON_GAP),
-            )
+            if (!running) {
+                DisclosureChevron(
+                    expanded = expanded,
+                    modifier = Modifier.padding(start = TOOL_CHEVRON_GAP),
+                )
+            }
         }
 
-        if (expanded) {
+        if (expanded && !running) {
             // A gap between the row and what it opened. The row's own padding put the
             // chevron's underline almost on the panel's first line, so the panel
             // read as part of the header rather than as the thing it revealed.
@@ -941,8 +910,8 @@ internal fun NoticeCard(item: ChatItem.Notice) {
     // `PiTone`'s middle three, and the *ink* accessor rather than a container: a
     // notice is a remark about the conversation rather than a control, so it wears
     // its colour as text and rule with no fill of its own. A warning is the app's
-    // own accent and not the live coral — coral means "still running", and nothing
-    // in a notice is.
+    // own accent and not the live tone — live means "still running", and nothing in
+    // a notice is.
     val tone = when (item.kind) {
         NoticeKind.Info -> PiTone.Neutral
         NoticeKind.Warning -> PiTone.Accent

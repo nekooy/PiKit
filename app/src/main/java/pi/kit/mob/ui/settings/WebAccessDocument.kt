@@ -169,14 +169,16 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
             modifier = Modifier
                 .fillMaxWidth()
                 // 8 above, and the card's own 12 at the sides: the same inset the
-                // sheet footers use, and primary on the right like every other
-                // confirm row in the app. It was 4t/12b with Save on the left, which
-                // reversed the muscle memory the rest of the settings had just
-                // taught.
+                // sheet footers use, and the pair collected at the trailing edge like
+                // every other action row in the app. It was 4t/12b with Save on the
+                // left, which reversed the muscle memory the rest of the settings had
+                // just taught — and the leading spacer is what keeps a third action
+                // beside the pair rather than stranding the first one on the left.
                 .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Box(Modifier.weight(1f))
             PiButton(
                 text = text.settings.searchConfigRevert,
                 onClick = {
@@ -189,7 +191,6 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
                 size = PiButtonSize.Small,
                 enabled = value != null && !saving,
             )
-            Box(Modifier.weight(1f))
             PiButton(
                 text = text.settings.searchConfigSave,
                 onClick = {

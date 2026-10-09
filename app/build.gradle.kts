@@ -143,6 +143,13 @@ if (signingWithReleaseKey) {
     }
 }
 
+// `android { }` resolves to the deprecated `Project.android` accessor, because
+// this build keeps `android.newDsl=false` (gradle.properties): the new DSL is
+// the `com.android.build.api.dsl.*Extension` one, and moving to it is the same
+// AGP-10 migration the suppressed warnings name. Silenced on the block itself,
+// so a reader editing this file still gets everything else the Kotlin DSL and
+// javac have to say about it.
+@Suppress("DEPRECATION")
 android {
     namespace = "pi.kit.mob"
     compileSdk = providers.gradleProperty("pikit.compileSdk").get().toInt()

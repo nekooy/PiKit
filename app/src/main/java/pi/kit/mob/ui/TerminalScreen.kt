@@ -65,7 +65,6 @@ import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
@@ -77,7 +76,6 @@ import pi.kit.mob.ui.design.PiSheetRow
 import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiWorkingPill
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -183,18 +181,29 @@ fun TerminalScreen(session: PiAgentSession) {
     val keysHeight = barHeight(keys)
 
     PiScaffold(
-        // Which shell this is, and what the page is. The shell's *state* is not
-        // here: a bar's subtitle is a plain string, so a shell that ended could
-        // neither carry the danger tone nor offer the one thing that fixes it —
-        // `ShellStateRow` over the terminal does both, and reports the roster's
-        // live count while it is at it.
+        // Which shell this is, and what the page is. The subtitle *is* the roster
+        // count once there is more than one shell: the line is there either way, so
+        // the count costs no height, where a pill reporting it above the terminal
+        // grew and shrank the terminal's own rectangle every time a shell was
+        // created or closed. One shell keeps the idle line, which is the hint about
+        // what this page is rather than a count.
+        //
+        // A shell's *failure* is still not here: a header's subtitle is a plain
+        // string, so a shell that ended could neither carry the danger tone nor
+        // offer the one thing that fixes it — `ShellStateRow` over the terminal does
+        // both.
         title = selected?.displayTitle ?: t.header.terminal,
-        subtitle = t.header.terminalSubtitleIdle,
-        // Pinned rather than collapsing: the terminal is the page, and a bar that
-        // grew to two lines and shrank again would move the whole rectangle — and
-        // the PTY sized from it — on every scroll. The medium bar is the shorter of
-        // the two the scaffold can draw, and that height is the terminal's.
-        scrollBehavior = PiAppBarScroll.Pinned,
+        subtitle = if (running > 1) {
+            t.header.terminalSubtitle(running)
+        } else {
+            t.header.terminalSubtitleIdle
+        },
+        // The header's height is the terminal's, and it is the shell that fixes it:
+        // the PTY is sized from the rectangle under the header, so a strip that grew
+        // to two lines and shrank again would re-measure the terminal on every
+        // scroll. That is what the fixed header gives this page for free (§9.2) —
+        // a *flexible* bar of either size would still have moved the rectangle while
+        // its own height animated.
         actions = {
             IconButton(onClick = { selected?.write("clear\n") }) {
                 Icon(
@@ -244,7 +253,6 @@ fun TerminalScreen(session: PiAgentSession) {
         Column(body) {
             ShellStateRow(
                 text = t,
-                running = running,
                 selected = selected,
                 onNewTerminal = { manager.create() },
             )
@@ -501,42 +509,36 @@ private fun TerminalSessionSheet(
             )
         }
 
-        PiNotice(
-            text = text.terminal.sessionsRunOn,
-            tone = PiTone.Neutral,
-            modifier = Modifier.padding(horizontal = 12.dp),
-        )
     }
 }
 
 /**
- * What the shells are doing, over the terminal — and only when there is something
- * to report.
+ * A shell that has ended, over the terminal — and nothing at all while the shells
+ * are fine.
  *
- * Two facts live here and each has exactly one home. More than one shell running is
- * a [PiWorkingPill] on the live tone: the count is a thing that is going on, which
- * is what the app's one reserved hue means, and the moving indicator says the same
- * thing its label does. A shell that has ended is a [PiNotice] on the danger tone,
- * in the app's own words, with the one remedy that applies to it — because the
- * terminal itself cannot say it and the picker is behind a tap.
+ * A shell that exited is a [PiNotice] on the danger tone, in the app's own words,
+ * with the one remedy that applies to it, because the terminal itself cannot say it
+ * and the picker is behind a tap. It is the only thing this row draws: the *count*
+ * of running shells is the header's subtitle now (`TerminalScreen`), where the line
+ * it replaced already existed — a pill reporting the count grew the strip above the
+ * terminal by its own height and took it away again on the next close, and the PTY
+ * is sized from the rectangle under that strip. The count cost a `TERM` resize
+ * every time a shell was created or closed; it costs nothing as a subtitle.
  *
  * Nothing is drawn while the page's one shell is alive, and that is the point: this
- * is chrome around a rectangle the reader came to read. The cost is that the
- * terminal's height changes when a shell is created, closed or ends — set against the
- * alternative, a strip of fixed height, which would hold that room open for a report
- * that is almost never there and charge the terminal for it in lines of output at all
- * times. The PTY is resized at those moments anyway: creating or closing a shell
- * attaches or detaches the view its size is measured from.
+ * is chrome around a rectangle the reader came to read. The terminal still changes
+ * height when a shell *ends* or is closed, and that is the trade the notice makes:
+ * its content is worth a line, and a strip of fixed height would hold that room
+ * open for a report that is almost never there and charge the terminal for it in
+ * lines of output at all times.
  */
 @Composable
 private fun ShellStateRow(
     text: pi.kit.mob.locales.Strings,
-    running: Int,
     selected: TerminalSessionManager.Entry?,
     onNewTerminal: () -> Unit,
 ) {
-    val ended = selected?.takeIf { !it.running }
-    if (ended == null && running <= 1) return
+    val ended = selected?.takeIf { !it.running } ?: return
 
     Row(
         modifier = Modifier
@@ -545,28 +547,19 @@ private fun ShellStateRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (running > 1) {
-            PiWorkingPill(label = text.header.terminalSubtitle(running))
-        }
-        if (ended != null) {
-            PiNotice(
-                text = text.terminal.exited(ended.exitStatus),
-                tone = PiTone.Danger,
-                icon = Icons.Filled.Warning,
-                // The remaining width rather than the row's: the two facts can be
-                // true at once — a shell that ended while others are running — and
-                // a notice that claimed the whole row would push the pill out of it.
-                modifier = Modifier.weight(1f),
-                action = {
-                    PiButton(
-                        text = text.terminal.newTerminal,
-                        kind = PiButtonKind.Tonal,
-                        size = PiButtonSize.ExtraSmall,
-                        onClick = onNewTerminal,
-                    )
-                },
-            )
-        }
+        PiNotice(
+            text = text.terminal.exited(ended.exitStatus),
+            tone = PiTone.Danger,
+            icon = Icons.Filled.Warning,
+            action = {
+                PiButton(
+                    text = text.terminal.newTerminal,
+                    kind = PiButtonKind.Tonal,
+                    size = PiButtonSize.ExtraSmall,
+                    onClick = onNewTerminal,
+                )
+            },
+        )
     }
 }
 
@@ -1018,11 +1011,11 @@ private fun KeyGroup(content: @Composable () -> Unit) {
  *
  * ## The grouping
  *
- * Three tracks: the cluster, the two keys that latch a modifier, and the rest. The
- * cluster is the *first* item, so the arrows and the scroll toggle are on screen at
- * scroll offset zero without holding a strip of the bar hostage for a control that is
- * tapped once a session; the whole strip is one `LazyRow`, so the two groups beside
- * the cluster stay aligned with it at any offset.
+ * Two tracks: the arrow cluster, and one group holding the modifiers and every other
+ * key. The cluster is the *first* item, so the arrows and the scroll toggle are on
+ * screen at scroll offset zero without holding a strip of the bar hostage for a
+ * control that is tapped once a session; the whole strip is one `LazyRow`, so the
+ * second group stays aligned with the cluster at any offset.
  */
 @Composable
 private fun ExtraKeysRow(
@@ -1041,9 +1034,14 @@ private fun ExtraKeysRow(
         modifier = modifier
             .fillMaxWidth()
             .height(barHeight(size)),
-        // Light, like the bar above it and the navigation bar below. The terminal
-        // itself stays dark — that is the transcript, not chrome.
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        // `surfaceContainer` is the colour the tab strip and the root behind it are
+        // painted in (`PiKitRoot`), and this strip is the page's bottom edge — the
+        // extra keys sit directly above the tab strip, so anything else drew a band
+        // of its own between the terminal and the bar. It was
+        // `surfaceContainerHighest`, a step *paler* than the bar in the light scheme,
+        // which is a seam at the exact place the page is meant to end. The keys stay
+        // raised out of it: `KeyGroup` puts each group on `surfaceContainerHigh`.
+        color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         LazyRow(
             modifier = Modifier
@@ -1064,30 +1062,42 @@ private fun ExtraKeysRow(
                 }
             }
             item {
-                // The modifiers are their own group because they are the only keys
-                // here that *latch*: a tap turns one on and it stays on until it is
-                // tapped again, and the grouped pair says so before the label is
-                // read.
+                // Two rows, and the modifiers at the head of the first one: the bar is
+                // two keys tall for the arrow pad's sake, so a single row of keys in it
+                // left half the height empty wherever it did not reach — and the row
+                // reached past the right edge rather than using the space below it. The
+                // keys that used to sit to the right of CTRL and ALT now wrap under
+                // them, which is the report "把后面一条按键放在 ctrl 和 alt 下面以充分利用空间".
+                //
+                // The pair still reads as a pair: they are first, they latch, and their
+                // active fill is the one that stays pressed. What was given up is only
+                // the separate frame around them — a group of two on its own row was the
+                // shape that made the empty half visible in the first place.
                 KeyGroup {
-                    Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                        ExtraKeyChip(text.terminal.ctrl, active = ctrlOn, size = size) {
-                            onToggleCtrl()
+                    Column(verticalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                            ExtraKeyChip(text.terminal.ctrl, active = ctrlOn, size = size) {
+                                onToggleCtrl()
+                            }
+                            ExtraKeyChip(text.terminal.alt, active = altOn, size = size) {
+                                onToggleAlt()
+                            }
+                            EXTRA_KEYS.take(EXTRA_KEYS_PER_ROW).forEach { key ->
+                                ExtraKeyChip(
+                                    label = key.fixedLabel ?: key.labelOf(text),
+                                    active = false,
+                                    size = size,
+                                ) { onSend(key.sequence) }
+                            }
                         }
-                        ExtraKeyChip(text.terminal.alt, active = altOn, size = size) {
-                            onToggleAlt()
-                        }
-                    }
-                }
-            }
-            item {
-                KeyGroup {
-                    Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                        EXTRA_KEYS.forEach { key ->
-                            ExtraKeyChip(
-                                label = key.fixedLabel ?: key.labelOf(text),
-                                active = false,
-                                size = size,
-                            ) { onSend(key.sequence) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                            EXTRA_KEYS.drop(EXTRA_KEYS_PER_ROW).forEach { key ->
+                                ExtraKeyChip(
+                                    label = key.fixedLabel ?: key.labelOf(text),
+                                    active = false,
+                                    size = size,
+                                ) { onSend(key.sequence) }
+                            }
                         }
                     }
                 }
@@ -1095,6 +1105,16 @@ private fun ExtraKeysRow(
         }
     }
 }
+
+/**
+ * How many of [EXTRA_KEYS] share the modifiers' row, so the rest fall under them.
+ *
+ * Six: with `CTRL` and `ALT` at the head of the row that is eight keys, against seven
+ * on the row below — the two rows are within one key of each other in every shipped
+ * language, which is what "the space is used" means here. The symbols are the seven
+ * that end up on the second row, and they are the ones a reader reaches for least.
+ */
+private const val EXTRA_KEYS_PER_ROW = 6
 
 /**
  * One of the bar's keys, at the bar's uniform size and fully round.
@@ -1298,6 +1318,14 @@ private class TerminalHolders {
             return 1.0f
         }
 
+        // `SHOW_IMPLICIT` is deprecated as of API 30, and the call stays: this app's
+        // `targetSdk` is 28 (§1), so the flags argument is the API this build is
+        // written against on every device it runs on, and its replacement
+        // (`WindowInsetsController`) is an API-30 API that would need a second path
+        // for the API 26–29 devices this app also supports. Suppressing the note is
+        // the honest reading: nothing here is going to be migrated, and the flag is
+        // ignored by the framework on the versions that deprecated it.
+        @Suppress("DEPRECATION")
         override fun onSingleTapUp(e: MotionEvent) {
             // Mirrors Termux's client. On a phone this is the only way to raise
             // the keyboard, since there is no hardware one.

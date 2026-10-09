@@ -41,7 +41,6 @@ import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.PiIcons
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.PickerRow
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiPageSwap
 import pi.kit.mob.ui.design.PiScaffold
 
@@ -375,13 +374,11 @@ private fun RootPage(
     val piVersion = PiInstallation.installedVersion(session.env)
     val text = strings
 
-    // The tab root is a page like every other page now, which is what puts its
-    // title on the app's flexible app bar rather than on a fixed band: the list is
-    // twelve rows, and a title that shrinks out of the way as the reader scrolls
-    // into it is worth more than a title that keeps its height.
+    // The tab root is a page like every other page, so its title is on the shell's
+    // one header rather than on a band of its own: the list is twelve rows, and the
+    // title does not need to be told twice. §9.2 has the header's reasoning.
     PiScaffold(
         title = text.settings.title,
-        scrollBehavior = PiAppBarScroll.Pinned,
     ) { full ->
         SettingsBody(full) {
             SettingsSection(text.settings.essentials) {
@@ -525,8 +522,6 @@ private fun RootPage(
                     onClick = { onOpen(SettingsPage.About) },
                 )
             }
-
-            SettingsNote(text.settings.bundlesNote)
         }
     }
 }

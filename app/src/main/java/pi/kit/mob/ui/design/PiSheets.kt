@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -156,7 +157,7 @@ fun PiSheetRow(
             .padding(horizontal = 12.dp, vertical = 1.dp)
             .clip(PiShapes.row)
             .clickable(enabled = enabled && host.isOpen, onClick = onClick)
-            .heightIn(min = 56.dp)
+            .heightIn(min = 52.dp)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -204,7 +205,18 @@ fun PiSheetRow(
     }
 }
 
-/** A sheet's closing action row: a dismiss and up to two real actions. */
+/**
+ * A sheet's closing action row: a dismiss and up to two real actions.
+ *
+ * **End-aligned**, like every action row in the app: the buttons collect at the
+ * trailing edge and the space they do not use is on the leading side. The first
+ * draft spread them from the leading edge, which put the one real action of a sheet
+ * under the reader's *left* thumb and the dismiss under the right — the opposite of
+ * where a phone's hand is — and made two sheets with different numbers of buttons
+ * start their rows at two different places. The order inside the row is the
+ * caller's: a dismiss first and the action it commits last, so the row reads
+ * left-to-right into the thing it does.
+ */
 @Composable
 fun PiSheetActions(
     modifier: Modifier = Modifier,
@@ -217,6 +229,7 @@ fun PiSheetActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        Spacer(Modifier.weight(1f))
         content()
     }
 }

@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +57,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.FilledIconButton
@@ -67,12 +70,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Slider
+import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -86,6 +89,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -106,6 +110,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import pi.kit.mob.data.ModelProfile
+import pi.kit.mob.data.AI_AVATAR_DEFAULT_LABEL
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.rememberedThinkingLevels
 import pi.kit.mob.locales.Strings
@@ -136,16 +141,14 @@ import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PickerBody
 import pi.kit.mob.ui.components.ReadOnlyBody
 import pi.kit.mob.ui.components.ReadOnlySheetRow
-import pi.kit.mob.ui.components.thinkingLevelFootnote
 import pi.kit.mob.ui.components.thinkingLevelOptions
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.PageBackHandler
-import pi.kit.mob.ui.design.PiAgentMark
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiCard
+import pi.kit.mob.ui.design.PiAvatar
 import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiPageSwap
 import pi.kit.mob.ui.design.PiScaffold
@@ -154,7 +157,7 @@ import pi.kit.mob.ui.design.PiSelectChip
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiSheetActions
 import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiWorkingPill
+import pi.kit.mob.ui.design.PiStatePill
 import pi.kit.mob.ui.design.PiEmptyState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -815,7 +818,7 @@ internal fun ChatScreen(
 }
 
 /**
- * The conversation page: the app bar, the transcript and the composer.
+ * The conversation page: the header, the transcript and the composer.
  *
  * Pulled out of [ChatScreen] so that the page swap above can hold two of its
  * destinations at once — the history list and this — without either of them having
@@ -823,27 +826,39 @@ internal fun ChatScreen(
  * a visit to the history list (the draft, the attachments, the transcript's scroll
  * position, which turns are open) is still owned by [ChatScreen] and passed down.
  *
- * ## The bar
+ * ## The header
  *
- * The page frame is [PiScaffold] with a *collapsing* bar, which is the variant the
- * design language names for a page whose title is a moving fact: this page's title
- * is the first thing the reader asked, and the bar gives its height back to the
- * transcript as soon as they scroll into the answer.
+ * The page frame is [PiScaffold] with the shell's one fixed header: this page's title
+ * is the first thing the reader asked, and the whole of it is a line the header
+ * ellipsises rather than a band that grows and shrinks with it. The header used to be
+ * the large *collapsing* bar, on the argument that a moving title should give its
+ * height back to the transcript as the reader scrolled — the price was that this page's
+ * chrome was 36dp taller than the settings pages' and moved while the others did not,
+ * and §9.2 has the tokens that made the two heights unequal.
  *
- * The **agent's mark** is drawn in the bar's action row and is the one place the
- * app's abstract silhouette appears on this page. It is inert, like the status dot
- * it replaces in the subtitle: the agent's state is a fact rather than a control,
- * and a row of tappable icons with one inert mark at its head is read as a control
- * anyway. What it adds to the dot is that it says *which* thing is working — it is
- * the app's own signature — and that `working` carries the reserved coral while a
- * turn is in flight, which is the one colour this app spends on "still running".
- * The three actions after it are ordered compress, history, new: left to right as
- * "do something to this conversation, look at the others, start another", which is
- * also the order of how much each disturbs what is on screen.
+ * The title is drawn a step smaller than every other page's (`titleMedium`, through
+ * [PiScaffold]'s `titleStyle`), because it is the one title that can be a whole sentence
+ * and the reader asked for more of it to fit.
+ *
+ * The **agent's mark** used to stand in the header's action row, which is why
+ * `PiFeedback.PiAgentMark` exists; it is gone, because to the reader it was a
+ * placeholder before the compress button with nothing to say that the subtitle does not
+ * already say in words. What remains is the three actions, ordered compress, history,
+ * new: left to right as "do something to this conversation, look at the others, start
+ * another", which is also the order of how much each disturbs what is on screen.
+ *
+ * ## The composer sits under the transcript
+ *
+ * The composer and its notices are the page column's own last children, below the box
+ * the transcript is drawn in rather than over it, so nothing overlaps and nothing has
+ * to be measured to be cleared: the list ends where the band begins and its tail
+ * padding is one line of `bodyMedium` ([TRANSCRIPT_TAIL_SPACE]). The panel this
+ * replaced was an overlay with a measured height; §7.1 has the whole of why it is a
+ * band again and where the field's frame came back from.
  *
  * The *title* is passed as a `String` rather than as the state it came from, and
  * that is a performance decision: `ConversationState` is a new object for every
- * record pi sends — several times a second while an answer streams — so a bar that
+ * record pi sends — several times a second while an answer streams — so a header that
  * took the state could never be skipped and would re-run for every token, while the
  * two things it draws change once per conversation and once per process lifecycle.
  */
@@ -872,6 +887,31 @@ private fun ChatPage(
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+
+    // The two avatars the transcript draws, rebuilt only when one of the five settings
+    // behind them moves. Collected here rather than passed in so a change on the
+    // personalization page reaches this one without a restart.
+    val saved by session.settingsStore.settings.collectAsState()
+    val avatars = remember(
+        saved.showAvatars,
+        saved.aiAvatarLabel,
+        saved.aiAvatarColor,
+        saved.userAvatarLabel,
+        saved.userAvatarColor,
+    ) {
+        if (!saved.showAvatars) {
+            null
+        } else {
+            ChatAvatars(
+                aiLabel = saved.aiAvatarLabel.ifBlank { AI_AVATAR_DEFAULT_LABEL },
+                aiColor = saved.aiAvatarColor.seed,
+                // Blank is the silhouette, not a word: the two speakers must not fall
+                // back to the same mark, and the agent's fallback is already taken.
+                userLabel = saved.userAvatarLabel.ifBlank { null },
+                userColor = saved.userAvatarColor.seed,
+            )
+        }
+    }
 
     // Rows that would compose to nothing are dropped before the list measures them.
     //
@@ -915,9 +955,12 @@ private fun ChatPage(
     PiScaffold(
         title = conversationTitle(state),
         subtitle = agentSubtitle(agent, text),
-        scrollBehavior = PiAppBarScroll.Collapsing,
+        // The one page whose title can be a whole sentence: the reader's own first
+        // line, ellipsised at one line by the header. `titleMedium` rather than the
+        // shell's `titleLarge` is what fits the opening words of a question where
+        // the large style fitted two of them.
+        titleStyle = MaterialTheme.typography.titleMedium,
         actions = {
-            AgentMark(agent = agent, working = state.isStreaming || state.isCompacting)
             IconButton(onClick = { session.compact() }) {
                 Icon(Icons.Filled.Compress, contentDescription = text.chat.compact)
             }
@@ -1025,7 +1068,7 @@ private fun ChatPage(
                                     // stops growing, which is the one moment the
                                     // announcement is useful.
                                     //
-                                    // The scroll connection the app bar needs lives on this
+                                    // The scroll connection the header needs lives on this
                                     // node rather than on the page's column, and the design
                                     // system's scaffold hands it out for exactly this: the
                                     // nested-scroll link belongs on the scrolling container,
@@ -1033,15 +1076,12 @@ private fun ChatPage(
                                     // is the page.
                                     .semantics { liveRegion = LiveRegionMode.Polite },
                                 // The bottom inset is the transcript's breathing room against
-                                // the composer. The composer used to be a full-bleed bar of the
-                                // same colour as the page, and an answer that ended flush
-                                // against it read as cut off rather than as finished; the
-                                // report asked for two lines of the body style's air. It is a
-                                // panel with its own margin now, so the separation is carried
-                                // by shape rather than by blank space — what is left is one
-                                // line, enough that the last line of an answer never sits
-                                // against the panel's rounded top edge, and enough to keep it
-                                // clear of the jump-to-latest button when that is on screen.
+                                // the composer. An answer that ended flush against the band
+                                // read as cut off rather than as finished, which is the report
+                                // that asked for two lines of the body style's air; one line is
+                                // what is left, because the band's own edge and the fill step
+                                // carry the separation and the last line only has to not touch
+                                // it.
                                 //
                                 // The right inset used to reserve the turn rail's column;
                                 // the rail is gone, so the transcript keeps its own gutter
@@ -1050,6 +1090,11 @@ private fun ChatPage(
                                     start = TRANSCRIPT_GUTTER,
                                     end = TRANSCRIPT_GUTTER,
                                     top = 10.dp,
+                                    // One line of the body style's air, and nothing
+                                    // else: the composer is a band in this page's
+                                    // column now rather than a panel over the list, so
+                                    // the list's own box already ends above it. The
+                                    // measured height the floating panel needed is gone.
                                     bottom = TRANSCRIPT_TAIL_SPACE,
                                 ),
                                 // No uniform gap. See `rowGap`: the space between two rows is
@@ -1089,6 +1134,7 @@ private fun ChatPage(
                                             text = text,
                                             expandedTurns = expandedTurns,
                                             onToggleTurn = onToggleTurn,
+                                            avatars = avatars,
                                         )
                                     }
                                 }
@@ -1099,7 +1145,7 @@ private fun ChatPage(
                                     // a pill says *what* is running as well as *that* something
                                     // is — which is the whole reason it carries a label.
                                     item(key = "compacting") {
-                                        PiWorkingPill(
+                                        PiStatePill(
                                             label = text.chat.compacting,
                                             modifier = Modifier.padding(top = MODULE_GAP),
                                         )
@@ -1154,6 +1200,10 @@ private fun ChatPage(
                             // the platform draws in the last few dp of the window: the
                             // button is drawn over the list, so it has to sit inside the
                             // list's content margin rather than on the edge itself.
+                            //
+                            // Inside the list's own box, which the composer's band no
+                            // longer overlaps: the 10dp is the gutter's own figure and
+                            // not a clearance from a floating panel.
                             .padding(end = 10.dp, bottom = 10.dp)
                             // 40dp, the same drawn size as the composer's send control
                             // at the other end of the page. It was 38dp, which made two
@@ -1175,6 +1225,14 @@ private fun ChatPage(
                 }
             }
 
+            // The notices and the composer, under the transcript in the page's own
+            // column rather than stacked over it. The band is part of the page's
+            // layout, so nothing here has to clear a floating panel's measured height
+            // any more, and a message scrolls to the band rather than behind it.
+            //
+            // The notices are in the same stack because both are things said *to* the
+            // reader about what they are doing rather than part of the conversation.
+            //
             // One notice for "the agent is not there". A `Failed` agent and a
             // `lastError` are usually the same event — `runCommand`'s catch writes
             // both — and two stacked bars made one failure look like two. The agent's
@@ -1358,8 +1416,8 @@ private fun thinkingLevelOf(state: ConversationState, saved: PiSettings): String
  * ## One level is not a slider
  *
  * A model without reasoning answers `["off"]` and there is no choice to make.
- * A one-tick track is a control that does nothing, so the case draws the name
- * and [Strings.Chat.thinkingDisabled] and no track at all.
+ * A one-tick track is a control that does nothing, so the case draws the level's
+ * name and its own description and no track at all.
  */
 @Composable
 private fun ThinkingLevelSheet(
@@ -1375,13 +1433,19 @@ private fun ThinkingLevelSheet(
     val steps = options.map { it.id }
     val startIndex = steps.indexOf(current).takeIf { it >= 0 }
         ?: 0
-    // The step under the finger. Keyed on the committed one, so a change made
-    // anywhere else — the model page, a model switch — lands in the slider.
-    var draft by remember(current, steps) {
-        mutableFloatStateOf(startIndex.toFloat())
-    }
+    // The slider's own state, built once. Two things about the state-based `Slider`
+    // are what the first version got wrong, and both made the thumb refuse to move:
+    // `rememberSliderState` is keyed on all of its arguments, so the value under the
+    // finger must not be fed back in (the opened level is its initial value only); and
+    // with an `onValueChange` the library hands the snapped value to the caller and
+    // does not write it into the state itself, so the callback has to (below).
+    val state = rememberSliderState(
+        startIndex.toFloat(),
+        steps.size - 2,
+        0f..steps.lastIndex.toFloat(),
+    )
     var committed by remember(current, steps) { mutableStateOf(current) }
-    val shown = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
+    val shown = steps[state.value.roundToInt().coerceIn(0, steps.lastIndex)]
 
     // 48dp under the last line, the same figure `FontSizeSheet` uses: both are
     // short slider sheets, and less left the track's block against the panel edge.
@@ -1425,19 +1489,30 @@ private fun ThinkingLevelSheet(
                     modifier = Modifier.padding(end = 8.dp),
                 )
                 Slider(
-                    value = draft,
-                    onValueChange = { draft = it },
+                    // The `SliderState` overload: this release deprecates the
+                    // value-based one. The value, the tick count and the range are the
+                    // three the state carries, and they go to `rememberSliderState`
+                    // positionally for a stated reason (see `PiInputs`): the two
+                    // overloads in this release name their third parameter differently
+                    // and only its type is stable between them. Material3 still counts
+                    // the ticks *between* the ends, so n positions is n-2 of them.
+                    // The state is built once above and never re-keyed on the value
+                    // under the finger — that is what lets the thumb move at all.
+                    state = state,
+                    // The library hands the snapped value to this callback and does
+                    // not write it into the state itself, so this write-back is what
+                    // moves the thumb — see the note where the state is built.
+                    onValueChange = { state.value = it },
+                    // Committed on release, not per tick: applying a level re-measures
+                    // the composer's chip row, and doing that under the finger is what
+                    // made the drag stutter.
                     onValueChangeFinished = {
-                        val chosen = steps[draft.roundToInt().coerceIn(0, steps.lastIndex)]
+                        val chosen = steps[state.value.roundToInt().coerceIn(0, steps.lastIndex)]
                         if (chosen != committed) {
                             committed = chosen
                             onChange(chosen)
                         }
                     },
-                    valueRange = 0f..steps.lastIndex.toFloat(),
-                    // Material3 counts the ticks *between* the ends, so n
-                    // positions is n-2 of them.
-                    steps = steps.size - 2,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
@@ -1447,14 +1522,6 @@ private fun ThinkingLevelSheet(
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }
-        }
-        thinkingLevelFootnote(text, available)?.let { footnote ->
-            Text(
-                text = footnote,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-            )
         }
     }
 }
@@ -1852,57 +1919,6 @@ private fun Modifier.transcriptContextMenu(): Modifier =
     }
 
 /**
- * The agent, as the mark in the app bar.
- *
- * ## Why the mark and not the status dot
- *
- * The header's subtitle used to carry the state twice: as words and as a 5dp dot
- * drawn *inline* in the text, because a `Row` of a `Box` and a `Text` gives the box
- * no baseline and the dot sat 3px low at `bodySmall`. The dot is gone with the
- * inline placeholder that made it work: the design language gives this app one
- * abstract silhouette and one place to spend it, and an inert mark at the head of
- * the action row says the same thing in the app's own shape — who is answering, and
- * whether they are answering right now — rather than in a coloured bullet.
- *
- * It is inert on purpose. The agent's state is a fact rather than a control, and a
- * row of tappable icons with one inert mark at its head is how a page gets a
- * control nobody can press; the three actions beside it are the ones that do
- * something.
- *
- * ## The colours it carries
- *
- * `working` is the turn in flight, and the mark takes the app's reserved coral for
- * it — the one colour that means *still running* and nothing else. A failed or a
- * stopped agent takes the error tone instead, which is what the dot's colour used
- * to say: from the reader's side a stopped agent and a failed one are the same
- * fact, their question is not being answered. Everything else is the neutral
- * container, because a ready agent is not news.
- */
-@Composable
-private fun AgentMark(agent: AgentStatus, working: Boolean) {
-    val scheme = MaterialTheme.colorScheme
-    val down = agent is AgentStatus.Failed || agent is AgentStatus.Stopped
-    PiAgentMark(
-        size = AGENT_MARK_SIZE,
-        working = working,
-        container = if (down) scheme.errorContainer else scheme.secondaryContainer,
-        ink = if (down) scheme.onErrorContainer else scheme.onSecondaryContainer,
-        // A little air before the first action button: the mark is not a control and
-        // must not look like the first of four.
-        modifier = Modifier.padding(end = 6.dp),
-    )
-}
-
-/**
- * The mark's drawn size: the same 28dp `PiAgentMark` defaults to.
- *
- * Named because it is the one number the bar's action row is sized around — the
- * three `IconButton`s beside it are 48dp touch targets with 24dp glyphs, and a mark
- * between 20 and 28dp is what reads as a signature rather than as a fourth button.
- */
-private val AGENT_MARK_SIZE = 28.dp
-
-/**
  * How many lines of a failure a notice shows.
  *
  * Three: enough for the reason plus a stack frame or two, short enough that the
@@ -1962,25 +1978,39 @@ private const val APP_NAME = "PiKit"
  *
  * ## Two widths, and that is the whole of the difference between them
  *
- * A **prompt** is sized to what the reader wrote. The card is a `Surface` with a
- * loose `0..max` constraint, so it settles at its content's width and there is
- * deliberately no `fillMaxWidth` anywhere inside it: `fillMaxWidth` sets the
- * *minimum*, so one on the card or on a child of it is what turns "ok" into a
- * full-width slab. That is the same defect this page has already been through once
- * — a two-word prompt drawn as an 86%-wide bar, reported twice as "气泡是固定宽度"
- * and "用户消息靠左了", which were one bug wearing two descriptions — and the shape
- * of the fix is that the *parent* leaves the minimum at zero and the cap, when there
- * was one, sits on the parent. There is still one constraint here and it is not a
- * cap but the transcript's own measure, so the prompt simply takes what it needs.
+ * A **prompt** is sized to what the reader wrote and sits at the *end* edge. The
+ * card is a `Surface` with a loose `0..max` constraint, so it settles at its
+ * content's width; the cap and the side come from a `BoxWithConstraints` around it,
+ * and there is deliberately no `fillMaxWidth` anywhere inside it — `fillMaxWidth`
+ * sets the *minimum*, so one on the card or on a child of it is what turns "ok" into
+ * a full-width slab. That is the same defect this page has already been through once
+ * — a two-word prompt drawn as an 86%-wide bar — and the shape of the fix is that
+ * the *parent* leaves the minimum at zero and the cap sits on the parent.
+ *
+ * `MessageMeta` used to carry a `fillMaxWidth` of its own, which was the same defect
+ * one level down and defeated the cap entirely: the meta row's minimum became the
+ * card's maximum, so every prompt *was* a full-width card, in the reader's own words
+ * but with no side to read. It wraps to its content now; on the answer card, whose
+ * frame is the transcript's measure either way, nothing changes.
  *
  * An **answer** is a body of text laid out as a document, so its card is the
  * transcript's full measure: `fillMaxWidth` on that card means "the column is the
  * measure", which is a statement about the answer rather than about its content.
  *
- * The two cards are the same rounded rectangle in the same surface step, and what
- * separates them is width and position rather than a second colour: a question and
- * its answer are two halves of one exchange, and giving either its own palette step
- * would say they are two kinds of thing.
+ * The two cards are the same rounded rectangle and differ in surface step, width and
+ * side: a question and its answer are two halves of one exchange, and the reader's
+ * own words take `secondaryContainer` at the end edge — a container the page's own
+ * controls also wear (`PiSelectChip`, the jump-to-latest button), so the question
+ * reads as *the reader's* half by the colour a control on this page already uses
+ * rather than by a role nothing else on the page has. The side and the width cap do
+ * the rest, and they are what the "heading of a section" treatment could not replace:
+ * a question that is not distinguishable from its answer at a glance makes the
+ * transcript unreadable at speed.
+ *
+ * ## Each card's own furniture is drawn under it
+ *
+ * A card holds what was *said*; the time and the copy glyph are drawn under the frame
+ * by the card view itself, mirrored to the side the message sits on. See [MessageMeta].
  *
  * ## The rhythm inside a card is the rhythm between cards
  *
@@ -1990,36 +2020,139 @@ private const val APP_NAME = "PiKit"
  * are drawn: the modules of a turn (a fold band, a thought, a call, its answer, a
  * notice) are now inside one card instead of loose in the list.
  */
+/**
+ * The two avatars the transcript draws over its cards, or null when they are off.
+ *
+ * A null [userLabel] (and a null [aiLabel]) is the built-in mark rather than a word:
+ * the agent's is `"PI"` (so its label is never null) and the reader's is the person
+ * silhouette, which is why [userLabel] may be null where [aiLabel] may not. The
+ * colours are the seeds of the two `ThemeColor`s the personalization page offers.
+ */
+private data class ChatAvatars(
+    val aiLabel: String?,
+    val aiColor: Color,
+    val userLabel: String?,
+    val userColor: Color,
+)
+
+/**
+ * The avatar's drawn size and the air between it and the card under it.
+ *
+ * 26dp: smaller than the 28dp `PiAgentMark` because it repeats on every card rather
+ * than standing once in a header, and large enough that a two-character label is
+ * legible. The 6dp gap is the inside-module gap — it belongs to the card's own top
+ * edge, not to the transcript's `rowGap`, which is the space between two turns.
+ */
+private val AVATAR_SIZE = 26.dp
+private val AVATAR_GAP = 6.dp
+
 @Composable
 private fun TranscriptCardView(
     card: TranscriptCard,
     text: Strings,
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
+    avatars: ChatAvatars?,
 ) {
     when (card) {
-        is TranscriptCard.Prompt -> PiCard(
-            container = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = PiShapes.card,
-            padding = PROMPT_CARD_PADDING,
+        // The prompt is measured against the transcript's own width so the cap can
+        // be a share of it: a dp width is not knowable before the constraint, and
+        // `widthIn(max = …)` needs a dp. `contentAlignment = CenterEnd` is what
+        // puts the card against the end edge without a second full-width child —
+        // the inner `Box` holds the cap, the card holds the content.
+        is TranscriptCard.Prompt -> BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.CenterEnd,
         ) {
-            TranscriptCardRow(card.row, text, expandedTurns, onToggleTurn)
+            Box(Modifier.widthIn(max = maxWidth * PROMPT_MAX_SHARE)) {
+                Column(horizontalAlignment = Alignment.End) {
+                    // The reader's own mark, over the bubble and on the reader's
+                    // side — the two things that say who is speaking without a name
+                    // line. See [PiAvatar]; a null label draws the silhouette.
+                    avatars?.let { marks ->
+                        PiAvatar(
+                            color = marks.userColor,
+                            label = marks.userLabel,
+                            icon = Icons.Filled.Person,
+                            size = AVATAR_SIZE,
+                            modifier = Modifier.padding(bottom = AVATAR_GAP),
+                        )
+                    }
+                    PiCard(
+                        container = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        shape = PiShapes.card,
+                        padding = PROMPT_CARD_PADDING,
+                    ) {
+                        TranscriptCardRow(card.row, text, expandedTurns, onToggleTurn)
+                    }
+                    // Outside the card, and that is the rule for both sides: the time
+                    // and the copy glyph are furniture *under* a message rather than
+                    // part of what was said, and drawn inside the fill they read as a
+                    // second line of the message. [MessageMeta] has the placement and
+                    // the mirroring between the two sides.
+                    MessageMeta(item = card.row.item, text = text, alignment = Alignment.End)
+                }
+            }
         }
 
-        is TranscriptCard.Answer -> PiCard(
-            modifier = Modifier.fillMaxWidth(),
-            container = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = PiShapes.card,
-            padding = PaddingValues(ANSWER_CARD_INSET),
-        ) {
-            card.rows.forEachIndexed { index, row ->
-                Column(Modifier.padding(top = rowGap(card.rows.getOrNull(index - 1), row))) {
-                    TranscriptCardRow(row, text, expandedTurns, onToggleTurn)
+        is TranscriptCard.Answer -> Column(Modifier.fillMaxWidth()) {
+            // The agent's mark, over the turn's card at the start edge. One per turn
+            // rather than per row: the card *is* the turn, and the folded steps inside
+            // it are the same speaker.
+            avatars?.let { marks ->
+                PiAvatar(
+                    color = marks.aiColor,
+                    label = marks.aiLabel,
+                    size = AVATAR_SIZE,
+                    modifier = Modifier.padding(bottom = AVATAR_GAP),
+                )
+            }
+            PiCard(
+                modifier = Modifier.fillMaxWidth(),
+                container = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = PiShapes.card,
+                padding = PaddingValues(ANSWER_CARD_INSET),
+            ) {
+                card.rows.forEachIndexed { index, row ->
+                    Column(Modifier.padding(top = rowGap(card.rows.getOrNull(index - 1), row))) {
+                        TranscriptCardRow(row, text, expandedTurns, onToggleTurn)
+                    }
                 }
+            }
+            // The turn's own answer is the one row that wears the pair (see
+            // `TranscriptRow.Message.showMeta`), so the card asks which row that is and
+            // draws it once, under the frame, mirrored against the prompt's row.
+            metaItemOf(card.rows)?.let { answered ->
+                MessageMeta(item = answered, text = text, alignment = Alignment.Start)
             }
         }
     }
 }
+
+/**
+ * The row of an answer card that carries the time and the copy button, or null.
+ *
+ * The last such row rather than the first: a turn's intermediate steps are fragments
+ * and `showMeta` is false for them, so there is normally exactly one — and taking the
+ * last is what makes a turn whose final reply is still streaming fall back to nothing
+ * rather than to the step above it.
+ */
+private fun metaItemOf(rows: List<TranscriptRow>): ChatItem? = rows
+    .lastOrNull { it is TranscriptRow.Message && it.showMeta && it.item is ChatItem.Assistant }
+    ?.let { (it as TranscriptRow.Message).item }
+
+/**
+ * The most of the transcript's width a prompt card may take.
+ *
+ * A share rather than a dp value so the cap survives a narrower phone and a tablet's
+ * capped column: 0.86 leaves a visible strip of the page down the start edge, which is
+ * what makes the *side* readable as a side rather than as a card that happens to be
+ * short. It is measured against the transcript's own width — the row the card is laid
+ * out in — so on a wide window the cap is a share of the prose measure and not of the
+ * screen.
+ */
+private const val PROMPT_MAX_SHARE = 0.86f
 
 /**
  * The prompt card's inset.
@@ -2053,7 +2186,7 @@ private fun TranscriptCardRow(
             is ChatItem.User -> PromptBody(item, text)
 
             is ChatItem.Assistant ->
-                AssistantBlock(item, text, row.showReasoning, row.showMeta)
+                AssistantBlock(item, text, row.showReasoning)
 
             is ChatItem.Tool -> ToolCallRow(item = item, text = text)
 
@@ -2257,12 +2390,11 @@ private fun PromptBody(item: ChatItem.User, text: Strings) {
                         else -> 0.dp
                     },
                 ),
-                // No colour: the card's `Surface` provides `onSurface`, and the
-                // reader's own words are the one thing on this page that must never
-                // be muted.
+                // No colour: the card's `Surface` provides its own content colour
+                // (`onSecondaryContainer`), and the reader's own words are the one
+                // thing on this page that must never be muted.
             )
         }
-        MessageMeta(item, text)
     }
 }
 
@@ -2283,7 +2415,7 @@ private fun PromptBody(item: ChatItem.User, text: Strings) {
  * `surfaceContainerLow`, so the chip is `Neutral`'s own container,
  * `surfaceContainerHigh` — because a control drawn *in* a card's colour is a control
  * the reader has to be told about. The height is the design system's 28dp, which is
- * what every other pill on the page is (`PiWorkingPill`, `PiBadge`), so the row of
+ * what every other pill on the page is (`PiStatePill`, `PiBadge`), so the row of
  * machinery above a prompt cannot change the card's height.
  */
 @Composable
@@ -2379,10 +2511,15 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
  *
  * ## Where the row is drawn
  *
- * Inside the message's own card, at its foot, and the row is the card's — so the
- * time a question was asked travels with the question rather than sitting under the
- * frame it belongs to. The row is *not* a row of the transcript list any more: the
- * card is the item, and everything under a message is part of that message.
+ * **Under the message's card, not inside it** — and mirrored between the two sides,
+ * which is what [alignment] decides. It is the arrangement the page had before the
+ * cards arrived: a prompt is `[time][copy]` at its end edge, an answer is
+ * `[copy][time]` at its start edge, so the glyph is always the outer mark and the
+ * time is always inboard. Drawn *inside* the fill it read as a second line of the
+ * message — the report "时间和复制按钮应该显示在气泡外而非里面" — because the pair sat on the
+ * same colour as the words above it and inherited none of the air a footnote needs.
+ * Nothing about the row changed except its parent: the card is still the item, and
+ * the row is still the card's own furniture.
  *
  * ## Which messages wear it
  *
@@ -2426,25 +2563,12 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
  * exception: it sits *under* a message, next to text that is not a control, and a
  * 48dp disc there would be a second bubble.
  *
- * ## Why the row is pulled out by the glyph's inset
+ * ## Which edge, and why the row is pulled out by the glyph's inset
  *
- * A row is aligned by its **ink**, and the button's ink is smaller than its box: an
- * 18dp glyph centred in a 28dp button leaves 5dp of the button on each side that the
- * reader cannot see. Left alone, the box lines up with the message and the *glyph*
- * does not — which is the report "ai消息回复气泡下面复制按钮最左侧没对齐气泡". Measured with
- * `uiautomator dump` on the emulator at density 2.625: the message's own text starts
- * at x=32px and the copy glyph's node at x=46px, the 14px (5.33dp) in the report.
- * [CopyButtonInkInset] is that 5dp, taken from the button's own geometry rather than
- * written down twice, and the row is moved by it so the glyph lands on the column the
- * message's text starts at. The timestamp keeps the distance from the button it had.
- *
- * The pull used to depend on which side the row was drawn on, because the button was
- * the outermost element of a mirrored pair — the time inboard, the glyph at the
- * outer edge, so an answer's copy sat under its left edge and a prompt's under its
- * right. Both cards are aligned to the same edge now, so there is one arrangement:
- * **glyph first, then the time**, pulled out by the glyph's own inset. What the
- * mirror bought was the position of a control inside a bubble that no longer has a
- * side.
+ * The pull's *direction* is the mirror: the glyph sits at the row's outer edge on
+ * both sides — right for a prompt, left for an answer — so the row moves out by
+ * [CopyButtonInkInset] toward that edge and the same magnitude serves both. See the
+ * inline note where `pull` is computed for the measurement behind it.
  *
  * ## Why the row is the accent colour
  *
@@ -2461,6 +2585,8 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
 private fun MessageMeta(
     item: ChatItem,
     text: Strings,
+    /** Which edge of the transcript the message this row belongs to sits on. */
+    alignment: Alignment.Horizontal,
 ) {
     if (item is ChatItem.Assistant && item.isStreaming) return
     if (item is ChatItem.Assistant && item.text.isBlank()) return
@@ -2473,22 +2599,47 @@ private fun MessageMeta(
         if (item.createdAt > 0L) text.chat.messageTime(item.createdAt, now) else null
     }
 
+    // The row is aligned by its **ink**, and the button's ink is smaller than its
+    // box: an 18dp glyph centred in a 28dp button leaves 5dp of the button on each
+    // side the reader cannot see — the report "ai消息回复气泡下面复制按钮最左侧没对齐气泡",
+    // measured with `uiautomator dump` at 32px against 46px. [CopyButtonInkInset] is
+    // that 5dp, taken from the button's own geometry rather than written down twice.
+    //
+    // Which side is pulled depends on which side the *button* ends: a left-aligned
+    // row starts with it, a right-aligned one ends with it.
+    val pull = if (alignment == Alignment.End) CopyButtonInkInset else -CopyButtonInkInset
+    // Mirrored order: an answer is [button][time] at the left, a prompt is
+    // [time][button] at the right, so the button is always the outer glyph — which is
+    // what "copy sits under the bubble's edge" means on either side.
+    val timeThenButton = alignment == Alignment.End
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            // See "Why the row is pulled out by the glyph's inset" above: the pull is
-            // the button's own invisible margin, taken off so the glyph's ink — not
-            // its box — lands on the column the message's text starts at.
-            .offset(x = -CopyButtonInkInset)
+            .offset(x = pull)
             .padding(top = 2.dp),
+        horizontalArrangement = if (alignment == Alignment.End) {
+            Arrangement.End
+        } else {
+            Arrangement.Start
+        },
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (timeThenButton && stamp != null) {
+            Text(
+                text = stamp,
+                modifier = Modifier.padding(end = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = accent,
+                maxLines = 1,
+            )
+        }
         CopyButton(
             onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(messageSource(item))) } },
             contentDescription = text.chat.copyMessage,
             tint = accent,
         )
-        if (stamp != null) {
+        if (!timeThenButton && stamp != null) {
             Text(
                 text = stamp,
                 modifier = Modifier.padding(start = 2.dp),
@@ -2540,7 +2691,7 @@ private fun messageSource(item: ChatItem): String = when (item) {
  * moves as the model thinks (`思考 · 1.2k 字`), and it is on screen for the whole of
  * the wait. Nothing is lost with the cursor — the row that draws nothing is dropped
  * by `drawsNothing()` rather than holding a blank line open, and the two live
- * signals this page does have are the agent's mark in the bar and the composer's
+ * signals this page does have are the agent's mark in the header and the composer's
  * stop button.
  *
  * A *static* bar was the other candidate and is worse than nothing here: it is the
@@ -2552,8 +2703,6 @@ private fun AssistantBlock(
     item: ChatItem.Assistant,
     text: Strings,
     showReasoning: Boolean = true,
-    /** See [TranscriptRow.Message.showMeta]: false for a turn's intermediate steps. */
-    showMeta: Boolean = true,
 ) {
     // `rememberSaveable`: a `LazyColumn` disposes the rows that scroll out of its
     // viewport, so a plain `remember` lost the opened reasoning block — the reader
@@ -2641,50 +2790,39 @@ private fun AssistantBlock(
         item.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
-
-        // Under everything the message has, and after the error: a failed answer's
-        // copy button is how the reader gets the partial reply and its error out of
-        // the app, which is exactly when they want it. Only the reply that ends the
-        // turn draws it — the steps in between are fragments, and their own buttons
-        // were what made a turn read as three separate answers (see
-        // [TranscriptRow.Message.showMeta]).
-        if (showMeta) {
-            MessageMeta(item = item, text = text)
-        }
     }
 }
 
 /**
- * The composer: the page's one **well**.
+ * The composer: the page's bottom band, with the field framed inside it.
  *
- * ## What a well is, and why this is the one surface on the page that is one
+ * ## Not a panel any more, and why
  *
- * Everything else on this page is a card in the list — the prompt, the answer, the
- * transcript's own scroll. The composer is not in that list: it is fixed to the
- * bottom of the page and the reader is *inside* it while typing, so it is drawn as
- * the app's largest corner radius, `PiShapes.panel`, on a surface step of its own,
- * with the page showing around it on three sides. That is what makes it read as a
- * place to write rather than as the next item of the conversation.
+ * It was one for a release: `PiShapes.panel` on `surfaceContainer`, floating over the
+ * transcript on a 12dp ambient shadow with 12dp of margin on each side. What that
+ * bought was a clear "this is in front of the list" — and what it cost was the field's
+ * own shape. With the panel explaining where the message goes, the field needed no
+ * edge, so it had none, and the reader's report is that they wanted it back
+ * ("输入框形状改回 0.4.1 的样子，取代现在的悬浮样式"). So the composer is the strip the app
+ * had before the panel: a full-bleed band in the page's column, under the transcript
+ * rather than over it, on the tab strip's own `surfaceContainer` so the bottom of the
+ * page is one band of chrome; and the field is a framed box inside it — `surface`, a
+ * 1dp `outlineVariant` hairline and `largeIncreased`'s 20dp, which is where 0.4.1's
+ * 22dp `shapes.medium` lands on Material's scale.
  *
- * ## Why it is a panel and not a bar
- *
- * It used to be a full-bleed bar on `surfaceContainerHighest` with an 8dp elevation
- * shadow along its top edge. The shadow was chosen over a hairline for a measured
- * reason — a 1dp `outlineVariant` rule is a *drawn line*, so it competes with the
- * transcript's own dividers and reads as the top of a box rather than as the bottom
- * of the page — and the panel answers the same question better: a rounded, inset
- * surface has an *edge*, which is what a rule was imitating and what a shadow was
- * standing in for. Nothing is left for the shadow to do, so it is gone with the bar,
- * and the page around the panel does the separating.
+ * Nothing about the *contents* changed. The four chips stay where they were, and they
+ * still read as the settings the next message goes with rather than as part of the
+ * message, because a chip between the field and the keyboard sits in the busiest strip
+ * on a phone screen.
  *
  * ## The three rows, and one control
  *
  * ```
- *  ╭────────────────────────────────────────╮
- *  │ (🧠 中) (🤖 packy…) (⤓ 上下文…) (⚡ 缓存…)│   the settings this message goes with
- *  │ Ask Pi…                                │   the field, growing upward
- *  │  ( / )                          (+)(↑) │   the row a thumb reaches
- *  ╰────────────────────────────────────────╯
+ *  (🧠 中) (🤖 packy…) (⤓ 上下文…) (⚡ 缓存…)   the settings this message goes with
+ *  ╭────────────────────────────────────╮
+ *  │ Ask Pi…                            │   the field, growing upward
+ *  │  ( / )                    (+)(↑)   │   the row a thumb reaches
+ *  ╰────────────────────────────────────╯
  * ```
  *
  * The four controls are above the field rather than below it: a chip between the
@@ -2693,20 +2831,16 @@ private fun AssistantBlock(
  * setting the next message will be sent with. They are `PiSelectChip`s — the design
  * system's own chip, which is also why the hand-rolled one this replaced is gone:
  * that one carried a luminance test to decide its own fill, one step off the bar it
- * sat on, and the design system's chip is now two steps from the well in both
- * schemes, which is visible without asking the colour a question. They scroll
- * horizontally once there are four of them, so a long profile name cannot squeeze
- * the last one off screen.
+ * sat on. They scroll horizontally once there are four of them, so a long profile
+ * name cannot squeeze the last one off screen.
  *
  * The agent's **state** is not one of them: it is a fact rather than a control, and
- * it lives in the bar. Nor is the *live* coral — coral means a turn is running, and
+ * it lives in the header. Nor is the *live* tone — live means a turn is running, and
  * nothing in a composer is.
  *
- * The field is the only thing inside the well with no frame of its own: a box around
- * it would be a second container inside `panel`, and the well already says where the
- * message goes. The buttons sit on the last line because that is the row a one-handed
- * thumb reaches, and the field grows *upward* out of it rather than pushing them down
- * the screen.
+ * The buttons sit on the field's last line because that is the row a one-handed thumb
+ * reaches, and the field grows *upward* out of it rather than pushing them down the
+ * screen.
  */
 @Composable
 private fun Composer(
@@ -2769,30 +2903,16 @@ private fun Composer(
     // made possible.
     var fieldFocused by remember { mutableStateOf(false) }
 
-    // The composer, as the app's one well: `PiShapes.panel` — the design language
-    // names that step for exactly this surface, along with sheets and dialogs — on
-    // `surfaceContainerLow`, with the page showing around it on three sides.
-    //
-    // The 8dp elevation shadow that used to separate the bar from the transcript is
-    // gone, and it is worth saying why rather than leaving it as an omission: the
-    // shadow was chosen over a hairline because a 1dp rule is a *drawn line* and
-    // competes with the transcript's own dividers. A rounded, inset panel answers
-    // that better than a shadow does — the edge is real rather than imitated — so
-    // the shadow has nothing left to say. And `Modifier.shadow` was placed *ahead*
-    // of the `Surface` rather than given to its own `shadowElevation` for a second
-    // reason that has also gone away with it: `shadowElevation` tints the surface
-    // with `surfaceTint` and lifts it a step in the palette, which is not what a
-    // well wants.
+    // The band: full bleed, in the page's column, on the same `surfaceContainer` the
+    // tab strip and the root behind it are painted in, so the foot of the page is one
+    // band of chrome from the transcript to the navigation bar rather than a box
+    // floating over the list with a seam above the bar. There is no shadow and no
+    // hairline: the fill is a step away from the page's own `surface`, which is the
+    // boundary — a drawn line here would compete with the transcript's own dividers
+    // (§7.1 has the measurement that settled that).
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = PiShapes.panel,
-        modifier = Modifier
-            .fillMaxWidth()
-            // The margin is what makes it a panel rather than a bar, and it is also
-            // what makes the panel's own corner geometry safe: at 28dp the rounded
-            // arc reaches about 8dp in from each edge, so every child below is inset
-            // by at least 12dp and none of them is sliced by a corner.
-            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
@@ -2829,11 +2949,12 @@ private fun Composer(
             // out at x=966..1048 and was sliced by the window rather than scrolled
             // to, which looks like a layout bug and is not scrollable either. The
             // content padding is what makes a partly-visible chip read as "there is
-            // more to the right" instead of as clipped, and it is 12dp rather than
-            // nothing because the row starts against the panel's own rounded corner.
+            // more to the right" instead of as clipped, and it is 12dp because the
+            // row is the band's own first line and its first chip should stand the
+            // same distance from the screen's edge as the field's box below it.
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -2900,14 +3021,31 @@ private fun Composer(
                 }
             }
 
-            // The field, and then the row of controls under it. There is no frame
-            // around the field: the well *is* its frame, and a second container
-            // inside `panel` is a box inside a box — which is what the `Surface`
-            // with a hairline border that used to stand here was, on top of a bar.
+            // The field in its own frame, and then the row of controls under it.
+            //
+            // The frame is back, and it is what the bar is *not* any more: while the
+            // composer floated it was the panel's own rounded outline that said where
+            // the field was, which left the field itself with no edge — the report
+            // "输入框形状改回 0.4.1 的样子，取代现在的悬浮样式" is that the reader wants the
+            // framed box back. The radius is the scale's `largeIncreased` (20dp),
+            // which is the step 0.4.1's 22dp `shapes.medium` lands on now that the app
+            // is on Material's own scale, and the hairline is `outlineVariant` — the
+            // same pair 0.4.1 drew, and the design language's one exception to "an
+            // action has no outline": a field is not an action, it is a place.
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp)
+                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
+                    // The frame: a fill one step above the band's own and the
+                    // design language's hairline, both clipped to the field's radius
+                    // so the border and the fill are the same rounded rectangle.
+                    .clip(PiShapes.largeIncreased)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        shape = PiShapes.largeIncreased,
+                    )
                     // Dismissing the selection toolbar the field's own long-press
                     // raises — the 粘贴 / 全选 strip — is the one thing the field
                     // cannot do for itself: `BasicTextField` consumes a tap on its own
@@ -3131,8 +3269,6 @@ private fun Composer(
                     }
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -3796,12 +3932,6 @@ private fun ShellCommandSheet(
                     onRun(line.trim())
                 },
                 kind = PiButtonKind.Filled,
-                size = PiButtonSize.Small,
-            )
-            PiButton(
-                text = text.common.cancel,
-                onClick = { host.dismiss() },
-                kind = PiButtonKind.Text,
                 size = PiButtonSize.Small,
             )
         }

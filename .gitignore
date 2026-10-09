@@ -41,6 +41,11 @@ release.jks
 *.iml
 *.hprof
 
+# Editor and agent tooling. `.zcodeignore` is the ZCode agent's own skip list for
+# the working directory — a setting for one editor, like `.idea/`, and not part of
+# the project's sources.
+.zcodeignore
+
 # OS
 .DS_Store
 Thumbs.db

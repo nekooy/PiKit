@@ -73,10 +73,19 @@ object PiShapes {
     /** 16dp. Cards, text fields, and the group a set of rows is drawn inside. */
     val card: CornerBasedShape = RoundedCornerShape(16.dp)
 
-    /** 20dp. A card that carries a number or a single fact prominently. */
+    /**
+     * 20dp. A card that carries a number or a single fact prominently, and the
+     * composer's field.
+     *
+     * The field is here rather than at [card] because that is where 0.4.1's 22dp
+     * `shapes.medium` lands on Material's scale, and the reader asked for that shape
+     * back (§7.1). It is the one *place* the app frames — every other outlined
+     * rectangle is a control — which is why the step is named for weight rather than
+     * for a job.
+     */
     val largeIncreased: CornerBasedShape = RoundedCornerShape(20.dp)
 
-    /** 28dp. Sheets, dialogs, and the composer's own container. */
+    /** 28dp. Sheets and dialogs — the two surfaces that are drawn over the page. */
     val panel: CornerBasedShape = RoundedCornerShape(28.dp)
 
     /** 32dp. The hero surfaces: an empty state's medallion, the setup screen. */

@@ -294,10 +294,22 @@ of it.
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
-| Agent process | Start, stop, restart, working directory, AGENTS.md |
+| Agent process | Start, stop, restart, working directory, AGENTS.md, keep-alive |
 | Backup & restore | What to pack into one file, and putting it back |
 | Maintenance & repair | Model list, relocation, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
+
+**Accent colour** (under Personalization) is the
+one colour the whole interface is drawn in:
+buttons, selections and section headings. The
+neutral greys follow it. **Keep-alive** (on the
+Agent process page) is the battery-optimisation
+exemption: with the screen off or the app in the
+background, Android may reclaim the agent
+process and cut a turn short, and the exemption
+is what lets the foreground service and its wake
+lock hold the turn. It costs a little battery
+and the app stays resident.
 
 ## 9. Backup and restore
 

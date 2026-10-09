@@ -1,5 +1,7 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.ThemeColor
+
 internal object EnglishStrings : Strings {
     override val tabs = object : Strings.Tabs {
         override val chat = "Chat"
@@ -127,11 +129,6 @@ internal object EnglishStrings : Strings {
             else -> ""
         }
 
-        override fun thinkingModelNote(levels: String) =
-            "This model offers only these levels: $levels. A level it does not have is " +
-                "moved up to the next one it does."
-
-        override val thinkingDisabled = "This model does not reason; the level is off."
 
         override val switchModel = "Model"
         override val contextDetails = "Context"
@@ -318,6 +315,18 @@ internal object EnglishStrings : Strings {
         override val themeSystem = "Follow system"
         override val themeLight = "Light"
         override val themeDark = "Dark"
+        override val themeColor = "Accent colour"
+        override val themeColorSubtitle = "Buttons, selections and section names"
+        override fun themeColorName(code: String) = when (code) {
+            ThemeColor.BLUE.code -> "Blue"
+            ThemeColor.INDIGO.code -> "Indigo"
+            ThemeColor.TEAL.code -> "Teal"
+            ThemeColor.GREEN.code -> "Green"
+            ThemeColor.AMBER.code -> "Amber"
+            ThemeColor.RED.code -> "Red"
+            ThemeColor.PINK.code -> "Pink"
+            else -> "Purple"
+        }
         override val launcherIcon = "App icon"
         override val launcherIconSubtitle = "How it looks on the home screen"
         override val launcherIconBlack = "White on black"
@@ -325,6 +334,14 @@ internal object EnglishStrings : Strings {
         override val launcherIconFootnote =
             "Switching recreates the icon on your home screen: some launchers take " +
                 "a few seconds to catch up, and may move it somewhere else."
+        override val avatars = "Avatars"
+        override val showAvatars = "Show avatars"
+        override val showAvatarsSubtitle = "An avatar over each message"
+        override val aiAvatar = "Agent avatar"
+        override val userAvatar = "Your avatar"
+        override val avatarLabel = "Label"
+        override val avatarLabelHint = "Blank is the default mark"
+        override val avatarColor = "Colour"
         override val fontSize = "Text size"
         override val fontSizeSubtitle = "Seven steps, applied when you let go"
         override val personalizationNote =
@@ -382,8 +399,6 @@ internal object EnglishStrings : Strings {
         override val storageFolderDcim = "Camera"
         override val storageFolderMusic = "Music"
         override val storageFolderMovies = "Movies"
-        override val storageBroadWarning =
-            "These files are usually irreplaceable. The agent will be able to delete them."
         override val storageConfirmGrantTitle = "Give the agent access?"
         override fun storageConfirmGrantBody(name: String) =
             "\u201c$name\u201d contains files that are probably not replaceable. Once the agent " +
@@ -438,6 +453,7 @@ internal object EnglishStrings : Strings {
 
         override val agentContextSection = "Context"
         override val agentContextLead = "With every request, pi sends the model:"
+        override val agentContextLeadTitle = "What the context holds"
         override val agentContextSystemTitle = "System prompt"
         override val agentContextSystemBody =
             "pi's own role (a coding assistant), its tool list and calling rules (edit replaces " +
@@ -468,7 +484,6 @@ internal object EnglishStrings : Strings {
         override val agentContextInstructions = "Global AGENTS.md"
         override val agentContextInstructionsEditable = "Editable"
         override val agentContextNote = "pi reads this file at startup; the agent restarts after a save."
-        override val agentContextEditorNote = "The agent restarts after a save so the change takes effect."
         override val agentContextSave = "Save"
         override val agentContextSaved = "Saved; the agent is restarting"
         override val agentContextFailed = "Could not save; the file is unchanged"
@@ -655,7 +670,6 @@ internal object EnglishStrings : Strings {
         override val process = "Process"
         override val agentProcess = "Agent process"
         override val restartAgent = "Restart agent"
-        override val stopAgent = "Stop"
         override val failedStartNote =
             "A failed start is almost always configuration: check that the active profile " +
                 "has a key and that the model id exists for that provider. The manual has " +
@@ -738,8 +752,6 @@ internal object EnglishStrings : Strings {
         override val prefix = "Prefix"
         override val home = "Home"
         override val appFiles = "App files"
-        override val installedImage = "Installed image"
-        override val installedImageSubtitle = "Revision of the runtime unpacked from the APK"
         override val bundledTools = "Bundled tools"
         override val runtimePrefixNote =
             "Packages installed here are relocated to this prefix automatically."
@@ -749,16 +761,12 @@ internal object EnglishStrings : Strings {
         override val installedVersionSubtitle = "Read from the package inside the runtime"
         override val unknown = "unknown"
         override val modelList = "Model list"
-        override val modelListRefresh = "Refresh now"
+        override val modelListRefresh = "Refresh"
         override val modelListRefreshSubtitle = "Updates the model list on demand"
         override val modelListRefreshing = "Contacting the providers…"
-        override val modelListChanged =
-            "The model list changed. The agent is restarting to read it."
-        override val modelListUnchanged =
-            "The model list is already up to date."
         override val modelListStateRefreshing = "Refreshing"
         override val modelListStateUpdated = "Updated"
-        override val modelListStateCurrent = "Up to date"
+        override val modelListStateCurrent = "Latest"
         override val modelListStateFailed = "Refresh failed"
         override val modelListNote =
             "Usually nothing to do here: the list refreshes by itself every four hours, " +
@@ -771,7 +779,7 @@ internal object EnglishStrings : Strings {
         override val installedPackages = "Installed packages"
         override val relocate = "Package relocation"
         override val relocateSubtitle = "Rewrite a package that still points at Termux"
-        override val relocateNow = "Check and repair"
+        override val relocateNow = "Repair"
         override val relocateNote =
             "Only needed if something you installed already fails to run — normally " +
                 "nothing has to be pressed: anything installed with pkg or apt is " +
@@ -784,15 +792,6 @@ internal object EnglishStrings : Strings {
         override val relocateBroken =
             "The package relocator in this runtime has been damaged, so a repair cannot " +
                 "help. Reinstall PiKit: the runtime is unpacked fresh from the app."
-        override fun relocated(occurrences: Int, files: Int, symlinks: Int, modes: Int) =
-            buildString {
-                append("Relocated $occurrences references in $files files and $symlinks symlinks.")
-                // Worth naming: an executable bit that the zip could not carry is
-                // why `npm` would refuse to run.
-                if (modes > 0) append(" Restored the executable bit on $modes files.")
-            }
-        override val nothingToRelocate =
-            "Nothing to relocate: every file already matches this app's prefix."
         override val relocateProblems = "Finished with problems:"
         override val relocateStateScanning = "Checking"
         override val relocateStateRepaired = "Repaired"
@@ -801,9 +800,9 @@ internal object EnglishStrings : Strings {
 
         override val storageCheck = "Check storage"
         override val storageCheckSubtitle = "Read, write and delete safety, measured"
-        override val storageCheckRun = "Run the check"
-        override val storageCheckRunning = "Running…"
-        override val storageCheckPassed = "All checks passed"
+        override val storageCheckRun = "Check"
+        override val storageCheckRunning = "Checking…"
+        override val storageCheckPassed = "Passed"
         override val storageCheckFailed = "Some checks failed"
         override val storageCheckNote =
             "Runs a script inside the runtime, as a child process of this app — the " +
@@ -847,7 +846,7 @@ internal object EnglishStrings : Strings {
             "This runtime has no web-access extension. Update the runtime under Maintenance & " +
                 "repair, then open this page again."
         override val webAccess = "Web access"
-        override val webAccessSubtitle = "Search the web, read pages, clone GitHub links"
+        override val webAccessSubtitle = "Search the web, read pages, clone GitHub links; changes apply when the agent next starts"
         override val searchWorkflow = "Search workflow"
         override val searchWorkflowSubtitle = "What happens after a search"
         override val workflowNone = "Raw results"

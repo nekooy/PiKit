@@ -159,28 +159,6 @@ fun thinkingLevelOptions(text: Strings, available: List<String>? = null): List<P
         )
     }
 
-/**
- * The picker's footnote: why the menu is shorter than pi's seven, or why it is not a
- * menu at all.
- *
- * One function rather than the expression each caller used to repeat, and the second
- * case is why. pi answers `["off"]` for a model without reasoning support
- * (`getSupportedThinkingLevels`), and a one-item list went through the "a model that
- * offers fewer levels" branch: the sheet explained that `off` was "the only level
- * this model has", which is a sentence about a choice where there is none. The
- * model does not reason; that is the fact, and [Strings.Chat.thinkingDisabled] is
- * the sentence for it.
- *
- * Null when there is nothing to explain: all seven offered, or no agent has answered
- * yet and the fallback list is pi's own seven.
- */
-fun thinkingLevelFootnote(text: Strings, available: List<String>?): String? {
-    val levels = available.orEmpty().filter { it.isNotBlank() }
-    if (levels.isEmpty()) return null
-    if (levels.size == 1 && levels.first() == "off") return text.chat.thinkingDisabled
-    if (levels.size >= PiLaunchOptions.THINKING_LEVELS.size) return null
-    return text.chat.thinkingModelNote(levels.joinToString(", "))
-}
 
 /**
  * A modal list of choices, with the selected one marked. This is the *only*

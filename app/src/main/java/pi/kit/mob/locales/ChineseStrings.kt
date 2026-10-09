@@ -1,5 +1,7 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.ThemeColor
+
 /**
  * Simplified Chinese catalog.
  *
@@ -126,10 +128,6 @@ internal object ChineseStrings : Strings {
             else -> ""
         }
 
-        override fun thinkingModelNote(levels: String) =
-            "当前模型只有这些等级：$levels。模型没有的等级，pi 会自动往上取最接近的一档。"
-
-        override val thinkingDisabled = "当前模型不支持思考，等级固定为 off。"
 
         override val switchModel = "模型"
         override val contextDetails = "上下文"
@@ -297,6 +295,18 @@ internal object ChineseStrings : Strings {
         override val themeSystem = "跟随系统"
         override val themeLight = "浅色"
         override val themeDark = "深色"
+        override val themeColor = "主题色"
+        override val themeColorSubtitle = "按钮、选中状态与小标题的颜色"
+        override fun themeColorName(code: String) = when (code) {
+            ThemeColor.BLUE.code -> "蓝色"
+            ThemeColor.INDIGO.code -> "靛蓝"
+            ThemeColor.TEAL.code -> "青色"
+            ThemeColor.GREEN.code -> "绿色"
+            ThemeColor.AMBER.code -> "琥珀"
+            ThemeColor.RED.code -> "红色"
+            ThemeColor.PINK.code -> "粉色"
+            else -> "紫色"
+        }
         override val launcherIcon = "应用图标"
         override val launcherIconSubtitle = "桌面上的样子"
         override val launcherIconBlack = "黑底白字"
@@ -304,6 +314,14 @@ internal object ChineseStrings : Strings {
         override val launcherIconFootnote =
             "切换后桌面上的图标会被重新创建：有的桌面要过几秒才刷新，" +
                 "也可能把图标挪到别的位置。"
+        override val avatars = "头像"
+        override val showAvatars = "显示头像"
+        override val showAvatarsSubtitle = "在每条消息上方显示头像"
+        override val aiAvatar = "Agent 头像"
+        override val userAvatar = "你的头像"
+        override val avatarLabel = "文字"
+        override val avatarLabelHint = "留空使用默认标记"
+        override val avatarColor = "颜色"
         override val fontSize = "字体大小"
         override val fontSizeSubtitle = "共 7 档，松手即生效"
         override val personalizationNote =
@@ -355,7 +373,6 @@ internal object ChineseStrings : Strings {
         override val storageFolderDcim = "相机"
         override val storageFolderMusic = "音乐"
         override val storageFolderMovies = "视频"
-        override val storageBroadWarning = "这些文件通常无法找回，Agent 将可以删除它们。"
         override val storageConfirmGrantTitle = "确定开放给 Agent？"
         override fun storageConfirmGrantBody(name: String) =
             "「$name」里的文件很可能无法恢复。开放之后 Agent 不但能读取，也能删除。" +
@@ -401,6 +418,7 @@ internal object ChineseStrings : Strings {
 
         override val agentContextSection = "上下文"
         override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
+        override val agentContextLeadTitle = "上下文说明"
         override val agentContextSystemTitle = "系统提示"
         override val agentContextSystemBody =
             "pi 自带的角色设定（编码助手）、工具清单与调用规则（比如 edit 用精确替换、read 代替 " +
@@ -427,7 +445,6 @@ internal object ChineseStrings : Strings {
         override val agentContextInstructions = "全局 AGENTS.md"
         override val agentContextInstructionsEditable = "可编辑"
         override val agentContextNote = "pi 启动时读取该文件；保存后 Agent 会重启。"
-        override val agentContextEditorNote = "保存后 Agent 重启，改动才会生效。"
         override val agentContextSave = "保存"
         override val agentContextSaved = "已保存，Agent 正在重启"
         override val agentContextFailed = "保存失败，文件没有改动"
@@ -588,7 +605,6 @@ internal object ChineseStrings : Strings {
         override val process = "进程"
         override val agentProcess = "Agent 进程"
         override val restartAgent = "重启 Agent"
-        override val stopAgent = "停止"
         override val failedStartNote =
             "启动失败几乎总是配置问题：确认当前配置填写了 Key，并且该供应商确实存在这个模型 ID。" +
                 "手册里有更完整的排查清单。"
@@ -659,8 +675,6 @@ internal object ChineseStrings : Strings {
         override val prefix = "前缀目录"
         override val home = "主目录"
         override val appFiles = "应用文件"
-        override val installedImage = "已安装镜像"
-        override val installedImageSubtitle = "从 APK 解包出来的运行环境版本"
         override val bundledTools = "内置工具"
         override val runtimePrefixNote = "在这里安装的软件包会自动重定位到这个前缀。"
         override val maintenanceSubtitle = "模型列表，以及已安装软件包的修复"
@@ -669,14 +683,12 @@ internal object ChineseStrings : Strings {
         override val installedVersionSubtitle = "从运行环境中的包读取"
         override val unknown = "未知"
         override val modelList = "模型列表"
-        override val modelListRefresh = "立即刷新"
+        override val modelListRefresh = "刷新"
         override val modelListRefreshSubtitle = "需要时手动刷新模型列表"
         override val modelListRefreshing = "正在联系各服务商…"
-        override val modelListChanged = "模型列表有更新，Agent 正在重启以读取。"
-        override val modelListUnchanged = "模型列表已是最新。"
         override val modelListStateRefreshing = "刷新中"
         override val modelListStateUpdated = "已更新"
-        override val modelListStateCurrent = "已是最新"
+        override val modelListStateCurrent = "最新"
         override val modelListStateFailed = "刷新失败"
         override val modelListNote =
             "一般不需要手动点：模型列表每 4 小时自动刷新一次，只有想立刻用到刚发布的新模型时才需要" +
@@ -686,7 +698,7 @@ internal object ChineseStrings : Strings {
         override val installedPackages = "已安装的软件包"
         override val relocate = "软件包重定位"
         override val relocateSubtitle = "修复仍然指向 Termux 路径的软件包"
-        override val relocateNow = "检测并修复"
+        override val relocateNow = "修复"
         override val relocateNote =
             "仅在已安装的东西确实启动报错时才需要点 —— 正常情况无需点击：用 pkg 或 apt 安装的" +
                 "软件包会在安装时自动完成重定位。若是从别的途径装进来、启动报错的包，这个检测会" +
@@ -695,12 +707,6 @@ internal object ChineseStrings : Strings {
         override val relocateBroken =
             "当前运行环境里的包重定位器已经损坏，修复无法解决。请重新安装 PiKit —— " +
                 "运行环境会从应用里重新解包。"
-        override fun relocated(occurrences: Int, files: Int, symlinks: Int, modes: Int) =
-            buildString {
-                append("已重定位 $files 个文件中的 $occurrences 处引用，以及 $symlinks 个符号链接。")
-                if (modes > 0) append(" 并恢复了 $modes 个文件的可执行权限。")
-            }
-        override val nothingToRelocate = "无需重定位：所有文件都已匹配本应用的前缀。"
         override val relocateProblems = "完成，但存在问题："
         override val relocateStateScanning = "检测中"
         override val relocateStateRepaired = "已修复"
@@ -709,9 +715,9 @@ internal object ChineseStrings : Strings {
 
         override val storageCheck = "检查存储"
         override val storageCheckSubtitle = "实测读写与防误删是否真的有效"
-        override val storageCheckRun = "运行检查"
-        override val storageCheckRunning = "正在检查…"
-        override val storageCheckPassed = "全部检查通过"
+        override val storageCheckRun = "检查"
+        override val storageCheckRunning = "检查中"
+        override val storageCheckPassed = "通过"
         override val storageCheckFailed = "有检查未通过"
         override val storageCheckNote =
             "它在运行环境里以子进程运行，位置和 Agent、终端一样，所以报告的是 Agent 实际能做到" +
@@ -748,7 +754,7 @@ internal object ChineseStrings : Strings {
             "当前运行环境里没有 web-access 扩展。请先在「维护与修复」中更新运行环境，" +
                 "再回到本页。"
         override val webAccess = "联网访问"
-        override val webAccessSubtitle = "搜索网页、读取页面、克隆 GitHub 链接"
+        override val webAccessSubtitle = "搜索网页、读取页面、克隆 GitHub 链接；改动在下次启动 Agent 时生效"
         override val searchWorkflow = "搜索流程"
         override val searchWorkflowSubtitle = "搜索之后做什么"
         override val workflowNone = "直接返回结果"

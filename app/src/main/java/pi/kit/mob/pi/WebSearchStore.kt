@@ -750,7 +750,9 @@ private object SchemaBody {
                 Entry.Kind.Key,
             )
         }
-        val body = render(child, raw as? JsonObject, "$indent$INDENT", lang, settings)
+        // No cast: the guard above has already narrowed `raw` to "null, or an object",
+        // which is exactly what `render`'s `source` accepts.
+        val body = render(child, raw, "$indent$INDENT", lang, settings)
         if (body.live || child.key !in NEVER_EMPTY_BRANCHES) {
             // Spelled as a list rather than as `"…{" + body.lines + "…}"`, which is
             // the same shape only while the left operand is a List: with a String on

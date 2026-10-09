@@ -5,6 +5,13 @@ plugins {
 // Vendored from termux/termux-app, module `terminal-emulator` (GPLv3).
 // Provides: an xterm-compatible VT parser/terminal buffer (pure Java) and a
 // JNI PTY allocator (src/main/jni/termux.c) used for the embedded shell.
+// `android { }` resolves to the deprecated `Project.android` accessor, because
+// this build keeps `android.newDsl=false` (gradle.properties): the new DSL is
+// the `com.android.build.api.dsl.*Extension` one, and moving to it is the same
+// AGP-10 migration the suppressed warnings name. Silenced on the block itself,
+// so a reader editing this file still gets everything else the Kotlin DSL and
+// javac have to say about it.
+@Suppress("DEPRECATION")
 android {
     namespace = "com.termux.emulator"
     compileSdk = providers.gradleProperty("pikit.compileSdk").get().toInt()
