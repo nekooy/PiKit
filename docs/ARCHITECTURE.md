@@ -8,7 +8,8 @@ and Pi's RPC protocol.
 
 Chapters 1–6 are those constraints. 7–9 are the interface, where several designs
 were tried and rejected and the number that settled each one is recorded. 10–12 are
-ownership, vendored code and rendering. [AGENTS.md](../AGENTS.md) has the commands
+ownership, vendored code and rendering, and 13 is the design language the interface
+is now built from. [AGENTS.md](../AGENTS.md) has the commands
 and the hard rules this document explains; [docs/README.md](README.md) is the index
 of everything under `docs/`.
 
@@ -25,17 +26,18 @@ of everything under `docs/`.
 | 6.2 | [The model page's facts](architecture/06.2-models-and-catalogue.md) | How a model's settings pick between a merging override and a replacing definition, why the catalogue check is a read, and what a custom id's entry holds |
 | 7.1 | [The composer](architecture/07.1-composer.md) | The bottom of the screen: the tab strip, the IME insets, and the controls above the input box |
 | 7.2 | [The model and thinking-level switches](architecture/07.2-models-and-thinking.md) | One provider with many models, where the levels come from, and what is saved |
-| 7.3 | [The transcript](architecture/07.3-transcript.md) | Following, folding, tool rows, the removed cursor and turn rail, and the page's rhythm |
+| 7.3 | [The transcript](architecture/07.3-transcript.md) | One card per turn, following, folding, tool rows, the removed cursor and turn rail, and the page's rhythm |
 | 7.4 | [The terminal's key bar](architecture/07.4-terminal-keys.md) | Uniform keys, an arrow pad, and the word that toggles |
 | 8 | [Restoring a conversation](architecture/08-restoring-a-conversation.md) | How a reopened conversation gets its turns, durations and folding back |
 | 9.1 | [Pages, and which moves are one](architecture/09.1-pages-and-moves.md) | Back behaviour, the flattened settings root, and what is a page and what is not |
-| 9.2 | [The settings pages, and the furniture of a page](architecture/09.2-settings-pages.md) | The header band's fixed height, dividers, the row that acts, the shape a list and its rows share, forms that ask before leaving, the text-size slider, and the one choice that is a manifest component |
+| 9.2 | [The settings pages, and the furniture of a page](architecture/09.2-settings-pages.md) | The app bar the band became, dividers, the row that acts, the shape a list and its rows share, forms that ask before leaving, the text-size slider, and the choices that are rows |
 | 9.3 | [The web-access and maintenance pages](architecture/09.3-web-access-and-maintenance.md) | The six keys PiKit owns of the extension's hundred, the document that is not the file, and the three repair runs that are now one shape |
 | 10 | [Process and state ownership](architecture/10-process-and-state.md) | Who owns the agent process, the session and the saved state, what a backup carries, and why a restore has to re-read everything |
 | 11 | [Vendored code](architecture/11-vendored-code.md) | The two Termux modules, why only those two, and their licence |
 | 12.1 | [What the model writes](architecture/12.1-markdown-and-math.md) | The Markdown half: what the parser accepts, the inline walk, and the test that could not catch a bug |
 | 12.2 | [Mathematics](architecture/12.2-mathematics.md) | Why the renderer is a library, how a formula's line box is built, and every measurement that chose it |
 | 12.3 | [Tables, display formulas, and the marks](architecture/12.3-display-and-marks.md) | Table layout, display formulas as paragraphs, the glyphs that were chosen, and the colour one action carries |
+| 13 | [The design language](architecture/13-design-language.md) | Material 3 Expressive as the rule for what a page may look like: the palette, the two shape voices, the springs, the component inventory, and why the dependency was raised for it |
 
 ## How to read it
 

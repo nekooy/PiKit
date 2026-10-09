@@ -4,12 +4,15 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Folder
@@ -18,7 +21,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,8 +30,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import pi.kit.mob.BuildConfig
@@ -40,6 +46,17 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.ui.MarkdownText
+import pi.kit.mob.ui.design.PiAppBarScroll
+import pi.kit.mob.ui.design.PiCard
+import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiLoading
+import pi.kit.mob.ui.design.PiPagePadding
+import pi.kit.mob.ui.design.PiRow
+import pi.kit.mob.ui.design.PiRowDivider
+import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiValueRow
+import pi.kit.mob.ui.design.PiNote
 
 /**
  * What PiKit is, what it ships, and where those pieces live.
@@ -73,6 +90,22 @@ import pi.kit.mob.ui.MarkdownText
  * `$PREFIX` and arrive with the unpacked image. Under the app's own version row they
  * read as three versions of one thing released together — which is the confusion §3
  * exists to prevent, and the reason the image's revision is the row they now sit under.
+ *
+ * ## The machine strings, and where they are now
+ *
+ * §9.2's rule about a machine string is about *where it belongs*, and both halves still
+ * hold: a path is handed in as the row's subtitle, which has the row's full width and
+ * three lines, and a version or a revision sits in the value column beside the fact it
+ * belongs to. Two things that chapter's own row did are out of reach here, and both are
+ * recorded rather than worked around with a row of this file's own:
+ *
+ *  - **The monospace face** it asks for, because a revision "reads back wrong in
+ *    proportional type". The design package's rows carry no font-family slot.
+ *  - **The cap on the value column.** §9.2 held the value to 0.35 of the row — 351 px of
+ *    the 1016 px a row has, which kept the label the other 349 — so that a 23-character
+ *    revision could not squeeze the title beside it. `PiValueRow` gives the value its
+ *    natural width and caps it at two lines instead, so the title keeps whatever is
+ *    left of the row.
  */
 @Composable
 internal fun AboutPage(
@@ -90,46 +123,48 @@ internal fun AboutPage(
     // resets the row to its idle state, which is one tap from an answer again.
     var updateState by remember { mutableStateOf<UpdateRow>(UpdateRow.Idle) }
 
-    Column(Modifier.fillMaxSize()) {
-        SettingsPageHeader(
-            title = text.settings.aboutTitle,
-            subtitle = "PiKit ${BuildConfig.VERSION_NAME}",
-            onBack = onBack,
-        )
-
-        SettingsBody {
-            SettingsSection(text.settings.application) {
-                SettingsRow(
+    PiScaffold(
+        title = text.settings.aboutTitle,
+        subtitle = "PiKit ${BuildConfig.VERSION_NAME}",
+        onBack = onBack,
+        scrollBehavior = PiAppBarScroll.Pinned,
+    ) { modifier ->
+        Column(
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(PiPagePadding),
+        ) {
+            PiSectionHeader(text.settings.application)
+            PiGroup {
+                PiValueRow(
                     title = "PiKit",
                     subtitle = text.settings.appSubtitle,
-                    icon = Icons.Filled.Info,
+                    leading = { RowMark(Icons.Filled.Info) },
                     value = BuildConfig.VERSION_NAME,
-                    monospaceValue = true,
                 )
-                SettingsDivider()
-                SettingsRow(
+                PiRowDivider()
+                PiRow(
                     title = text.settings.packageName,
-                    subtitle = env.packageId,
-                    icon = Icons.Filled.Info,
                     // The application id is a machine string the licence and
-                    // every bug report are read against; it is monospace and
-                    // wraps rather than being cut at one line.
-                    monospace = true,
+                    // every bug report are read against, so it is the row's
+                    // subtitle and wraps rather than being cut at one line.
+                    subtitle = env.packageId,
+                    leading = { RowMark(Icons.Filled.Info) },
                 )
-                SettingsDivider()
+                PiRowDivider()
                 // The last row of this section rather than a section of its own: it
                 // is a fact about the application, and the row above it already says
                 // which version this build is. See the note below the section for
                 // what tapping it does — the one thing on this page that reaches the
                 // network.
-                SettingsRow(
+                PiRow(
                     title = text.settings.checkForUpdates,
                     // One short status line, and the idle text is kept short enough
                     // to stay on it: a failure's reason used to sit here and wrapped
                     // to two or three lines, so tapping the row grew it — the height
                     // of the row depended on what the network said. The reason is a
-                    // `SettingsNote` under the section now, and the idle subtitle is
-                    // worded to the same one-line budget so the row never resizes.
+                    // note under the section now, and the idle subtitle is worded to
+                    // the same one-line budget so the row never resizes.
                     subtitle = when (val state = updateState) {
                         UpdateRow.Idle -> text.settings.checkForUpdatesSubtitle
                         UpdateRow.Checking -> text.settings.updateChecking
@@ -138,33 +173,49 @@ internal fun AboutPage(
                         is UpdateRow.Available -> text.settings.updateAvailable
                         is UpdateRow.Failed -> text.settings.updateFailedShort
                     },
-                    icon = Icons.Filled.Refresh,
+                    leading = { RowMark(Icons.Filled.Refresh) },
                     // Where the check goes while there is no answer to show, and the
                     // version once there is one: a value column that changes subject
                     // is better than two rows saying one thing each. One line either
                     // way, so the row does not resize when the answer lands.
-                    value = when (val state = updateState) {
-                        is UpdateRow.UpToDate -> state.version
-                        is UpdateRow.Available -> state.version
-                        else -> BuildConfig.REPOSITORY
-                    },
-                    monospaceValue = true,
                     trailing = if (updateState == UpdateRow.Checking) {
                         {
-                            // 20dp, the chevron's own box, so the row does not
-                            // change size when the mark swaps.
-                            CircularProgressIndicator(
-                                Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                            )
+                            // 20dp, the chevron's own box, so the row does not change
+                            // size when the mark swaps — and the design system's
+                            // loading indicator rather than a spinner (§13).
+                            PiLoading(size = 20.dp)
                         }
                     } else {
-                        null
+                        {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = when (val state = updateState) {
+                                        is UpdateRow.UpToDate -> state.version
+                                        is UpdateRow.Available -> state.version
+                                        else -> BuildConfig.REPOSITORY
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                // The chevron is drawn here because `PiRow` draws its
+                                // own only when the trailing slot is empty, and this
+                                // row reports a value *and* acts.
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     },
                     // No chevron while the check runs: a second tap would queue a
-                    // second request behind the first, and the spinner is already the
-                    // row saying it is busy.
-                    showChevron = updateState != UpdateRow.Checking,
+                    // second request behind the first, and the indicator is already
+                    // the row saying it is busy.
                     onClick = if (updateState == UpdateRow.Checking) {
                         null
                     } else {
@@ -186,31 +237,31 @@ internal fun AboutPage(
             // to sit here explained the check in three sentences and was the
             // page's second thing to read after the row it described.
             (updateState as? UpdateRow.Failed)?.let { failed ->
-                SettingsNote(text.settings.failedWith(failed.reason))
+                PiNote(text.settings.failedWith(failed.reason))
             }
 
-            SettingsSection(text.settings.environment) {
-                SettingsRow(
+            PiSectionHeader(text.settings.environment)
+            PiGroup {
+                PiValueRow(
                     title = text.settings.termuxEnvironment,
                     // The tag the version below was taken from, so the two can be read
                     // against each other and against the image builder's output.
                     subtitle = BundledImage.metadata(context)?.bootstrapTag ?: text.settings.unknown,
-                    icon = Icons.Filled.Memory,
+                    leading = { RowMark(Icons.Filled.Memory) },
                     value = BundledImage.termuxVersion(context),
-                    monospaceValue = true,
                 )
-                SettingsDivider()
-                SettingsRow(
+                PiRowDivider()
+                PiValueRow(
                     title = text.settings.installedImage,
                     subtitle = text.settings.installedImageSubtitle,
-                    icon = Icons.Filled.Memory,
-                    value = env.installedRevision ?: text.settings.notInstalled,
+                    leading = { RowMark(Icons.Filled.Memory) },
                     // A revision is 23 characters of hex and digits: it reads back
-                    // wrong in proportional type, and one line of it is wider than
-                    // the value column is allowed to be.
-                    monospaceValue = true,
+                    // wrong in proportional type, and it is the string §9.2 capped the
+                    // value column for. Both are why this row wants a monospace face
+                    // and two lines — see this page's note on the machine strings.
+                    value = env.installedRevision ?: text.settings.notInstalled,
                 )
-                SettingsDivider()
+                PiRowDivider()
                 // The two rows about what the image *carries*, directly under the
                 // revision that names it. They were in the application section, and
                 // that was the wrong drawer: pi and `rg`/`fd` are not parts of this
@@ -220,68 +271,83 @@ internal fun AboutPage(
                 // it"); split across two cards they answered two half-questions, and
                 // pi's version sat under "PiKit 0.2.1" as though the two came from the
                 // same place.
-                SettingsRow(
+                PiValueRow(
                     title = text.settings.bundledPi,
-                    subtitle = PiInstallation.CLI_ENTRY_RELATIVE,
-                    icon = Icons.Filled.Build,
-                    value = PiInstallation.installedVersion(env) ?: text.settings.unknown,
                     // 74 characters of path. It measured 699 px on one line and
-                    // fits at font scale 1.0 only; monospace and three lines is
-                    // what keeps it readable when the user's font is larger.
-                    monospace = true,
-                    monospaceValue = true,
+                    // fits at font scale 1.0 only; as a subtitle it gets the row's
+                    // full width and three lines, which is what keeps it readable
+                    // when the user's font is larger.
+                    subtitle = PiInstallation.CLI_ENTRY_RELATIVE,
+                    leading = { RowMark(Icons.Filled.Build) },
+                    value = PiInstallation.installedVersion(env) ?: text.settings.unknown,
                 )
-                SettingsDivider()
-                SettingsRow(
+                PiRowDivider()
+                PiRow(
                     title = text.settings.bundledTools,
                     subtitle = tools.entries.joinToString(", ") { (tool, present) ->
                         if (present) tool else "$tool (${text.settings.bundledToolsMissing})"
                     },
-                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    leading = { RowMark(Icons.AutoMirrored.Filled.MenuBook) },
                 )
-                SettingsDivider()
-                SettingsRow(
+                PiRowDivider()
+                PiRow(
                     title = text.settings.prefix,
                     subtitle = env.prefixPath,
-                    icon = Icons.Filled.Storage,
-                    monospace = true,
+                    leading = { RowMark(Icons.Filled.Storage) },
                 )
-                SettingsDivider()
-                SettingsRow(
+                PiRowDivider()
+                PiRow(
                     title = text.settings.home,
                     subtitle = env.homePath,
-                    icon = Icons.Filled.Home,
-                    monospace = true,
+                    leading = { RowMark(Icons.Filled.Home) },
                 )
-                SettingsDivider()
-                SettingsRow(
+                PiRowDivider()
+                PiRow(
                     title = text.settings.appFiles,
                     subtitle = env.filesDir.absolutePath,
-                    icon = Icons.Filled.Folder,
-                    monospace = true,
+                    leading = { RowMark(Icons.Filled.Folder) },
                 )
             }
-            SettingsNote(text.settings.runtimePrefixNote)
+            PiNote(text.settings.runtimePrefixNote)
 
-            SettingsSection(text.notes.licenceTitle) {
+            // Prose blocks, each in a `PiCard` rather than a group: this is one
+            // subject with a body of its own, which is what a card is for (§13), and
+            // the two are read rather than acted on, so nothing in them is a row.
+            PiSectionHeader(text.notes.licenceTitle)
+            PiCard {
                 Text(
-                    text.notes.licence,
+                    text = text.notes.licence,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
                 )
             }
 
-            SettingsSection(text.notes.creditsTitle) {
+            PiSectionHeader(text.notes.creditsTitle)
+            PiCard {
                 Text(
-                    text.notes.credits,
+                    text = text.notes.credits,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
                 )
             }
         }
     }
+}
+
+/**
+ * A leading mark, in the muted role a list row draws one in.
+ *
+ * The design package's rows leave the tint to `LocalContentColor`, which a group sets
+ * to `onSurface` — the title's own colour, at which a leading glyph competes with the
+ * words beside it. Every list in this app draws its leading mark in `onSurfaceVariant`.
+ */
+@Composable
+private fun RowMark(icon: ImageVector) {
+    Icon(
+        icon,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /**
@@ -341,7 +407,35 @@ private fun openReleasePage(context: Context, url: String) {
 /** The one tag every log line in this app carries. */
 private const val TAG = "PiKit"
 
-/** The user manual, rendered from Markdown. */
+/**
+ * The user manual, rendered from Markdown.
+ *
+ * ## What this page owns, and what it does not
+ *
+ * The manual is translated prose — `locales/ManualText*.kt` — and the renderer is
+ * `MarkdownText`, the same one the transcript draws. Its block styles are the
+ * renderer's: headings are sized by level with a wider gap above a level-1 or level-2
+ * one, a code span is drawn on its own fill against the page, and a paragraph is set
+ * in a 22sp line box where Material's own default for 14sp text is 20sp (see that
+ * file). What is left for the page is the *measure*, and that is what it does here.
+ *
+ * ## The measure
+ *
+ * [MANUAL_MEASURE] is 560dp of block and 520dp of text after the 20dp gutters — about
+ * 74 characters at `bodyMedium`, which is the top of the 45–75 a line of prose is
+ * comfortable at. The cap only binds on a tablet or a landscape phone: on the phone
+ * this is written for, the screen is narrower than the cap and the block is the width
+ * of the page. It is centred rather than left-aligned so that a wide window puts the
+ * extra on both sides instead of leaving one long gap.
+ *
+ * ## It stays a plain scrolling `Column`
+ *
+ * `MarkdownText` renders a plain `Column` and must keep doing so — a `LazyColumn`
+ * inside a vertically scrollable parent is measured against an infinite height and
+ * throws `IllegalStateException: Vertically scrollable component was measured with an
+ * infinity maximum height constraints`, which is a crash this page has already been
+ * the source of twice. So the scrolling is the page's, and it is a `Column`.
+ */
 @Composable
 internal fun ManualPage(onBack: () -> Unit) {
     val text = strings
@@ -351,19 +445,31 @@ internal fun ManualPage(onBack: () -> Unit) {
     val language = LocalLanguage.current
     val body = remember(language) { manualFor(language) }
 
-    Column(Modifier.fillMaxSize()) {
-        SettingsPageHeader(
-            title = text.manual.title,
-            subtitle = text.manual.subtitle,
-            onBack = onBack,
-        )
-
-        SettingsBody {
-            // The manual routinely exceeds one screen, and MarkdownText renders a
-            // plain column, so the scrolling has to come from the page body.
-            MarkdownText(body, modifier = Modifier.fillMaxWidth())
+    PiScaffold(
+        // A document rather than a list of rows: the title keeps its two lines while
+        // the reader is at the top of the manual and gives the page the height back as
+        // they read into it (§13).
+        title = text.manual.title,
+        subtitle = text.manual.subtitle,
+        onBack = onBack,
+        scrollBehavior = PiAppBarScroll.Collapsing,
+    ) { modifier ->
+        Column(modifier.verticalScroll(rememberScrollState())) {
+            MarkdownText(
+                text = body,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .widthIn(max = MANUAL_MEASURE)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            )
         }
     }
 }
 
-
+/**
+ * The width the manual's prose is set to on a window wide enough to use it.
+ *
+ * A cap rather than a fixed width: on the ~411dp phone this app is written for, the
+ * page's own width is the measure and nothing here changes anything.
+ */
+private val MANUAL_MEASURE = 560.dp

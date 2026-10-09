@@ -10,21 +10,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,16 +64,26 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.PageHeader
-import pi.kit.mob.ui.components.PickerBody
-import pi.kit.mob.ui.components.PickerOption
-import pi.kit.mob.ui.components.ReadOnlySheetRow
 import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.design.PiAppBarScroll
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiSheetActions
+import pi.kit.mob.ui.design.PiSheetList
+import pi.kit.mob.ui.design.PiSheetRow
+import pi.kit.mob.ui.design.PiSheetTitle
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.design.PiWorkingPill
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /** Pinch-to-zoom bounds, in sp. */
 private const val MIN_TEXT_SIZE_SP = 8
@@ -88,12 +100,21 @@ private const val MAX_TEXT_SIZE_SP = 40
  * The shells themselves belong to [PiAgentSession.terminalSessions], not to this
  * composable — switching to another tab disposes the whole screen, and a shell
  * that died with it would make a long build or an upgrade impossible.
+ *
+ * ## What is chrome here, and what is not
+ *
+ * The rectangle in the middle is the vendored `TerminalView`, painted from the
+ * terminal's own sixteen colours; nothing on this page restyles it, and nothing
+ * may — a terminal that borrowed the app's palette stops being the thing whose
+ * output the reader is trusting. So the page is the *chrome*: a bar that says
+ * which shell this is, a row that reports what the shells are doing, and the key
+ * bar. All of it composes `pi.kit.mob.ui.design` and invents no colour, radius or
+ * control of its own (ARCHITECTURE §13).
  */
 @Composable
 fun TerminalScreen(session: PiAgentSession) {
-    // Named `t` rather than `strings`: the session menu below takes a parameter
-    // called `sessions`, and a local named `strings` would be read as the
-    // catalog inside that call site regardless of what is passed.
+    // `t`, not `strings`: that is the imported accessor read on the next line, and
+    // `text` is the name the composables below take for the same catalog.
     val t = strings
     val manager = session.terminalSessions
     val sessions by manager.sessions.collectAsState()
@@ -161,106 +182,71 @@ fun TerminalScreen(session: PiAgentSession) {
     val keys = rememberKeySize(t, LocalDensity.current.fontScale)
     val keysHeight = barHeight(keys)
 
-    Box(Modifier.fillMaxSize().background(TERMINAL_BACKGROUND)) {
-        Column(Modifier.fillMaxSize()) {
-            PageHeader(
-                title = t.header.terminal,
-                subtitle = if (running > 1) {
-                    t.header.terminalSubtitle(running)
-                } else {
-                    t.header.terminalSubtitleIdle
-                },
-                actions = {
-                    IconButton(onClick = { selected?.write("clear\n") }) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = t.terminal.clear,
-                        )
-                    }
-                    IconButton(onClick = { manager.create() }) {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = t.terminal.newTerminal,
-                        )
-                    }
-                    IconButton(
-                        onClick = { selected?.let { manager.close(it.id) } },
-                        enabled = selected != null,
-                    ) {
-                        Icon(
-                            Icons.Filled.Close,
-                            contentDescription = t.terminal.closeTerminal,
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            // The session list is the same kind of question as the
-                            // language row or the model chip — pick one of these —
-                            // so it is asked with the same control, in the same
-                            // layer. It used to be a `DropdownMenu` anchored to
-                            // this button: a 280dp context menu with a tick glyph,
-                            // which is the one selection UI in the app that did not
-                            // match the others, and the only one that took window
-                            // focus away from the terminal's own input.
-                            sheets.show(
-                                Sheet(key = "terminal-sessions") {
-                                    // The selection is derived here rather than taken
-                                    // from the `selected` local above: this body was
-                                    // built when the sheet opened, and only the reads
-                                    // *inside* it follow live state — so a row closed
-                                    // here would otherwise leave the tick on the
-                                    // session that is already gone.
-                                    val current = sessions.firstOrNull { it.id == selectedId }
-                                        ?: sessions.firstOrNull()
-                                    PickerBody(
-                                        title = t.terminal.switchTerminal,
-                                        options = sessions.map { entry ->
-                                            PickerOption(
-                                                id = entry.id,
-                                                label = entry.displayTitle,
-                                                description = if (entry.running) {
-                                                    null
-                                                } else {
-                                                    t.terminal.exited(entry.exitStatus)
-                                                },
-                                                // The sheet stays open: closing the
-                                                // shells is a thing a user may be doing
-                                                // to several of them at once.
-                                                trailing = {
-                                                    IconButton(
-                                                        onClick = { manager.close(entry.id) },
-                                                        modifier = Modifier.size(32.dp),
-                                                    ) {
-                                                        Icon(
-                                                            Icons.Filled.Close,
-                                                            contentDescription = t.terminal
-                                                                .closeSession(entry.displayTitle),
-                                                        )
-                                                    }
-                                                },
-                                            )
-                                        },
-                                        selectedId = current?.id,
-                                        onPick = { manager.select(it) },
-                                        action = {
-                                            ReadOnlySheetRow(
-                                                label = t.terminal.closeAllTerminals,
-                                                value = null,
-                                                onClick = { manager.closeAll() },
-                                            )
-                                        },
-                                        footnote = t.terminal.sessionsRunOn,
-                                    )
-                                },
-                            )
+    PiScaffold(
+        // Which shell this is, and what the page is. The shell's *state* is not
+        // here: a bar's subtitle is a plain string, so a shell that ended could
+        // neither carry the danger tone nor offer the one thing that fixes it —
+        // `ShellStateRow` over the terminal does both, and reports the roster's
+        // live count while it is at it.
+        title = selected?.displayTitle ?: t.header.terminal,
+        subtitle = t.header.terminalSubtitleIdle,
+        // Pinned rather than collapsing: the terminal is the page, and a bar that
+        // grew to two lines and shrank again would move the whole rectangle — and
+        // the PTY sized from it — on every scroll. The medium bar is the shorter of
+        // the two the scaffold can draw, and that height is the terminal's.
+        scrollBehavior = PiAppBarScroll.Pinned,
+        actions = {
+            IconButton(onClick = { selected?.write("clear\n") }) {
+                Icon(
+                    Icons.Filled.Refresh,
+                    contentDescription = t.terminal.clear,
+                )
+            }
+            IconButton(onClick = { manager.create() }) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = t.terminal.newTerminal,
+                )
+            }
+            IconButton(
+                onClick = { selected?.let { manager.close(it.id) } },
+                enabled = selected != null,
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = t.terminal.closeTerminal,
+                )
+            }
+            IconButton(
+                onClick = {
+                    // The session list is the same kind of question as the
+                    // language row or the model chip — pick one of these —
+                    // so it is asked with the same control, in the same
+                    // layer. It used to be a `DropdownMenu` anchored to
+                    // this button: a 280dp context menu with a tick glyph,
+                    // which is the one selection UI in the app that did not
+                    // match the others, and the only one that took window
+                    // focus away from the terminal's own input.
+                    sheets.show(
+                        Sheet(key = "terminal-sessions") {
+                            TerminalSessionSheet(text = t, manager = manager)
                         },
-                    ) {
-                        Icon(
-                            Icons.Filled.Terminal,
-                            contentDescription = t.terminal.switchTerminal,
-                        )
-                    }
+                    )
                 },
+            ) {
+                Icon(
+                    Icons.Filled.Terminal,
+                    contentDescription = t.terminal.switchTerminal,
+                )
+            }
+        },
+    ) { body ->
+        Column(body) {
+            ShellStateRow(
+                text = t,
+                running = running,
+                selected = selected,
+                onNewTerminal = { manager.create() },
             )
 
             Box(
@@ -416,13 +402,184 @@ private fun ScreenRepaintAnchor(
 }
 
 /**
+ * The session picker: one row per shell, the live one ticked, a ✕ that closes a
+ * shell without leaving the list, and the roster's one page-level action.
+ *
+ * It is the same control as every other picker in the app: the sheet components
+ * carry the panel's grammar — a question as the title, menu rows, an action row —
+ * and `components/Sheets.kt` still carries the panel, the grabber, the scrim and
+ * the drag. Nothing here draws a second kind of menu.
+ *
+ * The selection is derived here rather than taken from the `selected` local in
+ * [TerminalScreen]: this body was built when the sheet opened, and only the reads
+ * *inside* it follow live state — so a row closed here would otherwise leave the
+ * tick on the shell that is already gone.
+ */
+@Composable
+private fun TerminalSessionSheet(
+    text: pi.kit.mob.locales.Strings,
+    manager: TerminalSessionManager,
+) {
+    val sessions by manager.sessions.collectAsState()
+    val selectedId by manager.selectedId
+    val host = LocalSheetHost.current
+    val current = sessions.firstOrNull { it.id == selectedId } ?: sessions.firstOrNull()
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // 16dp between the last row and the panel's padding, so the final row
+            // does not read as cut off against the sheet's own edge. The panel's
+            // bottom inset — the gesture bar, or nothing while the keyboard is up —
+            // belongs to the layer, so a body only has to leave this.
+            .padding(bottom = 16.dp),
+    ) {
+        PiSheetTitle(title = text.terminal.switchTerminal)
+
+        // The list stops growing at 60% of the height the sheet may take: past that
+        // it stops being something you glance at and becomes a page, and the sheet
+        // covers the screen it is being chosen from. A ceiling and not a height — a
+        // picker of two shells keeps its own two rows.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            PiSheetList(
+                modifier = Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION),
+            ) {
+                items(sessions, key = { it.id }) { entry ->
+                    PiSheetRow(
+                        label = entry.displayTitle,
+                        subtitle = if (entry.running) {
+                            null
+                        } else {
+                            text.terminal.exited(entry.exitStatus)
+                        },
+                        selected = entry.id == current?.id,
+                        onClick = {
+                            // Gated on the sheet still being open: the panel is
+                            // drawn until it is off screen, and a tap aimed at the
+                            // page underneath a leaving sheet must not be eaten by a
+                            // row of the sheet that is leaving.
+                            if (host.isOpen) {
+                                host.dismiss()
+                                manager.select(entry.id)
+                            }
+                        },
+                        trailing = {
+                            // The sheet stays open: closing the shells is a thing a
+                            // user may be doing to several of them at once.
+                            //
+                            // Tapping this does not also switch to the row it is in,
+                            // because the button's own pointer input consumes the
+                            // down first — which is what keeps a close from
+                            // selecting the shell it has just closed.
+                            IconButton(
+                                onClick = { manager.close(entry.id) },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = text.terminal
+                                        .closeSession(entry.displayTitle),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
+        PiSheetActions {
+            PiButton(
+                text = text.terminal.closeAllTerminals,
+                kind = PiButtonKind.Tonal,
+                size = PiButtonSize.Small,
+                onClick = {
+                    if (host.isOpen) {
+                        host.dismiss()
+                        manager.closeAll()
+                    }
+                },
+            )
+        }
+
+        PiNotice(
+            text = text.terminal.sessionsRunOn,
+            tone = PiTone.Neutral,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+    }
+}
+
+/**
+ * What the shells are doing, over the terminal — and only when there is something
+ * to report.
+ *
+ * Two facts live here and each has exactly one home. More than one shell running is
+ * a [PiWorkingPill] on the live tone: the count is a thing that is going on, which
+ * is what the app's one reserved hue means, and the moving indicator says the same
+ * thing its label does. A shell that has ended is a [PiNotice] on the danger tone,
+ * in the app's own words, with the one remedy that applies to it — because the
+ * terminal itself cannot say it and the picker is behind a tap.
+ *
+ * Nothing is drawn while the page's one shell is alive, and that is the point: this
+ * is chrome around a rectangle the reader came to read. The cost is that the
+ * terminal's height changes when a shell is created, closed or ends — set against the
+ * alternative, a strip of fixed height, which would hold that room open for a report
+ * that is almost never there and charge the terminal for it in lines of output at all
+ * times. The PTY is resized at those moments anyway: creating or closing a shell
+ * attaches or detaches the view its size is measured from.
+ */
+@Composable
+private fun ShellStateRow(
+    text: pi.kit.mob.locales.Strings,
+    running: Int,
+    selected: TerminalSessionManager.Entry?,
+    onNewTerminal: () -> Unit,
+) {
+    val ended = selected?.takeIf { !it.running }
+    if (ended == null && running <= 1) return
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (running > 1) {
+            PiWorkingPill(label = text.header.terminalSubtitle(running))
+        }
+        if (ended != null) {
+            PiNotice(
+                text = text.terminal.exited(ended.exitStatus),
+                tone = PiTone.Danger,
+                icon = Icons.Filled.Warning,
+                // The remaining width rather than the row's: the two facts can be
+                // true at once — a shell that ended while others are running — and
+                // a notice that claimed the whole row would push the pill out of it.
+                modifier = Modifier.weight(1f),
+                action = {
+                    PiButton(
+                        text = text.terminal.newTerminal,
+                        kind = PiButtonKind.Tonal,
+                        size = PiButtonSize.ExtraSmall,
+                        onClick = onNewTerminal,
+                    )
+                },
+            )
+        }
+    }
+}
+
+/** The sheet's list stops growing here, as a share of the height the sheet may take. */
+private const val SHEET_LIST_FRACTION = 0.6f
+
+/**
  * The bar's height, derived from the keys in it.
  *
- * Two chip rows plus the gap between them and the padding around them. The arrows
- * make the bar two deep by themselves — up has to sit above down for the pad to mean
- * anything — and once one key needs a second row the rest may as well use it, which
- * is how the bar went from a horizontally scrolling strip to two rows that fit on
- * screen.
+ * The arrow cluster is two keys deep — up has to sit above down for the pad to mean
+ * anything — and it is the tallest thing in the bar, so the bar is that cluster plus
+ * the padding of the group it sits in and the bar's own padding. The groups beside
+ * it are one key deep and are centred on that.
  *
  * It is a function of [KeySize] rather than a constant, and that is a fix rather than
  * tidiness. It used to be a flat 76dp derived from 30dp chips, and the chips grew without
@@ -432,7 +589,8 @@ private fun ScreenRepaintAnchor(
  * bar is a fixed size: the keys scale with the interface, so the space holding two of
  * them has to.
  */
-private fun barHeight(size: KeySize): Dp = size.height * 2 + KEY_GAP + KEY_BAR_PADDING * 2
+private fun barHeight(size: KeySize): Dp =
+    size.height * 2 + KEY_GAP + GROUP_PADDING * 2 + KEY_BAR_PADDING * 2
 
 /** One chip's height floor, and the gap between chips in both directions. */
 // 24dp with `labelMedium`. The bar's keys sat at the composer's 34dp so the two
@@ -445,20 +603,23 @@ private fun barHeight(size: KeySize): Dp = size.height * 2 + KEY_GAP + KEY_BAR_P
 private val KEY_HEIGHT = 24.dp
 private val KEY_GAP = 5.dp
 
-/** The bar's padding around its two rows, on each side of each axis. */
+/**
+ * The padding inside one group's track, and the gap between two groups.
+ *
+ * A group is what makes the bar readable at a glance — the modifier pair, the arrow
+ * cluster, and the rest — and the track is the shape vocabulary's answer for it:
+ * `PiShapes.card`, the radius the app draws every dense container with, one step of
+ * the surface ramp below the bar, with the keys themselves on `surface` so a key
+ * reads as raised out of its group. The gap *between* groups is more than three
+ * times the gap between two keys of one group, which is the whole difference between
+ * "these belong together" and "these are one after another".
+ */
+private val GROUP_PADDING = 4.dp
+private val GROUP_GAP = 16.dp
+
+/** The bar's padding around its contents, on each side of each axis. */
 private val KEY_BAR_PADDING = 5.dp
 private val KEY_BAR_SIDE_PADDING = 6.dp
-
-/**
- * The corner every key in the bar is drawn with.
- *
- * One value, because two things have to agree: the `Surface`'s shape and the clip
- * that bounds the key's ripple (see [ExtraKeyChip]). 8dp, one step under the
- * composer's chips now that the bar's keys are a step smaller too — written as a
- * constant because it is used from two non-composable call sites and because two
- * spellings of one radius is how they would come apart.
- */
-private val EXTRA_KEY_SHAPE = RoundedCornerShape(8.dp)
 
 /**
  * One arrow: the escape sequence it sends, and the glyph it shows.
@@ -497,7 +658,10 @@ private val ARROW_LEFT = ArrowKey("\u001b[D", "\u2190")
  * [TextMeasurer] before the first layout rather than by measuring laid-out chips.
  * Measuring the chips works, but it costs a frame in which the whole bar is drawn
  * too narrow and then reflows; measuring the text costs nothing and is exact,
- * because a chip contains nothing but its text.
+ * because a chip contains nothing but its text. The padding is no longer one
+ * constant on both axes: a round key's cap curves into the label's box by an amount
+ * that grows with the key, so the horizontal inset is solved against the height
+ * rather than written down (see [rememberKeySize]).
  *
  * Measured on the emulator at font scale 1.0: the widest label is `PGUP`/`PGDN`
  * (four monospace characters, 77px) and the result is about 44dp, so every key in the
@@ -515,10 +679,10 @@ private val ARROW_LEFT = ArrowKey("\u001b[D", "\u2190")
  * The bound is where the longest shipped label ends, not a round number below it.
  * `Scroll` is 6 characters and `滚动` two, but `スクロール` is five full-width glyphs —
  * measured at 184px, 70dp, against an earlier 64dp ceiling — so the Japanese bar drew
- * `スク` and cut the rest of the word off mid-glyph. At 88dp the bar takes that label
- * in full and the ones it shipped with are unaffected, because the width every key is
- * given is still the *widest* label's: a language whose labels are short pays nothing
- * for the ceiling being high.
+ * `スク` and cut the rest of the word off mid-glyph. At [MAX_KEY_WIDTH] the bar takes
+ * that label in full and the ones it shipped with are unaffected, because the width
+ * every key is given is still the *widest* label's: a language whose labels are short
+ * pays nothing for the ceiling being high.
  */
 private data class KeySize(val width: Dp, val height: Dp)
 
@@ -540,17 +704,9 @@ private fun rememberKeySize(
         buildList {
             add(text.terminal.ctrl)
             add(text.terminal.alt)
-            add(text.terminal.home)
-            add(text.terminal.end)
-            add(text.terminal.pageUp)
-            add(text.terminal.pageDown)
             add(text.terminal.newline)
             add(text.terminal.scrollShort)
-            add(text.terminal.interrupt)
-            add(text.terminal.eof)
-            add(text.terminal.escape)
-            add(text.terminal.tab)
-            EXTRA_KEYS_ROW_TWO.forEach { add(it.fixedLabel ?: it.labelOf(text)) }
+            EXTRA_KEYS.forEach { add(it.fixedLabel ?: it.labelOf(text)) }
             ARROW_GLYPHS.forEach(::add)
         }
     }
@@ -560,19 +716,39 @@ private fun rememberKeySize(
     val tallest = remember(labels, style, fontScale) {
         labels.maxOf { measurer.measure(it, style).size.height }
     }
-    val width = with(density) { widest.toDp() } + KEY_TEXT_PADDING
     // The height follows the label for the same reason the width does, and it is the
     // half that was missed: the type's line box is scaled by the system font size
     // while the chip was once a flat 34dp, so at 1.8 every key in the bar clipped
     // its own label top and bottom. Measured on the emulator in Japanese at 1.8:
     // the labels were cut to the height of the chip, `スクロール` to `スク`, and the
     // second row of the bar ended up under the tab strip.
-    val height = with(density) { tallest.toDp() } + KEY_VERTICAL_PADDING
-    // The floor keeps a one-glyph label's key from being a sliver, and the ceiling
-    // keeps a long translation from making the row scroll further than it has to.
+    //
+    // The floor keeps a one-glyph label's key from being a sliver, so it is applied
+    // here: the inset below is a function of the height, and the height it has to be
+    // solved against is this one.
+    val height = (with(density) { tallest.toDp() } + KEY_VERTICAL_PADDING)
+        .coerceAtLeast(KEY_HEIGHT)
+
+    // A round key's own cap eats into the label's box, and how much it eats grows
+    // with the key. The label sits [KEY_VERTICAL_PADDING]/2 from the top and the
+    // bottom of the key, so its top-left corner is inside the pill only while the
+    // horizontal inset clears `r - sqrt(2rv - v²)` — with `r` the key's half-height
+    // and `v` the vertical inset. Worked out at both ends: 3.06dp at the 24dp key of
+    // font scale 1.0, which the 6dp the label already had covers, and 9.35dp at a
+    // 44dp one, which it does not. So the inset is solved rather than fixed, and it
+    // is the same shape of fix as the height above: the number that was a constant
+    // is a constant only where the key is short.
+    val radius = height.value / 2f
+    val halfVerticalInset = KEY_VERTICAL_PADDING.value / 2f
+    val capInset = radius -
+        sqrt((2f * radius * halfVerticalInset - halfVerticalInset * halfVerticalInset).coerceAtLeast(0f))
+    val sidePadding = maxOf(KEY_TEXT_PADDING / 2, capInset.dp)
+    // The ceiling keeps a long translation from making the row scroll further than
+    // it has to.
     return KeySize(
-        width = width.coerceIn(MIN_KEY_WIDTH, MAX_KEY_WIDTH),
-        height = height.coerceAtLeast(KEY_HEIGHT),
+        width = (with(density) { widest.toDp() } + sidePadding * 2)
+            .coerceIn(MIN_KEY_WIDTH, MAX_KEY_WIDTH),
+        height = height,
     )
 }
 
@@ -602,6 +778,9 @@ private val MAX_KEY_WIDTH = 72.dp
  * above `↓` because they are both the middle cell of their row — there is no
  * measurement to keep in step and no way for the two to drift apart, which is what
  * four earlier attempts at this each got wrong in a different way.
+ *
+ * It is the contents of one [KeyGroup] and the only two-deep item in the bar:
+ * [barHeight] is the cluster's own height plus the padding around it.
  */
 @Composable
 private fun ArrowPad(
@@ -710,7 +889,7 @@ private fun ScrollToggle(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = EXTRA_KEY_SHAPE,
+        shape = PiShapes.pill,
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .size(size.width, size.height)
@@ -721,7 +900,7 @@ private fun ScrollToggle(
             // a `clickable` applied to the bare chain paints a rectangle over the
             // rounded shape underneath it. Same rule, and same wording, as
             // `ToolCard`'s header row in `chat/Transcript.kt`.
-            .clip(EXTRA_KEY_SHAPE)
+            .clip(PiShapes.pill)
             .clickable(
                 // The full phrase, not the two-glyph label: the visible word names
                 // the thing, and the spoken one has to say what tapping it does.
@@ -766,26 +945,24 @@ private class ExtraKey(
 )
 
 /**
- * The keys that are not arrows, split across the bar's two rows.
+ * The keys that are neither arrows nor modifiers, as one run.
  *
- * First row: the keys that go with text entry — escape, tab, interrupt and EOF —
- * beside the arrow pad. Second row: navigation and the symbols a shell prompt
- * wants. Both rows scroll horizontally *together* (they are one `Column` inside one
- * `LazyRow`), so the pad stays aligned with the row beside it no matter where the
- * bar is scrolled to.
+ * Text entry first — escape, tab, interrupt and EOF — then the navigation keys, then
+ * the symbols a shell prompt wants, because that is the order they are reached for
+ * in. They are one group and not two rows: everything in the bar scrolls sideways
+ * *together*, so a run and the cluster beside it stay on the same axis wherever the
+ * strip is scrolled to, and a second row's only job would be to halve how far the
+ * strip has to travel.
  *
  * The printable keys repeat their own character as their label and reuse the ESC
  * lambda; the lambda is only consulted when there is no fixed label, which keeps a
  * translated name like TAB/HOME from being overwritten by the escape byte.
  */
-private val EXTRA_KEYS_ROW_ONE: List<ExtraKey> = listOf(
+private val EXTRA_KEYS: List<ExtraKey> = listOf(
     ExtraKey("\u001b", { it.terminal.escape }),
     ExtraKey("\t", { it.terminal.tab }),
     ExtraKey("\u0003", { it.terminal.interrupt }),
     ExtraKey("\u0004", { it.terminal.eof }),
-)
-
-private val EXTRA_KEYS_ROW_TWO: List<ExtraKey> = listOf(
     ExtraKey("\u001b[H", { it.terminal.home }),
     ExtraKey("\u001b[F", { it.terminal.end }),
     ExtraKey("\u001b[5~", { it.terminal.pageUp }),
@@ -798,16 +975,54 @@ private val EXTRA_KEYS_ROW_TWO: List<ExtraKey> = listOf(
 )
 
 /**
- * The extra-keys bar: the arrow pad, then two rows of keys beside it.
+ * One run of keys, on its own track.
  *
- * Every key is the same rectangle ([rememberKeySize]), which is what makes the pad
- * line up and keeps the ten keys beside it on an even grid. Everything scrolls
- * sideways together as one `Column` inside one `LazyRow`, so the pad stays aligned
- * with the rows beside it at any scroll offset.
+ * The track is what makes a group legible: the keys of a group sit on one container
+ * — [PiShapes.card], the app's dense container radius, on one step of the surface
+ * ramp above the bar, with the keys themselves on `surface` — so a group reads as one
+ * object and a key reads as raised out of it. That is the same relationship a
+ * settings group has to its rows, which is why it needs no new vocabulary.
  *
- * The two rows of the right-hand column are **start**-aligned rather than centred.
- * They hold four and nine keys, so centring would inset the shorter row by half a
- * key and break the grid the uniform size was for.
+ * It wraps its contents, which is what lets the arrow cluster's track be two keys
+ * tall while the runs beside it are one, all centred on the bar's axis.
+ */
+@Composable
+private fun KeyGroup(content: @Composable () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = PiShapes.card,
+    ) {
+        Box(Modifier.padding(GROUP_PADDING), contentAlignment = Alignment.Center) {
+            content()
+        }
+    }
+}
+
+/**
+ * The extra-keys bar: the arrow cluster, the modifier pair, and the keys beside them
+ * — one strip, scrolled sideways.
+ *
+ * Every key is the same size ([rememberKeySize]) and every key is fully round
+ * ([PiShapes.pill]). The uniform size is what makes the pad line up and keeps a label
+ * from being clipped by a neighbour's width, and it is the one property of this bar
+ * that four earlier revisions each got wrong in a different way (ARCHITECTURE §7.4).
+ *
+ * ## Why the arrows are still a cluster and not four more keys in the row
+ *
+ * A flat `← ↑ ↓ →` is not a d-pad: the eye reads it left to right and has to stop and
+ * count to find "down". The four arrows are therefore a two-row cross — `↑` above
+ * `↓`, `←` and `→` flanking them — and because every key is the same rectangle the
+ * alignment is by construction rather than by two widths agreeing. Flattening it into
+ * the row is the design §7.4 measured and rejected, and it is the one thing the
+ * grouping here may not do.
+ *
+ * ## The grouping
+ *
+ * Three tracks: the cluster, the two keys that latch a modifier, and the rest. The
+ * cluster is the *first* item, so the arrows and the scroll toggle are on screen at
+ * scroll offset zero without holding a strip of the bar hostage for a control that is
+ * tapped once a session; the whole strip is one `LazyRow`, so the two groups beside
+ * the cluster stay aligned with it at any offset.
  */
 @Composable
 private fun ExtraKeysRow(
@@ -826,60 +1041,48 @@ private fun ExtraKeysRow(
         modifier = modifier
             .fillMaxWidth()
             .height(barHeight(size)),
-        // Light, like the header above it and the navigation bar below. The
-        // terminal itself stays dark — that is the transcript, not chrome.
+        // Light, like the bar above it and the navigation bar below. The terminal
+        // itself stays dark — that is the transcript, not chrome.
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         LazyRow(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = KEY_BAR_PADDING),
-            horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
+            horizontalArrangement = Arrangement.spacedBy(GROUP_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             item {
-                // The pad spans both rows, so it is one item; everything else is a
-                // row of chips in the column beside it. The scroll toggle lives
-                // inside the pad and scrolls with it: the pad is at the *start* of
-                // the row, so the toggle is on screen at scroll offset zero without
-                // holding a strip of the bar hostage for a control that is tapped
-                // once a session.
-                ArrowPad(
-                    text = text,
-                    size = size,
-                    following = autoScroll,
-                    onToggleAutoScroll = onToggleAutoScroll,
-                    onSend = onSend,
-                )
+                KeyGroup {
+                    ArrowPad(
+                        text = text,
+                        size = size,
+                        following = autoScroll,
+                        onToggleAutoScroll = onToggleAutoScroll,
+                        onSend = onSend,
+                    )
+                }
             }
             item {
-                Column(
-                    modifier = Modifier.height(size.height * 2 + KEY_GAP),
-                    verticalArrangement = Arrangement.spacedBy(KEY_GAP),
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                // The modifiers are their own group because they are the only keys
+                // here that *latch*: a tap turns one on and it stays on until it is
+                // tapped again, and the grouped pair says so before the label is
+                // read.
+                KeyGroup {
+                    Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
                         ExtraKeyChip(text.terminal.ctrl, active = ctrlOn, size = size) {
                             onToggleCtrl()
                         }
                         ExtraKeyChip(text.terminal.alt, active = altOn, size = size) {
                             onToggleAlt()
                         }
-                        EXTRA_KEYS_ROW_ONE.forEach { key ->
-                            ExtraKeyChip(
-                                label = key.fixedLabel ?: key.labelOf(text),
-                                active = false,
-                                size = size,
-                            ) { onSend(key.sequence) }
-                        }
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        EXTRA_KEYS_ROW_TWO.forEach { key ->
+                }
+            }
+            item {
+                KeyGroup {
+                    Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                        EXTRA_KEYS.forEach { key ->
                             ExtraKeyChip(
                                 label = key.fixedLabel ?: key.labelOf(text),
                                 active = false,
@@ -894,11 +1097,16 @@ private fun ExtraKeysRow(
 }
 
 /**
- * One of the bar's keys, at the bar's uniform size.
+ * One of the bar's keys, at the bar's uniform size and fully round.
  *
  * The width comes from [size] rather than from the label, which is the point: a
  * key is a key whatever it says, and the single glyph keys and the four-letter ones
  * line up because they are the same rectangle.
+ *
+ * The shape is the app's action voice — [PiShapes.pill] — and it is the token rather
+ * than a radius written here, because two things have to agree on it: the shape the
+ * `Surface` paints and the clip that bounds the key's ripple. One value for both is
+ * what keeps a pressed key's ripple inside its own edges.
  */
 @Composable
 private fun ExtraKeyChip(
@@ -908,7 +1116,7 @@ private fun ExtraKeyChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = EXTRA_KEY_SHAPE,
+        shape = PiShapes.pill,
         color = if (active) {
             MaterialTheme.colorScheme.primary
         } else {
@@ -919,7 +1127,7 @@ private fun ExtraKeyChip(
             // Before `clickable`, not after: the ripple is drawn by the clickable's
             // node, and a clip that comes later in the chain cannot bound it. See
             // `ScrollToggle` for the measured report.
-            .clip(EXTRA_KEY_SHAPE)
+            .clip(PiShapes.pill)
             .clickable(onClick = onClick),
     ) {
         Box(contentAlignment = Alignment.Center) {

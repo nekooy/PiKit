@@ -1,5 +1,6 @@
 /*
- * The app's one selection vocabulary.
+ * The app's one selection vocabulary: the modal list of choices, and the row that
+ * opens it.
  *
  * Every picker in PiKit used to be a `DropdownMenu` anchored to a row, written
  * out separately at each call site: language in Settings, the
@@ -21,6 +22,25 @@
  * chip (`ChatScreen.ControlChip`) and nothing else ever called this one, so it was
  * removed rather than left as a second vocabulary for the same job.
  *
+ * ## The inside of a sheet is the design system's now
+ *
+ * [PiSheetTitle] over a [PiSheetList] of [PiSheetRow]s is the one row shape the
+ * app draws inside the panel: a sheet's row is a *menu* — read once, tapped once,
+ * dismissed — so it is taller than a settings row, centres its two lines, and
+ * marks the current choice with a tick at the end rather than with a filled
+ * container. What is left in this file is what the design system does not carry:
+ * the option list, its filter, its grouping, and the footnote under it.
+ *
+ * ## The host is consulted inside every tap
+ *
+ * The old rows left their pointer modifier *off* while the sheet was leaving, so a
+ * tap during the exit could not run an action aimed at the page behind it.
+ * [PiSheetRow] installs its own tap and cannot be built without one, so the same
+ * guard moved into the handler: the row first asks [SheetHost.isOpen] and does
+ * nothing if the sheet it belongs to has already been dismissed. The outcome is
+ * the one that matters — the ~250 ms of exit cannot run an action — and it is the
+ * reason every row below reads its onClick that way.
+ *
  * Everything user-visible — the sheet's title, every row's label and
  * description, every content description — is passed in by the caller, because
  * the app's text lives in the three catalogs under `locales/` and nothing here
@@ -33,53 +53,37 @@
  */
 package pi.kit.mob.ui.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import pi.kit.mob.locales.LocalStrings
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.pi.PiLaunchOptions
+import pi.kit.mob.ui.design.PiSearchField
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiSheetList
+import pi.kit.mob.ui.design.PiSheetRow
+import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.settings.SettingsRow
 
 /**
@@ -107,8 +111,8 @@ data class PickerOption(
      * the ✕ beside it closes that shell. The control is the caller's, so its glyph
      * and its wording are still the caller's catalog strings.
      *
-     * Tapping it does not also choose the row: `selectable` is on the row and the
-     * child's own pointer input consumes the down first, which is what keeps a
+     * Tapping it does not also choose the row: the row's own tap is on the row and
+     * the child's pointer input consumes the down first, which is what keeps a
      * close button from switching to the session it just closed.
      */
     val trailing: (@Composable () -> Unit)? = null,
@@ -188,13 +192,11 @@ fun thinkingLevelFootnote(text: Strings, available: List<String>?): String? {
  * the panel: two sheets that drew their own panel would be two panels that drift
  * apart on the first change to either.
  *
- * The sheet is deliberately quiet. The selected row carries a tick and a
- * [MaterialTheme.colorScheme.primary] label and nothing else; every other row is
- * plain `onSurface` on the sheet's own `surfaceContainerLow`. The first draft
- * filled the selected row with `primaryContainer`, which in this palette is
- * `#DCE6F2` in light mode against a `#DCE3EB` sheet — a 3% difference that read
- * as a rendering artifact rather than as a selection, which is why the marking is
- * a tick and a colour rather than a fill.
+ * The sheet is deliberately quiet, and the design system draws that: a selected
+ * row carries a tick and nothing else, where an earlier draft filled it with
+ * `primaryContainer` — in this palette `#DCE6F2` in light mode against a
+ * `#DCE3EB` sheet, a 3% difference that read as a rendering artifact rather than
+ * as a selection.
  *
  * Every exit — the scrim, the system back gesture, a downward swipe, and picking
  * a row — goes through [SheetHost.dismiss]. The list scrolls once it is taller
@@ -228,61 +230,52 @@ internal fun PickerBody(
     action: (@Composable () -> Unit)? = null,
     searchHint: String? = null,
 ) {
-    val host = LocalSheetHost.current
-
-    SheetScaffold(title) {
-        // Local to the sheet: a filter is a question you are asking right now, and
-        // one that came back set the next time the sheet was opened would hide the
-        // list the user came to see.
-        var query by remember(searchHint) { mutableStateOf("") }
-        val needle = query.trim()
-        val shown = if (searchHint == null || needle.isEmpty()) {
-            options
-        } else {
-            options.filter { option ->
-                option.label.contains(needle, ignoreCase = true) ||
-                    option.id.contains(needle, ignoreCase = true) ||
-                    option.description?.contains(needle, ignoreCase = true) == true
-            }
+    // Local to the sheet: a filter is a question you are asking right now, and
+    // one that came back set the next time the sheet was opened would hide the
+    // list the user came to see.
+    var query by remember(searchHint) { mutableStateOf("") }
+    val needle = query.trim()
+    val shown = if (searchHint == null || needle.isEmpty()) {
+        options
+    } else {
+        options.filter { option ->
+            option.label.contains(needle, ignoreCase = true) ||
+                option.id.contains(needle, ignoreCase = true) ||
+                option.description?.contains(needle, ignoreCase = true) == true
         }
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // 16dp between the last row and the panel's padding, which is what
+            // keeps the final row from looking cut off against the edge.
+            .padding(bottom = 16.dp),
+    ) {
+        PiSheetTitle(title)
 
         if (searchHint != null) {
-            OutlinedTextField(
+            // The app's search field: a filled pill with a magnifier and a clear
+            // button. A filter over a list of names is a search, and the pill is
+            // what says so; the field it replaced was an outlined box, which on a
+            // panel with no other outline read as a third frame.
+            PiSearchField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text(searchHint) },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                singleLine = true,
-                // A key name is machine text: an autocorrected `xaiApiKey` is a
-                // filter that silently matches nothing.
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Ascii,
-                    autoCorrectEnabled = false,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 12h/4v, the inset every other field uses, so the field's box
-                    // lines up with the rows under it. The top padding is the gap
-                    // under the title's hairline — without it the field sat hard
-                    // against the rule and read as sheet chrome rather than as the
-                    // list's first control.
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .padding(top = 8.dp),
+                placeholder = searchHint,
+                clearContentDescription = LocalStrings.current.common.clear,
+                // 12h/4v, the inset every other control in this file uses, so the
+                // field's box lines up with the rows under it.
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             )
         }
 
         // 60% of the height the sheet is allowed to take. Past that the list
         // stops being something you glance at and becomes a page, and the
         // sheet hides the screen it is being chosen from. This is a ceiling
-        // and not a height: a two-item picker keeps its own 120dp.
+        // and not a height: a two-item picker keeps its own.
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = maxHeight * SHEET_LIST_FRACTION),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
+            PiSheetList(Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION)) {
                 // Keyed on the index *and* the id: [PickerOption.id] is only
                 // unique within one source. The fetched-model list holds the
                 // same model id twice when pi's catalog and the provider's own
@@ -298,17 +291,14 @@ internal fun PickerBody(
                 shown.forEachIndexed { index, option ->
                     val group = option.group
                     if (!group.isNullOrBlank() && group != shown.getOrNull(index - 1)?.group) {
-                        item(key = "group:$index:$group") { PickerGroupHeading(group) }
+                        item(key = "group:$index:$group") { PiSectionHeader(group) }
                     }
                     item(key = "$index:${option.id}") {
                         PickerSheetRow(
                             option = option,
                             selected = option.id == selectedId,
                             enabled = option.enabled,
-                            onChoose = {
-                                host.dismiss()
-                                onPick(option.id)
-                            },
+                            onChoose = { onPick(option.id) },
                         )
                     }
                 }
@@ -318,6 +308,8 @@ internal fun PickerBody(
             action()
         }
         if (!footnote.isNullOrBlank()) {
+            // A sentence under the list rather than a notice: it explains the
+            // *list*, and `PiNotice` is a container for something that happened.
             Text(
                 text = footnote,
                 style = MaterialTheme.typography.bodySmall,
@@ -326,28 +318,6 @@ internal fun PickerBody(
             )
         }
     }
-}
-
-/**
- * A heading over a run of [PickerOption]s that share a group.
- *
- * The same shape as `SettingsSection`'s label — a primary-coloured section
- * title — so a grouped picker reads like the page the sheet was opened from. It
- * is a heading and not a selectable row: it carries no tick column and no ripple,
- * or a group name would look like one more thing to choose.
- */
-@Composable
-private fun PickerGroupHeading(label: String) {
-    Text(
-        text = label.uppercase(),
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        letterSpacing = 0.8.sp,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 6.dp),
-    )
 }
 
 /**
@@ -378,9 +348,9 @@ internal fun SheetHost.showPicker(
  * The shape every bottom sheet in the app shares with [PickerBody] is not a
  * coincidence and not a copy: a user who has just learned that a sheet means
  * "here are the things you can pick" must not be shown a second, differently
- * spaced sheet for the things they cannot. The grabber, the title, the hairline
- * and the row height are one implementation ([SheetScaffold] plus
- * [ReadOnlySheetRow] on the layer's panel); only the marking differs.
+ * spaced sheet for the things they cannot. The grabber, the title and the row
+ * height are one implementation ([PiSheetTitle] and [PiSheetRow] on the layer's
+ * panel); only the marking differs.
  *
  * Used for the conversation's numbers and for pi's command list, where the rows
  * are facts and anything tappable is an action rather than a selection.
@@ -396,14 +366,15 @@ internal fun ReadOnlyBody(
     title: String,
     content: LazyListScope.() -> Unit,
 ) {
-    SheetScaffold(title) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+    ) {
+        PiSheetTitle(title)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = maxHeight * SHEET_LIST_FRACTION),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+            PiSheetList(
+                modifier = Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION),
                 content = content,
             )
         }
@@ -417,24 +388,24 @@ internal fun ReadOnlyBody(
  * chevron, because a ripple is not an affordance: it only exists *after* the tap
  * it was supposed to invite, and on a sheet whose other rows are inert facts there
  * is nothing else on screen to tell the two apart. The chevron is the same glyph
- * and the same 20dp a settings row that opens something uses.
+ * a settings row that opens something uses.
  *
  * Tapping an action closes the sheet, and the two happen together: the row is a
  * menu entry, and a menu that stays open behind the thing it just did is a menu
- * the user has to dismiss by hand. The click is not even *installed* while the
- * sheet is on its way out — see [SheetHost.isOpen] — so a tap aimed at the page
- * underneath a leaving sheet reaches the page rather than being eaten by a row
- * that no longer exists.
+ * the user has to dismiss by hand. The host is consulted first — see the file
+ * header — so a tap aimed at the page underneath a leaving sheet reaches the page
+ * rather than being eaten by a row that no longer exists.
  *
  * [description] may be blank, in which case the row shows its label and its
  * [value] only — used where a fact has no current value.
  *
- * A description wraps to as many lines as it needs and is never ellipsised. It is a
- * sentence telling the reader what the row does or what a command is for, and a
- * sentence cut off at its most informative clause is worse than a taller row — which
- * is the "小字没显示完全" report this cap was. The one caller that used to ask for more
- * than the default (`descriptionLines = 4`, the composer's `!` note) was the same
- * complaint arriving through a parameter.
+ * [monospaceValue] and [valueLines] are the two things the design row's own value
+ * slot cannot do, and they are why this row draws its value itself when either is
+ * set: a session file is a 60-character name whose id is what distinguishes it
+ * from the file under it, and a path read back in proportional digits is a path
+ * read back wrongly. A value that needs either therefore takes the row's trailing
+ * slot, and the two never both apply — a value that needs that slot is the whole
+ * of the row's right-hand side at that point.
  */
 @Composable
 fun ReadOnlySheetRow(
@@ -447,137 +418,104 @@ fun ReadOnlySheetRow(
     onClick: (() -> Unit)? = null,
 ) {
     val host = LocalSheetHost.current
-    val live = host.isOpen
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .then(
-                if (onClick != null && live) {
-                    Modifier.clickable {
-                        host.dismiss()
-                        onClick()
-                    }
-                } else {
-                    Modifier
-                },
-            )
-            .heightIn(min = READ_ONLY_ROW_MIN_HEIGHT)
-            // End padding is larger than the start's because the value is
-            // end-aligned: measured, a value ending at x=1022 on a 1080px sheet
-            // with a 22dp inset leaves it 6px from the sheet's own edge, which
-            // reads as clipped rather than as aligned.
-            .padding(start = 22.dp, end = 26.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                // An action's own name is the row's primary text, not a caption:
-                // onSurface for a tappable row, the muted label colour for a fact
-                // whose value is the datum.
-                color = if (onClick != null) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                fontWeight = if (onClick != null) FontWeight.Medium else FontWeight.Normal,
-                // Two lines rather than one. This row's label is a short catalog
-                // word ("Model", "Session") and its value is the datum, so the
-                // value keeps its intrinsic width here — unlike `SettingsRow`,
-                // where the value is capped because it is the secondary fact.
-                // Two lines is what stops a translated label or a long value
-                // from turning the label into an ellipsis, which is the failure
-                // the settings rows had.
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!description.isNullOrBlank()) {
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (!value.isNullOrBlank()) {
-            Text(
-                text = value,
-                modifier = Modifier.padding(start = 14.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = if (monospaceValue) FontFamily.Monospace else null,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.End,
-                // Two lines where the value is a path or a file name: a session
-                // file is a 60-character name and a single ellipsised line would
-                // show its timestamp and never the id that distinguishes it.
-                maxLines = valueLines,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (onClick != null) {
+    val wideValue = value != null && (monospaceValue || valueLines > 1)
+    val trailing: (@Composable () -> Unit)? = if (wideValue) {
+        { SheetValue(value.orEmpty(), monospaceValue, valueLines) }
+    } else if (onClick != null) {
+        {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .size(20.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
+    } else {
+        null
     }
+
+    PiSheetRow(
+        label = label,
+        onClick = {
+            if (host.isOpen) {
+                host.dismiss()
+                onClick?.invoke()
+            }
+        },
+        modifier = modifier,
+        subtitle = description,
+        value = if (wideValue) null else value,
+        trailing = trailing,
+    )
 }
 
 /**
- * The part of a sheet that is the same for every sheet: the title over a hairline.
+ * The value of a [ReadOnlySheetRow] that cannot use the design row's own slot.
  *
- * The panel's own bottom inset — the gesture bar, or nothing while the keyboard is
- * up — is applied by the layer, so this is a body and not a page: it starts just
- * under the grabber, which is the layer's, and ends at the panel's padding.
- *
- * A hairline under the title rather than a gap: a long list scrolls under the
- * heading, and without it the first row's ripple runs into the heading with
- * nothing between them.
+ * Drawn in the row's trailing position rather than in a column of its own, which
+ * is where the value of a sheet row belongs, and with 4dp of its own on that end:
+ * the value is end-aligned, so its last glyph is the one thing in the row that
+ * lands on the panel's gutter, and a machine string there reads as clipped rather
+ * than as aligned.
  */
 @Composable
-private fun SheetScaffold(title: String, content: @Composable () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            // 16dp between the last row and the sheet's padding, which is what
-            // keeps the final row from looking cut off against the edge.
-            .padding(bottom = 16.dp),
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
-        )
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant,
-            thickness = 1.dp,
-        )
-        content()
-    }
+private fun SheetValue(text: String, monospace: Boolean, lines: Int) {
+    Text(
+        text = text,
+        modifier = Modifier.padding(end = 4.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontFamily = if (monospace) FontFamily.Monospace else null,
+        textAlign = TextAlign.End,
+        maxLines = lines,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/**
+ * One row of a [PickerBody].
+ *
+ * The design system's [PiSheetRow] rather than a row of this file's own: a sheet's
+ * row is a menu entry, and the tick at its end is how the list says which one the
+ * reader is on. The two things this adds are the caller's option object going in
+ * and the dismiss going out.
+ */
+@Composable
+private fun PickerSheetRow(
+    option: PickerOption,
+    selected: Boolean,
+    enabled: Boolean,
+    onChoose: () -> Unit,
+) {
+    val host = LocalSheetHost.current
+
+    PiSheetRow(
+        label = option.label,
+        onClick = {
+            if (host.isOpen) {
+                host.dismiss()
+                onChoose()
+            }
+        },
+        subtitle = option.description,
+        selected = selected,
+        enabled = enabled,
+        leading = option.leading,
+        trailing = option.trailing,
+    )
 }
 
 /**
  * A settings-style row that opens a picker when tapped. Renders exactly
- * like `SettingsRow` but this one is the row *and* the sheet, so a call site is
+ * like [SettingsRow] but this one is the row *and* the sheet, so a call site is
  * one line.
  *
  * The row is `SettingsRow` itself rather than a second copy of its layout. The
  * one thing this component has to guarantee is that a row that opens a picker is
- * indistinguishable from the rows beside it — same 16dp horizontal and 12dp
- * vertical padding, same title weight, same 20dp chevron — and two
- * implementations of one row drift apart on the first change to either of them.
- * It costs an import from `ui.components` into `ui.settings`; a copy would cost
- * the guarantee.
+ * indistinguishable from the rows beside it — the same content inset, the same
+ * title style, the same 20dp chevron — and two implementations of one row drift
+ * apart on the first change to either of them. It costs an import from
+ * `ui.components` into `ui.settings`; a copy would cost the guarantee.
  *
  * The chevron is always drawn: tapping opens the sheet, and the row's whole
  * surface is the target.
@@ -621,176 +559,18 @@ fun PickerRow(
     )
 }
 
-/**
- * One row of a [PickerBody].
- *
- * `selectable` rather than `clickable`: it reports the row as the chosen one to a
- * screen reader — the same fact the tick draws — and it carries the platform's
- * own ripple, clipped to the row's rounded shape because `clip` comes first in
- * the chain.
- *
- * The modifier is installed only while the sheet is still open, for the reason
- * spelled out on [ReadOnlySheetRow]: a pointer modifier that is merely *disabled*
- * still claims the hit test, so a row that is on its way off screen would swallow
- * a tap meant for the page underneath it.
- */
-@Composable
-private fun PickerSheetRow(
-    option: PickerOption,
-    selected: Boolean,
-    enabled: Boolean,
-    onChoose: () -> Unit,
-) {
-    val host = LocalSheetHost.current
-    val foreground = pickerForeground(selected = selected, enabled = enabled)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            // 52dp is the target, and it is the floor rather than the padding
-            // that sets it: a one-line row measures 44dp of content, and only a
-            // row with a two-line description grows past the floor.
-            .heightIn(min = PICKER_ROW_MIN_HEIGHT)
-            .clip(MaterialTheme.shapes.medium)
-            .then(
-                if (host.isOpen) {
-                    Modifier.selectable(
-                        selected = selected,
-                        enabled = enabled,
-                        role = Role.RadioButton,
-                        onClick = onChoose,
-                    )
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // The tick's column is always here, empty on the rows that are not the
-        // chosen one. Letting the mark take part in the flow would shove that
-        // row's label — and the entry's own glyph — sideways by the width of a
-        // tick, so the whole list would jump as the selection moved.
-        Box(Modifier.size(TICK_COLUMN), contentAlignment = Alignment.Center) {
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    // Decorative: `selectable` above already announces this row as
-                    // the chosen one, and a description here would make a screen
-                    // reader say "selected" twice.
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(TICK_COLUMN),
-                )
-            }
-        }
-        // The entry's own glyph goes after the tick, not before it: the tick has
-        // to be in the same column on every row, so a glyph ahead of it would push
-        // that row's label out of line with the rest.
-        //
-        // `LocalContentColor` is provided because a caller's `Icon` tints itself
-        // with that local and its default is black — outside a Material surface
-        // that is a black glyph on a dark sheet. The row's own colour is what the
-        // glyph should follow, including the dimming when the row is disabled.
-        if (option.leading != null) {
-            CompositionLocalProvider(LocalContentColor provides foreground) {
-                option.leading()
-            }
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = option.label,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                color = foreground,
-                // Two lines, not one. The one-line rule kept the list's rhythm
-                // even, but it cost the entry its identity: a model id is the
-                // only thing that says which model the row *is*, it runs past
-                // 50 characters on providers that namespace their ids
-                // (`anthropic/claude-…`), and a row that reads
-                // `anthropic/claude-3-5-son…` cannot be told from the row under
-                // it. The id is the primary text of this row, so it wraps.
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!option.description.isNullOrBlank()) {
-                Text(
-                    text = option.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = DISABLED_ALPHA)
-                    },
-                    // Two lines, and that is a cap: an uncapped description made
-                    // one picker row three lines taller than its neighbour, and a
-                    // list of models is a rhythm the eye scans. The full note is
-                    // still readable in the option's own value sheet when it has
-                    // one, and two lines hold the capability line this was written
-                    // for (`1M context · images · reasoning`).
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (option.trailing != null) {
-            // 4dp, not 12: the row's own `spacedBy(12.dp)` already separates the
-            // label from whatever is here, and a second full gap reads as a
-            // different row.
-            Box(Modifier.padding(start = 4.dp)) { option.trailing?.invoke() }
-        }
-    }
-}
-
-/**
- * The colour of a row's text, and of any glyph that sits in it.
- *
- * A disabled row is a theme colour at [DISABLED_ALPHA] rather than a grey: the
- * palette has no disabled token, and 0.38 is the alpha Material3's own components
- * apply to disabled content.
- */
-@Composable
-private fun pickerForeground(selected: Boolean, enabled: Boolean): Color = when {
-    !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
-    selected -> MaterialTheme.colorScheme.primary
-    else -> MaterialTheme.colorScheme.onSurface
-}
-
-/**
- * The grabber lives on the layer's panel (`Sheets.kt`): it is chrome the sheet
- * owns, not something a body draws, because a body that drew its own would draw a
- * second one under the panel's.
- */
-
 /** The sheet's list stops growing here, as a share of the height the sheet may take. */
 private const val SHEET_LIST_FRACTION = 0.6f
 
 /**
  * A row's floor, so a picker of one-line entries is still a comfortable target.
  *
- * Not private: `StoragePage`'s folder tree draws its own rows — a picker row would
- * dismiss the sheet on every step into a directory — and claims to be the same row
- * as this one. It was not, because it was missing this floor; the figure is shared
- * so the claim cannot come apart again.
+ * It is [PiSheetRow]'s own floor — a menu row is taller than a settings row,
+ * because it is a target rather than a line of a table — and it is published
+ * rather than private for a page that draws its own sheet rows: `StoragePage`'s
+ * folder tree steps into a directory instead of choosing it, so its rows cannot be
+ * picker rows, and a tree row that was a different height from the rows beside it
+ * is the mismatch this figure exists to prevent. It was 52dp when the picker row
+ * was this file's own; the design row's 56dp is the one that is real now.
  */
-internal val PICKER_ROW_MIN_HEIGHT = 52.dp
-
-/**
- * A [ReadOnlyBody] row's floor.
- *
- * Lower than a picker row's, deliberately: a fact is not a target, and a page of
- * ten facts at 52dp each is a page of ten facts and no page. Anything tappable in
- * one of these sheets is one of two or three rows, so the smaller floor does not
- * cost a touch target its size.
- */
-private val READ_ONLY_ROW_MIN_HEIGHT = 44.dp
-
-/** The width reserved for the selected row's tick, on every row. */
-private val TICK_COLUMN = 20.dp
-
-/**
- * The disabled content alpha, as a fraction of the row's own colour. Material3's
- * own components use 0.38 for it.
- */
-private const val DISABLED_ALPHA = 0.38f
+internal val PICKER_ROW_MIN_HEIGHT = 56.dp

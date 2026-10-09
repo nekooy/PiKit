@@ -124,6 +124,16 @@ interface Strings {
 
         val placeholder: String
         val placeholderAttachment: String
+
+        /**
+         * The second line of the empty transcript: what the reader can do from here.
+         *
+         * Drawn in the transcript's place on a conversation nothing has been sent to,
+         * under [newConversation]. It names both things a prompt can be — a question,
+         * or a shell command — because [placeholder] alone names only the first, and
+         * the `!` form is otherwise something a reader finds by reading the manual.
+         */
+        val emptyIntro: String
         val send: String
         val stop: String
         val sessions: String
@@ -484,8 +494,29 @@ interface Strings {
          */
         val recent: String
         val back: String
+
+        /**
+         * The empty page's heading, with [empty] as the sentence under it.
+         *
+         * Split in two because the page draws it as an empty state — a heading
+         * and a body under a medallion — and one string carrying both would be a
+         * heading styled as a paragraph.
+         */
+        val emptyHeading: String
+
+        /** Why there is nothing to list yet: what writes a conversation to disk. */
         val empty: String
+
         fun nothingMatches(query: String): String
+
+        /**
+         * The body under [nothingMatches]: what the search looked at.
+         *
+         * An empty result is the one case where the reader cannot tell "this is
+         * not here" from "this was not searched", and the scan does read every
+         * message of every saved conversation.
+         */
+        val searchEmptyNote: String
         val pinned: String
         val actions: String
         val rename: String
@@ -602,9 +633,20 @@ interface Strings {
          * directory it may not open and an empty one are the same empty list and the
          * same null from `listFiles()`. Before this both drew a blank page — no rows,
          * no message, nothing to tell the reader whether the folder was empty or the
-         * app had failed.
+         * app had failed. It is the empty state's heading now, with [emptyBody]
+         * under it saying the same thing at length.
          */
         val empty: String
+
+        /** [empty]'s second line, in the empty state's body. */
+        val emptyBody: String
+
+        /** The kind column's word for a directory. */
+        val folder: String
+
+        /** The kind column's word for a file whose name carries no extension. */
+        val file: String
+
         fun tooLarge(size: String): String
         fun binary(size: String): String
         fun unreadable(reason: String): String
@@ -896,6 +938,16 @@ interface Strings {
          * handful of alternatives to choose between.
          */
         val providerPickSearch: String
+
+        /**
+         * The filter field's placeholder in the fetched-model picker.
+         *
+         * The fetched list is the provider's own `/models` answer merged with pi's catalog,
+         * so on a well-catalogued provider it is well over a hundred rows: *finding* one is
+         * the problem rather than choosing between them, which is the same reason the
+         * provider picker beside it is searchable.
+         */
+        val modelPickSearch: String
         fun keyPassedAs(envVar: String): String
         val notChosen: String
         val apiKey: String
@@ -1718,5 +1770,8 @@ interface Strings {
         val back: String
         val confirm: String
         val retry: String
+
+        /** Empty a field: the name a search field's clear button is read out as. */
+        val clear: String
     }
 }

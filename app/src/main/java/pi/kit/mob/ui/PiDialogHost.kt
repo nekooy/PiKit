@@ -2,11 +2,13 @@ package pi.kit.mob.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +17,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.strings
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiTextField
 
 /**
  * Renders a dialog raised by a pi extension.
@@ -23,6 +30,24 @@ import pi.kit.mob.locales.strings
  * built-in permission prompt by design — so an unanswered dialog blocks the
  * extension indefinitely. In particular `editor` has no server-side timeout and
  * must always be answered or cancelled.
+ *
+ * ## Why this stays a platform dialog
+ *
+ * Every other panel in the app is a sheet in the app's own modal layer, for the
+ * two reasons measured in `components/Sheets.kt`. This one is the exception and
+ * keeps it: the caller is pi waiting on an answer rather than the user navigating,
+ * it can arrive over any destination and while a sheet is already open, and a
+ * question that blocks a process is the one case where the platform's own
+ * attention-grabbing dialog is the honest shape. It is drawn in the app's colours
+ * and its corner from [PiShapes.panel], so it does not read as a stranger.
+ *
+ * ## The three shapes it takes
+ *
+ * `options` is a question with a fixed answer, `placeholder`/`prefill` is a
+ * question with a typed one, and neither is a plain confirmation. The branches
+ * below are that distinction and nothing else; in particular a `confirm` with a
+ * message *and* no field draws no field, which is the branch that would otherwise
+ * put an empty text box under a sentence asking "are you sure".
  */
 @Composable
 fun PiDialogHost(
@@ -40,29 +65,55 @@ fun PiDialogHost(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(title) },
+        shape = PiShapes.panel,
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                message?.let { Text(it) }
+                message?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // Bounded and scrolled inside the bound. A message an
+                        // extension sends is a sentence or a specification,
+                        // depending on the extension, and an unbounded one pushed
+                        // the answer buttons off the bottom of the dialog — the
+                        // same measurement the runtime warnings dialog cites.
+                        modifier = Modifier
+                            .heightIn(max = 260.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
+                }
 
                 when {
                     options.isNotEmpty() -> options.forEach { option ->
-                        TextButton(
+                        // Outlined rather than text buttons: an option is a real
+                        // answer to the question above it, and it has to be
+                        // distinguishable at a glance from the cancel underneath
+                        // the whole dialog, which is the way out rather than one of
+                        // the answers.
+                        PiButton(
+                            text = option,
                             onClick = { onValue(option) },
+                            kind = PiButtonKind.Outlined,
+                            size = PiButtonSize.Small,
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text(option) }
+                        )
                     }
 
                     // `confirm` carries neither options nor a placeholder.
                     placeholder == null && prefill == null && message != null -> Unit
 
-                    else -> OutlinedTextField(
+                    else -> PiTextField(
                         value = text,
                         onValueChange = { text = it },
-                        placeholder = placeholder?.let { { Text(it) } },
-                        // One line, like every other value entry in the app: a
-                        // multi-line box for a one-line answer grows as the user
-                        // types and is the only field in the app that does.
+                        placeholder = placeholder,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -73,15 +124,30 @@ fun PiDialogHost(
             when {
                 options.isNotEmpty() -> Unit
                 placeholder == null && prefill == null && message != null ->
-                    TextButton(onClick = { onConfirmed(true) }) { Text(text0.common.confirm) }
+                    PiButton(
+                        text = text0.common.confirm,
+                        onClick = { onConfirmed(true) },
+                        kind = PiButtonKind.Text,
+                        size = PiButtonSize.Small,
+                    )
 
-                else -> TextButton(onClick = { onValue(text) }) { Text(text0.common.ok) }
+                else -> PiButton(
+                    text = text0.common.ok,
+                    onClick = { onValue(text) },
+                    kind = PiButtonKind.Text,
+                    size = PiButtonSize.Small,
+                )
             }
         },
         dismissButton = {
-            // TextButton, like the confirm beside it: in a dialog both actions
+            // A text button, like the confirm beside it: in a dialog both actions
             // are text buttons, and a bordered one reads as a different component.
-            TextButton(onClick = onCancel) { Text(text0.common.cancel) }
+            PiButton(
+                text = text0.common.cancel,
+                onClick = onCancel,
+                kind = PiButtonKind.Text,
+                size = PiButtonSize.Small,
+            )
         },
     )
 }

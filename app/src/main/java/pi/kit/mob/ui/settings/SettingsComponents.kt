@@ -1,6 +1,27 @@
+/*
+ * The furniture every settings page is built from.
+ *
+ * Settings is the one destination where a *group* of peer rows is the whole page
+ * (ARCHITECTURE §13): a section is a labelled frame, a row is one peer inside it,
+ * and the hairline between two rows belongs to the rows rather than to the page.
+ * Every visual in this file therefore comes from `pi.kit.mob.ui.design`, and the
+ * file is the settings-specific half of that vocabulary — the section, the row
+ * with a value column, the note, the action strip.
+ *
+ * [SettingsRow] is the one member that is not a plain [PiRow], because a settings
+ * row carries more than the design row's two slots: a value that has to be capped
+ * so it cannot elbow the label aside, a value that may be monospaced, a value
+ * *and* a chevron together, and a subtitle that may be monospaced. [PiRow]'s
+ * trailing slot is "a value or a chevron but never both", and its subtitle is one
+ * style, so the row keeps its own value column and composes [PiRow] for
+ * everything else — the title, the leading mark, the press outline, the padding.
+ *
+ * [SettingsSwitchRow] is deliberately **not** [PiSwitchRow]: that one toggles when
+ * the whole row is tapped, and a settings page's switch must not (see its own
+ * KDoc).
+ */
 package pi.kit.mob.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -9,18 +30,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -30,46 +49,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import pi.kit.mob.locales.LocalStrings
-import pi.kit.mob.ui.components.PageHeader
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiPagePadding
+import pi.kit.mob.ui.design.PiRow
+import pi.kit.mob.ui.design.PiRowDivider
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiWorkingPill
 
 /**
- * The settings pages all use the shared header, so a sub-page differs from the
- * tab root only by its back action. Every page paints its own status bar band;
- * adding an inset here would double it.
- */
-@Composable
-fun SettingsPageHeader(
-    title: String,
-    subtitle: String? = null,
-    onBack: (() -> Unit)? = null,
-) {
-    PageHeader(
-        title = title,
-        subtitle = subtitle,
-        onBack = onBack,
-        backContentDescription = LocalStrings.current.common.back,
-    )
-}
-
-/**
- * A labelled group of rows.
+ * A labelled group of rows: a section label over one [PiGroup].
  *
- * The label sits above the card rather than inside it, so the grouping reads at
- * a glance: the previous flat page gave every setting the same weight and the
- * model fields — the thing that actually stops the agent from working — were
- * indistinguishable from the licence text.
- *
- * The label used to be `labelMedium` in `onSurfaceVariant` — 12sp at caption
- * contrast — which read as a footnote rather than as the heading of the card
- * under it. `titleSmall` at SemiBold in the primary colour is the size and the
- * weight of a real section title, and the colour is what makes the break between
- * two sections visible before the words are read.
+ * The label sits above the frame rather than inside it, so the grouping reads at a
+ * glance: a flat page gives every setting the same weight and the rows that
+ * actually stop the agent from working are indistinguishable from the licence
+ * text. [PiSectionHeader] carries the label's style — small, emphasized, in the
+ * secondary role rather than the primary one, because a heading in the action
+ * colour made every label look tappable.
  */
 @Composable
 fun SettingsSection(
@@ -78,21 +80,8 @@ fun SettingsSection(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier.fillMaxWidth()) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-            letterSpacing = 0.8.sp,
-            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-        )
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(Modifier.fillMaxWidth()) { content() }
-        }
+        PiSectionHeader(label)
+        PiGroup { content() }
     }
 }
 
@@ -103,12 +92,12 @@ fun SettingsSection(
  * keeps no ripple, which is how the runtime facts are told apart from the
  * actions.
  *
- * [monospace] is for rows whose subtitle is a path or a command: those are long
- * enough to wrap, and proportional digits make a path noticeably harder to read
- * back. [monospaceValue] is the same statement about [value] — a revision, a
- * version, a model id — rather than about the subtitle.
+ * [monospace] marks a row whose subtitle is a path or a command; the slot is full
+ * width and wraps to three lines for it. [monospaceValue] is the same statement
+ * about [value] — a revision, a version, a model id — and that slot *is* drawn in
+ * `FontFamily.Monospace` when it is set.
  *
- * ## The value is a demoted column, not a peer of the label
+ * ## The value is a capped column, not a peer of the label
  *
  * A `Row` measures a child that has no `weight` against its *intrinsic* width
  * before it gives the weighted children what is left, so a value that takes its
@@ -120,9 +109,8 @@ fun SettingsSection(
  * was wider than the entire label column. At font scale 1.0 the title still fit
  * inside those 300 px; at 1.8 the same string needs 720 px of the 706 px the row
  * has left after its icon and chevron, so the label column gets nothing and
- * `运行环境` draws as `运行…` — which is the report this was fixed from. Nothing
- * about the data made the title less important; the layout just had no opinion
- * about the order.
+ * `运行环境` draws as `运行…`. Nothing about the data made the title less
+ * important; the layout just had no opinion about the order.
  *
  * So the value is capped at [VALUE_MAX_SHARE] of the row and wraps inside that
  * cap instead of elbowing the label aside, and a long *machine* string gets
@@ -137,9 +125,16 @@ fun SettingsSection(
  *
  * A path is the one string this cap is still too sharp for: the pi CLI path is
  * 94 characters and a third of a row cannot show it. That is why paths are
- * handed in as [subtitle] (full width, [monospace], three lines) rather than as
- * a value — the rule is about *where a string belongs*, and a path belongs on a
- * line of its own.
+ * handed in as [subtitle] — full width, three lines — rather than as a value:
+ * the rule is about *where a string belongs*, and a path belongs on a line of
+ * its own.
+ *
+ * [monospace] is the one caller-visible thing the delegation to [PiRow] could not
+ * carry, and it is the subtitle's *face* alone: the design row has exactly one
+ * subtitle style, so a path in this slot is no longer drawn in `FontFamily
+ * .Monospace`. The parameter stays because every call site passes it and the row
+ * is this module's public surface; the *value* column, which this row still owns,
+ * keeps [monospaceValue].
  */
 @Composable
 fun SettingsRow(
@@ -171,218 +166,92 @@ fun SettingsRow(
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
 ) {
+    // Read here rather than computed from PiRow's padding: the share is of the
+    // whole row, so it needs no knowledge of the icon, the chevron or the
+    // gutters, and it stays the same number on every page.
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        // Read here rather than computed from the padding: the share is of the
-        // whole row, so it needs no knowledge of the icon, the chevron or the
-        // 16dp gutters, and it stays the same number on every page.
+        val scheme = MaterialTheme.colorScheme
         val valueCap = maxWidth * VALUE_MAX_SHARE
-        // Material3's own disabled content alpha, applied to the whole row rather
-        // than to the title alone: a dimmed title over a full-strength subtitle
-        // reads as a formatting bug.
+        // Material3's own disabled content alpha, applied to every part of the row
+        // rather than to the title alone: a dimmed title over a full-strength
+        // subtitle reads as a formatting bug. PiRow dims its own two slots; the
+        // mark and the value below are this row's, so they dim here.
         val contentAlpha = if (enabled) 1f else DISABLED_ALPHA
-        // The title's colour when the row is *not* dimmed has to stay
-        // `Color.Unspecified` — the sentinel that means "draw in `LocalContentColor`",
-        // which is what makes the row follow the theme. Dimming it is not possible:
-        // `Unspecified.copy(alpha = …)` stops being the sentinel and becomes a colour
-        // with an unspecified colour space, which renders black. On a dark surface
-        // that is invisible, and it was reported as exactly that — a settings page
-        // whose text vanished in dark mode. So the disabled case names its colour.
-        val titleColor = when {
-            danger -> MaterialTheme.colorScheme.error.copy(alpha = contentAlpha)
-            enabled -> Color.Unspecified
-            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (onClick != null) {
-                        // Clipped to the card's own corner radius before the ripple is
-                        // attached, because a `clickable`'s indication is a *rectangle*: on
-                        // the first and last row of a card it painted square corners outside
-                        // the rounded ones, which is the "no rounded corners on the tap
-                        // feedback" a reader reported on the model page's two number rows.
-                        Modifier
-                            .clip(MaterialTheme.shapes.medium)
-                            .clickable(enabled = enabled, onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = (
-                        if (danger) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                        ).copy(alpha = contentAlpha),
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = titleColor,
-                    // Two lines of room, and no more: a model id is a title here
-                    // and runs past one line on providers that namespace their ids.
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!subtitle.isNullOrBlank()) {
-                    // Height follows the text. Three lines of room is the safety
-                    // cap, not a reserved box — a one-line subtitle is one line
-                    // tall again, and a long sentence gets as many lines as it
-                    // needs up to three.
-                    //
-                    // Two was the cap, and it cut the backup page's category rows
-                    // mid-list: each subtitle there is a sentence with a list
-                    // inside it ("主题、语言、工作目录、工具调用守卫、共享存储授权，以及本应用
-                    // 保存的其他全部偏好" is one of them), those rows carry no value so
-                    // the label column is the row less an icon and a switch, and
-                    // the list still runs onto a third line once the text is set
-                    // any larger than the default. Three is where the longest of
-                    // them ends, and an ellipsis was taking the item the reader
-                    // was looking for.
+        val markColor = (if (danger) scheme.error else scheme.onSurfaceVariant).copy(alpha = contentAlpha)
+
+        PiRow(
+            title = title,
+            // The title's colour is named even when the row is enabled, rather
+            // than left as `Color.Unspecified`: `Unspecified.copy(alpha = …)`
+            // stops being the "draw in `LocalContentColor`" sentinel and becomes
+            // a colour with an unspecified colour space, which renders black — on
+            // a dark surface that is invisible text.
+            titleColor = if (danger) scheme.error else scheme.onSurface,
+            subtitle = subtitle,
+            leading = if (icon != null) {
+                { Icon(icon, contentDescription = null, tint = markColor) }
+            } else {
+                null
+            },
+            // Always supplied, even when it draws nothing, because PiRow adds a
+            // chevron of its own to any row that is tappable and this row's
+            // chevron is [showChevron]'s decision rather than the tap's.
+            trailing = {
+                if (!value.isNullOrBlank()) {
                     Text(
-                        text = subtitle,
+                        text = value,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
-                        fontFamily = if (monospace) FontFamily.Monospace else null,
-                        maxLines = 3,
+                        color = (
+                            if (valueEmphasised) scheme.onSurface
+                            else scheme.onSurfaceVariant
+                            ).copy(alpha = contentAlpha),
+                        fontFamily = if (monospaceValue) FontFamily.Monospace else null,
+                        textAlign = TextAlign.End,
+                        // Two lines: a machine string in the value column — a
+                        // revision, a repository path — needs the second line, and
+                        // one line cut `x86_64-440db5bca1496c14` into something that
+                        // could not be checked against a bug report.
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .widthIn(max = valueCap)
+                            .padding(end = 2.dp),
                     )
                 }
-            }
-            if (!value.isNullOrBlank()) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = (
-                        if (valueEmphasised) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                        ).copy(alpha = contentAlpha),
-                    fontFamily = if (monospaceValue) FontFamily.Monospace else null,
-                    textAlign = TextAlign.End,
-                    // Two lines: a machine string in the value column — a
-                    // revision, a repository path — needs the second line, and
-                    // one line cut `x86_64-440db5bca1496c14` into something that
-                    // could not be checked against a bug report.
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .widthIn(max = valueCap)
-                        .padding(end = 2.dp),
-                )
-            }
-            if (trailing != null) {
-                trailing()
-            } else if (showChevron) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
+                if (trailing != null) {
+                    trailing()
+                } else if (showChevron) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = scheme.onSurfaceVariant.copy(alpha = contentAlpha),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+            onClick = onClick,
+            enabled = enabled,
+        )
     }
 }
 
 /**
- * The action strip under an action row: the button, the dismiss, and the progress
- * line while a run is going.
+ * The column a group's own content starts at: where a note's text, a row's icon
+ * and a control placed by hand all begin.
  *
- * ## Why this is one component
+ * 24dp is [PiRow]'s own figure — its 12dp outer padding plus its 12dp inner one —
+ * so a note or a button added inside a group lands on the column the rows above it
+ * use. Outside a group the same note gets 24dp on top of `PiPagePadding`, which is
+ * where a row's *title* starts, so one inset serves both positions.
  *
- * The maintenance page has three action rows — refresh the model list, repair the
- * installed packages, run the storage self-test — and each of the three was written
- * out at its call site. They had drifted into three different blocks: one drew its
- * button at a 12dp gutter while the note under it was at 16dp, one showed its
- * verdict in a paragraph and another in the row's own value column, and the third
- * drew no progress at all while the first two drew a bar. A reader looking at the
- * page sees three things that are the same *kind* of thing (a button, a run, a
- * verdict) laid out three ways, which is the report this answers.
- *
- * So the strip is the shared half and the row above it is a [SettingsRow]: a state
- * in the value column, one primary button, one optional dismiss, one bar. What
- * differs between the three — the wording, and what the verdict says — is passed in.
- *
- * ## The details, each of which was a drift
- *
- *  - **[ACTION_INSET], the same 16dp the rows and [SettingsNote] use.** The buttons
- *    used to start at 12dp, which put them 4dp left of the note under them and 4dp
- *    left of the row's own icon — near enough to look like a mistake rather than like
- *    a decision. The vertical padding is the row's own 12dp, so a button sits the
- *    same distance under its row as a subtitle sits under its title.
- *  - **[progress] is the bar *and* its line.** Both blocks that had a bar drew it the
- *    same way, and the difference between a bar with no word and a word with no bar
- *    is the difference between "working" and "stuck". Passing the sentence in means
- *    the two cannot be separated at one call site and not another.
- *  - **The dismiss is optional and its label is not.** `relocate`'s result can be
- *    dismissed, `storage`'s can, `catalogue`'s can — but only while there is a result,
- *    so the button is present exactly when [onDismiss] is not null. It is drawn as
- *    `OutlinedButton`, the shape every non-primary action in this app uses.
- *  - **The bar is animated by the caller's state, not by this component.** A run that
- *    reports nothing between its start and its end draws an indeterminate bar, which
- *    is what `LinearProgressIndicator` without a `progress` is: the two runs that walk
- *    a tree (the relocation walk, the self-test) have no fraction to report at all,
- *    and inventing one would be a bar that lies.
+ * Not 12dp: that is what a *text field* uses, and a field is different because it
+ * has an outline of its own and is inset to sit inside its card, while a note and
+ * a button have no box and have to line up with the content above them. The
+ * maintenance page's buttons started there and sat 4dp left of the note under them
+ * and 4dp left of the row's own icon, near enough to look like a mistake rather
+ * than like a decision.
  */
-@Composable
-fun SettingsActionStrip(
-    actionLabel: String,
-    onAction: () -> Unit,
-    dismissLabel: String,
-    modifier: Modifier = Modifier,
-    actionEnabled: Boolean = true,
-    onDismiss: (() -> Unit)? = null,
-    progress: String? = null,
-) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = ACTION_INSET, vertical = 12.dp),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(onClick = onAction, enabled = actionEnabled) { Text(actionLabel) }
-            if (onDismiss != null) {
-                OutlinedButton(onClick = onDismiss) { Text(dismissLabel) }
-            }
-        }
-        if (progress != null) {
-            LinearProgressIndicator(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp),
-            )
-            Text(
-                text = progress,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-    }
-}
-
-/**
- * The gutter a row's control starts at: the same 16dp the icon column and a
- * [SettingsNote]'s text do.
- *
- * Not 12dp, which is what the buttons on the maintenance page used and what a *text
- * field* uses — a field has its own outline and is inset to sit inside its card,
- * while a button has no box of its own and lines up with the content above it.
- */
-private val ACTION_INSET = 16.dp
+private val CONTENT_INSET = 24.dp
 
 /**
  * The most of a row its value may take.
@@ -397,8 +266,8 @@ private val ACTION_INSET = 16.dp
  * the other 349 px however long the value is.
  *
  * It is a share rather than a dp value so the split survives a narrower phone
- * and a larger font scale; the 23-character revision the report was filed about
- * is the string that exercises it.
+ * and a larger font scale; the 23-character revision that settles it is the
+ * string that exercises it.
  */
 private const val VALUE_MAX_SHARE = 0.35f
 
@@ -411,14 +280,14 @@ private const val DISABLED_ALPHA = 0.38f
  *
  * A divider separates two *rows*: a switch, a picker, a statement of fact. A text
  * field is not one of those, because it already draws its own boundary — and it is
- * inset 12dp inside the card while the divider used to span the card's full width,
- * so a line under or over a field runs edge to edge *past* the rounded corners of
- * the box it is supposed to separate from, with 4dp of air on each side.
+ * inset inside the card while a rule used to span the card's full width, so a line
+ * under or over a field ran edge to edge *past* the rounded corners of the box it
+ * is supposed to separate from, with 4dp of air on each side.
  *
- * Inset [DIVIDER_INSET] from each side rather than edge-to-edge: a full-bleed rule
- * is longer than the text it separates and reads as a second card border. The
- * inset matches the row's own horizontal padding, so the rule starts and stops
- * with the content above and below it. This is also what the history list uses
+ * It is the design system's row divider insetted for a leading mark, because a
+ * settings row always has one: [PiRow] starts its title one 24dp mark and a 16dp
+ * gap in from its own padding, so the rule has to begin under the text rather than
+ * under the icon. This is also what the history list uses
  * ([pi.kit.mob.ui.SessionsScreen]), so the two pages share one rule style.
  *
  * Still never beside a text field: a run of fields is separated by their own
@@ -426,22 +295,16 @@ private const val DISABLED_ALPHA = 0.38f
  */
 @Composable
 fun SettingsDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(horizontal = DIVIDER_INSET),
-        color = MaterialTheme.colorScheme.outlineVariant,
-        thickness = 1.dp,
-    )
+    PiRowDivider()
 }
-
-/** How far a [SettingsDivider] stops short of the card's edges — the row's own gutter. */
-private val DIVIDER_INSET = 16.dp
 
 /**
  * The scrolling body every settings page shares.
  *
  * A plain scrolling `Column` rather than a `LazyColumn`: these pages are tens of
  * rows, and a lazy list would only add nested-scroll problems to text fields
- * that need to scroll themselves.
+ * that need to scroll themselves. The 12dp gutter is the app's page inset, which
+ * is what puts a section's label and its rows on the same column.
  */
 @Composable
 fun SettingsBody(
@@ -452,7 +315,8 @@ fun SettingsBody(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+            .padding(PiPagePadding)
+            .padding(vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
         content = content,
     )
@@ -461,17 +325,19 @@ fun SettingsBody(
 /**
  * A paragraph of explanation, for the pages that need one.
  *
- * The one note voice in the settings: `bodySmall` in `onSurfaceVariant`, inset
- * 16dp horizontally so its text lines up with a [SettingsRow]'s title whether it
- * sits inside a card or directly on the page body. Call sites add no horizontal
- * padding of their own — that was the drift (4dp here, +12dp at half the call
- * sites, +16dp at two more), and it put the same sentence at three different
+ * The one note voice in the settings: `bodySmall` in `onSurfaceVariant`, inset so
+ * its text lines up with a [SettingsRow]'s title whether it sits inside a group or
+ * directly on the page body. That inset is [CONTENT_INSET] — the 24dp [PiRow]
+ * leaves between a group's frame and its own text — and call sites add no
+ * horizontal padding of their own, which was the drift (4dp here, +12dp at half
+ * the call sites, +16dp at two more) that put the same sentence at three different
  * left edges on one screen.
  *
  * [color] is for a note that is a *result* rather than an explanation — a save
  * that landed, a check that failed — so the status lines on the maintenance and
  * web-config pages can be this component instead of a bare `Text` with its own
- * padding.
+ * padding. There is no notice component to delegate to: the design system's
+ * `PiNotice` is a sentence in a container, and this is prose under a group.
  */
 @Composable
 fun SettingsNote(
@@ -483,53 +349,7 @@ fun SettingsNote(
         text = text,
         style = MaterialTheme.typography.bodySmall,
         color = color,
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = modifier.padding(horizontal = CONTENT_INSET, vertical = 4.dp),
     )
 }
 
-/**
- * One row whose only control is the switch in its trailing slot.
- *
- * The row is deliberately **not** clickable, and that is the whole reason this is
- * a component rather than three lines at each call site: a clickable row with a
- * switch in its trailing slot runs both the row's `onClick` and the switch's
- * `onCheckedChange` for one tap, so the control appears to do two things — or,
- * where the two cancel out, nothing at all. On the model page that was literally
- * the bug: the row that chose the answering model also carried the image switch,
- * so tapping the switch moved the selection as well. The switch is the target and
- * the row is inert, which is also how `StoragePage`'s folder rows work.
- *
- * A [value] is drawn in the value column before the switch — the web-access row
- * uses it for the extension's version — and is monospaced when it is a machine
- * string, the way the runtime and pi version rows are.
- *
- * [enabled] is false for a switch that must not be moved, and [subtitle] carries the
- * reason — a disabled row with only the normal caption reads as a rendering fault.
- * Nothing uses it today: the model page's image switch was the one caller, and it is
- * drawn for every model now, catalogued or not (`modelDefinitions` writes an override
- * for a model pi knows and a definition for one it does not, so there is no model the
- * declaration cannot reach). It is kept because the state is a real one for any future
- * control that has to be shown and explained before it can be used.
- */
-@Composable
-fun SettingsSwitchRow(
-    title: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-    value: String? = null,
-    icon: ImageVector? = null,
-    enabled: Boolean = true,
-) {
-    SettingsRow(
-        title = title,
-        subtitle = subtitle,
-        icon = icon,
-        value = value,
-        monospaceValue = value != null,
-        modifier = modifier,
-        enabled = enabled,
-        trailing = { Switch(checked = checked, onCheckedChange = onChange, enabled = enabled) },
-    )
-}

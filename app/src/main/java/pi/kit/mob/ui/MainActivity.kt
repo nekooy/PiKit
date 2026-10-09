@@ -16,7 +16,7 @@ import pi.kit.mob.data.ThemeMode
 import pi.kit.mob.data.applyLauncherIcon
 import pi.kit.mob.pi.PiAgentService
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.ui.theme.PiKitTheme
+import pi.kit.mob.ui.design.PiKitTheme
 
 class MainActivity : ComponentActivity() {
 

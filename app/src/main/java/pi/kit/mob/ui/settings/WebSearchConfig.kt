@@ -1,8 +1,6 @@
 package pi.kit.mob.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
@@ -11,13 +9,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,10 +23,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -48,6 +44,18 @@ import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.showPicker
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiRow
+import pi.kit.mob.ui.design.PiRowDivider
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiSheetActions
+import pi.kit.mob.ui.design.PiSheetTitle
+import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.design.PiTone
 
 /**
  * The "add an option" half of the search settings page.
@@ -60,11 +68,12 @@ import pi.kit.mob.ui.components.showPicker
  * user left in the box. It was honest and it was complete, and it asked the user to
  * write JSON to set one API key: know the key's exact name, know whether the value
  * wants quotes, keep the commas straight — on a phone keyboard, in a box about 46
- * columns wide. The report asked for the obvious alternative, and this is it.
+ * columns wide. What replaced it is the list of what is set plus one way to add a
+ * key, which is the shape this section has had since.
  *
  *  - **A list** of the file's keys that the controls above do not own. Read from
  *    the file, so a key this app has never heard of is still visible.
- *  - **One button**, which opens the extension's own documented options — the same
+ *  - **One row**, which opens the extension's own documented options — the same
  *    [WEB_ACCESS_PARAMS] list that used to be rendered as comments, each row
  *    carrying the description the file used to carry.
  *  - **A value sheet** whose shape follows the option's type: text is a string,
@@ -74,8 +83,8 @@ import pi.kit.mob.ui.components.showPicker
  * Nothing is lost by this: adding a key writes it into the same document, on top of
  * what is already in effect, and removing one touches nothing else. What *is* gone
  * is the ability to hand-edit the document — for a file that is not a JSON object
- * the editor is still shown ([WebSearchDocument] is its fallback), because that is
- * the one case where the structured controls cannot start.
+ * the editor is still shown ([WebSearchDocumentEditor] is its fallback), because
+ * that is the one case where the structured controls cannot start.
  *
  * ## Why the removal asks first
  *
@@ -88,25 +97,30 @@ import pi.kit.mob.ui.components.showPicker
  * ## The add row, in the storage page's shape
  *
  * Adding a key used to be a bare title with a chevron, and that is the one row on the
- * page whose shape did not match anything else: a chevron means "this opens a page",
+ * page whose shape did not match anything else: a chevron meant "this opens a page",
  * and a menu entry is not what this is. The storage page's add-a-folder has had the
  * right shape for the same job since it was written — icon, title, one line saying
- * what the control is for — so this is that row with this page's words in it. See
- * [WebSearchResetSection] for where the reset went.
+ * what the control is for — so this is that row with this page's words in it. The
+ * chevron is still there, because the design language changed what it means: `PiRow`
+ * draws one on every row that acts, which is how this row is told apart from the key
+ * rows above it, and the picker rows on the page's first group carry a badge where
+ * their own value goes instead.
  *
- * ## The card holds rows and nothing else, which is what makes the press feedback match
+ * ## The group holds rows and nothing else, which is what keeps the press feedback even
  *
- * The add row is the card's **last** row, the way the storage page's add-a-folder is,
- * and the text around it lives outside the card. That is not tidiness: `SettingsSection`
- * clips its contents to the card's rounded shape, so a row that is the card's last one
- * has a rounded ripple at its bottom edge and a row with anything under it — a note —
- * has a square one. Measured as the report: on this page the add row's press outline
- * changed after the first option was added, because the outcome note appeared *inside*
- * the card under it, while the storage page's add-a-folder never moved. The notes above
- * the row squared its top edge the same way, in every state — the storage page's card
- * holds no notes at all. So the explanation and the empty hint are [SettingsNote]s above
- * the section, the outcome is a [ConfigNote] below the card, and the card itself is the
- * list plus the one row that acts on it.
+ * The add row is the group's **last** row, the way the storage page's add-a-folder is,
+ * and the sentences around it live outside the group. That was originally forced by
+ * `SettingsSection` clipping its contents to the card's rounded shape: a row that was
+ * the card's last one had a rounded ripple at its bottom edge and a row with anything
+ * under it — a note — had a square one. Measured on this page: the add row's press
+ * outline changed after the first option was added, because the outcome note appeared
+ * *inside* the card under it, while the storage page's add-a-folder never moved. A
+ * group is a set of peer rows now and each row clips its own outline, so that
+ * particular failure cannot recur — but the notes still belong outside it, because a
+ * group is rows and a sentence is not one, and the acting row still belongs last. So
+ * the explanation and the empty hint are notices above the group, the outcome is a
+ * [ConfigNote] below it, and the group itself is the list plus the one row that acts
+ * on it.
  *
  * The hairline above the row exists only when the list has something in it: it
  * separates the list from the row, and a rule with one thing on each side of it is a
@@ -124,20 +138,24 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
     var outcome by remember { mutableStateOf<ConfigOutcome?>(null) }
     var pendingRemoval by remember { mutableStateOf<WebSearchEntry?>(null) }
 
-    // Outside the card, deliberately: see the note above on the press feedback.
-    SettingsNote(text.settings.searchConfigNote)
-    if (entries.isEmpty()) SettingsNote(text.settings.searchConfigEmpty)
+    // Outside the group, deliberately: see the note above on the press feedback.
+    PiNotice(text.settings.searchConfigNote, tone = PiTone.Neutral)
+    if (entries.isEmpty()) PiNotice(text.settings.searchConfigEmpty, tone = PiTone.Neutral)
 
-    SettingsSection(text.settings.searchConfig) {
+    PiSectionHeader(text.settings.searchConfig)
+    PiGroup {
         entries.forEachIndexed { index, entry ->
-            if (index > 0) SettingsDivider()
-            SettingsRow(
+            if (index > 0) PiRowDivider(inset = false)
+            PiRow(
                 title = entry.path,
-                // Monospace, and one line: this is a JSON value, and the row is a
-                // reminder of what is set rather than the place to read it — the
-                // value sheet is where a long one is edited.
+                // The value is shown on the row's own second line rather than in
+                // the trailing slot, and as JSON rather than as prose: the row is a
+                // reminder of what is set, and the value sheet is where a long one
+                // is edited. The second line is where a machine string belongs —
+                // `VALUE_DISPLAY_CHARS` of JSON in an unweighted trailing slot is
+                // the width the old value column was capped at 0.35 of the row to
+                // prevent it from taking.
                 subtitle = entry.value.display(),
-                monospace = true,
                 trailing = {
                     IconButton(onClick = { pendingRemoval = entry }) {
                         Icon(
@@ -149,13 +167,16 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
                 },
             )
         }
-        if (entries.isNotEmpty()) SettingsDivider()
+        if (entries.isNotEmpty()) PiRowDivider(inset = false)
 
-        // No chevron, and a caption: the same row the storage page adds a folder with.
-        SettingsRow(
+        // A caption, and the storage page's add-a-folder shape: icon, title, one
+        // line saying what the picker it opens is for. The chevron is `PiRow`'s own —
+        // it goes on every row that acts — and it is the one mark that tells this row
+        // apart from the key rows above it, which carry a ✕ and no chevron.
+        PiRow(
             title = text.settings.searchConfigAdd,
             subtitle = text.settings.searchConfigAddBody,
-            icon = Icons.Filled.Add,
+            leading = { Icon(Icons.Filled.Add, contentDescription = null) },
             onClick = {
                 outcome = null
                 val options = WEB_ACCESS_PARAMS
@@ -206,7 +227,7 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
         )
     }
 
-    // The result of the last action, under the card that holds the row that performed
+    // The result of the last action, under the group that holds the row that performed
     // it. It used to sit inside the card, between that row and the list, which put
     // "已保存，下次启动 Agent 时生效" on the wrong side of the button the reader had just
     // pressed — it read as a caption of the list rather than as the answer to the tap —
@@ -234,6 +255,10 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
             title = { Text(text.settings.searchConfigRemoveTitle) },
             text = { Text(text.settings.searchConfigRemoveBody(entry.path)) },
             confirmButton = {
+                // A `TextButton` and not a `PiButton`: the confirmation's own colour
+                // is the design's `error` role and `PiButton` has no colour of its
+                // own to give it. The dialog's two slots are Material's text-button
+                // slots, so nothing here is a control this app invented.
                 TextButton(
                     onClick = {
                         pendingRemoval = null
@@ -263,12 +288,13 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
  *
  * ## Why it is not one more row in the list above
  *
- * It was, and that was the report: the configuration section is "the keys in this
- * file, and how to add one", and a control that throws away *all of them* sitting at
- * the bottom of that list reads as one more entry in it. It is not an entry — it is
- * the only action on the page that touches keys it does not name — so it gets the
- * shape the storage page gives "take every permission back": its own labelled section,
- * below the one it acts on, with the destructive colour on its title.
+ * It was, and that is what was wrong with it: the configuration section is "the keys
+ * in this file, and how to add one", and a control that throws away *all of them*
+ * sitting at the bottom of that list reads as one more entry in it. It is not an
+ * entry — it is the only action on the page that touches keys it does not name — so
+ * it gets the shape the storage page gives "take every permission back": its own
+ * labelled section, below the one it acts on, with the destructive colour on its
+ * title.
  *
  * ## What it does, which is more than the list shows
  *
@@ -277,14 +303,14 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
  * keys back to PiKit's defaults *and* every key the list was showing — because that is
  * what "restore defaults" means and because a reset that left half the file alone
  * would be a reset the user has to audit. It is also the way out of a file the page
- * cannot parse at all ([WebSearchDocument]): it writes the default document without
- * ever needing to read the broken one, and the page then comes back editable.
+ * cannot parse at all ([WebSearchDocumentEditor]): it writes the default document
+ * without ever needing to read the broken one, and the page then comes back editable.
  *
  * The confirmation is here rather than in the section above because the question
- * belongs to the control that asks it, and the outcome note lands under the card the
- * same way the list's own notes do — **outside** it, because a note inside the card
- * under this row would square off that row's press ripple ([WebSearchConfigOptions]
- * has the measurement for the add row, and this row is the same shape).
+ * belongs to the control that asks it, and the outcome note lands under the group the
+ * same way the list's own notes do — **outside** it, because the group is its rows
+ * (see [WebSearchConfigOptions] for the measurement that settled that for the add row,
+ * which this row is the same shape as).
  */
 @Composable
 internal fun WebSearchResetSection(store: WebSearchStore) {
@@ -293,12 +319,22 @@ internal fun WebSearchResetSection(store: WebSearchStore) {
     var confirming by remember { mutableStateOf(false) }
     var outcome by remember { mutableStateOf<ResetOutcome?>(null) }
 
-    SettingsSection(text.settings.searchConfigRestore) {
-        SettingsRow(
+    PiSectionHeader(text.settings.searchConfigRestore)
+    PiGroup {
+        PiRow(
             title = text.settings.searchConfigRestore,
             subtitle = text.settings.searchConfigRestoreSubtitle,
-            icon = Icons.Filled.RestartAlt,
-            danger = true,
+            leading = {
+                Icon(
+                    Icons.Filled.RestartAlt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            // The title's own colour is the destructive one: a row that reports a
+            // thing that cannot be taken back is the one place the `error` role
+            // belongs on this page.
+            titleColor = MaterialTheme.colorScheme.error,
             onClick = {
                 outcome = null
                 confirming = true
@@ -379,26 +415,27 @@ private fun WebSearchValueSheet(
     var invalid by remember(param.path) { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        Text(
-            text = text.settings.searchConfigValueTitle(param.path),
-            style = MaterialTheme.typography.titleMedium,
-            // SemiBold, the weight `SheetScaffold` gives every sheet title.
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
+        // The option's own note is the sheet's subtitle rather than a paragraph
+        // under it: it says what the key is for, which is the question the reader
+        // arrived with, and it lines up with the title instead of a paragraph
+        // starting 4dp to its left.
+        PiSheetTitle(
+            title = text.settings.searchConfigValueTitle(param.path),
+            subtitle = param.note(language),
         )
-        Text(
-            text = param.note(language),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-        )
+        // The extension's own example, shown before the field rather than inside it:
+        // it is what a value of this option looks like, and it is not the value.
         Text(
             text = param.example,
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
         )
 
+        // A `PiTextField` cannot be used here: it offers no way to turn autocorrect
+        // off, and that is load-bearing for this field. The rest of it is what
+        // `PiTextField` draws — the app's field radius, and no container of its own —
+        // so the two are indistinguishable on screen.
         OutlinedTextField(
             value = draft,
             onValueChange = { next ->
@@ -414,6 +451,11 @@ private fun WebSearchValueSheet(
                 keyboardType = KeyboardType.Ascii,
                 autoCorrectEnabled = false,
             ),
+            shape = PiShapes.card,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 // 12/4, the inset every other value field uses (was 12/6).
@@ -424,22 +466,24 @@ private fun WebSearchValueSheet(
             text = text.settings.searchConfigValueNote,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
         )
 
         if (invalid) {
             ConfigNote(text.settings.searchConfigValueInvalid, MaterialTheme.colorScheme.error)
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedButton(onClick = host::dismiss) { Text(text.common.cancel) }
-            Button(
+        // The design's own action row: the dismiss first, then the one real action,
+        // which is the order the sheet already used.
+        PiSheetActions {
+            PiButton(
+                text = text.common.cancel,
+                onClick = host::dismiss,
+                kind = PiButtonKind.Outlined,
+                size = PiButtonSize.Small,
+            )
+            PiButton(
+                text = text.settings.searchConfigValueAdd,
                 onClick = {
                     val parsed = parseValue(param, draft)
                     if (parsed == null) {
@@ -449,9 +493,8 @@ private fun WebSearchValueSheet(
                         onAdd(parsed)
                     }
                 },
-            ) {
-                Text(text.settings.searchConfigValueAdd)
-            }
+                size = PiButtonSize.Small,
+            )
         }
     }
 }

@@ -2,16 +2,10 @@ package pi.kit.mob.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,9 +22,20 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.BackupStatus
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.ui.design.PiAppBarScroll
+import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPagePadding
+import pi.kit.mob.ui.design.PiRow
+import pi.kit.mob.ui.design.PiRowDivider
+import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiSwitchRow
+import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.design.PiNote
 
 /**
- * Backup & restore: the archive's contents, and the two buttons that move it.
+ * Backup & restore: the archive's contents, and the two directions that move it.
  *
  * ## Why this page is not the maintenance page
  *
@@ -45,13 +50,25 @@ import pi.kit.mob.pi.PiAgentSession
  *
  * ## What the page shows, and in which order
  *
- * The two directions are two cards, and each draws the state that belongs to it:
- * an export's "packing…" line appears under the export button and an import's
+ * The two directions are two labelled groups, and each draws the state that belongs
+ * to it: an export's "packing…" pill appears under the export button and an import's
  * under the import button, because one shared status line under both reads as
- * having done the wrong thing. The selection is the same eight switches both
+ * having done the wrong thing. The selection is the same six switches both
  * times, which is the point of the design: what was ticked on the way out is what
  * is offered on the way back in, and an archive that came from someone else shows
  * exactly what it carries rather than what the reader picked last time.
+ *
+ * The switches are `PiSwitchRow`, where the whole row toggles: picking what an
+ * archive holds is immediate and undoable, so a tap anywhere on the row is the
+ * right target. The storage page deliberately does the opposite with its folder
+ * rows, because each of those can raise a question before it moves.
+ *
+ * A restore is the one destructive thing here — it replaces the files of the names
+ * the archive carries, and what it replaced is not recoverable — so it is the one
+ * action whose wording sits in an error-toned notice. `PiButtonKind` is Material's
+ * five kinds and none of them is the error colour, so the frame is where that
+ * meaning has a home; the sentence itself is unchanged, because "it deletes
+ * nothing" is exactly what a reader needs before pressing it.
  *
  * ## The picker
  *
@@ -99,16 +116,35 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
     }
 
     val busy = status is BackupStatus.Running
+    val running = status as? BackupStatus.Running
+    // The pill's sentence, split by direction for the same reason the verdict is: a
+    // count of entries packed under the import button reads as an import that is
+    // somehow writing a file.
+    val exportWorking = running
+        ?.takeIf { it.kind == BackupStatus.Kind.EXPORT }
+        ?.let { text.settings.backupExportRunning(it.entries) }
+    val importWorking = running
+        ?.takeIf { it.kind == BackupStatus.Kind.IMPORT }
+        ?.let { text.settings.backupImportRunning(it.entries) }
 
-    Column(Modifier.fillMaxSize()) {
-        SettingsPageHeader(
-            title = text.settings.backupTitle,
-            subtitle = text.settings.backupSubtitle,
-            onBack = onBack,
-        )
-
-        SettingsBody {
-            SettingsSection(text.settings.backupExportSection) {
+    // The bar has no inset of its own: `PiScaffold` zeroes it, because where a
+    // page's top edge is is the page's business. Nothing above a settings page
+    // applies the status bar inset (the root pads the horizontal safe-drawing and
+    // the bottom only), so it is applied here.
+    PiScaffold(
+        title = text.settings.backupTitle,
+        subtitle = text.settings.backupSubtitle,
+        onBack = onBack,
+        scrollBehavior = PiAppBarScroll.Pinned,
+            ) { content ->
+        Column(
+            content
+                .verticalScroll(rememberScrollState())
+                .padding(PiPagePadding)
+                .padding(bottom = 32.dp),
+        ) {
+            PiSectionHeader(text.settings.backupExportSection)
+            PiGroup {
                 Categories(
                     offered = BackupCategory.entries.toSet(),
                     selected = selection,
@@ -117,52 +153,52 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                         selection = selection.toggle(category)
                     },
                 )
-                SettingsDivider()
-                SettingsSwitchRow(
+                PiRowDivider()
+                PiSwitchRow(
                     title = text.settings.backupApiKeys,
                     subtitle = text.settings.backupApiKeysSubtitle,
                     checked = includeKeys,
                     enabled = !busy,
-                    onChange = { includeKeys = it },
+                    onCheckedChange = { includeKeys = it },
                 )
-
-                ActionRow(
-                    label = text.settings.backupExport,
-                    enabled = !busy && selection.isNotEmpty(),
-                    onClick = {
-                        suggested = BackupArchive.suggestedName()
-                        createArchive.launch(suggested)
-                    },
-                    onDismiss = if (status.isExportOutcome()) manager::dismiss else null,
-                    dismissLabel = text.settings.dismiss,
-                )
-                StatusLine(status = status, kind = BackupStatus.Kind.EXPORT)
-                if (selection.isEmpty()) {
-                    SettingsNote(
-                        text.settings.backupNothingSelected
-                    )
-                }
+            }
+            RunActions(
+                label = text.settings.backupExport,
+                onAction = {
+                    suggested = BackupArchive.suggestedName()
+                    createArchive.launch(suggested)
+                },
+                dismissLabel = text.settings.dismiss,
+                enabled = !busy && selection.isNotEmpty(),
+                onDismiss = if (status.isExportOutcome()) manager::dismiss else null,
+                working = exportWorking,
+            )
+            StatusLine(status = status, kind = BackupStatus.Kind.EXPORT)
+            if (selection.isEmpty()) {
+                PiNotice(text = text.settings.backupNothingSelected, tone = PiTone.Neutral)
             }
 
-            SettingsSection(text.settings.backupImportSection) {
-                val pending = review
-                if (pending == null) {
-                    ActionRow(
-                        label = text.settings.backupImport,
-                        enabled = !busy,
-                        onClick = { pickArchive.launch(arrayOf("*/*")) },
-                        onDismiss = if (status.isImportOutcome()) manager::dismiss else null,
-                        dismissLabel = text.settings.dismiss,
-                    )
-                    StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
-                } else {
-                    val available = pending.manifest.included
-                    // Re-seeded whenever a different archive is read, so the ticks
-                    // are the archive's contents rather than the last import's
-                    // choices.
-                    var chosen by remember(pending) { mutableStateOf(available) }
+            PiSectionHeader(text.settings.backupImportSection)
+            val pending = review
+            if (pending == null) {
+                RunActions(
+                    label = text.settings.backupImport,
+                    onAction = { pickArchive.launch(arrayOf("*/*")) },
+                    dismissLabel = text.settings.dismiss,
+                    enabled = !busy,
+                    onDismiss = if (status.isImportOutcome()) manager::dismiss else null,
+                    working = importWorking,
+                )
+                StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
+            } else {
+                val available = pending.manifest.included
+                // Re-seeded whenever a different archive is read, so the ticks
+                // are the archive's contents rather than the last import's
+                // choices.
+                var chosen by remember(pending) { mutableStateOf(available) }
 
-                    SettingsRow(
+                PiGroup {
+                    PiRow(
                         title = text.settings.backupReviewTitle,
                         subtitle = text.settings.backupReviewFrom(
                             version = pending.manifest.app,
@@ -172,25 +208,23 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                             date = pending.manifest.createdAt.take(ISO_DATE_LENGTH),
                         ),
                     )
-                    if (available.isEmpty()) {
-                        SettingsDivider()
-                        SettingsNote(
-                            text.settings.backupReviewEmpty
-                        )
-                    } else {
-                        SettingsDivider()
+                    // Nothing tickable when the archive carries nothing: the note
+                    // below says why, and the title row stays so the reader still
+                    // sees which archive was read.
+                    if (available.isNotEmpty()) {
+                        PiRowDivider()
                         Categories(
                             offered = available,
                             selected = chosen,
                             enabled = !busy,
                             onToggle = { category -> chosen = chosen.toggle(category) },
                         )
-                        SettingsDivider()
+                        PiRowDivider()
                         // What the archive carries, said plainly: whether a key is
                         // in it is not something the reader can see from the file
                         // name, and it is the one fact that decides whether this
                         // archive may be passed on.
-                        SettingsRow(
+                        PiRow(
                             title = if (pending.manifest.apiKeys) {
                                 text.settings.backupReviewKeys
                             } else {
@@ -198,34 +232,39 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                             },
                         )
                     }
-
-                    ActionRow(
-                        label = text.settings.backupImportConfirm,
-                        enabled = !busy && chosen.isNotEmpty(),
-                        onClick = { manager.restore(chosen) },
-                        onDismiss = if (busy) null else manager::cancelReview,
-                        dismissLabel = text.common.cancel,
-                    )
-                    StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
-                    SettingsNote(
-                        text.settings.backupImportNote
-                    )
                 }
+                if (available.isEmpty()) {
+                    PiNote(text.settings.backupReviewEmpty)
+                }
+
+                // The destructive half, in the error role: the wording says what a
+                // restore does *and* what it does not, and the button that acts on it
+                // is the next thing below.
+                PiNotice(text = text.settings.backupImportNote, tone = PiTone.Danger)
+                RunActions(
+                    label = text.settings.backupImportConfirm,
+                    onAction = { manager.restore(chosen) },
+                    dismissLabel = text.common.cancel,
+                    enabled = !busy && chosen.isNotEmpty(),
+                    onDismiss = if (busy) null else manager::cancelReview,
+                    working = importWorking,
+                )
+                StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
             }
 
-            SettingsNote(text.settings.backupNote)
+            PiNote(text.settings.backupNote)
         }
     }
 }
 
 /**
- * The eight switches, drawn from the enum rather than written out.
+ * The six switches, drawn from the enum rather than written out.
  *
- * Both cards draw the same list and the difference is only [offered], so a ninth
- * category is one entry in [BackupCategory], one pair of strings and no change
- * here. The alternative — two hand-written runs of eight switches — is two lists
- * to keep in step with the enum, which is how a category comes to be exportable
- * and not restorable.
+ * Both directions draw the same list and the difference is only [offered], so a
+ * seventh category is one entry in [BackupCategory], one pair of strings and no
+ * change here. The alternative — two hand-written runs of six switches — is two
+ * lists to keep in step with the enum, which is how a category comes to be
+ * exportable and not restorable.
  */
 @Composable
 private fun Categories(
@@ -237,105 +276,61 @@ private fun Categories(
     val text = strings
     val shown = BackupCategory.entries.filter { it in offered }
     shown.forEachIndexed { index, category ->
-        if (index > 0) SettingsDivider()
+        if (index > 0) PiRowDivider()
         val (title, subtitle) = category.label(text)
-        SettingsSwitchRow(
+        PiSwitchRow(
             title = title,
             subtitle = subtitle,
             checked = category in selected,
             enabled = enabled,
-            onChange = { onToggle(category) },
+            onCheckedChange = { onToggle(category) },
         )
     }
 }
 
 /**
- * A button and, beside it, the action that clears the outcome it produced.
- *
- * The pair is the maintenance page's shape — a `Button` to run, a `TextButton` to
- * dismiss — because the two pages ask the reader to press the same kind of thing.
- */
-@Composable
-private fun ActionRow(
-    label: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    onDismiss: (() -> Unit)?,
-    dismissLabel: String,
-) {
-    Row(
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Button(onClick = onClick, enabled = enabled) { Text(label) }
-        if (onDismiss != null) {
-            // Outlined, not a bare TextButton: the secondary beside a primary in
-            // every action row carries the same edge the primary does, so the two
-            // read as a pair rather than as a button and a link.
-            OutlinedButton(onClick = onDismiss) { Text(dismissLabel) }
-        }
-    }
-}
-
-/**
- * The line under a card's buttons, for the half of the status that card owns.
+ * What a run left behind, in the direction that owns it.
  *
  * Split by direction rather than shown under both: an export's progress under the
  * import button reads as an import that is somehow packing a file, and the one
- * status value both halves read from is exactly why this takes a [kind].
+ * status value both halves read from is exactly why this takes a [kind]. The
+ * *running* case is deliberately absent — that is the coral pill beside the button
+ * — and `NotAnArchive` is an import outcome only: it is the answer to reading a
+ * picked file, and it used to appear under the export button's own status line as
+ * well, which is the same confusion in the other direction.
  */
 @Composable
 private fun StatusLine(status: BackupStatus, kind: BackupStatus.Kind) {
     val text = strings
-    val tone: Tone
-    val message: String
-
     when (status) {
-        BackupStatus.Idle -> return
-        BackupStatus.NotAnArchive -> {
-            message = text.settings.backupNotAnArchive
-            tone = Tone.ERROR
+        BackupStatus.Idle -> Unit
+
+        BackupStatus.NotAnArchive -> if (kind == BackupStatus.Kind.IMPORT) {
+            PiNotice(text = text.settings.backupNotAnArchive, tone = PiTone.Danger)
         }
 
-        is BackupStatus.Failed -> {
-            if (status.kind != kind) return
-            message = text.settings.backupFailed(status.message)
-            tone = Tone.ERROR
+        is BackupStatus.Failed -> if (status.kind == kind) {
+            PiNotice(text = text.settings.backupFailed(status.message), tone = PiTone.Danger)
         }
 
-        is BackupStatus.Running -> {
-            if (status.kind != kind) return
-            message = when (kind) {
-                BackupStatus.Kind.EXPORT -> text.settings.backupExportRunning(status.entries)
-                BackupStatus.Kind.IMPORT -> text.settings.backupImportRunning(status.entries)
-            }
-            tone = Tone.PROGRESS
+        // The pill, above the button that started it.
+        is BackupStatus.Running -> Unit
+
+        is BackupStatus.Exported -> if (kind == BackupStatus.Kind.EXPORT) {
+            PiNotice(
+                text = text.settings.backupExportDone(status.name, status.entries),
+                tone = PiTone.Accent,
+            )
         }
 
-        is BackupStatus.Exported -> {
-            if (kind != BackupStatus.Kind.EXPORT) return
-            message = text.settings.backupExportDone(status.name, status.entries)
-            tone = Tone.OK
-        }
-
-        is BackupStatus.Imported -> {
-            if (kind != BackupStatus.Kind.IMPORT) return
-            message = text.settings.backupImportDone(status.entries)
-            tone = Tone.OK
+        is BackupStatus.Imported -> if (kind == BackupStatus.Kind.IMPORT) {
+            PiNotice(
+                text = text.settings.backupImportDone(status.entries),
+                tone = PiTone.Accent,
+            )
         }
     }
-
-    SettingsNote(
-        text = message,
-        color = when (tone) {
-            Tone.OK -> MaterialTheme.colorScheme.primary
-            Tone.ERROR -> MaterialTheme.colorScheme.error
-            Tone.PROGRESS -> MaterialTheme.colorScheme.onSurfaceVariant
-        },
-    )
 }
-
-private enum class Tone { PROGRESS, OK, ERROR }
 
 /** One category's row: what it is, and what is inside it. */
 private fun BackupCategory.label(text: Strings): Pair<String, String> = when (this) {

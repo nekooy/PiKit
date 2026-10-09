@@ -1,15 +1,11 @@
 package pi.kit.mob.ui.settings
 
 import android.util.Log
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -25,8 +21,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -35,13 +29,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -52,9 +42,23 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.PICKER_ROW_MIN_HEIGHT
-import pi.kit.mob.ui.components.ReadOnlyBody
 import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.design.PiAppBarScroll
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPagePadding
+import pi.kit.mob.ui.design.PiRow
+import pi.kit.mob.ui.design.PiRowDivider
+import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiSheetList
+import pi.kit.mob.ui.design.PiSheetRow
+import pi.kit.mob.ui.design.PiSheetTitle
+import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.design.PiNote
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -95,6 +99,19 @@ import kotlinx.coroutines.withContext
  *    terminal app — but it is framed for what it is: a prerequisite, not the
  *    decision. What the agent can reach is decided here.
  *
+ * ## The page is the first of three layers, and it says so
+ *
+ * ARCHITECTURE §5 puts three independent layers between this agent and the user's
+ * files, and each one alone has a hole. This page is the first: the scoped grant
+ * below, which decides what is offered and what is permitted (see the section under
+ * this one). The second is not on this page at all —
+ * `env/SafeDelete.kt` is the only place in the app allowed to remove a directory
+ * tree, it refuses any path outside `filesDir`, and it deletes a symlink as a
+ * link rather than following it, which is what stops a link into shared storage
+ * being walked *through*. That layer is why "revoking never deletes anything" is
+ * a promise the page can keep, and why nothing here has to warn about a mis-tap.
+ * The third is the tool-call guard at the bottom of the page.
+ *
  * ## What the switches do and do not enforce
  *
  * They decide what PiKit *offers* the agent (`~/storage/<name>`, created only for the
@@ -105,6 +122,23 @@ import kotlinx.coroutines.withContext
  * so no filesystem-level switch could be honest about it. `pi-safety-guard.ts`
  * carries the details, and the page's copy says "PiKit refuses", not "Android
  * hides", for the same reason.
+ *
+ * ## How the page is drawn
+ *
+ * Labelled groups by subject — what the agent may reach, the folders, the folders
+ * the user added, taking it all back, and the guard — rather than six cards of one
+ * row each. The switch rows put the switch in the row's trailing slot and leave
+ * the row itself inert, which is deliberate: each of these switches can raise a
+ * confirmation or restart the agent, so the tap has to be aimed at the control
+ * rather than at the sentence beside it. `PiRow`'s own `enabled` dims the label and
+ * the path of a row that cannot be moved, which is the by-hand 0.38 alpha the
+ * folder rows used to apply.
+ *
+ * The one destructive row — taking every grant back — carries the error role, and
+ * so does every question this page asks whose answer cannot be taken back from
+ * here. The role lives on the notice around the wording rather than on the button:
+ * `PiButtonKind` is Material's five kinds and none of them is the error colour, so
+ * the frame is where that meaning has a home.
  */
 @Composable
 fun StoragePage(
@@ -208,66 +242,79 @@ fun StoragePage(
             // dismisses the sheet on tap (it is a menu), and stepping through a
             // directory tree is not a menu — the panel would animate away and back
             // on every step. These rows navigate, and only "use this folder" closes.
-            ReadOnlyBody(title = text.settings.storageCustomPickTitle) {
-                item(key = "use") {
-                    PickerRow(
-                        label = text.settings.storageCustomPickUse,
-                        description = StorageAccess.displayPathOf(directory.absolutePath),
-                        leading = Icons.Filled.Check,
-                        onClick = {
-                            val chosen = directory.absolutePath
-                            pickerDir = null
-                            sheets.dismiss()
-                            askToGrant(StorageAccess.displayPathOf(chosen)) {
-                                apply(policy.plus(chosen))
-                            }
-                        },
-                    )
-                }
-                if (root != null && directory.absolutePath != root.absolutePath) {
-                    item(key = "up") {
-                        PickerRow(
-                            label = text.settings.storageCustomPickUp,
-                            description = StorageAccess.displayPathOf(
-                                directory.parentFile?.absolutePath ?: directory.absolutePath,
-                            ),
-                            leading = Icons.AutoMirrored.Filled.ArrowBack,
-                            onClick = { pickerDir = directory.parentFile },
+            //
+            // `PiSheetRow` is the design system's row for this panel, and its own
+            // 56dp floor is what the picker's rows needed: they used to be 44dp, under
+            // the 48dp a target wants and 8dp shorter than the two navigation rows
+            // beside them, so every plain folder in the tree was the small row in its
+            // own list.
+            Column {
+                PiSheetTitle(text.settings.storageCustomPickTitle)
+                PiSheetList {
+                    item(key = "use") {
+                        PiSheetRow(
+                            label = text.settings.storageCustomPickUse,
+                            subtitle = StorageAccess.displayPathOf(directory.absolutePath),
+                            leading = { Icon(Icons.Filled.Check, contentDescription = null) },
+                            onClick = {
+                                val chosen = directory.absolutePath
+                                pickerDir = null
+                                sheets.dismiss()
+                                askToGrant(StorageAccess.displayPathOf(chosen)) {
+                                    apply(policy.plus(chosen))
+                                }
+                            },
                         )
                     }
-                }
-                items(children, key = { it.absolutePath }) { child ->
-                    PickerRow(
-                        label = child.name,
-                        description = null,
-                        leading = Icons.Filled.Folder,
-                        onClick = { pickerDir = child },
-                    )
+                    if (root != null && directory.absolutePath != root.absolutePath) {
+                        item(key = "up") {
+                            PiSheetRow(
+                                label = text.settings.storageCustomPickUp,
+                                subtitle = StorageAccess.displayPathOf(
+                                    directory.parentFile?.absolutePath ?: directory.absolutePath,
+                                ),
+                                leading = {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                },
+                                onClick = { pickerDir = directory.parentFile },
+                            )
+                        }
+                    }
+                    items(children, key = { it.absolutePath }) { child ->
+                        PiSheetRow(
+                            label = child.name,
+                            leading = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                            onClick = { pickerDir = child },
+                        )
+                    }
                 }
             }
         })
     }
 
-    Column(Modifier.fillMaxSize()) {
-        SettingsPageHeader(
-            title = text.settings.storagePageTitle,
-            subtitle = text.settings.storagePageSubtitle,
-            onBack = onBack,
-        )
+    PiScaffold(
+        title = text.settings.storagePageTitle,
+        subtitle = text.settings.storagePageSubtitle,
+        onBack = onBack,
+        scrollBehavior = PiAppBarScroll.Pinned,
+    ) { content ->
+        Column(
+            content
+                .verticalScroll(rememberScrollState())
+                .padding(PiPagePadding)
+                .padding(bottom = 32.dp),
+        ) {
+            AccessSection(
+                text = text,
+                policy = policy,
+                granted = granted,
+                onOpenSettings = { showGrantPrompt = true },
+            )
 
-        SettingsBody {
-            AccessLevelCard(text, policy, granted)
-
-            if (!granted) {
-                GrantCard(
-                    text = text,
-                    onOpenSettings = { showGrantPrompt = true },
-                )
-            }
-
-            SettingsSection(text.settings.storageFolders) {
+            PiSectionHeader(text.settings.storageFolders)
+            PiGroup {
                 StorageAccess.Root.entries.forEachIndexed { index, root ->
-                    if (index > 0) SettingsDivider()
+                    if (index > 0) PiRowDivider()
                     // While the whole tree is on, a sub-folder's switch changes
                     // nothing: it is already reachable through `shared`. Disabled
                     // and shown as included rather than left tappable. The predicate
@@ -275,46 +322,103 @@ fun StoragePage(
                     // applies — the two disagreed once, and the farm named
                     // `/sdcard/Download` twice for it.
                     val subsumed = policy.isSubsumed(root)
-                    FolderRow(
-                        label = folderLabel(text, root),
-                        path = StorageAccess.displayTargetOf(root),
-                        checked = subsumed || root in policy.roots,
+                    // The subtitle is the *real* directory — `/sdcard/DCIM` — and not the
+                    // link's name inside the environment (`~/storage/dcim`). The mismatch
+                    // is the point of the row: a user looking for the folder they
+                    // recognise in a file manager needs the spelling the file manager
+                    // uses, and `StorageAccess.displayTargetOf` is the one place that
+                    // decides it. Both names are in the manual — the link is lower case
+                    // because `termux-setup-storage` created it that way for years and
+                    // scripts type it.
+                    //
+                    // The label no longer carries the directory name: the Camera row read
+                    // "Camera (DCIM)", so the folder name appeared twice, once in the label
+                    // and once in the path under it. The path is the honest place for it,
+                    // and `storageFolderDcim` is "Camera" now.
+                    PiRow(
+                        title = folderLabel(text, root),
+                        subtitle = StorageAccess.displayTargetOf(root),
+                        leading = {
+                            Icon(
+                                Icons.Filled.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                        // The switch is the target and the row is inert: every one of
+                        // these can raise a question or restart the agent, and a row
+                        // that toggles on a tap aimed at its own text is a grant asked
+                        // for by accident.
+                        trailing = {
+                            Switch(
+                                checked = subsumed || root in policy.roots,
+                                enabled = granted && !subsumed,
+                                onCheckedChange = { wanted ->
+                                    if (wanted) {
+                                        askToGrant(folderLabel(text, root)) {
+                                            apply(policy.toggled(root, true))
+                                        }
+                                    } else {
+                                        apply(policy.toggled(root, false))
+                                    }
+                                },
+                            )
+                        },
                         enabled = granted && !subsumed,
-                        onToggle = { wanted ->
-                            if (wanted) {
-                                askToGrant(folderLabel(text, root)) {
-                                    apply(policy.toggled(root, true))
-                                }
-                            } else {
-                                apply(policy.toggled(root, false))
+                    )
+                }
+            }
+
+            // The page's one alert, and only while the policy is unrestricted — the
+            // one root that means *everything on the phone*. Every row used to carry
+            // a warning, and a page where every row is an alert is a page where no
+            // alert is read; a folder that is switched off cannot lose anything
+            // either. A fresh install, which has an empty policy, is correctly
+            // warning-free.
+            if (policy.isUnrestricted) {
+                PiNotice(text = text.settings.storageBroadWarning, tone = PiTone.Danger)
+            }
+
+            PiSectionHeader(text.settings.storageCustomSection)
+            PiGroup {
+                policy.custom.sorted().forEachIndexed { index, path ->
+                    if (index > 0) PiRowDivider()
+                    PiRow(
+                        title = path.substringAfterLast('/').ifEmpty { path },
+                        subtitle = StorageAccess.displayPathOf(path),
+                        leading = {
+                            Icon(
+                                Icons.Filled.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                        trailing = {
+                            IconButton(onClick = { pendingRemove = path }) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = text.settings.storageCustomRemove,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         },
                     )
                 }
-            }
-
-            if (policy.isUnrestricted) {
-                SettingsNote(text.settings.storageBroadWarning)
-            }
-
-            SettingsSection(text.settings.storageCustomSection) {
-                policy.custom.sorted().forEachIndexed { index, path ->
-                    if (index > 0) SettingsDivider()
-                    CustomFolderRow(
-                        path = path,
-                        removeLabel = text.settings.storageCustomRemove,
-                        onRemove = { pendingRemove = path },
-                    )
-                }
-                if (policy.custom.isNotEmpty()) SettingsDivider()
-                SettingsRow(
+                if (policy.custom.isNotEmpty()) PiRowDivider()
+                PiRow(
                     title = text.settings.storageCustomAdd,
                     subtitle = if (policy.isUnrestricted) {
                         text.settings.storageCustomSubsumed
                     } else {
                         text.settings.storageCustomAddBody
                     },
-                    icon = Icons.Filled.CreateNewFolder,
+                    leading = {
+                        Icon(
+                            Icons.Filled.CreateNewFolder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
                     enabled = granted && !policy.isUnrestricted,
                     onClick = {
                         if (!granted) {
@@ -327,186 +431,181 @@ fun StoragePage(
             }
 
             if (!policy.isEmpty) {
-                SettingsSection(text.settings.storageRevokeAll) {
-                    SettingsRow(
+                PiSectionHeader(text.settings.storageRevokeAll)
+                PiGroup {
+                    PiRow(
                         title = text.settings.storageRevokeAll,
                         subtitle = text.settings.storageRevokeAllSubtitle,
-                        icon = Icons.Filled.DeleteForever,
-                        danger = true,
+                        leading = {
+                            Icon(
+                                Icons.Filled.DeleteForever,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        // Revoking every grant drops the symlink farm and every folder
+                        // the agent could reach, and the user has to grant them again one
+                        // by one. `NONE` is not a smaller version of a grant — it is the
+                        // destructive direction of the same switch — so the row carries
+                        // the error role the way the other destructive controls here do.
+                        titleColor = MaterialTheme.colorScheme.error,
                         onClick = { confirmRevoke = true },
                     )
                 }
             }
 
-            // Last, and in its own section, because it is the one control on this page
+            // Last, and in its own group, because it is the one control on this page
             // that is not a folder: the switches above decide what the agent may
             // *reach*, and this one decides whether anything checks what it does with
             // it. `SafetyGuard` has the whole argument — the enforcement of those
             // switches runs inside this extension, which is why turning it off is a
             // question rather than a tap.
-            SettingsSection(text.settings.storageGuardSection) {
-                SettingsSwitchRow(
+            PiSectionHeader(text.settings.storageGuardSection)
+            PiGroup {
+                PiRow(
                     title = text.settings.storageGuardTitle,
                     subtitle = if (guardInstalled) {
                         text.settings.storageGuardSubtitle
                     } else {
                         text.settings.storageGuardMissing
                     },
-                    icon = Icons.Filled.Security,
-                    checked = guardInstalled && settings.safetyExtension,
-                    // A runtime image built before the guard existed has nothing to
-                    // switch: a switch that reports a state it cannot change is worse
-                    // than one that is visibly inert and says why.
-                    enabled = guardInstalled,
-                    onChange = { wanted ->
-                        if (wanted) {
-                            session.setSafetyExtension(true)
-                        } else {
-                            confirmDisableGuard = true
-                        }
+                    leading = {
+                        Icon(
+                            Icons.Filled.Security,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     },
+                    trailing = {
+                        Switch(
+                            checked = guardInstalled && settings.safetyExtension,
+                            // A runtime image built before the guard existed has nothing
+                            // to switch: a switch that reports a state it cannot change is
+                            // worse than one that is visibly inert and says why.
+                            enabled = guardInstalled,
+                            onCheckedChange = { wanted ->
+                                if (wanted) {
+                                    session.setSafetyExtension(true)
+                                } else {
+                                    confirmDisableGuard = true
+                                }
+                            },
+                        )
+                    },
+                    enabled = guardInstalled,
                 )
             }
-            SettingsNote(text.settings.storageGuardNote)
+            PiNote(text.settings.storageGuardNote)
         }
     }
 
-    val confirm = confirmGrant
-    if (pendingGrant != null && confirm != null) {
+    val answer = confirmGrant
+    if (pendingGrant != null && answer != null) {
         val name = pendingGrant
-        AlertDialog(
-            onDismissRequest = {
+        ConfirmDialog(
+            title = text.settings.storageConfirmGrantTitle,
+            body = text.settings.storageConfirmGrantBody(name.orEmpty()),
+            confirmLabel = text.common.confirm,
+            icon = Icons.Filled.SdCard,
+            onConfirm = {
+                answer()
                 pendingGrant = null
                 confirmGrant = null
             },
-            icon = { Icon(Icons.Filled.SdCard, contentDescription = null) },
-            title = { Text(text.settings.storageConfirmGrantTitle) },
-            text = { Text(text.settings.storageConfirmGrantBody(name.orEmpty())) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirm()
-                        pendingGrant = null
-                        confirmGrant = null
-                    },
-                ) { Text(text.common.confirm) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                        pendingGrant = null
-                        confirmGrant = null
-                    },
-                ) { Text(text.common.cancel) }
+            onDismissRequest = {
+                pendingGrant = null
+                confirmGrant = null
             },
         )
     }
 
     if (confirmRevoke) {
-        AlertDialog(
+        ConfirmDialog(
+            title = text.settings.storageRevokeAllTitle,
+            body = text.settings.storageRevokeAllBody,
+            confirmLabel = text.common.confirm,
+            destructive = true,
+            onConfirm = {
+                apply(StorageAccess.Policy.NONE)
+                confirmRevoke = false
+            },
             onDismissRequest = { confirmRevoke = false },
-            title = { Text(text.settings.storageRevokeAllTitle) },
-            text = { Text(text.settings.storageRevokeAllBody) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        apply(StorageAccess.Policy.NONE)
-                        confirmRevoke = false
-                    },
-                ) {
-                    // Red: revoking every grant drops the symlink farm and every folder
-                    // the agent could reach, and the user has to grant them again one by
-                    // one. `NONE` is not a smaller version of a grant — it is the
-                    // destructive direction of the same switch.
-                    Text(text.common.confirm, color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmRevoke = false }) { Text(text.common.cancel) }
-            },
         )
     }
 
     if (pendingRemove != null) {
         val path = pendingRemove
-        AlertDialog(
+        ConfirmDialog(
+            title = text.settings.storageCustomRemoveTitle,
+            body = text.settings.storageCustomRemoveBody(path.orEmpty()),
+            confirmLabel = text.settings.storageCustomRemove,
+            destructive = true,
+            onConfirm = {
+                apply(policy.minus(path.orEmpty()))
+                pendingRemove = null
+            },
             onDismissRequest = { pendingRemove = null },
-            title = { Text(text.settings.storageCustomRemoveTitle) },
-            text = { Text(text.settings.storageCustomRemoveBody(path.orEmpty())) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        apply(policy.minus(path.orEmpty()))
-                        pendingRemove = null
-                    },
-                ) {
-                    Text(
-                        text.settings.storageCustomRemove,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemove = null }) { Text(text.common.cancel) }
-            },
         )
     }
 
     if (showGrantPrompt) {
-        AlertDialog(
+        ConfirmDialog(
+            title = text.settings.storageGrantPromptTitle,
+            body = text.settings.storageGrantPromptBody,
+            confirmLabel = text.settings.storageGrantPromptConfirm,
+            icon = Icons.Filled.SdCard,
+            onConfirm = {
+                showGrantPrompt = false
+                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
+                    .onFailure { Log.w(TAG, "No all-files-access page on this device", it) }
+            },
             onDismissRequest = { showGrantPrompt = false },
-            title = { Text(text.settings.storageGrantPromptTitle) },
-            text = { Text(text.settings.storageGrantPromptBody) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showGrantPrompt = false
-                        runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
-                            .onFailure { Log.w(TAG, "No all-files-access page on this device", it) }
-                    },
-                ) { Text(text.settings.storageGrantPromptConfirm) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showGrantPrompt = false }) { Text(text.common.cancel) }
-            },
         )
     }
 
     if (confirmDisableGuard) {
-        AlertDialog(
+        ConfirmDialog(
+            title = text.settings.storageGuardOffTitle,
+            body = text.settings.storageGuardOffBody,
+            confirmLabel = text.settings.storageGuardOffConfirm,
+            icon = Icons.Filled.Security,
+            destructive = true,
+            onConfirm = {
+                confirmDisableGuard = false
+                session.setSafetyExtension(false)
+            },
             onDismissRequest = { confirmDisableGuard = false },
-            icon = { Icon(Icons.Filled.Security, contentDescription = null) },
-            title = { Text(text.settings.storageGuardOffTitle) },
-            text = { Text(text.settings.storageGuardOffBody) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDisableGuard = false
-                        session.setSafetyExtension(false)
-                    },
-                ) {
-                    // Red, like every other control in this app whose effect is the
-                    // destructive direction of the switch it belongs to.
-                    Text(
-                        text.settings.storageGuardOffConfirm,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDisableGuard = false }) { Text(text.common.cancel) }
-            },
         )
     }
 }
 
 /**
- * The one-line summary: none, some folders, or everything.
+ * The one-line summary: none, some folders, or everything, and the way to the
+ * Android page when there is no grant yet.
  *
- * Stated rather than implied, because it is the answer to "what can the agent
- * see right now?" and the switch list below is long enough to be misread.
+ * Stated rather than implied, because it is the answer to "what can the agent see
+ * right now?" and the switch list below is long enough to be misread — and the
+ * permission row is in the *same* group, because it is not a second access level:
+ * without the grant none of the switches can move, so the two belong on one frame
+ * with the action that resolves it.
+ *
+ * The permission that row leads to is an **app-op**, not the manifest permission:
+ * `appops get --uid pi.kit.mob MANAGE_EXTERNAL_STORAGE` reads `allow` on an app that
+ * `dumpsys package` reports as `granted=false, flags=[USER_SET]`, and it survives
+ * `pm clear` and a reinstall. `StorageAccess.isGranted()` asks the platform for it
+ * (`Environment.isExternalStorageManager()`) rather than reading the permission flag,
+ * because that is what decides whether the mount is readable — so a "fresh" install
+ * can be genuinely already granted and is then not asked, and
+ * `appops set --uid … deny` is the only thing that makes a clean first launch
+ * measurable.
  */
 @Composable
-private fun AccessLevelCard(text: Strings, policy: StorageAccess.Policy, granted: Boolean) {
+private fun AccessSection(
+    text: Strings,
+    policy: StorageAccess.Policy,
+    granted: Boolean,
+    onOpenSettings: () -> Unit,
+) {
     val level = when {
         !granted || policy.isEmpty -> text.settings.storageLevelNone
         policy.isUnrestricted -> text.settings.storageLevelAll
@@ -520,189 +619,103 @@ private fun AccessLevelCard(text: Strings, policy: StorageAccess.Policy, granted
         else -> grantedPaths.joinToString(", ")
     }
 
-    SettingsSection(text.settings.storageAccessLevel) {
-        SettingsRow(
+    PiSectionHeader(text.settings.storageAccessLevel)
+    PiGroup {
+        PiRow(
             title = level,
             subtitle = detail,
-            icon = Icons.Filled.SdCard,
-            monospace = false,
-        )
-    }
-    if (policy.isEmpty || !granted) {
-        SettingsNote(text.settings.storageNoAccessBody)
-    }
-}
-
-@Composable
-private fun GrantCard(text: Strings, onOpenSettings: () -> Unit) {
-    SettingsSection(text.settings.storageGrantPromptTitle) {
-        SettingsRow(
-            title = text.settings.storageGrant,
-            subtitle = text.settings.storageMissing,
-            icon = Icons.Filled.SdCard,
-            showChevron = true,
-            onClick = onOpenSettings,
-        )
-    }
-    SettingsNote(text.settings.storageNote)
-}
-
-/**
- * One folder, and whether the agent may reach it.
- *
- * ## Why the row shows the real directory and not the link
- *
- * The subtitle used to be `~/storage/dcim`, which is the name of the *symlink*
- * inside the environment. The real directory on the device is `/sdcard/DCIM`, and
- * the mismatch is the point of the row: a user looking for the folder they
- * recognise in a file manager needs to see the spelling the file manager uses.
- * Both names are shown in the manual — the link is lower case because
- * `termux-setup-storage` created it that way for years and scripts type it.
- *
- * ## Why the label no longer carries the directory name
- *
- * The Camera row read "Camera (DCIM)" so that the folder name appeared twice, once
- * in the label and once in the path under it. The path is the honest place for it
- * and the parenthetical was noise; `storageFolderDcim` is "Camera" now.
- */
-@Composable
-private fun FolderRow(
-    label: String,
-    path: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Folder,
-            contentDescription = null,
-            tint = if (enabled) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = DISABLED_ALPHA)
-            },
-        )
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
-                },
-                // Two lines, the budget `SettingsRow` gives a title: a long
-                // folder name wraps rather than being cut mid-glyph.
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = path,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                    alpha = if (enabled) 1f else DISABLED_ALPHA,
-                ),
-            )
-        }
-        Switch(
-            checked = checked,
-            enabled = enabled,
-            onCheckedChange = onToggle,
-        )
-    }
-}
-
-/**
- * One row of the folder picker.
- *
- * Not [ReadOnlySheetRow]: that one dismisses the sheet as part of the tap, which
- * is right for a menu and wrong for a tree — picking a subdirectory has to keep the
- * panel open and move its contents. The leading glyph is what tells the three kinds
- * apart: a tick for "use this folder", a back arrow for going up, a folder for
- * going in.
- */
-@Composable
-private fun PickerRow(
-    label: String,
-    description: String?,
-    leading: ImageVector,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            // The same floor as `PickerSheetRow`, which is what the row below claims
-            // and did not have: 10dp above and below a one-line label is 44dp, under
-            // the 48dp a target needs and 8dp shorter than the two navigation rows
-            // beside it — so every plain folder in the tree was the small row in its
-            // own list.
-            .heightIn(min = PICKER_ROW_MIN_HEIGHT)
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
-            // 12h/10v and a 12dp gap, the same geometry as `PickerSheetRow`: both
-            // are tappable rows in the app's one modal layer, and this one was
-            // 12v/14gap against 10v/12gap there.
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-        Icon(
-            imageVector = leading,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyLarge,
-                // Two lines, like every other row's primary text. Uncapped, a
-                // folder name long enough to wrap set the height of every row
-                // around it — this list is a tree of directories, and a name with
-                // no spaces in it wraps wherever the width runs out.
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!description.isNullOrBlank()) {
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-/** One folder the user added, with the one action it has: take it back. */
-@Composable
-private fun CustomFolderRow(
-    path: String,
-    removeLabel: String,
-    onRemove: () -> Unit,
-) {
-    SettingsRow(
-        title = path.substringAfterLast('/').ifEmpty { path },
-        subtitle = StorageAccess.displayPathOf(path),
-        icon = Icons.Filled.Folder,
-        trailing = {
-            IconButton(onClick = onRemove) {
+            leading = {
                 Icon(
-                    Icons.Filled.Close,
-                    contentDescription = removeLabel,
+                    Icons.Filled.SdCard,
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
+            },
+        )
+        if (!granted) {
+            PiRowDivider()
+            PiRow(
+                title = text.settings.storageGrant,
+                subtitle = text.settings.storageMissing,
+                leading = {
+                    Icon(
+                        Icons.Filled.SdCard,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                onClick = onOpenSettings,
+            )
+        }
+    }
+    if (!granted) {
+        // Stated under the group rather than only in the row: with the grant missing
+        // the row's own line is the *blocker* (`storageMissing`), so what the agent
+        // can reach is what is left to say — and the switch list below is long enough
+        // to be misread. A fact about what the reader is looking at rather than a
+        // failure: the agent is confined to its own home, which is a working state,
+        // so the tone is neutral rather than the error role.
+        PiNotice(text = text.settings.storageNoAccessBody, tone = PiTone.Neutral)
+        PiNote(text.settings.storageNote)
+    }
+}
+
+/**
+ * One question, in the app's one confirmation shape: a title, the sentence that
+ * says what the answer does, and the two buttons.
+ *
+ * [destructive] is the error role, and it is the *frame* rather than the button:
+ * `PiButtonKind` is Material's five kinds and the error colour is not one of them,
+ * so a confirmation that cannot be taken back from this page is marked by the
+ * notice its wording sits in. The wording itself is the caller's, unchanged — the
+ * sentence explaining what a restore or a revoke does *not* do is the reason the
+ * question is asked at all.
+ */
+@Composable
+private fun ConfirmDialog(
+    title: String,
+    body: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismissRequest: () -> Unit,
+    icon: ImageVector? = null,
+    destructive: Boolean = false,
+) {
+    val text = strings
+    val mark = icon
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = if (mark != null) {
+            { Icon(mark, contentDescription = null) }
+        } else {
+            null
+        },
+        title = { Text(title) },
+        text = {
+            PiNotice(
+                text = body,
+                tone = if (destructive) PiTone.Danger else PiTone.Neutral,
+            )
+        },
+        confirmButton = {
+            PiButton(
+                text = confirmLabel,
+                onClick = onConfirm,
+                kind = PiButtonKind.Filled,
+                size = PiButtonSize.Small,
+            )
+        },
+        dismissButton = {
+            PiButton(
+                text = text.common.cancel,
+                onClick = onDismissRequest,
+                kind = PiButtonKind.Text,
+                size = PiButtonSize.Small,
+            )
         },
     )
 }
+
 
 private fun folderLabel(text: Strings, root: StorageAccess.Root): String = when (root) {
     StorageAccess.Root.Shared -> text.settings.storageFolderShared
@@ -713,8 +726,5 @@ private fun folderLabel(text: Strings, root: StorageAccess.Root): String = when 
     StorageAccess.Root.Music -> text.settings.storageFolderMusic
     StorageAccess.Root.Movies -> text.settings.storageFolderMovies
 }
-
-/** Material3's disabled content alpha, for a row whose switch does nothing. */
-private const val DISABLED_ALPHA = 0.38f
 
 private const val TAG = "PiKit"

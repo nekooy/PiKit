@@ -37,6 +37,9 @@ internal object EnglishStrings : Strings {
         override val extrasNotes = "Image notes"
         override val extrasOpen = "Show attachment details"
         override val placeholder = "Ask Pi…"
+        override val emptyIntro =
+            "Ask Pi a question, or start a line with ! to run it " +
+                "in the on-device environment."
         override val placeholderAttachment = "Add a message for these images…"
         override val send = "Send"
         override val stop = "Stop"
@@ -194,9 +197,10 @@ internal object EnglishStrings : Strings {
         override val cancelSelection = "Cancel selection"
         override val recent = "Recent"
         override val back = "Back"
-        override val empty =
-            "No saved conversations yet.\nA conversation is written to disk once pi replies."
+        override val emptyHeading = "No saved conversations yet"
+        override val empty = "A conversation is written to disk once pi replies."
         override fun nothingMatches(query: String) = "Nothing matches \u201c$query\u201d."
+        override val searchEmptyNote = "Search reads every message of every saved conversation."
         override val pinned = "Pinned"
         override val actions = "Conversation actions"
         override val rename = "Rename"
@@ -276,6 +280,10 @@ internal object EnglishStrings : Strings {
         override val openWith = "Open with"
         override val notAFile = "Not a file"
         override val empty = "This folder is empty"
+        override val emptyBody =
+            "Empty, or a folder this app may not read — either way there is nothing to list."
+        override val folder = "Folder"
+        override val file = "File"
         override fun tooLarge(size: String) =
             "File is $size; preview is limited to 64 KB.\nOpen it from the terminal instead."
         override fun binary(size: String) = "Binary file ($size)"
@@ -496,6 +504,7 @@ internal object EnglishStrings : Strings {
         override val provider = "Provider"
         override val providerSubtitle = "Choose the provider this profile is for"
         override val providerPickSearch = "Search providers"
+        override val modelPickSearch = "Search models"
         override fun keyPassedAs(envVar: String) = "Env var $envVar"
         override val notChosen = "Not chosen"
         override val apiKey = "API key"
@@ -1035,6 +1044,7 @@ internal object EnglishStrings : Strings {
         override val back = "Back"
         override val confirm = "Confirm"
         override val retry = "Retry"
+        override val clear = "Clear"
     }
 }
 
