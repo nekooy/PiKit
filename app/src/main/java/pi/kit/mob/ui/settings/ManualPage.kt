@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,15 +48,19 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.ui.MarkdownText
-import pi.kit.mob.ui.design.PiAppBarScroll
-import pi.kit.mob.ui.design.PiCard
+import pi.kit.mob.ui.design.PiButton
+import pi.kit.mob.ui.design.PiButtonKind
+import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiLoading
+import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiScaffold
 import pi.kit.mob.ui.design.PiSectionHeader
+import pi.kit.mob.ui.design.PiTone
 import pi.kit.mob.ui.design.PiValueRow
 import pi.kit.mob.ui.design.PiNote
 
@@ -74,10 +80,12 @@ import pi.kit.mob.ui.design.PiNote
  *  * **Kept, from this page:** the app's version and package id, pi's version and its
  *    entry point inside `$PREFIX`, and the tool list — one row, with the missing ones
  *    marked, rather than one row per tool.
- *  * **Kept, from the environment page:** the revision stamped into the unpacked image,
- *    and the three paths (`$PREFIX`, `$HOME`, the app's own files directory) with the
- *    note that a package installed there is relocated to that prefix. These are the
- *    facts a bug report is read against that had no other home.
+ *  * **Kept, from the environment page:** the bootstrap tag and version the environment
+ *    was unpacked from, and the three paths (`$PREFIX`, `$HOME`, the app's own files
+ *    directory) with the note that a package installed there is relocated to that
+ *    prefix. These are the facts a bug report is read against that had no other home.
+ *    The image's own revision digest was a fifth, and it is gone: it moves only when
+ *    the bootstrap beside it does, so it was a second row for one fact.
  *  * **Dropped:** the runtime's *live* state and the agent's process state. Both are
  *    already on screen where they matter — the root gates the whole interface on the
  *    runtime being ready, and the Agent page is where the process is started, stopped
@@ -122,17 +130,20 @@ internal fun AboutPage(
     // launch would show a release that may have been superseded. Reopening the page
     // resets the row to its idle state, which is one tap from an answer again.
     var updateState by remember { mutableStateOf<UpdateRow>(UpdateRow.Idle) }
+    // The reason a failed check reported, held until the reader dismisses it. Null is
+    // "no dialog"; the row keeps its own one-word status either way.
+    var updateError by remember { mutableStateOf<String?>(null) }
 
     PiScaffold(
         title = text.settings.aboutTitle,
         subtitle = "PiKit ${BuildConfig.VERSION_NAME}",
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Pinned,
     ) { modifier ->
         Column(
             modifier
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding),
+                .padding(PiPagePadding)
+                .padding(top = 8.dp, bottom = PiPageBottom),
         ) {
             PiSectionHeader(text.settings.application)
             PiGroup {
@@ -204,11 +215,14 @@ internal fun AboutPage(
                                 )
                                 // The chevron is drawn here because `PiRow` draws its
                                 // own only when the trailing slot is empty, and this
-                                // row reports a value *and* acts.
+                                // row reports a value *and* acts. 20dp, the box
+                                // `PiRow` gives its own — the two are the same mark and
+                                // the report was that they measured differently.
                                 Icon(
                                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp),
                                 )
                             }
                         }
@@ -225,19 +239,34 @@ internal fun AboutPage(
                                 openReleasePage(context, answered.pageUrl)
                             } else {
                                 updateState = UpdateRow.Checking
-                                scope.launch { updateState = checkForUpdates() }
+                                scope.launch {
+                                    val outcome = checkForUpdates()
+                                    updateState = outcome
+                                    // A failed check raises the app's dialog with the
+                                    // reason: the row's own line is a one-word status,
+                                    // and "Update failed" with no reason is a report
+                                    // the reader cannot act on. The dialog is the
+                                    // settings pages' default for an operation that
+                                    // errors — the storage page's own confirmations
+                                    // are the same shape — and it is dismissed.
+                                    if (outcome is UpdateRow.Failed) updateError = outcome.reason
+                                }
                             }
                         }
                     },
                 )
             }
-            // The failure's reason, in full, outside the row: a note can wrap
-            // without changing the height of anything above or below it. The
-            // only note under this section — the standing paragraph that used
-            // to sit here explained the check in three sentences and was the
-            // page's second thing to read after the row it described.
-            (updateState as? UpdateRow.Failed)?.let { failed ->
-                PiNote(text.settings.failedWith(failed.reason))
+
+            // The failure, in the app's one dialog shape rather than a note under the
+            // section: a check that failed is an *event* — the reader asked for it and
+            // it came back wrong — so it is announced and dismissed, not left as a
+            // paragraph that has to be found again by scrolling.
+            updateError?.let { reason ->
+                PiErrorDialog(
+                    title = text.settings.checkForUpdates,
+                    body = text.settings.failedWith(reason),
+                    onDismiss = { updateError = null },
+                )
             }
 
             PiSectionHeader(text.settings.environment)
@@ -251,26 +280,22 @@ internal fun AboutPage(
                     value = BundledImage.termuxVersion(context),
                 )
                 PiRowDivider()
-                PiValueRow(
-                    title = text.settings.installedImage,
-                    subtitle = text.settings.installedImageSubtitle,
-                    leading = { RowMark(Icons.Filled.Memory) },
-                    // A revision is 23 characters of hex and digits: it reads back
-                    // wrong in proportional type, and it is the string §9.2 capped the
-                    // value column for. Both are why this row wants a monospace face
-                    // and two lines — see this page's note on the machine strings.
-                    value = env.installedRevision ?: text.settings.notInstalled,
-                )
-                PiRowDivider()
-                // The two rows about what the image *carries*, directly under the
-                // revision that names it. They were in the application section, and
+                // The rows about what the image *carries*, directly under the
+                // environment that names it. They were in the application section, and
                 // that was the wrong drawer: pi and `rg`/`fd` are not parts of this
                 // app — they live inside `$PREFIX`, they arrive with the unpacked
-                // image, and the row above says which image that is. Read together
-                // the three answer one question ("what runtime is this and what is in
-                // it"); split across two cards they answered two half-questions, and
+                // image, and the row above says which environment that is. Read
+                // together they answer one question ("what runtime is this and what is
+                // in it"); split across two cards they answered two half-questions, and
                 // pi's version sat under "PiKit 0.2.1" as though the two came from the
                 // same place.
+                //
+                // The image's own revision row stood here and is gone: it was a digest
+                // of the image builder's inputs (`x86_64-974c4c37820b7790`), which
+                // changes exactly when the bootstrap above it does, and the bootstrap's
+                // tag and version are what a reader can act on. §3 is the chapter it
+                // was read against, and that reading is the builder's job, not a
+                // phone's.
                 PiValueRow(
                     title = text.settings.bundledPi,
                     // 74 characters of path. It measured 699 px on one line and
@@ -308,30 +333,52 @@ internal fun AboutPage(
                     leading = { RowMark(Icons.Filled.Folder) },
                 )
             }
-            PiNote(text.settings.runtimePrefixNote)
 
-            // Prose blocks, each in a `PiCard` rather than a group: this is one
-            // subject with a body of its own, which is what a card is for (§13), and
-            // the two are read rather than acted on, so nothing in them is a row.
+            // Prose, and *not* in a container: a card around a paragraph of licence
+            // text drew a box whose only content was the sentence, which is the one
+            // kind of surface §13 reserves for a control or a subject with a body.
+            // The reader's report — "许可证和致谢两项的内容文字都去掉背景色，更简洁" — is that
+            // the background was doing nothing the heading above it does not. `PiNote`
+            // is the design system's own in-page paragraph: the same 24dp column and
+            // `bodySmall` voice the text had, without the frame.
             PiSectionHeader(text.notes.licenceTitle)
-            PiCard {
-                Text(
-                    text = text.notes.licence,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            PiNote(text.notes.licence)
 
             PiSectionHeader(text.notes.creditsTitle)
-            PiCard {
-                Text(
-                    text = text.notes.credits,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            PiNote(text.notes.credits)
         }
     }
+}
+
+/**
+ * A failure, announced and then dismissed.
+ *
+ * The settings pages' one dialog for an operation that came back wrong: a title
+ * naming what was asked for, the failure's own sentence in the error role, and a
+ * single "OK". Both of the app's dialog buttons are the same plain text
+ * (`PiButtonKind.Text`), so this is a title, a sentence and one word with nothing
+ * to draw the eye but the colour.
+ */
+@Composable
+private fun PiErrorDialog(
+    title: String,
+    body: String,
+    onDismiss: () -> Unit,
+) {
+    val text = strings
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { PiNotice(text = body, tone = PiTone.Danger) },
+        confirmButton = {
+            PiButton(
+                text = text.common.ok,
+                onClick = onDismiss,
+                kind = PiButtonKind.Text,
+                size = PiButtonSize.Small,
+            )
+        },
+    )
 }
 
 /**
@@ -452,7 +499,6 @@ internal fun ManualPage(onBack: () -> Unit) {
         title = text.manual.title,
         subtitle = text.manual.subtitle,
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Collapsing,
     ) { modifier ->
         Column(modifier.verticalScroll(rememberScrollState())) {
             MarkdownText(
@@ -460,7 +506,10 @@ internal fun ManualPage(onBack: () -> Unit) {
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .widthIn(max = MANUAL_MEASURE)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    // The bottom inset is the page's own gap above the navigation bar:
+                    // a manual's last line set against the bar reads as a page that
+                    // was cut rather than as one that ended.
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = PiPageBottom),
             )
         }
     }

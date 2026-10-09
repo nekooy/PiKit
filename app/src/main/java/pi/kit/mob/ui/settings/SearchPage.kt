@@ -27,10 +27,9 @@ import pi.kit.mob.pi.WebSearchStore
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.showPicker
-import pi.kit.mob.ui.design.PiAppBarScroll
-import pi.kit.mob.ui.design.PiBadge
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
@@ -136,30 +135,23 @@ internal fun SearchPage(
         onBack = onBack,
         // Pinned rather than collapsing: the body is the point on this page, and a
         // one-line bar gives the rows back their height.
-        scrollBehavior = PiAppBarScroll.Pinned,
     ) { body ->
         Column(
             modifier = body
                 .verticalScroll(rememberScrollState())
                 .padding(PiPagePadding)
-                .padding(vertical = 12.dp),
+                .padding(top = 8.dp, bottom = PiPageBottom),
             // `PiGap`'s own rhythm: a group and the heading over it are 20dp apart
             // from the heading's own top padding, so this only has to be the step
             // between two sections.
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // First, before anything the user could mistake for a requirement.
-            PiNotice(text.settings.searchFreeNote, tone = PiTone.Neutral)
-
             if (extension == null) {
                 // Nothing interactive at all: there is no file for these controls
                 // to be about.
                 PiNotice(text.settings.searchNotBundled, tone = PiTone.Danger)
                 return@Column
             }
-            // The extension's version, read as a plain string: it is the badge on the
-            // group's heading below, and it cannot change while the page is open.
-            val version = extension.version
 
             if (unreadable) {
                 // The six keys below are hidden rather than merely refused: the
@@ -167,14 +159,12 @@ internal fun SearchPage(
                 // of them would be a control that appears to work and does not.
                 PiNotice(text.settings.searchConfigUnreadable, tone = PiTone.Danger)
             } else {
-                // The extension's version rides the group's own heading, which is
-                // where a fact about the whole extension belongs: it is the one
-                // thing about it that is otherwise a terminal away, and the switch
-                // row underneath it has no second line to spare for a number.
-                PiSectionHeader(
-                    text = text.settings.webAccess,
-                    trailing = { PiBadge(text = version) },
-                )
+                // The extension's version used to ride this heading as a trailing
+                // number. It is gone: it is a fact about the bundled image rather
+                // than about anything the reader does here, it is not translated,
+                // and a version the reader cannot act on was noise on the one line
+                // whose whole job is to name the group.
+                PiSectionHeader(text = text.settings.webAccess)
                 PiGroup {
                     // One switch over the extension's five keys. It is a real
                     // master: off takes the search, source-check, fetch and
@@ -302,10 +292,6 @@ internal fun SearchPage(
             // also the way out of a file nothing can parse. See [WebSearchResetSection].
             WebSearchResetSection(store = store)
 
-            // Last, because it qualifies everything above it: the extension
-            // registers its tools when pi starts, so none of these takes effect
-            // until the agent has been restarted.
-            PiNotice(text.settings.searchRestartNote, tone = PiTone.Neutral)
         }
     }
 }
@@ -317,14 +303,14 @@ internal fun SearchPage(
  * more often than it is changed, so the current value is what the row is for and the
  * list is one tap behind it.
  *
- * The value is a [PiBadge] in the trailing slot rather than plain text, and that is
- * the one place this row and the design's own [PiRow] disagree: `PiRow` draws a
- * chevron itself only when nothing is in the trailing slot, because a dense list
- * wants one mark per row — but a picker needs both facts on one line, *what is
- * chosen* and *that tapping opens a list*. The pill is the app's action voice, so a
- * row whose end is a badge reads as the control it is, and it is the same treatment
- * `PiSliderRow` gives its value. A `PiPickerRow` in the design package would be the
- * missing piece; this is what stands in until one exists.
+ * The value is the row's own plain `value` slot and the chevron is [PiRow]'s, which
+ * is exactly the shape every other picker in the app has — the language row on the
+ * settings root is the same control (`PickerRow`). It used to end in a [PiBadge]
+ * instead, on the theory that "what is chosen" and "that tapping opens a list" are
+ * two facts that need two marks; the pill turned out to read as a *state* — a chip
+ * that looks like it can be tapped to change something in place — where the row
+ * itself is the target, and it made these two rows the only pickers in the app that
+ * did not look like the others.
  *
  * The sheet itself is the app's existing one (`SheetHost.showPicker`), because the
  * modal layer, its filter field and its dismissal are not this page's to restyle.
@@ -345,7 +331,7 @@ private fun OptionPickerRow(
         title = title,
         subtitle = subtitle,
         leading = leading,
-        trailing = { PiBadge(text = value, tone = PiTone.Accent) },
+        value = value,
         onClick = { host.showPicker(title, options, selectedId, onPick, footnote) },
     )
 }

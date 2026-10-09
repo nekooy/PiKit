@@ -30,14 +30,14 @@ of everything under `docs/`.
 | 7.4 | [The terminal's key bar](architecture/07.4-terminal-keys.md) | Uniform keys, an arrow pad, and the word that toggles |
 | 8 | [Restoring a conversation](architecture/08-restoring-a-conversation.md) | How a reopened conversation gets its turns, durations and folding back |
 | 9.1 | [Pages, and which moves are one](architecture/09.1-pages-and-moves.md) | Back behaviour, the flattened settings root, and what is a page and what is not |
-| 9.2 | [The settings pages, and the furniture of a page](architecture/09.2-settings-pages.md) | The app bar the band became, dividers, the row that acts, the shape a list and its rows share, forms that ask before leaving, the text-size slider, and the choices that are rows |
+| 9.2 | [The settings pages, and the furniture of a page](architecture/09.2-settings-pages.md) | The header the band became, dividers, the row that acts, the shape a list and its rows share, forms that ask before leaving, the text-size slider, the accent swatches, and the choices that are rows |
 | 9.3 | [The web-access and maintenance pages](architecture/09.3-web-access-and-maintenance.md) | The six keys PiKit owns of the extension's hundred, the document that is not the file, and the three repair runs that are now one shape |
 | 10 | [Process and state ownership](architecture/10-process-and-state.md) | Who owns the agent process, the session and the saved state, what a backup carries, and why a restore has to re-read everything |
 | 11 | [Vendored code](architecture/11-vendored-code.md) | The two Termux modules, why only those two, and their licence |
 | 12.1 | [What the model writes](architecture/12.1-markdown-and-math.md) | The Markdown half: what the parser accepts, the inline walk, and the test that could not catch a bug |
 | 12.2 | [Mathematics](architecture/12.2-mathematics.md) | Why the renderer is a library, how a formula's line box is built, and every measurement that chose it |
 | 12.3 | [Tables, display formulas, and the marks](architecture/12.3-display-and-marks.md) | Table layout, display formulas as paragraphs, the glyphs that were chosen, and the colour one action carries |
-| 13 | [The design language](architecture/13-design-language.md) | Material 3 Expressive as the rule for what a page may look like: the palette, the two shape voices, the springs, the component inventory, and why the dependency was raised for it |
+| 13 | [The design language](architecture/13-design-language.md) | Material 3 Expressive as the rule for what a page may look like: the palette and the accent the user chooses, the two shape voices, which buttons are outlined and how an action row ends, the dismiss a sheet does without, where a note goes, the springs, the component inventory, and why the dependency was raised for it |
 
 ## How to read it
 

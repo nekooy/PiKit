@@ -8,7 +8,6 @@ import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.rememberedThinkingLevels
 import pi.kit.mob.locales.Lang
 import pi.kit.mob.locales.stringsFor
-import pi.kit.mob.ui.components.thinkingLevelFootnote
 import pi.kit.mob.ui.components.thinkingLevelOptions
 
 /**
@@ -141,22 +140,4 @@ class ThinkingLevelTest {
         }
     }
 
-    @Test
-    fun `the footnote explains a short list, and the single-level case is its own sentence`() {
-        val chinese = stringsFor(Lang.CHINESE)
-
-        // All seven, or nothing known: nothing to explain.
-        assertNull(thinkingLevelFootnote(chinese, null))
-        assertNull(thinkingLevelFootnote(chinese, emptyList()))
-        assertNull(thinkingLevelFootnote(chinese, PiLaunchOptions.THINKING_LEVELS))
-        assertNull(thinkingLevelFootnote(chinese, PiLaunchOptions.THINKING_LEVELS + "ultra"))
-
-        // A model with fewer levels: the note names them, in pi's own words.
-        val note = thinkingLevelFootnote(chinese, deepseekFlash)
-        assertEquals("当前模型只有这些等级：off, low, high, max。模型没有的等级，pi 会自动往上取最接近的一档。", note)
-
-        // And a model that does not reason at all is not "a model with one level":
-        // pi's own answer for it is `["off"]`, and there is nothing to choose.
-        assertEquals(chinese.chat.thinkingDisabled, thinkingLevelFootnote(chinese, listOf("off")))
-    }
 }

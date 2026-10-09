@@ -459,8 +459,16 @@ enum class FontSize(val code: String, val scale: Float) {
     }
 }
 
-/** Immutable snapshot of user configuration. */data class PiSettings(
-    val provider: PiProvider? = null,
+/**
+ * The agent avatar's built-in word, drawn when [PiSettings.aiAvatarLabel] is blank.
+ *
+ * Written once because two screens read it — the personalization page's preview and
+ * the transcript's cards — and a second spelling of the same mark in two files is how
+ * one of them comes to show something the other does not.
+ */
+const val AI_AVATAR_DEFAULT_LABEL = "PI"
+
+/** Immutable snapshot of user configuration. */data class PiSettings(    val provider: PiProvider? = null,
     val modelId: String = "",
     val apiKey: String = "",
     /**
@@ -520,6 +528,16 @@ enum class FontSize(val code: String, val scale: Float) {
     /** Interface theme. Persisted here because it is not part of a profile. */
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
     /**
+     * The accent every action, selection and section name is drawn in.
+     *
+     * Persisted for the same reason as [themeMode] and applied the same way: read
+     * where the theme is assembled (`MainActivity`), so choosing one re-themes the
+     * page that was just tapped rather than the next launch. The *lightness* of every
+     * role and the error pair do not move with it; the hue of the whole scheme does,
+     * neutrals included — see `ThemeColor` and `PiColor.accentScheme`.
+     */
+    val themeColor: ThemeColor = ThemeColor.DEFAULT,
+    /**
      * The interface's text size. Persisted here for the same reason [themeMode] is:
      * it is not part of a profile, and it applies to the app rather than to a launch.
      *
@@ -546,6 +564,31 @@ enum class FontSize(val code: String, val scale: Float) {
      * default, and the switch that turns it off asks first — see the storage page.
      */
     val safetyExtension: Boolean = true,
+    /**
+     * Whether the transcript draws an avatar over each message.
+     *
+     * On by default: a question and its answer are told apart by their side and by
+     * the card's fill, and the avatar over each is a *name* for the two speakers —
+     * the agent and the reader — rather than a second cue for the side. Off removes
+     * both and leaves the transcript as it was before the names existed.
+     */
+    val showAvatars: Boolean = true,
+    /**
+     * The agent's avatar: a short label, and the colour of its circle.
+     *
+     * A label rather than an image: PiKit has no photo picker, and a file-backed
+     * avatar would be one more thing for a backup to carry and a restore to put back.
+     * Blank means the built-in word — `"PI"` — so a fresh install shows that without
+     * this field having to hold it.
+     */
+    val aiAvatarLabel: String = "",
+    val aiAvatarColor: ThemeColor = ThemeColor.INDIGO,
+    /**
+     * The reader's avatar, the same pair. A blank label is the person silhouette
+     * rather than a word, so the two speakers never fall back to the same mark.
+     */
+    val userAvatarLabel: String = "",
+    val userAvatarColor: ThemeColor = ThemeColor.TEAL,
 ) {
     /**
      * Whether the agent can actually be started with this.
@@ -682,11 +725,17 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            themeColor = ThemeColor.fromCode(prefs.getString(KEY_THEME_COLOR, null)),
             fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
+            showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
+            aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
+            aiAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
+            userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
+            userAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         ),
     )
 
@@ -758,9 +807,15 @@ class SettingsStore(context: Context) {
             .putString(KEY_LANGUAGE, next.language.code)
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
             .putString(KEY_THEME, next.themeMode.code)
+            .putString(KEY_THEME_COLOR, next.themeColor.code)
             .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
             .putBoolean(KEY_SAFETY, next.safetyExtension)
+            .putBoolean(KEY_SHOW_AVATARS, next.showAvatars)
+            .putString(KEY_AI_AVATAR_LABEL, next.aiAvatarLabel)
+            .putString(KEY_AI_AVATAR_COLOR, next.aiAvatarColor.code)
+            .putString(KEY_USER_AVATAR_LABEL, next.userAvatarLabel)
+            .putString(KEY_USER_AVATAR_COLOR, next.userAvatarColor.code)
             .apply()
         // The model fields are read back from the active profile rather than
         // taken from `next`, which keeps one source of truth for them.
@@ -772,9 +827,15 @@ class SettingsStore(context: Context) {
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
+            themeColor = next.themeColor,
             fontSize = next.fontSize,
             launcherIcon = next.launcherIcon,
             safetyExtension = next.safetyExtension,
+            showAvatars = next.showAvatars,
+            aiAvatarLabel = next.aiAvatarLabel,
+            aiAvatarColor = next.aiAvatarColor,
+            userAvatarLabel = next.userAvatarLabel,
+            userAvatarColor = next.userAvatarColor,
         )
         return resolved
     }
@@ -808,9 +869,15 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            themeColor = ThemeColor.fromCode(prefs.getString(KEY_THEME_COLOR, null)),
             fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
+            showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
+            aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
+            aiAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
+            userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
+            userAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         )
     }
 
@@ -827,9 +894,15 @@ class SettingsStore(context: Context) {
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
+        themeColor: ThemeColor = current.get().themeColor,
         fontSize: FontSize = current.get().fontSize,
         launcherIcon: LauncherIcon = current.get().launcherIcon,
         safetyExtension: Boolean = current.get().safetyExtension,
+        showAvatars: Boolean = current.get().showAvatars,
+        aiAvatarLabel: String = current.get().aiAvatarLabel,
+        aiAvatarColor: ThemeColor = current.get().aiAvatarColor,
+        userAvatarLabel: String = current.get().userAvatarLabel,
+        userAvatarColor: ThemeColor = current.get().userAvatarColor,
     ): PiSettings {
         val next = current.updateAndGet {
             it.copy(
@@ -844,9 +917,15 @@ class SettingsStore(context: Context) {
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
+                themeColor = themeColor,
                 fontSize = fontSize,
                 launcherIcon = launcherIcon,
                 safetyExtension = safetyExtension,
+                showAvatars = showAvatars,
+                aiAvatarLabel = aiAvatarLabel,
+                aiAvatarColor = aiAvatarColor,
+                userAvatarLabel = userAvatarLabel,
+                userAvatarColor = userAvatarColor,
             )
         }
         _settings.value = next
@@ -897,6 +976,9 @@ class SettingsStore(context: Context) {
         /** [ThemeMode.code]; absent means [ThemeMode.DEFAULT]. */
         private const val KEY_THEME = "theme_mode"
 
+        /** [ThemeColor.code]; absent means [ThemeColor.DEFAULT] — blue. */
+        private const val KEY_THEME_COLOR = "theme_color"
+
         /** [FontSize.code]; absent means [FontSize.DEFAULT] — the fourth of seven. */
         private const val KEY_FONT_SIZE = "font_size"
 
@@ -905,6 +987,15 @@ class SettingsStore(context: Context) {
 
         /** True unless the user switched the tool-call guard off; see [PiSettings]. */
         private const val KEY_SAFETY = "safety_extension"
+
+        /** True unless the user switched the transcript's avatars off; see [PiSettings]. */
+        private const val KEY_SHOW_AVATARS = "show_avatars"
+
+        /** The two avatars' labels (blank = the built-in mark) and their colours. */
+        private const val KEY_AI_AVATAR_LABEL = "ai_avatar_label"
+        private const val KEY_AI_AVATAR_COLOR = "ai_avatar_color"
+        private const val KEY_USER_AVATAR_LABEL = "user_avatar_label"
+        private const val KEY_USER_AVATAR_COLOR = "user_avatar_color"
 
         /**
          * The remembered level list, comma-separated.

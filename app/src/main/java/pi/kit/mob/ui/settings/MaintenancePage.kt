@@ -19,11 +19,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.env.PrefixPatcher
@@ -33,21 +35,22 @@ import pi.kit.mob.pi.CatalogueStatus
 import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.StorageSelfTest
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiLoading
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
+import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiScaffold
 import pi.kit.mob.ui.design.PiSectionHeader
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiTone
 import pi.kit.mob.ui.design.PiValueRow
-import pi.kit.mob.ui.design.PiWorkingPill
-import pi.kit.mob.ui.design.PiNote
+import pi.kit.mob.ui.design.PiStatePill
 
 /**
  * Maintenance: the model catalogue, repairing the prefix, and the storage check.
@@ -68,17 +71,23 @@ import pi.kit.mob.ui.design.PiNote
  * own four-hour window and which the button forces when a just-released model is
  * wanted now.
  *
- * ## The three runs are one shape
+ * ## The three runs are one row
  *
  * The page has three things that run and report: the catalogue refresh, the
- * relocation walk, and the storage self-test. Each is a `PiValueRow` carrying the
- * run's state in its value column *and its tone*, a [RunActions] with the button and
- * the working pill, and then the verdict in a `PiNotice` above the standing
- * explanation. That shape is not a preference — it is what the three were *not*: one
- * showed its state in the row and two only in prose, one drew a progress bar and one
- * did not, and the buttons of one started 4dp left of the note under them.
- * [RunActions] is the shared half, so the three cannot drift apart again, and it is
- * shared with the backup page, which asks the reader to press the same kind of thing.
+ * relocation walk, and the storage self-test. Each is one `PiRow` carrying the run's
+ * state in its value column *and its tone*, with the run's own control — the button,
+ * or the live indicator while it is going — in the row's trailing slot, and then the
+ * verdict in a `PiNotice` above the standing explanation. That shape is not a
+ * preference; it is what the three were *not*: one showed its state in the row and two
+ * only in prose, one drew a progress bar and one did not, and the buttons of one
+ * started 4dp left of the note under them.
+ *
+ * The control is *in* the row rather than in a strip under it because the strip was
+ * three controls for one action — the run's button, a dismiss and a pill — and it made
+ * each run two objects with a paragraph between them. The reader's report is the short
+ * version: "把那些操作按钮放到列表右边…点击后显示那种转圈的团状ui，然后显示已是最新".
+ * [RunActions] is still the backup page's shape, where a run's own sheet gives it a
+ * place to stand.
  *
  * ## Why the verdict and the output are two components
  *
@@ -118,13 +127,12 @@ internal fun MaintenancePage(
         title = text.settings.updateAndRepair,
         subtitle = text.settings.maintenanceSubtitle,
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Pinned,
             ) { content ->
         Column(
             content
                 .verticalScroll(rememberScrollState())
                 .padding(PiPagePadding)
-                .padding(bottom = 32.dp),
+                .padding(top = 8.dp, bottom = PiPageBottom),
         ) {
             PiSectionHeader(text.settings.piAgent)
             PiGroup {
@@ -141,84 +149,54 @@ internal fun MaintenancePage(
                     },
                 )
                 PiRowDivider()
-                PiValueRow(
+                // The catalogue run's state, in the value column, in the tone that says
+                // what it means, and the button that starts it in the trailing slot
+                // while there is nothing to report. A verdict on the row is the row's
+                // own dismiss: tapping it clears the result and brings the button back
+                // (see [RunControl]). The old strip under the row — a button, a dismiss
+                // and a pill, three controls for one action — is what "删除多余控件"
+                // asked away; its dismiss is the row now.
+                val catalogueRunning = catalogueStatus is CatalogueStatus.Running
+                val catalogueSettled = !catalogueRunning && catalogueStatus !is CatalogueStatus.Idle
+                PiRow(
                     title = text.settings.modelList,
                     subtitle = text.settings.modelListRefreshSubtitle,
-                    // The run's state, in the value column, which is where the two
-                    // blocks below carry theirs. It used to be in the paragraph under
-                    // the button and nowhere else, so the page's three runs reported
-                    // themselves three different ways. An empty value rather than an
-                    // absent one: the column is not optional, and an empty string
-                    // draws no glyph — which is what the old row looked like with
-                    // nothing to say.
-                    value = catalogueState(catalogueStatus, text).orEmpty(),
-                    valueTone = catalogueTone(catalogueStatus),
-                    leading = {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    value = catalogueValue(catalogueStatus, text),
+                    valueColor = catalogueTone(catalogueStatus).ink(MaterialTheme.colorScheme),
+                    leading = { RunMark(Icons.Filled.Refresh) },
+                    onClick = if (catalogueSettled) catalogue::dismiss else null,
+                    trailing = {
+                        RunControl(
+                            running = catalogueRunning,
+                            hasResult = catalogueSettled,
+                            label = text.settings.modelListRefresh,
+                            onAction = { catalogue.start() },
                         )
                     },
                 )
             }
-            RunActions(
-                label = text.settings.modelListRefresh,
-                onAction = { catalogue.start() },
-                dismissLabel = text.settings.dismiss,
-                enabled = catalogueStatus !is CatalogueStatus.Running,
-                onDismiss = if (catalogueStatus is CatalogueStatus.Done ||
+
+            // `refreshVersion` used to ride on the dismiss button — the moment the page
+            // was about to be looked at again. There is no dismiss button any more, so
+            // the run's own end is that moment: the row keeps its verdict, and the
+            // version beside it is re-read in case a runtime reinstall happened behind
+            // the page.
+            LaunchedEffect(catalogueStatus) {
+                if (catalogueStatus is CatalogueStatus.Done ||
                     catalogueStatus is CatalogueStatus.Failed
                 ) {
-                    {
-                        catalogue.dismiss()
-                        catalogue.refreshVersion()
-                    }
-                } else {
-                    null
-                },
-                // The coral pill, and that is the whole indicator: a bar with no word
-                // and a word with no bar are the difference between "working" and
-                // "stuck", and the catalogue refresh has no number between its start
-                // and its end to put in a bar that would not lie.
-                working = if (catalogueStatus is CatalogueStatus.Running) {
-                    text.settings.modelListRefreshing
-                } else {
-                    null
-                },
-            )
-
-            when (val current = catalogueStatus) {
-                // No verdict yet: the value column and the pill say the run is going,
-                // and the note under them says what the button is for. A paragraph
-                // repeating "refreshing" would be the third telling.
-                CatalogueStatus.Idle, CatalogueStatus.Running -> Unit
-
-                is CatalogueStatus.Done -> PiNotice(
-                    // The changed case also restarted the agent, so the sentence
-                    // says both; the unchanged case is a success too — the model the
-                    // user came for may simply not exist yet — and saying so is what
-                    // keeps "nothing happened" from reading as a failure.
-                    text = if (current.changed) {
-                        text.settings.modelListChanged
-                    } else {
-                        text.settings.modelListUnchanged
-                    },
-                    tone = PiTone.Accent,
-                )
-
-                is CatalogueStatus.Failed -> PiNotice(
-                    text = current.message,
-                    tone = PiTone.Danger,
-                )
+                    catalogue.refreshVersion()
+                }
             }
 
-            // Last in the block, always, and in the same position in all three:
-            // what the button is for. The relocation block below has carried its
-            // note this way from the start, and this one drew the same sentence
-            // *instead of* the verdict while idle — so the two blocks put a
-            // paragraph in two different places.
-            PiNote(text.settings.modelListNote)
+            // A failure is the one outcome the row cannot state on its own — its
+            // reason is a sentence — so it keeps a notice. A *success* does not: the
+            // row's value already says "已更新" or "已是最新", and a second banner
+            // saying the same thing in a sentence was the "完成的横幅" the page was
+            // asked to drop.
+            (catalogueStatus as? CatalogueStatus.Failed)?.let { failed ->
+                PiNotice(text = failed.message, tone = PiTone.Danger)
+            }
 
             // Relocation is not something the user should have to think about: a
             // package is rewritten before dpkg ever unpacks it (apt's
@@ -233,51 +211,30 @@ internal fun MaintenancePage(
             // answers "do I need this", and the honest answer is almost always no.
             PiSectionHeader(text.settings.installedPackages)
             PiGroup {
-                PiValueRow(
+                val repairSettled = !repairRunning && repair != null
+                PiRow(
                     title = text.settings.relocate,
                     subtitle = text.settings.relocateSubtitle,
-                    value = relocateState(repair, repairRunning, text).orEmpty(),
-                    valueTone = relocateTone(repair, repairRunning),
-                    leading = {
-                        Icon(
-                            Icons.Filled.Extension,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // The walk reads every file under `$PREFIX` — 22 000 on a freshly
+                    // installed image — so while it runs the column reports what it has
+                    // read rather than a bar that appears frozen, and the row's control
+                    // is the live indicator. Same treatment as the catalogue above.
+                    value = relocateValue(repair, repairRunning, repairScanned, text),
+                    valueColor = relocateTone(repair, repairRunning).ink(MaterialTheme.colorScheme),
+                    leading = { RunMark(Icons.Filled.Extension) },
+                    onClick = if (repairSettled) session::clearRepairResult else null,
+                    trailing = {
+                        RunControl(
+                            running = repairRunning,
+                            hasResult = repairSettled,
+                            label = text.settings.relocateNow,
+                            onAction = { session.repairInstalledPackages() },
                         )
                     },
                 )
             }
-            RunActions(
-                label = text.settings.relocateNow,
-                onAction = { session.repairInstalledPackages() },
-                dismissLabel = text.settings.dismiss,
-                // Guarded on the walk, not on the last result being on
-                // screen: the run takes long enough that a button disabled
-                // until Dismiss reads as broken.
-                enabled = !repairRunning,
-                onDismiss = if (repair != null && !repairRunning) {
-                    { session.clearRepairResult() }
-                } else {
-                    null
-                },
-                // The walk reads every file under `$PREFIX` — 22 000 on a
-                // freshly installed image — so it reports what it has read
-                // rather than a bar that appears frozen. Same treatment as the
-                // catalogue refresh above.
-                working = if (repairRunning) {
-                    text.settings.relocateScanning(repairScanned)
-                } else {
-                    null
-                },
-            )
 
             repair?.let { result -> RelocationVerdict(result) }
-
-            // Under the button, always, the way the storage check carries its
-            // own explanation: a page whose actions are "refresh metadata" and
-            // "repair a package" has to say what the second one is for, and the
-            // row's caption alone cannot.
-            PiNote(text.settings.relocateNote)
 
             // Storage does not belong on this page conceptually — it changes no
             // file under $PREFIX — but the *check* is a maintenance action, and it
@@ -285,46 +242,109 @@ internal fun MaintenancePage(
             // reach my files, and will it ever delete them" without a terminal.
             PiSectionHeader(text.settings.storageCheck)
             PiGroup {
-                PiValueRow(
+                val storageRunning = storageCheck is StorageSelfTest.Status.Running
+                val storageSettled = !storageRunning && storageCheck is StorageSelfTest.Status.Finished
+                PiRow(
                     title = text.settings.storageCheck,
                     subtitle = text.settings.storageCheckSubtitle,
                     value = storageCheckState(storageCheck, text).orEmpty(),
-                    valueTone = storageCheckTone(storageCheck),
-                    leading = {
-                        Icon(
-                            Icons.Filled.VerifiedUser,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    valueColor = storageCheckTone(storageCheck).ink(MaterialTheme.colorScheme),
+                    leading = { RunMark(Icons.Filled.VerifiedUser) },
+                    onClick = if (storageSettled) selfTest::dismiss else null,
+                    trailing = {
+                        RunControl(
+                            running = storageRunning,
+                            hasResult = storageSettled,
+                            label = text.settings.storageCheckRun,
+                            onAction = { selfTest.start() },
                         )
                     },
                 )
             }
-            RunActions(
-                label = text.settings.storageCheckRun,
-                onAction = { selfTest.start() },
-                dismissLabel = text.settings.dismiss,
-                enabled = storageCheck !is StorageSelfTest.Status.Running,
-                onDismiss = if (storageCheck is StorageSelfTest.Status.Finished) {
-                    { selfTest.dismiss() }
-                } else {
-                    null
-                },
-                // The third run gets the same indicator the other two draw. It used
-                // to have none — the value column said "checking" and nothing moved —
-                // which is the one place on this page where a run in flight and a
-                // run that never started looked the same. The self-test has no number
-                // between "started" and "finished" either, so the pill carries the
-                // word and invents no fraction.
-                working = if (storageCheck is StorageSelfTest.Status.Running) {
-                    text.settings.storageCheckRunning
-                } else {
-                    null
-                },
-            )
 
             StorageCheckVerdict(storageCheck)
         }
     }
+}
+
+/**
+ * A leading mark for one of the page's rows, in the muted role every list uses.
+ *
+ * The design package's rows leave the tint to `LocalContentColor`, which a group sets
+ * to `onSurface` — the title's own colour, at which a leading glyph competes with the
+ * words beside it. Same figure as `AboutPage`'s `RowMark`, and duplicated rather than
+ * shared because it is three lines of `Icon` and a shared one would have to live in
+ * the design package to be reachable from both.
+ */
+@Composable
+private fun RunMark(icon: ImageVector) {
+    Icon(
+        icon,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
+ * The one control a run has: its button, or the live indicator while it is going.
+ *
+ * The pair is exclusive rather than a disabled button beside an indicator, which is
+ * what the button-with-a-pill-under-it strip drew: while a run is in flight there is
+ * nothing to press, and a disabled `Filled` button is the same statement twice. The
+ * indicator is `PiLoading` rather than `PiStatePill` because the word that pill
+ * carries lives in the row's own value column — "正在扫描 1234 个文件" — where it has the
+ * width for a number and does not make the row change height when it arrives.
+ *
+ * [hasResult] hides the button once the run has a verdict on the row. The value
+ * column then *is* the row's report — "已修复", "已是最新" — and a button beside a
+ * verdict invites a second run against an answer the reader has not read yet. The
+ * way back to the button is the row itself: a tap clears the verdict, and the button
+ * returns where it was. That gesture is what keeps hiding it from being a dead end —
+ * nothing else on this page dismisses a result.
+ */
+@Composable
+private fun RunControl(
+    running: Boolean,
+    hasResult: Boolean,
+    label: String,
+    onAction: () -> Unit,
+) {
+    when {
+        running -> PiLoading(size = 20.dp, color = PiTone.Live.ink(MaterialTheme.colorScheme))
+        hasResult -> Unit
+        else -> PiButton(
+            text = label,
+            onClick = onAction,
+            kind = PiButtonKind.Filled,
+            size = PiButtonSize.ExtraSmall,
+        )
+    }
+}
+
+/**
+ * The catalogue run's value: what it is doing, or what it found.
+ *
+ * The two are one column because they are one question — "where is this run" — and the
+ * pill that used to carry the running half is gone with the strip; the words are the
+ * same ones it showed.
+ */
+private fun catalogueValue(status: CatalogueStatus, text: Strings): String =
+    if (status is CatalogueStatus.Running) {
+        text.settings.modelListRefreshing
+    } else {
+        catalogueState(status, text).orEmpty()
+    }
+
+/** The relocation walk's value, the same split as [catalogueValue]. */
+private fun relocateValue(
+    result: PrefixPatcher.Result?,
+    running: Boolean,
+    scanned: Int,
+    text: Strings,
+): String = if (running) {
+    text.settings.relocateScanning(scanned)
+} else {
+    relocateState(result, running, text).orEmpty()
 }
 
 /**
@@ -347,14 +367,22 @@ internal fun MaintenancePage(
  *    mistake rather than as a decision: the measured pair was a label at x=127
  *    inside a pill whose left edge was x=64 against its own note's text at x=74.
  *    A button has no box of its own, so it lines up with the content above it.
- *  - **`working` is `PiWorkingPill`, and that is the whole indicator.** The
+ *  - **They start at the leading edge, not the trailing one.** The row was
+ *    `Spacer(weight)` then the buttons, which pushed them to the right; the pages'
+ *    other standalone actions — the model page's "new configuration", the export
+ *    and import pair here — read as a column that starts where the page's content
+ *    starts, and one page's action floating at the opposite edge from the next
+ *    page's was the inconsistency this fixes.
+ *  - **`working` is `PiStatePill`, and that is the whole indicator.** The
  *    indeterminate bar it replaces was a second way to say the same thing, and the
- *    pill says it in the app's one hue for a thing that is *running*: coral.
+ *    pill says it in the app's one role for a thing that is *running* (`PiTone.Live`).
  *  - **The dismiss is optional and its label is not.** All three runs can dismiss
  *    their result, but only while there is one, so the button is present exactly
  *    when [onDismiss] is not null.
  *  - **It is [PiButtonSize.Small].** A strip under a row is not the page's hero
  *    action, and Material's own default height is what these three drew before.
+ *    The model page's own action is the same size for the same reason: a page's
+ *    standalone actions are one component at one weight, not one per page.
  */
 @Composable
 internal fun RunActions(
@@ -372,6 +400,7 @@ internal fun RunActions(
             .padding(horizontal = ACTION_INSET, vertical = 12.dp),
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -392,7 +421,7 @@ internal fun RunActions(
             }
         }
         if (working != null) {
-            PiWorkingPill(label = working, modifier = Modifier.padding(top = 14.dp))
+            PiStatePill(label = working, modifier = Modifier.padding(top = 14.dp))
         }
     }
 }
@@ -446,7 +475,12 @@ private fun ErrorBody(lines: List<String>, modifier: Modifier = Modifier) {
 }
 
 /**
- * What the relocation walk found.
+ * What the relocation walk found, when that is something to act on.
+ *
+ * The two failure shapes keep a notice; the two successes — repaired and nothing to
+ * do — do not, because the row's own value already says "已修复" or "无需修复" and a
+ * banner repeating it was one of the "完成的横幅" the page was asked to drop. So this
+ * only draws when there is a sentence the value cannot carry.
  *
  * Checked in this order because the damaged relocator is the one outcome the walk
  * cannot repair from the inside: the relocator no longer names the upstream id at
@@ -469,60 +503,44 @@ private fun RelocationVerdict(result: PrefixPatcher.Result) {
             ErrorBody(result.errors)
         }
 
-        result.changed -> PiNotice(
-            text = text.settings.relocated(
-                occurrences = result.occurrences,
-                files = result.filesRewritten,
-                symlinks = result.symlinksRewritten,
-                modes = result.modesFixed,
-            ),
-            // Success, same accent the catalogue and storage verdicts use: a grey
-            // "已修复" read as muted metadata beside two blue result lines and looked
-            // unfinished.
-            tone = PiTone.Accent,
-        )
-
-        else -> PiNotice(text = text.settings.nothingToRelocate, tone = PiTone.Accent)
+        // Repaired or already clean: the row's value is the whole report.
+        else -> Unit
     }
 }
 
 /**
- * What the storage self-test found.
+ * What the storage self-test found, when it found a failure.
  *
- * The verdict and the failures, never the whole transcript. The script prints one
- * line per check — fourteen of them on a fresh install, and one more per granted
- * folder — and printing all of them pushed this page's own buttons off the screen
- * and buried the one line the user came for. The full list is still one command
- * away, and the note below says which.
+ * A pass is the row's own word ("通过") and nothing more — the success banner was a
+ * "完成的横幅" and is gone with the others. A failure keeps its notice and its
+ * failing lines: the verdict's numbers are the tally line the script prints, which
+ * the row cannot carry, and the lines are what the reader came for.
+ *
+ * The line list is never the whole transcript. The script prints one line per check
+ * — fourteen on a fresh install, and one more per granted folder — and printing all
+ * of them pushed this page's own controls off the screen and buried the one line the
+ * user came for. The full list is still one command away.
  */
 @Composable
 private fun StorageCheckVerdict(status: StorageSelfTest.Status) {
     val text = strings
-    val finished = status as? StorageSelfTest.Status.Finished
-    if (finished == null) {
-        PiNote(text.settings.storageCheckNote)
-        return
-    }
+    val finished = status as? StorageSelfTest.Status.Finished ?: return
+    if (finished.passed) return
 
     PiNotice(
         text = finished.output.lastOrNull { it.startsWith(STORAGE_CHECK_TALLY) }
-            ?: if (finished.passed) {
-                text.settings.storageCheckPassed
-            } else {
-                text.settings.storageCheckFailed
-            },
-        tone = if (finished.passed) PiTone.Accent else PiTone.Danger,
+            ?: text.settings.storageCheckFailed,
+        tone = PiTone.Danger,
     )
     ErrorBody(finished.output.filter { FAILURE_MARKER in it })
-    PiNote(text.settings.storageCheckTerminalHint)
 }
 
 /**
  * The catalogue run's state, as the row's value: null while there is nothing to say.
  *
- * A word rather than the sentence the note carries, because the value column is a
- * share of the row and `modelListChanged` is a sentence: "Updated" is the whole
- * fact, and the sentence belongs under the button where there is room for it.
+ * A word rather than a sentence, because the value column is a share of the row:
+ * "Updated" is the whole fact. The sentence that used to sit under the row for this
+ * outcome is gone with the completion banners.
  */
 private fun catalogueState(status: CatalogueStatus, text: Strings): String? = when (status) {
     CatalogueStatus.Idle -> null

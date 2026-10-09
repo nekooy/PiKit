@@ -4,24 +4,27 @@ Renders the launcher icon into the SVG the README shows, and checks that the app
 two launcher icons are the same mark.
 
 The README's icon is a second copy of something that already exists, and a second
-copy is a thing that drifts: the launcher icon is `ic_launcher_foreground.xml`
-plus a colour from `values/colors.xml`, and nothing about editing either of those
-would remind anyone that the picture at the top of the README is now wrong. So
-this script *derives* the SVG from those two files instead of the SVG being
-hand-drawn, and `--check` fails when the file on disk no longer matches what they
-say — which is what `tools/build-apks.py` runs:
+copy is a thing that drifts: the launcher icon is a foreground vector plus a colour
+from `values/colors.xml`, and nothing about editing either of those would remind
+anyone that the picture at the top of the README is now wrong. So this script
+*derives* the SVG from those two files instead of the SVG being hand-drawn, and
+`--check` fails when the file on disk no longer matches what they say — which is
+what `tools/build-apks.py` runs:
 
     python tools/render-icon.py           # write docs/assets/icon.svg
     python tools/render-icon.py --check   # fail if it is out of date
 
-The *other* copy is `ic_launcher_foreground_light.xml`, the black-cut mark the white
-icon is made of — the second of the two icons the personalization page offers. That
-one cannot be derived: an Android vector has no way to take another vector's
-geometry, so the path data is written twice and the only defence against the two
-copies diverging is to compare them. This does that, in both modes, for the same
-reason the SVG is compared at all: a mark that was edited in one file and not the
-other is two different icons under one name, and nothing about editing either file
-would say so.
+The picture is derived from the icon the app **ships with** — the white field and
+black mark, `LauncherIcon.DEFAULT = LIGHT` — because the README is a fresh install's
+first view of the app.
+
+The *other* copy is `ic_launcher_foreground.xml`, the white-cut mark the black icon
+is made of — the second of the two icons the personalization page offers. That one
+cannot be derived: an Android vector has no way to take another vector's geometry, so
+the path data is written twice and the only defence against the two copies diverging
+is to compare them. This does that, in both modes, for the same reason the SVG is
+compared at all: a mark that was edited in one file and not the other is two
+different icons under one name, and nothing about editing either file would say so.
 
 The picture is the launcher's own viewport, not the layers' full 108 units. An
 adaptive icon draws each 108-unit layer with its bounds extended by a quarter on
@@ -34,9 +37,9 @@ Two things here are the README's own and are deliberately not in the launcher
 icon. The corner radius (24 of those 108 units, kept at the same roundness in
 the 72-unit frame the picture is drawn in) stands in for the mask an Android
 launcher applies — an unmasked square reads as a bug next to other projects'
-icons. The hairline border exists because the icon is black and GitHub renders
-README images on a near-black card in the dark theme, where a black square with
-no edge is invisible; the line is the icon's own black plus one step, not a
+icons. The hairline border exists because the default icon is white and GitHub
+renders README images on a white card in the light theme, where a white square
+with no edge is invisible; the line is the icon's own white plus one step, not a
 different design.
 """
 
@@ -53,15 +56,25 @@ LIGHT_FOREGROUND = Path("app/src/main/res/drawable/ic_launcher_foreground_light.
 COLORS = Path("app/src/main/res/values/colors.xml")
 OUTPUT = Path("docs/assets/icon.svg")
 
+#: The icon the app ships with, and so the one the README shows. The white field is
+#: the default (`LauncherIcon.DEFAULT = LIGHT`), so the picture is derived from the
+#: light foreground and the light background — deriving it from the black icon would
+#: show the README an icon a fresh install does not have.
+SHIPPED_FOREGROUND = LIGHT_FOREGROUND
+SHIPPED_BACKGROUND_COLOR = "ic_launcher_background_light"
+
 #: The white icon's field, in `colors.xml`. Read rather than assumed, so that "the
 #: ink is not the field it is drawn on" compares two files instead of restating one.
 LIGHT_BACKGROUND_COLOR = "ic_launcher_background_light"
 
-#: The README's stand-ins for the launcher's mask and for the dark theme's card.
-#: The radius is 24 of the layer's 108 units, which is 16 of the 72 the picture is
-#: drawn in — the roundness of the icon is unchanged, the frame it is drawn in is not.
+#: The README's stand-ins for the launcher's mask and for the card it sits on. The
+#: radius is 24 of the layer's 108 units, which is 16 of the 72 the picture is drawn
+#: in — the roundness of the icon is unchanged, the frame it is drawn in is not. The
+#: hairline is the white field plus one step rather than the icon's own ink: the
+#: default icon is now white, and a white square on GitHub's white card would have no
+#: edge to be seen by.
 CORNER_RADIUS = 16
-BORDER = "#2A2F3A"
+BORDER = "#D5DAE2"
 #: The layer is 108 units square; the masked viewport shows its centre 72, because an
 #: adaptive icon draws each layer with its bounds extended by a quarter on every side.
 LAYER = 108
@@ -172,13 +185,13 @@ def light_ink_problems() -> list[str]:
 
 
 def build_svg() -> str:
-    foreground = (REPO_ROOT / FOREGROUND).read_text(encoding="utf-8")
+    foreground = (REPO_ROOT / SHIPPED_FOREGROUND).read_text(encoding="utf-8")
     colors = (REPO_ROOT / COLORS).read_text(encoding="utf-8")
 
-    background = _named_colour(colors, "ic_launcher_background")
+    background = _named_colour(colors, SHIPPED_BACKGROUND_COLOR)
     if background is None:
         raise SystemExit(
-            f"render-icon: no ic_launcher_background in {COLORS}, which is the "
+            f"render-icon: no {SHIPPED_BACKGROUND_COLOR} in {COLORS}, which is the "
             "colour the adaptive icon paints behind the mark"
         )
 
@@ -187,7 +200,7 @@ def build_svg() -> str:
     translate_y = group.get("translateY", "0")
 
     if not blocks:
-        raise SystemExit(f"render-icon: no <path> in {FOREGROUND}")
+        raise SystemExit(f"render-icon: no <path> in {SHIPPED_FOREGROUND}")
     fills = {_colour(block["fillColor"]) for block in blocks}
     if len(fills) != 1:
         raise SystemExit(
@@ -212,7 +225,7 @@ def build_svg() -> str:
             '<?xml version="1.0" encoding="UTF-8"?>',
             "<!--",
             "    PiKit's launcher icon as the README shows it. Generated by",
-            "    tools/render-icon.py from app/src/main/res/drawable/ic_launcher_foreground.xml",
+            "    tools/render-icon.py from app/src/main/res/drawable/ic_launcher_foreground_light.xml",
             "    and app/src/main/res/values/colors.xml — edit those, not this, then run",
             "    `python tools/render-icon.py`.",
             "-->",
@@ -285,7 +298,7 @@ def main() -> int:
     # to make.
     with open(output, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(rendered)
-    print(f"wrote {OUTPUT} ({len(rendered)} bytes) from {FOREGROUND}")
+    print(f"wrote {OUTPUT} ({len(rendered)} bytes) from {SHIPPED_FOREGROUND}")
     return 0
 
 

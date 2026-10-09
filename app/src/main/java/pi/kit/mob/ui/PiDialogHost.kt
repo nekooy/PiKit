@@ -93,15 +93,15 @@ fun PiDialogHost(
 
                 when {
                     options.isNotEmpty() -> options.forEach { option ->
-                        // Outlined rather than text buttons: an option is a real
-                        // answer to the question above it, and it has to be
-                        // distinguishable at a glance from the cancel underneath
-                        // the whole dialog, which is the way out rather than one of
-                        // the answers.
+                        // A text button like the cancel under the whole dialog, and
+                        // the separation is the full width the option takes rather
+                        // than a border: the app's dialogs are all words that differ
+                        // by colour and nothing else. An outlined option was a filled
+                        // boundary around an answer, which made the cancel the odd one.
                         PiButton(
                             text = option,
                             onClick = { onValue(option) },
-                            kind = PiButtonKind.Outlined,
+                            kind = PiButtonKind.Text,
                             size = PiButtonSize.Small,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -140,8 +140,10 @@ fun PiDialogHost(
             }
         },
         dismissButton = {
-            // A text button, like the confirm beside it: in a dialog both actions
-            // are text buttons, and a bordered one reads as a different component.
+            // A text button, like the confirm beside it: a dialog is two words that
+            // differ by colour, neither carrying a fill or a border. A dialog keeps
+            // its dismiss — a sheet does not need one, but a question with a
+            // destructive answer has to have both answers.
             PiButton(
                 text = text0.common.cancel,
                 onClick = onCancel,

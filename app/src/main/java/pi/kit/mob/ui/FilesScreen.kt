@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -50,20 +51,18 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiEmptyState
 import pi.kit.mob.ui.design.PiLoading
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPageSwap
 import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiScaffold
 import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiSheetActions
 import pi.kit.mob.ui.design.PiSheetList
-import pi.kit.mob.ui.design.PiSheetRow
 import pi.kit.mob.ui.design.PiSheetTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -79,10 +78,10 @@ import java.util.Locale
  *
  * ## The page is the path
  *
- * Where the app bar's title is a fact that never changes ("Files"), the bar's
- * subtitle is the one that does, and it is the path the reader is standing in.
- * That is what this page has to say about itself, so it says it under the title
- * rather than in a band of its own — the browser's whole state is one string.
+ * Where the header's title is a fact that never changes ("Files"), its subtitle is
+ * the one that does, and it is the path the reader is standing in. That is what this
+ * page has to say about itself, so it says it under the title rather than in a band
+ * of its own — the browser's whole state is one string.
  *
  * ## Why entering a folder is a page swap
  *
@@ -116,7 +115,7 @@ fun FilesScreen(session: PiAgentSession) {
     }
 
     // The back gesture walks *up* the filesystem, exactly like the parent arrow in
-    // the app bar, rather than leaving the app. A browser whose back gesture closes
+    // the header, rather than leaving the app. A browser whose back gesture closes
     // the app from three directories down is the report this answers — on a phone
     // the gesture is the primary way back, and "back" on a listing means the
     // listing above it. At the top of the tree it is disabled (there is no parent
@@ -131,10 +130,6 @@ fun FilesScreen(session: PiAgentSession) {
     PiScaffold(
         title = text.header.files,
         subtitle = relativeTo(home, current),
-        // Collapsing rather than pinned: what the bar holds is the path, and the
-        // path is one line of a listing the reader wants the height back for as
-        // soon as they start scrolling it.
-        scrollBehavior = PiAppBarScroll.Collapsing,
         actions = {
             IconButton(
                 onClick = { navigate(home) },
@@ -232,15 +227,36 @@ private fun DirectoryList(
     // `LazyColumn` rather than a `PiGroup` because a group holds a plain `Column`
     // — the frame has to be outside the scrolling container when the rows are
     // lazy, and a directory of a few thousand entries is exactly why they are.
+    //
+    // ## The frame is the listing's size, not the page's
+    //
+    // `fillMaxSize` made this card the height of the window whatever the directory
+    // held, so a folder of three files drew one grey slab with two rows at the top
+    // of it — a panel that claims to be full and is not. A `LazyColumn` reports the
+    // height of its laid-out content when the content fits (it fills only when
+    // there is something to scroll to), so the frame is `wrapContentHeight` and the
+    // card ends where the last row ends. `wrapContentHeight` rather than nothing
+    // because it is what *relaxes the incoming minimum*: the page's body arrives
+    // with a minimum of the whole viewport, and only this drops it.
+    //
+    // The top gap is new with it: flush under the header the first row read as part
+    // of the bar rather than as the first line of a list, and every other list in
+    // the app has that gap (`SettingsBody`, the transcript's own top margin).
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = PiShapes.card,
         modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp),
+            .fillMaxWidth()
+            .wrapContentHeight(Alignment.Top)
+            .padding(horizontal = 12.dp)
+            .padding(top = 8.dp)
+            // A gap above the navigation bar, so the listing's own lower rounded
+            // corners read as corners rather than as the bottom edge of the window:
+            // flush against the bar the card reads as cut off.
+            .padding(bottom = PiPageBottom),
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(vertical = 4.dp),
         ) {
             itemsIndexed(rows, key = { _, file -> file.absolutePath }) { index, file ->
@@ -364,9 +380,9 @@ private fun kindOf(file: File, text: Strings): String = when {
  * the scrim and the drag all belong to `SheetLayer`, and this is what goes inside
  * it. It is the one sheet in the app that is not a menu of choices — a preview is
  * one file, so its body is one block of monospace text and the only two things to
- * do with it are reading it and handing it on. That is why its one row comes
- * *after* the text: the sheet is read first and acted on second, and the action
- * row under it holds the way out.
+ * do with it are reading it and handing it on. That is why both actions come
+ * *after* the text: the sheet is read first and acted on second, and the two
+ * buttons under it are the two things that can be done with what was read.
  */
 @Composable
 private fun PreviewSheet(file: File, text: Strings) {
@@ -422,20 +438,6 @@ private fun PreviewSheet(file: File, text: Strings) {
                         }
                     }
                 }
-                item {
-                    PiSheetRow(
-                        label = text.files.openWith,
-                        leading = {
-                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
-                        },
-                        // Gated on the sheet still being open for the same reason
-                        // every control in a sheet is: the panel keeps drawing
-                        // while it leaves, and a second tap must not hand the file
-                        // to another app after the reader has dismissed the
-                        // preview.
-                        onClick = { if (host.isOpen) openFailed = !openExternally(context, file) },
-                    )
-                }
             }
         }
 
@@ -445,12 +447,35 @@ private fun PreviewSheet(file: File, text: Strings) {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
-        PiSheetActions {
+
+        // Open with is a button — it used to be a list row inside the body, so the
+        // one action that takes the file *out* of the app looked like one more line
+        // of the preview rather than like a thing to press. It collects at the
+        // trailing edge, like every other action row in the app.
+        //
+        // There is no **Close** beside it any more. A sheet is dismissed four ways
+        // that need no control — the scrim, the back gesture, a downward drag and
+        // the panel's own exit — and a fifth button that does what all four already
+        // do was the largest thing on the panel's last line.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             PiButton(
-                text = text.files.close,
-                kind = PiButtonKind.Text,
+                text = text.files.openWith,
+                // Gated on the sheet still being open for the same reason every
+                // control in a sheet is: the panel keeps drawing while it leaves,
+                // and a second tap must not hand the file to another app after the
+                // reader has dismissed the preview.
+                onClick = { if (host.isOpen) openFailed = !openExternally(context, file) },
+                kind = PiButtonKind.Outlined,
                 size = PiButtonSize.Small,
-                onClick = host::dismiss,
+                leadingIcon = {
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
+                },
             )
         }
     }

@@ -3,15 +3,17 @@
  *
  * ## The page shell
  *
- * A page is a large flexible app bar over a scrolling body. That is Material's
- * expressive app-bar variant — the guidance says the medium and large *non*-flexible
- * bars are no longer recommended and that the flexible pair should replace them —
- * and it is the right shape for this app because every page's title is a moving
- * fact: the chat page's is the first line of the conversation, the files page's
- * carries a path, the history page's carries a count. A flexible bar takes a
- * subtitle, so that second fact has a home rather than being crammed beside the
- * title, and it collapses on scroll so the reading area grows as the reader
- * scrolls into it.
+ * A page is one fixed header over a scrolling body. The header carries a title and a
+ * subtitle, which is what this app needs because every page's title is a moving fact:
+ * the chat page's is the first line of the conversation, the files page's carries a
+ * path, the history page's carries a count — and the second fact needs a home rather
+ * than being crammed beside the first.
+ *
+ * It is drawn here rather than taken from Material's app bars because those could not
+ * hold one height: the flexible pair's expanded height depends on whether a subtitle
+ * is present, and the large one is taller again, so four pages wore three heights and
+ * two of them moved as the reader scrolled. [PiScaffold]'s own KDoc has the tokens and
+ * the measurement.
  *
  * ## The two containers
  *
@@ -25,7 +27,7 @@
  *
  * ## Row density
  *
- * [PiRow] is the dense voice from `PiShapes` — 14dp of vertical padding, a 12dp
+ * [PiRow] is the dense voice from `PiShapes` — 10dp of vertical padding, a 12dp
  * corner for its press outline, and a trailing slot that is either a value or a
  * chevron but never both. It is deliberately *not* a `ListItem`: `ListItem`'s
  * expressive heights are tuned for media-rich browsing lists, and three of this
@@ -33,6 +35,7 @@
  */
 package pi.kit.mob.ui.design
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -61,25 +64,29 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -89,23 +96,41 @@ import pi.kit.mob.locales.LocalStrings
 import pi.kit.mob.ui.components.PageBackHandler
 
 /**
- * A page: a flexible app bar, a body, and room for one floating control.
+ * A page: one fixed header, a body, and room for one floating control.
  *
- * The body is *given* the scroll connection rather than applying it itself, so a
- * page's list can scroll the bar away while the page keeps its own layout. That is
- * what makes the collapsed state work at all: the nested-scroll link has to be on
- * the scrolling container, and the only thing that knows which container that is
- * is the page.
+ * The body is *given* the scroll connection rather than applying it itself, so the
+ * header can show that content has scrolled under it while the page keeps its own
+ * layout. The nested-scroll link has to be on the scrolling container, and the only
+ * thing that knows which container that is is the page.
  *
- * ## The status bar is the frame's business, not the page's
+ * ## One header, and one height, on every page
  *
- * [WindowInsets.statusBars] is consumed here and the app bar's own `windowInsets`
- * is zero, so a page cannot get this wrong. The alternative — leaving the inset to
- * the caller — is how a page ends up with its title under the clock, and it is the
- * same failure the theme's own status-bar handling exists to prevent: one screen
- * that forgot is one screen whose clock is invisible, and it is found by looking at
- * that screen rather than by any check. The root pads the *bottom* and the
- * horizontal edges for the same reason, one level up.
+ * The header is drawn here rather than taken from Material's app bars, and the
+ * reason is a measurement of theirs rather than a preference: the flexible bars'
+ * expanded height is **two different tokens depending on whether a subtitle is
+ * present** (`MediumFlexibleAppBarWithoutSubtitleExpandedHeight` against
+ * `…WithSubtitleExpandedHeight`, and the same pair for the large bar). So a page
+ * that passed a subtitle and one that did not were never the same height, and a
+ * page that chose the large bar was taller again — four pages, three heights. A
+ * single `heightIn` with the same two lines everywhere is the smallest thing that
+ * cannot drift: the *pages* differ in their title and their actions, not in how
+ * tall the strip above the body is.
+ *
+ * 56dp is a one-line bar's own height with room for the subtitle line inside it
+ * (a `titleLarge` line box and a `bodySmall` one come to about 44dp), and
+ * `heightIn` rather than `height` so a large font scale grows the strip instead of
+ * clipping it.
+ *
+ * ## The status bar is the header's own surface
+ *
+ * [WindowInsets.statusBars] is consumed *inside* the header's `Surface`, so the
+ * strip behind the clock is painted by the same container as the title — it changes
+ * with it when content scrolls under, and a page cannot get it wrong. The
+ * alternative is the failure this replaced: the inset consumed *above* the bar left
+ * the status strip on the page's surface while the bar filled with
+ * `surfaceContainer` as soon as the body scrolled, so one band of chrome was drawn
+ * in two colours. The root pads the *bottom* and the horizontal edges for the same
+ * reason, one level up.
  *
  * [onBack] positions a back arrow at the *start* of the bar, which is where the
  * platform convention puts it — three of this app's pages have one, and the Files
@@ -113,16 +138,25 @@ import pi.kit.mob.ui.components.PageBackHandler
  * The back handler yields to any open sheet, which is what stops a swipe while a
  * picker is up from closing the page underneath it.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PiScaffold(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
-    scrollBehavior: PiAppBarScroll = PiAppBarScroll.Collapsing,
     actions: @Composable RowScope.() -> Unit = {},
     floating: (@Composable () -> Unit)? = null,
+    /**
+     * The title's own style, for the one page whose title can be a whole sentence.
+     *
+     * Every page but the chat page is named by a word or two, and the shell's
+     * `titleLarge` is sized for that. A conversation's title is the reader's own
+     * first line, which the header ellipsises at one line — so the one page whose
+     * title is prose asks for a smaller style and fits more of it. The default is
+     * the shell's, so a page that says nothing gets the shared look.
+     */
+    titleStyle: TextStyle = MaterialTheme.typography.titleLarge,
     body: @Composable (Modifier) -> Unit,
 ) {
     if (onBack != null) {
@@ -130,102 +164,18 @@ fun PiScaffold(
     }
 
     val barState = rememberTopAppBarState()
-    val barScroll = when (scrollBehavior) {
-        PiAppBarScroll.Collapsing -> TopAppBarDefaults.exitUntilCollapsedScrollBehavior(barState)
-        PiAppBarScroll.Pinned -> TopAppBarDefaults.pinnedScrollBehavior(barState)
-        PiAppBarScroll.None -> null
-    }
-    val nested = if (barScroll != null) Modifier.nestedScroll(barScroll.nestedScrollConnection) else Modifier
+    val barScroll = TopAppBarDefaults.pinnedScrollBehavior(barState)
+    val nested = Modifier.nestedScroll(barScroll.nestedScrollConnection)
 
-    // The bar paints nothing of its own until the body scrolls under it, and then
-    // a fill separates the two. That is the M3 rule — a colour fill rather than a
-    // shadow — and it is why the container colour is transparent here: at rest the
-    // title sits on the page's own surface, which is what makes the body read as
-    // one continuous sheet rather than as a band above a panel.
-    val colors = TopAppBarDefaults.topAppBarColors(
-        containerColor = Color.Transparent,
-        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    Column(
-        modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
-    ) {
-        val navigation: @Composable () -> Unit = {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = LocalStrings.current.common.back,
-                    )
-                }
-            }
-        }
-        val subtitleBlock: @Composable () -> Unit = {
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        when (scrollBehavior) {
-            // The large bar is for a page whose title is the point — the chat
-            // page, whose title is the conversation, and the history page, whose
-            // title is what the list is.
-            PiAppBarScroll.Collapsing -> LargeFlexibleTopAppBar(
-                title = {
-                    Text(
-                        title,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                subtitle = subtitleBlock,
-                navigationIcon = navigation,
-                actions = actions,
-                colors = colors,
-                scrollBehavior = barScroll,
-                windowInsets = WindowInsets(0),
-            )
-
-            // A page whose body is the point gets the medium bar: it gives the
-            // list three more lines of height on a phone.
-            PiAppBarScroll.Pinned -> MediumFlexibleTopAppBar(
-                title = {
-                    Text(
-                        title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                subtitle = subtitleBlock,
-                navigationIcon = navigation,
-                actions = actions,
-                colors = colors,
-                scrollBehavior = barScroll,
-                windowInsets = WindowInsets(0),
-            )
-
-            PiAppBarScroll.None -> Column(Modifier.fillMaxWidth().padding(start = 24.dp, top = 16.dp)) {
-                Text(title, style = MaterialTheme.typography.headlineMediumEmphasized)
-                if (subtitle != null) {
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-        }
+    Column(modifier.fillMaxSize()) {
+        PiPageHeader(
+            title = title,
+            subtitle = subtitle,
+            onBack = onBack,
+            actions = actions,
+            barState = barState,
+            titleStyle = titleStyle,
+        )
 
         Box(Modifier.fillMaxSize()) {
             body(nested.fillMaxSize())
@@ -242,17 +192,110 @@ fun PiScaffold(
     }
 }
 
-/** How a page's app bar behaves as its body scrolls. */
-enum class PiAppBarScroll {
-    /** Shrinks to a single line as the reader scrolls, giving the body the height. */
-    Collapsing,
+/**
+ * The strip above every page's body: a title, an optional second fact, and the
+ * page's actions — at one height, whatever the page.
+ *
+ * A `Surface` so the status-bar inset it consumes is painted in the same colour as
+ * the rest of the strip, and `overlappedFraction` rather than a `contentOffset`
+ * comparison for the fill: it is the library's own answer to "how much of the bar
+ * has content behind it", it is a fraction so the threshold is stated in the units
+ * it means, and it reads the state inside a `derivedStateOf` so a scroll recomposes
+ * this only at the moment the answer flips.
+ *
+ * `heightOffsetLimit` is what makes that fraction mean anything — it is computed
+ * from the limit, and the pinned behaviour never sets it (it only moves
+ * `contentOffset`) — so it is set here from the strip's own measured height.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PiPageHeader(
+    title: String,
+    subtitle: String?,
+    onBack: (() -> Unit)?,
+    actions: @Composable RowScope.() -> Unit,
+    barState: TopAppBarState,
+    titleStyle: TextStyle,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val heightPx = with(density) { PiHeaderHeight.toPx() }
+    SideEffect {
+        if (barState.heightOffsetLimit != -heightPx) barState.heightOffsetLimit = -heightPx
+    }
+    val overlapped by remember(barState) {
+        derivedStateOf { barState.overlappedFraction > 0.01f }
+    }
+    val fill by animateColorAsState(
+        targetValue = if (overlapped) scheme.surfaceContainer else scheme.surface,
+        animationSpec = PiMotion.defaultEffects(),
+        label = "headerFill",
+    )
 
-    /** Keeps a medium two-line bar and stays put. */
-    Pinned,
-
-    /** No bar at all; the page draws its own heading. */
-    None,
+    Surface(
+        color = fill,
+        contentColor = scheme.onSurface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Inside the Surface, so the strip behind the clock is this
+                // container and moves with it.
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .heightIn(min = PiHeaderHeight)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = LocalStrings.current.common.back,
+                        tint = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(
+                        start = if (onBack != null) 4.dp else 16.dp,
+                        end = 8.dp,
+                        top = 6.dp,
+                        bottom = 6.dp,
+                    ),
+            ) {
+                Text(
+                    text = title,
+                    style = titleStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            actions()
+        }
+    }
 }
+
+/**
+ * The header's own height, for every page in the app.
+ *
+ * One constant rather than a per-page number, because a header that differs between
+ * pages is exactly what this header exists to prevent. The composer's floating
+ * height and the transcript's tail are separate numbers (`ChatScreen`) and are not
+ * this one.
+ */
+val PiHeaderHeight = 56.dp
 
 /**
  * A card: one subject, on its own surface, with the app's content radius.
@@ -261,11 +304,18 @@ enum class PiAppBarScroll {
  * container and its own children carry their taps — which is the difference
  * between "this card is the action" and "this card holds actions", and mixing the
  * two is how a tap on a button inside a card ends up firing the card's handler.
+ *
+ * [contentColor] defaults to `onSurface`, which is what every card that sits on a
+ * neutral container wants. It is a parameter because a card on `primaryContainer` —
+ * the reader's own prompt — takes `onPrimaryContainer`, and a card whose container
+ * and content colour came from two different roles was the reason that prompt's text
+ * had to name a colour at each call site instead.
  */
 @Composable
 fun PiCard(
     modifier: Modifier = Modifier,
     container: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
     shape: androidx.compose.ui.graphics.Shape = PiShapes.card,
     border: BorderStroke? = null,
     padding: PaddingValues = PaddingValues(16.dp),
@@ -274,7 +324,7 @@ fun PiCard(
 ) {
     Surface(
         color = container,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        contentColor = contentColor,
         shape = shape,
         border = border,
         modifier = modifier
@@ -306,17 +356,26 @@ fun PiGroup(
         shape = PiShapes.card,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(vertical = 4.dp), content = content)
+        Column(Modifier.padding(vertical = 2.dp), content = content)
     }
 }
 
 /**
  * The heading above a group.
  *
- * Small, emphasized, letterspaced, and in the *secondary* role rather than the
- * primary one. The primary colour is reserved for selection and for actions; a
- * heading that borrowed it made every label look tappable, which is the reason
- * this is a distinct component rather than a styled `Text`.
+ * Small, emphasized, letterspaced, and in the *primary* role.
+ *
+ * It used to be `secondary`, on the theory that the primary colour belongs to
+ * selection and actions and a heading in it would look tappable. Measured against
+ * the light scheme's actual values that theory does not hold: `secondary` is
+ * `#5C5D72`, a desaturated slate that on `surface` is a *grey* label — the page's
+ * section names read as one more shade of body text and a reader scanning for
+ * "where does the API key live" had nothing to scan for. The tappability worry is
+ * answered by form rather than by colour: a heading is upper-cased, letterspaced,
+ * `labelLargeEmphasized` and inset 24dp, and no control in this app looks like
+ * that. One hue for "this is a name for the things below it" is worth more than
+ * the residual risk of confusion, and every settings page states its structure
+ * with it.
  */
 @Composable
 fun PiSectionHeader(
@@ -327,14 +386,14 @@ fun PiSectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, end = 16.dp, top = 20.dp, bottom = 8.dp)
+            .padding(start = 24.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)
             .semantics { heading() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = text.uppercase(),
             style = MaterialTheme.typography.labelLargeEmphasized,
-            color = MaterialTheme.colorScheme.secondary,
+            color = MaterialTheme.colorScheme.primary,
             letterSpacing = 0.8.sp,
             modifier = Modifier.weight(1f),
         )
@@ -361,6 +420,12 @@ fun PiSectionHeader(
  * [monospace] is for a row whose subtitle or value is a path, a version or an
  * identifier: proportional digits make a path noticeably harder to read back, and
  * it is applied to both so a row cannot be half-machine.
+ *
+ * [valueColor] is the value's ink, and it is a parameter because a row that reports
+ * the outcome of something the reader just started carries that outcome in a tone
+ * (`PiTone`) rather than in the neutral the rest of the list speaks in — the
+ * maintenance runs and the battery-exemption row are the callers. The default is
+ * the neutral so a row that has no outcome to report looks like every other row.
  */
 @Composable
 fun PiRow(
@@ -368,6 +433,7 @@ fun PiRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     value: String? = null,
+    valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     monospace: Boolean = false,
@@ -383,7 +449,7 @@ fun PiRow(
             .padding(horizontal = 12.dp, vertical = 2.dp)
             .clip(PiShapes.row)
             .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -415,7 +481,7 @@ fun PiRow(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = machine,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                color = valueColor.copy(alpha = alpha),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -427,6 +493,14 @@ fun PiRow(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                // 20dp, the same box the settings rows have always drawn their
+                // chevron in. Left at `Icon`'s own 24dp it was 19x31 px of ink where
+                // the settings tree's rows measured 16x27 on the same 420dpi screen,
+                // so two lists one tap apart drew two different chevrons — the
+                // report "设置首页的右箭头粗细不一致" — and the smaller one is the
+                // right answer: this is chrome beside body text, not a 24dp tap
+                // target (the row itself is the target).
+                modifier = Modifier.size(20.dp),
             )
         }
     }
@@ -435,12 +509,28 @@ fun PiRow(
 /**
  * A paragraph of explanation, in the page rather than in a container.
  *
- * The one prose voice in the app, and it is deliberately not [PiNotice]: a notice is
- * a *container* answering a state ("the save failed"), and using it for an
- * explanation puts a filled box around a sentence that is not about anything that
- * happened. Its leading inset matches [PiSectionHeader]'s, so a note under a heading
- * lines up with it instead of drifting left — the drift the settings pages used to
- * have, at three different left edges on one screen.
+ * The app's *object line* voice: a sentence with no container, for the few remarks
+ * that are about an outcome but are not failures — "saved, the agent is restarting",
+ * "the file could not be read". Its leading inset matches [PiSectionHeader]'s, so a
+ * line under a heading lines up with it instead of drifting left.
+ *
+ * ## What it is not for any more
+ *
+ * It used to be the voice of the app's *explanation* — a paragraph on every settings
+ * page saying what the page was for, when a change would take effect, why the default
+ * was what it was — and those paragraphs are gone. The app now carries two kinds of
+ * prose and writes a third kind nowhere:
+ *
+ *  - about **one control** — the consequence of pressing a button, what a field's
+ *    value is for — it goes *inside that control*, as a row's `subtitle` or a field's
+ *    `supportingText`. (A `PiButton`'s `caption`, a second line inside its own fill,
+ *    was a third home for one of these and is gone — see `PiActions`.)
+ *  - about a **state** — a save that failed, a shell that exited — it is [PiNotice],
+ *    in its container, next to the thing in that state.
+ *  - about the **page** — nothing. A paragraph under the controls it describes is met
+ *    after the decision rather than before it, and the manual is the document that can
+ *    say a thing once instead of at every place it is true. §13's "where a sentence
+ *    goes" has the three reasons and what moved.
  */
 @Composable
 fun PiNote(
@@ -454,7 +544,7 @@ fun PiNote(
         color = tone.ink(MaterialTheme.colorScheme),
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 2.dp, bottom = 2.dp),
     )
 }
 
@@ -559,3 +649,17 @@ fun PiFullDivider() {
 
 /** An inset that keeps a page's own content clear of the rounded screen edge. */
 val PiPagePadding = PaddingValues(horizontal = 12.dp)
+
+/**
+ * How far above the bottom of a page its content stops.
+ *
+ * A page hands the bottom of the window to the navigation bar, and content that runs
+ * flush against that bar reads as cut off rather than as finished — the visible case
+ * was a file listing drawn as a card whose lower rounded corners sat on the bar's own
+ * top edge. Every scrolling body therefore ends with this much blank space, so the
+ * last row, card or paragraph has the bar under a gap rather than under itself.
+ *
+ * One constant rather than a per-page number, for the same reason the header has
+ * one: pages used to carry 0, 12 and 32dp of it, which is a difference nobody chose.
+ */
+val PiPageBottom = 16.dp

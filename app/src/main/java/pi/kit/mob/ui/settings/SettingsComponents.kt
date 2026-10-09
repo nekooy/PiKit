@@ -57,11 +57,11 @@ import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiSectionHeader
-import pi.kit.mob.ui.design.PiWorkingPill
 
 /**
  * A labelled group of rows: a section label over one [PiGroup].
@@ -316,40 +316,10 @@ fun SettingsBody(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(PiPagePadding)
-            .padding(vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+            .padding(top = 8.dp, bottom = PiPageBottom),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         content = content,
     )
 }
 
-/**
- * A paragraph of explanation, for the pages that need one.
- *
- * The one note voice in the settings: `bodySmall` in `onSurfaceVariant`, inset so
- * its text lines up with a [SettingsRow]'s title whether it sits inside a group or
- * directly on the page body. That inset is [CONTENT_INSET] — the 24dp [PiRow]
- * leaves between a group's frame and its own text — and call sites add no
- * horizontal padding of their own, which was the drift (4dp here, +12dp at half
- * the call sites, +16dp at two more) that put the same sentence at three different
- * left edges on one screen.
- *
- * [color] is for a note that is a *result* rather than an explanation — a save
- * that landed, a check that failed — so the status lines on the maintenance and
- * web-config pages can be this component instead of a bare `Text` with its own
- * padding. There is no notice component to delegate to: the design system's
- * `PiNotice` is a sentence in a container, and this is prose under a group.
- */
-@Composable
-fun SettingsNote(
-    text: String,
-    modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = color,
-        modifier = modifier.padding(horizontal = CONTENT_INSET, vertical = 4.dp),
-    )
-}
 

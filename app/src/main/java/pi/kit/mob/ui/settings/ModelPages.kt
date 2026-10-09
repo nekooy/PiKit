@@ -67,7 +67,6 @@ import pi.kit.mob.pi.modelDefinitionFacts
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.PiIcons
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiBadge
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
@@ -76,6 +75,7 @@ import pi.kit.mob.ui.design.PiGap
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiLoading
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
@@ -89,7 +89,6 @@ import pi.kit.mob.ui.design.PiSheetRow
 import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiSwitchRow
 import pi.kit.mob.ui.design.PiTextField
-import pi.kit.mob.ui.design.PiTone
 import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -177,12 +176,12 @@ internal fun ModelPage(
         title = text.settings.profilesTitle,
         subtitle = text.settings.modelCount(profiles.size),
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Pinned,
     ) { body ->
         Column(
             modifier = body
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding),
+                .padding(PiPagePadding)
+                .padding(top = 8.dp, bottom = PiPageBottom),
         ) {
             // An empty list is not drawn as an empty frame: `PiGroup` is a rounded
             // surface, and one with no rows in it is a slab of nothing under a heading.
@@ -261,13 +260,18 @@ internal fun ModelPage(
                 }
             }
 
-            PiGap(8.dp)
-            PiNotice(text.settings.tapToActivate, tone = PiTone.Neutral)
-
             PiGap(12.dp)
+            // The page's one action, at the leading edge and at the same weight as
+            // every other standalone page action (the backup page's export/import
+            // pair uses `RunActions`): filled, `Small`, drawn where the page's own
+            // content column starts. It was `Medium`, which made this button a size
+            // larger than the equivalent button on the next page for no reason the
+            // reader could see.
             PiButton(
                 text = text.settings.addProfile,
                 onClick = { onEdit("") },
+                kind = PiButtonKind.Filled,
+                size = PiButtonSize.Small,
                 leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
             )
 
@@ -902,12 +906,12 @@ internal fun ModelEditPage(
         // has no name to show and the provider is what the reader has to choose.
         subtitle = provider?.label ?: text.settings.notChosen,
         onBack = ::requestLeave,
-        scrollBehavior = PiAppBarScroll.Pinned,
     ) { body ->
         Column(
             modifier = body
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding),
+                .padding(PiPagePadding)
+                .padding(top = 8.dp, bottom = PiPageBottom),
         ) {
             PiSectionHeader(text.settings.profile)
             PiGroup {
@@ -1083,21 +1087,10 @@ internal fun ModelEditPage(
             // paragraph follows the frame rather than the row it explains, because a note
             // inside a group would break the group's own 24dp/64dp rhythm with a third
             // left edge.
-            if (isCustomEndpoint) {
-                PiGap(8.dp)
-                PiNotice(text.settings.apiTypeNote, tone = PiTone.Neutral)
-            }
-            // The same three values are written into pi's own settings.json, so
-            // a `pi` the user starts by hand in the terminal answers with this
-            // model instead of reporting none.
-            PiGap(8.dp)
-            PiNotice(text.settings.terminalModelNote, tone = PiTone.Neutral)
-
             PiSectionHeader(
                 text = text.settings.models,
                 trailing = { PiBadge(text.settings.modelCount(models.size)) },
             )
-            PiNotice(text.settings.modelsSubtitle, tone = PiTone.Neutral)
             // What this provider can answer with. Choosing one — the row's
             // whole surface — is what makes it the model the agent answers
             // with; the ✕ takes one out of the list without touching the
@@ -1297,9 +1290,6 @@ internal fun ModelEditPage(
                 )
             }
 
-            PiGap(4.dp)
-            PiNotice(text.settings.fetchNote, tone = PiTone.Neutral)
-
             discoveryError?.let { message ->
                 PiGap(8.dp)
                 PiNotice(message)
@@ -1354,16 +1344,6 @@ internal fun ModelEditPage(
             // *written* to pi's file, and what gets written depends on the answer, so a
             // control drawn before the answer is a control whose meaning is not known yet.
             PiSectionHeader(text.settings.imageInputSection)
-            // One paragraph for the whole section, at the top: it was drawn under the first
-            // model's switch for a while, to put it next to the control it explains — and
-            // that is worse: the section has two controls *and* two numbers per model, and
-            // the sentence is about the card rather than about one switch.
-            PiNotice(text.settings.imageInputNote, tone = PiTone.Neutral)
-            if (isCustomEndpoint) {
-                PiGap(8.dp)
-                PiNotice(text.settings.imageInputCustomNote, tone = PiTone.Neutral)
-            }
-
             if (needsProvider) {
                 PiGap(8.dp)
                 // The honest subject. The catalogue was never the problem, and the row
@@ -1997,17 +1977,16 @@ private fun ModelNumberSheet(
             value = draft,
             onValueChange = { draft = tokenDigits(it) },
             placeholder = fallback?.toString() ?: text.settings.unknown,
+            // What a blank box means, on the field rather than in a paragraph above
+            // the button: it is a rule about *this* value, and the sheet has room
+            // for one line under the box.
+            supportingText = text.settings.modelNumbersNote,
             keyboardType = KeyboardType.Number,
             modifier = FIELD_INSET,
         )
-        PiNotice(text.settings.modelNumbersNote, tone = PiTone.Neutral)
+        // No dismiss beside the save: the scrim, the back gesture and the downward
+        // drag already close a sheet.
         PiSheetActions {
-            PiButton(
-                text = text.common.cancel,
-                onClick = host::dismiss,
-                kind = PiButtonKind.Text,
-                size = PiButtonSize.Small,
-            )
             PiButton(
                 text = text.settings.save,
                 onClick = {

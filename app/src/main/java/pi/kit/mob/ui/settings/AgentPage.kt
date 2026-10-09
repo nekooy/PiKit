@@ -12,13 +12,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,13 +52,12 @@ import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.design.PiAppBarScroll
-import pi.kit.mob.ui.design.PiBadge
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
@@ -70,7 +67,6 @@ import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiTextField
 import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiValueRow
 import pi.kit.mob.ui.design.PiNote
 
 /**
@@ -119,12 +115,12 @@ internal fun AgentPage(
         title = text.settings.agentProcess,
         subtitle = agentDescription(agent, text),
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Pinned,
     ) { modifier ->
         Column(
             modifier
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding),
+                .padding(PiPagePadding)
+                .padding(top = 8.dp, bottom = PiPageBottom),
         ) {
             PiSectionHeader(text.settings.workspace)
             PiGroup {
@@ -152,7 +148,6 @@ internal fun AgentPage(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
-            PiNote(text.settings.workingDirNote)
 
             PiSectionHeader(text.settings.agentContextSection)
             PiGroup {
@@ -162,7 +157,7 @@ internal fun AgentPage(
                 // section is actually for; the row's title is the question the
                 // sheet answers.
                 PiRow(
-                    title = text.settings.agentContextLead,
+                    title = text.settings.agentContextLeadTitle,
                     leading = { RowMark(Icons.Filled.Info) },
                     onClick = {
                         sheets.show(Sheet(key = "agent-context-notes") {
@@ -181,33 +176,19 @@ internal fun AgentPage(
                     title = text.settings.agentContextInstructions,
                     subtitle = instructions.absolutePath,
                     leading = { RowMark(Icons.Filled.Description) },
-                    // The badge and the chevron together: `PiRow` draws its chevron
-                    // only when the trailing slot is empty, and a row that says what
-                    // it is *and* opens a sheet needs both.
-                    trailing = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            PiBadge(text.settings.agentContextInstructionsEditable, tone = PiTone.Accent)
-                            Icon(
-                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
+                    // "Editable" in the row's own value slot, with `PiRow`'s chevron
+                    // beside it — the shape the language row uses. As a `PiBadge` it
+                    // was a filled pill, which is this app's *action* voice: a row
+                    // whose end is a badge reads as a control inside a control, and
+                    // the one thing that is true here is a fact about the file.
+                    value = text.settings.agentContextInstructionsEditable,
                     onClick = {
                         sheets.show(Sheet(key = "agent-context") {
-                            InstructionsEditor(
-                                session = session,
-                                onClose = { sheets.dismiss() },
-                            )
+                            InstructionsEditor(session = session)
                         })
                     },
                 )
             }
-            PiNote(text.settings.agentContextNote)
 
             PiSectionHeader(text.settings.process)
             PiGroup {
@@ -215,32 +196,25 @@ internal fun AgentPage(
                     title = text.settings.agentProcess,
                     subtitle = agentDescription(agent, text),
                     leading = { RowMark(Icons.Filled.PlayArrow) },
+                    // One control, and it is the restart: stop-and-start in one tap,
+                    // which is the only thing a reader comes to this row to do. The
+                    // stop button beside it was the second half of that same act made
+                    // into a separate, destructive-looking one — and a stopped agent
+                    // is a state nobody asks for.
+                    trailing = {
+                        PiButton(
+                            text = text.settings.restartAgent,
+                            onClick = {
+                                scope.launch {
+                                    session.stopAgent()
+                                    session.startAgent()
+                                }
+                            },
+                            kind = PiButtonKind.Filled,
+                            size = PiButtonSize.Small,
+                        )
+                    },
                 )
-                Row(
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PiButton(
-                        text = text.settings.restartAgent,
-                        onClick = {
-                            scope.launch {
-                                session.stopAgent()
-                                session.startAgent()
-                            }
-                        },
-                        kind = PiButtonKind.Filled,
-                        size = PiButtonSize.Small,
-                    )
-                    PiButton(
-                        text = text.settings.stopAgent,
-                        onClick = { scope.launch { session.stopAgent() } },
-                        kind = PiButtonKind.Outlined,
-                        size = PiButtonSize.Small,
-                        enabled = agent != AgentStatus.Stopped,
-                        leadingIcon = { Icon(Icons.Filled.Stop, contentDescription = null) },
-                    )
-                }
 
                 if (agent is AgentStatus.Failed) {
                     PiNotice(
@@ -253,7 +227,6 @@ internal fun AgentPage(
                 PiRowDivider()
                 KeepAliveRow(text = text)
             }
-            PiNote(text.settings.failedStartNote)
         }
     }
 }
@@ -358,12 +331,11 @@ private val CONTEXT_NOTES_MAX_HEIGHT = 440.dp
  * screen goes off, which is the report "息屏后会直接 terminated", and this row reports
  * whether the exemption is already held and offers the ask.
  *
- * The state is the row's value in a [PiTone]: the accent role when the exemption is
- * held and the neutral one while it is not, which is the distinction the row used to
- * draw in `primary` against `onSurfaceVariant` — the state is readable without the
- * wording having to carry it alone. The consequence is a note under the row rather
- * than the row's subtitle, because it is a sentence and the value column is a third
- * of a row (§9.2).
+ * The state is the row's subtitle, because it is a sentence rather than a value (§9.2
+ * held a value to a share of the row, and this one is thirty-eight characters in
+ * English). The ask is the row's trailing control, on the same line, which is the
+ * shape the process pair above has — and the pairing is what the report
+ * "操作按钮放同一行" asked for.
  */
 @Composable
 private fun KeepAliveRow(text: Strings) {
@@ -386,29 +358,33 @@ private fun KeepAliveRow(text: Strings) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    PiValueRow(
+    PiRow(
         title = text.settings.keepAliveTitle,
-        value = if (exempt) text.settings.keepAliveGranted else text.settings.keepAliveDenied,
-        valueTone = if (exempt) PiTone.Accent else PiTone.Neutral,
-        maxValueLines = 2,
+        // The state is the *subtitle* rather than the value column, and that is a
+        // measurement rather than a preference: the sentence is long in every catalog
+        // ("Battery optimisation is off for this app") and the ask beside it is seven
+        // characters, so as a value it left the title 79px — one glyph per line,
+        // "后/台…" — where the same text as a subtitle has the row's full width. A
+        // value is a short fact about a row; a sentence about its state is a subtitle
+        // (§13).
+        subtitle = if (exempt) text.settings.keepAliveGranted else text.settings.keepAliveDenied,
         leading = { RowMark(Icons.Filled.Settings) },
+        // The ask is the row's trailing control, on the same line as the state it
+        // changes — the same shape the process pair above now has.
+        trailing = {
+            // Always drawn, disabled once held: a button that appeared when the
+            // exemption was missing made the section jump a button taller and then
+            // shorter again as the answer changed.
+            PiButton(
+                text = text.settings.keepAliveAsk,
+                onClick = { BatteryOptimisation.request(context) },
+                kind = PiButtonKind.Outlined,
+                size = PiButtonSize.Small,
+                enabled = !exempt,
+                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+            )
+        },
     )
-    PiNote(text.settings.keepAliveNote)
-    Row(
-        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
-    ) {
-        // Always drawn, disabled once held: a button that appeared when the
-        // exemption was missing made the section jump a button taller and then
-        // shorter again as the answer changed.
-        PiButton(
-            text = text.settings.keepAliveAsk,
-            onClick = { BatteryOptimisation.request(context) },
-            kind = PiButtonKind.Outlined,
-            size = PiButtonSize.Small,
-            enabled = !exempt,
-            leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-        )
-    }
 }
 
 /**
@@ -428,13 +404,13 @@ private fun KeepAliveRow(text: Strings) {
  * yourself" would leave the sentence the user just wrote unread, which is worse than
  * a restart they did not ask for: the same trade the storage page already makes.
  *
- * ## No close button in the title
+ * ## No close button, in the title or in the footer
  *
- * The title is [PiSheetTitle], which has no action slot, and the panel is dismissible
- * four ways — the scrim, a downward drag, back, and this body's own Cancel. The ✕ that
- * used to sit on this title's line went with the context sheet's, which is the same
- * panel shape and the same reasoning: a second way to do what four already do was one
- * control too many on the one line that says what the sheet is.
+ * The title is [PiSheetTitle], which has no action slot, and the panel is
+ * dismissible three ways that need no control at all: the scrim, a downward drag and
+ * back. The ✕ that used to sit on this title's line went first, and the footer's
+ * *Cancel* after it — the same reasoning applied to the last line instead of the
+ * first. What is left in the footer is the two buttons that *change* the file.
  *
  * ## Why the field is Material's own and not [PiTextField]
  *
@@ -447,10 +423,7 @@ private fun KeepAliveRow(text: Strings) {
  * own shape and colours, and the gap is reported rather than papered over.
  */
 @Composable
-private fun InstructionsEditor(
-    session: PiAgentSession,
-    onClose: () -> Unit,
-) {
+private fun InstructionsEditor(session: PiAgentSession) {
     val text = strings
     val file = remember(session) { AgentContext.file(session.env) }
     var draft by remember {
@@ -494,13 +467,19 @@ private fun InstructionsEditor(
                 .fillMaxWidth()
                 // 12h/12t/8b: more air above the box than the 12/4 every other
                 // field uses — the editor sat against the sheet's title — and room
-                // for the note that follows to read as its own part.
+                // for the outcome line that follows to read as its own part.
                 .padding(horizontal = 12.dp)
                 .padding(top = 12.dp, bottom = 8.dp)
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
-        PiNote(text.settings.agentContextEditorNote)
+        // The note that used to sit here — "saving restarts the agent" — was the Save
+        // button's own caption, drawn inside its fill on a second line. It is gone:
+        // the caption made the Save button a two-line control standing beside a
+        // one-line Restore, which read as two different sizes for two peer actions.
+        // The consequence of the save is still stated where it always was for the
+        // section rather than for the button — `agentContextSaved` reports it after
+        // the fact — and the sheet's own title names the file.
         when {
             failed -> PiNote(
                 text = text.settings.agentContextFailed,
@@ -516,20 +495,16 @@ private fun InstructionsEditor(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // All three sit together on the right — Cancel, Restore, Save —
-                // rather than split across the row, and with room under them so
-                // the sheet's last control is not against the panel edge.
+                // Both sit together on the right — Restore, Save — rather than split
+                // across the row, and with room under them so the sheet's last
+                // control is not against the panel edge. There is no Cancel: the
+                // scrim, the back gesture and a downward drag all leave the sheet
+                // without saving, and a button for that was the third of three.
                 .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.weight(1f))
-            PiButton(
-                text = text.common.cancel,
-                onClick = onClose,
-                kind = PiButtonKind.Outlined,
-                size = PiButtonSize.Small,
-            )
             PiButton(
                 text = text.settings.agentContextRestore,
                 onClick = { confirmRestore = true },

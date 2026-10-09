@@ -2231,13 +2231,15 @@ internal fun settingsWithPiDefaults(
     // A user whose own entry names a *different* source is untouched either way —
     // this only ever appends the bundled directory when it is not already listed.
     val packages = existing["packages"]
+    // The guard narrows `packages` to "null, or an array", so the two reads below need
+    // no cast of their own — and a cast there is a second place the rule is written.
     if (bundledExtension != null && (packages == null || packages is JsonArray)) {
         val path = bundledExtension.directory.absolutePath
-        val listed = (packages as? JsonArray).orEmpty()
+        val listed = packages.orEmpty()
             .any { (it as? JsonPrimitive)?.contentOrNull == path }
         if (!listed) {
             merged = JsonObject(
-                merged + ("packages" to JsonArray((packages as? JsonArray).orEmpty() + JsonPrimitive(path))),
+                merged + ("packages" to JsonArray(packages.orEmpty() + JsonPrimitive(path))),
             )
         }
     }

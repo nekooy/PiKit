@@ -45,17 +45,14 @@ import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.showPicker
 import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGroup
-import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiSectionHeader
 import pi.kit.mob.ui.design.PiSheetActions
 import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiTone
 
 /**
  * The "add an option" half of the search settings page.
@@ -116,11 +113,12 @@ import pi.kit.mob.ui.design.PiTone
  * outline changed after the first option was added, because the outcome note appeared
  * *inside* the card under it, while the storage page's add-a-folder never moved. A
  * group is a set of peer rows now and each row clips its own outline, so that
- * particular failure cannot recur — but the notes still belong outside it, because a
+ * particular failure cannot recur — but the outcome still belongs outside it, because a
  * group is rows and a sentence is not one, and the acting row still belongs last. So
- * the explanation and the empty hint are notices above the group, the outcome is a
- * [ConfigNote] below it, and the group itself is the list plus the one row that acts
- * on it.
+ * the outcome is a [ConfigNote] below the group, and the group itself is the list plus
+ * the one row that acts on it. The explanation that used to sit above it is gone:
+ * what the section is for is one line of a field's own help, and a paragraph over a
+ * list nobody reads is clutter (§13).
  *
  * The hairline above the row exists only when the list has something in it: it
  * separates the list from the row, and a rule with one thing on each side of it is a
@@ -139,9 +137,6 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
     var pendingRemoval by remember { mutableStateOf<WebSearchEntry?>(null) }
 
     // Outside the group, deliberately: see the note above on the press feedback.
-    PiNotice(text.settings.searchConfigNote, tone = PiTone.Neutral)
-    if (entries.isEmpty()) PiNotice(text.settings.searchConfigEmpty, tone = PiTone.Neutral)
-
     PiSectionHeader(text.settings.searchConfig)
     PiGroup {
         entries.forEachIndexed { index, entry ->
@@ -444,6 +439,9 @@ private fun WebSearchValueSheet(
             },
             label = { Text(text.settings.searchConfigValueLabel) },
             placeholder = { Text(param.example) },
+            // What the field accepts, as its own supporting text rather than as a
+            // paragraph between it and the button: it is help for this box.
+            supportingText = { Text(text.settings.searchConfigValueNote) },
             singleLine = !param.type.contains("object"),
             // Machine text: an autocorrected key or `true` is a value the extension
             // ignores, and the failure is invisible until a search does nothing.
@@ -462,26 +460,15 @@ private fun WebSearchValueSheet(
                 .padding(horizontal = 12.dp, vertical = 4.dp),
         )
 
-        Text(
-            text = text.settings.searchConfigValueNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
-        )
-
         if (invalid) {
             ConfigNote(text.settings.searchConfigValueInvalid, MaterialTheme.colorScheme.error)
         }
 
-        // The design's own action row: the dismiss first, then the one real action,
-        // which is the order the sheet already used.
+        // The design's own action row, holding the sheet's one real action. No
+        // dismiss beside it: a sheet is closed by the scrim, the back gesture or a
+        // downward drag, and this file's cancel was a fourth way to do the same
+        // thing.
         PiSheetActions {
-            PiButton(
-                text = text.common.cancel,
-                onClick = host::dismiss,
-                kind = PiButtonKind.Outlined,
-                size = PiButtonSize.Small,
-            )
             PiButton(
                 text = text.settings.searchConfigValueAdd,
                 onClick = {

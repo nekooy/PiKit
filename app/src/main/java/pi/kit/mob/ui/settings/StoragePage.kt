@@ -43,12 +43,12 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
@@ -58,7 +58,6 @@ import pi.kit.mob.ui.design.PiSheetList
 import pi.kit.mob.ui.design.PiSheetRow
 import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiNote
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -296,13 +295,12 @@ fun StoragePage(
         title = text.settings.storagePageTitle,
         subtitle = text.settings.storagePageSubtitle,
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Pinned,
     ) { content ->
         Column(
             content
                 .verticalScroll(rememberScrollState())
                 .padding(PiPagePadding)
-                .padding(bottom = 32.dp),
+                .padding(top = 8.dp, bottom = PiPageBottom),
         ) {
             AccessSection(
                 text = text,
@@ -369,16 +367,12 @@ fun StoragePage(
                 }
             }
 
-            // The page's one alert, and only while the policy is unrestricted — the
-            // one root that means *everything on the phone*. Every row used to carry
-            // a warning, and a page where every row is an alert is a page where no
-            // alert is read; a folder that is switched off cannot lose anything
-            // either. A fresh install, which has an empty policy, is correctly
-            // warning-free.
-            if (policy.isUnrestricted) {
-                PiNotice(text = text.settings.storageBroadWarning, tone = PiTone.Danger)
-            }
-
+            // No alert above the list. One stood here while the policy was
+            // unrestricted — "these files usually cannot be recovered" — and it is
+            // gone: it repeated what the /sdcard row's own subtitle says about what
+            // granting it means, and it fired the moment the root was switched on,
+            // which is the state the reader had just chosen and did not need telling
+            // about a second time.
             PiSectionHeader(text.settings.storageCustomSection)
             PiGroup {
                 policy.custom.sorted().forEachIndexed { index, path ->
@@ -495,7 +489,6 @@ fun StoragePage(
                     enabled = guardInstalled,
                 )
             }
-            PiNote(text.settings.storageGuardNote)
         }
     }
 
@@ -648,16 +641,6 @@ private fun AccessSection(
             )
         }
     }
-    if (!granted) {
-        // Stated under the group rather than only in the row: with the grant missing
-        // the row's own line is the *blocker* (`storageMissing`), so what the agent
-        // can reach is what is left to say — and the switch list below is long enough
-        // to be misread. A fact about what the reader is looking at rather than a
-        // failure: the agent is confined to its own home, which is a working state,
-        // so the tone is neutral rather than the error role.
-        PiNotice(text = text.settings.storageNoAccessBody, tone = PiTone.Neutral)
-        PiNote(text.settings.storageNote)
-    }
 }
 
 /**
@@ -698,11 +681,17 @@ private fun ConfirmDialog(
             )
         },
         confirmButton = {
+            // A dialog's two buttons are two words that differ by colour and nothing
+            // else — see `PiActions`' `Text` note. The destructive one is the error
+            // role, the ordinary one the app's accent, and neither carries a fill or
+            // a border: a filled pill beside a bordered word was two weights for one
+            // question.
             PiButton(
                 text = confirmLabel,
                 onClick = onConfirm,
-                kind = PiButtonKind.Filled,
+                kind = PiButtonKind.Text,
                 size = PiButtonSize.Small,
+                tone = if (destructive) PiTone.Danger else PiTone.Accent,
             )
         },
         dismissButton = {

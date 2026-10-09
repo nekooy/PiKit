@@ -21,15 +21,16 @@ import android.util.Log
  *
  * ## What it does not move
  *
- * The **application's** icon (`android:icon` on `<application>`) is untouched, so
- * the recent-tasks card, the app's own page in system settings and the
- * "uninstall" dialog keep the black icon whichever way this is set. That is
- * deliberate and not half a feature: those surfaces have one icon and no
- * per-entry notion, and the alternative — repainting every one of them — is the
- * app rewriting its own identity rather than offering a preference.
+ * The **application's** icon (`android:icon` on `<application>`) is fixed at build
+ * time, so the recent-tasks card and the app's own page in system settings always
+ * show the mark the manifest declares — which is the app's shipping identity rather
+ * than this preference, and today that is the white field. Switching the preference
+ * repaints the home-screen entry only; the alternative — repainting every other
+ * surface too — is the app rewriting its own identity rather than offering a
+ * preference.
  *
- * [DEFAULT] is [DARK], which is also the alias the manifest declares enabled, so a
- * fresh install shows the black icon and writes no component state at all.
+ * [DEFAULT] is [LIGHT], which is also the alias the manifest declares enabled, so a
+ * fresh install shows the white icon and writes no component state at all.
  */
 enum class LauncherIcon(
     /** What is written to preferences; an unrecognised code resolves to [DEFAULT]. */
@@ -53,15 +54,15 @@ enum class LauncherIcon(
      */
     val declaredEnabled: Boolean,
 ) {
-    /** Black field, white mark — the icon the app shipped with. */
-    DARK("dark", "ui.LauncherDark", declaredEnabled = true),
+    /** White field, black mark — the icon the app ships with. */
+    LIGHT("light", "ui.LauncherLight", declaredEnabled = true),
 
-    /** White field, black mark. */
-    LIGHT("light", "ui.LauncherLight", declaredEnabled = false),
+    /** Black field, white mark. */
+    DARK("dark", "ui.LauncherDark", declaredEnabled = false),
     ;
 
     companion object {
-        val DEFAULT = DARK
+        val DEFAULT = LIGHT
 
         fun fromCode(code: String?): LauncherIcon =
             entries.firstOrNull { it.code == code } ?: DEFAULT

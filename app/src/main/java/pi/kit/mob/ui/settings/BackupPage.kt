@@ -22,9 +22,9 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.BackupStatus
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.ui.design.PiAppBarScroll
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiNotice
+import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
 import pi.kit.mob.ui.design.PiRowDivider
@@ -32,7 +32,6 @@ import pi.kit.mob.ui.design.PiScaffold
 import pi.kit.mob.ui.design.PiSectionHeader
 import pi.kit.mob.ui.design.PiSwitchRow
 import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiNote
 
 /**
  * Backup & restore: the archive's contents, and the two directions that move it.
@@ -135,13 +134,12 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
         title = text.settings.backupTitle,
         subtitle = text.settings.backupSubtitle,
         onBack = onBack,
-        scrollBehavior = PiAppBarScroll.Pinned,
             ) { content ->
         Column(
             content
                 .verticalScroll(rememberScrollState())
                 .padding(PiPagePadding)
-                .padding(bottom = 32.dp),
+                .padding(top = 8.dp, bottom = PiPageBottom),
         ) {
             PiSectionHeader(text.settings.backupExportSection)
             PiGroup {
@@ -233,10 +231,6 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                         )
                     }
                 }
-                if (available.isEmpty()) {
-                    PiNote(text.settings.backupReviewEmpty)
-                }
-
                 // The destructive half, in the error role: the wording says what a
                 // restore does *and* what it does not, and the button that acts on it
                 // is the next thing below.
@@ -251,8 +245,6 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 )
                 StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
             }
-
-            PiNote(text.settings.backupNote)
         }
     }
 }
@@ -294,7 +286,7 @@ private fun Categories(
  * Split by direction rather than shown under both: an export's progress under the
  * import button reads as an import that is somehow packing a file, and the one
  * status value both halves read from is exactly why this takes a [kind]. The
- * *running* case is deliberately absent — that is the coral pill beside the button
+ * *running* case is deliberately absent — that is the live pill beside the button
  * — and `NotAnArchive` is an import outcome only: it is the answer to reading a
  * picked file, and it used to appear under the export button's own status line as
  * well, which is the same confusion in the other direction.

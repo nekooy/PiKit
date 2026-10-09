@@ -16,6 +16,33 @@
  * only delightful when the finger meant it, and a list of twelve of them is a
  * twitch.
  *
+ * ## Chips carry the accent, and the glyph alone says what they do
+ *
+ * [PiSelectChip] is the app's only chip, and for a while it was a neutral one: a
+ * step of `surfaceContainer` with an `onSurfaceVariant` label. That is the M3
+ * baseline's "assist chip", and on this app's surfaces it was nearly invisible —
+ * the composer's row of four was read as four labels with glyphs beside them. It is
+ * an accent container now, so the row reads as four controls at a glance.
+ *
+ * ## No kind carries a border of its own except `Outlined`
+ *
+ * [PiButtonKind.Text] is Material's own text button and nothing more: no fill, no
+ * outline, its whole difference from the fill kinds being the colour of its label.
+ * That is exactly what a *dialog* wants — a confirm and a dismiss that are two words
+ * differing by colour (the destructive one in the error role), rather than a filled
+ * pill beside a bordered one, which is two weights for one question. Turning a
+ * question into a red word and a plain word keeps the reader's eye on the sentence
+ * rather than on the chrome.
+ *
+ * The app added a 1dp hairline to this kind for a while, to stop a bare button
+ * reading as a word on a page whose cards and background are the same neutral. Every
+ * `Text` button left in the app lives inside a tinted notice, whose own container is
+ * that edge — so the hairline was a second boundary around one thing, and it is gone.
+ * `Outlined` keeps the framework's border, which is the kind that means "this is a
+ * control with an edge"; a toolbar *icon* is chrome rather than a button (a header's
+ * back arrow, the terminal's own actions, the composer's controls) and carries no
+ * outline either way.
+ *
  * ## Why the connected group is hand-built
  *
  * `ButtonGroup` in this release carries an overflow menu, a measured item
@@ -31,6 +58,7 @@ package pi.kit.mob.ui.design
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -131,10 +159,15 @@ fun PiButton(
     // the page that cannot be taken back.
     tone: PiTone = PiTone.Accent,
 ) {
-    val padding = PaddingValues(
-        horizontal = size.horizontalPadding,
-        vertical = 0.dp,
-    )
+    // Only `Outlined` carries a border, and it is the framework's own: this parameter
+    // overrides `OutlinedButton`'s default, so passing nothing here is what once made
+    // an outlined button lose its outline. Every other kind is a fill or a bare word.
+    val border = if (kind == PiButtonKind.Outlined) {
+        ButtonDefaults.outlinedButtonBorder(enabled = enabled)
+    } else {
+        null
+    }
+    val padding = PaddingValues(horizontal = size.horizontalPadding, vertical = 0.dp)
     val shapes = ButtonDefaults.shapes(
         shape = PiShapes.pill,
         pressedShape = PiShapes.card,
@@ -146,21 +179,24 @@ fun PiButton(
         PiButtonKind.Outlined, PiButtonKind.Text -> ButtonDefaults.shapes(shape = PiShapes.pill)
     }
 
+    val labelStyle = when (size) {
+        PiButtonSize.ExtraSmall, PiButtonSize.Small -> MaterialTheme.typography.labelLarge
+        else -> MaterialTheme.typography.titleSmall
+    }
     val content: @Composable RowScope.() -> Unit = {
         if (leadingIcon != null) {
             Box(Modifier.size(size.iconSize), contentAlignment = Alignment.Center) { leadingIcon() }
         }
         Text(
             text = text,
-            style = when (size) {
-                PiButtonSize.ExtraSmall, PiButtonSize.Small -> MaterialTheme.typography.labelLarge
-                else -> MaterialTheme.typography.titleSmall
-            },
+            style = labelStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
 
+    // A fixed height, and the row of buttons this sits in is aligned on one
+    // baseline because of it.
     val container = Modifier
         .height(size.containerHeight)
         .defaultMinSize(minWidth = size.containerHeight)
@@ -203,6 +239,7 @@ fun PiButton(
             modifier = modifier.then(container),
             enabled = enabled,
             colors = colors,
+            border = border,
             contentPadding = padding,
             content = content,
         )
@@ -213,6 +250,7 @@ fun PiButton(
             modifier = modifier.then(container),
             enabled = enabled,
             colors = colors,
+            border = border,
             contentPadding = padding,
             content = content,
         )
@@ -223,6 +261,7 @@ fun PiButton(
             modifier = modifier.then(container),
             enabled = enabled,
             colors = colors,
+            border = border,
             contentPadding = padding,
             content = content,
         )
@@ -246,20 +285,31 @@ fun PiSelectChip(
     modifier: Modifier = Modifier,
     leadingIcon: (@Composable () -> Unit)? = null,
 ) {
+    // An unselected chip is the accent's own container: a tint of the theme colour,
+    // which is both a step away from the band it sits on (`surfaceContainer`) and
+    // visibly *coloured*, so the row reads as controls rather than as labels. The
+    // first version was `surfaceContainerHighest` — a neutral one step up — and the
+    // distinction it bought was a shade of grey; a second version added a hairline,
+    // which is a boundary around a fill that already is one. The tint is the answer,
+    // and the label takes `onPrimaryContainer` with it so the chip is legible as a
+    // chip rather than as text on a tint.
+    //
+    // Selected is the solid accent, which is the one state that has to be tellable
+    // from two feet away.
     val container by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
+            MaterialTheme.colorScheme.primary
         } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
+            MaterialTheme.colorScheme.primaryContainer
         },
         animationSpec = PiMotion.defaultEffects(),
         label = "chipContainer",
     )
     val content by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
+            MaterialTheme.colorScheme.onPrimary
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+            MaterialTheme.colorScheme.onPrimaryContainer
         },
         animationSpec = PiMotion.defaultEffects(),
         label = "chipContent",
