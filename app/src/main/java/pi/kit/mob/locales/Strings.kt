@@ -1299,6 +1299,16 @@ interface Strings {
         val process: String
         val agentProcess: String
         val restartAgent: String
+
+        /**
+         * The confirmation that a restart actually happened.
+         *
+         * The process row's button stops and starts pi in one tap, and the row's own
+         * subtitle answers with the state — but "starting" and "ready" are the same
+         * two words it wore before the tap on a page nobody has opened twice, so the
+         * tap read as doing nothing. A toast names the outcome instead of the state.
+         */
+        val restartedAgent: String
         val failedStartNote: String
 
         /**

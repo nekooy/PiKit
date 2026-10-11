@@ -682,6 +682,7 @@ internal object EnglishStrings : Strings {
         override val process = "Process"
         override val agentProcess = "Agent process"
         override val restartAgent = "Restart agent"
+        override val restartedAgent = "Agent restarted"
         override val failedStartNote =
             "A failed start is almost always configuration: check that the active profile " +
                 "has a key and that the model id exists for that provider. The manual has " +
