@@ -1540,15 +1540,18 @@ internal fun ModelEditPage(
                 }
             }
 
-            saveMessage?.let { message ->
-                PiGap(12.dp)
-                PiNotice(message)
-            }
-
             // Cancel and Save sit together on the right — the primary last — rather than
             // split across the row, which put the secondary action on the far left where the
             // eye does not look for a pair. Ask the same question the back arrow does, because
             // Cancel is the same action: this button has always meant "leave without saving".
+            //
+            // **`Small`, and that is the whole of what this row was getting wrong.** The
+            // pair used to be Material's `Medium` — 56dp tall — which made the two controls
+            // at the foot of this form a size larger than *every* other action pair in the
+            // settings: `RunActions` on the maintenance and backup pages, the AGENTS.md
+            // editor's Restore-and-Save, and the document editor's Revert-and-Save are all
+            // `Small`, because a page's own actions are one component at one weight rather
+            // than one weight per page (§9.2).
             PiGap(12.dp)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1559,10 +1562,12 @@ internal fun ModelEditPage(
                     text = text.settings.cancel,
                     onClick = ::requestLeave,
                     kind = PiButtonKind.Outlined,
+                    size = PiButtonSize.Small,
                 )
                 PiButton(
                     text = text.settings.save,
                     onClick = { if (save()) leave() },
+                    size = PiButtonSize.Small,
                 )
             }
             PiGap(12.dp)
