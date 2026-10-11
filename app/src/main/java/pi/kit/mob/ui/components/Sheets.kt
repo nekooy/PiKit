@@ -63,15 +63,18 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -380,72 +383,96 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
                 .windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom)),
             contentAlignment = Alignment.BottomCenter,
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                // The panel's corners are the app's sheet shape, which is `PiShapes`'s
-                // 28dp pair and square at the bottom: the bottom two corners sit on
-                // the window's own edge, so rounding them would let the scrim show
-                // through underneath.
-                shape = PiShapes.sheetTop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = SHEET_MAX_WIDTH)
-                    .onSizeChanged { panelHeight = it.height.toFloat() }
-                    // `graphicsLayer` rather than `offset`: the translation is a
-                    // property of the sheet's *own* height, which is only known
-                    // after it has been measured, and a `graphicsLayer` lambda is
-                    // read at draw time — an `offset` modifier built from state
-                    // measured in the same frame would draw one frame of the panel
-                    // sitting at its final position before it started moving.
-                    //
-                    // ## Why the translation is rounded to whole pixels
-                    //
-                    // This is a text-rendering fix, not a taste for round numbers.
-                    // `drag` is the finger's own delta and `progress` is a tween, so
-                    // while the panel moves its translation is almost never an
-                    // integer — and Android rasterises text inside a RenderNode that
-                    // sits at a fractional offset with grayscale antialiasing rather
-                    // than subpixel (LCD) antialiasing, because LCD text has to be
-                    // aligned to the pixel grid. Every glyph in the sheet therefore
-                    // changes weight and position slightly from frame to frame while
-                    // the panel is dragged, and snaps back to what it was the moment
-                    // the drag stops. That is the report "拖动时和停止状态切换时感觉
-                    // 文字会闪烁或者变糊", and this panel is the only place in the app
-                    // that translates text at a fractional offset — the transcript's
-                    // list places its rows at whole-pixel offsets (`LazyListState`
-                    // rounds its scroll), so nothing there needs the same treatment.
-                    //
-                    // Rounded *here* rather than where `drag` accumulates, and that
-                    // is what keeps the accumulation exact: a drag that moves half a
-                    // pixel per frame still travels, instead of dropping the
-                    // remainder on every frame and stalling against the finger.
-                    .graphicsLayer {
-                        translationY = ((1f - progress) * size.height + drag).roundToInt().toFloat()
-                    }
-                    .then(
-                        if (live) {
-                            Modifier
-                                .nestedScroll(overscroll)
-                                .draggable(
-                                    orientation = Orientation.Vertical,
-                                    state = rememberDraggableState { delta ->
-                                        // Downwards only: a sheet that can be
-                                        // dragged up past its own top edge is a
-                                        // sheet that detaches from the edge it is
-                                        // docked to.
-                                        drag = (drag + delta).coerceAtLeast(0f)
-                                    },
-                                    onDragStopped = { velocity -> settleDrag(velocity) },
-                                )
-                        } else {
-                            Modifier
-                        },
-                    ),
-            ) {
-                Column(Modifier.fillMaxWidth()) {
-                    SheetGrabber()
-                    Box(Modifier.padding(bottom = contentBottom)) {
-                        sheet.content()
+            // The panel's ceiling, and the reason it is here rather than in a body.
+            //
+            // A panel taller than the space between the keyboard and the status bar
+            // used to be laid out from the window's bottom edge with nothing stopping
+            // it, so its top — the grabber and the sheet's title — was drawn *over* the
+            // status bar's clock and battery. The measured case is the AGENTS.md
+            // editor: a 240-440dp field with two buttons under it, and a keyboard that
+            // takes 300dp of a 411x891dp window.
+            //
+            // The bound is the height this box has (the window, less the keyboard,
+            // because the inset above is consumed on the way in) minus the status bar,
+            // which is what keeps the panel's top edge below the clock. Every body
+            // under it is measured against the ceiling, so a body that can scroll
+            // scrolls and a body that cannot is at least never over the system bars —
+            // and `PiSheetList`'s own 0.7-of-the-panel cap follows the new ceiling
+            // because it is a share of what it is given.
+            BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                val statusTop = with(density) {
+                    WindowInsets.statusBars.getTop(density).toDp()
+                }
+                val ceiling = with(density) { constraints.maxHeight.toDp() } - statusTop
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    // The panel's corners are the app's sheet shape, which is `PiShapes`'s
+                    // 32dp pair and square at the bottom: the bottom two corners sit on
+                    // the window's own edge, so rounding them would let the scrim show
+                    // through underneath.
+                    shape = PiShapes.sheetTop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = SHEET_MAX_WIDTH)
+                        .heightIn(max = ceiling)
+                        .onSizeChanged { panelHeight = it.height.toFloat() }
+                        // `graphicsLayer` rather than `offset`: the translation is a
+                        // property of the sheet's *own* height, which is only known
+                        // after it has been measured, and a `graphicsLayer` lambda is
+                        // read at draw time — an `offset` modifier built from state
+                        // measured in the same frame would draw one frame of the panel
+                        // sitting at its final position before it started moving.
+                        //
+                        // ## Why the translation is rounded to whole pixels
+                        //
+                        // This is a text-rendering fix, not a taste for round numbers.
+                        // `drag` is the finger's own delta and `progress` is a tween, so
+                        // while the panel moves its translation is almost never an
+                        // integer — and Android rasterises text inside a RenderNode that
+                        // sits at a fractional offset with grayscale antialiasing rather
+                        // than subpixel (LCD) antialiasing, because LCD text has to be
+                        // aligned to the pixel grid. Every glyph in the sheet therefore
+                        // changes weight and position slightly from frame to frame while
+                        // the panel is dragged, and snaps back to what it was the moment
+                        // the drag stops. That is the report "拖动时和停止状态切换时感觉
+                        // 文字会闪烁或者变糊", and this panel is the only place in the app
+                        // that translates text at a fractional offset — the transcript's
+                        // list places its rows at whole-pixel offsets (`LazyListState`
+                        // rounds its scroll), so nothing there needs the same treatment.
+                        //
+                        // Rounded *here* rather than where `drag` accumulates, and that
+                        // is what keeps the accumulation exact: a drag that moves half a
+                        // pixel per frame still travels, instead of dropping the
+                        // remainder on every frame and stalling against the finger.
+                        .graphicsLayer {
+                            translationY = ((1f - progress) * size.height + drag).roundToInt().toFloat()
+                        }
+                        .then(
+                            if (live) {
+                                Modifier
+                                    .nestedScroll(overscroll)
+                                    .draggable(
+                                        orientation = Orientation.Vertical,
+                                        state = rememberDraggableState { delta ->
+                                            // Downwards only: a sheet that can be
+                                            // dragged up past its own top edge is a
+                                            // sheet that detaches from the edge it is
+                                            // docked to.
+                                            drag = (drag + delta).coerceAtLeast(0f)
+                                        },
+                                        onDragStopped = { velocity -> settleDrag(velocity) },
+                                    )
+                            } else {
+                                Modifier
+                            },
+                        ),
+                ) {
+                    Column(Modifier.fillMaxWidth()) {
+                        SheetGrabber()
+                        Box(Modifier.padding(bottom = contentBottom)) {
+                            sheet.content()
+                        }
                     }
                 }
             }

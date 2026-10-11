@@ -478,7 +478,24 @@ private fun InstructionsEditor(session: PiAgentSession) {
     var failed by remember { mutableStateOf(false) }
     var confirmRestore by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxWidth()) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // Scrollable, and that is what makes the panel survive a keyboard.
+            //
+            // The sheet's own ceiling stops the panel at the status bar
+            // (`components/Sheets.kt`), and this body is taller than that ceiling the
+            // moment the keyboard is up: a 240-440dp field plus a title and two
+            // buttons against a window that just lost 300dp. A plain column would be
+            // *clipped* — the buttons and the bottom of the document unreachable — so
+            // it scrolls instead, and it does not scroll at all while everything fits.
+            //
+            // Safe to wrap, and that is a property of this body rather than of the
+            // rule: it holds a title, one `OutlinedTextField` and a row, and a
+            // `LazyColumn` here would throw on an infinite height (AGENTS.md's rule
+            // about vertically scrollable components).
+            .verticalScroll(rememberScrollState()),
+    ) {
         PiSheetTitle(
             title = text.settings.agentContextInstructions,
             subtitle = file.absolutePath,
