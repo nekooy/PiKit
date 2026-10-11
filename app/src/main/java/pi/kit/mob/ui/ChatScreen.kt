@@ -110,7 +110,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import pi.kit.mob.data.ModelProfile
-import pi.kit.mob.data.AI_AVATAR_DEFAULT_LABEL
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.rememberedThinkingLevels
 import pi.kit.mob.locales.Strings
@@ -888,26 +887,32 @@ private fun ChatPage(
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
-    // The two avatars the transcript draws, rebuilt only when one of the five settings
+    // The two avatars the transcript draws, rebuilt only when one of the settings
     // behind them moves. Collected here rather than passed in so a change on the
     // personalization page reaches this one without a restart.
     val saved by session.settingsStore.settings.collectAsState()
     val avatars = remember(
         saved.showAvatars,
         saved.aiAvatarLabel,
+        saved.aiAvatarImage,
         saved.aiAvatarColor,
         saved.userAvatarLabel,
+        saved.userAvatarImage,
         saved.userAvatarColor,
     ) {
         if (!saved.showAvatars) {
             null
         } else {
             ChatAvatars(
-                aiLabel = saved.aiAvatarLabel.ifBlank { AI_AVATAR_DEFAULT_LABEL },
+                // Blank is the mark, not a word: the agent's fallback is the app's own
+                // Pi logo, drawn by `PiAvatar`'s `mark` flag.
+                aiLabel = saved.aiAvatarLabel.ifBlank { null },
+                aiImage = saved.aiAvatarImage.ifBlank { null },
                 aiColor = saved.aiAvatarColor.seed,
-                // Blank is the silhouette, not a word: the two speakers must not fall
-                // back to the same mark, and the agent's fallback is already taken.
+                // The reader's blank is the silhouette for the same reason: the two
+                // speakers must not fall back to the same figure.
                 userLabel = saved.userAvatarLabel.ifBlank { null },
+                userImage = saved.userAvatarImage.ifBlank { null },
                 userColor = saved.userAvatarColor.seed,
             )
         }
@@ -2060,28 +2065,37 @@ private const val APP_NAME = "PiKit"
 /**
  * The two avatars the transcript draws over its cards, or null when they are off.
  *
- * A null [userLabel] (and a null [aiLabel]) is the built-in mark rather than a word:
- * the agent's is `"PI"` (so its label is never null) and the reader's is the person
- * silhouette, which is why [userLabel] may be null where [aiLabel] may not. The
- * colours are the seeds of the two `ThemeColor`s the personalization page offers.
+ * A null label (and no image) is the built-in mark rather than a word: the agent's is
+ * the app's own Pi logo and the reader's is the person silhouette, which is why both
+ * labels may be null and why the two fallbacks are different figures. The colours are
+ * the seeds of the two `ThemeColor`s the personalization page offers, and an image is
+ * a file path the settings store holds.
  */
 private data class ChatAvatars(
     val aiLabel: String?,
+    val aiImage: String?,
     val aiColor: Color,
     val userLabel: String?,
+    val userImage: String?,
     val userColor: Color,
 )
 
 /**
  * The avatar's drawn size and the air between it and the card under it.
  *
- * 26dp: smaller than the 28dp `PiAgentMark` because it repeats on every card rather
- * than standing once in a header, and large enough that a two-character label is
- * legible. The 6dp gap is the inside-module gap — it belongs to the card's own top
- * edge, not to the transcript's `rowGap`, which is the space between two turns.
+ * 34dp, up from 26. The avatar is a *name* for the speaker, and at 26dp a
+ * two-character label was legible but the figure was not — the transcript is read at
+ * arm's length, and the mark has to be tellable from the other speaker's at a glance
+ * rather than by looking for it. 34dp is the size the agent's mark is drawn at in the
+ * process row (`PiAgentMark`'s 28dp is inside a container; this is the whole badge),
+ * and it clears the answer card's own 16dp inset without competing with the text's
+ * first line.
+ *
+ * The 8dp gap is the inside-module gap — it belongs to the card's own top edge, not
+ * to the transcript's `rowGap`, which is the space between two turns.
  */
-private val AVATAR_SIZE = 26.dp
-private val AVATAR_GAP = 6.dp
+private val AVATAR_SIZE = 34.dp
+private val AVATAR_GAP = 8.dp
 
 @Composable
 private fun TranscriptCardView(
@@ -2105,12 +2119,14 @@ private fun TranscriptCardView(
                 Column(horizontalAlignment = Alignment.End) {
                     // The reader's own mark, over the bubble and on the reader's
                     // side — the two things that say who is speaking without a name
-                    // line. See [PiAvatar]; a null label draws the silhouette.
+                    // line. See [PiAvatar]; a null label draws the silhouette and a
+                    // stored picture replaces both.
                     avatars?.let { marks ->
                         PiAvatar(
                             color = marks.userColor,
                             label = marks.userLabel,
                             icon = Icons.Filled.Person,
+                            imagePath = marks.userImage,
                             size = AVATAR_SIZE,
                             modifier = Modifier.padding(bottom = AVATAR_GAP),
                         )
@@ -2141,6 +2157,11 @@ private fun TranscriptCardView(
                 PiAvatar(
                     color = marks.aiColor,
                     label = marks.aiLabel,
+                    imagePath = marks.aiImage,
+                    // The agent's fallback is the app's own mark, so the speaker
+                    // answering is named by the product's logo rather than by two
+                    // letters standing in for one.
+                    mark = true,
                     size = AVATAR_SIZE,
                     modifier = Modifier.padding(bottom = AVATAR_GAP),
                 )

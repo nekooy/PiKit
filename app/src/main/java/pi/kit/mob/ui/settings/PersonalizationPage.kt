@@ -1,5 +1,7 @@
 package pi.kit.mob.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,14 +26,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import pi.kit.mob.data.AI_AVATAR_DEFAULT_LABEL
+import kotlinx.coroutines.launch
+import pi.kit.mob.data.AvatarSlot
+import pi.kit.mob.data.AvatarStore
 import pi.kit.mob.data.FontSize
 import pi.kit.mob.data.LauncherIcon
 import pi.kit.mob.data.ThemeColor
@@ -45,6 +51,7 @@ import pi.kit.mob.ui.design.PiAvatar
 import pi.kit.mob.ui.design.PiBadge
 import pi.kit.mob.ui.design.PiChoiceRow
 import pi.kit.mob.ui.design.PiDot
+import pi.kit.mob.ui.design.PiGap
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
@@ -255,9 +262,9 @@ internal fun PersonalizationPage(
                 }
             }
 
-            // The transcript's two speakers, as names. A switch over the pair rather
-            // than one per side: they are one feature — "draw who is talking" — and a
-            // reader who wants them off wants both off.
+            // The transcript's two speakers, as names, pictures or marks. A switch
+            // over the pair rather than one per side: they are one feature — "draw
+            // who is talking" — and a reader who wants them off wants both off.
             PiSectionHeader(text.settings.avatars)
             PiGroup {
                 PiSwitchRow(
@@ -271,24 +278,34 @@ internal fun PersonalizationPage(
                 PiRowDivider()
                 AvatarRow(
                     title = text.settings.aiAvatar,
-                    label = settings.aiAvatarLabel.ifBlank { AI_AVATAR_DEFAULT_LABEL },
+                    label = settings.aiAvatarLabel.ifBlank { null },
+                    imagePath = settings.aiAvatarImage.ifBlank { null },
                     icon = null,
+                    // The agent's blank is the app's own Pi mark.
+                    mark = true,
                     color = settings.aiAvatarColor.seed,
                     onClick = {
                         sheets.show(
                             Sheet(key = "ai-avatar") {
                                 AvatarSheet(
                                     title = text.settings.aiAvatar,
+                                    slot = AvatarSlot.Ai,
+                                    label = settings.aiAvatarLabel,
+                                    imagePath = settings.aiAvatarImage,
                                     // The stored label, blank included: the field edits
                                     // the *stored* word, and the preview shows the
                                     // fallback so a blank field is not a blank circle.
-                                    label = settings.aiAvatarLabel,
-                                    fallbackLabel = AI_AVATAR_DEFAULT_LABEL,
+                                    mark = true,
                                     fallbackIcon = null,
                                     color = settings.aiAvatarColor,
                                     onChangeLabel = { value ->
                                         session.settingsStore.update {
                                             it.copy(aiAvatarLabel = value)
+                                        }
+                                    },
+                                    onChangeImage = { path ->
+                                        session.settingsStore.update {
+                                            it.copy(aiAvatarImage = path)
                                         }
                                     },
                                     onChangeColor = { chosen ->
@@ -307,20 +324,29 @@ internal fun PersonalizationPage(
                     title = text.settings.userAvatar,
                     // Blank draws the silhouette — the reader's default mark.
                     label = settings.userAvatarLabel.ifBlank { null },
+                    imagePath = settings.userAvatarImage.ifBlank { null },
                     icon = Icons.Filled.Person,
+                    mark = false,
                     color = settings.userAvatarColor.seed,
                     onClick = {
                         sheets.show(
                             Sheet(key = "user-avatar") {
                                 AvatarSheet(
                                     title = text.settings.userAvatar,
+                                    slot = AvatarSlot.User,
                                     label = settings.userAvatarLabel,
-                                    fallbackLabel = null,
+                                    imagePath = settings.userAvatarImage,
+                                    mark = false,
                                     fallbackIcon = Icons.Filled.Person,
                                     color = settings.userAvatarColor,
                                     onChangeLabel = { value ->
                                         session.settingsStore.update {
                                             it.copy(userAvatarLabel = value)
+                                        }
+                                    },
+                                    onChangeImage = { path ->
+                                        session.settingsStore.update {
+                                            it.copy(userAvatarImage = path)
                                         }
                                     },
                                     onChangeColor = { chosen ->
@@ -351,7 +377,9 @@ internal fun PersonalizationPage(
 private fun AvatarRow(
     title: String,
     label: String?,
+    imagePath: String?,
     icon: ImageVector?,
+    mark: Boolean,
     color: Color,
     onClick: () -> Unit,
 ) {
@@ -366,7 +394,9 @@ private fun AvatarRow(
                 PiAvatar(
                     color = color,
                     label = label,
+                    imagePath = imagePath,
                     icon = icon,
+                    mark = mark,
                     size = AVATAR_ROW_PREVIEW,
                 )
                 Icon(
@@ -380,25 +410,58 @@ private fun AvatarRow(
 }
 
 /**
- * The avatar editor: a large preview, the label field, and the eight colours.
+ * The avatar editor: a large preview, the picture, the label field, and the eight
+ * colours.
  *
  * Saves as it is typed and on a swatch tap, like the working directory and the theme
- * accent — neither restarts anything, and the sheet is dismissed by the scrim, the
- * drag and back, so a second "done" control would be the third of three. The label is
- * capped at [AVATAR_LABEL_MAX] characters: it is drawn in a circle the size of a
- * thumbnail, where a fourth character is already an ellipsis.
+ * accent — none of them restarts anything, and the sheet is dismissed by the scrim,
+ * the drag and back, so a second "done" control would be the third of three.
+ *
+ * ## The picture
+ *
+ * A row above the label rather than a second control beside it, because the two are
+ * not peers: a picture is drawn *instead of* the label, which is what the hint under
+ * the row says. Picking one opens the system's image picker and copies the result
+ * into the app's own storage ([AvatarStore]); a picture that could not be read is
+ * reported in the sheet rather than leaving the circle unchanged and unexplained.
+ *
+ * The label is capped at [AVATAR_LABEL_MAX] characters: it is drawn in a circle the
+ * size of a thumbnail, where a fourth character is already an ellipsis.
  */
 @Composable
 private fun AvatarSheet(
     title: String,
+    slot: AvatarSlot,
     label: String,
-    fallbackLabel: String?,
+    imagePath: String,
+    mark: Boolean,
     fallbackIcon: ImageVector?,
     color: ThemeColor,
     onChangeLabel: (String) -> Unit,
+    onChangeImage: (String) -> Unit,
     onChangeColor: (ThemeColor) -> Unit,
     text: Strings,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var failed by remember(slot) { mutableStateOf(false) }
+    val filesDir = context.filesDir
+
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val stored = AvatarStore.store(context, filesDir, slot, uri)
+            failed = stored == null
+            // The old picture is removed only once a new one is on disk: a pick that
+            // could not be read leaves the avatar as it was rather than blanking it.
+            if (stored != null) {
+                onChangeImage(stored)
+            }
+        }
+    }
+
     Column(Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
         PiSheetTitle(title = title)
         Box(
@@ -407,12 +470,55 @@ private fun AvatarSheet(
         ) {
             PiAvatar(
                 color = color.seed,
-                label = label.ifBlank { fallbackLabel },
+                label = label.ifBlank { null },
+                imagePath = imagePath.ifBlank { null },
                 icon = fallbackIcon,
+                mark = mark,
                 size = AVATAR_PREVIEW_SIZE,
                 labelStyle = MaterialTheme.typography.headlineSmall,
             )
         }
+
+        // No leading mark on these two rows and that is deliberate: `PiRow` insets a
+        // title to 24dp when it has none, which is exactly where the field below and
+        // the sheet's own title start. An icon would move the title 40dp right, off
+        // the sheet's one column.
+        PiRow(
+            title = text.settings.avatarPicture,
+            subtitle = text.settings.avatarPictureHint,
+            value = if (imagePath.isBlank()) {
+                text.settings.avatarPicturePick
+            } else {
+                text.settings.avatarPictureChange
+            },
+            onClick = { pickImage.launch(IMAGE_MIME) },
+        )
+        if (imagePath.isNotBlank()) {
+            PiRowDivider()
+            PiRow(
+                title = text.settings.avatarPictureClear,
+                titleColor = MaterialTheme.colorScheme.error,
+                onClick = {
+                    // The file goes with the setting: a picture nothing points at is
+                    // a file the app would keep for ever, and the backup would carry
+                    // it. `AvatarStore.clear` is a single-file delete rather than the
+                    // recursive one `SafeDelete` exists for.
+                    AvatarStore.clear(filesDir, slot)
+                    failed = false
+                    onChangeImage("")
+                },
+            )
+        }
+        if (failed) {
+            Text(
+                text = text.settings.avatarPictureFailed,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp),
+            )
+        }
+
+        PiGap(12.dp)
         PiTextField(
             value = label,
             onValueChange = { value -> onChangeLabel(value.take(AVATAR_LABEL_MAX)) },
@@ -447,12 +553,15 @@ private fun AvatarSheet(
     }
 }
 
+/** Anything the system picker can hand back as an image. */
+private const val IMAGE_MIME = "image/*"
+
 /** The most characters an avatar label holds: a third is already an ellipsis. */
 private const val AVATAR_LABEL_MAX = 3
 
 /** The small avatar on a settings row, and the large one in its editor. */
-private val AVATAR_ROW_PREVIEW = 24.dp
-private val AVATAR_PREVIEW_SIZE = 88.dp
+private val AVATAR_ROW_PREVIEW = 28.dp
+private val AVATAR_PREVIEW_SIZE = 96.dp
 
 /**
  * The text size's sheet: a title, the seven-step slider, and the percentage.

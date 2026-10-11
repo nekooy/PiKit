@@ -459,15 +459,6 @@ enum class FontSize(val code: String, val scale: Float) {
     }
 }
 
-/**
- * The agent avatar's built-in word, drawn when [PiSettings.aiAvatarLabel] is blank.
- *
- * Written once because two screens read it — the personalization page's preview and
- * the transcript's cards — and a second spelling of the same mark in two files is how
- * one of them comes to show something the other does not.
- */
-const val AI_AVATAR_DEFAULT_LABEL = "PI"
-
 /** Immutable snapshot of user configuration. */data class PiSettings(    val provider: PiProvider? = null,
     val modelId: String = "",
     val apiKey: String = "",
@@ -574,20 +565,29 @@ const val AI_AVATAR_DEFAULT_LABEL = "PI"
      */
     val showAvatars: Boolean = true,
     /**
-     * The agent's avatar: a short label, and the colour of its circle.
+     * The agent's avatar: a short label, a picture, and the colour of its circle.
      *
-     * A label rather than an image: PiKit has no photo picker, and a file-backed
-     * avatar would be one more thing for a backup to carry and a restore to put back.
-     * Blank means the built-in word — `"PI"` — so a fresh install shows that without
-     * this field having to hold it.
+     * Three things, and the order they are tried in is in `PiAvatar`: the picture
+     * wins, then the label, and a blank pair means the app's own Pi mark. So a fresh
+     * install shows the logo without this field having to hold anything.
+     *
+     * [aiAvatarImage] is an absolute path to a file this app owns — the one
+     * `AvatarStore` writes when the reader picks a picture — not a content URI.
+     * A URI from the system picker is a grant that expires with the process, so an
+     * avatar that pointed at one would be a blank circle on the next launch; the
+     * copy in `files/avatars/` is what survives, and it is what a backup carries
+     * (the archive's `SETTINGS` category includes that directory).
      */
     val aiAvatarLabel: String = "",
+    val aiAvatarImage: String = "",
     val aiAvatarColor: ThemeColor = ThemeColor.INDIGO,
     /**
-     * The reader's avatar, the same pair. A blank label is the person silhouette
-     * rather than a word, so the two speakers never fall back to the same mark.
+     * The reader's avatar, the same three. A blank label and no picture is the person
+     * silhouette rather than the agent's mark, so the two speakers never fall back to
+     * the same figure.
      */
     val userAvatarLabel: String = "",
+    val userAvatarImage: String = "",
     val userAvatarColor: ThemeColor = ThemeColor.TEAL,
 ) {
     /**
@@ -733,8 +733,10 @@ class SettingsStore(context: Context) {
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
             aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
+            aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
             aiAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
             userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
+            userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
             userAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         ),
     )
@@ -813,8 +815,10 @@ class SettingsStore(context: Context) {
             .putBoolean(KEY_SAFETY, next.safetyExtension)
             .putBoolean(KEY_SHOW_AVATARS, next.showAvatars)
             .putString(KEY_AI_AVATAR_LABEL, next.aiAvatarLabel)
+            .putString(KEY_AI_AVATAR_IMAGE, next.aiAvatarImage)
             .putString(KEY_AI_AVATAR_COLOR, next.aiAvatarColor.code)
             .putString(KEY_USER_AVATAR_LABEL, next.userAvatarLabel)
+            .putString(KEY_USER_AVATAR_IMAGE, next.userAvatarImage)
             .putString(KEY_USER_AVATAR_COLOR, next.userAvatarColor.code)
             .apply()
         // The model fields are read back from the active profile rather than
@@ -833,8 +837,10 @@ class SettingsStore(context: Context) {
             safetyExtension = next.safetyExtension,
             showAvatars = next.showAvatars,
             aiAvatarLabel = next.aiAvatarLabel,
+            aiAvatarImage = next.aiAvatarImage,
             aiAvatarColor = next.aiAvatarColor,
             userAvatarLabel = next.userAvatarLabel,
+            userAvatarImage = next.userAvatarImage,
             userAvatarColor = next.userAvatarColor,
         )
         return resolved
@@ -875,8 +881,10 @@ class SettingsStore(context: Context) {
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
             aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
+            aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
             aiAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
             userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
+            userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
             userAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         )
     }
@@ -900,8 +908,10 @@ class SettingsStore(context: Context) {
         safetyExtension: Boolean = current.get().safetyExtension,
         showAvatars: Boolean = current.get().showAvatars,
         aiAvatarLabel: String = current.get().aiAvatarLabel,
+        aiAvatarImage: String = current.get().aiAvatarImage,
         aiAvatarColor: ThemeColor = current.get().aiAvatarColor,
         userAvatarLabel: String = current.get().userAvatarLabel,
+        userAvatarImage: String = current.get().userAvatarImage,
         userAvatarColor: ThemeColor = current.get().userAvatarColor,
     ): PiSettings {
         val next = current.updateAndGet {
@@ -923,8 +933,10 @@ class SettingsStore(context: Context) {
                 safetyExtension = safetyExtension,
                 showAvatars = showAvatars,
                 aiAvatarLabel = aiAvatarLabel,
+                aiAvatarImage = aiAvatarImage,
                 aiAvatarColor = aiAvatarColor,
                 userAvatarLabel = userAvatarLabel,
+                userAvatarImage = userAvatarImage,
                 userAvatarColor = userAvatarColor,
             )
         }
@@ -987,6 +999,10 @@ class SettingsStore(context: Context) {
 
         /** True unless the user switched the tool-call guard off; see [PiSettings]. */
         private const val KEY_SAFETY = "safety_extension"
+
+        /** The two avatars' own fields; see [PiSettings.aiAvatarLabel]. */
+        private const val KEY_AI_AVATAR_IMAGE = "ai_avatar_image"
+        private const val KEY_USER_AVATAR_IMAGE = "user_avatar_image"
 
         /** True unless the user switched the transcript's avatars off; see [PiSettings]. */
         private const val KEY_SHOW_AVATARS = "show_avatars"

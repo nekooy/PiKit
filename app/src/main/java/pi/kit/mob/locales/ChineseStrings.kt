@@ -328,6 +328,12 @@ internal object ChineseStrings : Strings {
         override val avatarLabel = "文字"
         override val avatarLabelHint = "留空使用默认标记"
         override val avatarColor = "颜色"
+        override val avatarPicture = "图片"
+        override val avatarPicturePick = "选择图片"
+        override val avatarPictureChange = "更换图片"
+        override val avatarPictureClear = "移除图片"
+        override val avatarPictureHint = "设置图片后将不再显示文字"
+        override val avatarPictureFailed = "无法读取这张图片。"
         override val fontSize = "字体大小"
         override val fontSizeSubtitle = "共 7 档，松手即生效"
         override val personalizationNote =

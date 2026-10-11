@@ -327,6 +327,12 @@ internal object JapaneseStrings : Strings {
         override val avatarLabel = "文字"
         override val avatarLabelHint = "空欄なら既定のマーク"
         override val avatarColor = "色"
+        override val avatarPicture = "画像"
+        override val avatarPicturePick = "画像を選ぶ"
+        override val avatarPictureChange = "画像を変更"
+        override val avatarPictureClear = "画像を削除"
+        override val avatarPictureHint = "画像は文字より優先して表示されます"
+        override val avatarPictureFailed = "この画像を読み込めませんでした。"
         override val fontSize = "文字サイズ"
         override val fontSizeSubtitle = "7 段階。指を離すとすぐ反映されます"
         override val personalizationNote =
