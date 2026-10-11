@@ -1049,14 +1049,30 @@ private fun ChatPage(
                     ) {
                         // A conversation nothing has been sent to is not a blank
                         // area: it is the one place the page can say what it is for.
-                        // The mark is the app's single abstract silhouette, the same
-                        // figure the agent draws while it works, so the first thing a
-                        // reader sees is the thing they are about to talk to.
+                        // The mark is the app's own logo, and the line under the
+                        // title is a tip from the catalog's set rather than the same
+                        // sentence every time — see `Strings.Chat.tips`.
+                        //
+                        // A conversation that is *being opened* is neither: it is
+                        // empty for the length of one round trip to pi, and drawing
+                        // the new-conversation page over it is the flash this
+                        // replaces. `loadingSession` is the difference between "this
+                        // conversation has nothing in it" and "this conversation is
+                        // not here yet".
                         if (cards.isEmpty()) {
-                            PiEmptyState(
-                                title = text.chat.newConversation,
-                                body = text.chat.emptyIntro,
-                            )
+                            if (state.loadingSession) {
+                                Box(
+                                    Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    PiStatePill(label = text.chat.loadingConversation)
+                                }
+                            } else {
+                                PiEmptyState(
+                                    title = text.chat.newConversation,
+                                    body = remember(cards) { text.chat.tips.random() },
+                                )
+                            }
                         } else {
                             LazyColumn(
                                 state = listState,

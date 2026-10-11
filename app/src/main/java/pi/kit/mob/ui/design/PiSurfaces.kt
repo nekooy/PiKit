@@ -88,12 +88,14 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pi.kit.mob.locales.LocalStrings
 import pi.kit.mob.ui.components.PageBackHandler
+import pi.kit.mob.ui.components.PiMark
 
 /**
  * A page: one fixed header, a body, and room for one floating control.
@@ -569,16 +571,22 @@ fun PiRowDivider(inset: Boolean = true) {
 }
 
 /**
- * A page that has nothing to show yet: a medallion, a sentence, and one action.
+ * A page that has nothing to show yet: the app's mark, a sentence, and one action.
  *
- * The medallion is cut from the app's one abstract silhouette, and the pair is the
- * *only* place that silhouette appears: the agent's own mark, and this. Scaled to
- * 96dp it is the only thing on the page, which is what the empty state is for — and
- * it is deliberately not an illustration, because a drawn picture of a folder tells
- * the reader less than the sentence under it does.
+ * The mark is the **Pi logo** — the launcher icon's own geometry, drawn without a
+ * container — rather than an abstract silhouette in a medallion. The medallion was
+ * two nested scalloped figures on `secondaryContainer`, and at 96dp it read as "a
+ * shape" rather than as anything about the app: the one thing a page with nothing on
+ * it should say is *which app this is*, and the mark the reader just tapped on the
+ * home screen says it in one figure (§13).
  *
- * A conversation with nothing in it is not a blank area either: the chat page draws
- * this where the transcript would be, which is the first thing the app ever shows.
+ * It is drawn in `primary` rather than in the launcher icon's own white, because the
+ * drawable is a *launcher foreground*: white on a light page is nothing at all, and
+ * a tint of the app's accent is the same picture made legible in both themes.
+ *
+ * The body is centred as a paragraph rather than as a line: a tip is a sentence and
+ * can wrap, and a wrapped sentence set flush left under a centred title reads as two
+ * objects.
  */
 @Composable
 fun PiEmptyState(
@@ -595,37 +603,23 @@ fun PiEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            Modifier
-                .size(96.dp)
-                .clip(PiShapes.medallion)
-                .background(MaterialTheme.colorScheme.secondaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(PiShapes.agent)
-                    // At full strength, and at half the medallion's own size. The
-                    // first version drew this at 55% of `onSecondaryContainer` and
-                    // 40dp, and two nested scalloped figures at similar weights read
-                    // as one smudge rather than as a mark inside a container: the
-                    // inner shape has to be the darker of the two for the pair to
-                    // read as a lockup at all.
-                    .background(MaterialTheme.colorScheme.onSecondaryContainer),
-            )
-        }
+        PiMark(
+            size = EMPTY_STATE_MARK,
+            tint = MaterialTheme.colorScheme.primary,
+        )
         Spacer(Modifier.height(24.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.titleLargeEmphasized,
             color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = body,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
         if (action != null) {
             Spacer(Modifier.height(24.dp))
@@ -633,6 +627,16 @@ fun PiEmptyState(
         }
     }
 }
+
+/**
+ * How large the mark is on an empty page.
+ *
+ * The glyph has no padding of its own — `ic_pi_mark.xml`'s viewport *is* the mark's
+ * bounding box — so this is the mark's own height rather than a container's. 64dp is
+ * about the size the setup screen draws it at (72dp, inside a screen that has nothing
+ * else on it) and large enough to be the page's subject without being a poster.
+ */
+private val EMPTY_STATE_MARK = 64.dp
 
 /** The group's own divider, for a page that wants the hairline without the inset
  * arithmetic: a group whose rows have no leading marks. */
