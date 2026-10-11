@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,11 +53,13 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGroup
+import pi.kit.mob.ui.design.PiLoading
 import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
@@ -67,7 +71,6 @@ import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiTextField
 import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiNote
 
 /**
  * Working directory, what the model is given, and the process controls.
@@ -101,8 +104,15 @@ internal fun AgentPage(
 ) {
     val scope = rememberCoroutineScope()
     var working by remember(workingDir) { mutableStateOf(workingDir) }
+    // The restart is two suspending calls — stop, then start — and pi takes about two
+    // seconds to handshake. Without a state of its own the button was inert for that
+    // whole window: the row's subtitle said "starting" either way, so a tap that
+    // landed and a tap that missed looked identical. The flag drives the button's own
+    // indicator and takes the second tap that would otherwise queue a second restart.
+    var restarting by remember { mutableStateOf(false) }
     val text = strings
     val sheets = LocalSheetHost.current
+    val toasts = LocalToastHost.current
     val instructions = remember(session) { AgentContext.file(session.env) }
 
     PiScaffold(
@@ -139,6 +149,15 @@ internal fun AgentPage(
                     onValueChange = { value ->
                         working = value
                         session.settingsStore.update { it.copy(workingDir = value) }
+                        // The directory is read when the process is spawned — it is the
+                        // shell's own `cwd` and `PIKIT_WORKSPACE` — so a new one does
+                        // not reach the running agent at all. It used to be a sentence
+                        // telling the reader to restart, and then no sentence at all,
+                        // which is the worse of the two: the field saved and nothing
+                        // else happened. The restart is debounced by the session (1.5 s,
+                        // and it waits for a turn to settle), so a typed path restarts
+                        // the agent once, after the typing stops.
+                        session.scheduleRestart()
                     },
                     label = text.settings.workingDirectory,
                     placeholder = session.env.workspacePath,
@@ -206,12 +225,35 @@ internal fun AgentPage(
                             text = text.settings.restartAgent,
                             onClick = {
                                 scope.launch {
-                                    session.stopAgent()
-                                    session.startAgent()
+                                    restarting = true
+                                    try {
+                                        session.stopAgent()
+                                        // The toast reports the *outcome*, and only a
+                                        // start that succeeded has one: a failed
+                                        // launch writes `AgentStatus.Failed`, which the
+                                        // notice under this row is already showing with
+                                        // pi's own stderr in it.
+                                        if (session.startAgent()) {
+                                            toasts.show(text.settings.restartedAgent)
+                                        }
+                                    } finally {
+                                        restarting = false
+                                    }
                                 }
                             },
                             kind = PiButtonKind.Filled,
                             size = PiButtonSize.Small,
+                            enabled = !restarting,
+                            // The mark swaps rather than the label, so the button does
+                            // not resize under the finger that just pressed it — the
+                            // same rule the model page's fetch button follows.
+                            leadingIcon = {
+                                if (restarting) {
+                                    PiLoading(size = 20.dp)
+                                } else {
+                                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                                }
+                            },
                         )
                     },
                 )
@@ -425,6 +467,7 @@ private fun KeepAliveRow(text: Strings) {
 @Composable
 private fun InstructionsEditor(session: PiAgentSession) {
     val text = strings
+    val toasts = LocalToastHost.current
     val file = remember(session) { AgentContext.file(session.env) }
     var draft by remember {
         mutableStateOf(
@@ -473,23 +516,31 @@ private fun InstructionsEditor(session: PiAgentSession) {
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
-        // The note that used to sit here — "saving restarts the agent" — was the Save
-        // button's own caption, drawn inside its fill on a second line. It is gone:
-        // the caption made the Save button a two-line control standing beside a
-        // one-line Restore, which read as two different sizes for two peer actions.
-        // The consequence of the save is still stated where it always was for the
-        // section rather than for the button — `agentContextSaved` reports it after
-        // the fact — and the sheet's own title names the file.
-        when {
-            failed -> PiNote(
-                text = text.settings.agentContextFailed,
-                tone = PiTone.Danger,
-            )
-
-            saved -> PiNote(
-                text = text.settings.agentContextSaved,
-                tone = PiTone.Accent,
-            )
+        // What the last press did, as the one transient message the app owns. It used
+        // to be a line of prose under the field, which then stayed there until the
+        // next keystroke — a sentence about an action that has already finished.
+        //
+        // The note that used to sit above the buttons — "saving restarts the agent" —
+        // is gone with it, and for the same reason: the save *does* restart the agent
+        // (`scheduleRestart` below), so telling the reader to expect it is telling them
+        // about something they do not have to do anything about.
+        //
+        // The outcome is raised from two places — this button and the restore
+        // confirmation — so it is turned into a toast by the state rather than fired
+        // from each handler, which is also what keeps the file's own write the only
+        // thing either handler has to get right.
+        LaunchedEffect(failed, saved) {
+            if (failed || saved) {
+                toasts.show(
+                    if (failed) {
+                        text.settings.agentContextFailed
+                    } else {
+                        text.settings.agentContextSaved
+                    },
+                )
+                failed = false
+                saved = false
+            }
         }
 
         Row(

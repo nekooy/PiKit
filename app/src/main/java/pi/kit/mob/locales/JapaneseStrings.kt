@@ -645,6 +645,7 @@ internal object JapaneseStrings : Strings {
         override val process = "プロセス"
         override val agentProcess = "エージェントのプロセス"
         override val restartAgent = "エージェントを再起動"
+        override val restartedAgent = "エージェントを再起動しました"
         override val failedStartNote =
             "起動失敗のほとんどは設定が原因です。使用中のプロファイルにキーがあるか、" +
                 "そのプロバイダーにモデル ID が存在するかを確認してください。" +
