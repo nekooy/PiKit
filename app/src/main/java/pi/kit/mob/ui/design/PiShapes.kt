@@ -19,7 +19,7 @@
  *    against large or full corners on information-dense components, because a big
  *    radius eats the content at the corners. The transcript's tool rows, the
  *    settings rows, the file rows and the terminal's chrome are all dense, so they
- *    sit at [row] (12dp) and [card] (16dp) — one step at a time, never a pill.
+ *    sit at [row] (16dp) and [card] (20dp) — one step at a time, never a pill.
  *  - **Action surfaces are fully round.** Buttons, chips, badges, the navigation
  *    bar's selection indicator and the composer's send control are all
  *    [pill]. Rounding an action is what makes it read as an action rather than as
@@ -27,7 +27,7 @@
  *    square and fully rounded shapes" the guidance describes.
  *
  * The tension is load-bearing, so a new surface has to pick a side rather than
- * land in the middle: a 24dp radius on a list row is neither dense nor an action,
+ * land in the middle: a 32dp radius on a list row is neither dense nor an action,
  * and it reads as neither.
  *
  * ## One mark, used once
@@ -35,9 +35,14 @@
  * [MaterialShapes]'s thirty-five polygons are decorative, and the guidance is
  * explicit that abstract shapes should be used sparingly. PiKit therefore spends
  * its one licence on a single mark — [agent] — which is the shape the agent's own
- * avatar, its working indicator and the empty-transcript medallion are all cut
- * from. It appears nowhere else: a second abstract silhouette elsewhere on the
- * same screen turns the first one into wallpaper.
+ * avatar and its working indicator are both cut from. It appears nowhere else: a
+ * second abstract silhouette elsewhere on the same screen turns the first one into
+ * wallpaper.
+ *
+ * An empty page draws the **Pi mark** instead of a silhouette — the same glyph the
+ * launcher icon and the setup screen use — because the one thing a page with
+ * nothing on it should say is *what app this is*, and a seven-sided cookie in a
+ * container said "a shape" instead (§13).
  */
 package pi.kit.mob.ui.design
 
@@ -61,20 +66,32 @@ import androidx.compose.ui.unit.dp
  */
 object PiShapes {
 
-    /** 4dp. Checkbox and radio corners, badges, the smallest insets. */
-    val extraSmall: CornerBasedShape = RoundedCornerShape(4.dp)
+    /**
+     * The whole scale was moved up one step of Material's own ramp.
+     *
+     * Every radius in the app is read from here, so the rounder corners are one
+     * edit rather than a sweep: 4→8, 8→12, 12→16, 16→20, 20→24, 28→32, 32→36,
+     * 48→56. Two things were checked against the guidance rather than assumed.
+     * The **nested** pairs are still concentric under `opticalRadius`, which is a
+     * difference of two steps and does not care what the steps are; and the dense
+     * voice is still dense — a settings row is a 16dp rectangle rather than a
+     * 24dp one, which is where "neither dense nor an action" starts (§13).
+     */
 
-    /** 8dp. Chips' inner edges, menu items' inner corners, small marks. */
-    val small: CornerBasedShape = RoundedCornerShape(8.dp)
+    /** 8dp. Checkbox and radio corners, badges, the smallest insets. */
+    val extraSmall: CornerBasedShape = RoundedCornerShape(8.dp)
 
-    /** 12dp. A row's press outline, and any dense surface that needs a step. */
-    val row: CornerBasedShape = RoundedCornerShape(12.dp)
+    /** 12dp. Chips' inner edges, menu items' inner corners, small marks. */
+    val small: CornerBasedShape = RoundedCornerShape(12.dp)
 
-    /** 16dp. Cards, text fields, and the group a set of rows is drawn inside. */
-    val card: CornerBasedShape = RoundedCornerShape(16.dp)
+    /** 16dp. A row's press outline, and any dense surface that needs a step. */
+    val row: CornerBasedShape = RoundedCornerShape(16.dp)
+
+    /** 20dp. Cards, text fields, and the group a set of rows is drawn inside. */
+    val card: CornerBasedShape = RoundedCornerShape(20.dp)
 
     /**
-     * 20dp. A card that carries a number or a single fact prominently, and the
+     * 24dp. A card that carries a number or a single fact prominently, and the
      * composer's field.
      *
      * The field is here rather than at [card] because that is where 0.4.1's 22dp
@@ -83,16 +100,16 @@ object PiShapes {
      * rectangle is a control — which is why the step is named for weight rather than
      * for a job.
      */
-    val largeIncreased: CornerBasedShape = RoundedCornerShape(20.dp)
+    val largeIncreased: CornerBasedShape = RoundedCornerShape(24.dp)
 
-    /** 28dp. Sheets and dialogs — the two surfaces that are drawn over the page. */
-    val panel: CornerBasedShape = RoundedCornerShape(28.dp)
+    /** 32dp. Sheets and dialogs — the two surfaces that are drawn over the page. */
+    val panel: CornerBasedShape = RoundedCornerShape(32.dp)
 
-    /** 32dp. The hero surfaces: an empty state's medallion, the setup screen. */
-    val hero: CornerBasedShape = RoundedCornerShape(32.dp)
+    /** 36dp. The hero surfaces: a failure screen, the setup screen. */
+    val hero: CornerBasedShape = RoundedCornerShape(36.dp)
 
-    /** 48dp. A full-bleed decorative block. */
-    val extraExtraLarge: CornerBasedShape = RoundedCornerShape(48.dp)
+    /** 56dp. A full-bleed decorative block. */
+    val extraExtraLarge: CornerBasedShape = RoundedCornerShape(56.dp)
 
     /**
      * Fully round. Every action, and the marker that says which destination a
@@ -123,11 +140,6 @@ object PiShapes {
     val live: Shape
         @Composable @OptIn(ExperimentalMaterial3ExpressiveApi::class)
         get() = MaterialShapes.SoftBurst.toShape()
-
-    /** An empty state's medallion, one size up from the agent mark. */
-    val medallion: Shape
-        @Composable @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-        get() = MaterialShapes.Cookie9Sided.toShape()
 
     /** A burst, for the one place a count or a status needs an emphatic frame. */
     val spark: Shape

@@ -112,19 +112,26 @@ library ships both, so nothing here defines them. Two rules:
 
 ## Shape: two voices, one mark
 
-The corner scale is Material's ten steps, unmodified, in `PiShapes`. What this app
-decides is *which step a surface uses*, and it does so by picking a side:
+The corner scale is Material's ten steps, and every step of the app's own vocabulary sits
+**one step up the ramp** from where it started: 4→8, 8→12, 12→16, 16→20, 20→24, 28→32,
+32→36, 48→56. What this app decides is *which step a surface uses*, and it does so by
+picking a side:
 
 | Voice | Radii | Where |
 | --- | --- | --- |
-| Dense | `row` 12dp, `card` 16dp | Information-dense surfaces: transcript tool rows, settings rows, file rows, terminal chrome |
+| Dense | `row` 16dp, `card` 20dp | Information-dense surfaces: transcript tool rows, settings rows, file rows, terminal chrome |
 | Action | `pill`, fully round | Buttons, chips, badges, the navigation bar's indicator, the composer's send control |
 
 The tension between the two is load-bearing and is the expressive shape tactic
 ("unexpected moments by switching between square and fully rounded shapes") applied
 at the level of the whole app: an action reads as an action because it is the only
-round thing on the page. A surface in the *middle* — a 24dp radius on a list row —
+round thing on the page. A surface in the *middle* — a 32dp radius on a list row —
 is neither dense nor an action and reads as neither, so it is not available.
+
+Everything read from `PiShapes`, so the move was one edit rather than a sweep; the two
+things that had to be checked were that the nested pairs are still concentric (they are
+a *difference* of steps, and `opticalRadius` subtracts the padding) and that the dense
+voice is still dense — a settings row is a 16dp rectangle, not a 24dp one.
 
 Nested corners follow the guidance's optical-roundness rule,
 `outer radius - padding = inner radius`, which `opticalRadius` computes. Two nested
@@ -132,10 +139,45 @@ rectangles at the same radius look unbalanced; this is the one line that fixes i
 
 `MaterialShapes`'s thirty-five polygons are decorative and the guidance says to use
 abstract shapes sparingly, so the app spends its one licence on a single silhouette:
-a **seven-sided cookie** (`PiShapes.agent`). It is the agent's mark, its working
-indicator and the empty-state medallion, and it appears nowhere else. Seven sides is
-the count that still reads as a distinct outline at the 20dp it is drawn at
-smallest; at twelve it is a circle and at four it is a square.
+a **seven-sided cookie** (`PiShapes.agent`). It is the agent's mark and its working
+indicator, and it appears nowhere else. Seven sides is the count that still reads as a
+distinct outline at the 20dp it is drawn at smallest; at twelve it is a circle and at
+four it is a square. It used to be the empty state's medallion as well, and that is the
+use that was given up: an empty page draws the **Pi mark** — the launcher icon's own
+glyph, tinted `primary` — because the one thing a page with nothing on it should say is
+which app it is (§7.3).
+
+## One transient message, and what it is for
+
+`components/Toasts.kt` holds the app's only transient UI: `ToastHost`, `LocalToastHost`
+and the `ToastLayer` the root draws. A page reports a finished action by calling
+`show`, and the message appears over the page, is read, and goes after 3.5 s. It can
+never carry a button — a message with a control on it is a question, and a question
+belongs in a dialog.
+
+The split against `PiNotice` is by **tense**, which is what makes it decidable rather
+than a matter of taste:
+
+| | For | Example |
+| --- | --- | --- |
+| Toast | A moment: something finished | "Saved", "4 entries restored", "Agent restarted" |
+| `PiNotice` | A condition: something *is* | The agent failed to start, the web extension is not bundled, a folder cannot be read |
+
+A sentence about an action that has already finished used to be an in-page strip, and it
+stayed on the page until the next action replaced it — a settings page that had been
+used twice carried three notes, each about something already done — or a `PiNote` line
+under a field, which the reader had to clear by typing. The condition notices stay
+because a message that disappears after four seconds is the wrong shape for them: they
+name what to do about something that is still true.
+
+Two failure shapes are neither: a **dialog** for a failure whose text is longer than a
+pill (the model page's discovery problems, which are two paragraphs and are bounded and
+scrolled inside the dialog), and an in-sheet note for a field's own validation error
+(the web-search value sheet's "that is not JSON"), which belongs beside the box being
+typed into.
+
+`PiFeedback.kt`'s components stay the page's own vocabulary: `PiNotice`, `PiNote`,
+`PiBadge`, `PiStatePill`, `PiLoading`, `PiProgress`.
 
 ## Motion
 
@@ -242,7 +284,7 @@ The **composer's field** is the one hairline that is not a `PiButtonKind.Text`, 
 is the same rule rather than an exception to it: the words above it are about *actions*,
 and a field is not one — it is a place, and a place with no edge is a place the reader has
 to be told about. `surface` one step above the band's own `surfaceContainer`, 1dp
-`outlineVariant` and `largeIncreased`'s 20dp, which is where 0.4.1's 22dp
+`outlineVariant` and `largeIncreased`'s 24dp, which is where 0.4.1's 22dp
 `shapes.medium` lands on this scale (§7.1).
 
 **Action rows end-align, and a sheet's dismiss is not a button.** `PiSheetActions`,
