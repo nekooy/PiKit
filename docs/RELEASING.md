@@ -296,6 +296,14 @@ sentence about one release is wrong in the next.
 **Full Changelog**: https://github.com/nekooy/PiKit/compare/v<previous>...v<version>
 ```
 
+- **Start from the range, not from the work you remember doing.**
+  `git log --oneline v<previous>..v<version>` is what the release contains, and a range
+  routinely holds commits from earlier sessions — a design-system rebuild, a dependency
+  bump, a chapter brought in step — that nobody in the current one wrote. The first 0.5.0
+  body was written from the eleven commits of the session that cut it, and left out the two
+  Material 3 Expressive reworks, the AGP/Gradle/material3 bump and a documentation commit:
+  four commits, 79 files and +11600/-6200 lines, which was most of the release — and the
+  part a reader notices first. Enumerate the range, then fold it into the four sections.
 - **An empty section is left out, not written as "无".** A heading with nothing under it
   is a promise the release did not keep, and the four names are fixed so a reader knows
   which one to look in: what is new, what got better, what was broken, and what else
