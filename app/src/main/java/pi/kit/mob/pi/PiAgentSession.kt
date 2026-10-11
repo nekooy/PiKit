@@ -1156,12 +1156,23 @@ class PiAgentSession private constructor(context: Context) {
             rememberSessionPath(_conversation.value.sessionFile)
             return
         }
-        // pi rebinds to a different session, so stale UI state would be wrong.
-        _conversation.value = ConversationState()
-        val state = live.request("get_state") { PiCommand.getState(it) }
-        _conversation.update { ConversationReducer.reduce(it, state) }
-        refreshThinkingLevels()
-        loadCurrentMessages(live)
+        // pi rebinds to a different session, so stale UI state would be wrong — but
+        // the two round trips below leave the transcript empty for a moment, and an
+        // empty transcript is what a *new* conversation looks like. The flag is what
+        // tells the page the difference; `ConversationState.loadingSession` has the
+        // measurement.
+        _conversation.value = ConversationState(loadingSession = true)
+        try {
+            val state = live.request("get_state") { PiCommand.getState(it) }
+            _conversation.update { ConversationReducer.reduce(it, state) }
+            refreshThinkingLevels()
+            loadCurrentMessages(live)
+        } finally {
+            // In a `finally` because the flag has to come down on the failure paths
+            // too: a switch that threw would otherwise leave the page saying
+            // "opening the conversation" for ever, with no control that clears it.
+            _conversation.update { it.copy(loadingSession = false) }
+        }
     }
 
     /** Folds `get_messages` into the transcript and records the session path. */

@@ -40,9 +40,15 @@ internal object JapaneseStrings : Strings {
         override val extrasNotes = "画像メモ"
         override val extrasOpen = "添付の詳細を表示"
         override val placeholder = "Pi に質問する…"
-        override val emptyIntro =
-            "Pi に質問するか、! で始めて端末コマンドを書くと、" +
-                "この端末の環境で直接実行されます。"
+        override val tips = listOf(
+            "ヒント：行頭に ! を付けるとそのままシェルで実行されます。",
+            "ヒント：+ で画像やファイルを添付できます。",
+            "ヒント：/ でエージェントのコマンド一覧を開けます。",
+            "ヒント：テキストを長押しするとコピーできます。",
+            "ヒント：ヘッダーの履歴アイコンから過去の会話に戻れます。",
+            "ヒント：コンテキストのチップで使用量とコストを確認できます。",
+        )
+        override val loadingConversation = "会話を開いています…"
         override val placeholderAttachment = "この画像についての指示を入力…"
         override val send = "送信"
         override val stop = "停止"

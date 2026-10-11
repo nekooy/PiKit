@@ -47,9 +47,15 @@ internal object ChineseStrings : Strings {
         override val extrasNotes = "图片说明"
         override val extrasOpen = "查看附件详情"
         override val placeholder = "问 Pi 任何问题…"
-        override val emptyIntro =
-            "问 Pi 任何问题，或输入以 ! 开头的命令；" +
-                "它会在本机环境里直接执行。"
+        override val tips = listOf(
+            "提示：以 ! 开头可以直接执行命令，例如 !ls",
+            "提示：点 + 可以给消息附上图片或文件",
+            "提示：点 / 可以查看 Agent 的命令并插入",
+            "提示：长按任意文字即可复制",
+            "提示：点顶部的历史图标可以回到之前的对话",
+            "提示：点上下文芯片可以查看窗口占用、花费和会话文件",
+        )
+        override val loadingConversation = "正在打开对话…"
         override val placeholderAttachment = "给这些图片补充说明…"
         override val send = "发送"
         override val stop = "停止"

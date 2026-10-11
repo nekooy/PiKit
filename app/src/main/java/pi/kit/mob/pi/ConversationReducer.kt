@@ -223,6 +223,22 @@ data class ConversationState(
      */
     val availableThinkingLevels: List<String> = emptyList(),
     val usage: UsageTotals = UsageTotals(),
+    /**
+     * Whether a conversation is being opened and its transcript has not arrived yet.
+     *
+     * A session switch is two round trips to pi — `get_state`, then `get_messages` —
+     * and the transcript is *cleared* at the start of it, because the screen must not
+     * keep showing one conversation's messages under another's header. Empty is a
+     * state the transcript legitimately has, though, and the chat page drew the
+     * new-conversation page for the length of those two round trips: the flash this
+     * flag exists to prevent.
+     *
+     * It is set and cleared by `PiAgentSession.switchSessionTo` and by nothing else,
+     * so the reducer's own rules never have to know about it. `newSession`
+     * deliberately does not set it: a new conversation *is* empty, and the page
+     * should say so at once.
+     */
+    val loadingSession: Boolean = false,
     /** Transient status shown above the composer, e.g. "Working". */
     val statusMessage: String? = null,
     /** A dialog pi is waiting on; the UI must answer it. */

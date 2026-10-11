@@ -39,9 +39,15 @@ internal object EnglishStrings : Strings {
         override val extrasNotes = "Image notes"
         override val extrasOpen = "Show attachment details"
         override val placeholder = "Ask Pi…"
-        override val emptyIntro =
-            "Ask Pi a question, or start a line with ! to run it " +
-                "in the on-device environment."
+        override val tips = listOf(
+            "Tip: start a line with ! to run it as a shell command.",
+            "Tip: tap + to attach an image or a file.",
+            "Tip: tap / to see the agent's commands and insert one.",
+            "Tip: long-press any text to copy it.",
+            "Tip: the history icon in the header reopens a past conversation.",
+            "Tip: the Context chip shows window use, cost and the session file.",
+        )
+        override val loadingConversation = "Opening the conversation…"
         override val placeholderAttachment = "Add a message for these images…"
         override val send = "Send"
         override val stop = "Stop"

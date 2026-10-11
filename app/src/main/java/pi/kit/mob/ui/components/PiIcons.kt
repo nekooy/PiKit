@@ -17,10 +17,46 @@
  */
 package pi.kit.mob.ui.components
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import pi.kit.mob.R
+
+/**
+ * The Pi mark: the app's own logo, for anywhere the *product* has to be named rather
+ * than the agent or one of its actions.
+ *
+ * `res/drawable/ic_pi_mark.xml` is the launcher icon's own geometry, and the same
+ * picture the setup screen draws — one glyph, three places, so the mark a user taps on
+ * the home screen is the mark an empty page and a cold start show.
+ *
+ * [tint] is a parameter rather than each caller reaching for `painterResource`: the
+ * drawable is white (it is a launcher foreground, and `ic_pi_mark.xml` records why),
+ * so on a light page it has to be recoloured to be visible at all. `Icon` applies the
+ * tint as a `SrcIn` colour filter, which keeps the glyph's antialiasing and replaces
+ * its colour wholesale.
+ */
+@Composable
+fun PiMark(
+    modifier: Modifier = Modifier,
+    size: Dp = 48.dp,
+    tint: Color = LocalContentColor.current,
+) {
+    Icon(
+        painter = painterResource(R.drawable.ic_pi_mark),
+        contentDescription = null,
+        tint = tint,
+        modifier = modifier.size(size),
+    )
+}
 
 object PiIcons {
 

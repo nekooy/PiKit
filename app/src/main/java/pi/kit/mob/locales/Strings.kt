@@ -126,14 +126,28 @@ interface Strings {
         val placeholderAttachment: String
 
         /**
-         * The second line of the empty transcript: what the reader can do from here.
+         * The second line of the empty transcript: a tip, one of a rotating set.
          *
          * Drawn in the transcript's place on a conversation nothing has been sent to,
-         * under [newConversation]. It names both things a prompt can be — a question,
-         * or a shell command — because [placeholder] alone names only the first, and
-         * the `!` form is otherwise something a reader finds by reading the manual.
+         * under [newConversation]. It used to be one sentence naming both things a
+         * prompt can be — a question, or a shell command — and the same sentence every
+         * time, which is a line the reader stops seeing after the second conversation.
+         * A set costs one line of prose each and tells the reader something they did
+         * not know instead: what a tip is *for*.
+         *
+         * The list is the catalogs' own and each entry must stand alone — it is shown
+         * on its own, with no heading over it — so a tip is a whole sentence, and it
+         * is picked at random each time an empty conversation is drawn ([ChatScreen]).
+         *
+         * The `!` tip is first because it is the one that changes what the reader can
+         * do from this page: the form is otherwise something they find by reading the
+         * manual.
          */
-        val emptyIntro: String
+        val tips: List<String>
+
+        /** While a conversation is being opened: the transcript's place is not empty. */
+        val loadingConversation: String
+
         val send: String
         val stop: String
         val sessions: String
