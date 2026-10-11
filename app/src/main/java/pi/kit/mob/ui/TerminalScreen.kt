@@ -597,18 +597,19 @@ private val KEY_HEIGHT = 24.dp
 private val KEY_GAP = 5.dp
 
 /**
- * The padding inside one group's track, and the gap between two groups.
+ * The padding inside the bar's one group's track.
  *
- * A group is what makes the bar readable at a glance — the modifier pair, the arrow
- * cluster, and the rest — and the track is the shape vocabulary's answer for it:
+ * A group is what makes the bar readable at a glance — every key in the strip sits on
+ * one raised track — and the track is the shape vocabulary's answer for it:
  * `PiShapes.card`, the radius the app draws every dense container with, one step of
  * the surface ramp below the bar, with the keys themselves on `surface` so a key
- * reads as raised out of its group. The gap *between* groups is more than three
- * times the gap between two keys of one group, which is the whole difference between
- * "these belong together" and "these are one after another".
+ * reads as raised out of its group.
+ *
+ * There used to be a second constant beside this one — the gap *between* two groups,
+ * more than three times the gap between two keys — and both went with the second
+ * frame (see [ExtraKeysRow] for what the reader saw of it).
  */
 private val GROUP_PADDING = 4.dp
-private val GROUP_GAP = 16.dp
 
 /** The bar's padding around its contents, on each side of each axis. */
 private val KEY_BAR_PADDING = 5.dp
@@ -992,8 +993,7 @@ private fun KeyGroup(content: @Composable () -> Unit) {
 }
 
 /**
- * The extra-keys bar: the arrow cluster, the modifier pair, and the keys beside them
- * — one strip, scrolled sideways.
+ * The extra-keys bar: the arrow cluster and the keys beside it, in one group.
  *
  * Every key is the same size ([rememberKeySize]) and every key is fully round
  * ([PiShapes.pill]). The uniform size is what makes the pad line up and keeps a label
@@ -1009,13 +1009,19 @@ private fun KeyGroup(content: @Composable () -> Unit) {
  * the row is the design §7.4 measured and rejected, and it is the one thing the
  * grouping here may not do.
  *
- * ## The grouping
+ * ## One group, not two
  *
- * Two tracks: the arrow cluster, and one group holding the modifiers and every other
- * key. The cluster is the *first* item, so the arrows and the scroll toggle are on
- * screen at scroll offset zero without holding a strip of the bar hostage for a
- * control that is tapped once a session; the whole strip is one `LazyRow`, so the
- * second group stays aligned with the cluster at any offset.
+ * The bar used to be two tracks — the arrow cluster in one frame, the modifiers and
+ * every other key in a second, 16dp apart — and the second frame is gone. Both
+ * frames were drawn on `surfaceContainerHigh`, so what the reader saw was one strip
+ * with a seam down it: the same three surfaces at two different insets, which reads
+ * as a rendering mistake rather than as two sets of keys. There is exactly one thing
+ * this bar is, and it is one pad of keys; the frames that said otherwise were the
+ * only part of the bar that was not the keys themselves.
+ *
+ * The strip is still one `LazyRow` with a single item, so the group is measured
+ * unbounded along the axis and scrolls sideways when it is wider than the screen —
+ * which, at eleven keys and the widest label, it is at every font scale.
  */
 @Composable
 private fun ExtraKeysRow(
@@ -1047,56 +1053,56 @@ private fun ExtraKeysRow(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = KEY_BAR_PADDING),
-            horizontalArrangement = Arrangement.spacedBy(GROUP_GAP),
+            horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             item {
                 KeyGroup {
-                    ArrowPad(
-                        text = text,
-                        size = size,
-                        following = autoScroll,
-                        onToggleAutoScroll = onToggleAutoScroll,
-                        onSend = onSend,
-                    )
-                }
-            }
-            item {
-                // Two rows, and the modifiers at the head of the first one: the bar is
-                // two keys tall for the arrow pad's sake, so a single row of keys in it
-                // left half the height empty wherever it did not reach — and the row
-                // reached past the right edge rather than using the space below it. The
-                // keys that used to sit to the right of CTRL and ALT now wrap under
-                // them, which is the report "把后面一条按键放在 ctrl 和 alt 下面以充分利用空间".
-                //
-                // The pair still reads as a pair: they are first, they latch, and their
-                // active fill is the one that stays pressed. What was given up is only
-                // the separate frame around them — a group of two on its own row was the
-                // shape that made the empty half visible in the first place.
-                KeyGroup {
-                    Column(verticalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                            ExtraKeyChip(text.terminal.ctrl, active = ctrlOn, size = size) {
-                                onToggleCtrl()
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ArrowPad(
+                            text = text,
+                            size = size,
+                            following = autoScroll,
+                            onToggleAutoScroll = onToggleAutoScroll,
+                            onSend = onSend,
+                        )
+                        // Two rows, and the modifiers at the head of the first one: the
+                        // bar is two keys tall for the arrow pad's sake, so a single row
+                        // of keys in it left half the height empty wherever it did not
+                        // reach — and the row reached past the right edge rather than
+                        // using the space below it. The keys that used to sit to the
+                        // right of CTRL and ALT now wrap under them, which is the report
+                        // "把后面一条按键放在 ctrl 和 alt 下面以充分利用空间".
+                        //
+                        // The pair still reads as a pair: they are first, they latch, and
+                        // their active fill is the one that stays pressed.
+                        Column(verticalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                                ExtraKeyChip(text.terminal.ctrl, active = ctrlOn, size = size) {
+                                    onToggleCtrl()
+                                }
+                                ExtraKeyChip(text.terminal.alt, active = altOn, size = size) {
+                                    onToggleAlt()
+                                }
+                                EXTRA_KEYS.take(EXTRA_KEYS_PER_ROW).forEach { key ->
+                                    ExtraKeyChip(
+                                        label = key.fixedLabel ?: key.labelOf(text),
+                                        active = false,
+                                        size = size,
+                                    ) { onSend(key.sequence) }
+                                }
                             }
-                            ExtraKeyChip(text.terminal.alt, active = altOn, size = size) {
-                                onToggleAlt()
-                            }
-                            EXTRA_KEYS.take(EXTRA_KEYS_PER_ROW).forEach { key ->
-                                ExtraKeyChip(
-                                    label = key.fixedLabel ?: key.labelOf(text),
-                                    active = false,
-                                    size = size,
-                                ) { onSend(key.sequence) }
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                            EXTRA_KEYS.drop(EXTRA_KEYS_PER_ROW).forEach { key ->
-                                ExtraKeyChip(
-                                    label = key.fixedLabel ?: key.labelOf(text),
-                                    active = false,
-                                    size = size,
-                                ) { onSend(key.sequence) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                                EXTRA_KEYS.drop(EXTRA_KEYS_PER_ROW).forEach { key ->
+                                    ExtraKeyChip(
+                                        label = key.fixedLabel ?: key.labelOf(text),
+                                        active = false,
+                                        size = size,
+                                    ) { onSend(key.sequence) }
+                                }
                             }
                         }
                     }
