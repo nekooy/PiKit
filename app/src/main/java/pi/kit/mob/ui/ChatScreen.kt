@@ -959,7 +959,16 @@ private fun ChatPage(
         // line, ellipsised at one line by the header. `titleMedium` rather than the
         // shell's `titleLarge` is what fits the opening words of a question where
         // the large style fitted two of them.
-        titleStyle = MaterialTheme.typography.titleMedium,
+        //
+        // Only *while* the title is that sentence, though. The same slot holds the
+        // app's name on a new conversation and a session's own name when it has one,
+        // and `titleMedium` for those made the chat page's header the one header in
+        // the app drawn a size smaller than the Terminal, Files and Settings pages'.
+        titleStyle = if (conversationTitleIsProse(state)) {
+            MaterialTheme.typography.titleMedium
+        } else {
+            MaterialTheme.typography.titleLarge
+        },
         actions = {
             IconButton(onClick = { session.compact() }) {
                 Icon(Icons.Filled.Compress, contentDescription = text.chat.compact)
@@ -1985,6 +1994,18 @@ private fun conversationTitle(state: ConversationState): String {
     val message = (firstUser as? ChatItem.User)?.text
     return if (message.isNullOrBlank()) APP_NAME else SessionMetadata.asTitle(message)
 }
+
+/**
+ * Whether [conversationTitle] is the reader's own sentence rather than a name.
+ *
+ * The header's title style follows this, and it is deliberately the same two facts
+ * [conversationTitle] reads in the same order: a name is a name (and the app's own
+ * name on an empty conversation is a proper noun), while a *derived* title is the
+ * opening words of a question — which is the only case that needs the smaller style.
+ */
+private fun conversationTitleIsProse(state: ConversationState): Boolean =
+    state.sessionName.isNullOrBlank() &&
+        state.items.any { it is ChatItem.User && it.text.isNotBlank() }
 
 /** The application's name, as it is written wherever a proper noun is wanted. */
 private const val APP_NAME = "PiKit"
