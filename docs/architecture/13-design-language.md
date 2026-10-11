@@ -235,8 +235,14 @@ tightened), `PiFab`, `PiGroupOption`.
 `PiValueRow`.
 
 **`PiFeedback.kt`** — `PiLoading`, `PiStatePill` (a word and either the live indicator
-or a settled mark), `PiAgentMark`, `PiAvatar`, `PiBadge`, `PiNotice`, `PiProgress`,
+or a settled mark), `PiAgentMark`, `PiAvatar` (a picture, a label, a framework glyph or the
+app's Pi mark, in that order), `PiBadge`, `PiNotice`, `PiProgress`,
 `PiDot`, and `PiTone` (Neutral / Accent / Live / Danger).
+
+**`ui/components/Toasts.kt`** — `ToastHost`, `LocalToastHost` and `ToastLayer`: the app's
+one transient message, drawn by the root above the sheet layer and inset by the page's own
+bottom inset so it lands where the composer's band ends. See the section above for the split
+against `PiNotice`.
 
 **`PiSheets.kt`** — `PiSheetTitle`, `PiSheetList` (with a ceiling, because a sheet
 that grows to cover the window has stopped being a sheet), `PiSheetRow` (whose tap is
@@ -312,7 +318,7 @@ question above it, and its cancel is half of the answer.
 
 ### Where a sentence goes — and why most of them are gone
 
-The app carries two kinds of prose, and a sentence that is neither does not get
+The app carries three kinds of prose, and a sentence that is none of them does not get
 written:
 
 - about **one control** — what pressing it does, what a field's value is for — it
@@ -320,12 +326,18 @@ written:
   model-numbers sheet's "a blank box leaves the value alone" is its field's help. A
   button's `caption` — a second line inside its own fill — was a third home for one of
   these and it is gone: the one caller (the AGENTS.md editor's *Save*) dropped it because
-  a two-line *Save* beside a one-line *Restore* read as two sizes for two peer actions,
-  and the sentence about the restart is reported *after* the save instead.
+  a two-line *Save* beside a one-line *Restore* read as two sizes for two peer actions.
 - about a **state** — a save that failed, a file that could not be read, a shell that
   exited — it is `PiNotice`, in its container, beside the thing in that state.
+- about a **moment** — an action that has just finished — it is a **toast**, which is
+  the third home and the one that was missing. "Saved", "restored", "removed", "agent
+  restarted": each used to be a strip on the page or a line of `PiNote` prose under the
+  control, and each stayed there until the next action replaced it, so a settings page
+  that had been used twice carried notes about things nobody could act on any more. A
+  sentence in the past tense does not belong on the page it describes: it appears, it is
+  read, and it goes.
 
-What is deliberately **not** written is a third kind, and it was written in this app
+What is deliberately **not** written is a fourth kind, and it was written in this app
 for a long time: a paragraph about the *page* — what it is for, when a change takes
 effect, why the default is what it is. Those paragraphs were on every settings page,
 under a heading and in a voice of their own (`PiNote`, and `SettingsNote` on the
@@ -350,7 +362,9 @@ point:
 
 A fact that a user *must* know before acting — a change that only takes effect on the
 next agent start — is not a paragraph: it is a clause in the subtitle of the control
-that makes the change.
+that makes the change. And it is not always needed even there: where the app can act on
+the fact itself, it does, and the clause goes with it. Every write on the web-access page
+now restarts the agent instead of saying that the next start is when the change lands.
 
 ### Containers: a card is not a group
 

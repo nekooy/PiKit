@@ -37,10 +37,12 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.WEB_ACCESS_PARAMS
 import pi.kit.mob.locales.WebAccessParam
 import pi.kit.mob.locales.strings
+import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebSearchEntry
 import pi.kit.mob.pi.WebSearchStore
 import pi.kit.mob.pi.WEB_SEARCH_OWNED_PATHS
 import pi.kit.mob.ui.components.LocalSheetHost
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.components.PickerOption
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.showPicker
@@ -111,29 +113,35 @@ import pi.kit.mob.ui.design.PiShapes
  * the card's last one had a rounded ripple at its bottom edge and a row with anything
  * under it — a note — had a square one. Measured on this page: the add row's press
  * outline changed after the first option was added, because the outcome note appeared
- * *inside* the card under it, while the storage page's add-a-folder never moved. A
- * group is a set of peer rows now and each row clips its own outline, so that
- * particular failure cannot recur — but the outcome still belongs outside it, because a
- * group is rows and a sentence is not one, and the acting row still belongs last. So
- * the outcome is a [ConfigNote] below the group, and the group itself is the list plus
- * the one row that acts on it. The explanation that used to sit above it is gone:
- * what the section is for is one line of a field's own help, and a paragraph over a
- * list nobody reads is clutter (§13).
+ * *inside* the card under it, while the storage page's add-a-folder never moved. The
+ * outcome is a **toast** now (`components/Toasts.kt`), which is what actually settles
+ * it: a sentence about an action that has finished belongs nowhere on the page, and
+ * the acting row still belongs last. The explanation that used to sit above the list is
+ * gone too: what the section is for is one line of a field's own help, and a paragraph
+ * over a list nobody reads is clutter (§13).
  *
  * The hairline above the row exists only when the list has something in it: it
  * separates the list from the row, and a rule with one thing on each side of it is a
  * boundary drawn between two things that are not there.
+ *
+ * ## A write restarts the agent itself
+ *
+ * The extension registers its tools when pi starts, so a key written under a running
+ * agent is one the model does not see until its next launch. The page used to say so —
+ * "it applies the next time the agent starts" — which left the reader to remember it,
+ * and the strings no longer say it because the write now does it: `scheduleRestart`
+ * is called after every write here, and it waits for a turn in flight before touching
+ * the process, so a restart can never interrupt an answer.
  */
 @Composable
-internal fun WebSearchConfigOptions(store: WebSearchStore) {
+internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSession) {
     val text = strings
     val language = LocalLanguage.current
     val scope = rememberCoroutineScope()
     val host = LocalSheetHost.current
+    val toasts = LocalToastHost.current
     val entries by store.extra.collectAsState()
 
-    // The last thing a button did, which is the only status this section has.
-    var outcome by remember { mutableStateOf<ConfigOutcome?>(null) }
     var pendingRemoval by remember { mutableStateOf<WebSearchEntry?>(null) }
 
     // Outside the group, deliberately: see the note above on the press feedback.
@@ -173,7 +181,6 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
             subtitle = text.settings.searchConfigAddBody,
             leading = { Icon(Icons.Filled.Add, contentDescription = null) },
             onClick = {
-                outcome = null
                 val options = WEB_ACCESS_PARAMS
                     // The keys the controls above own are written from the settings on
                     // every render, so a value added here would be overwritten by the
@@ -205,9 +212,22 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
                                     text = text,
                                     onAdd = { value ->
                                         scope.launch {
-                                            outcome = store.setValue(param.path, value).fold(
-                                                onSuccess = { ConfigOutcome.Added },
-                                                onFailure = { ConfigOutcome.Failed },
+                                            // The extension registers its tools when pi
+                                            // starts, so a key written under a running
+                                            // agent is one the model does not see until
+                                            // the next launch. Rather than telling the
+                                            // reader to restart it, the write says so
+                                            // itself — `scheduleRestart` waits for any
+                                            // turn in flight, so this cannot interrupt an
+                                            // answer (`PiAgentSession`).
+                                            toasts.show(
+                                                store.setValue(param.path, value).fold(
+                                                    onSuccess = {
+                                                        session.scheduleRestart()
+                                                        text.settings.searchConfigSaved
+                                                    },
+                                                    onFailure = { text.settings.searchConfigFailed },
+                                                ),
                                             )
                                         }
                                     },
@@ -222,27 +242,9 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
         )
     }
 
-    // The result of the last action, under the group that holds the row that performed
-    // it. It used to sit inside the card, between that row and the list, which put
-    // "已保存，下次启动 Agent 时生效" on the wrong side of the button the reader had just
-    // pressed — it read as a caption of the list rather than as the answer to the tap —
-    // and moving it under the row left it inside the card, which is what squared off that
-    // row's press ripple (see the note on this composable). Each message names its own
-    // outcome (saved / removed / write failed), so one place under the section's action is
-    // also the right place for a removal's note.
-    outcome?.let { state ->
-        ConfigNote(
-            message = when (state) {
-                ConfigOutcome.Added -> text.settings.searchConfigSaved
-                ConfigOutcome.Removed -> text.settings.searchConfigRemoved
-                ConfigOutcome.Failed -> text.settings.searchConfigFailed
-            },
-            color = when (state) {
-                ConfigOutcome.Failed -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.primary
-            },
-        )
-    }
+    // The result of the last action is a toast (see the KDoc above), so nothing is
+    // drawn here: a group is its rows and a sentence is not one, and a sentence about
+    // an action that has already finished is what the toast layer is for.
 
     pendingRemoval?.let { entry ->
         AlertDialog(
@@ -258,9 +260,14 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
                     onClick = {
                         pendingRemoval = null
                         scope.launch {
-                            outcome = store.removeValue(entry.path).fold(
-                                onSuccess = { ConfigOutcome.Removed },
-                                onFailure = { ConfigOutcome.Failed },
+                            toasts.show(
+                                store.removeValue(entry.path).fold(
+                                    onSuccess = {
+                                        session.scheduleRestart()
+                                        text.settings.searchConfigRemoved
+                                    },
+                                    onFailure = { text.settings.searchConfigFailed },
+                                ),
                             )
                         }
                     },
@@ -302,17 +309,16 @@ internal fun WebSearchConfigOptions(store: WebSearchStore) {
  * without ever needing to read the broken one, and the page then comes back editable.
  *
  * The confirmation is here rather than in the section above because the question
- * belongs to the control that asks it, and the outcome note lands under the group the
- * same way the list's own notes do — **outside** it, because the group is its rows
- * (see [WebSearchConfigOptions] for the measurement that settled that for the add row,
- * which this row is the same shape as).
+ * belongs to the control that asks it, and the outcome is a toast for the same reason
+ * the list's own outcomes are (see [WebSearchConfigOptions]): a sentence about
+ * something already done does not belong on the page it was done to.
  */
 @Composable
-internal fun WebSearchResetSection(store: WebSearchStore) {
+internal fun WebSearchResetSection(store: WebSearchStore, session: PiAgentSession) {
     val text = strings
     val scope = rememberCoroutineScope()
+    val toasts = LocalToastHost.current
     var confirming by remember { mutableStateOf(false) }
-    var outcome by remember { mutableStateOf<ResetOutcome?>(null) }
 
     PiSectionHeader(text.settings.searchConfigRestore)
     PiGroup {
@@ -330,23 +336,7 @@ internal fun WebSearchResetSection(store: WebSearchStore) {
             // thing that cannot be taken back is the one place the `error` role
             // belongs on this page.
             titleColor = MaterialTheme.colorScheme.error,
-            onClick = {
-                outcome = null
-                confirming = true
-            },
-        )
-    }
-
-    outcome?.let { state ->
-        ConfigNote(
-            message = when (state) {
-                ResetOutcome.Restored -> text.settings.searchConfigRestored
-                ResetOutcome.Failed -> text.settings.searchConfigFailed
-            },
-            color = when (state) {
-                ResetOutcome.Failed -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.primary
-            },
+            onClick = { confirming = true },
         )
     }
 
@@ -360,9 +350,18 @@ internal fun WebSearchResetSection(store: WebSearchStore) {
                     onClick = {
                         confirming = false
                         scope.launch {
-                            outcome = store.restoreDocument().fold(
-                                onSuccess = { ResetOutcome.Restored },
-                                onFailure = { ResetOutcome.Failed },
+                            // Rewriting the file also rewrites the `tools.*` keys, so
+                            // the agent is restarted from here rather than the reader
+                            // being told to do it — the same trade the add and remove
+                            // paths make.
+                            toasts.show(
+                                store.restoreDocument().fold(
+                                    onSuccess = {
+                                        session.scheduleRestart()
+                                        text.settings.searchConfigRestored
+                                    },
+                                    onFailure = { text.settings.searchConfigFailed },
+                                ),
                             )
                         }
                     },
@@ -379,12 +378,6 @@ internal fun WebSearchResetSection(store: WebSearchStore) {
         )
     }
 }
-
-/** What the last button press in the configuration section did. */
-private enum class ConfigOutcome { Added, Removed, Failed }
-
-/** What the reset section's own button did. */
-private enum class ResetOutcome { Restored, Failed }
 
 /**
  * The sheet that takes one option's value.

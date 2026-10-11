@@ -49,6 +49,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.design.PiButton
@@ -56,7 +57,6 @@ import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiEmptyState
 import pi.kit.mob.ui.design.PiLoading
-import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPageSwap
 import pi.kit.mob.ui.design.PiRowDivider
@@ -388,11 +388,8 @@ private fun kindOf(file: File, text: Strings): String = when {
 private fun PreviewSheet(file: File, text: Strings) {
     val context = LocalContext.current
     val host = LocalSheetHost.current
+    val toasts = LocalToastHost.current
     var body by remember(file) { mutableStateOf<String?>(null) }
-    // Whether the last "Open with" tap could hand the file over. Kept here rather
-    // than logged, because the user is standing in front of a button that did
-    // nothing and deserves to be told why — see [openExternally].
-    var openFailed by remember(file) { mutableStateOf(false) }
 
     LaunchedEffect(file) {
         body = withContext(Dispatchers.IO) { readPreview(file, text) }
@@ -441,13 +438,6 @@ private fun PreviewSheet(file: File, text: Strings) {
             }
         }
 
-        if (openFailed) {
-            PiNotice(
-                text = text.files.openFailed,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-        }
-
         // Open with is a button — it used to be a list row inside the body, so the
         // one action that takes the file *out* of the app looked like one more line
         // of the preview rather than like a thing to press. It collects at the
@@ -470,7 +460,16 @@ private fun PreviewSheet(file: File, text: Strings) {
                 // control in a sheet is: the panel keeps drawing while it leaves,
                 // and a second tap must not hand the file to another app after the
                 // reader has dismissed the preview.
-                onClick = { if (host.isOpen) openFailed = !openExternally(context, file) },
+                // The failure is the app's one transient message rather than a strip
+                // on the panel: it is the answer to the press, and the reader is
+                // standing in front of a button that did nothing and deserves to be
+                // told why — see [openExternally]. It is raised from here rather than
+                // held in state because nothing on the sheet depends on it.
+                onClick = {
+                    if (host.isOpen && !openExternally(context, file)) {
+                        toasts.show(text.files.openFailed)
+                    }
+                },
                 kind = PiButtonKind.Outlined,
                 size = PiButtonSize.Small,
                 leadingIcon = {

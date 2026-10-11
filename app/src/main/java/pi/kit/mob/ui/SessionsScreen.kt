@@ -46,14 +46,11 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.ui.components.LocalSheetHost
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.SheetHost
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiEmptyState
 import pi.kit.mob.ui.design.PiLoading
-import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiScaffold
@@ -105,13 +102,13 @@ fun SessionsScreen(
     var confirmingDelete by remember { mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList()) }
     // A conversation the user tapped while the agent was answering.
     var pendingSwitch by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
     var matches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var matchedQuery by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val sheets = LocalSheetHost.current
+    val toasts = LocalToastHost.current
 
     LaunchedEffect(reload) {
         loading = true
@@ -241,21 +238,6 @@ fun SessionsScreen(
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
             )
 
-            message?.let {
-                PiNotice(
-                    text = it,
-                    action = {
-                        PiButton(
-                            text = text.common.ok,
-                            kind = PiButtonKind.Text,
-                            size = PiButtonSize.ExtraSmall,
-                            onClick = { message = null },
-                        )
-                    },
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
-                )
-            }
-
             when {
                 loading -> Box(
                     Modifier.fillMaxWidth().weight(1f),
@@ -342,7 +324,7 @@ fun SessionsScreen(
                 renaming = null
                 scope.launch {
                     session.renameSession(target, name)
-                        .onFailure { message = text.sessions.renameFailed(it.message.orEmpty()) }
+                        .onFailure { toasts.show(text.sessions.renameFailed(it.message.orEmpty())) }
                     reload++
                 }
             },
@@ -374,7 +356,9 @@ fun SessionsScreen(
                     session.deleteSessions(targets)
                         .onSuccess { removed ->
                             if (removed < targets.size) {
-                                message = text.sessions.partiallyDeleted(removed, targets.size)
+                                toasts.show(
+                                    text.sessions.partiallyDeleted(removed, targets.size),
+                                )
                             }
                         }
                         .onFailure { error ->
@@ -383,11 +367,13 @@ fun SessionsScreen(
                             // `deleteFailed` would print a process-language reason
                             // ("the agent is still working on this session") the
                             // reader cannot act on.
-                            message = if (error is TurnInFlightException) {
-                                text.sessions.switchWhileWorking
-                            } else {
-                                text.sessions.deleteFailed(error.message.orEmpty())
-                            }
+                            toasts.show(
+                                if (error is TurnInFlightException) {
+                                    text.sessions.switchWhileWorking
+                                } else {
+                                    text.sessions.deleteFailed(error.message.orEmpty())
+                                },
+                            )
                         }
                     reload++
                 }

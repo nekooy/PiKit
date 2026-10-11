@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.BackupStatus
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiPageBottom
@@ -83,6 +85,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
     val status by manager.status.collectAsState()
     val review by manager.review.collectAsState()
     val text = strings
+    val toasts = LocalToastHost.current
 
     var selection by rememberSaveable(stateSaver = CategoriesSaver) {
         mutableStateOf(BackupCategory.DEFAULT)
@@ -126,6 +129,24 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
         ?.takeIf { it.kind == BackupStatus.Kind.IMPORT }
         ?.let { text.settings.backupImportRunning(it.entries) }
 
+    // A run that finished is a moment rather than a condition, so its outcome is the
+    // app's one transient message: "4 entries restored" used to be a strip under the
+    // button that stayed there — with a Dismiss button beside it — until the next run
+    // replaced it. The status is cleared with it, because the toast *is* the report.
+    LaunchedEffect(status) {
+        val message = when (val settled = status) {
+            BackupStatus.NotAnArchive -> text.settings.backupNotAnArchive
+            is BackupStatus.Failed -> text.settings.backupFailed(settled.message)
+            is BackupStatus.Exported -> text.settings.backupExportDone(settled.name, settled.entries)
+            is BackupStatus.Imported -> text.settings.backupImportDone(settled.entries)
+            else -> null
+        }
+        if (message != null) {
+            toasts.show(message)
+            manager.dismiss()
+        }
+    }
+
     // The bar has no inset of its own: `PiScaffold` zeroes it, because where a
     // page's top edge is is the page's business. Nothing above a settings page
     // applies the status bar inset (the root pads the horizontal safe-drawing and
@@ -168,10 +189,8 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 },
                 dismissLabel = text.settings.dismiss,
                 enabled = !busy && selection.isNotEmpty(),
-                onDismiss = if (status.isExportOutcome()) manager::dismiss else null,
                 working = exportWorking,
             )
-            StatusLine(status = status, kind = BackupStatus.Kind.EXPORT)
             if (selection.isEmpty()) {
                 PiNotice(text = text.settings.backupNothingSelected, tone = PiTone.Neutral)
             }
@@ -184,10 +203,8 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                     onAction = { pickArchive.launch(arrayOf("*/*")) },
                     dismissLabel = text.settings.dismiss,
                     enabled = !busy,
-                    onDismiss = if (status.isImportOutcome()) manager::dismiss else null,
                     working = importWorking,
                 )
-                StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
             } else {
                 val available = pending.manifest.included
                 // Re-seeded whenever a different archive is read, so the ticks
@@ -243,7 +260,6 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                     onDismiss = if (busy) null else manager::cancelReview,
                     working = importWorking,
                 )
-                StatusLine(status = status, kind = BackupStatus.Kind.IMPORT)
             }
         }
     }
@@ -280,50 +296,6 @@ private fun Categories(
     }
 }
 
-/**
- * What a run left behind, in the direction that owns it.
- *
- * Split by direction rather than shown under both: an export's progress under the
- * import button reads as an import that is somehow packing a file, and the one
- * status value both halves read from is exactly why this takes a [kind]. The
- * *running* case is deliberately absent — that is the live pill beside the button
- * — and `NotAnArchive` is an import outcome only: it is the answer to reading a
- * picked file, and it used to appear under the export button's own status line as
- * well, which is the same confusion in the other direction.
- */
-@Composable
-private fun StatusLine(status: BackupStatus, kind: BackupStatus.Kind) {
-    val text = strings
-    when (status) {
-        BackupStatus.Idle -> Unit
-
-        BackupStatus.NotAnArchive -> if (kind == BackupStatus.Kind.IMPORT) {
-            PiNotice(text = text.settings.backupNotAnArchive, tone = PiTone.Danger)
-        }
-
-        is BackupStatus.Failed -> if (status.kind == kind) {
-            PiNotice(text = text.settings.backupFailed(status.message), tone = PiTone.Danger)
-        }
-
-        // The pill, above the button that started it.
-        is BackupStatus.Running -> Unit
-
-        is BackupStatus.Exported -> if (kind == BackupStatus.Kind.EXPORT) {
-            PiNotice(
-                text = text.settings.backupExportDone(status.name, status.entries),
-                tone = PiTone.Accent,
-            )
-        }
-
-        is BackupStatus.Imported -> if (kind == BackupStatus.Kind.IMPORT) {
-            PiNotice(
-                text = text.settings.backupImportDone(status.entries),
-                tone = PiTone.Accent,
-            )
-        }
-    }
-}
-
 /** One category's row: what it is, and what is inside it. */
 private fun BackupCategory.label(text: Strings): Pair<String, String> = when (this) {
     BackupCategory.SETTINGS -> text.settings.backupCategorySettings to text.settings.backupCategorySettingsSubtitle
@@ -343,20 +315,6 @@ private fun BackupCategory.label(text: Strings): Pair<String, String> = when (th
 
 private fun Set<BackupCategory>.toggle(category: BackupCategory): Set<BackupCategory> =
     if (category in this) this - category else this + category
-
-private fun BackupStatus.isExportOutcome(): Boolean = when (this) {
-    is BackupStatus.Exported -> true
-    is BackupStatus.Running -> kind == BackupStatus.Kind.EXPORT
-    is BackupStatus.Failed -> kind == BackupStatus.Kind.EXPORT
-    else -> false
-}
-
-private fun BackupStatus.isImportOutcome(): Boolean = when (this) {
-    is BackupStatus.Running -> kind == BackupStatus.Kind.IMPORT
-    is BackupStatus.Failed -> kind == BackupStatus.Kind.IMPORT
-    BackupStatus.NotAnArchive, is BackupStatus.Imported -> true
-    else -> false
-}
 
 /**
  * The selection as a list of ids.

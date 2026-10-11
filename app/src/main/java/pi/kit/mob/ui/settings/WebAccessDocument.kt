@@ -25,7 +25,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.strings
+import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebSearchStore
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
@@ -34,9 +36,6 @@ import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiTone
 import kotlinx.coroutines.launch
-
-/** What the last button press did, which is the only thing the editor reports. */
-private enum class EditorOutcome { Saved, Invalid, Failed }
 
 /**
  * The configuration document, as editable text — the fallback path.
@@ -90,14 +89,14 @@ private enum class EditorOutcome { Saved, Invalid, Failed }
  * the two of them got wrong.
  */
 @Composable
-internal fun WebSearchDocumentEditor(store: WebSearchStore) {
+internal fun WebSearchDocumentEditor(store: WebSearchStore, session: PiAgentSession) {
     val text = strings
     val scope = rememberCoroutineScope()
+    val toasts = LocalToastHost.current
     // Its own draft, not a read per recomposition: the box is what the user is
     // editing, and re-reading the file under their cursor would delete keystrokes.
     var draft by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
-    var outcome by remember { mutableStateOf<EditorOutcome?>(null) }
 
     // Loaded once. There used to be a `LaunchedEffect(settings)` here with a `dirty`
     // flag in front of it, so that a change made by the *controls above* — which
@@ -125,10 +124,7 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
         // own — so the two are indistinguishable on screen.
         OutlinedTextField(
             value = value.orEmpty(),
-            onValueChange = { next ->
-                draft = next
-                outcome = null
-            },
+            onValueChange = { next -> draft = next },
             enabled = value != null,
             // Monospace and small: `bodySmall` keeps about 46 columns on a phone,
             // which is the width the file is written at.
@@ -149,22 +145,11 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
         )
 
-        // Only what the last press did. A file that arrived unreadable is the
-        // page-level note's subject, and it says something better than "nothing was
-        // saved": nothing has been attempted yet.
-        when (outcome) {
-            EditorOutcome.Invalid ->
-                ConfigNote(text.settings.searchConfigInvalid, MaterialTheme.colorScheme.error)
-
-            EditorOutcome.Saved ->
-                ConfigNote(text.settings.searchConfigSaved, MaterialTheme.colorScheme.primary)
-
-            EditorOutcome.Failed ->
-                ConfigNote(text.settings.searchConfigFailed, MaterialTheme.colorScheme.error)
-
-            null -> Unit
-        }
-
+        // What the last press did is a toast, so nothing is drawn between the box and
+        // its buttons. The three outcomes are the same three the list's own writes
+        // report, and none of them is a *condition*: the file on disk is either what
+        // was just written or what it was, and the box in front of the reader is the
+        // evidence either way.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -184,7 +169,6 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
                 onClick = {
                     scope.launch {
                         draft = store.documentText()
-                        outcome = null
                     }
                 },
                 kind = PiButtonKind.Outlined,
@@ -196,23 +180,34 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore) {
                 onClick = {
                     scope.launch {
                         saving = true
-                        outcome = store.replaceDocument(draft.orEmpty()).fold(
-                            onSuccess = {
-                                // Re-read rather than keeping the box as it was typed:
-                                // the comments in it are not in the file, so leaving
-                                // them on screen would show a document pi does not
-                                // have. What comes back is the annotated rendering of
-                                // what was just written.
-                                draft = store.documentText()
-                                EditorOutcome.Saved
-                            },
-                            onFailure = { error ->
-                                if (error is IllegalArgumentException) {
-                                    EditorOutcome.Invalid
-                                } else {
-                                    EditorOutcome.Failed
-                                }
-                            },
+                        toasts.show(
+                            store.replaceDocument(draft.orEmpty()).fold(
+                                onSuccess = {
+                                    // Re-read rather than keeping the box as it was
+                                    // typed: the comments in it are not in the file, so
+                                    // leaving them on screen would show a document pi
+                                    // does not have. What comes back is the annotated
+                                    // rendering of what was just written.
+                                    draft = store.documentText()
+                                    // The document carries the `tools.*` keys, so what
+                                    // was just written is not in effect until pi has
+                                    // started again — which this does rather than
+                                    // telling the reader to.
+                                    session.scheduleRestart()
+                                    text.settings.searchConfigSaved
+                                },
+                                onFailure = { error ->
+                                    // A syntax error and a disk failure are different
+                                    // sentences and the reader can act on the first
+                                    // one; both are toasts, and the box below the pill
+                                    // is where the fix goes.
+                                    if (error is IllegalArgumentException) {
+                                        text.settings.searchConfigInvalid
+                                    } else {
+                                        text.settings.searchConfigFailed
+                                    }
+                                },
+                            ),
                         )
                         saving = false
                     }
