@@ -252,6 +252,19 @@ the drag, and it does so for measured reasons (a `ModalBottomSheet` is a second
 window, which is why the keyboard used to close and why taps were swallowed for up
 to 0.9 s after a dismissal). Nothing here re-opens that.
 
+**The panel has a ceiling too, and it is the status bar.** A sheet taller than the space
+between the keyboard and the top of the window used to be laid out from the window's bottom
+edge with nothing stopping it, so its top — the grabber and the sheet's title — was drawn
+*over* the clock and the battery. The measured case is the `AGENTS.md` editor: a 240–440dp
+field with two buttons under it, against a keyboard that takes 300dp of a 411×891dp window
+(`弹出输入法后页面顶部会直接冲到手机状态栏那里`). `SheetLayer` now bounds the panel to the
+height it was given (the window, less the keyboard, because the IME inset is consumed on the
+way in) minus the status bar. Every body is measured against that bound, so a body that can
+scroll scrolls — the editor's own column became a `Column(verticalScroll)`, which is safe
+there because it holds no lazy list — and a body that cannot is at least never over the
+system bars. `PiSheetList`'s 0.7 cap follows the new ceiling automatically, because it is a
+share of what it is given.
+
 ### The bump
 
 Buttons are a **pill at rest and square up to `card` while held**. It is the
