@@ -471,7 +471,7 @@ internal object JapaneseStrings : Strings {
         override val agentContextInstructionsEditable = "編集可"
         override val agentContextNote = "pi が起動時に読み込みます。保存するとエージェントが再起動します。"
         override val agentContextSave = "保存"
-        override val agentContextSaved = "保存しました。エージェントを再起動しています"
+        override val agentContextSaved = "保存しました"
         override val agentContextFailed = "保存できませんでした。ファイルは変更されていません"
         override val agentContextRestore = "既定に戻す"
         override val agentContextRestoreTitle = "既定の内容に戻しますか？"
@@ -807,7 +807,7 @@ internal object JapaneseStrings : Strings {
             "この実行環境には web-access 拡張がありません。「メンテナンスと修復」で" +
                 "実行環境を更新してから、このページを開き直してください。"
         override val webAccess = "ウェブアクセス"
-        override val webAccessSubtitle = "検索・ページ読み込み・GitHub のクローン。変更は次回のエージェント起動時に反映"
+        override val webAccessSubtitle = "検索・ページ読み込み・GitHub のクローン"
         override val searchWorkflow = "検索ワークフロー"
         override val searchWorkflowSubtitle = "検索後にすること"
         override val workflowNone = "結果をそのまま返す"
@@ -898,7 +898,7 @@ internal object JapaneseStrings : Strings {
         override val searchConfigValueAdd = "追加"
         override val searchConfigRemoveAction = "削除"
         override fun searchConfigRemove(path: String) = "$path を削除"
-        override val searchConfigRemoved = "削除しました。次にエージェントを起動したときに反映されます。"
+        override val searchConfigRemoved = "削除しました"
         override val searchConfigRemoveTitle = "この設定項目を削除しますか？"
         override fun searchConfigRemoveBody(path: String) =
             "web-search.json から `$path` を削除します。ファイル内の他のキーはそのままです。"
@@ -914,11 +914,10 @@ internal object JapaneseStrings : Strings {
         override val searchConfigInvalid =
             "まだ JSON オブジェクトではありません。保存していません。カンマや引用符の抜けを確認してください。" +
                 "コメントと末尾の余分なカンマは問題ありません。"
-        override val searchConfigSaved = "保存しました。次にエージェントを起動したときに反映されます。"
+        override val searchConfigSaved = "保存しました"
         override val searchConfigFailed = "ファイルを書き込めませんでした。理由は端末タブで確認できます。"
         override val searchConfigRestored =
-            "既定に戻しました。ファイルはインストール直後の内容になり、設定していた内容は失われています。" +
-                "次にエージェントを起動したときに反映されます。"
+            "既定に戻しました。ファイルはインストール直後の内容になり、設定していた内容は失われています。"
         override val searchConfigSave = "保存"
         override val searchConfigRevert = "変更を破棄"
         override val searchConfigRestore = "既定に戻す"

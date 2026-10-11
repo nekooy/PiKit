@@ -96,8 +96,11 @@ import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.RuntimeStatus
 import pi.kit.mob.ui.components.LocalSheetHost
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.components.SheetHost
 import pi.kit.mob.ui.components.SheetLayer
+import pi.kit.mob.ui.components.ToastHost
+import pi.kit.mob.ui.components.ToastLayer
 import pi.kit.mob.ui.design.PiAgentMark
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
@@ -143,6 +146,11 @@ fun PiKitRoot(session: PiAgentSession) {
     // and a sheet that was open when it happened still has to animate away.
     val sheets = remember { SheetHost() }
 
+    // One transient message for the whole app, held for the same reason and above
+    // the same key: a toast raised by a page that a language switch rebuilds has to
+    // finish being read rather than vanishing with the page that asked for it.
+    val toasts = remember { ToastHost() }
+
     CompositionLocalProvider(
         LocalStrings provides stringsFor(language),
         LocalLanguage provides language,
@@ -151,6 +159,7 @@ fun PiKitRoot(session: PiAgentSession) {
         // for a sheet — and the sheet it was switched from must still be able to
         // finish sliding out rather than blinking off the screen.
         LocalSheetHost provides sheets,
+        LocalToastHost provides toasts,
     ) {
         // The first-launch prompts sit *above* the language key, not inside it.
         // That is the fix for a measured bug rather than tidiness: a subtree
@@ -165,7 +174,7 @@ fun PiKitRoot(session: PiAgentSession) {
         // catalogs are plain objects, not observable state, so without this the
         // pages that are already composed would keep the old text.
         key(language) {
-            RootContent(session = session, language = language, sheets = sheets)
+            RootContent(session = session, language = language, sheets = sheets, toasts = toasts)
         }
     }
 }
@@ -363,7 +372,12 @@ private fun PiPromptDialog(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHost) {
+private fun RootContent(
+    session: PiAgentSession,
+    language: Lang,
+    sheets: SheetHost,
+    toasts: ToastHost,
+) {
     val runtime by session.runtime.collectAsState()
     val agent by session.agent.collectAsState()
     var destination by remember { mutableStateOf(Destination.Chat) }
@@ -574,6 +588,19 @@ private fun RootContent(session: PiAgentSession, language: Lang, sheets: SheetHo
             // anchored to the page's bottom edge would float a bar's height above
             // the window's.
             SheetLayer(host = sheets, modifier = Modifier.fillMaxSize())
+
+            // The one transient message, above even the sheet: it reports what a tap
+            // just did, and the tap that raised it may have been a sheet's own row.
+            // The inset is the page's own bottom inset — the bar, the keyboard and
+            // the gesture strip, whichever is largest — so the pill lands where the
+            // composer's band ends rather than under the navigation bar.
+            ToastLayer(
+                host = toasts,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(pageBottom)
+                    .padding(bottom = 8.dp),
+            )
         }
     }
 

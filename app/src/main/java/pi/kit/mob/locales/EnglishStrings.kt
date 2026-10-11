@@ -497,7 +497,7 @@ internal object EnglishStrings : Strings {
         override val agentContextInstructionsEditable = "Editable"
         override val agentContextNote = "pi reads this file at startup; the agent restarts after a save."
         override val agentContextSave = "Save"
-        override val agentContextSaved = "Saved; the agent is restarting"
+        override val agentContextSaved = "Saved"
         override val agentContextFailed = "Could not save; the file is unchanged"
         override val agentContextRestore = "Restore the default"
         override val agentContextRestoreTitle = "Restore the default text?"
@@ -858,7 +858,7 @@ internal object EnglishStrings : Strings {
             "This runtime has no web-access extension. Update the runtime under Maintenance & " +
                 "repair, then open this page again."
         override val webAccess = "Web access"
-        override val webAccessSubtitle = "Search the web, read pages, clone GitHub links; changes apply when the agent next starts"
+        override val webAccessSubtitle = "Search the web, read pages and clone GitHub links"
         override val searchWorkflow = "Search workflow"
         override val searchWorkflowSubtitle = "What happens after a search"
         override val workflowNone = "Raw results"
@@ -956,7 +956,7 @@ internal object EnglishStrings : Strings {
         override val searchConfigValueAdd = "Add"
         override val searchConfigRemoveAction = "Remove"
         override fun searchConfigRemove(path: String) = "Remove $path"
-        override val searchConfigRemoved = "Removed. It applies the next time the agent starts."
+        override val searchConfigRemoved = "Removed"
         override val searchConfigRemoveTitle = "Remove this option?"
         override fun searchConfigRemoveBody(path: String) =
             "`$path` is removed from web-search.json. Every other key in the file is left " +
@@ -976,12 +976,12 @@ internal object EnglishStrings : Strings {
         override val searchConfigInvalid =
             "This is not a JSON object — nothing was saved. Check for a missing comma or " +
                 "quote; comments and trailing commas are fine."
-        override val searchConfigSaved = "Saved. It applies the next time the agent starts."
+        override val searchConfigSaved = "Saved"
         override val searchConfigFailed =
             "The file could not be written. Check the terminal tab for the reason."
         override val searchConfigRestored =
             "Restored. The file is back to what a fresh install has, so anything you had " +
-                "configured is gone; it applies the next time the agent starts."
+                "configured is gone."
         override val searchConfigSave = "Save"
         override val searchConfigRevert = "Discard changes"
         override val searchConfigRestore = "Restore defaults"

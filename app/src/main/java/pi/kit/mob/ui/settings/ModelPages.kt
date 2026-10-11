@@ -65,6 +65,7 @@ import pi.kit.mob.pi.anyProviderModelFacts
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.modelDefinitionFacts
 import pi.kit.mob.ui.components.LocalSheetHost
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.components.PiIcons
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.design.PiBadge
@@ -74,7 +75,6 @@ import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiGap
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiLoading
-import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPagePadding
 import pi.kit.mob.ui.design.PiRow
@@ -126,8 +126,8 @@ internal fun ModelPage(
     onEdit: (String) -> Unit,
 ) {
     val store = session.settingsStore.profiles
+    val toasts = LocalToastHost.current
     var pendingDelete by remember { mutableStateOf<ModelProfile?>(null) }
-    var deleteError by remember { mutableStateOf<String?>(null) }
     // Collected rather than copied into local state: the store publishes what it
     // has, so a profile saved on the form behind this page, or a model changed
     // from the composer, is on this page the moment it is committed. It used to be
@@ -274,11 +274,6 @@ internal fun ModelPage(
                 size = PiButtonSize.Small,
                 leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
             )
-
-            deleteError?.let { message ->
-                PiGap(8.dp)
-                PiNotice(message)
-            }
         }
     }
 
@@ -291,10 +286,12 @@ internal fun ModelPage(
                 TextButton(onClick = {
                     val deleted = store.delete(target.id)
                     if (deleted) {
-                        deleteError = null
                         if (target.id == activeId) session.scheduleRestart()
                     } else {
-                        deleteError = text.settings.lastProfile
+                        // The last profile cannot go: pi would have nothing to launch
+                        // with. A toast rather than a strip under the list, because it
+                        // is the answer to the press and the list itself is unchanged.
+                        toasts.show(text.settings.lastProfile)
                     }
                     pendingDelete = null
                 }) {
@@ -398,6 +395,7 @@ internal fun ModelEditPage(
     // holding a field of their own — see the custom-parameters section for what that
     // replaced.
     val sheets = LocalSheetHost.current
+    val toasts = LocalToastHost.current
     // The saved preference, read for the thinking level each model row reports. It is not
     // a field of this form: the composer's chip is the one control for it.
     val preferences by session.settingsStore.settings.collectAsState()
@@ -430,13 +428,17 @@ internal fun ModelEditPage(
     // list yet. Cleared when it is added, so the button cannot add it twice.
     var draft by remember { mutableStateOf("") }
 
-    var saveMessage by remember { mutableStateOf<String?>(null) }
-
     var fetching by remember { mutableStateOf(false) }
     // The fetch failure, already worded: [DiscoveryProblem]s are rendered through
     // `Strings.discoveryProblem` at the point of capture, so the state holds text the
-    // interface owns rather than the throw site's English. `chooseProviderFirst` lands
-    // here too, which is why this is a string and not a problem list.
+    // interface owns rather than the throw site's English.
+    //
+    // It is the page's one *dialog*, and it is a dialog rather than a toast because of
+    // its length: a provider that answered with an auth failure and a wrong endpoint
+    // produces two paragraphs, and a pill that disappears after three seconds is not
+    // where a reader can read two paragraphs. The one-line refusal that used to share
+    // this state — "choose a provider first" — is a toast now, because it is one
+    // sentence and it is about the press rather than about the endpoint.
     var discoveryError by remember { mutableStateOf<String?>(null) }
 
     // Whether pi's own catalogue already contains each model id, what pi resolves an id
@@ -733,7 +735,7 @@ internal fun ModelEditPage(
      */
     fun save(): Boolean {
         refusal()?.let { message ->
-            saveMessage = message
+            toasts.show(message)
             return false
         }
         val chosen = provider ?: return false
@@ -874,10 +876,9 @@ internal fun ModelEditPage(
         // until the next launch re-reads the old file. Say so here rather than
         // leave the page claiming success.
         if (store.lastWriteFailed) {
-            saveMessage = text.settings.saveFailed
+            toasts.show(text.settings.saveFailed)
             return false
         }
-        saveMessage = null
         return true
     }
 
@@ -1197,7 +1198,9 @@ internal fun ModelEditPage(
                     onClick = {
                         val chosen = provider
                         if (chosen == null) {
-                            discoveryError = text.settings.chooseProviderFirst
+                            // One sentence about the press, so a toast: see the note on
+                            // `discoveryError` for why the failures are a dialog.
+                            toasts.show(text.settings.chooseProviderFirst)
                             return@PiButton
                         }
                         discoveryError = null
@@ -1291,8 +1294,25 @@ internal fun ModelEditPage(
             }
 
             discoveryError?.let { message ->
-                PiGap(8.dp)
-                PiNotice(message)
+                AlertDialog(
+                    onDismissRequest = { discoveryError = null },
+                    title = { Text(text.settings.fetchModels) },
+                    text = {
+                        Text(
+                            message,
+                            // Bounded and scrolled inside the bound: a provider that
+                            // answered with two failures produces two paragraphs, and
+                            // an unbounded body pushes the acknowledgement off the
+                            // bottom — the same treatment the installer's warnings get.
+                            modifier = Modifier
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(rememberScrollState()),
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { discoveryError = null }) { Text(text.common.ok) }
+                    },
+                )
             }
 
             // Its own section, and one *group* of rows per model: the model's name, the

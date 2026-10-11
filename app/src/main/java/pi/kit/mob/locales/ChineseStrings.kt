@@ -458,7 +458,7 @@ internal object ChineseStrings : Strings {
         override val agentContextInstructionsEditable = "可编辑"
         override val agentContextNote = "pi 启动时读取该文件；保存后 Agent 会重启。"
         override val agentContextSave = "保存"
-        override val agentContextSaved = "已保存，Agent 正在重启"
+        override val agentContextSaved = "已保存"
         override val agentContextFailed = "保存失败，文件没有改动"
         override val agentContextRestore = "恢复默认"
         override val agentContextRestoreTitle = "恢复默认说明？"
@@ -766,7 +766,7 @@ internal object ChineseStrings : Strings {
             "当前运行环境里没有 web-access 扩展。请先在「维护与修复」中更新运行环境，" +
                 "再回到本页。"
         override val webAccess = "联网访问"
-        override val webAccessSubtitle = "搜索网页、读取页面、克隆 GitHub 链接；改动在下次启动 Agent 时生效"
+        override val webAccessSubtitle = "搜索网页、读取页面、克隆 GitHub 链接"
         override val searchWorkflow = "搜索流程"
         override val searchWorkflowSubtitle = "搜索之后做什么"
         override val workflowNone = "直接返回结果"
@@ -855,7 +855,7 @@ internal object ChineseStrings : Strings {
         override val searchConfigValueAdd = "添加"
         override val searchConfigRemoveAction = "移除"
         override fun searchConfigRemove(path: String) = "移除 $path"
-        override val searchConfigRemoved = "已移除，下次启动 Agent 时生效。"
+        override val searchConfigRemoved = "已移除"
         override val searchConfigRemoveTitle = "移除这个配置项？"
         override fun searchConfigRemoveBody(path: String) =
             "将从 web-search.json 中移除 `$path`，文件里其他键保持原样。"
@@ -871,10 +871,10 @@ internal object ChineseStrings : Strings {
                 "要连大括号一起取消注释。"
         override val searchConfigInvalid =
             "这还不是一个 JSON 对象，没有保存。检查是否漏了逗号或引号；注释和结尾多余的逗号没关系。"
-        override val searchConfigSaved = "已保存，下次启动 Agent 时生效。"
+        override val searchConfigSaved = "已保存"
         override val searchConfigFailed = "文件写入失败，原因见终端页。"
         override val searchConfigRestored =
-            "已恢复。文件回到刚安装时的内容，之前配置过的内容都不在了；下次启动 Agent 时生效。"
+            "已恢复。文件回到刚安装时的内容，之前配置过的内容都不在了。"
         override val searchConfigSave = "保存"
         override val searchConfigRevert = "撤销修改"
         override val searchConfigRestore = "恢复默认"

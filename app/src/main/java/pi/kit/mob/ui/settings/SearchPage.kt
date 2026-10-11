@@ -170,10 +170,18 @@ internal fun SearchPage(
                     // master: off takes the search, source-check, fetch and
                     // retrieval tools all with it, which is what the subtitle
                     // beside it promises.
+                    //
+                    // The four `tools.<name>.enabled` keys it writes are read when pi
+                    // registers the extension's tools, so the restart is the write's
+                    // own consequence rather than a sentence telling the reader to
+                    // make one — the trade `WebSearchConfigOptions` records.
                     PiSwitchRow(
                         title = text.settings.webAccess,
                         checked = settings.enabled,
-                        onCheckedChange = { wanted -> store.update { it.copy(enabled = wanted) } },
+                        onCheckedChange = { wanted ->
+                            store.update { it.copy(enabled = wanted) }
+                            session.scheduleRestart()
+                        },
                         subtitle = text.settings.webAccessSubtitle,
                         leading = { Icon(Icons.Filled.Cloud, contentDescription = null) },
                     )
@@ -280,9 +288,9 @@ internal fun SearchPage(
             // last row is the one that acts.
             if (unreadable) {
                 PiSectionHeader(text.settings.searchConfig)
-                WebSearchDocumentEditor(store = store)
+                WebSearchDocumentEditor(store = store, session = session)
             } else {
-                WebSearchConfigOptions(store = store)
+                WebSearchConfigOptions(store = store, session = session)
             }
 
             // Then the one action that resets the *whole* file, in a section of its
@@ -290,7 +298,7 @@ internal fun SearchPage(
             // that throws all of them away — the controls' keys included — is not
             // one more entry in that list. It is shown in both states, because it is
             // also the way out of a file nothing can parse. See [WebSearchResetSection].
-            WebSearchResetSection(store = store)
+            WebSearchResetSection(store = store, session = session)
 
         }
     }
