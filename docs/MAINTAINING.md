@@ -68,6 +68,45 @@ storage, real network and the ARM translation trap. Both are described in
   storage**.
 - `pkg install` one small package and confirm it lands in the app's prefix.
 
+## The README preview strip
+
+Four phone screenshots — Chat, Terminal, Files, Settings — butted together with no frames and
+no captions, saved as `docs/assets/preview-<version>.webp`. The strip it replaces keeps its own
+version rather than being overwritten (`preview-0.2.0.webp`), and nothing generates the file, so
+this is the whole recipe:
+
+1. **Capture four full-bleed screenshots** at 1080x2400, one per tab, on the interface language
+   the strip is written for (简体中文 for the one the README ships). Tap by the bounds
+   `adb shell uiautomator dump` reports rather than by eye off a screenshot: the PNG reaches a
+   reader at whatever width the window has, while the tree is in device pixels.
+2. **Give the chat panel a transcript.** The emulator has no provider, so a real turn cannot be
+   produced and the empty state is what the tab opens on. Seed a conversation into
+   `files/pi-sessions/` with `run-as`: a `{"type":"session",…}` line, then one record per
+   message — `{"type":"message",…,"message":{"role":"user"…}}`, assistant messages whose
+   `content` carries `toolCall` blocks, a `toolResult` record per call, and a last assistant
+   message carrying `usage`. Two traps, both hit while shooting 0.5.0: the records must form a
+   **linear `parentId` chain**, because pi stores messages as a tree and `get_messages` returns
+   only the branch that reaches the last record — five tool calls hanging off one prompt
+   collapse to one step — and the file only reaches the screen if the app *restores* it, which
+   needs `open_new_on_launch=false` (or a tap on its row in History). `adb push` to
+   `/data/local/tmp` needs `MSYS_NO_PATHCONV=1` in Git Bash, or the path arrives as `D:/…`.
+3. **Make the chips read something.** With no profile configured, `get_state` reports the model
+   as `unknown`, so the composer's chips say `unknown` and `0%`. A `files/pikit-config.json`
+   naming a provider and a model fixes the first (a dummy key is fine — nothing is sent), and a
+   `usage` block on the last message fixes the other two.
+4. **Show the fold, opened.** The chat panel is the one panel with a claim to make, and it is the
+   feature the page exists for: an **opened** turn — the fold band with its step count, then a
+   `✓` row per tool with its name and argument — above a Markdown answer with a heading and a
+   table. The collapsed band is the same control in its other state and hides the point; a turn
+   with no tool calls at all draws no count, which is how the first attempt shipped an answer
+   that said nothing about tools.
+5. **Compose**: each screenshot scaled to 480px wide (Pillow, `Image.LANCZOS`) and pasted left
+   to right with no gap, saved as WebP at quality 88 — 1920 wide for four panels, which is what
+   the previous strips are.
+6. **Reference it**: both READMEs (they are mirrors), the asset row in
+   [README.md](README.md), and the caption under the image, which names the version the strip
+   shows.
+
 ## Traps that cost an afternoon
 
 Three that are specific to maintaining this project. The rest — a stale APK from the build
@@ -105,17 +144,9 @@ your time*, which is the list a change is written against.
   difference in the geometry, in a `fillType`, or in an ink that is the field it is
   drawn on — in both of the script's modes, because that is a property of two files
   rather than of the SVG.
-- **The README preview strip is four screenshots, and nothing generates it.** Chat,
-  Terminal, Files and Settings, captured full-bleed at 1080x2400, butted together at
-  480px each with no frames and no captions, saved as `docs/assets/preview-<version>.webp`
-  (`preview-0.5.0.webp`), and the strip it replaces is kept under its own version
-  rather than overwritten (`preview-0.2.0.webp`). Two things about the capture are not obvious: the emulator has
-  no provider, so the chat panel needs a conversation **seeded** into
-  `files/pi-sessions/` (a `{"type":"session",…}` line, then one record per message, each
-  with a `parentId`), and the model chip then reads `unknown` until a profile exists —
-  `files/pikit-config.json` with a provider and a model makes pi answer `get_state` with
-  a real name. The app restores the seeded file on the next cold start, so the panel can
-  be re-captured without touching the History list.
+- **The README preview strip is hand-made** — nothing generates it, and it is the one
+  asset a change to the interface can leave stale. *The README preview strip* above is
+  the recipe; the filenames are version-stamped and the previous strip is kept.
 - **Rejected designs are not deleted.** When a behaviour is removed, its reasoning
   moves into the chapter that describes it, with the number that settled it.
 - **Nothing in this repository writes to git on its own.** Commits, tags and
