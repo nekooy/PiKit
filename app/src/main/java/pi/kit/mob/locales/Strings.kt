@@ -738,10 +738,11 @@ interface Strings {
          * The transcript's avatars: whether they are drawn, and what each one is.
          *
          * Two rows and a switch on the personalization page. The agent's default is
-         * the word `PI` and the reader's is a person silhouette — both drawn by the
-         * app, not stored — so the two never look alike and neither has to be set up
-         * before the first message. A label is a short word or the reader's initials;
-         * blank means the built-in mark.
+         * the app's own Pi mark and the reader's is a person silhouette — both drawn
+         * by the app, not stored — so the two never look alike and neither has to be
+         * set up before the first message. A label is a short word or the reader's
+         * initials; blank means the built-in mark, and a chosen picture wins over
+         * both.
          */
         val avatars: String
         val showAvatars: String
@@ -755,6 +756,16 @@ interface Strings {
 
         /** In the avatar sheet: the row of colour swatches under the label. */
         val avatarColor: String
+
+        /** In the avatar sheet: choosing a picture, and removing the one chosen. */
+        val avatarPicture: String
+        val avatarPicturePick: String
+        val avatarPictureChange: String
+        val avatarPictureClear: String
+        val avatarPictureHint: String
+
+        /** The pick could not be read and stored; the sheet's own report of it. */
+        val avatarPictureFailed: String
 
         /**
          * The interface's text size: one row above the theme, in seven steps.

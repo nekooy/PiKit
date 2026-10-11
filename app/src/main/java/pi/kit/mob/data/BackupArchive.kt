@@ -182,6 +182,16 @@ internal data class BackupPaths(
     /** `$HOME/.pi/agent/AGENTS.md`. */
     val agentsPromptFile: File get() = File(piConfigDir, AgentContext.FILE_NAME)
 
+    /**
+     * `files/avatars` — the two custom avatar pictures, when the reader has any.
+     *
+     * Driven from [AvatarStore] rather than spelled again, because the settings that
+     * name the pictures hold *absolute paths* into this directory: a backup that put
+     * them back anywhere else would restore two settings pointing at files that are
+     * not there, which reads as "my avatar was lost" with no error to explain it.
+     */
+    val avatarDir: File get() = AvatarStore.directory(filesDir)
+
     companion object {
         fun of(env: TermuxEnv): BackupPaths = BackupPaths(
             filesDir = env.filesDir,
@@ -260,6 +270,7 @@ internal class BackupArchive(
         TreeItem(BackupCategory.CONVERSATIONS, "conversations", paths.sessionDir),
         TreeItem(BackupCategory.WORKSPACE, "workspace", paths.workspace),
         TreeItem(BackupCategory.HTML_EXPORTS, "html-exports", paths.exportDir),
+        TreeItem(BackupCategory.SETTINGS, "avatars", paths.avatarDir),
     )
 
     // ------------------------------------------------------------------ write

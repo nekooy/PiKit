@@ -348,6 +348,12 @@ internal object EnglishStrings : Strings {
         override val avatarLabel = "Label"
         override val avatarLabelHint = "Blank is the default mark"
         override val avatarColor = "Colour"
+        override val avatarPicture = "Picture"
+        override val avatarPicturePick = "Choose a picture"
+        override val avatarPictureChange = "Change picture"
+        override val avatarPictureClear = "Remove picture"
+        override val avatarPictureHint = "A picture is drawn instead of the label"
+        override val avatarPictureFailed = "That picture could not be read."
         override val fontSize = "Text size"
         override val fontSizeSubtitle = "Seven steps, applied when you let go"
         override val personalizationNote =
