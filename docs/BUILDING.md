@@ -193,10 +193,10 @@ The builder's work, in order:
 
 | Artifact | Size (decimal MB, as a download reports it) | Contains |
 | --- | --- | --- |
-| `app-arm64-debug.apk` | ~126 MB | arm64 runtime image, `libtermux.so` (arm64) |
-| `app-arm64-release.apk` | ~107 MB | as above, R8-shrunk |
-| `app-x64-debug.apk` | ~126 MB | x86_64 runtime image, `libtermux.so` (x86_64) |
-| `app-x64-release.apk` | ~107 MB | as above, R8-shrunk |
+| `app-arm64-debug.apk` | ~130 MB | arm64 runtime image, `libtermux.so` (arm64) |
+| `app-arm64-release.apk` | ~110 MB | as above, R8-shrunk |
+| `app-x64-debug.apk` | ~130 MB | x86_64 runtime image, `libtermux.so` (x86_64) |
+| `app-x64-release.apk` | ~110 MB | as above, R8-shrunk |
 
 Each flavour carries only its own architecture's image and native library, so neither
 APK is a fat binary. Inside each APK the runtime

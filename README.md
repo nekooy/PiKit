@@ -14,10 +14,10 @@ launch — no repository to reach, no package to fetch. The only connection need
 that can reach the model provider.
 
 <p align="center">
-  <img src="docs/assets/preview-0.2.0.webp" width="90%" alt="PiKit 0.2.0 — the Chat, Terminal, Files and Settings tabs">
+  <img src="docs/assets/preview-0.5.0.webp" width="90%" alt="PiKit 0.5.0 — the Chat, Terminal, Files and Settings tabs">
 </p>
 
-<p align="center"><sub>PiKit 0.2.0 interface preview</sub></p>
+<p align="center"><sub>PiKit 0.5.0 interface preview</sub></p>
 
 ## Features
 
@@ -48,7 +48,7 @@ that can reach the model provider.
   </a>
 </p>
 
-<p align="center"><sub>Phones and tablets · about 107 MB</sub></p>
+<p align="center"><sub>Phones and tablets · about 110 MB</sub></p>
 
 First launch unpacks the runtime (a few seconds). Give it the API key under
 **Settings → Model & provider**, or `pi /login` in the Terminal tab for a subscription.

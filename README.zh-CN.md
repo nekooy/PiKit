@@ -13,10 +13,10 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 供应商。
 
 <p align="center">
-  <img src="docs/assets/preview-0.2.0.webp" width="90%" alt="PiKit 0.2.0——对话、终端、文件、设置四个标签页">
+  <img src="docs/assets/preview-0.5.0.webp" width="90%" alt="PiKit 0.5.0——对话、终端、文件、设置四个标签页">
 </p>
 
-<p align="center"><sub>PiKit 0.2.0 界面预览</sub></p>
+<p align="center"><sub>PiKit 0.5.0 界面预览</sub></p>
 
 ## 特色
 
@@ -43,7 +43,7 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
   </a>
 </p>
 
-<p align="center"><sub>手机和平板 · 约 107 MB</sub></p>
+<p align="center"><sub>手机和平板 · 约 110 MB</sub></p>
 
 首次启动会解包运行时（约几秒）。到 **设置 → 模型与供应商** 填 API Key，或在有订阅时
 于终端标签页运行 `pi /login`。更新时覆盖安装即可保留数据——需要时点 **关于 PiKit →

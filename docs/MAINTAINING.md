@@ -105,6 +105,17 @@ your time*, which is the list a change is written against.
   difference in the geometry, in a `fillType`, or in an ink that is the field it is
   drawn on — in both of the script's modes, because that is a property of two files
   rather than of the SVG.
+- **The README preview strip is four screenshots, and nothing generates it.** Chat,
+  Terminal, Files and Settings, captured full-bleed at 1080x2400, butted together at
+  480px each with no frames and no captions, saved as `docs/assets/preview-<version>.webp`
+  (`preview-0.5.0.webp`), and the strip it replaces is kept under its own version
+  rather than overwritten (`preview-0.2.0.webp`). Two things about the capture are not obvious: the emulator has
+  no provider, so the chat panel needs a conversation **seeded** into
+  `files/pi-sessions/` (a `{"type":"session",…}` line, then one record per message, each
+  with a `parentId`), and the model chip then reads `unknown` until a profile exists —
+  `files/pikit-config.json` with a provider and a model makes pi answer `get_state` with
+  a real name. The app restores the seeded file on the next cold start, so the panel can
+  be re-captured without touching the History list.
 - **Rejected designs are not deleted.** When a behaviour is removed, its reasoning
   moves into the chapter that describes it, with the number that settled it.
 - **Nothing in this repository writes to git on its own.** Commits, tags and
