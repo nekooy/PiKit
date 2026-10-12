@@ -627,7 +627,7 @@ interface Strings {
          * same null from `listFiles()`. Before this both drew a blank page — no rows,
          * no message, nothing to tell the reader whether the folder was empty or the
          * app had failed. It is the empty state's heading now, with [emptyBody]
-         * under it saying the same thing at length.
+         * under it, one clause naming the two cases.
          */
         val empty: String
 

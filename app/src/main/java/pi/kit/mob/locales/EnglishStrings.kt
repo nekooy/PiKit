@@ -280,7 +280,7 @@ internal object EnglishStrings : Strings {
         override val notAFile = "Not a file"
         override val empty = "This folder is empty"
         override val emptyBody =
-            "Empty, or a folder this app may not read — either way there is nothing to list."
+            "Empty, or a folder this app may not read."
         override val folder = "Folder"
         override val file = "File"
         override fun tooLarge(size: String) =
