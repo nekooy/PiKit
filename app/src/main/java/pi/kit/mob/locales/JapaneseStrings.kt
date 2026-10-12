@@ -91,25 +91,22 @@ internal object JapaneseStrings : Strings {
                 "「設定 → モデルとプロバイダー」で「画像入力に対応」を有効にしてください。"
 
         override val commands = "コマンド"
-        override val shellCommandHint =
-            "ここに端末コマンドを入力すると、モデルを介さずこの環境で実行します。" +
-                "出力は会話に残ります。メッセージを ! で始めるのも同じことです。"
+        override val shellCommandHint = "モデルを介さず端末コマンドを直接実行します"
         override val shellCommandPlaceholder = "例: ls -la"
-        override val commandNew = "新しい会話を始める（現在の会話は中断されます）"
-        override val commandCompact = "今すぐコンテキストを圧縮し、ここまでを要約する"
-        override val commandStop = "実行中の回答を止め、待機中のメッセージも破棄する"
-        override val commandClone = "この会話を複製して新しい会話を作る（元はそのまま）"
-        override val commandExport = "HTML ファイルとして home/export に書き出す"
-        override val commandClear = "入力欄の下書きを捨てる"
-        override val commandModel = "どのモデルが答えるかを選びます。モデル選択を開きます"
+        override val commandNew = "新しい会話を始める（回答を中断します）"
+        override val commandCompact = "ここまでの文脈を要約します"
+        override val commandStop = "回答と待機中のメッセージを止めます"
+        override val commandClone = "この会話を複製します"
+        override val commandExport = "home/export に HTML 書き出し"
+        override val commandClear = "入力欄を空にします"
+        override val commandModel = "モデル選択を開きます"
         override val attachTitle = "メッセージに追加"
         override val attachImage = "画像"
         override val attachFile = "ファイル"
         override val attachCamera = "写真を撮る"
-        override val attachImageHint = "すでにある画像を選ぶ"
-        override val attachFileHint =
-            "任意のファイルを選び、一時フォルダへコピーしてパスを AI に渡します"
-        override val attachCameraHint = "その場で撮影してメッセージに追加する"
+        override val attachImageHint = "すでに持っている画像"
+        override val attachFileHint = "任意のファイル"
+        override val attachCameraHint = "その場で撮影"
         override val addressHeader =
             "次のファイルは準備できました。パスで読んでください："
         override val addressCopyFailed =

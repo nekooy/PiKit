@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,16 +63,15 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.components.PiMenuRow
+import pi.kit.mob.ui.components.menuAnchor
+import pi.kit.mob.ui.components.rememberMenuAnchor
+import pi.kit.mob.ui.components.showMenu
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
 import pi.kit.mob.ui.design.PiNotice
 import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiSheetActions
-import pi.kit.mob.ui.design.PiSheetList
-import pi.kit.mob.ui.design.PiSheetRow
-import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiShapes
 import pi.kit.mob.ui.design.PiTone
 import kotlinx.coroutines.CoroutineScope
@@ -205,6 +203,7 @@ fun TerminalScreen(session: PiAgentSession) {
         // a *flexible* bar of either size would still have moved the rectangle while
         // its own height animated.
         actions = {
+            val sessionsMenuAnchor = rememberMenuAnchor()
             IconButton(onClick = { selected?.write("clear\n") }) {
                 Icon(
                     Icons.Filled.Refresh,
@@ -229,19 +228,21 @@ fun TerminalScreen(session: PiAgentSession) {
             IconButton(
                 onClick = {
                     // The session list is the same kind of question as the
-                    // language row or the model chip — pick one of these —
-                    // so it is asked with the same control, in the same
-                    // layer. It used to be a `DropdownMenu` anchored to
-                    // this button: a 280dp context menu with a tick glyph,
-                    // which is the one selection UI in the app that did not
-                    // match the others, and the only one that took window
-                    // focus away from the terminal's own input.
-                    sheets.show(
-                        Sheet(key = "terminal-sessions") {
-                            TerminalSessionSheet(text = t, manager = manager)
-                        },
-                    )
+                    // language row or the model chip — pick one of these — so it
+                    // is asked with the same control: a floating menu at this
+                    // button, on the layer's anchored half. It was a
+                    // `DropdownMenu` (a 280dp context menu with a tick glyph,
+                    // and the one control that took window focus away from the
+                    // terminal's own input) and then a bottom sheet, which
+                    // covered the terminal to ask which terminal to show (§7.1).
+                    sheets.showMenu(
+                        key = "terminal-sessions",
+                        anchor = sessionsMenuAnchor,
+                    ) {
+                        TerminalSessionMenu(text = t, manager = manager)
+                    }
                 },
+                modifier = Modifier.menuAnchor(sessionsMenuAnchor),
             ) {
                 Icon(
                     Icons.Filled.Terminal,
@@ -411,20 +412,23 @@ private fun ScreenRepaintAnchor(
 
 /**
  * The session picker: one row per shell, the live one ticked, a ✕ that closes a
- * shell without leaving the list, and the roster's one page-level action.
+ * shell without leaving the menu, and the roster's one page-level action.
  *
- * It is the same control as every other picker in the app: the sheet components
- * carry the panel's grammar — a question as the title, menu rows, an action row —
- * and `components/Sheets.kt` still carries the panel, the grabber, the scrim and
- * the drag. Nothing here draws a second kind of menu.
+ * A floating menu at the header's switch button, on the layer's anchored half —
+ * the same control the language row and the composer's model chip use. It was a
+ * `DropdownMenu` and then a bottom sheet, and the sheet was wrong for this one:
+ * the question is "which terminal", asked from a toolbar button over the
+ * terminal itself, and a panel from the bottom edge covered the thing being
+ * switched to (§7.1). Nothing here draws a second kind of menu; the rows are
+ * `PiMenuRow`, which is the anchored half's own.
  *
  * The selection is derived here rather than taken from the `selected` local in
- * [TerminalScreen]: this body was built when the sheet opened, and only the reads
+ * [TerminalScreen]: this body was built when the menu opened, and only the reads
  * *inside* it follow live state — so a row closed here would otherwise leave the
  * tick on the shell that is already gone.
  */
 @Composable
-private fun TerminalSessionSheet(
+private fun TerminalSessionMenu(
     text: pi.kit.mob.locales.Strings,
     manager: TerminalSessionManager,
 ) {
@@ -433,83 +437,60 @@ private fun TerminalSessionSheet(
     val host = LocalSheetHost.current
     val current = sessions.firstOrNull { it.id == selectedId } ?: sessions.firstOrNull()
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            // 16dp between the last row and the panel's padding, so the final row
-            // does not read as cut off against the sheet's own edge. The panel's
-            // bottom inset — the gesture bar, or nothing while the keyboard is up —
-            // belongs to the layer, so a body only has to leave this.
-            .padding(bottom = 16.dp),
-    ) {
-        PiSheetTitle(title = text.terminal.switchTerminal)
-
-        // The list stops growing at 60% of the height the sheet may take: past that
-        // it stops being something you glance at and becomes a page, and the sheet
-        // covers the screen it is being chosen from. A ceiling and not a height — a
-        // picker of two shells keeps its own two rows.
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            PiSheetList(
-                modifier = Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION),
-            ) {
-                items(sessions, key = { it.id }) { entry ->
-                    PiSheetRow(
-                        label = entry.displayTitle,
-                        subtitle = if (entry.running) {
-                            null
-                        } else {
-                            text.terminal.exited(entry.exitStatus)
-                        },
-                        selected = entry.id == current?.id,
-                        onClick = {
-                            // Gated on the sheet still being open: the panel is
-                            // drawn until it is off screen, and a tap aimed at the
-                            // page underneath a leaving sheet must not be eaten by a
-                            // row of the sheet that is leaving.
-                            if (host.isOpen) {
-                                host.dismiss()
-                                manager.select(entry.id)
-                            }
-                        },
-                        trailing = {
-                            // The sheet stays open: closing the shells is a thing a
-                            // user may be doing to several of them at once.
-                            //
-                            // Tapping this does not also switch to the row it is in,
-                            // because the button's own pointer input consumes the
-                            // down first — which is what keeps a close from
-                            // selecting the shell it has just closed.
-                            IconButton(
-                                onClick = { manager.close(entry.id) },
-                                modifier = Modifier.size(32.dp),
-                            ) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = text.terminal
-                                        .closeSession(entry.displayTitle),
-                                )
-                            }
-                        },
+    sessions.forEach { entry ->
+        PiMenuRow(
+            label = entry.displayTitle,
+            subtitle = if (entry.running) {
+                null
+            } else {
+                text.terminal.exited(entry.exitStatus)
+            },
+            selected = entry.id == current?.id,
+            onClick = {
+                // Gated on the menu still being open: the panel is drawn until
+                // it is off screen, and a tap aimed at the page underneath a
+                // leaving menu must not be eaten by a row of the menu that is
+                // leaving.
+                if (host.isOpen) {
+                    host.dismiss()
+                    manager.select(entry.id)
+                }
+            },
+            trailing = {
+                // The menu stays open: closing the shells is a thing a user may
+                // be doing to several of them at once.
+                //
+                // Tapping this does not also switch to the row it is in,
+                // because the button's own pointer input consumes the
+                // down first — which is what keeps a close from
+                // selecting the shell it has just closed.
+                IconButton(
+                    onClick = { manager.close(entry.id) },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = text.terminal
+                            .closeSession(entry.displayTitle),
                     )
                 }
-            }
-        }
-
-        PiSheetActions {
-            PiButton(
-                text = text.terminal.closeAllTerminals,
-                kind = PiButtonKind.Tonal,
-                size = PiButtonSize.Small,
-                onClick = {
-                    if (host.isOpen) {
-                        host.dismiss()
-                        manager.closeAll()
-                    }
-                },
-            )
-        }
-
+            },
+        )
     }
+
+    // The roster's one page-level action, as a row of its own — a menu has no
+    // action strip below it, and the one thing that acts on every shell reads as
+    // the last entry of the list it empties. Danger, because it is destructive.
+    PiMenuRow(
+        label = text.terminal.closeAllTerminals,
+        danger = true,
+        onClick = {
+            if (host.isOpen) {
+                host.dismiss()
+                manager.closeAll()
+            }
+        },
+    )
 }
 
 /**

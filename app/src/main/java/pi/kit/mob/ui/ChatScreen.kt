@@ -69,8 +69,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.Slider
-import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
@@ -134,12 +132,15 @@ import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.components.CopyButtonInkInset
+import pi.kit.mob.ui.components.MenuAnchor
 import pi.kit.mob.ui.components.PiIcons
-import pi.kit.mob.ui.components.PickerOption
+import pi.kit.mob.ui.components.PiMenuRow
 import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.PickerBody
 import pi.kit.mob.ui.components.ReadOnlyBody
 import pi.kit.mob.ui.components.ReadOnlySheetRow
+import pi.kit.mob.ui.components.menuAnchor
+import pi.kit.mob.ui.components.rememberMenuAnchor
+import pi.kit.mob.ui.components.showMenu
 import pi.kit.mob.ui.components.thinkingLevelOptions
 import pi.kit.mob.ui.components.Sheet
 import pi.kit.mob.ui.components.PageBackHandler
@@ -160,7 +161,6 @@ import pi.kit.mob.ui.design.PiStatePill
 import pi.kit.mob.ui.design.PiEmptyState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 /**
  * What a picked file is until it is actually sent.
@@ -472,100 +472,128 @@ internal fun ChatScreen(
     // The open sheet is drawn by the root's modal layer rather than here, and the
     // back gesture that closes it is registered there too — one handler for every
     // sheet in the app instead of one per call site.
-    fun openSheet(which: ComposerSheet) {
+    //
+    // The model menu's anchor lives *here* rather than on its chip, because the
+    // same menu is opened from two places: the chip, and the `/model` command
+    // row — which runs outside the composer and has no bounds of its own to
+    // anchor to. The chip reports its bounds into this anchor continuously
+    // (`Modifier.menuAnchor`), so both opens land on the chip.
+    val modelMenuAnchor = rememberMenuAnchor()
+
+    fun openSheet(which: ComposerSheet, anchor: MenuAnchor? = null) {
         when (which) {
-            ComposerSheet.Thinking -> sheets.show(
-                Sheet(key = "chat-thinking") {
-                    // The level is read live rather than captured: the sheet is a
-                    // menu over a conversation that is still running, and the
-                    // tick on it must be the level pi is on *now*. See [Sheet].
+            // The two *choices* above the field — the level and the model — are
+            // floating menus anchored to the chip that opened them, not sheets:
+            // they are read once and tapped once, and a panel from the bottom edge
+            // covers the conversation to ask which level of thinking the next
+            // answer should do. Context and cache stay sheets, because what they
+            // open is a report to *read* (§7.1).
+            ComposerSheet.Thinking -> {
+                val at = anchor ?: return
+                sheets.showMenu("chat-thinking", at) {
+                    // The level is read live rather than captured: the menu is
+                    // over a conversation that is still running, and the tick on
+                    // it must be the level pi is on *now*. See [Sheet].
                     val live by session.conversation.collectAsState()
                     val saved by session.settingsStore.settings.collectAsState()
                     // Live levels once the agent has answered for the model that is
                     // running, the remembered ones otherwise — see
-                    // `thinkingLevelsFor`. The slider and the committed step come
-                    // from the one answer, so the track cannot offer a level the
-                    // model does not have.
+                    // `thinkingLevelsFor`, and `thinkingLevelOf` for why the saved
+                    // model id is the fallback key. The menu cannot offer a level
+                    // the model does not have.
                     val available = thinkingLevelsFor(
                         live.availableThinkingLevels,
-                        // The saved model id as the fallback, for the same reason
-                        // `thinkingLevelOf` does it: before `get_state` answers there
-                        // is no live model, and a lookup by null finds nothing.
                         saved.rememberedThinkingLevels(live.model?.id ?: saved.modelId),
                     )
-                    ThinkingLevelSheet(
-                        available = available,
-                        current = thinkingLevelOf(live, saved),
-                        onChange = { level ->
-                            // Applied to the running process immediately: pi
-                            // accepts the change over RPC, so unlike the provider
-                            // and model it needs no restart.
-                            session.settingsStore.update { it.copy(thinkingLevel = level) }
-                            session.setThinkingLevel(level)
-                        },
-                        text = text,
-                    )
-                },
-            )
+                    val current = thinkingLevelOf(live, saved)
+                    val host = LocalSheetHost.current
+                    thinkingLevelOptions(text, available).forEach { option ->
+                        PiMenuRow(
+                            // The id alone. The menu carried each level's
+                            // sentence under it once, and seven rows of "off —
+                            // 直接回答，不做思考" made a menu of two-line entries
+                            // out of seven one-word choices; the ids are the wire
+                            // strings pi documents, and the picker that explains
+                            // them is the model page's own rows.
+                            label = option.label,
+                            selected = option.id == current,
+                            onClick = {
+                                if (host.isOpen) {
+                                    host.dismiss()
+                                    if (option.id != current) {
+                                        // Applied to the running process
+                                        // immediately: pi accepts the change over
+                                        // RPC, so unlike the provider and model it
+                                        // needs no restart.
+                                        session.settingsStore.update { it.copy(thinkingLevel = option.id) }
+                                        session.setThinkingLevel(option.id)
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
 
-            ComposerSheet.Model -> sheets.show(
-                Sheet(key = "chat-model") {
-                    // Every model of every profile — one heading per provider, its
-                    // models under it — so the picker is the whole configuration
-                    // rather than one entry per provider.
+            ComposerSheet.Model -> {
+                sheets.showMenu("chat-model", modelMenuAnchor) {
+                    // Every model of every profile, one line each, so the menu is
+                    // the whole configuration rather than one entry per provider.
                     //
-                    // Read live, *inside* the sheet: the profile store is state and
-                    // the sheet is drawn from it on every open, so a model changed
+                    // Read live, *inside* the menu: the profile store is state and
+                    // the menu is drawn from it on every open, so a model changed
                     // on the settings page moves the tick too. Reading it from the
                     // click handler's closure was the bug — the chip was rebuilt
-                    // from the current store while the sheet still ticked the model
+                    // from the current store while the menu still ticked the model
                     // from the previous composition, and the two disagreed.
                     val config by session.settingsStore.profiles.snapshots.collectAsState()
                     val profiles = config.profiles
                     val active = config.activeProfile
-                    PickerBody(
-                        title = text.chat.switchModel,
-                        options = profiles.flatMap { profile ->
-                            val heading = providerLabel(profile, text)
-                            profile.selectableModels.map { model ->
-                                PickerOption(
-                                    id = modelOptionId(profile.id, model),
-                                    label = model,
-                                    description = modelRowHint(profile, text),
-                                    group = heading,
-                                    // A provider this build does not know cannot be
-                                    // sent to pi at all, so its rows are shown but
-                                    // not offered.
-                                    enabled = profile.providerEntry != null,
-                                )
-                            }
-                        },
-                        // The tick is the profile's own choice of model — the same
-                        // value the chip shows — so the two cannot disagree.
-                        selectedId = active
-                            ?.takeIf { it.modelId.isNotBlank() }
-                            ?.let { modelOptionId(it.id, it.modelId) },
-                        onPick = { id ->
-                            // Matched rather than parsed: a model id may contain any
-                            // character at all, so the option id is only ever
-                            // compared.
-                            profiles.firstNotNullOfOrNull { profile ->
-                                profile.selectableModels
-                                    .firstOrNull { modelOptionId(profile.id, it) == id }
-                                    ?.let { profile to it }
-                            }?.let { (profile, model) -> session.selectProfile(profile, model) }
-                        },
-                    )
+                    val selectedId = active
+                        ?.takeIf { it.modelId.isNotBlank() }
+                        ?.let { modelOptionId(it.id, it.modelId) }
+                    val host = LocalSheetHost.current
+                    profiles.forEach { profile ->
+                        val heading = providerLabel(profile, text)
+                        val hint = modelRowHint(profile, text)
+                        profile.selectableModels.forEach { model ->
+                            PiMenuRow(
+                                label = model,
+                                // The provider is the line under the model, and
+                                // the profile's own name when two profiles share
+                                // one provider — the same pair the sheet picker
+                                // grouped and captioned by.
+                                subtitle = listOfNotNull(heading, hint).joinToString(" · "),
+                                selected = modelOptionId(profile.id, model) == selectedId,
+                                // A provider this build does not know cannot be
+                                // sent to pi at all, so its rows are shown but
+                                // not offered.
+                                enabled = profile.providerEntry != null,
+                                onClick = {
+                                    if (host.isOpen && profile.providerEntry != null) {
+                                        host.dismiss()
+                                        session.selectProfile(profile, model)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            ComposerSheet.Context -> sheets.show(
+                // Full bleed: this body is a list of numbers that scrolls, and its
+                // text should travel to the window's bottom edge rather than stop
+                // behind the navigation bar's band of empty panel (§7.1).
+                Sheet(key = "chat-context", fullBleedBottom = true) {
+                    ContextSheet(session = session, text = text)
                 },
             )
 
-            ComposerSheet.Context -> sheets.show(
-                Sheet(key = "chat-context") { ContextSheet(session = session, text = text) },
-            )
-
-            ComposerSheet.Commands -> sheets.show(
-                Sheet(key = "chat-commands") {
-                    CommandSheet(
+            ComposerSheet.Commands -> {
+                val at = anchor ?: return
+                sheets.showMenu("chat-commands", at) {
+                    CommandMenu(
                         text = text,
                         onRun = { command ->
                             when (command.id) {
@@ -601,8 +629,9 @@ internal fun ChatScreen(
                                 "/export" -> session.exportHtml()
 
                                 // The picker, not a model: this page has no way to
-                                // know which model the reader wants, and the sheet
-                                // that does is one key away.
+                                // know which model the reader wants, and the menu
+                                // that does is one key away — anchored at the model
+                                // chip, which is where it opens from every path.
                                 "/model" -> openSheet(ComposerSheet.Model)
 
                                 "/clear" -> composer.input = ""
@@ -612,8 +641,8 @@ internal fun ChatScreen(
                         },
                         onShell = { openSheet(ComposerSheet.Shell) },
                     )
-                },
-            )
+                }
+            }
 
             ComposerSheet.Shell -> sheets.show(
                 Sheet(key = "chat-shell") {
@@ -635,36 +664,11 @@ internal fun ChatScreen(
                 },
             )
 
-            ComposerSheet.Attach -> sheets.show(
-                Sheet(key = "chat-attach") {
-                    PickerBody(
-                        title = text.chat.attachTitle,
-                        options = listOf(
-                            // First, because it is the one row this sheet actually adds: the
-                            // other two hand the job to the system picker, and a photo of a
-                            // whiteboard is not something the picker can offer at all. The
-                            // reader's report — "拍照应该放在图片上面" — is that the row worth
-                            // opening the sheet for should not be the third one.
-                            PickerOption(
-                                id = "camera",
-                                label = text.chat.attachCamera,
-                                description = text.chat.attachCameraHint,
-                                leading = { Icon(Icons.Filled.PhotoCamera, contentDescription = null) },
-                            ),
-                            PickerOption(
-                                id = "image",
-                                label = text.chat.attachImage,
-                                description = text.chat.attachImageHint,
-                                leading = { Icon(Icons.Filled.Image, contentDescription = null) },
-                            ),
-                            PickerOption(
-                                id = "file",
-                                label = text.chat.attachFile,
-                                description = text.chat.attachFileHint,
-                                leading = { Icon(Icons.Filled.Description, contentDescription = null) },
-                            ),
-                        ),
-                        selectedId = null,
+            ComposerSheet.Attach -> {
+                val at = anchor ?: return
+                sheets.showMenu("chat-attach", at) {
+                    AttachMenu(
+                        text = text,
                         onPick = { kind ->
                             when (kind) {
                                 "image" -> pickImages.launch("image/*")
@@ -673,8 +677,8 @@ internal fun ChatScreen(
                             }
                         },
                     )
-                },
-            )
+                }
+            }
         }
     }
 
@@ -736,6 +740,7 @@ internal fun ChatScreen(
                 notice = composer.notice,
                 onDismissNotice = { composer.notice = null },
                 onOpenSheet = ::openSheet,
+                modelMenuAnchor = modelMenuAnchor,
                 onOpenSessions = { showSessions = true },
                 onNewSession = {
                     // Same question as `/new` above and as the history list's rows:
@@ -879,7 +884,8 @@ private fun ChatPage(
     onRemoveImage: (String) -> Unit,
     notice: String?,
     onDismissNotice: () -> Unit,
-    onOpenSheet: (ComposerSheet) -> Unit,
+    onOpenSheet: (ComposerSheet, MenuAnchor?) -> Unit,
+    modelMenuAnchor: MenuAnchor,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     onSend: () -> Unit,
@@ -1347,6 +1353,7 @@ private fun ChatPage(
                 agent = agent,
                 state = state,
                 onOpenSheet = onOpenSheet,
+                modelMenuAnchor = modelMenuAnchor,
                 onSend = onSend,
                 onStop = {
                     // The queue behind the run is cleared with it (see
@@ -1417,144 +1424,6 @@ private fun thinkingLevelOf(state: ConversationState, saved: PiSettings): String
             saved.rememberedThinkingLevels(state.model?.id ?: saved.modelId),
         ),
     )
-
-/**
- * The thinking-level sheet: a title, the level under the thumb, and a discrete
- * slider — the same shape as the personalization page's font-size sheet.
- *
- * It used to be a [PickerBody] of the model's levels, one row per id. A level is
- * a *range* from `off` to `max`, so it is a track with ticks rather than a list
- * of names; the row of names made the seven ids look like seven unrelated
- * choices when the thing being set is how long to think before answering.
- *
- * ## The drag is not applied until it is released
- *
- * Same rule as `FontSizeSheet`, and for the same reason that gesture must not be
- * interrupted mid-drag: here the commit is one settings write plus one RPC
- * (`set_thinking_level`), which is cheap, but a level applied on every tick would
- * still send a command per pixel of travel. The draft moves the thumb, the
- * ticks and the big name under the title; the level is committed on release.
- *
- * ## The ends are the first and last level names
- *
- * `FontSizeSheet` puts a sample glyph at each end; a thinking level has no
- * sample to draw, so the ends are pi's own ids — `off` and `max` on a full
- * track — which is also the only pair that says which way is "more". The big
- * name is that same id: the chip shows it, `set_thinking_level` carries it, and
- * translating it would be two names for one wire string.
- *
- * ## One level is not a slider
- *
- * A model without reasoning answers `["off"]` and there is no choice to make.
- * A one-tick track is a control that does nothing, so the case draws the level's
- * name and its own description and no track at all.
- */
-@Composable
-private fun ThinkingLevelSheet(
-    available: List<String>,
-    current: String,
-    onChange: (String) -> Unit,
-    text: Strings,
-) {
-    // The same list the model page's row offers — built once so the two cannot
-    // disagree about a level or its description. Empty means no agent has
-    // answered yet, and `thinkingLevelOptions` falls back to pi's seven.
-    val options = thinkingLevelOptions(text, available)
-    val steps = options.map { it.id }
-    val startIndex = steps.indexOf(current).takeIf { it >= 0 }
-        ?: 0
-    // The slider's own state, built once. Two things about the state-based `Slider`
-    // are what the first version got wrong, and both made the thumb refuse to move:
-    // `rememberSliderState` is keyed on all of its arguments, so the value under the
-    // finger must not be fed back in (the opened level is its initial value only); and
-    // with an `onValueChange` the library hands the snapped value to the caller and
-    // does not write it into the state itself, so the callback has to (below).
-    val state = rememberSliderState(
-        startIndex.toFloat(),
-        steps.size - 2,
-        0f..steps.lastIndex.toFloat(),
-    )
-    var committed by remember(current, steps) { mutableStateOf(current) }
-    val shown = steps[state.value.roundToInt().coerceIn(0, steps.lastIndex)]
-
-    // 48dp under the last line, the same figure `FontSizeSheet` uses: both are
-    // short slider sheets, and less left the track's block against the panel edge.
-    Column(Modifier.fillMaxWidth().padding(bottom = 48.dp)) {
-        Text(
-            text = text.chat.thinkingLevelLabel,
-            style = MaterialTheme.typography.titleMediumEmphasized,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
-        )
-        Text(
-            text = shown,
-            style = MaterialTheme.typography.headlineSmallEmphasized,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-        )
-        // The meaning of the level under the thumb, not a second name for it:
-        // "medium" is the wire string, and this sentence is what it costs.
-        val description = options.firstOrNull { it.id == shown }?.description
-        if (!description.isNullOrBlank()) {
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-            )
-        }
-        if (steps.size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // A fixed-width column for each end, so the two ids read as the
-                // ends of one track and the track keeps its width as the thumb
-                // moves. The id, not a translation: `off` is what pi accepts.
-                Text(
-                    text = steps.first(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 8.dp),
-                )
-                Slider(
-                    // The `SliderState` overload: this release deprecates the
-                    // value-based one. The value, the tick count and the range are the
-                    // three the state carries, and they go to `rememberSliderState`
-                    // positionally for a stated reason (see `PiInputs`): the two
-                    // overloads in this release name their third parameter differently
-                    // and only its type is stable between them. Material3 still counts
-                    // the ticks *between* the ends, so n positions is n-2 of them.
-                    // The state is built once above and never re-keyed on the value
-                    // under the finger — that is what lets the thumb move at all.
-                    state = state,
-                    // The library hands the snapped value to this callback and does
-                    // not write it into the state itself, so this write-back is what
-                    // moves the thumb — see the note where the state is built.
-                    onValueChange = { state.value = it },
-                    // Committed on release, not per tick: applying a level re-measures
-                    // the composer's chip row, and doing that under the finger is what
-                    // made the drag stutter.
-                    onValueChangeFinished = {
-                        val chosen = steps[state.value.roundToInt().coerceIn(0, steps.lastIndex)]
-                        if (chosen != committed) {
-                            committed = chosen
-                            onChange(chosen)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = steps.last(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-        }
-    }
-}
 
 /**
  * A profile's provider, as the heading it groups its models under.
@@ -2407,7 +2276,7 @@ private fun PromptBody(item: ChatItem.User, text: Strings) {
                 extras = extras,
                 text = text,
                 onClick = {
-                    sheets.show(Sheet(key = "prompt-extras-${item.key}") {
+                    sheets.show(Sheet(key = "prompt-extras-${item.key}", fullBleedBottom = true) {
                         PromptExtrasSheet(extras, text)
                     })
                 },
@@ -2915,7 +2784,9 @@ private fun Composer(
     inputEnabled: Boolean,
     agent: AgentStatus,
     state: ConversationState,
-    onOpenSheet: (ComposerSheet) -> Unit,
+    onOpenSheet: (ComposerSheet, MenuAnchor?) -> Unit,
+    /** The model chip's anchor, hoisted so `/model`'s command row shares it. */
+    modelMenuAnchor: MenuAnchor,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -3010,6 +2881,18 @@ private fun Composer(
             // more to the right" instead of as clipped, and it is 12dp because the
             // row is the band's own first line and its first chip should stand the
             // same distance from the screen's edge as the field's box below it.
+            // The controls' menu anchors: each opens its floating menu at itself,
+            // and each reports its own bounds into the anchor the caller holds
+            // (`Modifier.menuAnchor`). The model chip's is [modelMenuAnchor],
+            // hoisted past this composable so the `/model` command row can open
+            // the same menu at the same chip. The context and cache chips share
+            // one anchor — both open the same report sheet, and neither anchors
+            // anything to itself.
+            val thinkingMenuAnchor = rememberMenuAnchor()
+            val contextMenuAnchor = rememberMenuAnchor()
+            val commandsMenuAnchor = rememberMenuAnchor()
+            val attachMenuAnchor = rememberMenuAnchor()
+
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -3024,10 +2907,11 @@ private fun Composer(
                         // `state.thinkingLevel` alone was empty for the whole of the
                         // agent's start-up and the chip then grew by the width of its
                         // own text — measured from the code, 37dp of glyph and padding
-                        // became ~89dp with "Medium". The same value the picker ticks
+                        // became ~89dp with "Medium". The same value the menu ticks
                         // and the settings row shows.
                         label = thinkingLevelOf(state, saved),
-                        onClick = { onOpenSheet(ComposerSheet.Thinking) },
+                        anchor = thinkingMenuAnchor,
+                        onClick = { onOpenSheet(ComposerSheet.Thinking, thinkingMenuAnchor) },
                     )
                 }
                 item {
@@ -3045,7 +2929,7 @@ private fun Composer(
                         // one is about to reply.
                         //
                         // The profile's choice wins over pi's report, and the store
-                        // is collected rather than read: it is what the picker's
+                        // is collected rather than read: it is what the menu's
                         // tick shows and what the next launch will use, so a change
                         // made on the settings page appears here at once instead of
                         // waiting for the agent to come back up. Before either has
@@ -3055,14 +2939,16 @@ private fun Composer(
                         label = config.activeProfile?.modelId?.takeIf { it.isNotBlank() }
                             ?: state.model?.id?.takeIf { it.isNotBlank() }
                             ?: text.chat.loadingModel,
-                        onClick = { onOpenSheet(ComposerSheet.Model) },
+                        anchor = modelMenuAnchor,
+                        onClick = { onOpenSheet(ComposerSheet.Model, modelMenuAnchor) },
                     )
                 }
                 item {
                     ControlChip(
                         glyph = Icons.Filled.Compress,
                         label = contextPercentLabel(state, text),
-                        onClick = { onOpenSheet(ComposerSheet.Context) },
+                        anchor = contextMenuAnchor,
+                        onClick = { onOpenSheet(ComposerSheet.Context, contextMenuAnchor) },
                     )
                 }
                 // Always shown, so the row has the same shape whether or not the
@@ -3074,7 +2960,8 @@ private fun Composer(
                     ControlChip(
                         glyph = Icons.Filled.Bolt,
                         label = text.chat.cacheHit(cacheHitPercent(state)),
-                        onClick = { onOpenSheet(ComposerSheet.Context) },
+                        anchor = contextMenuAnchor,
+                        onClick = { onOpenSheet(ComposerSheet.Context, contextMenuAnchor) },
                     )
                 }
             }
@@ -3250,9 +3137,13 @@ private fun Composer(
                     // painted nothing. See `PiIcons.Commands` for the read of the
                     // artefact and the drawable for the replacement geometry.
                     IconButton(
-                        onClick = { onOpenSheet(ComposerSheet.Commands) },
+                        onClick = {
+                            onOpenSheet(ComposerSheet.Commands, commandsMenuAnchor)
+                        },
                         enabled = enabled,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .menuAnchor(commandsMenuAnchor),
                     ) {
                         Icon(
                             PiIcons.Commands,
@@ -3270,9 +3161,13 @@ private fun Composer(
                     }
                     Spacer(Modifier.weight(1f))
                     IconButton(
-                        onClick = { onOpenSheet(ComposerSheet.Attach) },
+                        onClick = {
+                            onOpenSheet(ComposerSheet.Attach, attachMenuAnchor)
+                        },
                         enabled = enabled,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .menuAnchor(attachMenuAnchor),
                     ) {
                         Icon(
                             Icons.Filled.Add,
@@ -3559,9 +3454,15 @@ private fun cacheHitPercent(state: ConversationState): Int {
  * ## Why `selected` is always false
  *
  * A `PiSelectChip` carries a tick when it is selected, and none of these four is a
- * setting with an on state: each opens a sheet. `selected = false` is therefore the
- * honest reading, and the tick is not part of the control the reader sees — the
- * *glyph* is, which is why each chip passes its own mark through `leadingIcon`.
+ * setting with an on state: each opens a menu or a sheet. `selected = false` is
+ * therefore the honest reading, and the tick is not part of the control the reader
+ * sees — the *glyph* is, which is why each chip passes its own mark through
+ * `leadingIcon`.
+ *
+ * The [anchor] is what lets the two *choice* chips — thinking level and model —
+ * open their floating menus at the chip rather than as a panel from the bottom
+ * edge (§7.1). The chip reports its own bounds into it and hands it back on the
+ * tap; a chip that opens a sheet ignores it.
  *
  * ## Why the chip has no separate accessibility name
  *
@@ -3576,12 +3477,14 @@ private fun cacheHitPercent(state: ConversationState): Int {
 private fun ControlChip(
     glyph: ImageVector,
     label: String,
+    anchor: MenuAnchor,
     onClick: () -> Unit,
 ) {
     PiSelectChip(
         label = label,
         selected = false,
         onClick = onClick,
+        modifier = Modifier.menuAnchor(anchor),
         leadingIcon = {
             Icon(
                 imageVector = glyph,
@@ -3627,7 +3530,12 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
     // each fact is one `item`. Nothing here is tappable: the cache and context
     // chips both open this sheet, and a sheet that answered a tap by opening
     // itself again would be a loop.
-    ReadOnlyBody(title = text.chat.contextDetails) {
+    //
+    // 0.8 of the sheet's height rather than the picker's 0.6: this list *is* the
+    // sheet — fourteen facts, more than fit on any panel — and more of them
+    // should be visible at once. It still scrolls; the ceiling only says how much
+    // of the page behind the panel is covered before it does.
+    ReadOnlyBody(title = text.chat.contextDetails, maxHeightFraction = 0.8f) {
         item {
             ReadOnlySheetRow(
                 label = text.chat.detailModel,
@@ -3733,29 +3641,83 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
  * terminal — should read it from the session rather than re-implement the RPC.
  */
 @Composable
-private fun CommandSheet(
+private fun CommandMenu(
     text: Strings,
     onRun: (BuiltInCommand) -> Unit,
     onShell: () -> Unit,
 ) {
-    ReadOnlyBody(title = text.chat.commands) {
-        item {
-            ReadOnlySheetRow(
-                label = SHELL_SIGIL,
-                value = null,
-                description = text.chat.shellCommandHint,
-                onClick = onShell,
-            )
-        }
-        items(BUILT_IN_COMMANDS, key = { it.id }) { command ->
-            ReadOnlySheetRow(
-                label = command.id,
-                value = null,
-                description = command.description(text),
-                onClick = { onRun(command) },
-            )
+    val host = LocalSheetHost.current
+    // Each row dismisses before it acts, the gate every menu row carries: the
+    // panel is drawn for the length of its exit and a second tap aimed at the
+    // page behind it must not land on a row of a menu that is leaving.
+    PiMenuRow(
+        label = SHELL_SIGIL,
+        subtitle = text.chat.shellCommandHint,
+        onClick = {
+            if (host.isOpen) {
+                host.dismiss()
+                onShell()
+            }
+        },
+    )
+    BUILT_IN_COMMANDS.forEach { command ->
+        PiMenuRow(
+            label = command.id,
+            subtitle = command.description(text),
+            onClick = {
+                if (host.isOpen) {
+                    host.dismiss()
+                    onRun(command)
+                }
+            },
+        )
+    }
+}
+
+/**
+ * The three things a pending message can carry, as a menu at the `+`.
+ *
+ * It was a sheet of three rows and it is a dropdown now, for the same reason the
+ * command list is: three choices at a toolbar button do not cover the page to ask
+ * their question (§7.1). The rows keep their leading marks — a camera, a picture,
+ * a document — because the three are told apart by what they *are* before they
+ * are read.
+ *
+ * **Camera first**, because it is the one row this control actually adds: the
+ * other two hand the job to the system picker, and a photo of a whiteboard is not
+ * something the picker can offer at all. The report "拍照应该放在图片上面" is
+ * that the row worth opening the control for should not be the third one.
+ */
+@Composable
+private fun AttachMenu(
+    text: Strings,
+    onPick: (String) -> Unit,
+) {
+    val host = LocalSheetHost.current
+    fun pick(kind: String) {
+        if (host.isOpen) {
+            host.dismiss()
+            onPick(kind)
         }
     }
+    PiMenuRow(
+        label = text.chat.attachCamera,
+        subtitle = text.chat.attachCameraHint,
+        leading = { Icon(Icons.Filled.PhotoCamera, contentDescription = null) },
+        onClick = { pick("camera") },
+    )
+    PiMenuRow(
+        label = text.chat.attachImage,
+        subtitle = text.chat.attachImageHint,
+        leading = { Icon(Icons.Filled.Image, contentDescription = null) },
+        onClick = { pick("image") },
+    )
+    PiMenuRow(
+        label = text.chat.attachFile,
+        subtitle = text.chat.attachFileHint,
+        leading = { Icon(Icons.Filled.Description, contentDescription = null) },
+        onClick = { pick("file") },
+    )
 }
 
 /**

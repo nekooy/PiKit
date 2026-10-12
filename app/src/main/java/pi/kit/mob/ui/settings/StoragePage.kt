@@ -220,7 +220,7 @@ fun StoragePage(
      */
     fun openPicker(start: File) {
         pickerDir = start
-        sheets.show(Sheet(key = "storage-picker") {
+        sheets.show(Sheet(key = "storage-picker", fullBleedBottom = true) {
             val directory = pickerDir ?: return@Sheet
             val root = StorageAccess.sharedRoot()
             // Listed off the main thread, and above the body because a lazy list's

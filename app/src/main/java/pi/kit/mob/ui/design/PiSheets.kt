@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pi.kit.mob.ui.components.LocalSheetBottomInset
 import pi.kit.mob.ui.components.LocalSheetHost
 
 /**
@@ -98,7 +100,14 @@ fun PiSheetTitle(
  * it is never fully lost.
  *
  * The panel's own bottom inset is applied by the layer, so this only has to leave
- * room for a row's press outline not to be clipped by the panel's corners.
+ * room for a row's press outline not to be clipped by the panel's corners. A sheet
+ * declared `fullBleedBottom` instead hands the inset through
+ * [LocalSheetBottomInset], and it becomes the list's own bottom content padding:
+ * the text then travels to the window's bottom edge — scrolling past the last
+ * item is never a band of empty panel in the way of it — while the last item
+ * still clears the gesture bar, because the padding is part of the scroll. That
+ * band was the report "滑动时文字不会直接触底而是会被底下一个白色条块遮挡",
+ * and the same fix covers every list on the layer.
  */
 @Composable
 fun PiSheetList(
@@ -106,11 +115,18 @@ fun PiSheetList(
     maxHeightFraction: Float = 0.7f,
     content: LazyListScope.() -> Unit,
 ) {
+    val bottomInset = LocalSheetBottomInset.current
     BoxWithConstraints(modifier.fillMaxWidth()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = maxHeight * maxHeightFraction),
+            // The room a row's press outline keeps from the panel's bottom corners,
+            // plus — on a full-bleed body — the navigation bar's height as content
+            // padding rather than as a band of empty panel above it. Both live
+            // *inside* the scroll, so a scrolling row travels past them to the
+            // panel's edge while the list at rest keeps the spacing it always had.
+            contentPadding = PaddingValues(bottom = 16.dp + bottomInset),
             content = content,
         )
     }
