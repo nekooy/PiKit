@@ -947,7 +947,7 @@ internal fun ModelEditPage(
                         // list to search rather than a handful of rows to compare — see
                         // `ProviderPickerSheet`.
                         sheets.show(
-                            Sheet(key = "provider-picker") {
+                            Sheet(key = "provider-picker", fullBleedBottom = true) {
                                 ProviderPickerSheet(
                                     selectedId = provider?.id,
                                     onPick = { entry ->
@@ -1039,7 +1039,7 @@ internal fun ModelEditPage(
                         trailing = { RowValue(CustomApi.fromId(api).id, chevron = true) },
                         onClick = {
                             sheets.show(
-                                Sheet(key = "api-picker") {
+                                Sheet(key = "api-picker", fullBleedBottom = true) {
                                     ApiTypePickerSheet(
                                         selectedId = CustomApi.fromId(api).id,
                                         onPick = { api = it },
@@ -1215,7 +1215,7 @@ internal fun ModelEditPage(
                             ) {
                                 is ModelDiscovery.Success -> {
                                     sheets.show(
-                                        Sheet(key = "model-picker") {
+                                        Sheet(key = "model-picker", fullBleedBottom = true) {
                                             ModelPickerSheet(
                                                 models = result.models,
                                                 // The source of each entry is shown rather than
@@ -1840,16 +1840,18 @@ private fun ModelPickerSheet(
 private fun tokenDigits(raw: String): String = raw.filter { it.isDigit() }.take(MAX_TOKEN_DIGITS)
 
 /**
- * A sheet body's own frame: full width, and 16dp of air under its last row.
+ * A sheet body's own frame: full width.
  *
  * The layer hands a sheet's content a `Box`, so a body with more than one part has to be a
- * `Column` itself — two siblings in a `Box` are drawn on top of each other. The 16dp is what
- * keeps a list's final row from looking cut off against the panel's edge, and it is the
- * figure the picker body in `ui/components/Forms.kt` uses for the same reason.
+ * `Column` itself — two siblings in a `Box` are drawn on top of each other. There is no
+ * bottom padding here: these bodies end in a scrolling list, and `PiSheetList` carries the
+ * panel's bottom inset as the list's own content padding, so the rows scroll flush to the
+ * window's edge instead of stopping behind a band of empty panel (the report "滑动时文字
+ * 不会直接触底而是会被底下一个白色条块遮挡"). A body with a *tail* after its list — this
+ * file's forms — pads itself instead; see `SHEET_FORM_PADDING`.
  */
 private val SHEET_BODY_PADDING = Modifier
     .fillMaxWidth()
-    .padding(bottom = 16.dp)
 
 /** The same frame for a body whose last line is a button row, which brings its own padding. */
 private val SHEET_FORM_PADDING = Modifier

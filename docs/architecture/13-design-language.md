@@ -252,6 +252,15 @@ the drag, and it does so for measured reasons (a `ModalBottomSheet` is a second
 window, which is why the keyboard used to close and why taps were swallowed for up
 to 0.9 s after a dismissal). Nothing here re-opens that.
 
+**`ui/components/Menus.kt`** — the anchored half of that same layer: `MenuAnchor` and
+`Modifier.menuAnchor` (a trigger reporting its own window-relative bounds), `showMenu`,
+and `PiMenuRow` — a menu row at the height and width a dropdown carries (44dp,
+content-wide, tick at the end) where `PiSheetRow` is a sheet's 56dp. The panel it
+draws is placed at the anchor rather than at the window's edge, fades rather than
+slides, and dims nothing; the rows carry the same tap gate. Which surfaces are menus
+and which are sheets is §7.1's rule — a choice the panel hangs off is a menu, a
+report or a form is a sheet.
+
 **The panel has a ceiling too, and it is the status bar.** A sheet taller than the space
 between the keyboard and the top of the window used to be laid out from the window's bottom
 edge with nothing stopping it, so its top — the grabber and the sheet's title — was drawn
@@ -264,6 +273,17 @@ scroll scrolls — the editor's own column became a `Column(verticalScroll)`, wh
 there because it holds no lazy list — and a body that cannot is at least never over the
 system bars. `PiSheetList`'s 0.7 cap follows the new ceiling automatically, because it is a
 share of what it is given.
+
+**The panel's bottom edge is the other bound, and a list owns the room up to it.** The
+navigation bar's inset used to pad the body at the panel level, which left a band of
+empty panel between a scrolling list's text and the window's bottom edge — visible as
+a white bar under the text for as long as the list scrolled
+(`滑动时文字不会直接触底而是会被底下一个白色条块遮挡`). A body that scrolls declares
+`fullBleedBottom`, the layer hands it the inset through `LocalSheetBottomInset`
+instead of padding, and `PiSheetList` carries it as the list's content padding: the
+inset is inside the scroll, so text travels to the panel's edge and the last item
+still clears the gesture bar. A body with a tail after its list — a footnote, a form's
+buttons — pads itself below that tail instead (§7.1).
 
 ### The bump
 

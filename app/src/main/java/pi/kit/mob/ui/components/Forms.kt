@@ -17,6 +17,13 @@
  *  - [PickerRow], a settings-style row that is the row *and* the sheet, for the
  *    Settings pages.
  *
+ * A short *choice* list — the language row, the composer's thinking level and
+ * model, a row's own actions, the terminal's shells — is now a floating menu at
+ * its trigger instead of a panel from the bottom edge (`Menus.kt`, the anchored
+ * half of the same layer); see §7.1 for which surface is which. [PickerBody] is
+ * what the remaining pickers are: a list to *browse* (the provider list, the
+ * fetched models), and nothing here was changed to draw a second kind of menu.
+ *
  * A second, compact chip control lived here for a while, for rows with no space
  * for a settings row — the controls above the composer. The composer has its own
  * chip (`ChatScreen.ControlChip`) and nothing else ever called this one, so it was
@@ -222,13 +229,21 @@ internal fun PickerBody(
                 option.description?.contains(needle, ignoreCase = true) == true
         }
     }
+    // The list is the bottom-most thing unless something comes after it, and the
+    // difference is whose job the panel's bottom inset is: `PiSheetList` carries
+    // it as the list's own content padding — so the text scrolls flush to the
+    // window's bottom edge instead of stopping behind a band of empty panel —
+    // while a tail (an action, a footnote) sits below the list and owes the inset
+    // itself. See `Sheets.kt`'s `Sheet.fullBleedBottom`.
+    val bottomInset = LocalSheetBottomInset.current
+    val tail = action != null || !footnote.isNullOrBlank()
 
     Column(
         Modifier
             .fillMaxWidth()
-            // 16dp between the last row and the panel's padding, which is what
-            // keeps the final row from looking cut off against the edge.
-            .padding(bottom = 16.dp),
+            // 16dp between the last thing on the panel and the window's edge —
+            // which, with no tail, is the list's own content padding's job.
+            .padding(bottom = if (tail) 16.dp + bottomInset else 0.dp),
     ) {
         PiSheetTitle(title)
 
@@ -304,6 +319,10 @@ internal fun PickerBody(
  * The key is the title: one picker is open at a time, and a sheet that is asked
  * for twice with the same title is the same sheet — re-showing it would restart
  * an entrance animation the user is already watching.
+ *
+ * `fullBleedBottom` because a picker is a list whose text should reach the
+ * window's bottom edge as it scrolls: the navigation bar's height is the list's
+ * own content padding rather than a band of empty panel in the way of it.
  */
 internal fun SheetHost.showPicker(
     title: String,
@@ -314,7 +333,7 @@ internal fun SheetHost.showPicker(
     searchHint: String? = null,
 ) {
     show(
-        Sheet(key = "picker:$title") {
+        Sheet(key = "picker:$title", fullBleedBottom = true) {
             PickerBody(title, options, selectedId, onPick, footnote, searchHint = searchHint)
         },
     )
@@ -336,23 +355,27 @@ internal fun SheetHost.showPicker(
  * The content is a `LazyColumn`, not a `Column`: the command list is as long as
  * the extensions installed, and a sheet whose body is taller than the sheet is a
  * sheet whose last rows cannot be reached at all. It stops growing at
- * [SHEET_LIST_FRACTION] of the height the sheet may take, the same ceiling
- * [PickerBody] uses, so the two feel like one control.
+ * [maxHeightFraction] of the height the sheet may take, the same ceiling
+ * [PickerBody] uses, so the two feel like one control — and the conversation's
+ * numbers ask for more of it (0.8) because there the list *is* the point of the
+ * sheet, and the reader asked for more of its facts visible at once.
  */
 @Composable
 internal fun ReadOnlyBody(
     title: String,
+    maxHeightFraction: Float = SHEET_LIST_FRACTION,
     content: LazyListScope.() -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
-    ) {
+    // No bottom padding of its own: the list is the bottom-most thing on the
+    // panel and `PiSheetList` carries the panel's bottom inset as the list's own
+    // content padding, so a long body scrolls flush to the window's edge — the
+    // band of empty panel a padded body left in the way of the text is what
+    // `Sheet.fullBleedBottom` exists to remove.
+    Column(Modifier.fillMaxWidth()) {
         PiSheetTitle(title)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             PiSheetList(
-                modifier = Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION),
+                modifier = Modifier.heightIn(max = maxHeight * maxHeightFraction),
                 content = content,
             )
         }

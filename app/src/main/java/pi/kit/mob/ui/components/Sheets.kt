@@ -81,6 +81,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -96,6 +97,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -132,6 +134,40 @@ class Sheet(
      * entrance animation.
      */
     val key: String,
+    /**
+     * Where the panel goes. Null docks it to the window's bottom edge — the bottom
+     * sheet. A window-relative rect floats it over the thing that opened it: the
+     * anchored menu, whose panel, placement and fade belong to `Menus.kt`.
+     */
+    val anchor: IntRect? = null,
+    /**
+     * Whether an anchored panel aligns its *end* to the anchor's end instead of
+     * its start to the anchor's start.
+     *
+     * A menu at a chip or a toolbar button starts where the control starts. A
+     * menu of row actions wants the other edge: a row spans the page, its actions
+     * have always lived at its trailing edge (`⋮` was there), and a menu at the
+     * row's start is a menu at the screen's left margin (`历史消息页弹窗操作菜单
+     * 显示要靠右而不是靠左`). The panel's scale grows out of whichever edge it is
+     * aligned by, so the menu also *appears* from that edge.
+     */
+    val alignEnd: Boolean = false,
+    /**
+     * Whether the body runs to the panel's bottom edge and applies the
+     * navigation-bar inset itself, as its scrollable list's content padding.
+     *
+     * The layer pads every body by the navigation bar's height, which is what
+     * keeps a form's buttons clear of the gesture bar — and what stands between a
+     * long list's text and the panel's bottom edge: the text stops at the padding,
+     * the padding shows the panel's own fill, and the reader sees a bar of empty
+     * panel under the last visible line for as long as the list scrolls (the
+     * report "滑动时文字不会直接触底而是会被底下一个白色条块遮挡"). A body that
+     * scrolls declares so, the layer hands it the inset through
+     * [LocalSheetBottomInset] instead of padding it, and the list scrolls flush to
+     * the window's bottom edge with the inset inside the scroll — so the last
+     * *item* still clears the bar, but the text travels the full height.
+     */
+    val fullBleedBottom: Boolean = false,
     val content: @Composable () -> Unit,
 )
 
@@ -195,8 +231,20 @@ class SheetHost {
         displayed = sheet
     }
 
-    internal suspend fun slideTo(target: Float) {
-        slide.animateTo(target, tween(durationMillis = SHEET_MILLIS, easing = FastOutSlowInEasing))
+    /**
+     * Slides the panel to [target], on the clock the sheet kind belongs to.
+     *
+     * A docked sheet takes [SHEET_MILLIS] — the same 250 ms as the platform's
+     * sub-page transition, so a sheet and a page move at the same speed when one
+     * follows the other. An anchored menu is a dropdown, and a dropdown answers a
+     * tap at dropdown speed: [MENU_MILLIS], the 125 ms the platform's own
+     * `DropdownMenu` spends on its fade-and-scale. The report behind the split is
+     * "点击到出现都不够迅速且不流畅丝滑" — 250 ms of fade was the *rapid* half of
+     * that complaint, and the smooth half is fixed in `Menus.kt` by placing the
+     * panel in one measure pass.
+     */
+    internal suspend fun slideTo(target: Float, millis: Int = SHEET_MILLIS) {
+        slide.animateTo(target, tween(durationMillis = millis, easing = FastOutSlowInEasing))
     }
 }
 
@@ -276,9 +324,12 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
                     ) { value, _ -> drag = value }
                 }
             }
-            host.slideTo(1f)
+            host.slideTo(1f, panelMillis(target))
         } else {
-            host.slideTo(0f)
+            // `displayed` is the panel on its way out; it is what says whether the
+            // leaving thing is a menu or a sheet, so the exit runs on the same
+            // clock the entrance did.
+            host.slideTo(0f, panelMillis(host.displayed))
             drag = 0f
             host.retain(null)
         }
@@ -294,7 +345,11 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
     // A sheet that has been dismissed keeps drawing until it is off screen, but
     // stops taking input: every pointer modifier below is layered on `live`.
     val live = requested != null
-    val progress = host.progress
+    // An anchored menu is drawn by its own half of the layer (`Menus.kt`), and the
+    // two differ in more than position: a menu fades rather than slides, carries
+    // no drag, and dims nothing — a dropdown over the page it came from is not a
+    // screen the reader has to be told is modal.
+    val anchored = sheet.anchor != null && sheet.anchor != IntRect.Zero
 
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
@@ -359,12 +414,31 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
     }
 
     Box(modifier.fillMaxSize()) {
-        // The scrim. `detectTapGestures` rather than `clickable`: a scrim is not a
-        // control, and a ripple on a full-screen dim layer reads as a flash.
+        // The catcher between the modal and the page. A sheet dims; a menu does
+        // not, and keeps only the tap. `detectTapGestures` rather than `clickable`:
+        // a scrim is not a control, and a ripple on a full-screen dim layer reads
+        // as a flash.
+        //
+        // The fade is applied in `graphicsLayer` and reads [SheetHost.progress] at
+        // *draw* time. Reading it in composition — which this layer used to do —
+        // recomposes the whole modal layer on every frame of every entrance and
+        // exit, and that per-frame recomposition is half of what made a menu feel
+        // sluggish under a tap.
+        //
+        // `graphicsLayer` comes **before** `background`, and that order is
+        // load-bearing: a modifier wraps the ones after it in the chain, so a
+        // layer's alpha reaches a background placed inside it and cannot reach one
+        // placed outside. The first version had the two the other way round, which
+        // drew the scrim at full strength in the parent's layer whatever the alpha
+        // said — every menu and every sheet opened over a black screen
+        // (`点击按钮弹出悬浮菜单后，后面的内容全部黑屏了`).
         Box(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = SCRIM_ALPHA * progress))
+                .graphicsLayer {
+                    alpha = if (anchored) 0f else SCRIM_ALPHA * host.progress
+                }
+                .background(MaterialTheme.colorScheme.scrim)
                 .then(
                     if (live) {
                         Modifier.pointerInput(host) { detectTapGestures { host.dismiss() } }
@@ -374,10 +448,15 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
                 ),
         )
 
+        if (anchored) {
+            AnchoredMenu(sheet = sheet, host = host)
+            return@Box
+        }
+
         Box(
             Modifier
                 .fillMaxSize()
-                // Lifts the panel clear of the keyboard. The scrim above is
+                // Lifts the panel clear of the keyboard. The catcher above is
                 // deliberately *not* lifted: it covers the window, and the strip
                 // behind the keyboard is a strip nobody can see.
                 .windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom)),
@@ -446,7 +525,9 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
                         // pixel per frame still travels, instead of dropping the
                         // remainder on every frame and stalling against the finger.
                         .graphicsLayer {
-                            translationY = ((1f - progress) * size.height + drag).roundToInt().toFloat()
+                            translationY = ((1f - host.progress) * size.height + drag)
+                                .roundToInt()
+                                .toFloat()
                         }
                         .then(
                             if (live) {
@@ -470,8 +551,19 @@ fun SheetLayer(host: SheetHost, modifier: Modifier = Modifier) {
                 ) {
                     Column(Modifier.fillMaxWidth()) {
                         SheetGrabber()
-                        Box(Modifier.padding(bottom = contentBottom)) {
-                            sheet.content()
+                        if (sheet.fullBleedBottom) {
+                            // The body scrolls to the panel's bottom edge and
+                            // puts the navigation bar's height inside its own
+                            // scroll, as content padding — see [Sheet]'s
+                            // `fullBleedBottom` for the report that moved the
+                            // inset out of the layout.
+                            CompositionLocalProvider(LocalSheetBottomInset provides contentBottom) {
+                                Box { sheet.content() }
+                            }
+                        } else {
+                            Box(Modifier.padding(bottom = contentBottom)) {
+                                sheet.content()
+                            }
                         }
                     }
                 }
@@ -521,6 +613,17 @@ private val SHEET_MAX_WIDTH = 640.dp
 private const val SHEET_MILLIS = 250
 
 /**
+ * 125 ms, the platform `DropdownMenu`'s own fade-and-scale clock, for the
+ * anchored half. A dropdown answers a tap at dropdown speed; a sheet's 250 ms
+ * reads as a pause when the panel is appearing *at* the control that was tapped.
+ */
+private const val MENU_MILLIS = 125
+
+/** The clock one panel moves on: a menu at dropdown speed, a sheet at page speed. */
+private fun panelMillis(sheet: Sheet?): Int =
+    if (sheet?.anchor != null && sheet.anchor != IntRect.Zero) MENU_MILLIS else SHEET_MILLIS
+
+/**
  * Material3's scrim opacity (`ScrimTokens.ContainerOpacity`), applied to
  * `colorScheme.scrim` — which is what `BottomSheetDefaults.ScrimColor` resolves to.
  */
@@ -540,6 +643,20 @@ private const val DRAG_DISMISS_FRACTION = 0.5f
  * as the sheet sticking.
  */
 private const val FLING_VELOCITY = 1000f
+
+/**
+ * The bottom inset a full-bleed sheet body must apply itself, as the scrollable
+ * list's content padding.
+ *
+ * `0dp` — the default, and the value everywhere except under a
+ * [Sheet.fullBleedBottom] panel — means the layer has already padded the body and
+ * the body owes nothing. Bodies that are the same list either way read this
+ * rather than branching on the sheet's flag: `Forms.kt`'s picker and read-only
+ * bodies add it to their list's content padding, which is what lets the text of a
+ * long list travel to the window's bottom edge while its last item still clears
+ * the gesture bar.
+ */
+val LocalSheetBottomInset = staticCompositionLocalOf { 0.dp }
 
 private val GRABBER_WIDTH = 32.dp
 
