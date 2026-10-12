@@ -263,7 +263,7 @@ internal object ChineseStrings : Strings {
         override val openWith = "用其它应用打开"
         override val notAFile = "不是普通文件"
         override val empty = "这个文件夹是空的"
-        override val emptyBody = "可能是空的，也可能是这个应用无权读取——两种情况都列不出内容。"
+        override val emptyBody = "可能是空的，也可能是这个应用无权读取。"
         override val folder = "文件夹"
         override val file = "文件"
         override fun tooLarge(size: String) =

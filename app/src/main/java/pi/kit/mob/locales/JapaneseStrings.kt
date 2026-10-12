@@ -260,7 +260,7 @@ internal object JapaneseStrings : Strings {
         override val openWith = "他のアプリで開く"
         override val notAFile = "ファイルではありません"
         override val empty = "このフォルダーは空です"
-        override val emptyBody = "空か、このアプリが読めないフォルダーか——どちらも一覧には出せません。"
+        override val emptyBody = "空か、このアプリが読めないフォルダーか。"
         override val folder = "フォルダー"
         override val file = "ファイル"
         override fun tooLarge(size: String) =
