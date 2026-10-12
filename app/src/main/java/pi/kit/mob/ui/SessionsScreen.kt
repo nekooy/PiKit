@@ -1,6 +1,5 @@
 package pi.kit.mob.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +23,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,8 +46,12 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.LocalToastHost
-import pi.kit.mob.ui.components.Sheet
+import pi.kit.mob.ui.components.MenuAnchor
+import pi.kit.mob.ui.components.PiMenuRow
 import pi.kit.mob.ui.components.SheetHost
+import pi.kit.mob.ui.components.menuAnchor
+import pi.kit.mob.ui.components.rememberMenuAnchor
+import pi.kit.mob.ui.components.showMenu
 import pi.kit.mob.ui.design.PiEmptyState
 import pi.kit.mob.ui.design.PiLoading
 import pi.kit.mob.ui.design.PiPageBottom
@@ -57,9 +60,6 @@ import pi.kit.mob.ui.design.PiScaffold
 import pi.kit.mob.ui.design.PiSearchField
 import pi.kit.mob.ui.design.PiSectionHeader
 import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiSheetList
-import pi.kit.mob.ui.design.PiSheetRow
-import pi.kit.mob.ui.design.PiSheetTitle
 import pi.kit.mob.ui.design.PiTextField
 import pi.kit.mob.ui.design.PiStatePill
 import kotlinx.coroutines.delay
@@ -292,21 +292,31 @@ fun SessionsScreen(
                             onOpened()
                         }
                     },
-                    onActions = { item ->
-                        sheets.show(
-                            Sheet(key = "session-actions:${item.path}") {
-                                SessionActionsSheet(
-                                    text = text,
-                                    summary = item,
-                                    onRename = { renaming = item },
-                                    onTogglePin = {
-                                        session.setPinned(item, !item.pinned)
-                                        reload++
-                                    },
-                                    onDelete = { confirmingDelete = listOf(item) },
-                                )
-                            },
-                        )
+                    onActions = { item, at ->
+                        // A floating menu at the row that was held, not a sheet
+                        // from the bottom edge: three short actions on one
+                        // conversation do not cover the list to ask their
+                        // question, and the menu lands on the row the question is
+                        // about (§7.1). `alignEnd` hangs it off the row's
+                        // trailing edge, where a row's actions live — a row spans
+                        // the page and a menu at its start is a menu at the
+                        // screen's left margin ("要靠右而不是靠左").
+                        sheets.showMenu(
+                            key = "session-actions:${item.path}",
+                            anchor = at,
+                            alignEnd = true,
+                        ) {
+                            SessionActionsMenu(
+                                text = text,
+                                summary = item,
+                                onRename = { renaming = item },
+                                onTogglePin = {
+                                    session.setPinned(item, !item.pinned)
+                                    reload++
+                                },
+                                onDelete = { confirmingDelete = listOf(item) },
+                            )
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
@@ -389,11 +399,14 @@ fun SessionsScreen(
  * glyph stuck on every pinned title. The old mark — a filled pushpin at 14dp in
  * `primary`, hard against a bold title — was the whole of the "this is pinned"
  * signal and it fought the title for attention on every row. Grouping does that
- * work once, at the heading, and a pinned row only has to look slightly lifted
- * (`primaryContainer` at half strength) to stay easy to pick out inside its
- * group. The heading itself carries no glyph for the same reason: the group's
- * name already says what it is, and `PiSectionHeader`'s one voice is what the
- * rest of the app's headings are drawn in.
+ * work once, at the heading.
+ *
+ * The pinned rows share **one** lifted panel (`PinnedGroupPanel`), because the
+ * first answer — half-strength `primaryContainer` painted on every pinned row,
+ * each row its own rounded rectangle — read as a stack of selected rows rather
+ * than as one group ("已置顶对话不应该每个分别蓝色背景而应该整体蓝色背景"). The
+ * panel is the group's frame the same way `PiGroup` is a settings group's: the
+ * rows inside it are unchanged, only the frame around them is one.
  *
  * The unpinned heading appears only when something above it is pinned. Without
  * that break a mixed list has no way to say where the pinned group ends, and
@@ -409,7 +422,7 @@ private fun ConversationList(
     snippets: Map<String, String>,
     onToggle: (String) -> Unit,
     onOpen: (PiAgentSession.SessionSummary) -> Unit,
-    onActions: (PiAgentSession.SessionSummary) -> Unit,
+    onActions: (PiAgentSession.SessionSummary, MenuAnchor) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val pinnedVisible = visible.filter { it.pinned }
@@ -417,7 +430,7 @@ private fun ConversationList(
     val rows = buildList<ListRow> {
         if (pinnedVisible.isNotEmpty()) {
             add(ListRow.Section(text.sessions.pinned))
-            pinnedVisible.forEach { add(ListRow.Session(it)) }
+            add(ListRow.PinnedGroup(pinnedVisible))
             if (otherVisible.isNotEmpty()) {
                 add(ListRow.Section(text.sessions.recent))
             }
@@ -436,10 +449,21 @@ private fun ConversationList(
             when (row) {
                 is ListRow.Section -> "section-$index-${row.title}"
                 is ListRow.Session -> row.item.path
+                is ListRow.PinnedGroup -> "pinned-group"
             }
         }) { index, row ->
             when (row) {
                 is ListRow.Section -> PiSectionHeader(text = row.title)
+                is ListRow.PinnedGroup -> PinnedGroupPanel(
+                    items = row.items,
+                    text = text,
+                    selecting = selecting,
+                    selected = selected,
+                    snippets = snippets,
+                    onToggle = onToggle,
+                    onOpen = onOpen,
+                    onActions = onActions,
+                )
                 is ListRow.Session -> ConversationRow(
                     item = row.item,
                     text = text,
@@ -448,12 +472,13 @@ private fun ConversationList(
                     snippet = snippets[row.item.path],
                     onToggleChecked = { onToggle(row.item.path) },
                     onOpen = { onOpen(row.item) },
-                    onActions = { onActions(row.item) },
+                    onActions = { at -> onActions(row.item, at) },
                 )
             }
             // A hairline between two conversation rows only. A section heading is
             // the break — a divider after one would draw a line under the label
-            // and another under the same gap.
+            // and another under the same gap. The pinned group's own dividers are
+            // drawn inside its panel, between its rows.
             if (
                 row is ListRow.Session &&
                 index < rows.lastIndex &&
@@ -468,11 +493,66 @@ private fun ConversationList(
     }
 }
 
-/** One line of the list: a group heading, or a conversation. */
+/**
+ * The pinned conversations, on one lifted panel.
+ *
+ * The panel is the whole of the "pinned" signal and it is painted once, around
+ * the group: half-strength `primaryContainer`, the card's radius, the page's own
+ * 12dp inset — the union of the per-row rectangles this replaced, with the seams
+ * between them gone. The rows inside are ordinary [ConversationRow]s that skip
+ * the page inset (the panel carries it) and carry no lift of their own.
+ *
+ * One `LazyColumn` item for the whole group rather than one per row: a lazy item
+ * is what draws the frame, and a pinned list is short by the nature of pinning —
+ * the rows themselves are still per-row composables with their own taps and
+ * their own keys' worth of state.
+ */
+@Composable
+private fun PinnedGroupPanel(
+    items: List<PiAgentSession.SessionSummary>,
+    text: Strings,
+    selecting: Boolean,
+    selected: Set<String>,
+    snippets: Map<String, String>,
+    onToggle: (String) -> Unit,
+    onOpen: (PiAgentSession.SessionSummary) -> Unit,
+    onActions: (PiAgentSession.SessionSummary, MenuAnchor) -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+        shape = PiShapes.card,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+    ) {
+        Column(Modifier.padding(vertical = 2.dp)) {
+            items.forEachIndexed { index, item ->
+                ConversationRow(
+                    item = item,
+                    text = text,
+                    selecting = selecting,
+                    checked = item.path in selected,
+                    snippet = snippets[item.path],
+                    onToggleChecked = { onToggle(item.path) },
+                    onOpen = { onOpen(item) },
+                    onActions = { at -> onActions(item, at) },
+                    inPanel = true,
+                )
+                if (index < items.lastIndex) {
+                    PiRowDivider(inset = false)
+                }
+            }
+        }
+    }
+}
+
+/** One line of the list: a group heading, the pinned panel, or a conversation. */
 private sealed interface ListRow {
     data class Section(val title: String) : ListRow
 
     data class Session(val item: PiAgentSession.SessionSummary) : ListRow
+
+    data class PinnedGroup(val items: List<PiAgentSession.SessionSummary>) : ListRow
 }
 
 /**
@@ -481,13 +561,14 @@ private sealed interface ListRow {
  * The primary line is the reader's own words — the title pi shows is either the
  * name they gave it or, far more often, their first message — and the second
  * line is when it was and how much followed. A match from the content scan is
- * the third line, and only while searching.
+ * the third line, and only while searching. The title is one line and ellipsises:
+ * a title that could take two made the list a mix of one- and two-line rows, and
+ * every row is the same height now.
  *
  * Deliberately not a `PiRow`: a settings row names a control, and the design
  * language's history chapter says this row shares nothing with those. What
  * separates the two lines here is weight and colour rather than a box or a
- * glyph, which is what keeps a list of two-line questions one rhythm instead of
- * a table.
+ * glyph, which is what keeps a list of questions one rhythm instead of a table.
  *
  * ## Why the actions are a hold, not a button
  *
@@ -509,11 +590,21 @@ private fun ConversationRow(
     snippet: String?,
     onToggleChecked: () -> Unit,
     onOpen: () -> Unit,
-    onActions: () -> Unit,
+    onActions: (MenuAnchor) -> Unit,
+    /**
+     * Whether the row is inside the pinned group's panel — which carries the
+     * page inset and the lift, so the row carries neither. Its columns land on
+     * the same x as every other row on the page either way.
+     */
+    inPanel: Boolean = false,
 ) {
     // Locale.getDefault() follows the interface language because the root
     // applies it, so a date under a Chinese interface reads as Chinese.
     val formatter = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+    // Where the hold's menu lands: the row itself. The bounds are reported
+    // continuously (`menuAnchor` observes the layout), so the menu opens on the
+    // row as it is on screen when the finger lifts, not where it was built.
+    val anchor = rememberMenuAnchor()
 
     Row(
         modifier = Modifier
@@ -521,27 +612,20 @@ private fun ConversationRow(
             // 12dp of page inset, then the row's own padding: the press outline
             // is a rounded rectangle inside the page rather than a full-bleed
             // band, which is what the flat edge-to-edge list this replaced lacked
-            // — "no corners on the tap target".
-            .padding(horizontal = 12.dp)
+            // — "no corners on the tap target". Inside the pinned panel the panel
+            // is the page inset, so the row starts at its edge — and the press
+            // outline stays the same rectangle it is outside one.
+            .then(if (inPanel) Modifier else Modifier.padding(horizontal = 12.dp))
             // Clipped to the row's radius before the ripple, so the press outline
             // is the same shape the divider between two rows is inset to.
             .clip(PiShapes.row)
-            // Half-strength `primaryContainer` is the row's only "pinned" mark
-            // left after the heading took over the job of saying so. Full
-            // strength read as a selected row; this is a lift, not a state.
-            .background(
-                if (item.pinned) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                } else {
-                    Color.Transparent
-                },
-            )
+            .menuAnchor(anchor)
             .combinedClickable(
                 onLongClickLabel = text.sessions.actions,
                 // Nothing to hold for while the list is in selection mode: the
                 // tap is already the checkbox, and a second way to reach the same
                 // three actions there would be a menu over a multi-select.
-                onLongClick = if (selecting) null else onActions,
+                onLongClick = if (selecting) null else { { onActions(anchor) } },
                 onClick = { if (selecting) onToggleChecked() else onOpen() },
             )
             .padding(
@@ -561,9 +645,10 @@ private fun ConversationRow(
                 item.title.ifBlank { text.sessions.emptyTitle },
                 style = MaterialTheme.typography.bodyLargeEmphasized,
                 color = MaterialTheme.colorScheme.onSurface,
-                // Two lines: a session title is the user's own words and a one-line
-                // cap cut the middle out of names that matter.
-                maxLines = 2,
+                // One line, always: the list is a rhythm of equal rows, and a
+                // title that could take two made some rows two lines and some
+                // one. The ellipsis carries what does not fit.
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
@@ -599,23 +684,22 @@ private fun ConversationRow(
 }
 
 /**
- * The three things a conversation can have done to it, as a sheet body.
+ * The three things a conversation can have done to it, as a floating menu.
  *
- * A sheet and not a `DropdownMenu` anchored to the row: an anchored menu is a
- * focusable second window, and it leaves a zero-size layout node in the row it
- * hangs from, which `Arrangement.spacedBy` then charges a gap for. Every menu in
- * PiKit is a body on the root's one modal layer for the same reason, and this is
- * a body for it — `PiSheetTitle` and `PiSheetList` from the design system rather
- * than a shape of its own, and no dismiss button: the scrim, the back gesture and
- * the downward drag all close a sheet, so a *Cancel* row was a fourth way to do
- * what three already did.
+ * A menu at the row that was held, on the layer's anchored half (`Menus.kt`):
+ * three short actions on one conversation do not need a panel from the bottom
+ * edge, and the row is the thing the question is about — the menu lands on it
+ * instead of covering the list it came from. It used to be a `Sheet` body on
+ * `PiSheetTitle`/`PiSheetList`, which is what every *picker* is; a per-row
+ * action list is the case the anchored half exists for (§7.1).
  *
- * The title is the question and the subtitle is the conversation it is about,
- * so the reader does not have to look behind the scrim to remember which row
- * they held down.
+ * The label is the question and the rows name what can be done. There is no
+ * title inside the panel and no cancel row: a menu is dismissed by the scrim,
+ * the back gesture or a tap outside, and the row it replaced named its subject
+ * only because the sheet covered the row — this one sits on it.
  */
 @Composable
-private fun SessionActionsSheet(
+private fun SessionActionsMenu(
     text: Strings,
     summary: PiAgentSession.SessionSummary,
     onRename: () -> Unit,
@@ -624,47 +708,33 @@ private fun SessionActionsSheet(
 ) {
     val host = LocalSheetHost.current
 
-    Column(Modifier.fillMaxWidth()) {
-        PiSheetTitle(
-            title = text.sessions.actions,
-            subtitle = summary.title.ifBlank { text.sessions.emptyTitle },
-        )
-        PiSheetList {
-            item {
-                PiSheetRow(
-                    label = text.sessions.rename,
-                    leading = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                    onClick = sheetAction(host, onRename),
-                )
-            }
-            item {
-                PiSheetRow(
-                    label = if (summary.pinned) text.sessions.unpin else text.sessions.pin,
-                    leading = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-                    onClick = sheetAction(host, onTogglePin),
-                )
-            }
-            item {
-                PiSheetRow(
-                    label = text.sessions.delete,
-                    leading = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                    danger = true,
-                    onClick = sheetAction(host, onDelete),
-                )
-            }
-        }
-    }
+    PiMenuRow(
+        label = text.sessions.rename,
+        leading = { Icon(Icons.Filled.Edit, contentDescription = null) },
+        onClick = sheetAction(host, onRename),
+    )
+    PiMenuRow(
+        label = if (summary.pinned) text.sessions.unpin else text.sessions.pin,
+        leading = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+        onClick = sheetAction(host, onTogglePin),
+    )
+    PiMenuRow(
+        label = text.sessions.delete,
+        leading = { Icon(Icons.Filled.Delete, contentDescription = null) },
+        danger = true,
+        onClick = sheetAction(host, onDelete),
+    )
 }
 
 /**
- * Wraps a sheet row's action so that it runs only while the sheet is still the
- * thing on screen, and so that the sheet is dismissed first.
+ * Wraps a menu row's action so that it runs only while the menu is still the
+ * thing on screen, and so that the menu is dismissed first.
  *
- * The layer keeps drawing the panel for the length of its exit, and the design
- * system's `PiSheetRow` installs its click for as long as the row is composed —
- * so without this gate a second tap, aimed at the page behind a sheet that is
- * already leaving, would land on a row of a sheet that no longer exists.
- * `components/Forms.kt`'s rows carry the same gate for the same reason.
+ * The layer keeps drawing the panel for the length of its exit, and the row's
+ * tap is installed for as long as the row is composed — so without this gate a
+ * second tap, aimed at the page behind a menu that is already leaving, would
+ * land on a row of a menu that no longer exists. `components/Forms.kt`'s rows
+ * carry the same gate for the same reason.
  *
  * [SheetHost.isOpen] is read when the tap happens rather than when the body is
  * built: it is snapshot state, so reading it inside the lambda is the one way to
