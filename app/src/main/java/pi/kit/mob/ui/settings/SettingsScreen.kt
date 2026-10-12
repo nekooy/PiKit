@@ -1,17 +1,29 @@
 package pi.kit.mob.ui.settings
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -22,8 +34,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -39,10 +54,9 @@ import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.StorageSelfTest
 import pi.kit.mob.ui.components.PageBackHandler
 import pi.kit.mob.ui.components.PiIcons
-import pi.kit.mob.ui.components.PickerOption
-import pi.kit.mob.ui.components.PickerRow
 import pi.kit.mob.ui.design.PiPageSwap
 import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiShapes
 
 /** Screens reachable from the Settings tab. Navigation state lives here only. */
 internal sealed interface SettingsPage {
@@ -373,6 +387,7 @@ private fun RootPage(
     val activeProfile = config.activeProfile
     val piVersion = PiInstallation.installedVersion(session.env)
     val text = strings
+    var choosingLanguage by remember { mutableStateOf(false) }
 
     // The tab root is a page like every other page, so its title is on the shell's
     // one header rather than on a band of its own: the list is twelve rows, and the
@@ -427,22 +442,19 @@ private fun RootPage(
                     onClick = { onOpen(SettingsPage.Personalization) },
                 )
                 SettingsDivider()
-                PickerRow(
+                // A dialog, not a menu: the row asks "which language should the
+                // interface speak" and its answers are the whole of the question.
+                // The floating menu this replaced read as a dropdown off a
+                // toolbar control — a habit from a place this row does not live
+                // in — and the reader asked for 弹窗 instead. The row itself is
+                // unchanged: value in its own slot, chevron beside it.
+                SettingsRow(
                     title = text.settings.language,
                     subtitle = text.settings.languageSubtitle,
                     value = settings.language.label,
                     icon = Icons.Filled.Translate,
-                    options = Lang.entries.map { entry ->
-                        PickerOption(id = entry.code, label = entry.label)
-                    },
-                    selectedId = settings.language.code,
-                    onPick = { code ->
-                        // The root of the tree is keyed on this field, so writing
-                        // it rebuilds the whole interface in the chosen language.
-                        Lang.fromCode(code).let { chosen ->
-                            session.settingsStore.update { it.copy(language = chosen) }
-                        }
-                    },
+                    showChevron = true,
+                    onClick = { choosingLanguage = true },
                 )
                 SettingsDivider()
                 SettingsRow(
@@ -524,6 +536,92 @@ private fun RootPage(
             }
         }
     }
+
+    if (choosingLanguage) {
+        LanguageDialog(
+            text = text,
+            current = settings.language,
+            onDismiss = { choosingLanguage = false },
+            onPick = { entry ->
+                choosingLanguage = false
+                // The root of the tree is keyed on this field, so writing it
+                // rebuilds the whole interface in the chosen language.
+                session.settingsStore.update { it.copy(language = entry) }
+            },
+        )
+    }
+}
+
+/**
+ * The interface language, as a dialog: the question, its three answers under it,
+ * and the two words that close it.
+ *
+ * It has been a picker sheet and a floating menu, and the menu was the wrong
+ * habit: a dropdown anchored to a settings row borrows the shape of a toolbar
+ * control's menu, and a settings list is not a toolbar. The dialog is the shape
+ * the question already has elsewhere in the app — a question with its answers
+ * under it, a confirm and a cancel (§13) — and the reader asked for it by name
+ * (`语言选择改为弹窗选择的形式`).
+ *
+ * The tick moves under the finger and nothing is written until the confirm is
+ * tapped: this is a dialog, and a dialog's answer is committed by its confirm
+ * button — the same reason the rename dialog's field does not save as it is
+ * typed. The tick is at the row's end, the mark a picker row carries, because
+ * "which one am I on" is the dialog's first question.
+ */
+@Composable
+private fun LanguageDialog(
+    text: Strings,
+    current: Lang,
+    onDismiss: () -> Unit,
+    onPick: (Lang) -> Unit,
+) {
+    var chosen by remember(current) { mutableStateOf(current) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text.settings.language) },
+        text = {
+            Column {
+                Lang.entries.forEach { entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(PiShapes.row)
+                            .clickable { chosen = entry }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = entry.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (entry == chosen) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (entry == chosen) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onPick(chosen) }) { Text(text.common.confirm) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(text.common.cancel) }
+        },
+    )
 }
 
 internal fun agentDescription(agent: AgentStatus, text: Strings): String = when (agent) {
