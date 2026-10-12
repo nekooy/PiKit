@@ -441,5 +441,12 @@ that the shared components do not:
   subject, rows that act, and a page whose second level is a page rather than a
   dialog.
 - **History** — a list of conversations is a list of *questions the reader asked*,
-  so a row is two lines of the user's own words beside when it was and how much
-  followed. It shares no row with Settings.
+  so a row is the reader's own words on one line — ellipsised, so every row is the
+  same height, where a two-line cap made the list a mix of one- and two-line rows —
+  beside when it was and how much followed. It shares no row with Settings. The
+  row's actions are a hold, and what the hold opens is a floating menu on the row
+  (§7.1), not a panel from the bottom edge. The **pinned group is one panel**
+  (`primaryContainer` at half strength, the card's radius), not one lift per row:
+  a stack of individually tinted rounded rectangles read as a stack of selected
+  rows ("已置顶对话不应该每个分别蓝色背景而应该整体蓝色背景"), and the group frame is
+  the same move `PiGroup` makes around a settings page's peer rows.
