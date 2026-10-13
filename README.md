@@ -4,7 +4,7 @@
 
 <h1 align="center">PiKit</h1>
 
-<p align="center"><strong>A clean, out-of-the-box Android AI agent built on pi and Termux.</strong></p>
+<p align="center"><strong>A clean Android AI agent built on pi and Termux.</strong></p>
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 

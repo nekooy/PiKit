@@ -4,7 +4,7 @@
 
 <h1 align="center">PiKit</h1>
 
-<p align="center"><strong>一个基于 pi 和 Termux、开箱即用、界面干净的安卓 AI Agent。</strong></p>
+<p align="center"><strong>一个基于 pi 和 Termux 的简洁安卓 AI Agent。</strong></p>
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
