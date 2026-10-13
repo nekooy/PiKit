@@ -9,8 +9,7 @@
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
 PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux 环境、Node.js 与
-`pi` 命令行全部烘焙在 APK 里，首次启动解包即用，无需软件源或额外下载——唯一要连的是模型
-供应商。
+`pi` 命令行都打包在 APK 里，首次启动解包即用，无需软件源或额外下载——唯一要连的是模型供应商。
 
 <p align="center">
   <img src="docs/assets/preview-0.5.0.webp" width="90%" alt="PiKit 0.5.0——对话、终端、文件、设置四个标签页">
@@ -20,16 +19,14 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 
 ## 特色
 
-- **简洁的理念，原生优雅的界面。** Kotlin 与 Jetpack Compose，四个标签页，没有 WebView。
-  界面有英文、简体中文和日文。
+- **简洁的理念，原生优雅的界面。** Kotlin 与 Jetpack Compose，界面按 Material 3
+  Expressive（MD3E）设计语言绘制，四个标签页，没有 WebView。界面有英文、简体中文和日文。
 - **对话走在 pi 的 RPC 协议上。** 回合结束折叠成一行（`Worked 47s · 5 steps`），点一下重新展开；
   思考等级、模型、上下文占用和缓存命中是输入框上方的一排按钮，两个开关都不重启 Agent 就生效。
-  应用除此之外只加了 `!command` 和七条斜杠命令：`/new`、`/compact`、`/stop`、`/clone`、
-  `/export`、`/model`、`/clear`。
-- **终端和文件浏览器。** 切换标签页后仍在运行的 PTY 会话、手机键盘没有的按键、`$HOME` 的只读视图。
+- **终端和文件浏览器。** 切换标签页也不中断的 PTY 会话、手机键盘没有的按键、`$HOME` 的只读视图。
 - **按 pi 的规则对待供应商。** pi 自己的密钥表认识的 32 家，外加一个自定义端点；模型的上下文窗口、
   输出上限、思考等级和图片支持都读自 pi 的目录。
-- **存储规范且安全。** 授权默认是空集，按文件夹开启；删除只在应用数据内生效；运行时里的
+- **存储规范且安全。** 存储授权默认为空，按文件夹逐个开启；删除只在应用数据内生效；运行时里的
   **安全守卫**是一个 pi 扩展，拒绝 `$HOME/workspace` 之外的递归删除，也拒绝改写 pi 自己的文件。
   没有账号，也没有遥测。
 

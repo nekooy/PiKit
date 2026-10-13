@@ -9,9 +9,9 @@
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
 PiKit runs the [pi](https://pi.dev) coding agent on an Android phone. The Termux
-environment, Node.js and the `pi` CLI are baked into the APK and unpacked on first
-launch — no repository to reach, no package to fetch. The only connection needed is one
-that can reach the model provider.
+environment, Node.js and the `pi` CLI all ship inside the APK and are unpacked on
+first launch — no repository to reach, no package to fetch. The only connection
+needed is one that can reach the model provider.
 
 <p align="center">
   <img src="docs/assets/preview-0.5.0.webp" width="90%" alt="PiKit 0.5.0 — the Chat, Terminal, Files and Settings tabs">
@@ -21,13 +21,12 @@ that can reach the model provider.
 
 ## Features
 
-- **A simple idea, an elegant native interface.** Kotlin and Jetpack Compose, four tabs,
-  no WebView. English, 简体中文 or 日本語.
+- **A simple idea, an elegant native interface.** Kotlin and Jetpack Compose on
+  Material 3 Expressive (MD3E), four tabs, no WebView. English, 简体中文 or 日本語.
 - **Chat on pi's RPC protocol.** A finished turn folds to one line
   (`Worked 47s · 5 steps`) and reopens on a tap; thinking level, model, context use and
   cache hits are chips above the input, and both switches apply without restarting the
-  agent. Beyond that it adds `!command` and seven slash commands — `/new`, `/compact`,
-  `/stop`, `/clone`, `/export`, `/model`, `/clear` — and nothing else.
+  agent.
 - **A terminal and a file browser.** PTY sessions that survive a tab switch, the keys a
   phone keyboard lacks, and a read-only view of `$HOME`.
 - **Providers on pi's terms.** The 32 providers pi's own key table knows, plus a custom
