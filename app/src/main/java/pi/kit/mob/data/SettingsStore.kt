@@ -840,7 +840,11 @@ class SettingsStore(context: Context) {
             .putString(KEY_USER_AVATAR_COLOR, next.userAvatarColor.code)
             .apply()
         // The model fields are read back from the active profile rather than
-        // taken from `next`, which keeps one source of truth for them.
+        // taken from `next`, which keeps one source of truth for them. Every
+        // preference field is named below rather than left to `publish`'s
+        // defaults, which are the *current* values: one that is forgotten here
+        // is written to the file and never published — the control snaps back
+        // while the preference says it was set.
         val resolved = publish(
             thinkingLevel = next.thinkingLevel,
             availableThinkingLevels = next.availableThinkingLevels,
@@ -850,6 +854,7 @@ class SettingsStore(context: Context) {
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
             themeColor = next.themeColor,
+            themeDynamic = next.themeDynamic,
             fontSize = next.fontSize,
             launcherIcon = next.launcherIcon,
             safetyExtension = next.safetyExtension,
