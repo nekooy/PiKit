@@ -212,6 +212,21 @@ internal fun PersonalizationPage(
             // is chosen.
             PiSectionHeader(text.settings.themeColor)
             PiGroup {
+                // The wallpaper's palette first, as a row rather than a ninth
+                // swatch: the swatches are *seeds* (the avatars' picker reuses
+                // them), and "whatever this phone's wallpaper is" is not one. The
+                // system supplies the palette only from Android 12; below that
+                // `PiKitTheme` falls back to the swatches, which is what the
+                // subtitle says.
+                PiSwitchRow(
+                    title = text.settings.themeDynamic,
+                    subtitle = text.settings.themeDynamicSubtitle,
+                    checked = settings.themeDynamic,
+                    onCheckedChange = { on ->
+                        session.settingsStore.update { it.copy(themeDynamic = on) }
+                    },
+                )
+                PiRowDivider()
                 PiValueRow(
                     title = text.settings.themeColor,
                     subtitle = text.settings.themeColorSubtitle,

@@ -319,6 +319,8 @@ internal object EnglishStrings : Strings {
         override val themeDark = "Dark"
         override val themeColor = "Accent colour"
         override val themeColorSubtitle = "Buttons, selections and section names"
+        override val themeDynamic = "Dynamic colour"
+        override val themeDynamicSubtitle = "Take the palette from the wallpaper (Android 12+; earlier releases fall back to the chosen colour)"
         override fun themeColorName(code: String) = when (code) {
             ThemeColor.BLUE.code -> "Blue"
             ThemeColor.INDIGO.code -> "Indigo"

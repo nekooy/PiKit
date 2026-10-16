@@ -37,11 +37,15 @@
 package pi.kit.mob.ui.design
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import pi.kit.mob.data.ThemeColor
@@ -66,13 +70,35 @@ fun PiKitTheme(
      * with one argument.
      */
     accent: ThemeColor = ThemeColor.DEFAULT,
+    /**
+     * Whether the palette follows the wallpaper (Android 12's Material You).
+     *
+     * The preference is read in `MainActivity` alongside [darkTheme] and [accent]
+     * and for the same reason: this file assembles a theme and does not own a
+     * preference. Only the system can supply the wallpaper's palette, and only
+     * from Android 12 — on older releases the flag falls back to [accent], so a
+     * choice is never silently absent, it is just the seeded one.
+     *
+     * The wallpaper's scheme is used as the system derived it — [accentScheme]'s
+     * re-derivation is *not* applied to it, because re-deriving its roles would
+     * undo exactly what the system worked out from the wallpaper. What keeps the
+     * terminal readable on it is the same thing that keeps it readable on every
+     * palette: the transcript and terminal draw on fixed colours of their own.
+     */
+    dynamic: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val scheme = accentScheme(
-        base = if (darkTheme) PiDarkScheme else PiLightScheme,
-        seed = accent.seed,
-        dark = darkTheme,
-    )
+    val context = LocalContext.current
+    val supportsDynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val scheme = if (dynamic && supportsDynamic) {
+        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        accentScheme(
+            base = if (darkTheme) PiDarkScheme else PiLightScheme,
+            seed = accent.seed,
+            dark = darkTheme,
+        )
+    }
 
     val view = LocalView.current
     if (!view.isInEditMode) {
