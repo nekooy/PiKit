@@ -192,6 +192,7 @@ internal fun AnchoredMenu(
     val density = LocalDensity.current
     val marginPx = with(density) { SCREEN_MARGIN.roundToPx() }
     val gapPx = with(density) { ANCHOR_GAP.roundToPx() }
+    val menuElevationPx = with(density) { MENU_ELEVATION.toPx() }
     val topLimitPx = WindowInsets.statusBars.getTop(density) + marginPx
     val imePx = WindowInsets.ime.getBottom(density)
     // Written by the layout pass and read by the panel's draw lambda: which
@@ -211,7 +212,6 @@ internal fun AnchoredMenu(
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = PiShapes.card,
-                shadowElevation = MENU_ELEVATION,
                 modifier = Modifier
                     .graphicsLayer {
                         val p = host.progress
@@ -223,6 +223,16 @@ internal fun AnchoredMenu(
                             pivotFractionX = pivotX,
                             pivotFractionY = pivotY,
                         )
+                        // The shadow rides this layer rather than the Surface's
+                        // `shadowElevation`: a platform elevation shadow is
+                        // composited *outside* the alpha that fades the panel, so
+                        // the first version's shadow arrived at full strength on
+                        // the first frame while the panel was still at alpha 0 —
+                        // the report "后面的阴影过于生硬，是突然出现的那种".
+                        // Growing the elevation with the progress draws no shadow
+                        // at 0 and the menu's full shadow at 1, on the same clock.
+                        shape = PiShapes.card
+                        shadowElevation = menuElevationPx * p
                     }
                     .widthIn(min = MENU_MIN_WIDTH, max = MENU_MAX_WIDTH),
             ) {
@@ -373,7 +383,14 @@ private val SCREEN_MARGIN = 8.dp
 /** The air between the panel and the thing it is anchored to. */
 private val ANCHOR_GAP = 8.dp
 
-/** Material3's own menu elevation (`MenuDefaults`' container at level 2). */
+/**
+ * Material3's own menu elevation (`MenuDefaults`' container at level 2).
+ *
+ * Applied inside the panel's `graphicsLayer` and scaled by the animation's
+ * progress, so the shadow grows out of nothing on the same clock the panel fades
+ * in on — a platform `shadowElevation` on the `Surface` would be composited
+ * outside that fade and arrive at full strength on the first frame.
+ */
 private val MENU_ELEVATION = 3.dp
 
 /** Material's floor for a menu (`MenuDefaults.MinMenuWidth`), so three short rows still read as one panel. */
