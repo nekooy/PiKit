@@ -131,7 +131,7 @@ a document is exactly the change that forgets them.
   partial keystore does — none of which is visible from the run's own output, while the
   release itself is public the moment the run ends: a body invented from the previous
   release's shape is published before anyone can catch it.
-- **Nothing here commits, tags or branches on its own.** See *Commits* below.
+- **Nothing here pushes, tags or branches on its own.** See *Commits* above.
 
 ## Hard constraints — do not "fix" these
 
@@ -258,28 +258,75 @@ also lives inside the runtime image, so an edit to it has to reach the image:
 one of the files it is built from is rebuilt, and the image revision covers the file's
 content), and an APK built without it ships the previous guard.
 
-## Commits — ask first
+## Commits — commit finished work yourself, push only when asked
 
-**Do not run `git commit`, `git push`, or anything else that writes to a
-repository, unless the user has explicitly asked for it in that turn.** Not as a
-final step, not to "save progress", not because the change is finished and
-tested. Being asked to *write* code is not being asked to *commit* it, and an
-unwanted commit is rewritten history for whoever has to clean it up. The same
-applies to `git add`, `git stash`, `git checkout`/`restore`, branch creation, tag
-creation, and `git init`. Read-only commands (`status`, `diff`, `log`, `show`,
-`blame`) are fine at any time. The repository exists (`nekooy/PiKit`) and its
-history starts at one commit, so `git log` and `git blame` are worth reading
-before concluding that something is arbitrary.
+**Commit when a task is done and verified; push only when the user says so.** The
+old rule was *ask before every commit*, and what it produced in practice was a
+tree that piled unrelated work up for hours until the pile was too tangled to
+slice by hunks. The rule now is the opposite shape:
+
+- **The gate is verification, not permission.** When one task is finished —
+  code, tests and its chapter under `docs/architecture/` in the same change —
+  run `python tools/build-apks.py` (or, for a Kotlin-only change that touches
+  nothing the script checks, `./gradlew :app:testX64DebugUnitTest`), confirm it
+  is green, and commit it yourself in that turn. Do not let a second task start
+  on top of an uncommitted first one.
+- **`git push` still needs an explicit yes, every time.** Local commits are
+  cheap to rewrite and invisible to anyone else; a pushed one is neither. A
+  turn that ends with committed-but-unpushed work says so in its summary —
+  which commits are on `main` locally, awaiting the user's own push.
+- **Everything else that rewrites state stays ask-first.** `git stash`,
+  `git checkout`/`restore`, branch creation, tag creation, `git reset`, `git
+  rebase`, `git init` — none of these is part of "finishing a task". Read-only
+  commands (`status`, `diff`, `log`, `show`, `blame`) are fine at any time.
+- **Only your own work.** This authorises commits of the hunks you wrote this
+  turn. The tree often holds uncommitted work from another agent or from the
+  user; see *Several agents work this tree* below.
 
 **One concern per commit.** A turn that answers two questions is two commits rather
 than one whose subject carries an "and": a fix and the documentation that describes
 it are one concern, but two unrelated fixes are not, and neither is a feature plus
 the sentence in the manual that happens to mention it. A file is routinely shared by
 two concerns — a locale catalog, a screen, the installer — and staging selected
-*hunks* is worth the trouble when the alternative is a subject that lists things.
-Where the tree already holds a change somebody else has not committed, stage only
-your own hunks: a commit that sweeps up another author's work is theirs to write a
-message for, and the reply says what was left behind.
+*hunks* (`git add -p`, or `git apply --cached` for a slice of a diff) is worth the
+trouble when the alternative is a subject that lists things.
+
+## Several agents work this tree
+
+**More than one agent may be changing this repository at the same time**, in
+separate sessions, against the same working tree and the same `main`. Most
+collisions are avoidable with a few habits:
+
+- **The working tree is shared; your task is not.** Before staging, run `git
+  status` and `git diff` and *read* what is there: uncommitted hunks you did
+  not write may belong to another agent's half-finished task. Stage selected
+  hunks — never `git add -A`, never `git add .` — and say in your summary what
+  you left behind. A commit that sweeps up another agent's work is a commit
+  with your subject on somebody else's diff.
+- **`git stash` is forbidden here.** It is the one command that can hide
+  another agent's in-flight work where they will not find it. Slice your own
+  hunks out instead.
+- **Keep tasks small and commit promptly.** The longer a change sits uncommitted,
+  the more likely a parallel agent edits the same file and the harder the hunk
+  split becomes. This is the other half of why finished work commits immediately
+  (see above).
+- **Check before you build.** `python tools/build-apks.py` wipes and rebuilds
+  outputs under `app/build/` and `.runtime-build/`; that is harmless to another
+  agent's sources but not to its in-flight verification. If another session is
+  mid-run (its Gradle daemon busy, its log still writing), prefer the fast
+  Gradle test task until it is done — the two can share the daemon; two full
+  APK builds at once cannot share anything.
+- **Do not "help" another task's files.** A typo you spot in a file another
+  agent is editing is either left alone or reported, not fixed: your edit lands
+  in its diff, and neither of you can stage cleanly afterwards. Fix it in a
+  follow-up turn once its commit has landed.
+- **Expect your base to move.** You did not rebase anyone: another agent's
+  commit can land on `main` between your status checks. Read `git log` again
+  before reporting "the tree is clean", and if a merge is ever genuinely
+  needed, stop and ask — merging is not part of finishing a task.
+- **One user, many agents: the user approves pushes.** When two agents both
+  hold unpushed commits, pushing is serialized by the user, not negotiated
+  between agents; both report and wait.
 
 ## Commit message format
 
