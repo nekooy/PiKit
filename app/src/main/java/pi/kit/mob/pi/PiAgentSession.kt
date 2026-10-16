@@ -721,10 +721,16 @@ class PiAgentSession private constructor(context: Context) {
             if (client !== source) return@launch
             releaseCpuDuringTurn()
             val code = source.exitCodeOrNull()
-            // `isStreaming` has to go with the process: a turn killed mid-flight
-            // never emits `agent_settled`, and leaving the flag up locked the
-            // composer into "steer" mode for the next send.
-            _conversation.update { it.copy(isStreaming = false, statusMessage = null) }
+            // The turn's state has to go with the process: a turn killed
+            // mid-flight never emits `agent_settled`, and leaving `isStreaming`
+            // up locked the composer into "steer" mode for the next send. The
+            // same event closes the tool cards the turn left running — no
+            // `tool_execution_end` is coming from a process that is gone — so
+            // they stop wearing the live indicator for the rest of the
+            // conversation.
+            _conversation.update {
+                ConversationReducer.finalizeInterruptedTurn(it, System.currentTimeMillis())
+            }
             _agent.value = AgentStatus.Failed(
                 if (code != null) "pi exited with code $code\n${source.stderrSnapshot().trim()}"
                 else "pi stopped unexpectedly",
