@@ -139,6 +139,18 @@ class WebAccessParamsTest {
             "youApiKey",
             "zaiApiKey",
             "zaiEndpoint",
+            // 0.36.0-0.41.0: three more explicit-only providers, and the knobs that
+            // arrived beside them.
+            "keenableApiKey",
+            "ceramicApiKey",
+            "degoogBaseUrl",
+            "degoogApiKey",
+            "degoogEngines",
+            "degoogHeaders",
+            "firecrawlPdfMaxPages",
+            "pdf.endpointUrl",
+            "fetchContent.redirects",
+            "fetchContent.userAgent",
         ).forEach { path ->
             assertTrue("$path is documented", path in paths)
         }

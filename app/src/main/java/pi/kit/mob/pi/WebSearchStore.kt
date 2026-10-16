@@ -171,8 +171,8 @@ data class WebSearchSettings(
          * run the search through a model, then the rest alphabetically enough to be
          * findable.
          *
-         * **This is the extension 0.35.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
-         * from its `gemini-search.ts`, and it is 34 entries rather than the eleven
+         * **This is the extension 0.41.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
+         * from its `gemini-search.ts`, and it is 37 entries rather than the eleven
          * the page used to offer. The eleven were not "the supported ones": they were
          * the ones somebody had heard of, so a user whose provider was `kagi` or
          * `serper` could not select it at all and the picker looked complete.
@@ -192,6 +192,10 @@ data class WebSearchSettings(
             "exa",
             "duckduckgo",
             "searxng",
+            // Added by 0.36.0/0.37.0, both explicit-only: Keenable's public endpoint
+            // and a degoog metasearch instance answer with no key at all.
+            "keenable",
+            "degoog",
             // Search runs through a model you already have a key for.
             "openai",
             "gemini",
@@ -233,6 +237,9 @@ data class WebSearchSettings(
             // Baizhi — `auto` never routes to them.
             "you",
             "zai",
+            // Added by 0.38.0: Ceramic, a paid keyword API — explicit-only, never
+            // chosen by `auto` or `all`.
+            "ceramic",
         )
 
         /** `maxInlineContentChars` as the extension documents it. */
