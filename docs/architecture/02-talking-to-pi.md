@@ -55,6 +55,18 @@ using captured traffic.
   which is now the half for models pi knows", has the rest; the catalogue is refreshed
   instead by pi's own `update --models`, for every built-in provider, on a four-hour
   freshness window (§7.2, "The model catalogue is pi's, and stale is the default").
+- **The agent-level retry is made to outlast a network change.** Pi retries transient
+  provider failures on its own (`auto_retry_start`/`auto_retry_end`, which the reducer
+  shows as notices) and ships with the feature on — but three attempts on a 2 s base
+  delay give up in about fourteen seconds, and switching Wi-Fi to mobile takes longer.
+  A streaming answer died mid-turn on every such switch, and the reader had to re-send
+  by hand. `settingsWithPiDefaults` therefore writes pi's own `retry` key
+  (`enabled: true, maxRetries: 8, baseDelayMs: 3000` — 3 s, 6 s, 12 s, 24 s, 48 s, then
+  the 60 s ceiling, roughly four and a half minutes of patience), merged into
+  `$HOME/.pi/agent/settings.json` next to the tool defaults it already writes.
+  `retry.provider.*` is deliberately not written: pi's own advice for those keys is to
+  leave them, and a provider-level retry would only delay the agent-level one being
+  tuned.
 
 The last four points, plus the undocumented `session_info_changed`,
 `entry_appended` and `thinking_level_changed` events, are places where Pi's prose
