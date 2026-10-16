@@ -30,10 +30,17 @@ app rather than a conservative choice (§1).
 ## The palette
 
 Low-chroma neutrals in the accent's own hue, one saturated accent, and one role
-that means *live*. `PiColor.kt` has both schemes written out in full; dynamic
-colour is deliberately **not** used, because the terminal's own sixteen colours and
-the transcript's syntax tinting are fixed and a wallpaper-derived palette can land
-them on top of each other.
+that means *live*. `PiColor.kt` has both schemes written out in full. Dynamic
+colour — Android 12's wallpaper-derived Material You palette — exists as an
+**opt-in** (`PersonalizationPage`'s 动态配色 switch, off by default), not as the
+default: the terminal's own sixteen colours and the transcript's syntax tinting are
+fixed, and a wallpaper-derived palette can land them on top of each other. The
+switch trades that guarantee for a palette that matches the home screen, and
+`PiKitTheme` resolves it — below Android 12 there is nothing to follow, so the
+flag falls back to the chosen accent rather than to a missing palette. When it is
+on, the system's scheme is used as the system derived it: `accentScheme`'s
+re-derivation is skipped, because re-deriving the roles would undo exactly what
+the system worked out from the wallpaper.
 
 | Role | Hue | What it is for |
 | --- | --- | --- |

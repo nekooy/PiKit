@@ -529,6 +529,22 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val themeColor: ThemeColor = ThemeColor.DEFAULT,
     /**
+     * Whether the palette follows the wallpaper (Android 12's Material You)
+     * instead of [themeColor].
+     *
+     * A separate switch rather than a ninth `ThemeColor` entry: the enum is a
+     * *seed* per choice and its seeds are reused by the avatars' colour pickers,
+     * where "whatever the phone's wallpaper is" is not a colour. `PiKitTheme`
+     * resolves the switch — on below Android 12 it falls back to [themeColor],
+     * because the system cannot supply a palette there. It is deliberately
+     * **off** by default: the terminal's sixteen colours and the transcript's
+     * syntax tinting are fixed, and a wallpaper-derived palette can land them on
+     * top of each other — `PiColor`'s own header records that reasoning — so the
+     * opt-in is the reader trading that guarantee for a palette that matches
+     * their home screen.
+     */
+    val themeDynamic: Boolean = false,
+    /**
      * The interface's text size. Persisted here for the same reason [themeMode] is:
      * it is not part of a profile, and it applies to the app rather than to a launch.
      *
@@ -726,6 +742,7 @@ class SettingsStore(context: Context) {
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
             themeColor = ThemeColor.fromCode(prefs.getString(KEY_THEME_COLOR, null)),
+            themeDynamic = prefs.getBoolean(KEY_THEME_DYNAMIC, false),
             fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
@@ -810,6 +827,7 @@ class SettingsStore(context: Context) {
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
             .putString(KEY_THEME, next.themeMode.code)
             .putString(KEY_THEME_COLOR, next.themeColor.code)
+            .putBoolean(KEY_THEME_DYNAMIC, next.themeDynamic)
             .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
             .putBoolean(KEY_SAFETY, next.safetyExtension)
@@ -876,6 +894,7 @@ class SettingsStore(context: Context) {
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
             themeColor = ThemeColor.fromCode(prefs.getString(KEY_THEME_COLOR, null)),
+            themeDynamic = prefs.getBoolean(KEY_THEME_DYNAMIC, false),
             fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
@@ -903,6 +922,7 @@ class SettingsStore(context: Context) {
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
         themeColor: ThemeColor = current.get().themeColor,
+        themeDynamic: Boolean = current.get().themeDynamic,
         fontSize: FontSize = current.get().fontSize,
         launcherIcon: LauncherIcon = current.get().launcherIcon,
         safetyExtension: Boolean = current.get().safetyExtension,
@@ -928,6 +948,7 @@ class SettingsStore(context: Context) {
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
                 themeColor = themeColor,
+                themeDynamic = themeDynamic,
                 fontSize = fontSize,
                 launcherIcon = launcherIcon,
                 safetyExtension = safetyExtension,
@@ -990,6 +1011,9 @@ class SettingsStore(context: Context) {
 
         /** [ThemeColor.code]; absent means [ThemeColor.DEFAULT] — blue. */
         private const val KEY_THEME_COLOR = "theme_color"
+
+        /** True once the user opted the palette into following the wallpaper. */
+        private const val KEY_THEME_DYNAMIC = "theme_dynamic"
 
         /** [FontSize.code]; absent means [FontSize.DEFAULT] — the fourth of seven. */
         private const val KEY_FONT_SIZE = "font_size"

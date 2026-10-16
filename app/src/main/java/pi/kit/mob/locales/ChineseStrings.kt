@@ -301,6 +301,8 @@ internal object ChineseStrings : Strings {
         override val themeDark = "深色"
         override val themeColor = "主题色"
         override val themeColorSubtitle = "按钮、选中状态与小标题的颜色"
+        override val themeDynamic = "动态配色"
+        override val themeDynamicSubtitle = "跟随系统壁纸取色（Android 12+，低版本回退到所选颜色）"
         override fun themeColorName(code: String) = when (code) {
             ThemeColor.BLUE.code -> "蓝色"
             ThemeColor.INDIGO.code -> "靛蓝"

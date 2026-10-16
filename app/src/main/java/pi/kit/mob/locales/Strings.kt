@@ -712,6 +712,17 @@ interface Strings {
         fun themeColorName(code: String): String
 
         /**
+         * The wallpaper-derived palette (Android 12's Material You), offered as the
+         * row above the eight swatches.
+         *
+         * A row rather than a ninth swatch: the swatches are seeds, and "whatever
+         * this phone's wallpaper is" is not one. The subtitle names the fallback so
+         * a reader on Android 11 or below knows what the switch will actually do.
+         */
+        val themeDynamic: String
+        val themeDynamicSubtitle: String
+
+        /**
          * The launcher icon: the black mark or the white one.
          *
          * Named by their colours rather than by "light" and "dark", because the

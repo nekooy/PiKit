@@ -53,7 +53,10 @@ class MainActivity : ComponentActivity() {
             // The accent is read here with the theme mode and for the same reason:
             // it is a preference, and `PiKitTheme` assembles a palette rather than
             // owning one. Choosing a colour re-themes the page it was chosen on.
-            PiKitTheme(darkTheme = darkTheme, accent = settings.themeColor) {
+            // The dynamic flag rides along: on Android 12 and up the palette then
+            // comes from the wallpaper, and below that `PiKitTheme` falls back to
+            // the accent rather than losing the choice.
+            PiKitTheme(darkTheme = darkTheme, accent = settings.themeColor, dynamic = settings.themeDynamic) {
                 // The text size, applied as one multiplier on the composition's own
                 // density rather than by overriding each type style at each of the
                 // seven steps.
