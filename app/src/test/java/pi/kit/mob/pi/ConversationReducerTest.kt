@@ -471,4 +471,126 @@ class ConversationReducerTest {
         assertEquals("13, not 11+12+13", 13L, state.usage.total.total)
         assertEquals(UsageInfo.EMPTY, state.usage.message)
     }
+
+    // ------------------------------------------------------- interrupted calls
+
+    /**
+     * A provider stream cut mid-arguments (undici's `TypeError: terminated`) ends
+     * the assistant message with `stopReason: "error"` and the tool call half
+     * streamed. pi's loop `continue`s past an error or abort without executing
+     * anything, so no `tool_execution_*` record ever names the card — which left
+     * it on the live indicator for the rest of the turn, a spinner over a call
+     * that never ran, while the retried turn answered underneath it.
+     */
+    @Test
+    fun `a message that ended in error closes the tool calls it never executed`() {
+        val state = fold(
+            """{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":1,"id":"call_1","toolName":"bash"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":1,"delta":"{\"command\": \"strin"}}""",
+            """{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"error","errorMessage":"terminated"}}""",
+        )
+
+        val tool = state.tools().single()
+        assertEquals(ToolState.Failed, tool.state)
+        assertEquals("what streamed before the cut is kept", """{"command": "strin""", tool.argumentsJson)
+    }
+
+    /** The abort path has the same shape as the error one. */
+    @Test
+    fun `a message that ended aborted closes its streamed tool calls too`() {
+        val state = fold(
+            """{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":1,"id":"call_1","toolName":"bash"}}""",
+            """{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"aborted"}}""",
+        )
+
+        assertEquals(ToolState.Failed, state.tools().single().state)
+    }
+
+    /**
+     * The other side of the same rule: a call whose message ended `toolUse` is
+     * still going to run, so ending the message must not fail it.
+     */
+    @Test
+    fun `a message that ended toolUse leaves its calls to the execution events`() {
+        val state = fold(
+            """{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":1,"id":"call_1","toolName":"bash"}}""",
+            """{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_1","name":"bash"}],"stopReason":"toolUse"}}""",
+            """{"type":"tool_execution_start","toolCallId":"call_1","toolName":"bash","args":{"command":"ls"}}""",
+            """{"type":"tool_execution_end","toolCallId":"call_1","toolName":"bash","result":{"content":[{"type":"text","text":"a.txt"}]},"isError":false}""",
+        )
+
+        assertEquals("the call ran and reported, so it succeeded", ToolState.Succeeded, state.tools().single().state)
+    }
+
+    /**
+     * Idle means nothing is running any more, so a call the events left behind —
+     * started and never reported, or streamed and never executed — is finished
+     * as a failure when the turn settles.
+     */
+    @Test
+    fun `agent_settled finishes a call that never reported its end`() {
+        val state = fold(
+            """{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"do it"}]}}""",
+            """{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":1,"id":"call_1","toolName":"bash"}}""",
+            """{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_1","name":"bash"}],"stopReason":"toolUse"}}""",
+            """{"type":"tool_execution_start","toolCallId":"call_1","toolName":"bash","args":{"command":"ls"}}""",
+            // No `tool_execution_end` — the process died running it.
+            """{"type":"agent_settled"}""",
+        )
+
+        assertEquals(ToolState.Failed, state.tools().single().state)
+        assertTrue("the turn is closed with the rest of the settle", state.turns.single().isComplete)
+    }
+
+    /**
+     * The session layer's answer to a dead process: no `agent_settled` is coming,
+     * so everything the turn left open is closed by hand.
+     */
+    @Test
+    fun `an interrupted turn fails its unfinished call and closes`() {
+        var state = fold(
+            """{"type":"agent_start"}""",
+            """{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"do it"}]}}""",
+            """{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":1,"id":"call_1","toolName":"bash"}}""",
+            """{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_1","name":"bash"}],"stopReason":"toolUse"}}""",
+            """{"type":"tool_execution_start","toolCallId":"call_1","toolName":"bash","args":{"command":"ls"}}""",
+        )
+        assertTrue(state.isStreaming)
+
+        state = ConversationReducer.finalizeInterruptedTurn(state, now = 5_000L)
+
+        assertEquals(ToolState.Failed, state.tools().single().state)
+        assertTrue(state.turns.single().isComplete)
+        assertFalse(state.isStreaming)
+        assertNull(state.statusMessage)
+    }
+
+    /**
+     * History has no `tool_execution_*` records — a rebuilt call learns its state
+     * from the `toolResult` message behind it, and one with none never came back.
+     * Restoring it as live drew a spinner for work that had stopped with the
+     * process that was running it.
+     */
+    @Test
+    fun `a restored call with no result behind it is a failure`() {
+        val history = kotlinx.serialization.json.Json.parseToJsonElement(
+            """
+            {"messages":[
+              {"role":"user","content":[{"type":"text","text":"check libc++"}],"timestamp":1000},
+              {"role":"assistant","content":[{"type":"toolCall","id":"call_1","name":"bash",
+                "arguments":{"command":"ls"}}],"stopReason":"error","errorMessage":"terminated",
+                "timestamp":2000}
+            ]}
+            """.trimIndent(),
+        )
+
+        val state = ConversationReducer.replaceWithMessages(ConversationState(), history)
+
+        assertEquals(ToolState.Failed, state.tools().single().state)
+    }
 }

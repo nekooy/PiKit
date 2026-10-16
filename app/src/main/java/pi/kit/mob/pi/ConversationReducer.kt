@@ -503,6 +503,19 @@ object ConversationReducer {
 
         closeTurn()
 
+        // A rebuilt call with no `toolResult` behind it never came back — pi
+        // persists a result for every executed call, including the ones an abort
+        // turns into errors — so it is restored as the failure it is. Left as it
+        // is, a conversation reopened after the process died mid-call drew its
+        // card on the live indicator, a spinner for work that had stopped with
+        // the process that was running it.
+        for ((index, item) in items.withIndex()) {
+            val tool = item as? ChatItem.Tool ?: continue
+            if (tool.state == ToolState.Pending) {
+                items[index] = tool.copy(state = ToolState.Failed)
+            }
+        }
+
         return state.copy(
             items = items,
             seq = seq,
@@ -592,13 +605,18 @@ object ConversationReducer {
 
             // The only reliable idle signal: retries and queued continuations
             // can follow agent_end.
-            "agent_settled" -> state.copy(
-                isStreaming = false,
-                isCompacting = false,
-                statusMessage = null,
-                steeringQueue = emptyList(),
-                followUpQueue = emptyList(),
-                turns = state.turns.closeAt(at, state.items),            )
+            "agent_settled" -> state
+                // Idle means nothing is running any more, so a card still on its
+                // live pill is one whose end record is never coming.
+                .settleUnfinishedTools()
+                .copy(
+                    isStreaming = false,
+                    isCompacting = false,
+                    statusMessage = null,
+                    steeringQueue = emptyList(),
+                    followUpQueue = emptyList(),
+                    turns = state.turns.closeAt(at, state.items),
+                )
 
             "message_start" -> startMessage(state, raw.obj("message"), at)
             "message_update" -> applyMessageUpdate(state, raw, at)
@@ -798,6 +816,10 @@ object ConversationReducer {
         val key = state.currentAssistantKey ?: return state
         val stopReason = message.str("stopReason")
         val errorMessage = message.str("errorMessage")
+        // The cards this message streamed, read before the copy below clears the
+        // mapping: an error or abort ends them here, and they are the only ones
+        // the ending covers.
+        val messageToolKeys = state.toolKeysByIndex.values.toSet()
         // Reported per message, so the totals grow across a tool-using turn
         // instead of jumping. It also arrives more often than the prompt and
         // settle events, which is what makes the header count live.
@@ -836,14 +858,27 @@ object ConversationReducer {
                 toolKeysByIndex = emptyMap(),
             )
 
+        // A message that ended `error` or `aborted` never executes the tool calls
+        // it streamed — pi's loop `continue`s past both stop reasons without
+        // running anything — so the cards it created are finished as failures
+        // here. Measured against a provider stream cut mid-arguments (undici's
+        // `TypeError: terminated`): the turn went on to answer after the retries,
+        // and the half-streamed card under it wore the live indicator for the
+        // rest of the turn because no `tool_execution_*` record ever named it.
+        val settled = if (stopReason == "error" || stopReason == "aborted") {
+            next.settleUnfinishedTools(messageToolKeys)
+        } else {
+            next
+        }
+
         // The turn's reply is whichever assistant message carried text; a
         // tool-call-only message is not an answer. Recorded here as well as at
         // settle time so the fold is correct even if `agent_settled` never
         // arrives — a killed process, for instance.
-        val replyText = next.items.firstOrNull { it.key == key } as? ChatItem.Assistant
-        if (replyText == null || replyText.text.isBlank()) return next
-        val open = next.turns.lastOrNull()?.takeIf { !it.isComplete } ?: return next
-        return next.copy(turns = next.turns.dropLast(1) + open.copy(finalReplyKey = key))
+        val replyText = settled.items.firstOrNull { it.key == key } as? ChatItem.Assistant
+        if (replyText == null || replyText.text.isBlank()) return settled
+        val open = settled.turns.lastOrNull()?.takeIf { !it.isComplete } ?: return settled
+        return settled.copy(turns = settled.turns.dropLast(1) + open.copy(finalReplyKey = key))
     }
 
     private fun reduceUiRequest(state: ConversationState, request: PiRecord.UiRequest): ConversationState =
@@ -927,6 +962,54 @@ object ConversationReducer {
         text: String,
         kind: NoticeKind = NoticeKind.Info,
     ): ConversationState = state.addNotice(text, kind)
+
+    /**
+     * Folds the end of a turn that will never settle.
+     *
+     * The agent process died mid-turn: no `agent_settled` follows and no
+     * `tool_execution_end` either, so the layer that saw the process go closes
+     * here what the event stream never will — every tool card still on its live
+     * pill becomes the failure it is, the open turn is closed, and the streaming
+     * flags and queues go with the process that owned them. A pending dialog is
+     * cleared for the same reason: nothing will ever answer it.
+     */
+    fun finalizeInterruptedTurn(state: ConversationState, now: Long): ConversationState =
+        state
+            .settleUnfinishedTools()
+            .copy(
+                isStreaming = false,
+                isCompacting = false,
+                statusMessage = null,
+                pendingDialog = null,
+                steeringQueue = emptyList(),
+                followUpQueue = emptyList(),
+                turns = state.turns.closeAt(now, state.items),
+            )
+
+    /**
+     * Gives every unfinished tool card its final state.
+     *
+     * A card left in Pending or Running is one whose `tool_execution_end` is not
+     * coming: the call never started (its message ended `error` or `aborted`),
+     * or it never reported (the process died running it). The cross is the honest
+     * mark for both — the call did not come back — and it is what stops a dead
+     * call wearing the live indicator for the rest of the conversation.
+     *
+     * [ofMessage] scopes the sweep to the cards one assistant message streamed,
+     * which is what an error or abort on that message ends; without it the sweep
+     * covers the whole transcript, which is what idle means — nothing is running
+     * any more.
+     */
+    private fun ConversationState.settleUnfinishedTools(ofMessage: Set<String>? = null): ConversationState =
+        copy(items = items.map { item ->
+            val tool = item as? ChatItem.Tool ?: return@map item
+            val inScope = ofMessage == null || tool.key in ofMessage
+            if (inScope && (tool.state == ToolState.Pending || tool.state == ToolState.Running)) {
+                tool.copy(state = ToolState.Failed)
+            } else {
+                item
+            }
+        })
 
     private fun JsonObject.long(key: String): Long =
         (this[key] as? JsonPrimitive)?.let { it.longOrNull ?: it.doubleOrNull?.toLong() } ?: 0L
