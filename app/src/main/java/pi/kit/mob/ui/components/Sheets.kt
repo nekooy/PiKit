@@ -168,6 +168,18 @@ class Sheet(
      * *item* still clears the bar, but the text travels the full height.
      */
     val fullBleedBottom: Boolean = false,
+    /**
+     * Whether an anchored panel opens *above* its anchor even when the space below
+     * would fit it.
+     *
+     * The composer's menus hang off controls that sit above the field the reader is
+     * typing into: a menu that drops below its chip lands on that field — the report
+     * "输入框上方的按钮点击出的悬浮菜单应该始终从上面出现而不是从下面出现，否则会
+     * 遮挡输入框". The auto rule (`Menus.kt`) already sends most of them up because
+     * the keyboard leaves no room below; this flag makes above the only answer, with
+     * the window clamp as the fallback for a panel taller than the space above.
+     */
+    val preferAbove: Boolean = false,
     val content: @Composable () -> Unit,
 )
 

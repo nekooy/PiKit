@@ -490,7 +490,7 @@ internal fun ChatScreen(
             // open is a report to *read* (§7.1).
             ComposerSheet.Thinking -> {
                 val at = anchor ?: return
-                sheets.showMenu("chat-thinking", at) {
+                sheets.showMenu("chat-thinking", at, preferAbove = true) {
                     // The level is read live rather than captured: the menu is
                     // over a conversation that is still running, and the tick on
                     // it must be the level pi is on *now*. See [Sheet].
@@ -536,7 +536,7 @@ internal fun ChatScreen(
             }
 
             ComposerSheet.Model -> {
-                sheets.showMenu("chat-model", modelMenuAnchor) {
+                sheets.showMenu("chat-model", modelMenuAnchor, preferAbove = true) {
                     // Every model of every profile, one line each, so the menu is
                     // the whole configuration rather than one entry per provider.
                     //
@@ -592,7 +592,7 @@ internal fun ChatScreen(
 
             ComposerSheet.Commands -> {
                 val at = anchor ?: return
-                sheets.showMenu("chat-commands", at) {
+                sheets.showMenu("chat-commands", at, preferAbove = true) {
                     CommandMenu(
                         text = text,
                         onRun = { command ->
@@ -666,7 +666,7 @@ internal fun ChatScreen(
 
             ComposerSheet.Attach -> {
                 val at = anchor ?: return
-                sheets.showMenu("chat-attach", at) {
+                sheets.showMenu("chat-attach", at, preferAbove = true) {
                     AttachMenu(
                         text = text,
                         onPick = { kind ->

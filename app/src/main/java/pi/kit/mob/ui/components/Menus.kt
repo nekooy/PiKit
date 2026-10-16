@@ -129,11 +129,20 @@ fun SheetHost.showMenu(
     key: String,
     anchor: MenuAnchor,
     alignEnd: Boolean = false,
+    preferAbove: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val bounds = anchor.bounds
     if (bounds != IntRect.Zero) {
-        show(Sheet(key = key, anchor = bounds, alignEnd = alignEnd, content = content))
+        show(
+            Sheet(
+                key = key,
+                anchor = bounds,
+                alignEnd = alignEnd,
+                preferAbove = preferAbove,
+                content = content,
+            ),
+        )
     }
 }
 
@@ -146,10 +155,12 @@ fun SheetHost.showMenu(
  * rests on. Placement: below the anchor when it fits, above it otherwise, and
  * clamped inside the window when the panel is taller than either side — a menu
  * taller than the space it has scrolls inside itself rather than leaving the
- * window. The keyboard bounds the bottom while it is up, for the same reason the
- * sheet's panel is lifted: the composer's chips — the triggers that open menus
- * mid-sentence — sit above it, and a menu that ran under the keyboard would run
- * under the field the reader is typing in.
+ * window. [Sheet.preferAbove] inverts the rule for the composer's menus, whose
+ * triggers sit above the field being typed into: above is the only answer while
+ * the space above can hold the panel. The keyboard bounds the bottom while it is
+ * up, for the same reason the sheet's panel is lifted: the composer's chips — the
+ * triggers that open menus mid-sentence — sit above it, and a menu that ran under
+ * the keyboard would run under the field the reader is typing in.
  *
  * ## One measure pass, and an animation read at draw time
  *
@@ -257,7 +268,16 @@ internal fun AnchoredMenu(
         val aboveY = anchor.top - gapPx - height
         val roomBelow = bottomLimitPx - belowY
         val roomAbove = anchor.top - gapPx - topLimitPx
-        val below = height <= roomBelow || roomBelow >= roomAbove
+        // `preferAbove` is the caller overriding the auto rule: the composer's menus
+        // hang off controls above the field being typed into, and a panel that drops
+        // onto that field covers it — so above wins whenever the space above can hold
+        // the panel, and the auto rule answers only when it cannot (the window clamp
+        // below still bounds a panel taller than either side).
+        val below = if (sheet.preferAbove) {
+            height > roomAbove && height <= roomBelow
+        } else {
+            height <= roomBelow || roomBelow >= roomAbove
+        }
         val y = (if (below) belowY else aboveY)
             .coerceIn(topLimitPx, (bottomLimitPx - height).coerceAtLeast(topLimitPx))
 
