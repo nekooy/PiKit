@@ -7,7 +7,7 @@ runtime image has to exist at all is in
 
 ## Prerequisites
 
-- **JDK 17 to 26** (built and tested with JDK 21). The wrapper is Gradle 9.6.1, and a
+- **JDK 17 to 26** (built and tested with JDK 21). The wrapper is Gradle 9.8.1, and a
   Gradle release cannot run on a JVM newer than the one it knows about — a too-new
   Java fails before the build script is even read, which is why the error arrives as
   an IDE dialog rather than as a task failure. Android Studio keeps its own choice
