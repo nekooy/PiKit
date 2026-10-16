@@ -540,9 +540,9 @@ class WebSearchStoreTest {
     fun `the provider list is the extension's own, with no duplicates`() {
         val providers = WebSearchSettings.SEARCH_PROVIDERS
 
-        // The number the bundled 0.35.0 resolves to. It is pinned because the page
+        // The number the bundled 0.41.0 resolves to. It is pinned because the page
         // presents this list as "all of them", which is only true while it is.
-        assertEquals(34, providers.size)
+        assertEquals(37, providers.size)
         assertEquals("no provider is listed twice", providers.size, providers.toSet().size)
         assertEquals(
             "the two selectors are not providers",
@@ -556,7 +556,7 @@ class WebSearchStoreTest {
 
     @Test
     fun `every provider has a description in every language`() {
-        // A picker of thirty-one rows whose second line is blank for a language looks
+        // A picker of thirty-seven rows whose second line is blank for a language looks
         // like a rendering fault rather than like missing text, and the fallback in
         // `providerDescription` is the empty string.
         Lang.entries.forEach { lang ->

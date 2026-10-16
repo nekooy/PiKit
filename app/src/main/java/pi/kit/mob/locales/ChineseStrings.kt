@@ -789,6 +789,8 @@ internal object ChineseStrings : Strings {
             "exa" -> "无需 Key，有速率限制"
             "duckduckgo" -> "无需 Key"
             "searxng" -> "自建实例，地址写在下面的配置文件里"
+            "keenable" -> "Keenable 公开搜索，无需 Key；不会被自动选中"
+            "degoog" -> "元搜索，无需 Key，可指向自建实例；不会被自动选中"
             // 借用已有模型的联网能力
             "openai" -> "走 OpenAI 的联网搜索"
             "gemini" -> "走 Gemini 模型的联网搜索"
@@ -822,6 +824,7 @@ internal object ChineseStrings : Strings {
             "serpdive" -> "需要 SERPdive 的 Key，可选检索深度"
             "you" -> "You.com 索引；需要 Key，且不会被自动选中"
             "zai" -> "Z.ai web_search_prime MCP；需要 Key 和端点（国际或中国）"
+            "ceramic" -> "Ceramic 关键词搜索；需要 Key，且不会被自动选中"
             else -> ""
         }
 

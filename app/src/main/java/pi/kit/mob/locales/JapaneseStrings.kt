@@ -829,6 +829,8 @@ internal object JapaneseStrings : Strings {
             "exa" -> "キー不要。レート制限あり"
             "duckduckgo" -> "キー不要"
             "searxng" -> "自前のインスタンス。アドレスは下の設定ファイルに書きます"
+            "keenable" -> "Keenable の公開検索。キー不要で、自動選択はされません"
+            "degoog" -> "メタ検索。キー不要で自前ホストも可、自動選択はされません"
             // 既存モデルの検索機能を使う
             "openai" -> "OpenAI のホスト型ウェブ検索を使います"
             "gemini" -> "Gemini モデル経由で検索します"
@@ -862,6 +864,7 @@ internal object JapaneseStrings : Strings {
             "serpdive" -> "SERPdive のキーが必要です。検索の深さも選べます"
             "you" -> "You.com インデックス。キーが必要で、自動選択はされません"
             "zai" -> "Z.ai web_search_prime MCP。キーとエンドポイント（グローバルまたは中国）が必要です"
+            "ceramic" -> "Ceramic のキーワード検索。キーが必要で、自動選択はされません"
             else -> ""
         }
 

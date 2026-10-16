@@ -881,6 +881,8 @@ internal object EnglishStrings : Strings {
             "exa" -> "Works without a key, with a rate limit"
             "duckduckgo" -> "No key needed"
             "searxng" -> "Your own instance; set its address in the file below"
+            "keenable" -> "Keenable's public search; no key needed, and is never chosen automatically"
+            "degoog" -> "Metasearch, self-hostable; no key needed, and is never chosen automatically"
             // The search runs through a model.
             "openai" -> "Runs through OpenAI's hosted web search"
             "gemini" -> "Runs through a Gemini model"
@@ -917,6 +919,7 @@ internal object EnglishStrings : Strings {
             "serpdive" -> "Needs a SERPdive key; a retrieval depth can be chosen"
             "you" -> "You.com index; needs a key, and is never chosen automatically"
             "zai" -> "Z.ai web_search_prime MCP; needs a key and an endpoint (global or China)"
+            "ceramic" -> "Ceramic keyword search; needs a key, and is never chosen automatically"
             else -> ""
         }
 

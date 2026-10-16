@@ -163,7 +163,7 @@ VENDORED_MARKER = "pikit-vendored.json"
 #: a new version changes the extension's tools and its config, so it is bumped
 #: with the image and by hand, exactly as BOOTSTRAP_TAG is.
 WEB_ACCESS_PACKAGE = "pi-web-access"
-WEB_ACCESS_VERSION = "0.35.0"
+WEB_ACCESS_VERSION = "0.41.0"
 
 #: Where the bundled extension lives inside the prefix, relative to `$PREFIX`.
 #: Its own `node_modules` is a separate tree from pi's so that npm cannot touch

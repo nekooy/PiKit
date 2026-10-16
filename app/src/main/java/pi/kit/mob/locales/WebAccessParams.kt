@@ -7,8 +7,9 @@ package pi.kit.mob.locales
  * ## Why this is here and not in the three catalogs
  *
  * `Strings` is for interface text: a short label per control, completed by the
- * compiler. This is *prose about another program's configuration* — around eighty
- * keys, each with a shape, an example and a sentence — and it is written the way
+ * compiler. This is *prose about another program's configuration* — around a
+ * hundred and thirty keys, each with a shape, an example and a sentence — and it is
+ * written the way
  * `TerminalBanner.kt` and `ManualText*.kt` are, as one parallel structure whose
  * three languages sit beside each other. Prose is the documented exception to the
  * catalog rule, and it is the right one here: a key's description is only readable
@@ -26,15 +27,18 @@ package pi.kit.mob.locales
  *
  * ## The facts, and where they come from
  *
- * Every row is the extension **0.35.0** — the version the runtime image vendors
+ * Every row is the extension **0.41.0** — the version the runtime image vendors
  * (`tools/build-runtime-image.py`'s `WEB_ACCESS_VERSION`, recorded in the image's
  * `build-metadata.json`) — read from its own source rather than from its README. The
  * keys were checked against 0.31.0's modules one by one when the pin moved: 0.35.0
  * adds `youApiKey`, `zaiApiKey` and `zaiEndpoint` for its two new explicit-only
- * search providers (You.com and Z.ai's web_search_prime MCP) and removes none, so
- * the rows below grow rather than get rewritten. Baizhi MCP remains a *provider*
- * the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`) rather than a document
- * key; its lazy `web_enable` tool is tool surface, not config.
+ * search providers (You.com and Z.ai's web_search_prime MCP); 0.41.0 adds ten more
+ * — `keenableApiKey`, `ceramicApiKey` and the four `degoog*` keys for its three
+ * explicit-only providers (Keenable, degoog and Ceramic), plus `firecrawlPdfMaxPages`,
+ * `pdf.endpointUrl`, `fetchContent.redirects` and `fetchContent.userAgent`. Neither
+ * move removes a key, so the rows below grow rather than get rewritten. Baizhi MCP
+ * remains a *provider* the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`) rather
+ * than a document key; its lazy `web_enable` tool is tool surface, not config.
  *
  * The provider, type and description of each row were taken from the extension's
  * per-feature modules, which each re-parse the file with their own partial
@@ -268,6 +272,24 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "取得を禁止するホスト名。deny が allow に優先します。",
     ),
     p(
+        "fetchContent.redirects", "string", "\"same-origin\"",
+        "Refuse any redirect that leaves the requested site, before the other site is " +
+            "contacted. While it is set, the extractors that fetch pages themselves — " +
+            "Jina, the hosted providers, Gemini, GitHub and YouTube — are turned off.",
+        "拒绝离开目标站点的重定向，在访问新站点之前就拦下。设置后，会自行抓取页面的提取方式" +
+            "（Jina、托管服务、Gemini、GitHub、YouTube）会被关闭。",
+        "リダイレクト先が対象サイト外なら、そのサイトに接触する前に拒否します。設定中は、" +
+            "ページを自分で取得する抽出（Jina、ホスト型、Gemini、GitHub、YouTube）が無効になります。",
+    ),
+    p(
+        "fetchContent.userAgent", "string", "\"Mozilla/5.0 (Windows NT 10.0; Win64; x64)\"",
+        "The User-Agent page fetches send, for sites that turn the default one away. " +
+            "Printable ASCII only; unset keeps the default.",
+        "抓取页面时发送的 User-Agent，用于拒绝默认 UA 的站点。仅限可打印 ASCII；不写则用默认值。",
+        "ページ取得で送る User-Agent。既定値を拒否するサイト向け。印字可能 ASCII のみ、" +
+            "未指定なら既定値です。",
+    ),
+    p(
         "maxInlineContentChars", "number", "30000",
         "How much fetched text is handed to the model, up to 200000. This is the page's " +
             "own field.",
@@ -290,10 +312,23 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     ),
     p(
         "pdf.provider", "string", "\"auto\"",
-        "`auto`, `datalab`, `gemini`, or `unpdf` for on-device extraction with no upload. " +
-            "An unrecognised value falls back to auto.",
-        "auto、datalab、gemini，或完全在本机解析、不上传的 unpdf。无法识别的值会退回 auto。",
-        "auto、datalab、gemini、アップロードせず端末内で解析する unpdf。不明な値は auto になります。",
+        "`auto`, `datalab`, `gemini`, `endpoint` for your own parser (see below), or " +
+            "`unpdf` for on-device extraction with no upload. An unrecognised value " +
+            "falls back to auto.",
+        "auto、datalab、gemini、endpoint（用下面的自建解析服务），或完全在本机解析、不上传的 unpdf。" +
+            "无法识别的值会退回 auto。",
+        "auto、datalab、gemini、endpoint（下記の自前パーサー）、アップロードせず端末内で解析する unpdf。" +
+            "不明な値は auto になります。",
+    ),
+    p(
+        "pdf.endpointUrl", "string", "\"https://pdf.example.com/parse\"",
+        "Your own document parser. It receives the PDF and answers Markdown; `endpoint` " +
+            "asks it directly and `auto` tries it before the hosted engines. A failed " +
+            "request falls back to them.",
+        "自建的文档解析服务：接收 PDF、返回 Markdown。`endpoint` 直接使用它，`auto` 会先试它再退回" +
+            "托管解析。请求失败时退回其他引擎。",
+        "自前の文書パーサー。PDF を受け取り Markdown を返します。`endpoint` は直接、" +
+            "`auto` はホスト型の前に試します。失敗時は他のエンジンにフォールバックします。",
     ),
     p(
         "pdf.maxSizeMB", "number", "20",
@@ -524,7 +559,7 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     key("openaiApiKey", "OpenAI", "OPENAI_API_KEY", "key, used for Responses web search."),
     endpoint("openaiResponsesUrl", "OpenAI Responses", "https://api.openai.com/v1/responses"),
     p(
-        "openaiSearchModel", "string", "\"gpt-5.6\"",
+        "openaiSearchModel", "string", "\"gpt-6-luna\"",
         "Pin the OpenAI search model instead of letting the newest one be chosen.",
         "固定使用的 OpenAI 搜索模型，不写则由扩展选择最新的。",
         "OpenAI の検索モデルを固定します。未指定なら最新が選ばれます。",
@@ -576,6 +611,16 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "Allow scrapes that are not in lockdown mode.",
         "允许非 lockdown 模式的抓取。",
         "lockdown モード以外のスクレイプを許可します。",
+    ),
+    p(
+        "firecrawlPdfMaxPages", "number", "10",
+        "Read only the first N pages of each PDF through Firecrawl, which caps its " +
+            "per-page billing. Needs `firecrawlApiVersion` `v2`; unset reads the whole " +
+            "document.",
+        "用 Firecrawl 解析 PDF 时只读前 N 页，把按页计费控制住。需要 `firecrawlApiVersion` 为 v2；" +
+            "不写则读完整个文档。",
+        "Firecrawl で PDF の先頭 N ページだけ読み、ページ課金を抑えます。" +
+            "`firecrawlApiVersion` が v2 の場合のみ。未指定なら全文を読みます。",
     ),
     endpoint("crawl4aiBaseUrl", "Crawl4AI", "https://crawl4ai.example.com"),
     key(
@@ -631,6 +676,37 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
             "请选对应端点。",
         "global（api.z.ai）または china（open.bigmodel.cn）。GLM Coding Plan のキーはサイトごとに" +
             "発行されるため、対応するエンドポイントを選んでください。",
+    ),
+    // 0.36.0-0.41.0: three more explicit-only providers. Keenable and degoog answer
+    // with no key at all — their keys below are optional knobs — and Ceramic needs
+    // one.
+    key(
+        "keenableApiKey", "Keenable", "KEENABLE_API_KEY",
+        "key, optional — the keyless endpoint works without one and a key raises its rate limit.",
+        " 的 API Key，可选：免密钥端点可直接使用，填写后提高速率上限。",
+        " の API キー（任意）。キーなしの公開エンドポイントでも動き、キーでレート上限が上がります。",
+    ),
+    key("ceramicApiKey", "Ceramic", "CERAMIC_API_KEY", "key, for Ceramic's paid keyword search."),
+    endpoint("degoogBaseUrl", "degoog", "https://degoog.org"),
+    key(
+        "degoogApiKey", "degoog", "DEGOOG_API_KEY",
+        "key, if the instance `degoogBaseUrl` points at requires one.",
+        " 的 API Key，仅当 `degoogBaseUrl` 指向的实例要求时填写。",
+        " の API キー。`degoogBaseUrl` の先のインスタンスが必要とする場合のみ。",
+    ),
+    p(
+        "degoogEngines", "string[]", "[\"google\", \"bing\"]",
+        "Limit which engines your degoog instance queries; the names are the instance's " +
+            "own. Unset lets it decide.",
+        "限制 degoog 实例查询哪些搜索引擎，名称以实例为准；不写则由实例决定。",
+        "degoog が問い合わせるエンジンを限定します（名前はインスタンス依存）。未指定なら任せます。",
+    ),
+    p(
+        "degoogHeaders", "object", "{\"Authorization\": \"Bearer \$DEGOOG_TOKEN\"}",
+        "Extra headers for that instance, sent only to it — the same shape as " +
+            "`searxngHeaders`.",
+        "发给该实例的额外请求头，只会发给它自己，格式与 `searxngHeaders` 相同。",
+        "そのインスタンスへ送る追加ヘッダー。`searxngHeaders` と同じ形です。",
     ),
     key("xaiApiKey", "xAI", "XAI_API_KEY"),
     p(
