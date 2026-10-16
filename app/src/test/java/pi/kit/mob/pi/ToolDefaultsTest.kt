@@ -4,7 +4,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -165,6 +168,36 @@ class ToolDefaultsTest {
 
         assertEquals(existing["defaultProvider"], result["defaultProvider"])
         assertNull(result["defaultModel"])
+    }
+
+    // ------------------------------------------------------- the agent's retry
+
+    @Test
+    fun `the retry patience is written even when nothing is configured`() {
+        val result = merged(settings("""{"theme":"dark"}"""), PiSettings())
+
+        // The retry outlives a network change, not a model preference: a pi that
+        // is not configured yet is still a pi the terminal tab runs, and its
+        // streaming turns want the same patience.
+        val retry = result["retry"]!!.jsonObject
+        assertEquals(true, retry["enabled"]!!.jsonPrimitive.boolean)
+        assertEquals(8, retry["maxRetries"]!!.jsonPrimitive.int)
+        assertEquals(3_000, retry["baseDelayMs"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `an existing retry object is replaced, not merged`() {
+        val existing = settings(
+            """{"retry":{"enabled":true,"maxRetries":1,"baseDelayMs":500,"provider":{"maxRetries":2}}}""",
+        )
+
+        val result = merged(existing, PiSettings())
+
+        // pi's own advice is to leave `retry.provider.*` alone, and the merge
+        // cannot honour a user's `provider` sub-object without also honouring a
+        // `maxRetries` of 1 — the impatience this write exists to fix. The whole
+        // object is PiKit's, the way `defaultProvider` is.
+        assertEquals(RETRY_PATIENCE, result["retry"])
     }
 
     // ---------------------------------------------------- the bundled extension

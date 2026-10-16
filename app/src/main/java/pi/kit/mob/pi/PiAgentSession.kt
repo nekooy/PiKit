@@ -2214,6 +2214,24 @@ internal fun settingsWithDefaultTools(existing: JsonObject, tools: List<String>)
 }
 
 /**
+ * The `retry` object written into pi's own settings — see [settingsWithPiDefaults]
+ * for the arithmetic that picked the numbers.
+ *
+ * A `JsonObject` rather than five named constants: the merge writes the whole
+ * object under one key, and a reader wanting one field back has to parse it
+ * anyway. `retry.provider.*` is deliberately absent — pi's own advice for those
+ * keys is to leave them, and a provider-level retry would only delay the
+ * agent-level one this object exists to tune.
+ */
+internal val RETRY_PATIENCE = JsonObject(
+    mapOf(
+        "enabled" to JsonPrimitive(true),
+        "maxRetries" to JsonPrimitive(8),
+        "baseDelayMs" to JsonPrimitive(3_000),
+    ),
+)
+
+/**
  * pi's own settings with PiKit's tool list, the active profile's defaults and the
  * bundled web-access package merged in.
  *
@@ -2230,6 +2248,17 @@ internal fun settingsWithDefaultTools(existing: JsonObject, tools: List<String>)
  * agent has. Only a missing entry is added: an entry the user added — including one
  * for this very path, at some other spelling — is never removed or rewritten.
  *
+ * `retry` makes the agent-level retry outlast a network change. pi retries
+ * transient provider failures (its own pattern list: overload, rate limit, 5xx,
+ * and the connection family — `fetch failed`, `getaddrinfo`, `ECONNRESET`), but
+ * the defaults are three attempts on a 2 s base delay, so the patience runs out
+ * in about fourteen seconds. Switching Wi-Fi to mobile takes longer than that:
+ * the streaming answer died mid-turn, the run landed on `Failed`, and the reader
+ * had to re-send by hand. Eight attempts on a 3 s base cover roughly four and a
+ * half minutes (3 s, 6 s, 12 s, 24 s, 48 s, then the 60 s ceiling for the rest),
+ * and pi announces every attempt as `auto_retry_start`, which the reducer shows
+ * as a notice — the wait is visible rather than a dead composer.
+ *
  * Merged, never replaced: this file is pi's and already holds whatever else the
  * user set. The two model defaults are written only when [PiSettings.isConfigured],
  * because a half-filled profile would make a hand-run pi fall back to an unrelated
@@ -2242,6 +2271,11 @@ internal fun settingsWithPiDefaults(
     bundledExtension: BundledExtension? = null,
 ): JsonObject {
     var merged = settingsWithDefaultTools(existing, tools)
+
+    // Written unconditionally rather than only when the profile is filled in: the
+    // retry is the *runtime's* patience, not a model preference, and a pi the user
+    // runs by hand in the terminal tab deserves the same of it.
+    merged = JsonObject(merged + ("retry" to RETRY_PATIENCE))
 
     // A `packages` key that is not an array is not this function's to reinterpret:
     // the write is skipped, the same way an unparseable `models.json` is left alone.
