@@ -81,8 +81,9 @@ class PiProviderTest {
         "github-copilot",
         "openai-codex",
         // More than one input: a resource endpoint, a project and location, an account
-        // id (+ a gateway slug), AWS credentials.
-        "azure-openai-responses",
+        // id (+ a gateway slug), AWS credentials. (`azure` is pi 1.0.3's rename of
+        // `azure-openai-responses`; the key alone is not enough without the resource.)
+        "azure",
         "google-vertex",
         "cloudflare-workers-ai",
         "cloudflare-ai-gateway",
