@@ -206,7 +206,7 @@ files and a device shows no error when they are absent:
 - `verify-runtime-image.py` asserts three entry points by path — the manual's
   `docs/index.md` and its `docs.json` index, and the extension's `README.md` — and then
   compares the image against the vendoring cache: **every file the tree holds and the rule
-  keeps must be in the image, by name** (742 in pi's tree at 1.0.1, 5,936 in the
+  keeps must be in the image, by name** (8,049 in pi's tree at 1.3.0, 5,936 in the
   extension's). The expectation is computed from the tree and from `vendor_junk`, the same
   predicate the trim deletes by, so a release that adds, renames or retires anything moves
   no constant here and a file the image is missing is named. **A symlink counts on both

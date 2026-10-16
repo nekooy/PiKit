@@ -20,16 +20,17 @@ import pi.kit.mob.ui.components.thinkingLevelOptions
  * **forwards**, which is why asking a DeepSeek model for `medium` leaves pi on
  * `high`.
  *
- * The fixtures below are the real catalog maps from the bundled pi
- * (`chunk-JVUZSMYM.js`, `deepseek_default`), so a pi update that changes one is
- * caught here as a failing expectation rather than as a wrong chip on a phone.
+ * The fixtures below are the real catalog maps from the bundled pi's
+ * `deepseek_default` (`chunk-66G7ITPS.js` at pi 1.3.0), so a pi update that
+ * changes one is caught here as a failing expectation rather than as a wrong
+ * chip on a phone.
  */
 class ThinkingLevelTest {
 
     /** `deepseek-v4-pro`: only high and max, plus off. */
     private val deepseekPro = listOf("off", "high", "max")
 
-    /** `deepseek-v4-flash`: low, high and max, plus off. */
+    /** `deepseek-flash` (V4.1 Flash): low, high and max, plus off. */
     private val deepseekFlash = listOf("off", "low", "high", "max")
 
     @Test

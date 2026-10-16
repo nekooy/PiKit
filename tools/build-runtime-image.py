@@ -145,7 +145,7 @@ PI_PACKAGE = "@earendil-works/pi-coding-agent"
 #: failed outright (`Failed to load extension "…/pi-safety-guard.ts": Cannot find
 #: module 'jiti'`). A version that ships in the image cannot be half-installed.
 #: ARCHITECTURE §2 has the reasoning.
-PI_VERSION = "1.0.1"
+PI_VERSION = "1.3.0"
 
 PI_ENTRY_RELATIVE = f"lib/node_modules/{PI_PACKAGE}/dist/bundle/cli.js"
 
