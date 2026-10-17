@@ -284,6 +284,32 @@ and remove packages without it, and the official Termux bootstrap has the same o
 so this is a limit that is accepted rather than fixed: bundling `perl` to make three
 developer scripts run would pay for a language runtime on every device.
 
+## Why the environment is Termux packages, not a distribution under proot
+
+The other shape that was considered is the one some Android agent apps take: a full
+Ubuntu rootfs run through proot, with ordinary apt inside it. It buys glibc and a
+whole distribution's archive, and it was rejected for reasons about this app's
+workload rather than about Ubuntu.
+
+- proot serves the guest's filesystem by intercepting syscalls and rewriting paths.
+  What pi does all day *is* syscalls over thousands of small files — every tool call
+  stats, reads and writes the tree — so the interception tax lands on the agent's
+  hot loop rather than on a shell that pauses between commands. No microbenchmark
+  was taken before the decision; it was made on where the cost would fall.
+- The bundled environment already has what the rootfs would be *for*: a package
+  manager with a real repository (Termux's), and a `pkg install` path that works
+  with the relocation problem already solved (ARCHITECTURE §4). A rootfs would
+  bring a second package manager and a second set of packages to keep patched, and
+  its glibc binaries would run only inside the emulation — the same constraint that
+  makes `rg` and `fd` mandatory to bake in, above.
+- The storage and delete-guard model reasons about paths under this app's data
+  directory (ARCHITECTURE §5); a proot root is one more layer of path indirection
+  between the guard and the files it protects.
+
+And the problem this chapter's last section is about would not have gone away: a
+rootfs image is *itself* a versioned blob, so an app update that moved it would
+have replaced the user's installed packages wholesale — the same bug one layer up.
+
 ## The bundled packages are registered with dpkg
 
 The overlay's `.deb` files are extracted by hand — `extract_deb` reads the archive's data
