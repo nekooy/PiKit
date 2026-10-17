@@ -1,7 +1,6 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -95,11 +94,10 @@ import pi.kit.mob.ui.design.PiStatePill
  * 显示那种转圈的团状ui" — the button, then the spinner, then the result; only the
  * result's *address* moved out of the row.
  *
- * A failure keeps a `PiNotice` under the group for the sentence a toast cannot
- * carry, and the notice is tapped away — the chat page's failure banner dismisses
- * the same way, and a close button on the message itself would be a second control
- * for one action. That tap is also where the run's own clear call lives now (see
- * [RunControl]): there is no verdict in the row to dismiss any more.
+ * A failure is a dialog, not a banner: the run came back wrong, and in settings
+ * that is announced and then dismissed with one OK ([RunFailureDialog]) — which
+ * is also where the run's own clear call lives now, since no row carries a
+ * verdict to dismiss. A success is only the toast.
  *
  * ## Why the verdict and the output are two components
  *
@@ -227,18 +225,10 @@ internal fun MaintenancePage(
                 }
             }
 
-            // A failure is the one outcome a toast cannot carry — its reason is
-            // a sentence — so it keeps a notice, tapped away once read (the chat
-            // page's failure banner dismisses the same way). A success does not:
-            // the toast already said "已更新" or "已是最新", and a banner repeating
-            // it was one of the "完成的横幅" the page was asked to drop.
-            (catalogueStatus as? CatalogueStatus.Failed)?.let { failed ->
-                PiNotice(
-                    text = failed.message,
-                    tone = PiTone.Danger,
-                    modifier = Modifier.clickable(onClick = catalogue::dismiss),
-                )
-            }
+            // A failure is not announced by a banner here. The three runs' errors
+            // are *operations that came back wrong*, and in settings that is a
+            // dialog — announced then dismissed — not a strip that stays on the
+            // page (ARCHITECTURE §13); the dialog is bound to the state below.
 
             // Relocation is not something the user should have to think about: a
             // package is rewritten before dpkg ever unpacks it (apt's
@@ -302,10 +292,6 @@ internal fun MaintenancePage(
 
             packages?.let { report -> PackagesNotices(report) }
 
-            repair?.let { result ->
-                RelocationVerdict(result, onDismiss = session::clearRepairResult)
-            }
-
             // Storage does not belong on this page conceptually — it changes no
             // file under $PREFIX — but the *check* is a maintenance action, and it
             // is the only place a user can get an answer to "can the agent really
@@ -328,10 +314,44 @@ internal fun MaintenancePage(
                     },
                 )
             }
-
-            StorageCheckVerdict(storageCheck, onDismiss = selfTest::dismiss)
         }
     }
+
+    // The three runs' failures are operations that came back wrong, and in
+    // settings that is a dialog — announced then dismissed — not a strip that
+    // stays on the page (ARCHITECTURE §13). Each is bound to the run's own
+    // state, so its OK button *is* the run's clear call: pressing it reads the
+    // failure and dismisses it in one.
+    (catalogueStatus as? CatalogueStatus.Failed)?.let { failed ->
+        RunFailureDialog(
+            title = text.settings.modelListStateFailed,
+            message = failed.message,
+            onDismiss = catalogue::dismiss,
+        )
+    }
+    repair?.takeIf { it.relocatorDamaged || it.errors.isNotEmpty() }?.let { result ->
+        RunFailureDialog(
+            title = text.settings.relocateStateFailed,
+            message = if (result.relocatorDamaged) {
+                text.settings.relocateBroken
+            } else {
+                text.settings.relocateProblems
+            },
+            lines = result.errors,
+            onDismiss = session::clearRepairResult,
+        )
+    }
+    (storageCheck as? StorageSelfTest.Status.Finished)
+        ?.takeIf { !it.passed }
+        ?.let { finished ->
+            RunFailureDialog(
+                title = text.settings.storageCheckFailed,
+                message = finished.output.lastOrNull { it.startsWith(STORAGE_CHECK_TALLY) }
+                    ?: text.settings.storageCheckFailed,
+                lines = finished.output.filter { FAILURE_MARKER in it },
+                onDismiss = selfTest::dismiss,
+            )
+        }
 
     // The one press on this page that replaces something rather than repairing
     // it, so it asks first. The dialog says the two things being decided: what
@@ -589,81 +609,58 @@ private fun ErrorBody(lines: List<String>, modifier: Modifier = Modifier) {
 }
 
 /**
- * What the relocation walk found, when that is something to act on.
+ * A run that came back wrong: a title, the failure's own sentence, and one OK.
  *
- * The two failure shapes keep a notice; the two successes — repaired and nothing to
- * do — do not, because the run's toast already said "已修复" or "无需修复" and a
- * banner repeating it was one of the "完成的横幅" the page was asked to drop. So this
- * only draws when there is a sentence a toast cannot carry, and the notice is
- * tapped away once read — the run's clear call lives on that tap now that no row
- * carries a verdict to dismiss.
+ * The settings pages' shape for an operation that failed — "announced then
+ * dismissed", because the reader asked for the run and it came back wrong —
+ * rather than a strip that stays on the page until something else replaces it.
+ * [onDismiss] is the run's own clear call, so the OK button reads the failure
+ * and dismisses it in one press; there is no second control for that.
  *
- * Checked in this order because the damaged relocator is the one outcome the walk
- * cannot repair from the inside: the relocator no longer names the upstream id at
- * all, so its own `OLD_ID` was rewritten and it now refuses to run (`exit 4`) —
- * every later `pkg install` goes unrelocated until the runtime is rebuilt, and
- * that is the one sentence here that names an action. The failing files come next,
- * as the heading and then the lines.
+ * [lines] is the installer's own output — the files the walk could not rewrite,
+ * the checks the self-test failed — and it is bounded and scrolls inside the
+ * dialog, because the version that printed such lines into the page pushed this
+ * page's own controls off the screen and buried the one line the reader came
+ * for. The sentence is the `PiNotice` frame; the lines are [ErrorBody].
  */
 @Composable
-private fun RelocationVerdict(result: PrefixPatcher.Result, onDismiss: () -> Unit) {
+private fun RunFailureDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    lines: List<String> = emptyList(),
+) {
     val text = strings
-    when {
-        result.relocatorDamaged -> PiNotice(
-            text = text.settings.relocateBroken,
-            tone = PiTone.Danger,
-            modifier = Modifier.clickable(onClick = onDismiss),
-        )
-
-        result.errors.isNotEmpty() -> {
-            PiNotice(
-                text = text.settings.relocateProblems,
-                tone = PiTone.Danger,
-                modifier = Modifier.clickable(onClick = onDismiss),
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                PiNotice(text = message, tone = PiTone.Danger)
+                if (lines.isNotEmpty()) {
+                    ErrorBody(lines)
+                }
+            }
+        },
+        confirmButton = {
+            PiButton(
+                text = text.common.ok,
+                onClick = onDismiss,
+                kind = PiButtonKind.Text,
+                size = PiButtonSize.Small,
             )
-            ErrorBody(result.errors)
-        }
-
-        // Repaired or already clean: the toast is the whole report.
-        else -> Unit
-    }
-}
-
-/**
- * What the storage self-test found, when it found a failure.
- *
- * A pass is the run's own toast ("通过") and nothing more — the success banner was
- * a "完成的横幅" and is gone with the others. A failure keeps its notice and its
- * failing lines: the verdict's numbers are the tally line the script prints, which
- * a toast cannot carry, and the lines are what the reader came for. The notice is
- * tapped away, like the relocation one above.
- *
- * The line list is never the whole transcript. The script prints one line per check
- * — fourteen on a fresh install, and one more per granted folder — and printing all
- * of them pushed this page's own controls off the screen and buried the one line the
- * user came for. The full list is still one command away.
- */
-@Composable
-private fun StorageCheckVerdict(status: StorageSelfTest.Status, onDismiss: () -> Unit) {
-    val text = strings
-    val finished = status as? StorageSelfTest.Status.Finished ?: return
-    if (finished.passed) return
-
-    PiNotice(
-        text = finished.output.lastOrNull { it.startsWith(STORAGE_CHECK_TALLY) }
-            ?: text.settings.storageCheckFailed,
-        tone = PiTone.Danger,
-        modifier = Modifier.clickable(onClick = onDismiss),
+        },
     )
-    ErrorBody(finished.output.filter { FAILURE_MARKER in it })
 }
 
 /**
- * What a finished run announces, as a toast: null while there is nothing to say.
+ * What a successful run announces, as a toast: null while there is nothing to
+ * say and when the run failed.
  *
  * One word rather than a sentence — "已更新" is the whole fact, and the toast's
- * context is the button that was just pressed beside it. The sentence that used
- * to sit under the row for this outcome is gone with the completion banners.
+ * context is the button that was just pressed beside it. A failure is not a
+ * toast's business: it is a dialog, with the sentence and the lines to read
+ * ([RunFailureDialog]).
  */
 private fun catalogueVerdict(status: CatalogueStatus, text: Strings): String? = when (status) {
     is CatalogueStatus.Done -> if (status.changed) {
@@ -672,30 +669,30 @@ private fun catalogueVerdict(status: CatalogueStatus, text: Strings): String? = 
         text.settings.modelListStateCurrent
     }
 
-    is CatalogueStatus.Failed -> text.settings.modelListStateFailed
     else -> null
 }
 
 /**
- * What the relocation walk announces: the same three outcomes the notice under
- * it reports, in one word each. The damaged-relocator case is a failure here and
- * not a fourth word: from the run's point of view it is a walk that came back
- * with something the user has to act on, and the notice is where the action is
- * named.
+ * What a successful relocation walk announces: repaired, or nothing to do. Null
+ * for the two failures — the damaged relocator and the files the walk could not
+ * rewrite both name actions and lines, which is the dialog's shape. The
+ * damaged-relocator case is not a third success word for the same reason: from
+ * the run's point of view it is a walk that came back with something the user
+ * has to act on.
  */
-private fun relocateVerdict(result: PrefixPatcher.Result, text: Strings): String = when {
-    result.relocatorDamaged || result.errors.isNotEmpty() -> text.settings.relocateStateFailed
+private fun relocateVerdict(result: PrefixPatcher.Result, text: Strings): String? = when {
+    result.relocatorDamaged || result.errors.isNotEmpty() -> null
     result.changed -> text.settings.relocateStateRepaired
     else -> text.settings.relocateStateClean
 }
 
-/** What the self-test announces: the same split as the two above. */
+/** What a passing self-test announces: the failures are the dialog's. */
 private fun storageVerdict(status: StorageSelfTest.Status, text: Strings): String? =
     when (status) {
         is StorageSelfTest.Status.Finished -> if (status.passed) {
             text.settings.storageCheckPassed
         } else {
-            text.settings.storageCheckFailed
+            null
         }
 
         else -> null
