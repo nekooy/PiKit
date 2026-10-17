@@ -146,22 +146,24 @@ so it repackages when they change and cannot tell that they are out of date, and
 one is. `build-apks.py` therefore compares each image's timestamp (the oldest of
 `bootstrap.zip`, `overlay.zip`, `content.zip`, `revision.txt`, `content-revision.txt`)
 against `IMAGE_INPUTS` — the builder,
-the prefix rewriter, the relocator, the `dpkg` wrapper, the delete guard and the
-storage self-test — and rebuilds a flavour whose image predates one of them, naming
-the file that made it stale.
+the prefix rewriter, the pinned product versions, the relocator, the `dpkg` wrapper,
+the delete guard and the storage self-test — and rebuilds a flavour whose image
+predates one of them, naming the file that made it stale.
 
 The image carries one revision stamp per layer — `revision.txt` for the seed
 (`bootstrap.zip` + `overlay.zip`) and `content-revision.txt` for the content layer
 (`content.zip`) — and `BootstrapInstaller.ensureInstalled` compares them rather than
 contents, so an image built from a previous guard both ships the previous guard *and*
 leaves a device that already installed the earlier APK running its old unpacked
-runtime after the new APK is installed. That is why each digest covers its layer's
-archive *bytes* rather than the archives' sizes — the rewrite is length-preserving
-(both ids are ten characters), so a size digest could be moved by nothing at all — and
-why a build that reproduces byte-identical archives leaves the stamp alone. Which
-stamp moves decides what a device does: the seed's re-extracts the environment (a
-bootstrap or bundled-package change), the content one point-replaces pi, the extension
-and the guard in place (ARCHITECTURE §3).
+runtime after the new APK is installed. Which stamp moves decides what a device does:
+the content one point-replaces pi, the extension and the guard in place; the seed's
+re-extracts the environment, and it is kept rare on purpose. It covers the
+environment's *shape* — bootstrap tag, package names, the sources that assemble the
+seed — and not the packages' versions, because a cold build resolves the current apt
+index and version drift is what `pkg upgrade` is for. The content stamp hashes the
+archive's bytes (that layer carries no apt packages, so the bytes are stable), and the
+archives are written reproducibly — sorted entries, fixed member dates — so a rebuild
+that changed nothing moves no stamp (ARCHITECTURE §3).
 
 The list is checked rather than trusted — `image_input_manifest_errors()` reads the
 builder's own source and fails the build over a repository file it copies that the

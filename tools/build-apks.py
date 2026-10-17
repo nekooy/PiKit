@@ -127,6 +127,10 @@ IMAGE_INPUTS = (
     # and the rewrite pass.
     "tools/build-runtime-image.py",
     "tools/prefix_patch.py",
+    # The pinned product versions. Its own file because it is hashed into the content
+    # revision and *not* into the seed's: a pi bump must not rebuild a device's
+    # environment (see `compute_seed_revision`).
+    "tools/image-versions.json",
     # Copied into the overlay, by content, from this repository.
     "tools/pikit-relocate.js",
     "tools/pikit-dpkg.sh",
@@ -494,8 +498,9 @@ def image_input_manifest_errors() -> list[str]:
         errors.append(
             "build-runtime-image.py reads these, and IMAGE_INPUTS does not name them: "
             + ", ".join(unnamed)
-            + " — add them there (and to the builder's own revision digest), or an edit to "
-            "one of them ships an image built from the previous version"
+            + " — add them there (and to the revision that covers them: the seed's source "
+            "list or the content layer), or an edit to one of them ships an image built "
+            "from the previous version"
         )
     if absent:
         errors.append("IMAGE_INPUTS names files that do not exist: " + ", ".join(absent))
@@ -606,6 +611,11 @@ def run_tests() -> bool:
         # is: the chapters are simply absent, which is how they went missing.
         ("the vendored documentation", lambda: python_tool("test-vendor-trim.py")),
         ("the relocator", lambda: python_tool("test-relocate.py")),
+        # The revision stamps are what a device re-extracts over, and their coverage
+        # is invisible until a release re-extracts a few hundred megabytes on every
+        # phone: the seed stamp must ignore package versions, the content stamp must
+        # not ignore the product pins. Pinned here against the builder's functions.
+        ("the revision stamps", lambda: python_tool("test-image-revisions.py")),
         ("the manual's reflow", lambda: python_tool("reflow-manual.py", "--check")),
         ("the terminal banners", lambda: python_tool("check-locales.py")),
         # The provider table is a copy of pi's, and a copy is a thing that drifts:
