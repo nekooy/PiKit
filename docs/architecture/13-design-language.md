@@ -177,11 +177,14 @@ under a field, which the reader had to clear by typing. The condition notices st
 because a message that disappears after four seconds is the wrong shape for them: they
 name what to do about something that is still true.
 
-Two failure shapes are neither: a **dialog** for a failure whose text is longer than a
-pill (the model page's discovery problems, which are two paragraphs and are bounded and
-scrolled inside the dialog), and an in-sheet note for a field's own validation error
-(the web-search value sheet's "that is not JSON"), which belongs beside the box being
-typed into.
+Two failure shapes are neither: a **dialog** for a failure the reader has to read —
+an operation that came back wrong (the settings pages' "announced then dismissed":
+a title, the failure's own sentence in the error-tone frame, one OK — the About page's
+update check, and every run on the maintenance page, where the failing lines are
+bounded and scrolled inside the dialog and the OK is the run's own clear call), and
+the model page's discovery problems, which are two paragraphs for the same frame — and
+an in-sheet note for a field's own validation error (the web-search value sheet's
+"that is not JSON"), which belongs beside the box being typed into.
 
 `PiFeedback.kt`'s components stay the page's own vocabulary: `PiNotice`, `PiNote`,
 `PiBadge`, `PiStatePill`, `PiLoading`, `PiProgress`.
