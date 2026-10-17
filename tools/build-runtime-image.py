@@ -149,12 +149,20 @@ ROOT_PACKAGES = [
 
 PI_PACKAGE = "@earendil-works/pi-coding-agent"
 
-#: The pi release the image vendors. Pinned like BOOTSTRAP_TAG and
-#: WEB_ACCESS_VERSION, and for the same reason: an image is supposed to be the same
-#: image wherever it is built, and "latest" made a rebuild of one commit depend on
-#: the day it ran. It matters more here than for the other two — pi's RPC records,
-#: tool list and model catalogue are what this app parses, so a silent move changes
-#: behaviour with no diff to look at. `--pi-version` overrides it for one build.
+#: The pinned product versions the image vendors: pi and the web-access extension.
+#:
+#: Kept in their own file, out of this module's source, for one reason: this
+#: file's bytes are hashed into the *seed* revision (see
+#: [compute_seed_revision]) because it assembles the seed, and a pi bump is a
+#: content-layer change that must not rebuild anyone's environment. A pin that
+#: lived here would make every pi bump do exactly that.
+#:
+#: Pinned like BOOTSTRAP_TAG and for the same reason: an image is supposed to be
+#: the same image wherever it is built, and "latest" made a rebuild of one commit
+#: depend on the day it ran. It matters more for pi than for the rest — pi's RPC
+#: records, tool list and model catalogue are what this app parses, so a silent
+#: move changes behaviour with no diff to look at. `--pi-version` overrides the
+#: pi pin for one build.
 #:
 #: This is the *only* way pi moves on a user's device. There is deliberately no
 #: in-app update any more: it ran pi's own `npm install -g` into the live prefix, and
@@ -163,7 +171,10 @@ PI_PACKAGE = "@earendil-works/pi-coding-agent"
 #: failed outright (`Failed to load extension "…/pi-safety-guard.ts": Cannot find
 #: module 'jiti'`). A version that ships in the image cannot be half-installed.
 #: ARCHITECTURE §2 has the reasoning.
-PI_VERSION = "1.3.0"
+IMAGE_VERSIONS = json.loads(
+    (REPO_ROOT / "tools" / "image-versions.json").read_text(encoding="utf-8")
+)
+PI_VERSION = IMAGE_VERSIONS["pi"]
 
 PI_ENTRY_RELATIVE = f"lib/node_modules/{PI_PACKAGE}/dist/bundle/cli.js"
 
@@ -179,9 +190,10 @@ VENDORED_MARKER = "pikit-vendored.json"
 #: The web-access extension, bundled because the image cannot run
 #: `pi install npm:pi-web-access` — see `vendor_web_access`. Pinned deliberately:
 #: a new version changes the extension's tools and its config, so it is bumped
-#: with the image and by hand, exactly as BOOTSTRAP_TAG is.
+#: with the image and by hand, exactly as BOOTSTRAP_TAG is. The pin lives in
+#: `tools/image-versions.json`, beside pi's (see [IMAGE_VERSIONS]).
 WEB_ACCESS_PACKAGE = "pi-web-access"
-WEB_ACCESS_VERSION = "0.41.0"
+WEB_ACCESS_VERSION = IMAGE_VERSIONS["web_access"]
 
 #: Where the bundled extension lives inside the prefix, relative to `$PREFIX`.
 #: Its own `node_modules` is a separate tree from pi's so that npm cannot touch
@@ -1541,7 +1553,7 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     write_zip(overlay_root, assets_dir / "overlay.zip")
     write_zip(content_root, assets_dir / CONTENT_ARCHIVE)
 
-    seed_revision = compute_seed_revision(arch, assets_dir, resolved)
+    seed_revision = compute_seed_revision(arch, resolved)
     content_revision = compute_content_revision(arch, assets_dir, pi_version)
     (assets_dir / "revision.txt").write_text(seed_revision + "\n", encoding="utf-8")
     (assets_dir / "content-revision.txt").write_text(content_revision + "\n", encoding="utf-8")
@@ -1929,39 +1941,44 @@ def write_zip(root: Path, destination: Path) -> None:
             archive.writestr(info, path.read_bytes(), compress_type=compression)
 
 
-def compute_seed_revision(arch: str, assets_dir: Path, resolved: list[DebianPackage]) -> str:
+def compute_seed_revision(arch: str, resolved: list[DebianPackage]) -> str:
     """
-    A stable fingerprint of the seed layer, for the device's install stamp.
+    A stable fingerprint of the seed layer's *shape*, for the device's install stamp.
 
-    Everything in `bootstrap.zip` and `overlay.zip` has to be covered, or an
-    installed app keeps the old environment because the revision it reads back
-    still matches. The coverage is by *content* of the archives rather than by
-    name and size: the prefix rewrite is length-preserving by design (the
-    package id and the app id are both ten characters), so under a size digest
-    a change to `prefix_patch.py` rebuilt every archive with identical sizes
-    and moved nothing. A content hash has no such blind spot — and a build
-    that reproduces byte-identical archives leaves the digest alone, which is
-    exactly right: the unpacked tree would be identical too.
+    What it covers, and why each piece is here: the architecture, the bootstrap
+    the environment is built on ([BOOTSTRAP_TAG]), the *names* of the packages
+    the seed carries, and the three files whose content decides what the seed's
+    bytes are — the `dpkg` wrapper injected into the bootstrap, the prefix
+    rewriter, and this builder. A change to any of those makes an installed
+    environment the wrong environment.
 
-    That is also why the tools sources are not listed here any more. They used
-    to be hashed as "the files that decide the image's content", but their
-    effect is in the archives' bytes, and hashing the sources as well made a
-    comment-only edit to the builder re-extract a few hundred megabytes on
-    every device. The seed now moves when — and only when — what it ships
-    moves, which is the whole point of the seed/content split.
+    What it deliberately does **not** cover: the packages' versions, and the
+    archives' bytes. The seed evolves through `pkg upgrade` — that is the whole
+    update model — and the Termux repository moves ahead of whatever this image
+    pinned within weeks. A cold build resolves the *current* apt index, so
+    digesting versions or bytes made every release look like a different seed
+    and re-extracted a few hundred megabytes on every device, to hand over
+    versions `pkg upgrade` fetches anyway. The gap between what a device has and
+    what the image ships is not an error: it is what the settings page reports
+    as packages with updates available (ARCHITECTURE §3).
+
+    Which is also why the product pins live in `tools/image-versions.json`
+    instead of in this file: a pi bump is a content-layer change, and it must
+    not move this stamp.
     """
     digest = hashlib.sha256()
     digest.update(arch.encode())
     digest.update(BOOTSTRAP_TAG.encode())
-    # The pinned pi release is deliberately *not* in this digest: pi lives in
-    # the content layer, and a pi bump must not re-extract the environment.
-    for package in resolved:
-        digest.update(f"{package.name}={package.version};".encode())
-    for name in ("bootstrap.zip", "overlay.zip"):
-        path = assets_dir / name
-        if path.is_file():
-            digest.update(name.encode())
-            digest.update(sha256_of(path).encode())
+    for name in sorted({package.name for package in resolved}):
+        digest.update(f"{name};".encode())
+    for source in (
+        REPO_ROOT / "tools" / "pikit-dpkg.sh",
+        REPO_ROOT / "tools" / "prefix_patch.py",
+        REPO_ROOT / "tools" / "build-runtime-image.py",
+    ):
+        if source.is_file():
+            digest.update(source.name.encode())
+            digest.update(hashlib.sha256(source.read_bytes()).digest())
     return f"{arch}-{digest.hexdigest()[:16]}"
 
 
@@ -1971,9 +1988,12 @@ def compute_content_revision(arch: str, assets_dir: Path, pi_version: str) -> st
 
     Moves whenever anything under [CONTENT_PATHS] moves, which the archive's
     content hash covers completely; the pinned versions are named as well so
-    the digest records *what* it is as well as *which bytes*. A device
-    comparing this stamp replaces the content paths in place and leaves every
-    installed package alone — the update an app release actually needs.
+    the digest records *what* it is as well as *which bytes*. Unlike the seed
+    (see [compute_seed_revision]), the bytes are safe to hash here: this layer
+    carries no apt packages, so a repository that moved cannot change it under
+    the build. A device comparing this stamp replaces the content paths in
+    place and leaves every installed package alone — the update an app release
+    actually needs.
     """
     digest = hashlib.sha256()
     digest.update(arch.encode())

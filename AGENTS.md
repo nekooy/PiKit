@@ -35,11 +35,14 @@ about does not fail — it goes missing:
 - a new ABI or flavour → `VARIANTS` and `ABI_DIRS`, and `build-runtime-image.py`
   with them, because the assets a flavour packages are that script's output;
 - a new file the runtime image is built from → `IMAGE_INPUTS` there, which is what
-  makes an edit to the image's sources rebuild it. The device half is separate and
-  automatic: the revision stamps digest the archives' *bytes*, one per layer
-  (`compute_seed_revision`, `compute_content_revision`), so a source edit that
-  changes an archive's bytes always reaches the device and one that changes none
-  re-extracts nothing. The list is checked, not trusted: `image_input_manifest_errors()`
+  makes an edit to the image's sources rebuild it. The device half is separate: the
+  content revision digests the archive's *bytes* (that layer carries no apt packages,
+  so they are stable), and the seed revision covers the environment's *shape* —
+  bootstrap tag, package names, and the sources that assemble the seed
+  (`compute_seed_revision`, `compute_content_revision`); a new seed-deciding source
+  joins that function's list. Versions are deliberately in neither: a cold build
+  resolves the current apt index, and version drift is what `pkg upgrade` is for
+  (ARCHITECTURE §3). The list is checked, not trusted: `image_input_manifest_errors()`
   reads the builder's own source and fails the build over a file it copies that the
   list does not name;
 - a new prerequisite — a runtime, an SDK component, a version floor →
@@ -433,10 +436,11 @@ prompt, which billed the idle gap to a turn that had already finished.
   into it and the in-app manual is read on it, which is why `TerminalBanner.kt`
   pads its command column and the manual is written in short lines.
 - **`--refresh-images` rebuilds the image; pi is pinned, not refreshed.**
-  `PI_VERSION` in `tools/build-runtime-image.py` is the release the image vendors, and
-  the cache records which version it holds, so bumping the constant re-vendors on the
-  next build. `--pi-version <version>` overrides it for one build. A cache written
-  before that marker existed re-vendors once, which is not a bug.
+  The `pi` pin in `tools/image-versions.json` is the release the image vendors (the
+  builder reads it as `PI_VERSION`), and the cache records which version it holds, so
+  bumping the pin re-vendors on the next build. `--pi-version <version>` overrides it
+  for one build. A cache written before that marker existed re-vendors once, which is
+  not a bug.
 - **A stale APK comes from the Gradle build cache, not from packaging.**
   `build-apks.py` recognises the failure (an APK larger than its own entries) and
   retries that variant once with `--no-build-cache`; if it happens twice, delete

@@ -330,9 +330,11 @@ The image is therefore two layers, each with its own revision stamp:
 - The **seed** — `bootstrap.zip` plus `overlay.zip` — is the dpkg-managed environment:
   the bootstrap's packages, the layered `.deb`s, the merged ledger. It is unpacked once
   and from then on updated by `pkg upgrade`, which works because the ledger is complete
-  (above). Its revision moves only when its bytes move — a `BOOTSTRAP_TAG` bump or a
-  change to the bundled package set — and then, and only then, is the environment
-  rebuilt (with the capture and replay above, so the user's packages come back).
+  (above). Its revision covers the environment's *shape* — the bootstrap tag, the
+  package *names*, and the sources that assemble the seed — and moves only when that
+  shape changes: a `BOOTSTRAP_TAG` bump, a package added to or dropped from the bundled
+  set, a fix to the `dpkg` wrapper or the prefix rewriter. Package *versions* are
+  deliberately not in it; the paragraph below says why.
 - The **content layer** — `content.zip` — is what this app owns: pi and its dependency
   tree, the bundled web-access extension, the safety guard, the package relocator and
   the wrappers that reach them. Its revision moves on a pi bump, an extension bump or a
@@ -344,20 +346,29 @@ The image is therefore two layers, each with its own revision stamp:
 
 The two stamps live beside each other in `files/` (`runtime-revision.txt`,
 `content-revision.txt`) and are written seed-first, so a run that dies between them costs
-a content swap on the next launch rather than a second full unpack. Each digest covers
-its layer's archive **bytes** — which is what closed the hole a size digest had: the
-prefix rewrite is length-preserving, so a change to `prefix_patch.py` rebuilt every
-archive at identical sizes and moved nothing. A build that reproduces byte-identical
-archives leaves the stamp alone, and that is correct: the unpacked tree would be
-identical too. That makes the archives themselves load bearing for reproducibility, and
-they are written to be: sorted entries, fixed member dates. A writer that stamps each
-member with the moment of extraction was measured moving the seed digest between two
-consecutive builds of an unchanged seed — which would have re-extracted the environment
-on every device, for nothing. With fixed member dates, two consecutive full builds
-produce identical stamps for both layers and both architectures. The tool sources are not hashed into either digest any
-more, for the same reason a pi bump must not be an environment rebuild: their effect is
-in the archives' bytes, and hashing them as well made a comment-only edit to the builder
-re-extract a few hundred megabytes on every device.
+a content swap on the next launch rather than a second full unpack.
+
+The two digests cover different things, on purpose. The content stamp covers the
+archive's **bytes** plus the pinned versions: the layer carries no apt packages, so a
+repository that moved cannot change it under the build, and every byte in it is this
+app's business. The seed stamp covers the *shape* — architecture, `BOOTSTRAP_TAG`, the
+package names, and the sources that assemble the seed — and deliberately neither the
+packages' versions nor the archives' bytes. The seed evolves through `pkg upgrade`, and
+the Termux repository moves ahead of whatever the image pinned within weeks: a cold
+build resolves the *current* apt index, so digesting versions or bytes made every
+release look like a different seed and re-extracted a few hundred megabytes on every
+device, to hand over versions `pkg upgrade` fetches anyway. The gap between what a
+device's dpkg status says and what the image ships is therefore not an error to repair
+— it is what the settings page reports as packages with updates available.
+
+That is also why the product pins (pi's version, the extension's) live in
+`tools/image-versions.json` rather than in the builder's source: the builder's bytes go
+into the seed stamp because it assembles the seed, and a pi bump — a content-layer
+change — must not move it. The archives themselves are written reproducibly, sorted
+entries and fixed member dates, because a writer that stamps each member with the
+moment of extraction was measured moving a digest between two consecutive builds of an
+unchanged image; with fixed dates, two consecutive full builds produce identical stamps
+for both layers and both architectures.
 
 An install from before the split carries a stamp of the old shape, which matches
 neither: it takes the rebuild path once — the migration the capture and replay exists
