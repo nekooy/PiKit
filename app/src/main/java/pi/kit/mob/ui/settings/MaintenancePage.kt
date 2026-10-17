@@ -1,7 +1,5 @@
 package pi.kit.mob.ui.settings
 
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.env.PrefixPatcher
@@ -45,6 +42,7 @@ import pi.kit.mob.pi.CatalogueStatus
 import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.StorageSelfTest
+import pi.kit.mob.ui.components.LocalToastHost
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
@@ -128,7 +126,7 @@ internal fun MaintenancePage(
     val rebuildRunning by session.rebuildRunning.collectAsState()
     var confirmRebuild by remember { mutableStateOf(false) }
     val text = strings
-    val context = LocalContext.current
+    val toasts = LocalToastHost.current
 
     // The ledger is read when the page is opened rather than kept live: nothing
     // changes it while the user is looking at this page except a run they start
@@ -142,7 +140,7 @@ internal fun MaintenancePage(
     LaunchedEffect(catalogueStatus) {
         if (catalogueStatus !== seenCatalogue) {
             seenCatalogue = catalogueStatus
-            catalogueVerdict(catalogueStatus, text)?.let { announce(context, it) }
+            catalogueVerdict(catalogueStatus, text)?.let { toasts.show(it) }
         }
     }
     var seenRepair by remember { mutableStateOf(repair) }
@@ -150,14 +148,14 @@ internal fun MaintenancePage(
         val result = repair
         if (result != null && result !== seenRepair) {
             seenRepair = result
-            announce(context, relocateVerdict(result, text))
+            toasts.show(relocateVerdict(result, text))
         }
     }
     var seenStorage by remember { mutableStateOf(storageCheck) }
     LaunchedEffect(storageCheck) {
         if (storageCheck !== seenStorage) {
             seenStorage = storageCheck
-            storageVerdict(storageCheck, text)?.let { announce(context, it) }
+            storageVerdict(storageCheck, text)?.let { toasts.show(it) }
         }
     }
 
@@ -211,7 +209,7 @@ internal fun MaintenancePage(
                             running = catalogueStatus is CatalogueStatus.Running,
                             label = text.settings.modelListRefresh,
                             onAction = {
-                                announce(context, text.settings.modelListRefreshing)
+                                toasts.show(text.settings.modelListRefreshing)
                                 catalogue.start()
                             },
                         )
@@ -276,7 +274,7 @@ internal fun MaintenancePage(
                             running = repairRunning,
                             label = text.settings.relocateNow,
                             onAction = {
-                                announce(context, text.settings.relocateStateScanning)
+                                toasts.show(text.settings.relocateStateScanning)
                                 session.repairInstalledPackages()
                             },
                         )
@@ -323,7 +321,7 @@ internal fun MaintenancePage(
                             running = storageCheck is StorageSelfTest.Status.Running,
                             label = text.settings.storageCheckRun,
                             onAction = {
-                                announce(context, text.settings.storageCheckRunning)
+                                toasts.show(text.settings.storageCheckRunning)
                                 selfTest.start()
                             },
                         )
@@ -416,18 +414,6 @@ private fun RunControl(
             size = PiButtonSize.ExtraSmall,
         )
     }
-}
-
-/**
- * How a run says it started and what came back: two toasts, nothing in the row.
- *
- * The value column is the width the title and subtitle draw in — a status
- * sentence in it squeezed them to 182px while it held 464px (measured mid-walk)
- * — so the row never carries the run's words. See the class doc for the shape
- * this replaced.
- */
-private fun announce(context: Context, message: String) {
-    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }
 
 /**
