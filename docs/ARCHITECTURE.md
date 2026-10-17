@@ -19,7 +19,7 @@ of everything under `docs/`.
 | --- | --- | --- |
 | 1 | [The prefix cannot move](architecture/01-the-prefix.md) | Why `/data/data/pi.kit.mob/files/usr` is rewritten into every binary in place, and why `targetSdk` stays 28 |
 | 2 | [Talking to Pi](architecture/02-talking-to-pi.md) | `--mode rpc` instead of driving the TUI through a PTY, and the exact command line |
-| 3 | [What is baked in](architecture/03-what-is-baked-in.md) | What the runtime image carries, why `rg` and `fd` are not optional, why every version in it — pi's included — is pinned, what the delete list removes from the vendored trees and what it therefore ships |
+| 3 | [What is baked in](architecture/03-what-is-baked-in.md) | What the runtime image carries, why `rg` and `fd` are not optional, why every version in it — pi's included — is pinned, what the delete list removes from the vendored trees and what it therefore ships, and how its two layers update: the seed once, the app's own components point-replaced |
 | 4 | [`pkg install` without the user noticing](architecture/04-package-relocation.md) | Relocating a package on the tar stream, the two install paths, and the one file the rewrite must not touch |
 | 5 | [Storage, and why the first design could delete a phone](architecture/05-storage-and-safety.md) | The three layers — a scoped grant, a refusing delete, a guard inside the agent — and the self-test |
 | 6.1 | [Custom endpoints](architecture/06.1-custom-endpoints.md) | `models.json` merged and never replaced, the provider list, why the key is in `argv`, and the end-to-end run |
