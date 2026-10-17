@@ -82,6 +82,58 @@ internal fun missingImageMessage(abi: String, dir: String, bundled: List<String>
         }
     }
 
+/** The archive of the content layer, beside the seed archives under `assets/`. */
+internal const val CONTENT_ARCHIVE_NAME = "content.zip"
+
+/** The manifest the content archive carries: the paths it owns, one per line. */
+internal const val CONTENT_PATHS_ENTRY = "CONTENT-PATHS.txt"
+
+/** The seed archives and the content archive of one image, split apart. */
+internal data class ArchiveSplit(val seed: List<String>, val content: String?)
+
+/**
+ * Splits an asset directory listing into the seed archives and the content one.
+ *
+ * Pure, so the rule can be pinned on the JVM. The content archive is *named*,
+ * not inferred: it is the layer an app update replaces in place, and a listing
+ * that folded it into the seed would simply never update pi again — nothing
+ * else would look wrong. A listing without one (an image built before the
+ * split) carries no content layer, and the seed path unpacks it as before.
+ */
+internal fun splitArchiveNames(entries: List<String>): ArchiveSplit {
+    val zips = entries.filter { it.endsWith(".zip", ignoreCase = true) }
+    val content = zips.firstOrNull { it.equals(CONTENT_ARCHIVE_NAME, ignoreCase = true) }
+    return ArchiveSplit(seed = zips.filter { it != content }.sorted(), content = content)
+}
+
+/**
+ * The content layer's manifest: the prefix-relative roots the installer replaces.
+ *
+ * Pure, and validated here rather than at the swap — this list is exactly what
+ * gets deleted from the environment, so a manifest that names a traversal or a
+ * root inside another root has to fail before anything is touched. The inner
+ * root would be deleted along with its parent's old copy on the next update.
+ * Blank lines and `#` comments are the generated manifest's own.
+ */
+internal fun parseContentRoots(text: String): List<String> {
+    val roots = text.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.startsWith("#") }
+        .toList()
+    check(roots.isNotEmpty()) { "The content manifest names no paths" }
+    for (root in roots) {
+        val parts = root.split('/')
+        check(parts.all { it.isNotEmpty() && it != "." && it != ".." }) {
+            "Malformed content root: $root"
+        }
+    }
+    val sorted = roots.sorted()
+    for ((earlier, later) in sorted.zipWithNext()) {
+        check(!later.startsWith("$earlier/")) { "Content roots nest: $earlier contains $later" }
+    }
+    return roots
+}
+
 /**
  * Unpacks the Termux runtime that is baked into the APK's assets.
  *
@@ -89,6 +141,13 @@ internal fun missingImageMessage(abi: String, dir: String, bundled: List<String>
  * `$PREFIX`, plus a `SYMLINKS.txt` entry listing the symlinks that the zip
  * format itself cannot represent (Java's zip API has no symlink support, which
  * is why Termux uses this same side-car convention).
+ *
+ * It is also two *layers*, and the split is the update model. The seed
+ * (`bootstrap.zip`, `overlay.zip`) is the dpkg-managed environment — unpacked
+ * once, then evolved by `pkg upgrade`. The content layer (`content.zip`) is
+ * what this app owns — pi, the bundled extension, the safety guard, the
+ * relocator — and an app update replaces those paths in place ([replaceContent])
+ * without touching an installed package or re-extracting anything else.
  *
  * Extraction happens into a staging directory that is only renamed into place
  * once every archive has been applied, so an interrupted install can never
@@ -99,11 +158,22 @@ class BootstrapInstaller(private val context: Context) {
     private val env = TermuxEnv.of(context)
     private val assets = context.assets
 
+    /**
+     * What this APK carries for the running ABI: the seed archives, the content
+     * archive, and the revision of each layer.
+     *
+     * [archives] is the seed alone. The content archive is named apart because
+     * the two are applied differently: the seed is unpacked once, the content
+     * layer is replaced in place on every revision change (see
+     * [replaceContent]).
+     */
     data class Plan(
         val abi: String,
         val archives: List<String>,
+        val contentArchive: String?,
         val totalBytes: Long,
         val revision: String,
+        val contentRevision: String?,
     )
 
     sealed interface Progress {
@@ -121,30 +191,53 @@ class BootstrapInstaller(private val context: Context) {
         val abi = selectAbi(bundled)
         val dir = "$RUNTIME_ASSETS/$abi"
         val entries = runCatching { assets.list(dir)?.toList().orEmpty() }.getOrDefault(emptyList())
-        val archives = entries.filter { it.endsWith(".zip", ignoreCase = true) }.sorted()
-        check(archives.isNotEmpty()) { missingImageMessage(abi, dir, bundled) }
+        val split = splitArchiveNames(entries)
+        check(split.seed.isNotEmpty()) { missingImageMessage(abi, dir, bundled) }
 
-        val paths = archives.map { "$dir/$it" }
+        val paths = split.seed.map { "$dir/$it" }
+        val contentPath = split.content?.let { "$dir/$it" }
         val sizes = paths.map { assetSize(it) }
-        val total = if (sizes.any { it < 0 }) UNKNOWN_SIZE else sizes.sum()
+        val contentSize = contentPath?.let { assetSize(it) }
+        val measured = sizes + listOfNotNull(contentSize)
+        val total = if (measured.any { it < 0 }) UNKNOWN_SIZE else measured.sum()
 
-        val declaredRevision = entries
-            .firstOrNull { it.equals("revision.txt", ignoreCase = true) }
-            ?.let { name ->
-                runCatching {
-                    assets.open("$dir/$name").bufferedReader().use { it.readText().trim() }
-                }.getOrNull()
-            }
-            ?.takeIf { it.isNotEmpty() }
+        // Each layer carries its own stamp, written by the image build. The
+        // fallback below is for an image built without one: a revision derived
+        // from the archives' names and sizes, which is weak — an edit that did
+        // not change a length is invisible to it — but better than never
+        // re-installing anything.
+        fun declaredStamp(name: String): String? =
+            entries
+                .firstOrNull { it.equals(name, ignoreCase = true) }
+                ?.let { entry ->
+                    runCatching {
+                        assets.open("$dir/$entry").bufferedReader().use { it.readText().trim() }
+                    }.getOrNull()
+                }
+                ?.takeIf { it.isNotEmpty() }
 
-        val revision = declaredRevision ?: buildString {
+        val revision = declaredStamp("revision.txt") ?: buildString {
             append(abi)
-            archives.forEachIndexed { index, name ->
-                append('|').append(name).append(':').append(sizes[index])
+            paths.forEachIndexed { index, path ->
+                append('|').append(path.substringAfterLast('/')).append(':').append(sizes[index])
             }
         }
 
-        return Plan(abi = abi, archives = paths, totalBytes = total, revision = revision)
+        val contentRevision = contentPath?.let {
+            declaredStamp("content-revision.txt") ?: buildString {
+                append(abi)
+                append('|').append(CONTENT_ARCHIVE_NAME).append(':').append(contentSize)
+            }
+        }
+
+        return Plan(
+            abi = abi,
+            archives = paths,
+            contentArchive = contentPath,
+            totalBytes = total,
+            revision = revision,
+            contentRevision = contentRevision,
+        )
     }
 
     /**
@@ -156,6 +249,19 @@ class BootstrapInstaller(private val context: Context) {
             val plan = plan()
 
             if (env.isUpToDate(plan.revision)) {
+                // The seed is current, but the content layer may not be: an app
+                // update that moved only pi, the extension or the guard changes
+                // `content.zip` and leaves the environment's bytes untouched.
+                // Replacing those paths in place is seconds and touches no
+                // installed package; see [replaceContent].
+                if (!env.isContentUpToDate(plan.contentRevision)) {
+                    onProgress(Progress.Working(0f, "Updating components"))
+                    replaceContent(plan)
+                    // After the swap: the safety guard is copied out of the
+                    // content layer into `$HOME`, and that copy has to come
+                    // from the tree that is now in place.
+                    prepareHome()
+                }
                 // An up-to-date image still has to be finalised before it is
                 // used. A prefix installed by a PiKit that did not run the
                 // second stage itself — every revision up to the one that added
@@ -182,8 +288,13 @@ class BootstrapInstaller(private val context: Context) {
             var bytesDone = 0L
             var bytesReported = 0L
             var archiveIndex = 0
+            // The content layer is unpacked into the same staging tree here,
+            // because this path builds the whole prefix from nothing; it is
+            // only the app-update path ([replaceContent]) that applies it
+            // alone, in place.
+            val toExtract = plan.archives + listOfNotNull(plan.contentArchive)
 
-            for (archive in plan.archives) {
+            for (archive in toExtract) {
                 val label = archive.substringAfterLast('/')
                 onProgress(Progress.Working(fraction(bytesReported, plan.totalBytes), "Unpacking $label"))
 
@@ -209,7 +320,7 @@ class BootstrapInstaller(private val context: Context) {
                 archiveIndex++
                 onProgress(
                     Progress.Working(
-                        (archiveIndex.toFloat() / plan.archives.size * ACTIVATION_FRACTION)
+                        (archiveIndex.toFloat() / toExtract.size * ACTIVATION_FRACTION)
                             .coerceAtMost(ACTIVATION_FRACTION),
                         "Unpacked $label",
                     ),
@@ -235,7 +346,11 @@ class BootstrapInstaller(private val context: Context) {
             // depends on that.
             finaliseBootstrap()
 
+            // Seed stamp first, content stamp second: a run that dies between
+            // the two is a content swap on the next launch — seconds — rather
+            // than a second full unpack. [TermuxEnv.contentStampFile] says why.
             env.stampFile.writeText(plan.revision + "\n")
+            plan.contentRevision?.let { env.contentStampFile.writeText(it + "\n") }
 
             onProgress(Progress.Done(plan.revision))
             plan
@@ -398,6 +513,75 @@ class BootstrapInstaller(private val context: Context) {
                 "(${env.stagingPrefix} -> ${env.prefix})"
         }
         chmodPrivate(env.prefix)
+    }
+
+    // ------------------------------------------------------- content layer
+
+    /**
+     * Replaces the content layer — pi, the extension, the guard, the relocator
+     * — in place, and leaves the environment alone.
+     *
+     * Everything under the roots the archive's own manifest names is deleted
+     * and re-created from `content.zip`; nothing else in the prefix is touched,
+     * so every installed package keeps its files and dpkg keeps its ledger.
+     * That is the whole point of the seed/content split: an app update moves
+     * what this app owns, and only that. It is what makes an update take
+     * seconds instead of re-extracting a few hundred megabytes of environment
+     * the user has since added packages to.
+     *
+     * The swap is per-root and the stamp is written last, so an interrupted
+     * update is redone in full on the next launch instead of being left half
+     * applied: each root is either its old self, missing, or the new tree, and
+     * the stamp being stale is what repairs the missing case — from the APK,
+     * which is still the authority. A root is replaced wholesale (deleted,
+     * then moved in) so a file a new pi version *dropped* cannot survive the
+     * update inside a stale directory.
+     */
+    private suspend fun replaceContent(plan: Plan) {
+        val archive = plan.contentArchive ?: return
+
+        if (env.contentStagingPrefix.exists()) {
+            // A previous attempt that was killed mid-swap leaves debris here;
+            // the archive it came from is re-extracted either way.
+            val cleared = SafeDelete.recursively(env.contentStagingPrefix, env.filesDir)
+            if (cleared is SafeDelete.Outcome.Refused) {
+                error("Could not clear the content staging directory: ${cleared.reason}")
+            }
+        }
+        env.contentStagingPrefix.mkdirsOrThrow()
+        chmodPrivate(env.contentStagingPrefix)
+
+        val roots = extractArchive(
+            assetPath = archive,
+            staging = env.contentStagingPrefix,
+            onBytes = { },
+        )
+        // Without this, a content archive whose manifest is missing would
+        // replace nothing, write the stamp anyway, and never be retried.
+        check(roots.isNotEmpty()) { "The content archive carries no manifest of the paths it owns" }
+
+        for (root in roots) {
+            val staged = File(env.contentStagingPrefix, root)
+            check(staged.exists()) { "The content archive does not carry $root" }
+            val current = File(env.prefix, root)
+            if (current.exists()) {
+                val removed = SafeDelete.recursively(current, env.filesDir)
+                if (removed is SafeDelete.Outcome.Refused) {
+                    error("Could not replace $root: ${removed.reason}")
+                }
+            }
+            current.parentFile?.mkdirsOrThrow()
+            check(staged.renameTo(current)) {
+                "Could not move $root into the environment " +
+                    "(${staged.absolutePath} -> ${current.absolutePath})"
+            }
+        }
+
+        val cleared = SafeDelete.recursively(env.contentStagingPrefix, env.filesDir)
+        if (cleared is SafeDelete.Outcome.Refused) {
+            error("Could not clear the content staging directory: ${cleared.reason}")
+        }
+        env.contentStampFile.writeText((plan.contentRevision ?: "") + "\n")
     }
 
     // ------------------------------------------------ user packages across it
@@ -845,13 +1029,20 @@ class BootstrapInstaller(private val context: Context) {
      * Streams one archive out of assets. Symlinks are collected first and
      * created after the archive has been fully extracted, matching Termux's
      * own installer.
+     *
+     * Returns the content roots the archive's manifest names ([CONTENT_PATHS_ENTRY]),
+     * or an empty list for an archive that carries none — which is what a seed
+     * archive is. The manifest is consumed here and never lands in the tree,
+     * like `SYMLINKS.txt`.
      */
     private suspend fun extractArchive(
         assetPath: String,
         staging: File,
         onBytes: (Long) -> Unit,
-    ) {
+    ): List<String> {
         val symlinks = ArrayList<Pair<String, String>>(64)
+        val contentRoots = ArrayList<String>()
+        var sawManifest = false
         val buffer = ByteArray(64 * 1024)
 
         assets.open(assetPath).use { raw ->
@@ -861,7 +1052,7 @@ class BootstrapInstaller(private val context: Context) {
                     val entry = zip.nextEntry ?: break
                     val name = entry.name
 
-                    if (name == SYMLINKS_ENTRY) {
+                    if (name == SYMLINKS_ENTRY || name == CONTENT_PATHS_ENTRY) {
                         // Read the side-car without letting anything close it.
                         //
                         // Kotlin's `Reader.forEachLine` is implemented on top of
@@ -874,6 +1065,11 @@ class BootstrapInstaller(private val context: Context) {
                         val reader = BufferedReader(InputStreamReader(zip, Charsets.UTF_8))
                         while (true) {
                             val line = reader.readLine() ?: break
+                            if (name == CONTENT_PATHS_ENTRY) {
+                                sawManifest = true
+                                contentRoots += line
+                                continue
+                            }
                             if (line.isBlank()) continue
                             val parts = line.split(SYMLINK_SEPARATOR)
                             check(parts.size == 2) { "Malformed symlink line: $line" }
@@ -915,6 +1111,8 @@ class BootstrapInstaller(private val context: Context) {
             File(linkPath).parentFile?.mkdirsOrThrow()
             Os.symlink(linkTarget, linkPath)
         }
+
+        return if (sawManifest) parseContentRoots(contentRoots.joinToString("\n")) else emptyList()
     }
 
     /** Resolves an archive entry, rejecting path traversal (zip-slip). */

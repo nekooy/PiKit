@@ -93,14 +93,21 @@ STALE_APK_MARKERS = (
 #: carries no match falls back to retrying every requested variant.
 STALE_TASK_RE = re.compile(r"verifyApkPackaging(Arm64|X64)(Debug|Release)")
 
-#: The three files a complete runtime image directory holds.
+#: The files a complete runtime image directory holds — one stamp per layer.
 #:
-#: `revision.txt` is part of the set rather than a nicety: it is what the app compares an
-#: installed runtime against (`BootstrapInstaller.ensureInstalled`), and an image without it
-#: falls back to a revision derived from the archives' *names and sizes* — which cannot see
-#: an edit that did not change a length. An image that lacks it is therefore out of date by
+#: `revision.txt` (the seed) and `content-revision.txt` (the content layer) are part of the
+#: set rather than niceties: they are what the app compares an installed runtime against
+#: (`BootstrapInstaller.ensureInstalled`), and an image without them falls back to a
+#: revision derived from the archives' *names and sizes* — which cannot see an edit that
+#: did not change a length. An image that lacks one is therefore out of date by
 #: definition, and is rebuilt.
-IMAGE_FILES = ("bootstrap.zip", "overlay.zip", "revision.txt")
+IMAGE_FILES = (
+    "bootstrap.zip",
+    "overlay.zip",
+    "content.zip",
+    "revision.txt",
+    "content-revision.txt",
+)
 
 #: Every repository file that decides what a runtime image contains.
 #:
@@ -109,7 +116,7 @@ IMAGE_FILES = ("bootstrap.zip", "overlay.zip", "revision.txt")
 #: of date, and `verify-runtime-image.py` checks that an image is self-consistent, not that
 #: it is current. Left alone, an edit to the agent's delete guard, the relocator or the
 #: `dpkg` wrapper ships the *previous* one — and the failure is worse than a stale file:
-#: the image's `revision.txt` does not move either, so a device that already installed the
+#: the image's revision stamps do not move either, so a device that already installed the
 #: previous APK keeps its old unpacked runtime *after* installing the new APK.
 #:
 #: Kept by hand, like [VARIANTS] and [ABI_DIRS], and it is checked rather than trusted:

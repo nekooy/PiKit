@@ -9,7 +9,7 @@ the index of every document. This file is the practical part.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 474 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 483 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -34,11 +34,14 @@ about does not fail — it goes missing:
   packaged, so `check-release-math.py` is called by `main()` after `build_apks()`;
 - a new ABI or flavour → `VARIANTS` and `ABI_DIRS`, and `build-runtime-image.py`
   with them, because the assets a flavour packages are that script's output;
-- a new file the runtime image is built from → `IMAGE_INPUTS` there **and** the
-  digest in `build-runtime-image.py`, which are what make an edit to the image's
-  sources rebuild it and make a device unpack the result. The list is checked, not
-  trusted: `image_input_manifest_errors()` reads the builder's own source and
-  fails the build over a file it copies that the list does not name;
+- a new file the runtime image is built from → `IMAGE_INPUTS` there, which is what
+  makes an edit to the image's sources rebuild it. The device half is separate and
+  automatic: the revision stamps digest the archives' *bytes*, one per layer
+  (`compute_seed_revision`, `compute_content_revision`), so a source edit that
+  changes an archive's bytes always reaches the device and one that changes none
+  re-extracts nothing. The list is checked, not trusted: `image_input_manifest_errors()`
+  reads the builder's own source and fails the build over a file it copies that the
+  list does not name;
 - a new prerequisite — a runtime, an SDK component, a version floor →
   `check_prerequisites()`, so it is reported by name instead of exploding inside
   Gradle (and `image_builder_prerequisites()` for the two only an image build
@@ -255,8 +258,9 @@ the others is a guard that either refuses the agent's real work or allows a dele
 `$HOME/.pi`; `tools/test-safety-guard.mjs` is the command that says which. The guard
 also lives inside the runtime image, so an edit to it has to reach the image:
 `python tools/build-apks.py` does that on its own (`IMAGE_INPUTS` — an image older than
-one of the files it is built from is rebuilt, and the image revision covers the file's
-content), and an APK built without it ships the previous guard.
+one of the files it is built from is rebuilt, and the content-layer revision digest
+covers the archive that carries the guard), and an APK built without it ships the
+previous guard.
 
 ## Commits — commit finished work yourself, push only when asked
 

@@ -2,8 +2,8 @@
 """
 Builds the offline runtime image that PiKit unpacks on first launch.
 
-The image is assembled from four sources and shipped inside the APK as two zip
-archives per CPU architecture:
+The image is assembled from four sources and shipped inside the APK as three
+zip archives per CPU architecture:
 
   1. The official Termux bootstrap, taken verbatim from termux-packages.
   2. Termux .deb packages for Node.js, npm, ripgrep and fd (plus their
@@ -13,7 +13,23 @@ archives per CPU architecture:
   4. A small set of generated wrapper scripts.
 
 Everything is written into `app/src/<flavor>/assets/runtime/<abi>/` as
-`bootstrap.zip`, `overlay.zip` and `revision.txt`.
+`bootstrap.zip`, `overlay.zip`, `content.zip` and one revision stamp per
+layer (`revision.txt`, `content-revision.txt`).
+
+The three archives are two layers, and the split is the update model:
+
+  * The **seed** (`bootstrap.zip` + `overlay.zip`) is the dpkg-managed
+    environment — the bootstrap's 83 registered packages, the layered .debs
+    and the merged dpkg ledger. It is unpacked once and then evolves the
+    Termux way, through `pkg upgrade`; an app update that does not change
+    these bytes never re-extracts them.
+  * The **content layer** (`content.zip`) is what this app owns: pi, the
+    web-access extension, the safety guard, the relocator and their wrappers
+    ([CONTENT_PATHS]). An app update replaces these paths point-wise in
+    place, in seconds, without touching a single installed package.
+
+Each layer carries its own revision digest so one can move without the
+other; see [compute_seed_revision] and [compute_content_revision].
 
 Why the prefix is relocated by rewriting, not by recompiling
 ------------------------------------------------------------
@@ -211,6 +227,34 @@ WEB_ACCESS_RUNTIME_DEPS = {
 #: without the extension (an older one, or a build that dropped it) is a missing
 #: file the app can report instead of a path it assumes exists.
 WEB_ACCESS_METADATA = "share/pikit/web-access.json"
+
+#: The content layer: the archive of it, the manifest that says what it owns,
+#: and the paths it owns.
+#:
+#: `CONTENT_PATHS` is the update boundary. Everything here is written by this
+#: build rather than by a dpkg package — pi and its dependencies, the bundled
+#: web-access extension, the safety guard, the package relocator and the
+#: wrappers that reach them — so an app update may replace exactly these paths
+#: and must not touch anything else in the prefix: what lives beside them is a
+#: registered package's file, and dpkg is the only thing allowed to move those.
+#:
+#: Roots, not files: a root is replaced wholesale (deleted and re-created from
+#: the archive), so a file a new pi version *drops* cannot survive the update
+#: inside an old directory. The roots must not nest — one root inside another
+#: would be deleted by its parent's replacement — which [split_content_layer]
+#: checks rather than assumes.
+CONTENT_ARCHIVE = "content.zip"
+CONTENT_PATHS_ENTRY = "CONTENT-PATHS.txt"
+CONTENT_PATHS = (
+    "bin/pi",
+    "bin/pikit-relocate",
+    "bin/pikit-storage-check",
+    "etc/apt/apt.conf.d/99pikit-relocate",
+    "lib/node_modules/@earendil-works",
+    "lib/node_modules/pikit-extensions",
+    "libexec/pikit",
+    "share/pikit",
+)
 
 #: The check `verify_web_access` runs, so a tree that is missing something the
 #: extension loads fails *this* build rather than every fetch on a phone.
@@ -1446,11 +1490,22 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     extra_members, replaces_members = bootstrap_dpkg_wrapper()
     log("staged the dpkg wrapper for the bootstrap archive")
 
-    # 5. relocate the prefix ------------------------------------------------
+    # 5. split the content layer --------------------------------------------
+    # Before the rewrite below, so both halves — and their `SYMLINKS.txt`
+    # side-cars with them — are relocated by the same pass. The seed keeps
+    # every registered package's file and the dpkg ledger; everything this app
+    # owns moves into `content_root`, which ships as its own archive with its
+    # own revision and is what an app update replaces point-wise.
+    content_root = staging / "content"
+    split_content_layer(overlay_root, content_root)
+
+    # 6. relocate the prefix ------------------------------------------------
     # The zip cannot carry symlinks, so they are recorded the way Termux does.
     # This has to happen *before* the rewrite so the recorded targets are
-    # rewritten as well.
-    write_symlinks_txt(overlay_root, symlinks)
+    # rewritten as well. Split between the two trees by whether the link's
+    # path belongs to the content layer.
+    write_symlinks_txt(overlay_root, [s for s in symlinks if not under_content(s[1])])
+    write_symlinks_txt(content_root, [s for s in symlinks if under_content(s[1])])
 
     # The packages above are compiled for /data/data/com.termux/files/usr. The
     # whole tree is rewritten to the application id PiKit actually ships
@@ -1460,7 +1515,11 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     log(f"  overlay: {overlay_stats.note()}")
     if overlay_stats.errors:
         raise SystemExit(f"overlay patch errors: {overlay_stats.errors[:5]}")
-    verify_relocator(overlay_root)
+    content_stats = prefix_patch.patch_tree(content_root, APP_ID)
+    log(f"  content: {content_stats.note()}")
+    if content_stats.errors:
+        raise SystemExit(f"content patch errors: {content_stats.errors[:5]}")
+    verify_relocator(content_root)
 
     # The bootstrap ships as an opaque blob, so it is rewritten member-wise,
     # including its SYMLINKS.txt. Doing it here rather than on the device means
@@ -1480,13 +1539,17 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
         raise SystemExit(f"bootstrap patch errors: {bootstrap_stats.errors[:5]}")
 
     write_zip(overlay_root, assets_dir / "overlay.zip")
+    write_zip(content_root, assets_dir / CONTENT_ARCHIVE)
 
-    revision = compute_revision(arch, assets_dir, resolved, pi_version)
-    (assets_dir / "revision.txt").write_text(revision + "\n", encoding="utf-8")
+    seed_revision = compute_seed_revision(arch, assets_dir, resolved)
+    content_revision = compute_content_revision(arch, assets_dir, pi_version)
+    (assets_dir / "revision.txt").write_text(seed_revision + "\n", encoding="utf-8")
+    (assets_dir / "content-revision.txt").write_text(content_revision + "\n", encoding="utf-8")
 
     log(f"bootstrap.zip {(assets_dir / 'bootstrap.zip').stat().st_size / 1e6:.1f} MB")
     log(f"overlay.zip   {(assets_dir / 'overlay.zip').stat().st_size / 1e6:.1f} MB")
-    log(f"revision      {revision}")
+    log(f"{CONTENT_ARCHIVE:<13} {(assets_dir / CONTENT_ARCHIVE).stat().st_size / 1e6:.1f} MB")
+    log(f"revision      {seed_revision} (seed), {content_revision} (content)")
 
     summary = {
         "arch": arch,
@@ -1497,7 +1560,9 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
         "packages": {p.name: p.version for p in resolved},
         "pi_version": pi_version,
         "web_access": {"name": WEB_ACCESS_PACKAGE, "version": WEB_ACCESS_VERSION},
-        "revision": revision,
+        "revision": seed_revision,
+        "content_revision": content_revision,
+        "content_paths": list(CONTENT_PATHS),
         "symlinks": len(symlinks),
     }
     (assets_dir / "build-metadata.json").write_text(
@@ -1505,8 +1570,8 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     )
 
     # The staging tree is ~240 MB per architecture of extracted package contents,
-    # and nothing reads it once the archives are written — `compute_revision` reads
-    # only the archives and the hand-written tools. It used to be left behind and
+    # and nothing reads it once the archives are written — the revision digests
+    # read only the archives. It used to be left behind and
     # deleted at the *start* of the next build, so two architectures meant a
     # permanent ~480 MB under `.runtime-build/staging` plus 22,000 file creations
     # per rebuild. `--keep-staging` is what keeps it now, for inspecting a build.
@@ -1641,7 +1706,7 @@ def bootstrap_dpkg_wrapper() -> tuple[dict[str, tuple[bytes, int]], dict[str, st
     )
 
 
-def verify_relocator(overlay_root: Path) -> None:
+def verify_relocator(content_root: Path) -> None:
     """
     Runs the packed relocator's own `--selfcheck`, and fails the build if it fails.
 
@@ -1656,12 +1721,12 @@ def verify_relocator(overlay_root: Path) -> None:
     `verify-runtime-image.py`, which only asks whether any member still names the
     upstream id. Running the packed file is the check that fails.
 
-    It runs on the *patched* overlay, not on `tools/pikit-relocate.js`, so it
-    covers the copy that ships.
+    It runs on the *patched* content tree, not on `tools/pikit-relocate.js`, so
+    it covers the copy that ships.
     """
-    script = overlay_root / "libexec" / "pikit" / "relocate.js"
+    script = content_root / "libexec" / "pikit" / "relocate.js"
     if not script.is_file():
-        raise SystemExit(f"the relocator is missing from the overlay: {script}")
+        raise SystemExit(f"the relocator is missing from the content layer: {script}")
     node = shutil.which("node")
     if node is None:
         raise SystemExit(
@@ -1760,6 +1825,52 @@ def install_storage_self_test(overlay_root: Path) -> None:
 
 
 
+def under_content(relative: str) -> bool:
+    """True when a prefix-relative path belongs to the content layer."""
+    return any(relative == root or relative.startswith(root + "/") for root in CONTENT_PATHS)
+
+
+def split_content_layer(overlay_root: Path, content_root: Path) -> None:
+    """
+    Moves [CONTENT_PATHS] out of the seed tree into the content tree.
+
+    Roots, not individual files: the installer replaces a root wholesale, so a
+    file a new pi version drops cannot survive the update inside an old
+    directory. Two properties are checked here rather than assumed, because
+    both fail only on the device, where the mistake cannot be seen: a declared
+    root that is not in the tree (the swap would find nothing to move in), and
+    roots that nest (the installer would delete the inner root along with the
+    outer one's old copy).
+
+    The manifest travels inside the archive ([CONTENT_PATHS_ENTRY]), so the
+    installer swaps by what the build says it owns rather than by a list that
+    could drift in the app.
+    """
+    roots = sorted(CONTENT_PATHS)
+    for earlier, later in zip(roots, roots[1:]):
+        if later.startswith(earlier + "/"):
+            raise SystemExit(f"content roots nest: {earlier} contains {later}")
+
+    content_root.mkdir(parents=True, exist_ok=True)
+    for relative in roots:
+        source = overlay_root / relative
+        if not source.exists():
+            raise SystemExit(f"content root {relative} is not in the tree")
+        destination = content_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(destination))
+
+    (content_root / CONTENT_PATHS_ENTRY).write_text(
+        "# The paths this archive owns and the installer replaces, one per line,\n"
+        "# relative to $PREFIX. Generated by tools/build-runtime-image.py from\n"
+        "# its CONTENT_PATHS.\n"
+        + "".join(f"{name}\n" for name in roots),
+        encoding="utf-8",
+        newline="\n",
+    )
+    log(f"split {len(roots)} content root(s) into the content layer")
+
+
 def write_symlinks_txt(root: Path, symlinks: list[tuple[str, str]]) -> None:
     """
     Writes the `target←path` side-car the on-device installer reads.
@@ -1777,18 +1888,29 @@ def write_symlinks_txt(root: Path, symlinks: list[tuple[str, str]]) -> None:
     log(f"recorded {len(lines)} symlinks")
 
 
+#: The timestamp every zip member carries.
+#:
+#: The archives have to be reproducible: the revision digests cover their
+#: *bytes*, so a rebuild that changed nothing must not move a stamp and make
+#: every device re-extract the seed. `zipfile` defaults each member's date to
+#: the file's mtime, which is the moment of extraction and different on every
+#: build — measured as two consecutive builds whose seed digest moved while
+#: nothing in the seed had changed. `prefix_patch` already fixes its own
+#: members' dates for the same reason.
+ZIP_DATE_TIME = (1980, 1, 1, 0, 0, 0)
+
+
 def write_zip(root: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for path in sorted(root.rglob("*")):
             relative = path.relative_to(root).as_posix()
-            if relative == "SYMLINKS.txt":
-                archive.write(path, relative)
-                continue
             if path.is_dir():
                 # Record empty directories so `tmp/` survives the round trip.
                 if not any(path.iterdir()):
-                    archive.writestr(relative + "/", b"")
+                    info = zipfile.ZipInfo(relative + "/", date_time=ZIP_DATE_TIME)
+                    info.external_attr = (0o40755 << 16) | 0x10
+                    archive.writestr(info, b"", compress_type=zipfile.ZIP_STORED)
                 continue
             # Store already-compressed payloads rather than recompressing them.
             compression = (
@@ -1802,70 +1924,70 @@ def write_zip(root: Path, destination: Path) -> None:
             # not need (npm's `.bin` shims, left behind by copy_hoisted_dependencies).
             if path.is_symlink() and not path.exists():
                 continue
-            archive.write(path, relative, compress_type=compression)
+            info = zipfile.ZipInfo(relative, date_time=ZIP_DATE_TIME)
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, path.read_bytes(), compress_type=compression)
 
 
-def compute_revision(
-    arch: str,
-    assets_dir: Path,
-    resolved: list[DebianPackage],
-    pi_version: str,
-) -> str:
+def compute_seed_revision(arch: str, assets_dir: Path, resolved: list[DebianPackage]) -> str:
     """
-    A stable fingerprint so the app can detect that its image changed.
+    A stable fingerprint of the seed layer, for the device's install stamp.
 
-    Everything that ends up in the image has to be covered, or an installed app
-    keeps the old runtime because the revision it reads back still matches. That
-    is not hypothetical: the relocator and the agent safety guard are copied into
-    the overlay from `tools/`, so a change to either of them would otherwise ship
-    invisibly — the APK would carry the new file and the device would never
-    unpack it, because `ensureInstalled` compares revisions, not contents.
+    Everything in `bootstrap.zip` and `overlay.zip` has to be covered, or an
+    installed app keeps the old environment because the revision it reads back
+    still matches. The coverage is by *content* of the archives rather than by
+    name and size: the prefix rewrite is length-preserving by design (the
+    package id and the app id are both ten characters), so under a size digest
+    a change to `prefix_patch.py` rebuilt every archive with identical sizes
+    and moved nothing. A content hash has no such blind spot — and a build
+    that reproduces byte-identical archives leaves the digest alone, which is
+    exactly right: the unpacked tree would be identical too.
 
-    The files that *decide* the image's content are covered by content too, and
-    that is a separate list from "the files inside it": the rewrite is
-    length-preserving by design (the package id and the app id are both ten
-    characters), so a change to `prefix_patch.py` can rebuild every archive with
-    **identical sizes** — which is all the archive digest below can see. The
-    builder's own code is in the same list for the same reason, and it is the
-    conservative direction to be wrong in: an edit there means the APK's image is
-    not the one a device already unpacked, and one extra unpack is cheaper than a
-    runtime that silently stays old.
+    That is also why the tools sources are not listed here any more. They used
+    to be hashed as "the files that decide the image's content", but their
+    effect is in the archives' bytes, and hashing the sources as well made a
+    comment-only edit to the builder re-extract a few hundred megabytes on
+    every device. The seed now moves when — and only when — what it ships
+    moves, which is the whole point of the seed/content split.
     """
     digest = hashlib.sha256()
     digest.update(arch.encode())
     digest.update(BOOTSTRAP_TAG.encode())
-    # The pinned pi release, not "latest": the pin is what makes two builds of one
-    # commit the same image. The digest used to take the literal string "latest" when
-    # no version was pinned, which meant bumping pi moved the *archives* and so the
-    # digest below — but only because npm had downloaded something new, which is the
-    # accident this pin removes.
-    digest.update(pi_version.encode())
-    # The bundled extension's version, so bumping it reinstalls the runtime: its
-    # files are inside the archives the size-and-name digest below already covers,
-    # but a *removal* would not change any other input.
-    digest.update(WEB_ACCESS_VERSION.encode())
+    # The pinned pi release is deliberately *not* in this digest: pi lives in
+    # the content layer, and a pi bump must not re-extract the environment.
     for package in resolved:
         digest.update(f"{package.name}={package.version};".encode())
     for name in ("bootstrap.zip", "overlay.zip"):
         path = assets_dir / name
         if path.is_file():
             digest.update(name.encode())
-            digest.update(str(path.stat().st_size).encode())
-    # The hand-written pieces of the image, by content rather than by size: these
-    # are small text files and a one-character fix has to move the revision. The
-    # last two are not *in* the image — one is the rewriter, the other is this
-    # file — and are here because they decide what the rest of it contains.
-    for source in (
-        REPO_ROOT / "tools" / "pikit-relocate.js",
-        REPO_ROOT / "tools" / "pikit-dpkg.sh",
-        REPO_ROOT / "tools" / "pi-safety-guard.ts",
-        REPO_ROOT / "tools" / "storage-self-test.sh",
-        REPO_ROOT / "tools" / "prefix_patch.py",
-        REPO_ROOT / "tools" / "build-runtime-image.py",
-    ):
-        if source.is_file():
-            digest.update(source.name.encode())
-            digest.update(hashlib.sha256(source.read_bytes()).digest())
+            digest.update(sha256_of(path).encode())
+    return f"{arch}-{digest.hexdigest()[:16]}"
+
+
+def compute_content_revision(arch: str, assets_dir: Path, pi_version: str) -> str:
+    """
+    A stable fingerprint of the content layer — pi, the extension, the guard.
+
+    Moves whenever anything under [CONTENT_PATHS] moves, which the archive's
+    content hash covers completely; the pinned versions are named as well so
+    the digest records *what* it is as well as *which bytes*. A device
+    comparing this stamp replaces the content paths in place and leaves every
+    installed package alone — the update an app release actually needs.
+    """
+    digest = hashlib.sha256()
+    digest.update(arch.encode())
+    # The pinned releases, not "latest": the pins are what make two builds of
+    # one commit the same image. The digest used to take the literal string
+    # "latest" when no version was pinned, which meant bumping pi moved the
+    # *archives* and so the digest — but only because npm had downloaded
+    # something new, which is the accident this pin removes.
+    digest.update(pi_version.encode())
+    digest.update(WEB_ACCESS_VERSION.encode())
+    path = assets_dir / CONTENT_ARCHIVE
+    if path.is_file():
+        digest.update(CONTENT_ARCHIVE.encode())
+        digest.update(sha256_of(path).encode())
     return f"{arch}-{digest.hexdigest()[:16]}"
 
 

@@ -315,4 +315,54 @@ prompts and `dpkg -V`, never for install or remove.
 package has a file list, and every path a `.list` claims is in the image — the check that
 catches a list the relocation missed or a package whose files went missing.
 
+## The environment is seeded once; the app's own components are point-replaced
+
+One revision digest used to cover the whole image, so a pi bump — or a fix to the safety
+guard — re-extracted a few hundred megabytes of environment on every device that updated,
+in a wipe of `$PREFIX` that only the capture-and-replay above kept from taking the user's
+packages with it. The rebuild took tens of seconds and churned every file the user's
+`pkg install` had added, to replace one JavaScript tree.
+
+The fix is the shape Termux itself has: an environment that is unpacked **once** and then
+evolves through its own package manager, and app-owned files that are replaced *in place*.
+The image is therefore two layers, each with its own revision stamp:
+
+- The **seed** — `bootstrap.zip` plus `overlay.zip` — is the dpkg-managed environment:
+  the bootstrap's packages, the layered `.deb`s, the merged ledger. It is unpacked once
+  and from then on updated by `pkg upgrade`, which works because the ledger is complete
+  (above). Its revision moves only when its bytes move — a `BOOTSTRAP_TAG` bump or a
+  change to the bundled package set — and then, and only then, is the environment
+  rebuilt (with the capture and replay above, so the user's packages come back).
+- The **content layer** — `content.zip` — is what this app owns: pi and its dependency
+  tree, the bundled web-access extension, the safety guard, the package relocator and
+  the wrappers that reach them. Its revision moves on a pi bump, an extension bump or a
+  guard fix, and the update replaces exactly the paths its manifest
+  (`CONTENT-PATHS.txt`, inside the archive) names: each root is deleted and re-created
+  from the archive, so a file a new pi version *dropped* cannot survive the update
+  inside a stale directory. No installed package is touched, no dpkg transaction runs,
+  and the swap of one archive is seconds rather than the seed's minutes.
+
+The two stamps live beside each other in `files/` (`runtime-revision.txt`,
+`content-revision.txt`) and are written seed-first, so a run that dies between them costs
+a content swap on the next launch rather than a second full unpack. Each digest covers
+its layer's archive **bytes** — which is what closed the hole a size digest had: the
+prefix rewrite is length-preserving, so a change to `prefix_patch.py` rebuilt every
+archive at identical sizes and moved nothing. A build that reproduces byte-identical
+archives leaves the stamp alone, and that is correct: the unpacked tree would be
+identical too. That makes the archives themselves load bearing for reproducibility, and
+they are written to be: sorted entries, fixed member dates. A writer that stamps each
+member with the moment of extraction was measured moving the seed digest between two
+consecutive builds of an unchanged seed — which would have re-extracted the environment
+on every device, for nothing. With fixed member dates, two consecutive full builds
+produce identical stamps for both layers and both architectures. The tool sources are not hashed into either digest any
+more, for the same reason a pi bump must not be an environment rebuild: their effect is
+in the archives' bytes, and hashing them as well made a comment-only edit to the builder
+re-extract a few hundred megabytes on every device.
+
+An install from before the split carries a stamp of the old shape, which matches
+neither: it takes the rebuild path once — the migration the capture and replay exists
+for — and is on the two-stamp model from then on. The swap itself is per-root and the
+content stamp is written last, so an interrupted update is redone in full on the next
+launch instead of being left half applied.
+
 ---

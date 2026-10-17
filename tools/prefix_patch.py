@@ -368,7 +368,11 @@ def patch_nested_archive(blob: bytes, replacement: bytes, stats: Stats) -> bytes
                 if info.compress_type == zipfile.ZIP_STORED
                 else zipfile.ZIP_DEFLATED
             )
-            rebuilt.writestr(info.filename, patched, compress_type=compression)
+            # `info` and not `info.filename`: a fresh ZipInfo would date every
+            # member to now, and this archive's bytes go into the image the
+            # revision digest covers — a rebuild that changed nothing must not
+            # move a device's stamp.
+            rebuilt.writestr(info, patched, compress_type=compression)
 
     if not changed:
         return blob
@@ -763,7 +767,10 @@ def patch_archive(
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as rebuilt:
         for info, data in contents:
             if info.is_dir():
-                rebuilt.writestr(info.filename, b"")
+                # `info` keeps the member's own date: see the note at
+                # [patch_nested_archive] — these bytes are covered by the
+                # image's revision digest.
+                rebuilt.writestr(info, b"")
                 continue
             compression = (
                 zipfile.ZIP_STORED

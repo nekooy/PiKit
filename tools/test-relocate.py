@@ -363,9 +363,12 @@ def check_packed_relocator(check) -> None:
     occurrences every time, reported success, and every package the user
     installed failed to unpack with `unable to stat './data/data/com.termux'`.
 
-    The script is extracted from `overlay.zip` rather than read from `tools/`,
-    because only the packed copy can be wrong in that way. If the image has not
-    been built yet the check is skipped with a note rather than failed.
+    The script is extracted from the built image rather than read from `tools/`,
+    because only the packed copy can be wrong in that way — and from
+    `content.zip`, the layer the build puts it in (an image from before the
+    seed/content split carried it in `overlay.zip`, and either is the packed
+    copy). If the image has not been built yet the check is skipped with a note
+    rather than failed.
     """
     if not CACHE.is_dir():
         print("  note  no build cache, so the packed relocator was not exercised")
@@ -373,9 +376,20 @@ def check_packed_relocator(check) -> None:
 
     sample = next((name for name in SAMPLES if (CACHE / name).is_file()), None)
     for abi, flavor in OVERLAY.items():
-        overlay = REPO_ROOT / "app" / f"src/{flavor}" / "assets" / "runtime" / abi / "overlay.zip"
-        if not overlay.is_file():
-            print(f"  note  {abi}: no built image, so the packed relocator was not exercised")
+        images = REPO_ROOT / "app" / f"src/{flavor}" / "assets" / "runtime" / abi
+        blob = None
+        for name in ("content.zip", "overlay.zip"):
+            archive_path = images / name
+            if not archive_path.is_file():
+                continue
+            with zipfile.ZipFile(archive_path) as archive:
+                try:
+                    blob = archive.read("libexec/pikit/relocate.js")
+                except KeyError:
+                    continue
+            break
+        if blob is None:
+            print(f"  note  {abi}: no built image carries the packed relocator; not exercised")
             continue
         if sample is None:
             print("  note  no sample package available to relocate with the packed script")
@@ -383,9 +397,8 @@ def check_packed_relocator(check) -> None:
 
         with tempfile.TemporaryDirectory(prefix="pikit-packed-") as scratch_name:
             scratch = Path(scratch_name)
-            with zipfile.ZipFile(overlay) as archive:
-                script = scratch / "relocate.js"
-                script.write_bytes(archive.read("libexec/pikit/relocate.js"))
+            script = scratch / "relocate.js"
+            script.write_bytes(blob)
 
             environment = {
                 **os.environ,
