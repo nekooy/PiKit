@@ -21,8 +21,8 @@
  * substitution is indistinguishable from a correct run from the outside, which
  * is why `assertConfigured()` refuses to operate at all in that state, why
  * `--selfcheck` exists for the image build to call, and why
- * `tools/test-relocate.py` runs the copy extracted from `overlay.zip` rather
- * than this source file.
+ * `tools/test-relocate.py` runs the copy extracted from the built image
+ * (`content.zip`) rather than this source file.
  *
  * ## The problem this solves
  *

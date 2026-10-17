@@ -222,6 +222,12 @@ class Image:
                 symlink_lines = archive.read(name).decode("utf-8").splitlines()
                 continue
 
+            # The content layer's own manifest, not a file in the prefix; the
+            # installer reads it and swaps by it. [check_layer_split] holds it
+            # to account.
+            if name == BUILDER.CONTENT_PATHS_ENTRY:
+                continue
+
             is_dir = name.endswith("/")
             normalised = posixpath.normpath(name).lstrip("/")
 
@@ -388,7 +394,7 @@ def find_runpath(blob: bytes) -> str | None:
     return None
 
 
-def check_relocator(overlay: zipfile.ZipFile) -> tuple[bool, str]:
+def check_relocator(content: zipfile.ZipFile) -> tuple[bool, str]:
     """
     Runs the packed relocator's `--selfcheck` with `node`.
 
@@ -403,11 +409,13 @@ def check_relocator(overlay: zipfile.ZipFile) -> tuple[bool, str]:
 
     Running the packed file is the only check that fails in that state, and it
     fails at the build rather than at the ninety-sixth package installation.
+    It lives in the content layer (`content.zip`), which is what an app update
+    point-replaces.
     """
     try:
-        blob = overlay.read(RELOCATOR)
+        blob = content.read(RELOCATOR)
     except KeyError:
-        return False, f"{RELOCATOR} is missing from overlay.zip"
+        return False, f"{RELOCATOR} is missing from {BUILDER.CONTENT_ARCHIVE}"
 
     node = shutil.which("node")
     if node is None:
@@ -431,7 +439,7 @@ def check_relocator(overlay: zipfile.ZipFile) -> tuple[bool, str]:
     return True, "the packed relocator is configured (" + completed.stdout.strip() + ")"
 
 
-def check_rewrite_exclusions(overlay: zipfile.ZipFile) -> tuple[bool, str]:
+def check_rewrite_exclusions(content: zipfile.ZipFile) -> tuple[bool, str]:
     """
     The exclusion list the *app* reads must be the one the build applied.
 
@@ -444,9 +452,9 @@ def check_rewrite_exclusions(overlay: zipfile.ZipFile) -> tuple[bool, str]:
     is asserted here rather than trusted.
     """
     try:
-        text = overlay.read(REWRITE_EXCLUSIONS).decode("utf-8")
+        text = content.read(REWRITE_EXCLUSIONS).decode("utf-8")
     except KeyError:
-        return False, f"{REWRITE_EXCLUSIONS} is missing from overlay.zip"
+        return False, f"{REWRITE_EXCLUSIONS} is missing from {BUILDER.CONTENT_ARCHIVE}"
 
     listed = {
         line.strip()
@@ -460,6 +468,79 @@ def check_rewrite_exclusions(overlay: zipfile.ZipFile) -> tuple[bool, str]:
             f"missing {sorted(expected - listed)}, unexpected {sorted(listed - expected)}"
         )
     return True, f"the app's rewrite exclusion list matches the build's ({len(listed)} paths)"
+
+
+def check_layer_split(overlay: zipfile.ZipFile, content: zipfile.ZipFile) -> list[tuple[bool, str]]:
+    """
+    The seed/content split has to be exact, in both directions.
+
+    The installer replaces the content roots wholesale and leaves everything
+    else in the prefix alone, so the manifest that names those roots is load
+    bearing in both failure directions: a path the manifest does not name is
+    never updated again, and a registered package's file under a root it *does*
+    name is deleted by the next app update — behind dpkg's back, with a ledger
+    that still claims it. The manifest is therefore compared against the
+    builder's own `CONTENT_PATHS`, and each archive against the manifest: the
+    split the build declared, and the split it actually made.
+    """
+    results: list[tuple[bool, str]] = []
+    try:
+        text = content.read(BUILDER.CONTENT_PATHS_ENTRY).decode("utf-8")
+    except KeyError:
+        return [(False, f"{BUILDER.CONTENT_PATHS_ENTRY} is missing from {BUILDER.CONTENT_ARCHIVE}")]
+
+    declared = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    expected = sorted(BUILDER.CONTENT_PATHS)
+    results.append(
+        (
+            declared == expected,
+            f"the content manifest names the build's {len(expected)} root(s)"
+            + ("" if declared == expected else f" — manifest {declared}, build {expected}"),
+        )
+    )
+
+    roots = declared
+    nested = [f"{a} contains {b}" for a, b in zip(sorted(roots), sorted(roots)[1:]) if b.startswith(a + "/")]
+    results.append((not nested, f"no two content roots nest" + ("" if not nested else f" — {nested}")))
+
+    def under_root(path: str) -> str | None:
+        return next((r for r in roots if path == r or path.startswith(r + "/")), None)
+
+    strays = []
+    for info in content.infolist():
+        name = posixpath.normpath(info.filename).lstrip("/")
+        if name in (".", "") or info.filename in (BUILDER.CONTENT_PATHS_ENTRY, "SYMLINKS.txt"):
+            continue
+        if under_root(name) is None:
+            strays.append(info.filename)
+    results.append(
+        (
+            not strays,
+            f"every content.zip member is under a declared root"
+            + ("" if not strays else f" — strays: {strays[:5]}"),
+        )
+    )
+
+    overlaps = []
+    for info in overlay.infolist():
+        name = posixpath.normpath(info.filename).lstrip("/")
+        if name in (".", "") or info.filename in ("SYMLINKS.txt",):
+            continue
+        root = under_root(name)
+        if root is not None:
+            overlaps.append(f"{info.filename} (under {root})")
+    results.append(
+        (
+            not overlaps,
+            f"overlay.zip carries nothing under a content root"
+            + ("" if not overlaps else f" — would be deleted by an app update: {overlaps[:5]}"),
+        )
+    )
+    return results
 
 
 def read_any(image, archives, path: str) -> bytes | None:
@@ -637,7 +718,7 @@ def check_abi(abi: str, flavor: str) -> bool:
     root = REPO_ROOT / "app" / "src" / flavor / "assets" / "runtime" / abi
     print(f"\n=== {abi}  ({root.relative_to(REPO_ROOT)}) ===")
 
-    for name in ("bootstrap.zip", "overlay.zip"):
+    for name in ("bootstrap.zip", "overlay.zip", BUILDER.CONTENT_ARCHIVE):
         if not (root / name).is_file():
             print(f"  FAIL  {name} is missing")
             return False
@@ -645,8 +726,10 @@ def check_abi(abi: str, flavor: str) -> bool:
     image = Image()
     bootstrap = zipfile.ZipFile(root / "bootstrap.zip")
     overlay = zipfile.ZipFile(root / "overlay.zip")
+    content = zipfile.ZipFile(root / BUILDER.CONTENT_ARCHIVE)
     image.add_archive(bootstrap, "bootstrap.zip")
     image.add_archive(overlay, "overlay.zip")
+    image.add_archive(content, BUILDER.CONTENT_ARCHIVE)
 
     ok = True
 
@@ -682,7 +765,7 @@ def check_abi(abi: str, flavor: str) -> bool:
     for path in sorted(image.files):
         if not path.startswith(EXECUTABLE_PREFIXES):
             continue
-        head = image.read_any_head((bootstrap, overlay), path)
+        head = image.read_any_head((bootstrap, overlay, content), path)
         if not head or not head.startswith(b"#!"):
             continue
         first_line = head.split(b"\n", 1)[0][2:].strip().decode("utf-8", "replace")
@@ -722,15 +805,18 @@ def check_abi(abi: str, flavor: str) -> bool:
             f"{path} DT_RUNPATH is {runpath!r}",
         )
 
-    # pi must be the real CLI, not an empty stub.
-    cli = image.read(overlay, "lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js")
+    # pi must be the real CLI, not an empty stub. Both it and the extension live
+    # in the content layer — the part an app update point-replaces.
+    cli = image.read(
+        content, "lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js"
+    )
     report(cli is not None and len(cli) > 100, "pi CLI entry point is present and non-trivial")
 
     # The bundled extension's `pi.extensions` is the image's decision, not npm's:
     # the published package points at `./dist`, which pi's compact list names
     # `dist`. See `WEB_ACCESS_ENTRY` in the builder.
     web_access_manifest = image.read(
-        overlay, "lib/node_modules/pikit-extensions/node_modules/pi-web-access/package.json"
+        content, "lib/node_modules/pikit-extensions/node_modules/pi-web-access/package.json"
     )
     entry_ok = False
     if web_access_manifest is not None:
@@ -806,7 +892,11 @@ def check_abi(abi: str, flavor: str) -> bool:
     nested_checked = 0
     authored_seen: set[str] = set()
 
-    for archive, label in ((bootstrap, "bootstrap"), (overlay, "overlay")):
+    for archive, label in (
+        (bootstrap, "bootstrap"),
+        (overlay, "overlay"),
+        (content, "content"),
+    ):
         for info in archive.infolist():
             if info.is_dir():
                 continue
@@ -884,10 +974,12 @@ def check_abi(abi: str, flavor: str) -> bool:
         f"{len(AUTHORED_MEMBERS)})"
         + ("" if not missing_authored else f" — missing: {missing_authored}"),
     )
-    passed, message = check_relocator(overlay)
+    passed, message = check_relocator(content)
     report(passed, message)
-    passed, message = check_rewrite_exclusions(overlay)
+    passed, message = check_rewrite_exclusions(content)
     report(passed, message)
+    for split_ok, split_message in check_layer_split(overlay, content):
+        report(split_ok, split_message)
     for ledger_ok, ledger_message in check_dpkg_ledger(image, (overlay, bootstrap)):
         report(ledger_ok, ledger_message)
     report(

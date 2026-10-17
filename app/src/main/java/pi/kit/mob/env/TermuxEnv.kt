@@ -107,6 +107,17 @@ class TermuxEnv private constructor(context: Context) {
     /** Staging directory the runtime image is unpacked into before activation. */
     val stagingPrefix: File = File(filesDir, STAGING_DIR_NAME)
 
+    /**
+     * Staging directory the content layer is unpacked into before its paths are
+     * swapped into the prefix.
+     *
+     * Beside [stagingPrefix] rather than inside it: a content update never
+     * re-extracts the seed, and a seed install never sees this tree. An
+     * interrupted swap leaves it behind, which costs one `SafeDelete` on the
+     * next attempt — the paths it holds are re-extracted from the APK anyway.
+     */
+    val contentStagingPrefix: File = File(filesDir, CONTENT_STAGING_DIR_NAME)
+
     val binDir: File = File(prefix, "bin")
     val libDir: File = File(prefix, "lib")
     val etcDir: File = File(prefix, "etc")
@@ -128,6 +139,16 @@ class TermuxEnv private constructor(context: Context) {
 
     /** Records which runtime image revision is currently installed. */
     val stampFile: File = File(filesDir, RUNTIME_STAMP_FILE)
+
+    /**
+     * Records which content layer revision the prefix currently carries.
+     *
+     * Beside [stampFile] rather than inside `$PREFIX`, like it: the two stamps
+     * describe the tree, they are not part of it. The seed stamp is written
+     * first and this one second, so a run that dies between them is a cheap
+     * content swap on the next launch rather than a full re-extract.
+     */
+    val contentStampFile: File = File(filesDir, CONTENT_STAMP_FILE)
 
     /**
      * Where the packages the user installed wait out a reinstall.
@@ -193,12 +214,28 @@ class TermuxEnv private constructor(context: Context) {
     val installedRevision: String?
         get() = runCatching { stampFile.readText().trim() }.getOrNull()?.ifBlank { null }
 
+    /** True when the *seed* — the dpkg-managed environment — is the one expected. */
     fun isUpToDate(expectedRevision: String): Boolean =
         isInstalled && installedRevision == expectedRevision
 
+    /**
+     * True when the content layer in the prefix is the one expected.
+     *
+     * An image that carries no content layer ([expected] is null) is trivially
+     * up to date — there is nothing to replace. Everything else compares the
+     * stamp; a stamp that is missing or older is the normal app-update case,
+     * and the caller replaces the content paths in place.
+     */
+    fun isContentUpToDate(expected: String?): Boolean =
+        expected == null ||
+            (contentStampFile.isFile &&
+                runCatching { contentStampFile.readText().trim() }.getOrNull() == expected)
+
     companion object {
         const val STAGING_DIR_NAME = "usr-staging"
+        const val CONTENT_STAGING_DIR_NAME = "usr-content-staging"
         const val RUNTIME_STAMP_FILE = "runtime-revision.txt"
+        const val CONTENT_STAMP_FILE = "content-revision.txt"
 
         /** Where the user's installed packages wait out a reinstall. */
         const val PKG_RESTORE_DIR = "pkg-restore"

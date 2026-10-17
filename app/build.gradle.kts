@@ -318,7 +318,7 @@ val runtimeImagesByFlavor = mapOf("arm64" to "arm64-v8a", "x64" to "x86_64")
 
 runtimeImagesByFlavor.forEach { (flavor, abi) ->
     val imageDir = layout.projectDirectory.dir("src/$flavor/assets/runtime/$abi")
-    val requiredFiles = listOf("bootstrap.zip", "overlay.zip")
+    val requiredFiles = listOf("bootstrap.zip", "overlay.zip", "content.zip")
 
     if (requiredFiles.any { !imageDir.file(it).asFile.isFile }) {
         logger.warn(

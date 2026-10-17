@@ -110,10 +110,10 @@ Three things now stop it recurring:
 - `assertConfigured()` refuses to run at all when the two ids are equal or differ in
   length. A silent no-op that reports success is the worst failure mode there is.
 - `--selfcheck` exercises `rewrite()` on a synthetic path, and both
-  `build-runtime-image.py` (against the patched overlay) and
-  `verify-runtime-image.py` (against `overlay.zip`) call it. A build that rewrites
+  `build-runtime-image.py` (against the patched content layer) and
+  `verify-runtime-image.py` (against `content.zip`) call it. A build that rewrites
   its own relocator now fails at the build.
-- `test-relocate.py` runs the relocator **extracted from `overlay.zip`**, not the
+- `test-relocate.py` runs the relocator **extracted from `content.zip`**, not the
   copy in `tools/`, and relocates a real package with it. Only the packed copy can
   be wrong in this way, so only the packed copy proves anything.
 
@@ -194,7 +194,7 @@ cache and asserts, with nothing but the Python standard library:
   decides whether an installed binary runs at all;
 - no entry changed size, which is what keeps dpkg's own `md5sums` records valid
   for the files themselves (the *archive* changes size; see above);
-- the relocator extracted from `overlay.zip` passes `--selfcheck` and relocates a
+- the relocator extracted from `content.zip` passes `--selfcheck` and relocates a
   real package, which is the only check that fails when the build rewrites the
   relocator.
 

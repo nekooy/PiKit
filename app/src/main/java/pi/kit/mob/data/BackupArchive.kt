@@ -221,11 +221,11 @@ internal data class BackupPaths(
  *
  * ## What is not in it
  *
- * Nothing under `usr/`, `usr-staging/` or the extracted half of `$HOME`: that is the
- * runtime image, hundreds of megabytes of it, rebuilt from the APK on the next
- * launch. The same for `runtime-revision.txt`, the first-install log and pi's own
- * catalogue cache, which are each either re-derived or re-downloaded. A backup
- * carries what the user made and would have to make again.
+ * Nothing under `usr/`, `usr-staging/`, `usr-content-staging/` or the extracted half of
+ * `$HOME`: that is the runtime image, hundreds of megabytes of it, rebuilt from the APK on
+ * the next launch. The same for `runtime-revision.txt`, `content-revision.txt`, the
+ * first-install log and pi's own catalogue cache, which are each either re-derived or
+ * re-downloaded. A backup carries what the user made and would have to make again.
  *
  * ## The two halves, and why they are not symmetric
  *
