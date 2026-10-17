@@ -775,7 +775,6 @@ internal object EnglishStrings : Strings {
         override val modelListRefresh = "Refresh"
         override val modelListRefreshSubtitle = "Updates the model list on demand"
         override val modelListRefreshing = "Contacting the providers…"
-        override val modelListStateRefreshing = "Refreshing"
         override val modelListStateUpdated = "Updated"
         override val modelListStateCurrent = "Latest"
         override val modelListStateFailed = "Refresh failed"
@@ -798,8 +797,6 @@ internal object EnglishStrings : Strings {
                 "other way and refuses to start, this scan reads every file in the " +
                 "runtime and rewrites the paths inside them; nothing installed outside " +
                 "it is touched, and nothing is deleted."
-        override fun relocateScanning(files: Int) =
-            "Scanning… ${plural(files, "file", "files")} so far"
         override val relocateBroken =
             "The package relocator in this runtime has been damaged, so a repair cannot " +
                 "help. Rebuild the environment below: the runtime is unpacked fresh from the app."

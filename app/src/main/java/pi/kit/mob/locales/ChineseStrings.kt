@@ -699,7 +699,6 @@ internal object ChineseStrings : Strings {
         override val modelListRefresh = "刷新"
         override val modelListRefreshSubtitle = "需要时手动刷新模型列表"
         override val modelListRefreshing = "正在联系各服务商…"
-        override val modelListStateRefreshing = "刷新中"
         override val modelListStateUpdated = "已更新"
         override val modelListStateCurrent = "最新"
         override val modelListStateFailed = "刷新失败"
@@ -716,7 +715,6 @@ internal object ChineseStrings : Strings {
             "仅在已安装的东西确实启动报错时才需要点 —— 正常情况无需点击：用 pkg 或 apt 安装的" +
                 "软件包会在安装时自动完成重定位。若是从别的途径装进来、启动报错的包，这个检测会" +
                 "读取运行环境里的每个文件并改写其中的路径；环境之外的东西不会被改，也不会被删除。"
-        override fun relocateScanning(files: Int) = "正在检测…已扫描 $files 个文件"
         override val relocateBroken =
             "当前运行环境里的包重定位器已经损坏，修复无法解决。请用下方的「重建运行环境」—— " +
                 "运行环境会从应用里重新解包。"

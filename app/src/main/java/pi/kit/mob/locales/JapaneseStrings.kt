@@ -732,7 +732,6 @@ internal object JapaneseStrings : Strings {
         override val modelListRefresh = "更新"
         override val modelListRefreshSubtitle = "必要なときにモデル一覧を更新します"
         override val modelListRefreshing = "各プロバイダに問い合わせています…"
-        override val modelListStateRefreshing = "更新中"
         override val modelListStateUpdated = "更新済み"
         override val modelListStateCurrent = "最新"
         override val modelListStateFailed = "更新失敗"
@@ -752,7 +751,6 @@ internal object JapaneseStrings : Strings {
                 "pkg や apt で入れたパッケージはインストール時に自動で再配置されます。別の経路で" +
                 "入って起動しないパッケージのために、この確認は実行環境のすべてのファイルを読み、" +
                 "その中のパスを書き換えます。環境の外には触れず、削除もしません。"
-        override fun relocateScanning(files: Int) = "確認中…$files ファイルを走査"
         override val relocateBroken =
             "この実行環境のパッケージ再配置ツールが壊れているため、修復では直りません。" +
                 "下の「実行環境を再構築」で実行環境をアプリから展開し直してください。"
