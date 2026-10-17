@@ -462,6 +462,120 @@ def check_rewrite_exclusions(overlay: zipfile.ZipFile) -> tuple[bool, str]:
     return True, f"the app's rewrite exclusion list matches the build's ({len(listed)} paths)"
 
 
+def read_any(image, archives, path: str) -> bytes | None:
+    """The first archive that carries `path` — overlay over bootstrap, as on device."""
+    for archive in archives:
+        blob = image.read(archive, path)
+        if blob is not None:
+            return blob
+    return None
+
+
+def check_dpkg_ledger(image, archives) -> list[tuple[bool, str]]:
+    """
+    Every package the image unpacks by hand must be registered with dpkg.
+
+    The build writes `var/lib/dpkg/status` (the bootstrap's own paragraphs with
+    the overlay's merged in) and `var/lib/dpkg/info/<pkg>.list` per package.
+    Without them the files are ones no package owns: `pkg upgrade` re-downloads
+    what is already installed, `pkg remove` leaves every file behind, and a
+    later install can conflict with a phantom. The checks are what dpkg itself
+    needs to act — the status parses and names every bundled package, and every
+    path a `.list` claims is in the tree it claims it in.
+    """
+    findings: list[tuple[bool, str]] = []
+
+    status = read_any(image, archives, "var/lib/dpkg/status")
+    if status is None:
+        findings.append((False, "dpkg: var/lib/dpkg/status is missing"))
+        return findings
+
+    paragraphs = [p for p in status.decode("utf-8", "replace").split("\n\n") if p.strip()]
+    names: list[str] = []
+    bad_paragraphs: list[str] = []
+    for paragraph in paragraphs:
+        fields = {
+            line.split(":", 1)[0]: line.split(":", 1)[1].strip()
+            for line in paragraph.splitlines()
+            if ":" in line
+        }
+        name = fields.get("Package", "")
+        if not name or "Status" not in fields or "Version" not in fields:
+            bad_paragraphs.append(paragraph.splitlines()[0] if paragraph.strip() else "?")
+            continue
+        names.append(name)
+
+    findings.append(
+        (
+            not bad_paragraphs,
+            f"dpkg: {len(names)} status paragraphs parse (Package/Version/Status)"
+            + ("" if not bad_paragraphs else f" — malformed: {bad_paragraphs[:3]}"),
+        )
+    )
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    findings.append(
+        (
+            not duplicates,
+            "dpkg: no package is named twice in status"
+            + ("" if not duplicates else f" — duplicates: {duplicates}"),
+        )
+    )
+
+    # The root packages the app depends on must be registered, not merely present.
+    missing_roots = sorted(set(BUILDER.ROOT_PACKAGES) - set(names))
+    findings.append(
+        (
+            not missing_roots,
+            "dpkg: the root packages are registered"
+            + ("" if not missing_roots else f" — unregistered: {missing_roots}"),
+        )
+    )
+
+    missing_lists: list[str] = []
+    phantom: list[str] = []
+    unchecked = 0
+    for name in names:
+        listing = read_any(image, archives, f"var/lib/dpkg/info/{name}.list")
+        if listing is None:
+            missing_lists.append(name)
+            continue
+        for line in listing.decode("utf-8", "replace").splitlines():
+            line = line.strip()
+            if not line or line in ("/.", "/"):
+                continue
+            absolute = line.rstrip("/")
+            # The prefix root and its ancestors (`/data/`, `/data/data/…/files/`)
+            # are owned by every package and outside the tree this models.
+            # Anything else must be *under* the prefix and in it: an un-rewritten
+            # path (still naming the upstream app) lands here as a phantom,
+            # which is the check that catches a .list the relocation missed.
+            if absolute.lstrip("/") in (
+                PREFIX.strip("/"),
+                PREFIX.strip("/").rsplit("/", 1)[0],
+            ) or PREFIX.strip("/").startswith(absolute.lstrip("/") + "/"):
+                unchecked += 1
+                continue
+            relative = image.strip_prefix(absolute)
+            if not image.exists(relative):
+                phantom.append(f"{name}: {line}")
+    findings.append(
+        (
+            not missing_lists,
+            f"dpkg: every registered package has a file list ({len(names)})"
+            + ("" if not missing_lists else f" — no .list for: {missing_lists[:5]}"),
+        )
+    )
+    findings.append(
+        (
+            not phantom,
+            "dpkg: every path a .list claims is in the tree"
+            + ("" if not phantom else f" — phantom: {phantom[:5]}")
+            + f" ({unchecked} prefix-ancestor entries not modelled)",
+        )
+    )
+    return findings
+
+
 def files_in(root: Path) -> set[str] | None:
     """
     Every file a vendored tree holds, relative to it, or None when it is not there.
@@ -774,6 +888,8 @@ def check_abi(abi: str, flavor: str) -> bool:
     report(passed, message)
     passed, message = check_rewrite_exclusions(overlay)
     report(passed, message)
+    for ledger_ok, ledger_message in check_dpkg_ledger(image, (overlay, bootstrap)):
+        report(ledger_ok, ledger_message)
     report(
         not bad_dex,
         f"nested archives verified ({nested_checked} members; dex headers and prefixes)"
