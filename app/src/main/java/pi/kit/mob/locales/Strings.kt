@@ -1411,8 +1411,7 @@ interface Strings {
          *
          * [entries] is how many have gone in so far, which is the only progress
          * there is: a workspace backup walks thousands of files, and a button that
-         * only greys out reads as a button that did nothing. The same shape
-         * [relocateScanning] has, for the same reason.
+         * only greys out reads as a button that did nothing.
          */
         fun backupExportRunning(entries: Int): String
         fun backupExportDone(name: String, entries: Int): String
@@ -1471,15 +1470,14 @@ interface Strings {
         val modelListRefreshing: String
 
         /**
-         * The run's state, as the row's own value — one word, never a sentence.
+         * What a finished run announces, in the toast the row no longer speaks in.
          *
-         * The state belongs in the value column and nothing else: a sentence here would
-         * be an ellipsis, because `PiRow` gives its value the natural width and a
-         * sentence would crowd the title beside it. The verdict is the row's word
-         * alone now — the sentence banners that used to sit under the row for the
-         * changed and unchanged cases were the "完成的横幅" the page dropped.
+         * One word, never a sentence: the row's value column is the width the
+         * title and subtitle draw in, and a status sentence there squeezed them
+         * to 182px while it held 464px. The verdict banners that used to sit
+         * under the row for the changed and unchanged cases were the "完成的横幅"
+         * the page dropped.
          */
-        val modelListStateRefreshing: String
         val modelListStateUpdated: String
         val modelListStateCurrent: String
         val modelListStateFailed: String
@@ -1513,33 +1511,25 @@ interface Strings {
         val relocateNote: String
 
         /**
-         * Shown while the repair walk is running.
-         *
-         * The walk reads every file under `$PREFIX` — more than twenty thousand of
-         * them once the bundled extension is in the image — so a button that only
-         * greys out looks like it did nothing. `files` is how many it has read so
-         * far, which is the only progress there is to report.
-         */
-        fun relocateScanning(files: Int): String
-
-        /**
          * Shown when the runtime's package relocator is itself damaged.
          *
          * Only reachable on an install that pressed "check and repair" with a build
          * that lacked this class's exclusion list, which rewrote the relocator's own
-         * `OLD_ID`. The instruction is to reinstall, because the only thing that
-         * restores it is a fresh runtime image.
+         * `OLD_ID`. The instruction is to rebuild the environment, because the only
+         * thing that restores it is a fresh runtime image.
          */
         val relocateBroken: String
         val relocateProblems: String
 
         /**
-         * The walk's state, as the row's own value — the same split as
-         * [modelListStateRefreshing], and for the same reason: a verdict that is a
-         * sentence belongs in a notice, and this is the one word the row can hold.
-         * The success cases — repaired, nothing to fix — are the row's word alone; the
-         * `relocated(...)` count sentence that used to sit under the row is gone with
-         * the other completion banners.
+         * What the walk announces, in the toast the row no longer speaks in —
+         * the same split as [modelListStateUpdated]'s group, and for the same
+         * reason: a verdict that is a sentence belongs in a notice, and this is
+         * the one word the toast can carry. [relocateStateScanning] is the run's
+         * start announcement; the three after it are what came back. The success
+         * cases — repaired, nothing to fix — are the word alone; the
+         * `relocated(...)` count sentence that used to sit under the row is gone
+         * with the other completion banners.
          */
         val relocateStateScanning: String
         val relocateStateRepaired: String

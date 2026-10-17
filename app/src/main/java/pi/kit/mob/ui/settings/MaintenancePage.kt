@@ -1,6 +1,9 @@
 package pi.kit.mob.ui.settings
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +24,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.env.PrefixPatcher
@@ -78,23 +81,27 @@ import pi.kit.mob.ui.design.PiStatePill
  * own four-hour window and which the button forces when a just-released model is
  * wanted now.
  *
- * ## The three runs are one row
+ * ## The three runs are one row, and none of them speaks in the row
  *
- * The page has three things that run and report: the catalogue refresh, the
- * relocation walk, and the storage self-test. Each is one `PiRow` carrying the run's
- * state in its value column *and its tone*, with the run's own control — the button,
- * or the live indicator while it is going — in the row's trailing slot, and then the
- * verdict in a `PiNotice` above the standing explanation. That shape is not a
- * preference; it is what the three were *not*: one showed its state in the row and two
- * only in prose, one drew a progress bar and one did not, and the buttons of one
- * started 4dp left of the note under them.
+ * The page has three things that run: the catalogue refresh, the relocation walk,
+ * and the storage self-test. Each is one `PiRow` whose trailing slot holds the
+ * run's one control — the button, or the live spinner while it is going — and
+ * whose title and subtitle never move.
  *
- * The control is *in* the row rather than in a strip under it because the strip was
- * three controls for one action — the run's button, a dismiss and a pill — and it made
- * each run two objects with a paragraph between them. The reader's report is the short
- * version: "把那些操作按钮放到列表右边…点击后显示那种转圈的团状ui，然后显示已是最新".
- * [RunActions] is still the backup page's shape, where a run's own sheet gives it a
- * place to stand.
+ * The run's status text used to fill the row's value column, and it squeezed the
+ * text beside it: measured mid-walk, "正在检测…已扫描 2816 个文件" held 464px of
+ * the row while the title was left 182px wide and wrapped across two lines. A run
+ * announces itself as toasts instead — that it started, and what came back — so
+ * the row keeps its width for the words the row is about. The reader's original
+ * request is still the shape of the control: "把那些操作按钮放到列表右边…点击后
+ * 显示那种转圈的团状ui" — the button, then the spinner, then the result; only the
+ * result's *address* moved out of the row.
+ *
+ * A failure keeps a `PiNotice` under the group for the sentence a toast cannot
+ * carry, and the notice is tapped away — the chat page's failure banner dismisses
+ * the same way, and a close button on the message itself would be a second control
+ * for one action. That tap is also where the run's own clear call lives now (see
+ * [RunControl]): there is no verdict in the row to dismiss any more.
  *
  * ## Why the verdict and the output are two components
  *
@@ -114,7 +121,6 @@ internal fun MaintenancePage(
 ) {
     val repair by session.repair.collectAsState()
     val repairRunning by session.repairRunning.collectAsState()
-    val repairScanned by session.repairScanned.collectAsState()
     val catalogueStatus by catalogue.status.collectAsState()
     val version by catalogue.version.collectAsState()
     val storageCheck by selfTest.status.collectAsState()
@@ -122,11 +128,38 @@ internal fun MaintenancePage(
     val rebuildRunning by session.rebuildRunning.collectAsState()
     var confirmRebuild by remember { mutableStateOf(false) }
     val text = strings
+    val context = LocalContext.current
 
     // The ledger is read when the page is opened rather than kept live: nothing
     // changes it while the user is looking at this page except a run they start
     // from it, and those refresh it themselves.
     LaunchedEffect(Unit) { session.refreshPackages() }
+
+    // A run's verdict is announced once, as a toast, and never in the row. Each
+    // `seen` starts as whatever was already settled when the page opened, so
+    // coming back to a page whose run finished long ago does not re-announce it.
+    var seenCatalogue by remember { mutableStateOf(catalogueStatus) }
+    LaunchedEffect(catalogueStatus) {
+        if (catalogueStatus !== seenCatalogue) {
+            seenCatalogue = catalogueStatus
+            catalogueVerdict(catalogueStatus, text)?.let { announce(context, it) }
+        }
+    }
+    var seenRepair by remember { mutableStateOf(repair) }
+    LaunchedEffect(repair) {
+        val result = repair
+        if (result != null && result !== seenRepair) {
+            seenRepair = result
+            announce(context, relocateVerdict(result, text))
+        }
+    }
+    var seenStorage by remember { mutableStateOf(storageCheck) }
+    LaunchedEffect(storageCheck) {
+        if (storageCheck !== seenStorage) {
+            seenStorage = storageCheck
+            storageVerdict(storageCheck, text)?.let { announce(context, it) }
+        }
+    }
 
     // The bar has no inset of its own: `PiScaffold` zeroes it, because where a
     // page's top edge is is the page's business. Nothing above a settings page
@@ -164,38 +197,30 @@ internal fun MaintenancePage(
                     },
                 )
                 PiRowDivider()
-                // The catalogue run's state, in the value column, in the tone that says
-                // what it means, and the button that starts it in the trailing slot
-                // while there is nothing to report. A verdict on the row is the row's
-                // own dismiss: tapping it clears the result and brings the button back
-                // (see [RunControl]). The old strip under the row — a button, a dismiss
-                // and a pill, three controls for one action — is what "删除多余控件"
-                // asked away; its dismiss is the row now.
-                val catalogueRunning = catalogueStatus is CatalogueStatus.Running
-                val catalogueSettled = !catalogueRunning && catalogueStatus !is CatalogueStatus.Idle
+                // The run's control is the row's whole furniture. The row never
+                // reports the run — its status text squeezed the title to 182px
+                // while it held 464px (see the class doc) — so the button comes
+                // back when the spinner goes and there is nothing in the row to
+                // dismiss.
                 PiRow(
                     title = text.settings.modelList,
                     subtitle = text.settings.modelListRefreshSubtitle,
-                    value = catalogueValue(catalogueStatus, text),
-                    valueColor = catalogueTone(catalogueStatus).ink(MaterialTheme.colorScheme),
                     leading = { RunMark(Icons.Filled.Refresh) },
-                    onClick = if (catalogueSettled) catalogue::dismiss else null,
                     trailing = {
                         RunControl(
-                            running = catalogueRunning,
-                            hasResult = catalogueSettled,
+                            running = catalogueStatus is CatalogueStatus.Running,
                             label = text.settings.modelListRefresh,
-                            onAction = { catalogue.start() },
+                            onAction = {
+                                announce(context, text.settings.modelListRefreshing)
+                                catalogue.start()
+                            },
                         )
                     },
                 )
             }
 
-            // `refreshVersion` used to ride on the dismiss button — the moment the page
-            // was about to be looked at again. There is no dismiss button any more, so
-            // the run's own end is that moment: the row keeps its verdict, and the
-            // version beside it is re-read in case a runtime reinstall happened behind
-            // the page.
+            // The run's own end is also the moment the version beside it is
+            // re-read, in case a runtime reinstall happened behind the page.
             LaunchedEffect(catalogueStatus) {
                 if (catalogueStatus is CatalogueStatus.Done ||
                     catalogueStatus is CatalogueStatus.Failed
@@ -204,13 +229,17 @@ internal fun MaintenancePage(
                 }
             }
 
-            // A failure is the one outcome the row cannot state on its own — its
-            // reason is a sentence — so it keeps a notice. A *success* does not: the
-            // row's value already says "已更新" or "已是最新", and a second banner
-            // saying the same thing in a sentence was the "完成的横幅" the page was
-            // asked to drop.
+            // A failure is the one outcome a toast cannot carry — its reason is
+            // a sentence — so it keeps a notice, tapped away once read (the chat
+            // page's failure banner dismisses the same way). A success does not:
+            // the toast already said "已更新" or "已是最新", and a banner repeating
+            // it was one of the "完成的横幅" the page was asked to drop.
             (catalogueStatus as? CatalogueStatus.Failed)?.let { failed ->
-                PiNotice(text = failed.message, tone = PiTone.Danger)
+                PiNotice(
+                    text = failed.message,
+                    tone = PiTone.Danger,
+                    modifier = Modifier.clickable(onClick = catalogue::dismiss),
+                )
             }
 
             // Relocation is not something the user should have to think about: a
@@ -238,24 +267,18 @@ internal fun MaintenancePage(
                     leading = { RunMark(Icons.Filled.Inventory2) },
                 )
                 PiRowDivider()
-                val repairSettled = !repairRunning && repair != null
                 PiRow(
                     title = text.settings.relocate,
                     subtitle = text.settings.relocateSubtitle,
-                    // The walk reads every file under `$PREFIX` — 22 000 on a freshly
-                    // installed image — so while it runs the column reports what it has
-                    // read rather than a bar that appears frozen, and the row's control
-                    // is the live indicator. Same treatment as the catalogue above.
-                    value = relocateValue(repair, repairRunning, repairScanned, text),
-                    valueColor = relocateTone(repair, repairRunning).ink(MaterialTheme.colorScheme),
                     leading = { RunMark(Icons.Filled.Extension) },
-                    onClick = if (repairSettled) session::clearRepairResult else null,
                     trailing = {
                         RunControl(
                             running = repairRunning,
-                            hasResult = repairSettled,
                             label = text.settings.relocateNow,
-                            onAction = { session.repairInstalledPackages() },
+                            onAction = {
+                                announce(context, text.settings.relocateStateScanning)
+                                session.repairInstalledPackages()
+                            },
                         )
                     },
                 )
@@ -272,7 +295,6 @@ internal fun MaintenancePage(
                     trailing = {
                         RunControl(
                             running = rebuildRunning,
-                            hasResult = false,
                             label = text.settings.rebuildEnvironmentNow,
                             onAction = { confirmRebuild = true },
                         )
@@ -282,7 +304,9 @@ internal fun MaintenancePage(
 
             packages?.let { report -> PackagesNotices(report) }
 
-            repair?.let { result -> RelocationVerdict(result) }
+            repair?.let { result ->
+                RelocationVerdict(result, onDismiss = session::clearRepairResult)
+            }
 
             // Storage does not belong on this page conceptually — it changes no
             // file under $PREFIX — but the *check* is a maintenance action, and it
@@ -290,48 +314,59 @@ internal fun MaintenancePage(
             // reach my files, and will it ever delete them" without a terminal.
             PiSectionHeader(text.settings.storageCheck)
             PiGroup {
-                val storageRunning = storageCheck is StorageSelfTest.Status.Running
-                val storageSettled = !storageRunning && storageCheck is StorageSelfTest.Status.Finished
                 PiRow(
                     title = text.settings.storageCheck,
                     subtitle = text.settings.storageCheckSubtitle,
-                    value = storageCheckState(storageCheck, text).orEmpty(),
-                    valueColor = storageCheckTone(storageCheck).ink(MaterialTheme.colorScheme),
                     leading = { RunMark(Icons.Filled.VerifiedUser) },
-                    onClick = if (storageSettled) selfTest::dismiss else null,
                     trailing = {
                         RunControl(
-                            running = storageRunning,
-                            hasResult = storageSettled,
+                            running = storageCheck is StorageSelfTest.Status.Running,
                             label = text.settings.storageCheckRun,
-                            onAction = { selfTest.start() },
+                            onAction = {
+                                announce(context, text.settings.storageCheckRunning)
+                                selfTest.start()
+                            },
                         )
                     },
                 )
             }
 
-            StorageCheckVerdict(storageCheck)
+            StorageCheckVerdict(storageCheck, onDismiss = selfTest::dismiss)
         }
     }
 
     // The one press on this page that replaces something rather than repairing
     // it, so it asks first. The dialog says the two things being decided: what
     // stops (a running conversation) and what is kept (the user's packages).
+    // Its controls are the design system's: two bare text buttons, the
+    // destructive one in the error role, and the destructive meaning itself in
+    // the body's error-tone frame — never a fill or a border (ARCHITECTURE §13).
     if (confirmRebuild) {
         AlertDialog(
             onDismissRequest = { confirmRebuild = false },
             title = { Text(text.settings.rebuildEnvironment) },
-            text = { Text(text.settings.rebuildEnvironmentConfirm) },
+            text = {
+                PiNotice(text = text.settings.rebuildEnvironmentConfirm, tone = PiTone.Danger)
+            },
             confirmButton = {
-                TextButton(
+                PiButton(
+                    text = text.settings.rebuildEnvironmentConfirmNow,
                     onClick = {
                         confirmRebuild = false
                         session.rebuildEnvironment()
                     },
-                ) { Text(text.settings.rebuildEnvironmentConfirmNow) }
+                    kind = PiButtonKind.Text,
+                    size = PiButtonSize.Small,
+                    tone = PiTone.Danger,
+                )
             },
             dismissButton = {
-                TextButton(onClick = { confirmRebuild = false }) { Text(text.common.cancel) }
+                PiButton(
+                    text = text.common.cancel,
+                    onClick = { confirmRebuild = false },
+                    kind = PiButtonKind.Text,
+                    size = PiButtonSize.Small,
+                )
             },
         )
     }
@@ -356,33 +391,25 @@ private fun RunMark(icon: ImageVector) {
 }
 
 /**
- * The one control a run has: its button, or the live indicator while it is going.
+ * The one control a run has: its button, or the live spinner while it is going.
  *
  * The pair is exclusive rather than a disabled button beside an indicator, which is
  * what the button-with-a-pill-under-it strip drew: while a run is in flight there is
  * nothing to press, and a disabled `Filled` button is the same statement twice. The
- * indicator is `PiLoading` rather than `PiStatePill` because the word that pill
- * carries lives in the row's own value column — "正在扫描 1234 个文件" — where it has the
- * width for a number and does not make the row change height when it arrives.
- *
- * [hasResult] hides the button once the run has a verdict on the row. The value
- * column then *is* the row's report — "已修复", "已是最新" — and a button beside a
- * verdict invites a second run against an answer the reader has not read yet. The
- * way back to the button is the row itself: a tap clears the verdict, and the button
- * returns where it was. That gesture is what keeps hiding it from being a dead end —
- * nothing else on this page dismisses a result.
+ * spinner is the whole "it started" signal in the row — the run's words go to a
+ * toast — and the button comes back where it was when the run ends, so a finished
+ * run is never a dead end.
  */
 @Composable
 private fun RunControl(
     running: Boolean,
-    hasResult: Boolean,
     label: String,
     onAction: () -> Unit,
 ) {
-    when {
-        running -> PiLoading(size = 20.dp, color = PiTone.Live.ink(MaterialTheme.colorScheme))
-        hasResult -> Unit
-        else -> PiButton(
+    if (running) {
+        PiLoading(size = 20.dp, color = PiTone.Live.ink(MaterialTheme.colorScheme))
+    } else {
+        PiButton(
             text = label,
             onClick = onAction,
             kind = PiButtonKind.Filled,
@@ -392,29 +419,15 @@ private fun RunControl(
 }
 
 /**
- * The catalogue run's value: what it is doing, or what it found.
+ * How a run says it started and what came back: two toasts, nothing in the row.
  *
- * The two are one column because they are one question — "where is this run" — and the
- * pill that used to carry the running half is gone with the strip; the words are the
- * same ones it showed.
+ * The value column is the width the title and subtitle draw in — a status
+ * sentence in it squeezed them to 182px while it held 464px (measured mid-walk)
+ * — so the row never carries the run's words. See the class doc for the shape
+ * this replaced.
  */
-private fun catalogueValue(status: CatalogueStatus, text: Strings): String =
-    if (status is CatalogueStatus.Running) {
-        text.settings.modelListRefreshing
-    } else {
-        catalogueState(status, text).orEmpty()
-    }
-
-/** The relocation walk's value, the same split as [catalogueValue]. */
-private fun relocateValue(
-    result: PrefixPatcher.Result?,
-    running: Boolean,
-    scanned: Int,
-    text: Strings,
-): String = if (running) {
-    text.settings.relocateScanning(scanned)
-} else {
-    relocateState(result, running, text).orEmpty()
+private fun announce(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }
 
 /**
@@ -593,32 +606,39 @@ private fun ErrorBody(lines: List<String>, modifier: Modifier = Modifier) {
  * What the relocation walk found, when that is something to act on.
  *
  * The two failure shapes keep a notice; the two successes — repaired and nothing to
- * do — do not, because the row's own value already says "已修复" or "无需修复" and a
+ * do — do not, because the run's toast already said "已修复" or "无需修复" and a
  * banner repeating it was one of the "完成的横幅" the page was asked to drop. So this
- * only draws when there is a sentence the value cannot carry.
+ * only draws when there is a sentence a toast cannot carry, and the notice is
+ * tapped away once read — the run's clear call lives on that tap now that no row
+ * carries a verdict to dismiss.
  *
  * Checked in this order because the damaged relocator is the one outcome the walk
  * cannot repair from the inside: the relocator no longer names the upstream id at
  * all, so its own `OLD_ID` was rewritten and it now refuses to run (`exit 4`) —
- * every later `pkg install` goes unrelocated until the runtime is reinstalled, and
+ * every later `pkg install` goes unrelocated until the runtime is rebuilt, and
  * that is the one sentence here that names an action. The failing files come next,
  * as the heading and then the lines.
  */
 @Composable
-private fun RelocationVerdict(result: PrefixPatcher.Result) {
+private fun RelocationVerdict(result: PrefixPatcher.Result, onDismiss: () -> Unit) {
     val text = strings
     when {
         result.relocatorDamaged -> PiNotice(
             text = text.settings.relocateBroken,
             tone = PiTone.Danger,
+            modifier = Modifier.clickable(onClick = onDismiss),
         )
 
         result.errors.isNotEmpty() -> {
-            PiNotice(text = text.settings.relocateProblems, tone = PiTone.Danger)
+            PiNotice(
+                text = text.settings.relocateProblems,
+                tone = PiTone.Danger,
+                modifier = Modifier.clickable(onClick = onDismiss),
+            )
             ErrorBody(result.errors)
         }
 
-        // Repaired or already clean: the row's value is the whole report.
+        // Repaired or already clean: the toast is the whole report.
         else -> Unit
     }
 }
@@ -626,10 +646,11 @@ private fun RelocationVerdict(result: PrefixPatcher.Result) {
 /**
  * What the storage self-test found, when it found a failure.
  *
- * A pass is the row's own word ("通过") and nothing more — the success banner was a
- * "完成的横幅" and is gone with the others. A failure keeps its notice and its
+ * A pass is the run's own toast ("通过") and nothing more — the success banner was
+ * a "完成的横幅" and is gone with the others. A failure keeps its notice and its
  * failing lines: the verdict's numbers are the tally line the script prints, which
- * the row cannot carry, and the lines are what the reader came for.
+ * a toast cannot carry, and the lines are what the reader came for. The notice is
+ * tapped away, like the relocation one above.
  *
  * The line list is never the whole transcript. The script prints one line per check
  * — fourteen on a fresh install, and one more per granted folder — and printing all
@@ -637,7 +658,7 @@ private fun RelocationVerdict(result: PrefixPatcher.Result) {
  * user came for. The full list is still one command away.
  */
 @Composable
-private fun StorageCheckVerdict(status: StorageSelfTest.Status) {
+private fun StorageCheckVerdict(status: StorageSelfTest.Status, onDismiss: () -> Unit) {
     val text = strings
     val finished = status as? StorageSelfTest.Status.Finished ?: return
     if (finished.passed) return
@@ -646,20 +667,19 @@ private fun StorageCheckVerdict(status: StorageSelfTest.Status) {
         text = finished.output.lastOrNull { it.startsWith(STORAGE_CHECK_TALLY) }
             ?: text.settings.storageCheckFailed,
         tone = PiTone.Danger,
+        modifier = Modifier.clickable(onClick = onDismiss),
     )
     ErrorBody(finished.output.filter { FAILURE_MARKER in it })
 }
 
 /**
- * The catalogue run's state, as the row's value: null while there is nothing to say.
+ * What a finished run announces, as a toast: null while there is nothing to say.
  *
- * A word rather than a sentence, because the value column is a share of the row:
- * "Updated" is the whole fact. The sentence that used to sit under the row for this
- * outcome is gone with the completion banners.
+ * One word rather than a sentence — "已更新" is the whole fact, and the toast's
+ * context is the button that was just pressed beside it. The sentence that used
+ * to sit under the row for this outcome is gone with the completion banners.
  */
-private fun catalogueState(status: CatalogueStatus, text: Strings): String? = when (status) {
-    CatalogueStatus.Idle -> null
-    CatalogueStatus.Running -> text.settings.modelListStateRefreshing
+private fun catalogueVerdict(status: CatalogueStatus, text: Strings): String? = when (status) {
     is CatalogueStatus.Done -> if (status.changed) {
         text.settings.modelListStateUpdated
     } else {
@@ -667,65 +687,33 @@ private fun catalogueState(status: CatalogueStatus, text: Strings): String? = wh
     }
 
     is CatalogueStatus.Failed -> text.settings.modelListStateFailed
+    else -> null
 }
 
 /**
- * The relocation walk's state, as the row's value.
- *
- * The same three outcomes the note under the button reports, in one word each. The
- * damaged-relocator case is a failure here and not a fourth word: from the row's point
- * of view it is a walk that came back with something the user has to act on, and the
- * note is where the action is named.
+ * What the relocation walk announces: the same three outcomes the notice under
+ * it reports, in one word each. The damaged-relocator case is a failure here and
+ * not a fourth word: from the run's point of view it is a walk that came back
+ * with something the user has to act on, and the notice is where the action is
+ * named.
  */
-private fun relocateState(
-    result: PrefixPatcher.Result?,
-    running: Boolean,
-    text: Strings,
-): String? = when {
-    running -> text.settings.relocateStateScanning
-    result == null -> null
+private fun relocateVerdict(result: PrefixPatcher.Result, text: Strings): String = when {
     result.relocatorDamaged || result.errors.isNotEmpty() -> text.settings.relocateStateFailed
     result.changed -> text.settings.relocateStateRepaired
     else -> text.settings.relocateStateClean
 }
 
-/** The self-test's state, as the row's value: the same split as the two above. */
-private fun storageCheckState(status: StorageSelfTest.Status, text: Strings): String? =
+/** What the self-test announces: the same split as the two above. */
+private fun storageVerdict(status: StorageSelfTest.Status, text: Strings): String? =
     when (status) {
-        is StorageSelfTest.Status.Idle -> null
-        is StorageSelfTest.Status.Running -> text.settings.storageCheckRunning
         is StorageSelfTest.Status.Finished -> if (status.passed) {
             text.settings.storageCheckPassed
         } else {
             text.settings.storageCheckFailed
         }
+
+        else -> null
     }
-
-/**
- * The tone a run's state is reported in, which is the design language's vocabulary
- * rather than a colour: `Live` is the one hue for a thing still going, `Accent` is
- * the app's own "this landed", `Danger` is the one that failed, and `Neutral` is a
- * row with nothing to report.
- */
-private fun catalogueTone(status: CatalogueStatus): PiTone = when (status) {
-    CatalogueStatus.Idle -> PiTone.Neutral
-    CatalogueStatus.Running -> PiTone.Live
-    is CatalogueStatus.Done -> PiTone.Accent
-    is CatalogueStatus.Failed -> PiTone.Danger
-}
-
-private fun relocateTone(result: PrefixPatcher.Result?, running: Boolean): PiTone = when {
-    running -> PiTone.Live
-    result == null -> PiTone.Neutral
-    result.relocatorDamaged || result.errors.isNotEmpty() -> PiTone.Danger
-    else -> PiTone.Accent
-}
-
-private fun storageCheckTone(status: StorageSelfTest.Status): PiTone = when (status) {
-    is StorageSelfTest.Status.Idle -> PiTone.Neutral
-    is StorageSelfTest.Status.Running -> PiTone.Live
-    is StorageSelfTest.Status.Finished -> if (status.passed) PiTone.Accent else PiTone.Danger
-}
 
 /**
  * The last line of `tools/storage-self-test.sh`, which carries the verdict's numbers.
