@@ -129,6 +129,27 @@ class TermuxEnv private constructor(context: Context) {
     /** Records which runtime image revision is currently installed. */
     val stampFile: File = File(filesDir, RUNTIME_STAMP_FILE)
 
+    /**
+     * Where the packages the user installed wait out a reinstall.
+     *
+     * Beside the stamp file rather than under `$HOME` or `$PREFIX`: a reinstall
+     * replaces `$PREFIX` wholesale and this has to survive it, and it is
+     * app-managed state (a manifest, cached archives, a report) rather than
+     * anything the user edits. Named here for the same reason as [exportDir] —
+     * the installer and the settings page both need these paths, and a second
+     * spelling of one path is how a restore comes to miss a directory.
+     */
+    val pkgRestoreDir: File = File(filesDir, PKG_RESTORE_DIR)
+
+    /** What still wants restoring: one `name=version` per line. */
+    val pkgRestoreManifest: File = File(pkgRestoreDir, PKG_RESTORE_MANIFEST)
+
+    /** What the last restore did, for the settings page to show. */
+    val pkgRestoreReport: File = File(pkgRestoreDir, PKG_RESTORE_REPORT)
+
+    /** The cached `.deb` archives copied out of apt's cache before the wipe. */
+    val pkgRestoreDebs: File = File(pkgRestoreDir, PKG_RESTORE_DEBS)
+
     /** Pi's config directory (`$HOME/.pi/agent`). */
     val piConfigDir: File = File(home, ".pi/agent")
 
@@ -178,6 +199,13 @@ class TermuxEnv private constructor(context: Context) {
     companion object {
         const val STAGING_DIR_NAME = "usr-staging"
         const val RUNTIME_STAMP_FILE = "runtime-revision.txt"
+
+        /** Where the user's installed packages wait out a reinstall. */
+        const val PKG_RESTORE_DIR = "pkg-restore"
+
+        const val PKG_RESTORE_MANIFEST = "packages.txt"
+        const val PKG_RESTORE_REPORT = "report.txt"
+        const val PKG_RESTORE_DEBS = "debs"
 
         /** The directory under `$HOME` the agent works in; see [workspace]. */
         const val WORKSPACE_DIR_NAME = "workspace"

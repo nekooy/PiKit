@@ -217,6 +217,11 @@ class BootstrapInstaller(private val context: Context) {
             }
 
             currentCoroutineContext().ensureActive()
+            // Before the wipe, and after extraction: the capture reads dpkg's
+            // status from the tree being replaced *and* from the staging tree,
+            // whose status is what the new image ships.
+            captureUserPackages()
+
             onProgress(Progress.Working(0.97f, "Activating environment"))
 
             activateStagingPrefix()
@@ -394,6 +399,136 @@ class BootstrapInstaller(private val context: Context) {
         }
         chmodPrivate(env.prefix)
     }
+
+    // ------------------------------------------------ user packages across it
+
+    /**
+     * Records the packages the user installed before the prefix is replaced.
+     *
+     * A reinstall brings the image's own packages back by unpacking them again;
+     * whatever the user added with `pkg install` lives inside the same tree and
+     * dies with it. So the difference between dpkg's status and the status the
+     * new image ships is written to [TermuxEnv.pkgRestoreManifest] before the
+     * wipe — with every cached `.deb` apt still holds for it — and
+     * [restorePendingPackages] puts it back afterwards.
+     *
+     * This doubles as the migration for installs made before the image
+     * registered its packages: their status at least names the user's own
+     * packages, and everything the image shipped but never registered is
+     * replaced by the new image anyway.
+     *
+     * "The user's" is a difference of *names*, not apt's manual/auto flag. A
+     * package the new image also ships is the image's business — it comes back
+     * at the image's version — and one the old image shipped but the new one
+     * dropped is indistinguishable from the user's, so it is restored: the
+     * safer mistake of the two, and a one-line `pkg remove` to undo.
+     */
+    private fun captureUserPackages() {
+        val installedFile = File(env.prefix, "var/lib/dpkg/status")
+        if (!installedFile.isFile) return  // a first install: nothing to capture
+
+        val shippedFile = File(env.stagingPrefix, "var/lib/dpkg/status")
+        val installed = PackageManifest.parseStatus(installedFile.readText())
+        val shipped = if (shippedFile.isFile) {
+            PackageManifest.parseStatus(shippedFile.readText()).map { it.name }.toSet()
+        } else {
+            emptySet()
+        }
+        val user = PackageManifest.userInstalled(installed, shipped)
+
+        // A manifest can already be there — the previous update captured
+        // packages and the restore never finished (no network, an interrupted
+        // launch). Merging keeps those names; a fresh capture alone would not
+        // see them, because they are no longer in any status file.
+        val previous = if (env.pkgRestoreManifest.isFile) {
+            PackageManifest.parseList(env.pkgRestoreManifest.readText())
+        } else {
+            emptyList()
+        }
+        val wanted = PackageManifest.merge(previous, user)
+        if (wanted.isEmpty()) return
+
+        env.pkgRestoreDir.mkdirsOrThrow()
+        env.pkgRestoreManifest.writeText(PackageManifest.renderList(wanted))
+        env.pkgRestoreDebs.mkdirsOrThrow()
+        for (entry in wanted) {
+            val cached = findCachedDeb(entry.name) ?: continue
+            cached.copyTo(File(env.pkgRestoreDebs, cached.name), overwrite = true)
+        }
+    }
+
+    /**
+     * Puts the captured packages back, and reports what did not come back.
+     *
+     * Two passes, cheapest first: the `.deb`s copied out of apt's cache are
+     * installed directly (which needs no network and no repository still
+     * carrying the version), and whatever is still missing is handed to
+     * `pkg install` in one call. The dpkg wrapper relocates each archive
+     * before unpacking it, so a cached `.deb` that still names the upstream
+     * prefix is repaired on the way in — the same path a hand-run `dpkg -i`
+     * takes.
+     *
+     * The report is rewritten on every attempt and the manifest is trimmed to
+     * what is still missing, so an interrupted or offline restore is finished
+     * by the next attempt instead of being forgotten — and a name that is gone
+     * upstream stays visible as pending rather than silently vanishing.
+     */
+    internal suspend fun restorePendingPackages(): PackageManifest.Report = withContext(Dispatchers.IO) {
+        val wanted = if (env.pkgRestoreManifest.isFile) {
+            PackageManifest.parseList(env.pkgRestoreManifest.readText())
+        } else {
+            emptyList()
+        }
+        if (wanted.isEmpty()) return@withContext PackageManifest.Report(emptyList(), emptyList())
+
+        val log = File(env.pkgRestoreDir, RESTORE_LOG)
+        val debs = wanted.mapNotNull { entry ->
+            env.pkgRestoreDebs.listFiles()
+                ?.filter { it.name.startsWith("${entry.name}_") && it.name.endsWith(".deb") }
+                ?.maxByOrNull { it.lastModified() }
+        }
+        if (debs.isNotEmpty()) {
+            val argv = listOf(env.binDir.resolve("dpkg").absolutePath, "-i") +
+                debs.map { it.absolutePath }
+            runEnvironmentCommand(argv, log, RESTORE_TIMEOUT_SECONDS, "dpkg -i of ${debs.size} cached archive(s)")
+        }
+
+        var missing = PackageManifest.missingAfter(wanted, readInstalledPackages())
+        if (missing.isNotEmpty()) {
+            val argv = listOf(env.binDir.resolve("pkg").absolutePath, "install", "-y") +
+                missing.map { it.name }
+            runEnvironmentCommand(argv, log, RESTORE_TIMEOUT_SECONDS, "pkg install of ${missing.size} package(s)")
+            missing = PackageManifest.missingAfter(wanted, readInstalledPackages())
+        }
+
+        val report = PackageManifest.Report(
+            ready = wanted.filterNot { want -> missing.any { it.name == want.name } },
+            pending = missing,
+        )
+        env.pkgRestoreDir.mkdirsOrThrow()
+        env.pkgRestoreManifest.writeText(PackageManifest.renderList(missing))
+        if (missing.isEmpty()) env.pkgRestoreManifest.delete()
+        env.pkgRestoreReport.writeText(PackageManifest.renderReport(report))
+        report
+    }
+
+    private fun readInstalledPackages(): List<PackageManifest.Entry> {
+        val status = File(env.prefix, "var/lib/dpkg/status")
+        return if (status.isFile) PackageManifest.parseStatus(status.readText()) else emptyList()
+    }
+
+    /**
+     * The newest cached archive for one package, from either place apt keeps
+     * them. The prefix's copy dies with the tree, which is why `capture` reads
+     * both *before* the wipe and keeps what it finds.
+     */
+    private fun findCachedDeb(name: String): File? =
+        listOf(
+            File(context.cacheDir, "apt/archives"),
+            File(env.prefix, "var/cache/apt/archives"),
+        )
+            .flatMap { dir -> dir.listFiles()?.filter { it.name.startsWith("${name}_") && it.name.endsWith(".deb") }.orEmpty() }
+            .maxByOrNull { it.lastModified() }
 
     // ------------------------------------------------- bootstrap second stage
 
@@ -580,12 +715,53 @@ class BootstrapInstaller(private val context: Context) {
      */
     private fun runSecondStage(script: File): Int {
         val log = secondStageLog
+        val code = runEnvironmentCommand(
+            argv = listOf(env.bash.absolutePath, script.absolutePath),
+            log = log,
+            timeoutSeconds = SECOND_STAGE_TIMEOUT_SECONDS,
+            what = "bootstrap second stage",
+        )
+        if (code != EXIT_OK) {
+            Log.w(
+                TAG,
+                "Bootstrap second stage failed: exit $code, " +
+                    "left $FALLBACK_SCRIPT in place, log ${log.absolutePath}",
+            )
+        }
+        return code
+    }
 
+    /**
+     * Runs one environment command and waits for it, bounded.
+     *
+     * 120 s is generous for the ~30 `postinst` scripts in the bootstrap, which
+     * mostly edit dpkg's own database and call `update-alternatives`; the bound
+     * exists so one wedged maintainer script cannot make first launch look like
+     * a hang. `destroyForcibly` signals the direct child only, so a `postinst`
+     * that `bash` already spawned outlives the timeout — the transcript in the
+     * log says which package it stopped at.
+     *
+     * The command is handed to `$PREFIX/bin/bash` rather than executed directly
+     * when it is a script: the bootstrap zip carries no Unix modes and
+     * [needsExecutableBit] only covers `bin/`, `libexec`, apt's helpers and
+     * `node_modules`, so a script from the archive is not executable after
+     * extraction — which is why Termux's own hook `chmod +x`es the second stage
+     * before running it. Naming the interpreter skips that step entirely.
+     *
+     * @return the command's exit code, or a negative sentinel when it could not
+     *   be started or had to be killed.
+     */
+    private fun runEnvironmentCommand(
+        argv: List<String>,
+        log: File,
+        timeoutSeconds: Long,
+        what: String,
+    ): Int {
         val process = try {
-            ProcessBuilder(listOf(env.bash.absolutePath, script.absolutePath))
+            ProcessBuilder(argv)
                 // A directory that exists and is writable — the same
                 // `home.also { mkdirs() }` the other child processes use. The
-                // script changes to `/` itself before running a maintainer
+                // second stage changes to `/` itself before running a maintainer
                 // script, so this only has to be somewhere sane.
                 .directory(env.home.also { it.mkdirs() })
                 // Both streams into the log file, so neither can land in the
@@ -597,7 +773,7 @@ class BootstrapInstaller(private val context: Context) {
                 // instead of waiting out the timeout below.
                 .redirectInput(ProcessBuilder.Redirect.from(File(NULL_DEVICE)))
                 .apply {
-                    // Cleared rather than amended. The script enforces
+                    // Cleared rather than amended. The second stage enforces
                     // `TERMUX__UID` only when it is set, and this app has no
                     // Termux app to take that value from; leaving the app's
                     // environment in place would also leave `PATH` pointing at
@@ -612,14 +788,14 @@ class BootstrapInstaller(private val context: Context) {
                 }
                 .start()
         } catch (t: Throwable) {
-            Log.w(TAG, "Could not start the bootstrap second stage; log ${log.absolutePath}", t)
+            Log.w(TAG, "Could not start $what; log ${log.absolutePath}", t)
             return COULD_NOT_START
         }
 
         val finished = try {
-            process.waitFor(SECOND_STAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         } catch (t: Throwable) {
-            Log.w(TAG, "Waiting for the bootstrap second stage failed; log ${log.absolutePath}", t)
+            Log.w(TAG, "Waiting for $what failed; log ${log.absolutePath}", t)
             process.destroyForcibly()
             return COULD_NOT_START
         }
@@ -814,6 +990,17 @@ class BootstrapInstaller(private val context: Context) {
          * hung forever.
          */
         const val SECOND_STAGE_TIMEOUT_SECONDS = 120L
+
+        /** The restore transcript, beside the manifest it describes. */
+        const val RESTORE_LOG = "restore.log"
+
+        /**
+         * The same generous bound, for `dpkg -i` of a handful of cached
+         * archives and one `pkg install` call. Both are bounded rather than
+         * trusted: a restore must not be able to hang the environment it is
+         * restoring into.
+         */
+        const val RESTORE_TIMEOUT_SECONDS = 120L
 
         const val KILL_GRACE_SECONDS = 5L
 

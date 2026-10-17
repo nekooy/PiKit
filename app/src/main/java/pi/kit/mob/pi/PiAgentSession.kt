@@ -207,6 +207,17 @@ class PiAgentSession private constructor(context: Context) {
                 // Runs after the unpack so `$HOME` exists; harmless when the
                 // permission has not been granted yet.
                 syncStorageLinks()
+                // The packages a reinstall displaced are put back in the
+                // background rather than awaited here: the pass can need a
+                // network (a cached `.deb` covers most names offline, but not a
+                // name whose archive apt has already dropped) and this lock is
+                // what `startAgent` waits on. `restorePendingPackages` is
+                // idempotent and trims its manifest as it goes, so a launch
+                // killed mid-restore finishes the job on the next one.
+                scope.launch {
+                    runCatching { installer.restorePendingPackages() }
+                        .onFailure { Log.w(TAG, "Restoring the user's packages failed", it) }
+                }
             }
             true
         } catch (t: Throwable) {
