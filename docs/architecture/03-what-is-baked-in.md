@@ -271,4 +271,35 @@ and remove packages without it, and the official Termux bootstrap has the same o
 so this is a limit that is accepted rather than fixed: bundling `perl` to make three
 developer scripts run would pay for a language runtime on every device.
 
+## The bundled packages are registered with dpkg
+
+The overlay's `.deb` files are extracted by hand — `extract_deb` reads the archive's data
+member — and that is not the same thing as being *installed*. Without dpkg's records the
+files are ones no package owns: `pkg upgrade` re-downloads a package that is already on
+disk as if it had never been installed, `pkg remove` leaves every file behind, and a later
+install can conflict with a phantom. So the extraction also reads each archive's control
+member and writes what dpkg would have written:
+
+- `var/lib/dpkg/status` — the merged ledger. The overlay extracts *over* the bootstrap and
+  its `status` replaces the bootstrap's, so the file written at build time carries both:
+  the bootstrap's own paragraphs, with the ones the overlay re-ships (a newer `zlib`,
+  `openssl`, ...) replaced in place by the overlay's stanza. A package the ledger omits is
+  invisible to `pkg` however real its files are.
+- `var/lib/dpkg/info/<pkg>.list` and `.md5sums` — the file list and checksums, in dpkg's
+  own formats (`/data/...` absolute paths with trailing slashes on directories; checksum
+  paths minus the leading slash). The maintainer scripts and `conffiles` from the control
+  member are copied beside them, and the `postinst` scripts are run by the bootstrap's
+  second stage along with the bootstrap's own — which is the same "finish the
+  configuration" pass Termux's bootstrap needs, not a second mechanism.
+
+These records are written in the upstream prefix form and relocated with the rest of the
+tree by `prefix_patch`, exactly as the bootstrap's own `info/` files are. The md5sums are
+therefore stale for any file the relocation rewrites — the same staleness the bootstrap's
+own md5sums carry out of the same pipeline — and dpkg consults them only for conffile
+prompts and `dpkg -V`, never for install or remove.
+
+`verify-runtime-image.py` asserts the ledger against the assembled tree: every registered
+package has a file list, and every path a `.list` claims is in the image — the check that
+catches a list the relocation missed or a package whose files went missing.
+
 ---

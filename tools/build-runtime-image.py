@@ -453,6 +453,54 @@ def resolve_closure(
 # --------------------------------------------------------------------------- #
 
 
+#: Maintainer scripts dpkg keeps beside a package's file list under
+#: `var/lib/dpkg/info/<pkg>.<script>`. They are copied out of the archive's
+#: control member rather than run: the image unpacks packages the way Termux's
+#: bootstrap does — by hand — and `termux-bootstrap-second-stage.sh` runs the
+#: `postinst` scripts afterwards, exactly as it does for the bootstrap's own
+#: packages. `config` is included because dpkg treats it as one of them.
+MAINTAINER_SCRIPTS = ("preinst", "postinst", "prerm", "postrm", "config")
+
+
+@dataclass
+class DebRecord:
+    """
+    What dpkg needs to know about a package the image unpacks by hand.
+
+    The image builds `var/lib/dpkg/status` and `var/lib/dpkg/info/<pkg>.*` from
+    these, without which the packages are files nothing owns: `pkg upgrade`
+    re-downloads them as if never installed, `pkg remove` leaves every file
+    behind, and a package that shadows one of them conflicts with a phantom.
+    """
+
+    name: str
+    #: The status paragraph: the archive's control fields plus a `Status:` line.
+    stanza: str
+    #: `(target, path relative to $PREFIX)` pairs for `SYMLINKS.txt`.
+    symlinks: list[tuple[str, str]] = field(default_factory=list)
+
+
+def dpkg_list_line(member_name: str, is_dir: bool) -> str:
+    """
+    The `.list` line dpkg records for one data-tar member.
+
+    dpkg writes the member's path with `./` replaced by `/` and a trailing
+    slash on directories — `/data/`, `/data/data/com.termux/files/usr/bin/node`
+    — including the ancestor directories the tar lists before each file. That
+    is the format the bootstrap's own `info/*.list` files carry, and the prefix
+    relocation rewrites these lines like every other path in the tree.
+    """
+    name = member_name
+    if name in (".", "./"):
+        return "/."
+    if name.startswith("./"):
+        name = name[2:]
+    line = "/" + name.lstrip("/")
+    if is_dir and not line.endswith("/"):
+        line += "/"
+    return line
+
+
 def deb_entry_to_relative(name: str) -> str | None:
     """
     Maps a Debian tarball member path to a path relative to `$PREFIX`.
@@ -471,35 +519,26 @@ def deb_entry_to_relative(name: str) -> str | None:
     return None
 
 
-def extract_deb(deb_path: Path, destination: Path) -> list[tuple[str, str]]:
-    """
-    Unpacks a .deb's data member into `destination` (the overlay root, which
-    maps onto `$PREFIX`).
-
-    Returns the symlinks found, as (target, path-relative-to-prefix) pairs, which
-    the runtime zip cannot represent directly and so must record in
-    `SYMLINKS.txt` for the on-device installer to recreate.
-    """
+def read_ar_members(deb_path: Path) -> dict[str, bytes]:
+    """Every named member of a `.deb`'s `ar` container, read whole."""
     with open(deb_path, "rb") as handle:
         if handle.read(8) != b"!<arch>\n":
             raise SystemExit(f"{deb_path} is not an ar archive")
-        member = None
+        members: dict[str, bytes] = {}
         while True:
             header = handle.read(60)
             if len(header) < 60:
                 break
             name = header[0:16].decode("ascii", "replace").strip()
             size = int(header[48:58].decode("ascii", "replace").strip() or 0)
-            data = handle.read(size)
+            members[name] = handle.read(size)
             if size % 2:
                 handle.read(1)
-            if name.startswith("data.tar"):
-                member = data
-                break
+    return members
 
-    if member is None:
-        raise SystemExit(f"{deb_path} has no data.tar member")
 
+def open_deb_tar(member: bytes) -> tarfile.TarFile:
+    """A `.deb` tar member — gzip, xz, zstd or already plain — as a stream."""
     stream: io.BufferedIOBase = io.BytesIO(member)
     if member[:2] == b"\x1f\x8b":
         import gzip
@@ -508,24 +547,95 @@ def extract_deb(deb_path: Path, destination: Path) -> list[tuple[str, str]]:
     elif member[:6] == b"\xfd7zXZ\x00":
         import lzma
 
+        # `LZMAFile`'s first parameter is named `filename` but accepts any file
+        # object; the keyword `fileobj` does not exist (and the xz branch of
+        # this used to be a latent crash, exercised only by an xz'd member).
         stream = lzma.LZMAFile(io.BytesIO(member))  # type: ignore[assignment]
     elif member[:4] == b"\x28\xb5\x2f\xfd":
         stream = zstd_stream(member)  # type: ignore[assignment]
+    return tarfile.open(fileobj=stream, mode="r|")
+
+
+def extract_deb(deb_path: Path, destination: Path) -> DebRecord:
+    """
+    Unpacks a .deb into `destination` (the overlay root, which maps onto
+    `$PREFIX`) and writes the dpkg records for it.
+
+    The data member becomes files plus a symlink list for `SYMLINKS.txt`; the
+    control member becomes the package's ledger under `var/lib/dpkg/info/` —
+    its `.list`, `.md5sums`, conffiles and maintainer scripts. Without those
+    records the files are ones no package owns: `pkg upgrade` re-downloads the
+    package as if it had never been installed, `pkg remove` leaves every file
+    behind, and dpkg cannot answer "what owns this path". The status paragraph
+    is returned rather than written; `write_dpkg_status` merges it with the
+    bootstrap's own.
+
+    The `.list`/`.md5sums` paths and the scripts' shebangs are written in the
+    upstream form and relocated with the rest of the tree by `prefix_patch`,
+    exactly as the bootstrap's own `info/` files are. The md5sums are therefore
+    stale for any file the relocation rewrites — the same staleness the
+    bootstrap's own md5sums carry out of the same pipeline — and dpkg consults
+    them only for conffile prompts and `dpkg -V`, never for install or remove.
+    """
+    members = read_ar_members(deb_path)
+    data = next((v for k, v in members.items() if k.startswith("data.tar")), None)
+    control = next((v for k, v in members.items() if k.startswith("control.tar")), None)
+    if data is None:
+        raise SystemExit(f"{deb_path} has no data.tar member")
+
+    control_files: dict[str, bytes] = {}
+    if control is not None:
+        with open_deb_tar(control) as tar:
+            for entry in tar:
+                if entry.isfile():
+                    source = tar.extractfile(entry)
+                    if source is not None:
+                        control_files[entry.name.removeprefix("./")] = source.read()
+
+    control_text = control_files.get("control", b"").decode("utf-8", "replace")
+    name = next(
+        (
+            line.split(": ", 1)[1].strip()
+            for line in control_text.splitlines()
+            if line.startswith("Package: ")
+        ),
+        "",
+    )
+    if not name:
+        raise SystemExit(f"{deb_path} has no Package field in its control file")
+
+    info = destination / "var" / "lib" / "dpkg" / "info"
+    info.mkdir(parents=True, exist_ok=True)
+    for script in MAINTAINER_SCRIPTS:
+        body = control_files.get(script)
+        if body is not None:
+            (info / f"{name}.{script}").write_bytes(body)
+    if "conffiles" in control_files:
+        (info / f"{name}.conffiles").write_bytes(control_files["conffiles"])
 
     symlinks: list[tuple[str, str]] = []
+    list_lines: list[str] = []
+    md5_lines: list[str] = []
     skipped = 0
-    with tarfile.open(fileobj=stream, mode="r|") as tar:
+    with open_deb_tar(data) as tar:
         for entry in tar:
+            if entry.name in (".", "./"):
+                list_lines.append("/.")
+                continue
+
             relative = deb_entry_to_relative(entry.name)
-            if relative is None:
-                # Every member is preceded by its ancestor directories
-                # (`./`, `./data`, `./data/data`, ...). Those are created
-                # implicitly by the mkdir below, so only count real strays.
-                raw = (entry.name[2:] if entry.name.startswith("./") else entry.name)
-                raw = raw.strip("/")
-                if raw and not DEB_PATH_PREFIX.startswith(raw + "/"):
+            raw = (entry.name[2:] if entry.name.startswith("./") else entry.name).strip("/")
+            is_ancestor = bool(raw) and DEB_PATH_PREFIX.startswith(raw + "/")
+            if relative is None and not is_ancestor:
+                # Real strays only: every member is preceded by its ancestor
+                # directories (`./data`, `./data/data`, ...), which the mkdir
+                # below creates implicitly and dpkg still records as owned.
+                if raw:
                     skipped += 1
                 continue
+
+            list_lines.append(dpkg_list_line(entry.name, entry.isdir()))
+
             if not relative:
                 continue
 
@@ -547,9 +657,26 @@ def extract_deb(deb_path: Path, destination: Path) -> list[tuple[str, str]]:
             source = tar.extractfile(entry)
             if source is None:
                 continue
+            # MD5 is dpkg's own format here — `dpkg -V` and the conffile
+            # prompts read exactly these lines.
+            digest = hashlib.md5()  # noqa: S324 - not a security boundary
             with open(target, "wb") as out:
-                shutil.copyfileobj(source, out)
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    out.write(chunk)
             os.chmod(target, entry.mode & 0o7777 or 0o644)
+            # md5sums paths are absolute minus the leading slash.
+            md5_lines.append(f"{digest.hexdigest()}  {dpkg_list_line(entry.name, False)[1:]}")
+
+    (info / f"{name}.list").write_text(
+        "\n".join(list_lines) + "\n", encoding="utf-8", newline="\n"
+    )
+    (info / f"{name}.md5sums").write_text(
+        "\n".join(md5_lines) + "\n", encoding="utf-8", newline="\n"
+    )
 
     if skipped:
         log(
@@ -557,7 +684,62 @@ def extract_deb(deb_path: Path, destination: Path) -> list[tuple[str, str]]:
             "outside $PREFIX"
         )
 
-    return symlinks
+    return DebRecord(
+        name=name,
+        stanza=control_text.rstrip("\n") + "\nStatus: install ok installed",
+        symlinks=symlinks,
+    )
+
+
+def write_dpkg_status(overlay_root: Path, bootstrap_zip: Path, records: list[DebRecord]) -> None:
+    """
+    Writes the merged `var/lib/dpkg/status` into the overlay.
+
+    The overlay extracts *over* the bootstrap on the device and its `status`
+    replaces the bootstrap's, so the file written here has to carry both: the
+    bootstrap's own paragraphs, with the ones the overlay re-ships (a newer
+    zlib, openssl, ...) replaced in place by the overlay's. Without the merge
+    the ledger would forget every package the bootstrap registered the moment
+    the overlay landed.
+    """
+    with zipfile.ZipFile(bootstrap_zip) as archive:
+        try:
+            base_text = archive.read("var/lib/dpkg/status").decode("utf-8")
+        except KeyError:
+            base_text = ""
+
+    paragraphs: dict[str, str] = {}
+    order: list[str] = []
+    for paragraph in base_text.split("\n\n"):
+        paragraph = paragraph.strip("\n")
+        if not paragraph:
+            continue
+        pname = next(
+            (
+                line.split(": ", 1)[1].strip()
+                for line in paragraph.splitlines()
+                if line.startswith("Package: ")
+            ),
+            None,
+        )
+        if pname is None:
+            continue
+        paragraphs[pname] = paragraph
+        order.append(pname)
+
+    for record in records:
+        if record.name not in paragraphs:
+            order.append(record.name)
+        paragraphs[record.name] = record.stanza
+
+    target = overlay_root / "var" / "lib" / "dpkg" / "status"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "\n\n".join(paragraphs[pname] for pname in order) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    log(f"registered {len(records)} package(s) in dpkg's ledger ({len(order)} total)")
 
 
 def zstd_stream(member: bytes):
@@ -1179,13 +1361,22 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     log("layering packages: " + ", ".join(f"{p.name} {p.version}" for p in resolved))
 
     symlinks: list[tuple[str, str]] = []
+    records: list[DebRecord] = []
     for package in resolved:
         url = f"{APT_BASE}/{package.filename}"
         deb = CACHE_DIR / "debs" / safe_filename(
             f"{package.name}_{package.version}_{package.architecture}.deb"
         )
         download(url, deb, expected_sha256=package.sha256)
-        symlinks.extend(extract_deb(deb, overlay_root))
+        record = extract_deb(deb, overlay_root)
+        symlinks.extend(record.symlinks)
+        records.append(record)
+
+    # The ledger is merged against the bootstrap's own status and written here,
+    # before the tree is relocated: `prefix_patch` rewrites the paths inside it
+    # like every other path in the tree, and the bootstrap's 83 registered
+    # packages must survive the overlay replacing `status` on the device.
+    write_dpkg_status(overlay_root, bootstrap, records)
 
     # 3. pi ------------------------------------------------------------------
     pi_cache = vendor_pi(CACHE_DIR / "pi", pi_version)
