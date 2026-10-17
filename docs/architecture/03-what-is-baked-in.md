@@ -135,6 +135,19 @@ after every archive is applied, so an interrupted install cannot leave a
 half-populated `$PREFIX`. `$HOME` lives outside `$PREFIX`, so reinstalling the
 runtime never discards the user's Pi sessions.
 
+What the user installed *inside* `$PREFIX` is a different matter, and the
+installer treats it as data to carry across rather than as part of the image:
+before the wipe it writes the difference between dpkg's status and the status
+the new image ships — the names `pkg install` added — to
+`files/pkg-restore/packages.txt`, together with every cached `.deb` apt still
+holds for them, and puts them back afterwards (`dpkg -i` for the cached
+archives, one `pkg install` call for whatever is left). The report beside the
+manifest says what came back and what did not; the manifest is trimmed to the
+remainder so the next launch finishes the job instead of forgetting it. This is
+also the migration for installs made before the image registered its packages
+with dpkg: their status at least names the user's own packages, and everything
+the image shipped but never registered is replaced by the image anyway.
+
 ## The vendored trees are trimmed by a delete list, and the documentation rides on it
 
 Both vendored trees are trimmed of what nothing loads, and the rule that does it is a
