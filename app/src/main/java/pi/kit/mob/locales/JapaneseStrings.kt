@@ -755,12 +755,34 @@ internal object JapaneseStrings : Strings {
         override fun relocateScanning(files: Int) = "確認中…$files ファイルを走査"
         override val relocateBroken =
             "この実行環境のパッケージ再配置ツールが壊れているため、修復では直りません。" +
-                "PiKit を再インストールしてください（実行環境はアプリから展開し直されます）。"
+                "下の「実行環境を再構築」で実行環境をアプリから展開し直してください。"
         override val relocateProblems = "完了しましたが問題があります："
         override val relocateStateScanning = "確認中"
         override val relocateStateRepaired = "修復済み"
         override val relocateStateClean = "修復不要"
         override val relocateStateFailed = "修復失敗"
+
+        override val packagesRow = "パッケージ"
+        override val packagesRowSubtitle =
+            "pkg install で入れたパッケージは更新後も残ります。バージョンは手動で同期できます"
+        override fun packagesInstalled(count: Int) = "$count 個入り"
+        override fun packagesRestored(count: Int) = "$count 個を復元済み"
+        override fun packagesPending(count: Int) = "$count 個が未復元"
+        override fun packagesUpgradable(count: Int) = "$count 個に更新があります"
+        override fun packagesPendingNote(names: String) =
+            "まだ戻っていません：$names。ターミナルで pkg install -y $names を実行すると再試行できます。"
+        override val packagesUpgradableNote =
+            "アプリ同梱の環境の方が新しいバージョンです。ターミナルで pkg upgrade を実行すると" +
+                "最新版に更新できます。"
+        override val rebuildEnvironment = "実行環境を再構築"
+        override val rebuildEnvironmentSubtitle =
+            "ランタイムを展開し直します。入れたパッケージは記録され、後で復元されます"
+        override val rebuildEnvironmentNow = "再構築"
+        override val rebuildEnvironmentConfirm =
+            "実行中の会話を停止し、ランタイムをアプリから展開し直します（約30秒）。" +
+                "pkg install で入れたパッケージは先に記録され、後で戻ります。" +
+                "apt にキャッシュが残っていないものは通信が必要です。"
+        override val rebuildEnvironmentConfirmNow = "再構築"
 
         override val storageCheck = "ストレージを確認"
         override val storageCheckSubtitle = "読み書きと削除の安全性を実測します"

@@ -718,13 +718,32 @@ internal object ChineseStrings : Strings {
                 "读取运行环境里的每个文件并改写其中的路径；环境之外的东西不会被改，也不会被删除。"
         override fun relocateScanning(files: Int) = "正在检测…已扫描 $files 个文件"
         override val relocateBroken =
-            "当前运行环境里的包重定位器已经损坏，修复无法解决。请重新安装 PiKit —— " +
+            "当前运行环境里的包重定位器已经损坏，修复无法解决。请用下方的「重建运行环境」—— " +
                 "运行环境会从应用里重新解包。"
         override val relocateProblems = "完成，但存在问题："
         override val relocateStateScanning = "检测中"
         override val relocateStateRepaired = "已修复"
         override val relocateStateClean = "无需修复"
         override val relocateStateFailed = "修复失败"
+
+        override val packagesRow = "软件包"
+        override val packagesRowSubtitle = "pkg install 装的包会随更新保留；版本可手动同步到最新"
+        override fun packagesInstalled(count: Int) = "已安装 $count 个"
+        override fun packagesRestored(count: Int) = "已恢复 $count 个"
+        override fun packagesPending(count: Int) = "$count 个待恢复"
+        override fun packagesUpgradable(count: Int) = "$count 个有可用更新"
+        override fun packagesPendingNote(names: String) =
+            "仍未装回：$names。在终端里运行 pkg install -y $names 可以重试。"
+        override val packagesUpgradableNote =
+            "应用附带的环境比它们更新。在终端里运行 pkg upgrade 即可更新到最新版本。"
+        override val rebuildEnvironment = "重建运行环境"
+        override val rebuildEnvironmentSubtitle = "从安装包重新解包；已装的软件包会先记录、之后自动尝试装回"
+        override val rebuildEnvironmentNow = "重建"
+        override val rebuildEnvironmentConfirm =
+            "这会停止正在运行的对话，并从安装包重新解包整个运行环境（大约半分钟）。" +
+                "你用 pkg install 装的软件包会被先记下来、之后装回去；" +
+                "apt 已没有缓存安装包的那部分需要联网下载。"
+        override val rebuildEnvironmentConfirmNow = "重建"
 
         override val storageCheck = "检查存储"
         override val storageCheckSubtitle = "实测读写与防误删是否真的有效"

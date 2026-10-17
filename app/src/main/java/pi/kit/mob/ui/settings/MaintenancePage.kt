@@ -13,15 +13,22 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,7 +118,15 @@ internal fun MaintenancePage(
     val catalogueStatus by catalogue.status.collectAsState()
     val version by catalogue.version.collectAsState()
     val storageCheck by selfTest.status.collectAsState()
+    val packages by session.packages.collectAsState()
+    val rebuildRunning by session.rebuildRunning.collectAsState()
+    var confirmRebuild by remember { mutableStateOf(false) }
     val text = strings
+
+    // The ledger is read when the page is opened rather than kept live: nothing
+    // changes it while the user is looking at this page except a run they start
+    // from it, and those refresh it themselves.
+    LaunchedEffect(Unit) { session.refreshPackages() }
 
     // The bar has no inset of its own: `PiScaffold` zeroes it, because where a
     // page's top edge is is the page's business. Nothing above a settings page
@@ -211,6 +226,18 @@ internal fun MaintenancePage(
             // answers "do I need this", and the honest answer is almost always no.
             PiSectionHeader(text.settings.installedPackages)
             PiGroup {
+                // The ledger's state first, because it is the question the
+                // section answers before any button in it does: did my packages
+                // survive, and are they current. No control on this row — it is
+                // a fact, and the two below are the actions.
+                PiRow(
+                    title = text.settings.packagesRow,
+                    subtitle = text.settings.packagesRowSubtitle,
+                    value = packagesValue(packages, text),
+                    valueColor = packagesTone(packages).ink(MaterialTheme.colorScheme),
+                    leading = { RunMark(Icons.Filled.Inventory2) },
+                )
+                PiRowDivider()
                 val repairSettled = !repairRunning && repair != null
                 PiRow(
                     title = text.settings.relocate,
@@ -232,7 +259,28 @@ internal fun MaintenancePage(
                         )
                     },
                 )
+                PiRowDivider()
+                // The escape hatch, last and separate: every button above it
+                // repairs something inside the environment, and this one
+                // replaces the environment. Its subtitle is the cost sentence —
+                // what is kept and where it goes afterwards — because the name
+                // alone reads like a refresh. Pressing it asks first.
+                PiRow(
+                    title = text.settings.rebuildEnvironment,
+                    subtitle = text.settings.rebuildEnvironmentSubtitle,
+                    leading = { RunMark(Icons.Filled.Restore) },
+                    trailing = {
+                        RunControl(
+                            running = rebuildRunning,
+                            hasResult = false,
+                            label = text.settings.rebuildEnvironmentNow,
+                            onAction = { confirmRebuild = true },
+                        )
+                    },
+                )
             }
+
+            packages?.let { report -> PackagesNotices(report) }
 
             repair?.let { result -> RelocationVerdict(result) }
 
@@ -264,6 +312,28 @@ internal fun MaintenancePage(
 
             StorageCheckVerdict(storageCheck)
         }
+    }
+
+    // The one press on this page that replaces something rather than repairing
+    // it, so it asks first. The dialog says the two things being decided: what
+    // stops (a running conversation) and what is kept (the user's packages).
+    if (confirmRebuild) {
+        AlertDialog(
+            onDismissRequest = { confirmRebuild = false },
+            title = { Text(text.settings.rebuildEnvironment) },
+            text = { Text(text.settings.rebuildEnvironmentConfirm) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmRebuild = false
+                        session.rebuildEnvironment()
+                    },
+                ) { Text(text.settings.rebuildEnvironmentConfirmNow) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRebuild = false }) { Text(text.common.cancel) }
+            },
+        )
     }
 }
 
@@ -345,6 +415,51 @@ private fun relocateValue(
     text.settings.relocateScanning(scanned)
 } else {
     relocateState(result, running, text).orEmpty()
+}
+
+/**
+ * The ledger's state as the row's one phrase: whatever the reader needs first.
+ *
+ * A restore that left names behind outranks the update hint, which outranks the
+ * story of what the last restore did, which outranks a bare count — the same
+ * "one fact in the value column" rule the runs on this page follow. The detail
+ * the phrase cannot carry is in [PackagesNotices] under the group.
+ */
+private fun packagesValue(report: PiAgentSession.PackagesReport?, text: Strings): String =
+    when {
+        report == null -> ""
+        report.pending.isNotEmpty() -> text.settings.packagesPending(report.pending.size)
+        report.upgradable.isNotEmpty() -> text.settings.packagesUpgradable(report.upgradable.size)
+        report.restored.isNotEmpty() -> text.settings.packagesRestored(report.restored.size)
+        else -> text.settings.packagesInstalled(report.installed)
+    }
+
+/** What [packagesValue] says, in the tone that says it. */
+private fun packagesTone(report: PiAgentSession.PackagesReport?): PiTone =
+    when {
+        report == null -> PiTone.Neutral
+        report.pending.isNotEmpty() -> PiTone.Danger
+        report.upgradable.isNotEmpty() -> PiTone.Live
+        report.restored.isNotEmpty() -> PiTone.Accent
+        else -> PiTone.Neutral
+    }
+
+/**
+ * What a count cannot say: which names a restore left behind, and which command
+ * closes an update gap. One notice each, under the group — the page's "the row
+ * states the fact, the note answers" split. Neither is a button: both answers
+ * are commands the terminal runs, and a button here would have to download
+ * something the note only points at.
+ */
+@Composable
+private fun PackagesNotices(report: PiAgentSession.PackagesReport) {
+    if (report.pending.isNotEmpty()) {
+        val names = report.pending.joinToString(", ") { it.name }
+        PiNotice(text = strings.settings.packagesPendingNote(names))
+    }
+    if (report.upgradable.isNotEmpty()) {
+        PiNotice(text = strings.settings.packagesUpgradableNote, tone = PiTone.Live)
+    }
 }
 
 /**

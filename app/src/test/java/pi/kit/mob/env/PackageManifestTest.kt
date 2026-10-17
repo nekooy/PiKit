@@ -138,4 +138,36 @@ class PackageManifestTest {
         assertEquals("", PackageManifest.renderList(entries))
         assertTrue(PackageManifest.parseList("").isEmpty())
     }
+
+    @Test
+    fun `versions order the way the update hint needs`() {
+        // The hint answers "does the image ship newer than the device has", so
+        // what matters is order, not dpkg's whole algorithm: an epoch, a
+        // missing revision, and the tilde Debian uses for a prerelease.
+        assertTrue(PackageManifest.compareVersions("26.5.0-1", "26.4.0-1") > 0)
+        assertTrue(PackageManifest.compareVersions("11.21.1", "11.22.0") < 0)
+        assertEquals(0, PackageManifest.compareVersions("1.3.1", "1.3.1"))
+        assertTrue(PackageManifest.compareVersions("1.3.1", "1.3.1-1") < 0)
+        assertTrue(PackageManifest.compareVersions("1:3.6.5", "3.6.5") > 0)
+        assertTrue(PackageManifest.compareVersions("1.0~rc1", "1.0") < 0)
+    }
+
+    @Test
+    fun `only a strictly newer shipped version counts as an update`() {
+        val installed = listOf(
+            PackageManifest.Entry("nodejs", "26.4.0-1"),      // image ships 26.5.0-1: newer
+            PackageManifest.Entry("zlib", "1.3.1"),           // equal: not an update
+            PackageManifest.Entry("npm", "11.22.0"),          // device is ahead: not an update
+            PackageManifest.Entry("android-tools", "34.0.4"), // the image ships no version for it
+        )
+        val shipped = mapOf(
+            "nodejs" to "26.5.0-1",
+            "zlib" to "1.3.1",
+            "npm" to "11.21.1",
+        )
+        assertEquals(
+            listOf("nodejs"),
+            PackageManifest.upgradable(installed, shipped).map { it.name },
+        )
+    }
 }

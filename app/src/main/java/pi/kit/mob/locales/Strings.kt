@@ -1546,6 +1546,54 @@ interface Strings {
         val relocateStateClean: String
         val relocateStateFailed: String
 
+        // The environment's packages
+        /**
+         * The ledger's state as one row, whose value is one of the count
+         * phrases below — the same "the row states the fact" split as the runs
+         * on this page. The subtitle is the standing sentence: what is kept
+         * across updates, and what `pkg upgrade` is for.
+         */
+        val packagesRow: String
+        val packagesRowSubtitle: String
+        fun packagesInstalled(count: Int): String
+
+        /** The count a last restore brought back; the one-time migration notice. */
+        fun packagesRestored(count: Int): String
+
+        /** Names the restore could not bring back; the note names them. */
+        fun packagesPending(count: Int): String
+
+        /**
+         * The image ships a newer version than the device has. Offline by
+         * construction — the comparison is against the bundled
+         * `build-metadata.json` — so the note names the command that closes the
+         * gap rather than a button that would have to download anything itself.
+         */
+        fun packagesUpgradable(count: Int): String
+        fun packagesPendingNote(names: String): String
+        val packagesUpgradableNote: String
+
+        /**
+         * Re-extracts the runtime from the APK — the escape hatch the
+         * seed/content split made rarely needed. The subtitle is deliberately
+         * the *cost* sentence ("your packages are recorded and restored after"),
+         * because the button's name alone invites the press the relocation
+         * button used to.
+         */
+        val rebuildEnvironment: String
+        val rebuildEnvironmentSubtitle: String
+        val rebuildEnvironmentNow: String
+
+        /**
+         * The confirmation. It says what stops (a running conversation) and
+         * what is kept (the user's packages), because those are the two things
+         * a reader is deciding about.
+         */
+        val rebuildEnvironmentConfirm: String
+
+        /** The dialog's confirm button: it says what it does, not `OK`. */
+        val rebuildEnvironmentConfirmNow: String
+
         // Storage self-test
         val storageCheck: String
         val storageCheckSubtitle: String

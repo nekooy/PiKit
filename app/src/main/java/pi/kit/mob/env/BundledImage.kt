@@ -3,6 +3,8 @@ package pi.kit.mob.env
 import android.content.Context
 import android.os.Build
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import pi.kit.mob.BuildConfig
@@ -34,8 +36,18 @@ object BundledImage {
      * image builder was asked to vendor, which is `null` in an image built from
      * "latest" rather than from a pin (the About page reads pi's own `package.json`
      * for the version that is actually installed, which is the better answer anyway).
+     *
+     * [packages] is the bundled set as the build resolved it, name to version. It
+     * is the offline reference the maintenance page compares the device's dpkg
+     * status against — the difference is what it reports as packages with updates
+     * available, since the environment evolves through `pkg upgrade` rather than
+     * through app updates (ARCHITECTURE §3).
      */
-    data class Metadata(val bootstrapTag: String, val piVersion: String?)
+    data class Metadata(
+        val bootstrapTag: String,
+        val piVersion: String?,
+        val packages: Map<String, String> = emptyMap(),
+    )
 
     @Volatile
     private var cached: Metadata? = null
@@ -118,9 +130,16 @@ object BundledImage {
         val payload = runCatching { Json.parseToJsonElement(json).jsonObject }.getOrNull() ?: return null
         val tag = payload["bootstrap_tag"]?.jsonPrimitive?.content.orEmpty()
         if (tag.isBlank()) return null
+        val packages = buildMap {
+            val declared = payload["packages"] as? JsonObject ?: return@buildMap
+            for ((name, value) in declared) {
+                if (value is JsonPrimitive) put(name, value.content)
+            }
+        }
         return Metadata(
             bootstrapTag = tag,
             piVersion = payload["pi_version"]?.jsonPrimitive?.content?.takeIf { it != "null" },
+            packages = packages,
         )
     }
 }
