@@ -14,6 +14,8 @@ import pi.kit.mob.data.catalogueRefreshEnvironment
 import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.env.BootstrapInstaller
 import pi.kit.mob.env.BundledExtension
+import pi.kit.mob.env.BundledImage
+import pi.kit.mob.env.PackageManifest
 import pi.kit.mob.env.PrefixPatcher
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.env.TermuxEnv
@@ -217,6 +219,10 @@ class PiAgentSession private constructor(context: Context) {
                 scope.launch {
                     runCatching { installer.restorePendingPackages() }
                         .onFailure { Log.w(TAG, "Restoring the user's packages failed", it) }
+                    // Whatever happened, the ledger and the restore manifest are
+                    // what the maintenance page reports; re-read them once the
+                    // attempt has settled.
+                    refreshPackages()
                 }
             }
             true
@@ -1774,6 +1780,102 @@ class PiAgentSession private constructor(context: Context) {
 
     fun clearRepairResult() {
         _repair.value = null
+    }
+
+    // ------------------------------------------------------ installed packages
+
+    /**
+     * What the package ledger says: the last restore's outcome, what is still
+     * waiting for one, and what the image ships ahead of the device.
+     *
+     * Owned by the session for the same reason the repair walk is: these are
+     * facts about the environment this session owns, and the maintenance page
+     * is one tab that leaves the composition the moment the user looks at
+     * another one. Refreshed whenever an install or a restore has just run, and
+     * on demand when the page opens.
+     */
+    internal data class PackagesReport(
+        val installed: Int,
+        val restored: List<PackageManifest.Entry>,
+        val pending: List<PackageManifest.Entry>,
+        val upgradable: List<PackageManifest.Entry>,
+    )
+
+    private val _packages = MutableStateFlow<PackagesReport?>(null)
+    internal val packages: StateFlow<PackagesReport?> = _packages.asStateFlow()
+
+    /** Re-reads dpkg's status, the restore manifest, and the image's shipped set. */
+    internal fun refreshPackages() {
+        scope.launch { _packages.value = readPackagesReport() }
+    }
+
+    /**
+     * The three sources the report is made of, each read best-effort: a missing
+     * file is an empty answer rather than a failure — a first install has no
+     * restore report yet, and an image built before the ledger existed has no
+     * packages registered to compare.
+     */
+    private fun readPackagesReport(): PackagesReport {
+        val installed = runCatching {
+            val status = File(env.prefix, "var/lib/dpkg/status")
+            if (status.isFile) PackageManifest.parseStatus(status.readText()) else emptyList()
+        }.getOrDefault(emptyList())
+        val report = runCatching {
+            if (env.pkgRestoreReport.isFile) {
+                PackageManifest.parseReport(env.pkgRestoreReport.readText())
+            } else {
+                PackageManifest.Report(emptyList(), emptyList())
+            }
+        }.getOrDefault(PackageManifest.Report(emptyList(), emptyList()))
+        val pending = runCatching {
+            if (env.pkgRestoreManifest.isFile) {
+                PackageManifest.parseList(env.pkgRestoreManifest.readText())
+            } else {
+                emptyList()
+            }
+        }.getOrDefault(emptyList())
+        val shipped = BundledImage.metadata(appContext)?.packages.orEmpty()
+        return PackagesReport(
+            installed = installed.size,
+            restored = report.ready,
+            // The manifest is the live "still missing" list — trimmed after
+            // every attempt — and outranks the report's view of the last one.
+            pending = pending,
+            upgradable = PackageManifest.upgradable(installed, shipped),
+        )
+    }
+
+    // -------------------------------------------------------------- rebuild
+
+    /** True while [rebuildEnvironment] is unpacking. */
+    private val _rebuildRunning = MutableStateFlow(false)
+    val rebuildRunning: StateFlow<Boolean> = _rebuildRunning.asStateFlow()
+
+    /**
+     * Re-extracts the whole runtime from the APK — the escape hatch the
+     * seed/content split made rarely necessary.
+     *
+     * Deleting the stamps *is* the mechanism: [BootstrapInstaller.ensureInstalled]
+     * compares them, and a missing stamp is a mismatch, so the next pass takes
+     * the rebuild path — capture the user's packages, unpack the seed and the
+     * content layer, replay what was captured. Nothing else is touched here;
+     * the installer owns the rest. A running agent is stopped first, because
+     * the environment under it is about to be replaced.
+     */
+    fun rebuildEnvironment() {
+        if (!_rebuildRunning.compareAndSet(expect = false, update = true)) return
+        scope.launch {
+            try {
+                stopAgent()
+                runCatching { env.stampFile.delete() }
+                runCatching { env.contentStampFile.delete() }
+                _runtime.value = RuntimeStatus.NotInstalled
+                ensureEnvironment()
+            } finally {
+                _rebuildRunning.value = false
+                refreshPackages()
+            }
+        }
     }
 
     // ----------------------------------------------------------------- backup

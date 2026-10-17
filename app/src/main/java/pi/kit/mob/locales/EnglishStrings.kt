@@ -802,12 +802,38 @@ internal object EnglishStrings : Strings {
             "Scanning… ${plural(files, "file", "files")} so far"
         override val relocateBroken =
             "The package relocator in this runtime has been damaged, so a repair cannot " +
-                "help. Reinstall PiKit: the runtime is unpacked fresh from the app."
+                "help. Rebuild the environment below: the runtime is unpacked fresh from the app."
         override val relocateProblems = "Finished with problems:"
         override val relocateStateScanning = "Checking"
         override val relocateStateRepaired = "Repaired"
         override val relocateStateClean = "Nothing to fix"
         override val relocateStateFailed = "Repair failed"
+
+        override val packagesRow = "Packages"
+        override val packagesRowSubtitle =
+            "What you installed with pkg install, kept across app updates"
+        override fun packagesInstalled(count: Int) = "${plural(count, "package", "packages")} installed"
+        override fun packagesRestored(count: Int) =
+            "${plural(count, "package", "packages")} restored"
+        override fun packagesPending(count: Int) =
+            "${plural(count, "package", "packages")} waiting to be restored"
+        override fun packagesUpgradable(count: Int) =
+            "${plural(count, "package", "packages")} with updates"
+        override fun packagesPendingNote(names: String) =
+            "Still missing: $names. Run pkg install -y $names in the Terminal tab to retry."
+        override val packagesUpgradableNote =
+            "The bundled environment ships newer versions of these. Run pkg upgrade in " +
+                "the Terminal tab to move to the latest."
+        override val rebuildEnvironment = "Rebuild the environment"
+        override val rebuildEnvironmentSubtitle =
+            "Unpack the runtime again; your installed packages are recorded and restored after"
+        override val rebuildEnvironmentNow = "Rebuild"
+        override val rebuildEnvironmentConfirm =
+            "This stops any running conversation and unpacks the runtime again (about " +
+                "half a minute). Packages you installed with pkg install are recorded " +
+                "first and put back afterwards, which needs a network for anything apt " +
+                "no longer holds a cached archive for."
+        override val rebuildEnvironmentConfirmNow = "Rebuild"
 
         override val storageCheck = "Check storage"
         override val storageCheckSubtitle = "Read, write and delete safety, measured"

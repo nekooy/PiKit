@@ -116,4 +116,81 @@ internal object PackageManifest {
         }
         return Report(ready, pending)
     }
+
+    /**
+     * Orders two package versions, Debian-style enough for a hint.
+     *
+     * Not dpkg's algorithm — that has rules for letters beside digits and for a
+     * missing revision that only an archive build needs. This compares the epoch
+     * first, then the segments `.` and `-` split the rest into, numerically when
+     * both look like numbers and lexically otherwise, with `~` sorting before
+     * everything (Debian's "any release is newer than a tilde"). The one
+     * question it answers is "does the image ship a newer version than the
+     * device has", and a tie-break that errs toward *showing* the hint is the
+     * safe direction: the worst case is one line too many on a maintenance page,
+     * never a missed environment.
+     */
+    fun compareVersions(a: String, b: String): Int {
+        fun epochOf(version: String): Int =
+            if (':' in version) version.substringBefore(':').toIntOrNull() ?: 0 else 0
+
+        val epoch = epochOf(a).compareTo(epochOf(b))
+        if (epoch != 0) return epoch
+
+        fun bodyOf(version: String): String =
+            if (':' in version) version.substringAfter(':') else version
+
+        val left = bodyOf(a).split('.', '-', '_', '+')
+        val right = bodyOf(b).split('.', '-', '_', '+')
+
+        /** Numeric when both look like numbers, lexical otherwise. */
+        fun comparePieces(l: String, r: String): Int {
+            val ln = l.toLongOrNull()
+            val rn = r.toLongOrNull()
+            return if (ln != null && rn != null) ln.compareTo(rn) else l.compareTo(r)
+        }
+
+        for (index in 0 until maxOf(left.size, right.size)) {
+            val l = left.getOrNull(index).orEmpty()
+            val r = right.getOrNull(index).orEmpty()
+            if (l == r) continue
+            // A `~` anywhere in a segment is Debian's prerelease marker: it
+            // sorts before everything, *including* a segment that simply ran
+            // out — `1.0~rc1` is older than `1.0`, and `0~rc1` older than `0`,
+            // which is why the marker is looked for inside the segment and not
+            // only at its start. The head before the marker decides when the
+            // heads differ; when they are equal, the one still carrying a
+            // marker is the older.
+            val lt = l.indexOf('~')
+            val rt = r.indexOf('~')
+            if (lt >= 0 || rt >= 0) {
+                val heads = comparePieces(
+                    if (lt >= 0) l.take(lt) else l,
+                    if (rt >= 0) r.take(rt) else r,
+                )
+                if (heads != 0) return heads
+                if (lt >= 0 && rt < 0) return -1
+                if (rt >= 0 && lt < 0) return 1
+                return comparePieces(l.drop(lt + 1), r.drop(rt + 1))
+            }
+            return comparePieces(l, r)
+        }
+        return 0
+    }
+
+    /**
+     * Of [installed], the entries [shipped] names at a strictly newer version.
+     *
+     * The shipped map is the image's `build-metadata.json`, so this is the
+     * answer a device can give offline: the environment carries versions the
+     * app has already moved past. `pkg upgrade` is the fix — which is also why
+     * the reverse direction is not reported. A device *ahead* of the image has
+     * done the upgrading already, and "you are up to date" is the true sentence
+     * there.
+     */
+    fun upgradable(installed: List<Entry>, shipped: Map<String, String>): List<Entry> =
+        installed.filter { entry ->
+            val wanted = shipped[entry.name]
+            wanted != null && compareVersions(wanted, entry.version) > 0
+        }
 }

@@ -184,7 +184,11 @@ they are installed, so nothing needs doing. If
 something installed another way still refuses to
 start, press the button once: **Settings →
 Maintenance & repair → Installed packages →
-Check and repair**.
+Check and repair**. The heavier option on the
+same page, **Rebuild the environment**, unpacks
+the runtime again — packages you added with
+`pkg` are recorded first and put back
+afterwards.
 
 A `pi` you start here answers with the same
 model: PiKit writes your provider, model and key
@@ -296,7 +300,7 @@ of it.
 | Shared storage | Which folders the agent may reach |
 | Agent process | Start, stop, restart, working directory, AGENTS.md, keep-alive |
 | Backup & restore | What to pack into one file, and putting it back |
-| Maintenance & repair | Model list, relocation, storage check |
+| Maintenance & repair | Model list, packages, relocation, rebuild, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
 
 **Accent colour** (under Personalization) is the
