@@ -151,6 +151,12 @@ class WebAccessParamsTest {
             "pdf.endpointUrl",
             "fetchContent.redirects",
             "fetchContent.userAgent",
+            // 0.42.0: DeepSeek's search API, and the knob that defers the tools.
+            "deepseekApiKey",
+            "toolExposure",
+            // Read since 0.33.0, and documented late — the 0.41.0 sweep missed it
+            // because it is not a `*ApiKey` and does not start a section.
+            "toolActivation",
         ).forEach { path ->
             assertTrue("$path is documented", path in paths)
         }

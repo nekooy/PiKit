@@ -943,6 +943,7 @@ internal object EnglishStrings : Strings {
             "you" -> "You.com index; needs a key, and is never chosen automatically"
             "zai" -> "Z.ai web_search_prime MCP; needs a key and an endpoint (global or China)"
             "ceramic" -> "Ceramic keyword search; needs a key, and is never chosen automatically"
+            "deepseek" -> "DeepSeek's own search API; needs a key, and is never chosen automatically"
             else -> ""
         }
 

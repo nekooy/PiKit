@@ -885,6 +885,7 @@ internal object JapaneseStrings : Strings {
             "you" -> "You.com インデックス。キーが必要で、自動選択はされません"
             "zai" -> "Z.ai web_search_prime MCP。キーとエンドポイント（グローバルまたは中国）が必要です"
             "ceramic" -> "Ceramic のキーワード検索。キーが必要で、自動選択はされません"
+            "deepseek" -> "DeepSeek 独自の検索 API。キーが必要で、自動選択はされません"
             else -> ""
         }
 

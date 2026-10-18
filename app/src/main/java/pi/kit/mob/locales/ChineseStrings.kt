@@ -842,6 +842,7 @@ internal object ChineseStrings : Strings {
             "you" -> "You.com 索引；需要 Key，且不会被自动选中"
             "zai" -> "Z.ai web_search_prime MCP；需要 Key 和端点（国际或中国）"
             "ceramic" -> "Ceramic 关键词搜索；需要 Key，且不会被自动选中"
+            "deepseek" -> "DeepSeek 自己的搜索接口；需要 Key，且不会被自动选中"
             else -> ""
         }
 

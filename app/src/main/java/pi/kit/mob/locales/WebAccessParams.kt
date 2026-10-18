@@ -27,16 +27,18 @@ package pi.kit.mob.locales
  *
  * ## The facts, and where they come from
  *
- * Every row is the extension **0.41.0** — the version the runtime image vendors
- * (`tools/build-runtime-image.py`'s `WEB_ACCESS_VERSION`, recorded in the image's
+ * Every row is the extension **0.42.0** — the version the runtime image vendors
+ * (`tools/image-versions.json`'s `web_access`, recorded in the image's
  * `build-metadata.json`) — read from its own source rather than from its README. The
  * keys were checked against 0.31.0's modules one by one when the pin moved: 0.35.0
  * adds `youApiKey`, `zaiApiKey` and `zaiEndpoint` for its two new explicit-only
  * search providers (You.com and Z.ai's web_search_prime MCP); 0.41.0 adds ten more
  * — `keenableApiKey`, `ceramicApiKey` and the four `degoog*` keys for its three
  * explicit-only providers (Keenable, degoog and Ceramic), plus `firecrawlPdfMaxPages`,
- * `pdf.endpointUrl`, `fetchContent.redirects` and `fetchContent.userAgent`. Neither
- * move removes a key, so the rows below grow rather than get rewritten. Baizhi MCP
+ * `pdf.endpointUrl`, `fetchContent.redirects` and `fetchContent.userAgent`; 0.42.0
+ * adds two — `deepseekApiKey` for its new explicit-only provider, and
+ * `toolExposure`. Neither move removes a key, so the rows below grow rather than get
+ * rewritten. Baizhi MCP
  * remains a *provider* the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`) rather
  * than a document key; its lazy `web_enable` tool is tool surface, not config.
  *
@@ -442,6 +444,30 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
             "Curator のすべてがこのリストと照合され、空のリストは拒否されます。",
     ),
     p("tools.webSearch.enabled", "boolean", "true", "The `web_search` tool.", "web_search 工具。", "web_search ツール。"),
+    // The two knobs that decide when the tools exist at all. `toolActivation` arrived
+    // in 0.33.0 (defaulting to `auto` from 0.34.0) and was missed by the 0.41.0
+    // sweep; `toolExposure` arrived in 0.42.0 and builds on it.
+    p(
+        "toolActivation", "string", "\"auto\"",
+        "`auto` keeps the tools off the first request when the model accepts tools " +
+            "added mid-conversation; `dynamic` always starts with the `web_enable` " +
+            "tool; `eager` registers every tool up front.",
+        "auto：模型支持中途加入工具时，首次请求不带这些工具；dynamic：总是先给 web_enable；" +
+            "eager：一开始就注册全部工具。",
+        "auto はモデルが途中追加を受け付ける場合に初回リクエストから外します。dynamic は常に " +
+            "`web_enable` から始め、eager は全ツールを最初から登録します。",
+    ),
+    p(
+        "toolExposure", "string", "\"direct\"",
+        "`deferred` keeps all four web tools off every request until `web_enable` or " +
+            "pi's `tool_search` loads them. It implies dynamic activation, so it cannot " +
+            "be combined with `toolActivation: \"eager\"`.",
+        "deferred：四个联网工具在 `web_enable` 或 pi 的 `tool_search` 载入前都不进入请求。" +
+            "它会强制使用 dynamic 激活，因此不能与 `toolActivation: \"eager\"` 同时设置。",
+        "deferred は 4 つの Web ツールを、`web_enable` か pi の `tool_search` が読み込むまで" +
+            "どのリクエストにも載せません。dynamic 相当になるため " +
+            "`toolActivation: \"eager\"` とは併用できません。",
+    ),
     p("tools.sourceCheck.enabled", "boolean", "true", "The `source_check` tool.", "source_check 工具。", "source_check ツール。"),
     p("tools.fetchContent.enabled", "boolean", "true", "The `fetch_content` tool.", "fetch_content 工具。", "fetch_content ツール。"),
     p(
@@ -687,6 +713,15 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         " の API キー（任意）。キーなしの公開エンドポイントでも動き、キーでレート上限が上がります。",
     ),
     key("ceramicApiKey", "Ceramic", "CERAMIC_API_KEY", "key, for Ceramic's paid keyword search."),
+    // 0.42.0: DeepSeek's own Search API, explicit-only because it bills every search.
+    key(
+        "deepseekApiKey", "DeepSeek", "DEEPSEEK_API_KEY",
+        "key, for DeepSeek's own search API. It bills each search, so `auto` and `all` " +
+            "never route to it.",
+        " 的 API Key，用于 DeepSeek 自己的搜索接口。每次搜索都会计费，所以 auto 与 all 不会选它。",
+        " の API キー。DeepSeek 独自の検索 API 用です。検索ごとに課金されるため、" +
+            "`auto` と `all` からは選ばれません。",
+    ),
     endpoint("degoogBaseUrl", "degoog", "https://degoog.org"),
     key(
         "degoogApiKey", "degoog", "DEGOOG_API_KEY",
