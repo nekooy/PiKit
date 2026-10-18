@@ -160,7 +160,16 @@ which app it is (§7.3).
 and the `ToastLayer` the root draws. A page reports a finished action by calling
 `show`, and the message appears over the page, is read, and goes after 3.5 s. It can
 never carry a button — a message with a control on it is a question, and a question
-belongs in a dialog.
+belongs in a dialog. Its shape is `PiShapes.largeIncreased` (24dp) on `inverseSurface`,
+not the pill: the pill is the app's *action* voice, and a message with no control on it
+does not wear it. `Toast.makeText` is a different object entirely and is never used — the
+missing corners are what a shipping build showed.
+
+**`ToastHost` has one slot, and that is the design.** A second `show()` replaces the
+first and restarts the clock, which is what makes a quick run's start and its verdict read
+as one statement rather than as two overlapping ones — and what means a caller never
+queues messages itself. A queue here would be a log nobody reads, the same argument as the
+one-sheet rule in §7.1.
 
 The split against `PiNotice` is by **tense**, which is what makes it decidable rather
 than a matter of taste:

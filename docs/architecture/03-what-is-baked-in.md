@@ -402,4 +402,22 @@ for — and is on the two-stamp model from then on. The swap itself is per-root 
 content stamp is written last, so an interrupted update is redone in full on the next
 launch instead of being left half applied.
 
+**The unit that survives an update is the manifest, not the tree — which is why nothing is
+copied back.** The obvious alternative to capture-and-replay is to move `$PREFIX` aside and
+put it back afterwards, and the file tree is the wrong unit for four reasons, each visible
+only after the restore: a package is its files *plus* a dpkg ledger entry, so files copied
+back are unowned and the next `pkg upgrade` or `remove` treats them as garbage; copying the
+old ledger back instead makes dpkg's version state disagree with the new image's files; a
+restored binary links against the libraries of the image it was installed for (soname
+drift), which is a crash rather than a message; and a whole-tree copy spends the storage
+the image exists not to spend twice. The manifest survives because it is names, and it is
+restored **through the package manager**, which is the only thing that can re-establish
+ownership.
+
+Two Termux invariants sit behind that, and the reverse of each is a common belief. The
+Termux APK does ship its whole bootstrap, embedded in a `.so`, but `TermuxInstaller`
+extracts it **once**, only when `$PREFIX` is missing or empty — app updates never touch a
+prefix, and every environment update goes through `pkg upgrade`. PiKit holds the same rule
+for the seed layer, which is exactly what the shape-only stamp above buys.
+
 ---

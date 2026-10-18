@@ -10,7 +10,7 @@ Every document in this repository, and the rule for adding one.
 | [../README.zh-CN.md](../README.zh-CN.md) | The same README in 简体中文; the two are mirrors | After changing what the project says about itself |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The map of the design decisions and the constraints behind them | Before changing anything whose shape looks arbitrary |
 | [architecture/](architecture/) | The chapters themselves, one file per topic | When a comment in the code cites a chapter |
-| [BUILDING.md](BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device | Before the first build, on a new machine |
+| [BUILDING.md](BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device — including the Git Bash and emulator traps | Before the first build, on a new machine |
 | [RELEASING.md](RELEASING.md) | The version, the tag, the workflows, and the signing that has to happen first | When publishing a build |
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass, the README preview strip — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
@@ -41,6 +41,18 @@ rejected a design is the most valuable part of it.
 **The index is updated in the same change as the file.** A document nobody links to
 is a document nobody finds; a link to a file that no longer exists is worse, and
 both are found by reading, since nothing in the build parses Markdown.
+
+**The two READMEs are a mirror, and one commit carries both.** An edit to
+`README.md` lands in `README.zh-CN.md` in the same change, bullet for bullet, written
+in the other language's own wording rather than transplanted — when the English drops
+"baked", the Chinese drops 烘焙 where its own sentence needed it, not the English
+clause. The three claims that reach outside the files are checked by hand, because
+nothing parses them: the repository **description** is the tagline and has to match
+both `<strong>` lines, a feature bullet that names a technology is grounded in a pin
+(`Material 3 Expressive` is true because of `material3 1.5.0-beta01` and
+`MaterialExpressiveTheme`), and the preview strip and its caption name the version the
+image shows. `LICENSING.md` and the in-app credits keep the bare `Material 3` — there
+it is an artifact's name in a licence table, not the design language.
 
 **Generated files say so.** The first comment names the generator and the command
 that reproduces it (`docs/assets/icon.svg` and `tools/render-icon.py` are the
