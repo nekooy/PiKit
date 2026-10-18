@@ -12,7 +12,7 @@ Every document in this repository, and the rule for adding one.
 | [architecture/](architecture/) | The chapters themselves, one file per topic | When a comment in the code cites a chapter |
 | [BUILDING.md](BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device | Before the first build, on a new machine |
 | [RELEASING.md](RELEASING.md) | The version, the tag, the workflows, and the signing that has to happen first | When publishing a build |
-| [MAINTAINING.md](MAINTAINING.md) | The recurring chores: upstream pi, packages, dependencies, the device pass, the README preview strip | Periodically, and after an upstream release |
+| [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass, the README preview strip — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
 | [assets/icon.svg](assets/icon.svg) | The launcher icon, as the README shows it — **generated** | Never by hand |
 | [assets/preview-0.5.0.webp](assets/preview-0.5.0.webp) | The four tabs, as the README shows them — a screenshot of the running app, compressed and not generated | When the interface it shows changes |

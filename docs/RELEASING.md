@@ -214,6 +214,18 @@ users, never for a version people will install and keep.
 
 ## Before you dispatch
 
+- [ ] **The sweep is done: everything in `MAINTAINING.md`'s *Periodically* table that has
+      a newer upstream is upgraded in this release's own change, before the version
+      bump.** Gradle, AGP, Kotlin and its Compose compiler plugin, AndroidX and the BOM
+      first; then `pi`, the extension and the bootstrap in `tools/image-versions.json`;
+      then `npm audit --omit=dev` in both vendored trees; then a full
+      `python tools/build-apks.py`. Minors and patches in one batch, a major on its own
+      against a full build, and a bootstrap bump as the device pass its row describes.
+      A release that moved the pins after the dispatch has shipped the previous ones.
+- [ ] **The device half of the sweep is walked too**, because `build-apks.py` cannot see
+      it: `Settings → Maintenance & repair` reports the packages row (a non-zero
+      `N 个有可用更新` means `pkg upgrade` in the Terminal tab before the release goes
+      out), and the model list's *Refresh now* is what shows a just-released model.
 - [ ] `versionName`/`versionCode` bumped in `gradle.properties`, in the commit
       being released — and `git status` clean, because the workflow releases the
       commit it checks out.
