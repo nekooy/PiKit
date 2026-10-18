@@ -126,17 +126,23 @@ a document is exactly the change that forgets them.
   **publishes** the release it creates (no draft) and is serialised against itself
   with `concurrency: release-…`, never cancelled.
 - **A release starts by reading `docs/RELEASING.md`, in full — before the dispatch, not
-  after.** The run publishes a release whose body is only the generated
+  after.** That file's *Before you dispatch* begins with the sweep: every entry in
+  `docs/MAINTAINING.md`'s *Periodically* table that has a newer upstream is upgraded in
+  the release's own change, before the version bump — the build's dependencies first,
+  then pi, the extension and the bootstrap, then the advisories and a full
+  `build-apks.py`. Product pins live in `tools/image-versions.json`, never in
+  `tools/build-runtime-image.py`, because the builder's bytes are hashed into the seed
+  stamp. Then the run publishes a release whose body is only the generated
   `Full Changelog` line, so the notes are written *afterwards*, and their shape lives in
   exactly one place: that file's *The notes: Chinese, four sections…*, which fixes the four
   headings (`新增功能`, `体验优化`, `问题修复`, `其他变更`), omits an empty section rather than
   writing `"无"`, keeps the one-line bullets and the upgrade sentence between the table and the
   changelog link, and is applied with
   `gh release edit v<version> --notes-file .release/notes-<version>.md`. The same file owns
-  the *Before you dispatch* checklist, the tag-and-release refusal rules and what a
-  partial keystore does — none of which is visible from the run's own output, while the
-  release itself is public the moment the run ends: a body invented from the previous
-  release's shape is published before anyone can catch it.
+  the tag-and-release refusal rules and what a partial keystore does — none of which is
+  visible from the run's own output, while the release itself is public the moment the run
+  ends: a body invented from the previous release's shape is published before anyone can
+  catch it.
 - **Nothing here pushes, tags or branches on its own.** See *Commits* above.
 
 ## Hard constraints — do not "fix" these
