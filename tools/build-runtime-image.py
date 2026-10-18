@@ -101,7 +101,7 @@ STAGING_ROOT = BUILD_ROOT / "staging"
 #: Bootstrap release pinned by this project. A newer tag is a periodic bump —
 #: MAINTAINING's table carries the apt-index comparison and the device pass that
 #: go with one — then rebuild.
-BOOTSTRAP_TAG = "bootstrap-2026.10.11-r1+apt.android-7"
+BOOTSTRAP_TAG = "bootstrap-2026.10.18-r1+apt.android-7"
 
 #: Termux apt repository. `Packages.xz` does not exist; `.bz2` is the smallest.
 APT_BASE = "https://packages.termux.dev/apt/termux-main"
