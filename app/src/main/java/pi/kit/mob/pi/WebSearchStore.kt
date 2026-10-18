@@ -171,8 +171,8 @@ data class WebSearchSettings(
          * run the search through a model, then the rest alphabetically enough to be
          * findable.
          *
-         * **This is the extension 0.41.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
-         * from its `gemini-search.ts`, and it is 37 entries rather than the eleven
+         * **This is the extension 0.42.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
+         * from its `gemini-search.ts`, and it is 38 entries rather than the eleven
          * the page used to offer. The eleven were not "the supported ones": they were
          * the ones somebody had heard of, so a user whose provider was `kagi` or
          * `serper` could not select it at all and the picker looked complete.
@@ -240,6 +240,10 @@ data class WebSearchSettings(
             // Added by 0.38.0: Ceramic, a paid keyword API — explicit-only, never
             // chosen by `auto` or `all`.
             "ceramic",
+            // Added by 0.42.0: DeepSeek's own Search API. Explicit-only for the same
+            // reason as Ceramic — it bills every search — and it is keyed like the
+            // rest, so it sits at the end with them rather than among the keyless.
+            "deepseek",
         )
 
         /** `maxInlineContentChars` as the extension documents it. */
