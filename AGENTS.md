@@ -109,8 +109,15 @@ a document is exactly the change that forgets them.
     which is the document a person on a new machine reads.
 
   What legitimately stays out of the tree is the machine's own state: an SDK's
-  absolute path, an AVD's name, a cache directory's location. Those belong in
-  `local.properties` (ignored) or in a memory, never in a document that ships.
+  absolute path, an AVD's name, a cache directory's location, and the machine's own
+  configuration — a global `git config` URL rewrite, a shell wrapper, a tool setting.
+  The test is whether a contributor's machine needs it to change this tree: if the
+  fact is only true of the box you are sitting at, a document is the wrong home for
+  it, because a reader cannot act on it and it never gets reviewed. Those belong in
+  `local.properties` (ignored) or in a memory, never in a document that ships. What
+  does belong in the tree is anything a change has to obey — a command that has to
+  follow an edit, a version that lives in one file — because that holds on every
+  machine the project is built on.
 
   A rule that lives only in a memory is a rule the next agent re-learns by breaking
   something; when a memory and a document disagree, the document wins and the memory
