@@ -35,6 +35,17 @@ through `local.properties` or `ANDROID_HOME`), Node and the Gradle wrapper. `npm
 `zstandard` are reported by name too, but only when an image actually has to be
 built — a machine that already has the images can rebuild the APKs without them.
 
+**Editing the in-app manual is a build step, not a text edit.** One checker holds
+`locales/ManualText*.kt`'s raw-string bodies to being a fixed point of
+`tools/reflow-manual.py`, so any edit there has to be followed by that script or
+`build-apks.py` fails on "the manual's reflow". Write the manual *unwrapped* and let the
+tool wrap it: a hand-wrapped line longer than the phone re-wraps into a two-line mess,
+which is the defect the pass exists for. Only CJK paragraphs reflow cleanly — an
+English paragraph containing an em dash (`—`) is **not** idempotent and alternates
+between two wrappings on every run — so write manual English without em dashes.
+`python tools/reflow-manual.py --check` reports the offending lines without rewriting
+anything.
+
 ## One command, or the three
 
 ```bash
@@ -278,3 +289,62 @@ Two emulator facts worth knowing. A Play-Store system image's DNS comes and goes
 it has no `adb root`, which is why `tools/dns-pin.cjs` exists for testing. And
 `adb shell pm clear pi.kit.mob` costs a fresh ~285 MB unpack on the next launch, where
 `adb shell am force-stop pi.kit.mob` restarts the app without that cost.
+
+### Driving a device from Git Bash
+
+Four traps, each of which produces a plausible-looking wrong answer rather than an
+error:
+
+- **`MSYS_NO_PATHCONV=1` on every `adb` path argument.** Git Bash rewrites a leading
+  `/` into a drive path, so `adb push x.jsonl /data/local/tmp/x.jsonl` transfers to
+  `D:/APP/Git/data/local/tmp/…` and fails, and `adb shell sh -c 'cat /data/…'` reads a
+  file that does not exist. `adb pull` needs it **and** a Windows-style destination:
+  `MSYS_NO_PATHCONV=1 adb pull /sdcard/ui.xml D:/tmp/ui.xml`.
+- **Write output to a real Windows path, never `/tmp`.** The `python` in this shell is
+  a Windows python, so a script that opens `/d/tmp/…` fails and a file written to
+  `/tmp` inside `adb shell` is on the device, not on the host — which is also why a
+  screenshot is cheapest with no remote file at all:
+  `adb exec-out screencap -p > D:/tmp/shot.png`.
+- **`screencap` returns a stale cached frame when the display pipeline has frozen.**
+  Two captures byte-identical while the app animates, and a status-bar clock behind
+  `adb shell date`, mean the capture is the lie — `uiautomator dump` and `logcat` stay
+  live throughout, so the app is fine and the screenshot is not evidence.
+  `KEYCODE_SLEEP` → `KEYCODE_WAKEUP` → a swipe recovers it; a stuck AVD cold-boots.
+- **A tap coordinate read off a screenshot is not a device coordinate.** `screencap`
+  returns 1080x2400 while the image is shown ~900px wide, so a coordinate measured in
+  the picture scales by **1.2**. `uiautomator dump` bounds are already device pixels and
+  are the source to use; match a node by its `text`/`content-desc` and read its
+  `bounds` instead of estimating.
+
+Starting the AVD is worth one more line: `emulator -avd <name> -gpu host
+-no-snapshot-save -no-boot-anim`, backgrounded. A **snapshot load can hang** — the AVD
+sits `offline` and then vanishes from `adb devices` — and `-no-snapshot` cold-boots in
+about 30 s, which is faster than waiting for a load that never finishes. Poll
+`adb shell getprop sys.boot_completed` for `1` rather than the device list.
+
+**A Compose `Switch`'s `checked` in the uiautomator tree can lag the stored value**, so
+a switch that reads `checked="false"` after three dumps may still have flipped. The two
+honest checks are the stored preference (`adb shell run-as pi.kit.mob cat
+shared_prefs/pikit_settings.xml`) and the pixel for its *effect* — an on-track is
+`primary`. Re-dump after every swipe: row bounds move, and a tap computed against the
+previous dump lands on the row that took its place.
+
+### Seeing a populated transcript without a provider
+
+An emulator has no API key, so a prompt produces no answer and the chat tab opens on its
+empty state — which is no use for anything the transcript draws. The way in is a seeded
+session file:
+
+```bash
+MSYS_NO_PATHCONV=1 adb push D:/tmp/seed.jsonl /data/local/tmp/seed.jsonl
+MSYS_NO_PATHCONV=1 adb shell \
+  "run-as pi.kit.mob sh -c 'cp /data/local/tmp/seed.jsonl files/pi-sessions/seed.jsonl'"
+```
+
+It is picked up by the history list, which the chat header's history icon opens. The
+records and the two traps — a **linear `parentId` chain**, because pi stores messages as a
+tree and `get_messages` returns only the branch reaching the last record, and the profile
+file that makes the composer's chips read a real model instead of `unknown` — are written
+out in [MAINTAINING.md](MAINTAINING.md)'s *The README preview strip*, steps 2 and 3,
+which is the recipe for exactly this. Delete the seed file afterwards: it lands in the
+app's real session directory.

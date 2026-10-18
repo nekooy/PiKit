@@ -91,6 +91,30 @@ a document is exactly the change that forgets them.
   late is how three chapters went stale after the multi-line formula fix.
 - **Prose is English; the interface is not.** Documentation, comments and commit
   messages are English. Anything the user reads goes through `locales/`.
+- **The repository is the record, and an agent's memory is not.** What made a
+  decision, what a measurement settled, what a trap cost an afternoon — all of it
+  belongs in this tree, in the document its topic already owns, and nothing that
+  matters to *this project* may exist only in a memory directory outside the
+  repository. A memory is one machine's private notebook: it is invisible to the next
+  reader, to a contributor, and to CI, and it goes stale silently because nothing
+  reviews it. When a fact about the project is found in one, move it in the same turn:
+
+  - **anything a change has to obey** — a layout invariant, a modifier order, a
+    version that lives in one file, the command that has to follow an edit, a design
+    that was tried and rejected — goes where the rule is already written: a chapter
+    under `docs/architecture/`, the *Hard constraints* above, or
+    `docs/MAINTAINING.md` for a recurring chore;
+  - **anything about working here** — how to drive a device, the emulator's traps,
+    the checker that fails over a hand-wrapped manual — goes in `docs/BUILDING.md`,
+    which is the document a person on a new machine reads.
+
+  What legitimately stays out of the tree is the machine's own state: an SDK's
+  absolute path, an AVD's name, a cache directory's location. Those belong in
+  `local.properties` (ignored) or in a memory, never in a document that ships.
+
+  A rule that lives only in a memory is a rule the next agent re-learns by breaking
+  something; when a memory and a document disagree, the document wins and the memory
+  is corrected or deleted.
 
 ## Version, workflows, and the repository
 
@@ -407,6 +431,22 @@ prompt, which billed the idle gap to a turn that had already finished.
 - **Kotlin formatting**: 4-space indent, trailing commas, `internal` for things
   only the tests or the same module need. Tests are plain JUnit, with no
   Robolectric and no instrumentation.
+- **A new `PiSettings` field lands in five places, and `publish()`'s defaults hide
+  the one that is easy to miss.** The data class, the constructor, `update()`'s
+  preference write, `update()`'s `publish(…)` argument list, and `reload()`'s.
+  `publish()` defaults every parameter to the *currently published* value, so a field
+  whose preference is written but not passed is stored and never published: nothing
+  fails to compile, the file holds the new value, and the control snaps back on
+  screen. `SettingsStoreTest`'s round-trip sweep is written to catch the next omission
+  without naming a field.
+- **A dead `Strings` member is a standing condition, not a one-off.** The compiler
+  requires every catalog to override every member and cannot see a member nothing
+  calls, so they rot in place; delete one as soon as its last call site goes, or the
+  next reader assumes the interface still uses it. Removing a key means removing it
+  from `Strings.kt` (declaration and the KDoc above it) and all three catalogs by
+  **line range** rather than by pattern — a multi-line body plus a trailing `+` makes
+  a pattern delete cut the entry beside it, which is how one script removed a hundred
+  legitimate lines.
 
 ## Things that will waste your time if you do not know them
 

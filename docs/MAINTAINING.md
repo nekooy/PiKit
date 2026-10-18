@@ -176,6 +176,55 @@ your time*, which is the list a change is written against.
 - **`adb shell pm clear pi.kit.mob`** deletes the unpacked runtime, which costs a
   fresh ~285 MB unpack on the next launch. `am force-stop` is the cheap restart.
 
+## The repository's own surface: the description and the topics
+
+Neither is in the tree, so neither is in a commit — and both are what a reader meets
+before the README. They are edited with `gh`, and they have one rule each.
+
+**The tagline is one sentence, and it exists in three places that have to agree.** The
+current English is `A clean Android AI agent built on pi and Termux.`; the current Chinese
+is `一个基于 pi 和 Termux 的简洁安卓 AI Agent。`. The three places are each README's
+`<strong>` line and the repository description, which is the two joined by a single
+space, English first:
+
+```bash
+gh api repos/nekooy/PiKit --jq .description      # read it BEFORE rewriting a tagline
+gh api -X PATCH repos/nekooy/PiKit --input - <<'EOF'
+{"description": "A clean Android AI agent built on pi and Termux. 一个基于 pi 和 Termux 的简洁安卓 AI Agent。"}
+EOF
+```
+
+The description is often already the sentence the READMEs are missing, so read it first
+and bring the two READMEs *to* it rather than inventing a third wording. When the English
+drops a clause, the Chinese needs its own re-cut sentence rather than the dropped phrase —
+a mirror is per sentence, not per phrase.
+
+**Topics are discovery metadata and nothing more** — not in the code, the README or the
+build, changeable at will. The rules are GitHub's (lower case, hyphen-separated, ≤50
+characters, ≤20 per repository) and there is no controlled vocabulary and no synonym
+merging, which is why a topic is chosen by *audience* rather than by size:
+
+```bash
+gh api -X GET search/repositories -f q="topic:$t" -f per_page=1 --jq '.total_count'
+gh api -X GET search/repositories -f q="topic:$t language:kotlin" -f per_page=1 --jq '.total_count'
+```
+
+The narrowed count is the one that matters. `material-design` carries ten times
+`material3`'s repositories and is mostly web and Flutter UI kits — its Kotlin slice is
+~19% — while `material3` is ~82% Kotlin, so the smaller number buys the larger audience.
+`material-3-expressive` (101) is the spelling the community uses; `md3e`, `m3-expressive`
+and `material-expressive` are dead ends. **`PUT /repos/<owner>/<repo>/topics` replaces
+the whole set** — omitting a name deletes it — so always send the full list, and `sort`
+the read back because the API returns them in its own order:
+
+```bash
+gh api -X PUT repos/nekooy/PiKit/topics --input - <<'EOF'
+{"names":["ai-agent","android","android-app","coding-agent","gplv3","jetpack-compose","llm",
+"material-3-expressive","material3","pi","pikit","termux"]}
+EOF
+gh api repos/nekooy/PiKit/topics --jq '.names | sort | join(", ")'
+```
+
 ## Housekeeping
 
 - **Test counts are summed by `tools/build-apks.py` and written down by hand** in
@@ -195,5 +244,7 @@ your time*, which is the list a change is written against.
   the recipe; the filenames are version-stamped and the previous strip is kept.
 - **Rejected designs are not deleted.** When a behaviour is removed, its reasoning
   moves into the chapter that describes it, with the number that settled it.
-- **Nothing in this repository writes to git on its own.** Commits, tags and
-  branches are made by a person, deliberately — see AGENTS.md.
+- **Git is written deliberately, by the agent or by a person, and only after the gate.**
+  Finished, verified work is committed in the turn that finished it; a push is always
+  the user's call; and the commands that rewrite history — `stash`, `reset`, `rebase`,
+  branch and tag creation — are asked about first. AGENTS.md's *Commits* is the rule.
