@@ -22,9 +22,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -305,11 +309,7 @@ private fun FileRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Icon(
-            imageVector = if (file.isDirectory) {
-                Icons.Filled.Folder
-            } else {
-                Icons.Filled.Description
-            },
+            imageVector = glyphOf(file),
             contentDescription = null,
             // A directory is the page's navigation rather than content, so it
             // carries the secondary role and the files stay neutral: a listing of
@@ -364,6 +364,32 @@ private fun kindOf(file: File, text: Strings): String = when {
     file.extension.isNotBlank() -> file.extension.uppercase(Locale.ROOT)
     else -> text.files.file
 }
+
+/**
+ * A row's glyph, by what the file is rather than only whether it is a directory.
+ *
+ * A listing where every file wears the same sheet-of-paper mark asks the reader to
+ * read the *name* to tell anything apart; three more glyphs — code, image, archive —
+ * cover the kinds a phone user actually steps into this tab to find, and everything
+ * else keeps the paper. The extension's first letter is not a glyph: a row of
+ * one-letter marks reads as a bespoke alphabet nobody agreed on.
+ */
+private fun glyphOf(file: File): ImageVector = when {
+    file.isDirectory -> Icons.Filled.Folder
+    file.extension.lowercase(Locale.ROOT) in CODE_SUFFIXES -> Icons.Filled.Code
+    file.extension.lowercase(Locale.ROOT) in IMAGE_SUFFIXES -> Icons.Filled.Image
+    file.extension.lowercase(Locale.ROOT) in ARCHIVE_SUFFIXES -> Icons.Filled.FolderZip
+    else -> Icons.Filled.Description
+}
+
+/** Written by a programmer, or by a tool a programmer runs, or about one. */
+private val CODE_SUFFIXES = setOf("kt", "kts", "java", "py", "js", "ts", "mjs", "cjs", "sh", "json", "yaml", "yml", "toml", "xml", "html", "css", "md", "txt")
+
+/** Openable by the preview sheet's `Open with`. */
+private val IMAGE_SUFFIXES = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
+
+/** One thing that unpacks into several. */
+private val ARCHIVE_SUFFIXES = setOf("zip", "tar", "gz", "tgz", "xz", "bz2", "7z", "rar")
 
 /**
  * The preview, in the app's modal layer.
