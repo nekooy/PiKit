@@ -449,6 +449,8 @@ internal object JapaneseStrings : Strings {
         override val agentContextRestoreConfirm = "戻す"
 
         override val profilesTitle = "モデルとプロバイダー"
+        override val profilesEmptyHint =
+            "Pi が答えるにはプロファイルが必要です。キーとモデルを 1 つずつ選ぶだけで使えます。"
         override val savedProfiles = "保存済みのプロファイル"
         override val active = "使用中"
         override val editProfile = "プロファイルを編集"

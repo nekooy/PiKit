@@ -2936,8 +2936,14 @@ private fun Composer(
                         // answered, the chip says so rather than showing a glyph on
                         // its own — a chip that grows its label later is a row that
                         // reflows under the reader's thumb.
+                        //
+                        // pi's own report for "nothing is configured" is the id
+                        // `unknown` under the provider `unknown`; a reader who has
+                        // just installed the app reads that identifier as a fault,
+                        // so the chip answers with the translated loading sentence
+                        // instead of pi's identifier.
                         label = config.activeProfile?.modelId?.takeIf { it.isNotBlank() }
-                            ?: state.model?.id?.takeIf { it.isNotBlank() }
+                            ?: state.model?.takeIf { it.isUsable }?.id?.takeIf { it.isNotBlank() }
                             ?: text.chat.loadingModel,
                         anchor = modelMenuAnchor,
                         onClick = { onOpenSheet(ComposerSheet.Model, modelMenuAnchor) },
@@ -3549,7 +3555,15 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
         item {
             ReadOnlySheetRow(
                 label = text.chat.detailProvider,
-                value = model?.provider?.ifBlank { text.settings.none },
+                // `model == null` is the agent still starting; `provider == "unknown"`
+                // is pi's own word for "no profile is configured". Both have a
+                // translated sentence rather than pi's identifier, which a reader
+                // who has not configured anything reads as a fault.
+                value = when {
+                    model == null -> text.chat.loadingModel
+                    model.provider == "unknown" -> text.chat.noModel
+                    else -> model.provider.ifBlank { text.settings.none }
+                },
             )
         }
         item { ReadOnlySheetRow(text.chat.thinkingLabel, thinking) }

@@ -1,6 +1,7 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -72,6 +73,7 @@ import pi.kit.mob.ui.design.PiBadge
 import pi.kit.mob.ui.design.PiButton
 import pi.kit.mob.ui.design.PiButtonKind
 import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.design.PiEmptyState
 import pi.kit.mob.ui.design.PiGap
 import pi.kit.mob.ui.design.PiGroup
 import pi.kit.mob.ui.design.PiLoading
@@ -261,19 +263,44 @@ internal fun ModelPage(
             }
 
             PiGap(12.dp)
-            // The page's one action, at the leading edge and at the same weight as
-            // every other standalone page action (the backup page's export/import
-            // pair uses `RunActions`): filled, `Small`, drawn where the page's own
-            // content column starts. It was `Medium`, which made this button a size
-            // larger than the equivalent button on the next page for no reason the
-            // reader could see.
-            PiButton(
-                text = text.settings.addProfile,
-                onClick = { onEdit("") },
-                kind = PiButtonKind.Filled,
-                size = PiButtonSize.Small,
-                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            )
+            // An empty page is the first-run page, and it should say so rather
+            // than present a lone button over a blank screen: the mark, the
+            // sentence, then the action, vertically centred in the space the
+            // list will occupy once there is one. With profiles saved, the
+            // button stays at the leading edge of the column — a page that
+            // already has content needs a control, not a hero.
+            if (profiles.isEmpty()) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PiEmptyState(
+                        title = text.settings.profilesTitle,
+                        body = text.settings.profilesEmptyHint,
+                        action = {
+                            PiButton(
+                                text = text.settings.addProfile,
+                                onClick = { onEdit("") },
+                                kind = PiButtonKind.Filled,
+                                size = PiButtonSize.Small,
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Add, contentDescription = null)
+                                },
+                            )
+                        },
+                    )
+                }
+            } else {
+                PiButton(
+                    text = text.settings.addProfile,
+                    onClick = { onEdit("") },
+                    kind = PiButtonKind.Filled,
+                    size = PiButtonSize.Small,
+                    leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                )
+            }
         }
     }
 

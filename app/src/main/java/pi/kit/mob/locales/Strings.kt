@@ -934,6 +934,8 @@ interface Strings {
 
         // Model profiles
         val profilesTitle: String
+        /** What the page says when no profile exists yet — the first-run empty state. */
+        val profilesEmptyHint: String
         val savedProfiles: String
         val active: String
         val editProfile: String

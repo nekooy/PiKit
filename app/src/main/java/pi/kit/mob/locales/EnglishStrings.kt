@@ -473,6 +473,8 @@ internal object EnglishStrings : Strings {
         override val agentContextRestoreConfirm = "Restore"
 
         override val profilesTitle = "Model & provider"
+        override val profilesEmptyHint =
+            "Save a profile before Pi can answer — a key and one model is enough."
         override val savedProfiles = "Saved profiles"
         override val active = "Active"
         override val editProfile = "Edit profile"

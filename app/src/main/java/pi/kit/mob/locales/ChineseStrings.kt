@@ -440,6 +440,7 @@ internal object ChineseStrings : Strings {
         override val agentContextRestoreConfirm = "恢复"
 
         override val profilesTitle = "模型与供应商"
+        override val profilesEmptyHint = "先保存一个配置，Pi 才能开始回答。填一个 Key、选一个模型就好。"
         override val savedProfiles = "已保存的配置"
         override val active = "当前使用"
         override val editProfile = "编辑配置"
