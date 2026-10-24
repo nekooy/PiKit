@@ -171,8 +171,8 @@ data class WebSearchSettings(
          * run the search through a model, then the rest alphabetically enough to be
          * findable.
          *
-         * **This is the extension 0.42.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
-         * from its `gemini-search.ts`, and it is 38 entries rather than the eleven
+         * **This is the extension 0.44.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
+         * from its `gemini-search.ts`, and it is 39 entries rather than the eleven
          * the page used to offer. The eleven were not "the supported ones": they were
          * the ones somebody had heard of, so a user whose provider was `kagi` or
          * `serper` could not select it at all and the picker looked complete.
@@ -244,6 +244,9 @@ data class WebSearchSettings(
             // reason as Ceramic — it bills every search — and it is keyed like the
             // rest, so it sits at the end with them rather than among the keyless.
             "deepseek",
+            // Added by 0.43.0: Linkup, keyed (`LINKUP_API_KEY`) and in `auto`'s own
+            // rotation, unlike the explicit-only pair above it.
+            "linkup",
         )
 
         /** `maxInlineContentChars` as the extension documents it. */

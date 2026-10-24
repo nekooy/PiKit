@@ -540,9 +540,10 @@ class WebSearchStoreTest {
     fun `the provider list is the extension's own, with no duplicates`() {
         val providers = WebSearchSettings.SEARCH_PROVIDERS
 
-        // The number the bundled 0.42.0 resolves to. It is pinned because the page
-        // presents this list as "all of them", which is only true while it is.
-        assertEquals(38, providers.size)
+        // The number the bundled 0.44.0 resolves to (0.43.0 added Linkup). It is
+        // pinned because the page presents this list as "all of them", which is
+        // only true while it is.
+        assertEquals(39, providers.size)
         assertEquals("no provider is listed twice", providers.size, providers.toSet().size)
         assertEquals(
             "the two selectors are not providers",

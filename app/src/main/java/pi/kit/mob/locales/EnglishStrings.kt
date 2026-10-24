@@ -845,6 +845,7 @@ internal object EnglishStrings : Strings {
             "zai" -> "Z.ai web_search_prime MCP; needs a key and an endpoint (global or China)"
             "ceramic" -> "Ceramic keyword search; needs a key, and is never chosen automatically"
             "deepseek" -> "DeepSeek's own search API; needs a key, and is never chosen automatically"
+            "linkup" -> "Linkup search; needs a key, and `auto` may route to it"
             else -> ""
         }
 

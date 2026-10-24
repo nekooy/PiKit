@@ -21,7 +21,7 @@ import pi.kit.mob.ui.components.thinkingLevelOptions
  * `high`.
  *
  * The fixtures below are the real catalog maps from the bundled pi's
- * `deepseek_default` (`chunk-66G7ITPS.js` at pi 1.3.0), so a pi update that
+ * `deepseek` provider (`chunk-MM3LKT73.js` at pi 1.4.0), so a pi update that
  * changes one is caught here as a failing expectation rather than as a wrong
  * chip on a phone.
  */

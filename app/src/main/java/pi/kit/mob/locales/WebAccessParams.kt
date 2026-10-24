@@ -722,6 +722,15 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         " の API キー。DeepSeek 独自の検索 API 用です。検索ごとに課金されるため、" +
             "`auto` と `all` からは選ばれません。",
     ),
+    // 0.43.0: Linkup, keyed and part of `auto`'s rotation; `linkupDepth` is its
+    // one knob.
+    key("linkupApiKey", "Linkup", "LINKUP_API_KEY"),
+    p(
+        "linkupDepth", "\"fast\" | \"deep\"", "\"fast\"",
+        "`deep` reads more sources per query and costs more per search.",
+        "搜索深度：deep 每次查询读更多来源，费用也更高。",
+        "検索の深さ。deep は 1 回のクエリでより多くのソースを読み、費用も上がります。",
+    ),
     endpoint("degoogBaseUrl", "degoog", "https://degoog.org"),
     key(
         "degoogApiKey", "degoog", "DEGOOG_API_KEY",
