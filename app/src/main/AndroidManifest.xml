@@ -156,6 +156,11 @@
             The bundled `termux-setup-storage` does not create the ~/storage
             symlinks itself; it broadcasts this action and expects the app to.
             Without the receiver the command silently did nothing.
+
+            The action carries the app's own id, so a signature permission the
+            broadcaster cannot hold would refuse the one sender it exists for;
+            `exported` is required because the sender is a shell process, and the
+            receiver answers nothing else (the extra must say `storage`).
         -->
         <receiver
             android:name=".env.StorageSetupReceiver"

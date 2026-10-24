@@ -8,6 +8,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.termux.terminal.TerminalSession
@@ -62,7 +63,7 @@ class TerminalSessionManager(
         internal var running by mutableStateOf(true)
 
         /** Only meaningful once [running] is false. */
-        internal var exitStatus by mutableStateOf(0)
+        internal var exitStatus by mutableIntStateOf(0)
 
         /** The shell's own title when it has one, otherwise the stable label. */
         val displayTitle: String get() = terminalTitle?.takeIf { it.isNotBlank() } ?: label

@@ -28,7 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,10 +101,17 @@ fun SessionsScreen(
     var selecting by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var renaming by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
+    // The live session's file, read through a state the composition owns: reading
+    // `conversation.value` inside the dialog below answered the same lint trap the
+    // root's dialog flow documents — a `.value` in composition is a read nothing
+    // schedules an invalidation for.
+    var activeSessionFile by remember { mutableStateOf<String?>(null) }
+    val conversation by session.conversation.collectAsState()
+    activeSessionFile = conversation.sessionFile
     var confirmingDelete by remember { mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList()) }
     // A conversation the user tapped while the agent was answering.
     var pendingSwitch by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
-    var reload by remember { mutableStateOf(0) }
+    var reload by remember { mutableIntStateOf(0) }
     var matches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var matchedQuery by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
@@ -328,7 +337,7 @@ fun SessionsScreen(
         RenameDialog(
             text = text,
             initial = if (target.hasExplicitName) target.title else "",
-            isActive = target.path == session.conversation.value.sessionFile,
+            isActive = target.path == activeSessionFile,
             onDismiss = { renaming = null },
             onConfirm = { name ->
                 renaming = null

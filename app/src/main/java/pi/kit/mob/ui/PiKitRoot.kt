@@ -138,8 +138,11 @@ fun PiKitRoot(session: PiAgentSession) {
     val language = settings.language
 
     // Applies the choice to the default locale as well as to the catalogs, so
-    // dates and byte sizes follow the interface.
-    remember(language) { applyLocale(language) }
+    // dates and byte sizes follow the interface. `LaunchedEffect` rather than
+    // `remember(language)`'s calculation: applying a locale is a write, and a
+    // `remember` block must not have one — a discarded calculation re-runs it and
+    // the block returns Unit, which the lint is right to flag.
+    LaunchedEffect(language) { applyLocale(language) }
 
     // One sheet for the whole app. It is created here rather than inside the
     // language key because a language switch disposes everything under that key,
@@ -403,12 +406,14 @@ private fun RootContent(
     //
     // The one part of it the root does need is a dialog from pi, which can arrive
     // over any destination. Collected as its own flow so the root recomposes when a
-    // dialog appears or is answered and at no other time.
+    // dialog appears or is answered and at no other time. The `initial` reads
+    // `.value` once, before the first frame — the only place a `.value` is read in
+    // composition here, and the one the collector's own first emission replaces.
     val dialogFlow = remember(session) {
         session.conversation.map { it.pendingDialog }.distinctUntilChanged()
     }
     val pendingDialog by dialogFlow.collectAsState(
-        initial = session.conversation.value.pendingDialog,
+        initial = remember(session) { session.conversation.value.pendingDialog },
     )
 
     // Unpacking is a one-time, ~200MB operation, so it runs behind a blocking

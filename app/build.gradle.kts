@@ -252,7 +252,24 @@ android {
         // Termux-derived builds intentionally pin targetSdk 28 so the OS lets us
         // exec() binaries we extracted into our own data dir. That makes the
         // ExpiredTargetSdkVersion check fire; it is expected, not a defect.
-        disable += setOf("ExpiredTargetSdkVersion", "GoogleAppIndexingWarning")
+        //
+        // The rest of the list is the same shape — a rule that names a policy this
+        // app does not sit under, or a pattern that is this app's subject matter:
+        //  - `BatteryLife`: `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is restricted on
+        //    Play; this app is distributed as APKs from GitHub releases and the
+        //    ask-once dialog is the keep-alive row's whole design.
+        //  - `SdCardPath`: `/sdcard` literals are the Termux banner's and the
+        //    storage page's own vocabulary — the paths the shell sees.
+        //  - `ExportedReceiver`: the `termux-setup-storage` broadcast comes from a
+        //    shell process, so the receiver is exported by necessity; the manifest
+        //    documents why no permission guards it.
+        disable += setOf(
+            "ExpiredTargetSdkVersion",
+            "GoogleAppIndexingWarning",
+            "BatteryLife",
+            "SdCardPath",
+            "ExportedReceiver",
+        )
         abortOnError = false
         checkReleaseBuilds = false
     }

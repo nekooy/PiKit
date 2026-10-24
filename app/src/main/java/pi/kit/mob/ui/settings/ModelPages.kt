@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -512,7 +513,7 @@ internal fun ModelEditPage(
     // Bumped by the section's retry row. The check is the one thing on this page that can
     // fail for a reason outside the app — a runtime that will not start — so it is the one
     // thing here that has to be askable twice.
-    var retries by remember { mutableStateOf(0) }
+    var retries by remember { mutableIntStateOf(0) }
 
     val discovery = remember(context, session.env) { ModelDiscoveryClient(context, session.env) }
     val isNew = existing == null
