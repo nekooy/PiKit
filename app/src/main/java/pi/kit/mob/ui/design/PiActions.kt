@@ -56,7 +56,6 @@
 package pi.kit.mob.ui.design
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -71,7 +70,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
@@ -346,124 +344,6 @@ fun PiSelectChip(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-/**
- * One option of a [PiConnectedGroup].
- *
- * [detail] is the second line some groups need — a profile's model count, a
- * thinking level's one-word note. A group of two-line options is taller and reads
- * as a list rather than as a segmented control, which is the right thing when the
- * options genuinely differ by more than their name and the wrong thing when they
- * do not.
- */
-data class PiGroupOption(
-    val id: String,
-    val label: String,
-    val detail: String? = null,
-    val enabled: Boolean = true,
-)
-
-/**
- * A connected button group: the expressive replacement for a segmented control.
- *
- * The geometry is the spec's — the outer corners are round and the *inner* corners
- * are tightened, because two abutting rounded rectangles at full radius leave a
- * waist between them that reads as a gap rather than as a join. [selected] is a set
- * and [onSelect] is handed the tapped id, so whether tapping adds, replaces or
- * refuses-to-empty is the caller's rule rather than a flag here: the guidance's
- * three configurations (single-select, multi-select, selection-required) differ
- * only in that one lambda, and a `multi: Boolean` would be a second place to state
- * the same thing — with the two able to disagree.
- *
- * The group is drawn as one filled row on `surfaceContainerHigh` with the selected
- * options on `primary`, so the selected positions read as holes punched in a
- * container rather than as separate buttons — which is what makes a group of four
- * legible at a glance where four separate outlined buttons is not.
- */
-@Composable
-fun PiConnectedGroup(
-    options: List<PiGroupOption>,
-    selected: Set<String>,
-    onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    icon: (@Composable (PiGroupOption) -> Unit)? = null,
-) {
-    if (options.isEmpty()) return
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(PiShapes.card)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        options.forEachIndexed { index, option ->
-            val isSelected = option.id in selected
-            val fill by animateColorAsState(
-                targetValue = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    Color.Transparent
-                },
-                animationSpec = PiMotion.defaultEffects(),
-                label = "groupFill",
-            )
-            val content by animateColorAsState(
-                targetValue = when {
-                    !option.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                    isSelected -> MaterialTheme.colorScheme.onPrimary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                animationSpec = PiMotion.defaultEffects(),
-                label = "groupContent",
-            )
-            // The selected option is the rounder one; at rest the options keep the
-            // inner radius, so the fill appears to *grow* a corner when picked.
-            val radius by animateDpAsState(
-                targetValue = if (isSelected) 14.dp else 8.dp,
-                animationSpec = PiMotion.fastSpatial(),
-                label = "groupRadius",
-            )
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(radius))
-                    .background(fill)
-                    .clickable(enabled = option.enabled) { onSelect(option.id) }
-                    .padding(vertical = 8.dp, horizontal = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                if (icon != null) {
-                    icon(option)
-                }
-                Text(
-                    text = option.label,
-                    style = if (isSelected) {
-                        MaterialTheme.typography.labelLargeEmphasized
-                    } else {
-                        MaterialTheme.typography.labelLarge
-                    },
-                    color = content,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (option.detail != null) {
-                    Text(
-                        text = option.detail,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = content.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
     }
 }
 

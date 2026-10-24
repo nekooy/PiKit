@@ -246,9 +246,10 @@ does, so the exception is a parameter rather than a second header.
 
 **`PiActions.kt`** — `PiButton` (`PiButtonKind` × `PiButtonSize` × `PiTone`:
 Material's own five heights, 32, 40, 56, 96 and 136dp, with a destructive action
-being the same button in the error role), `PiSelectChip`, `PiConnectedGroup` (the
-expressive replacement for a segmented control; outer corners round, inner corners
-tightened), `PiFab`, `PiGroupOption`.
+being the same button in the error role), `PiSelectChip`. A connected button group
+(`PiConnectedGroup`, the expressive replacement for a segmented control) lived here
+too and was deleted with its last call site — no page had a group of options left
+that a row of chips did not answer better.
 
 **`PiInputs.kt`** — `PiSearchField`, `PiTextField`, `PiSwitchRow`, `PiChoiceRow`,
 `PiValueRow`.
