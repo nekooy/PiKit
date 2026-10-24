@@ -119,7 +119,6 @@ internal object ChineseStrings : Strings {
         override val addressFallbackName = "未命名文件"
         override val cameraDenied = "没有相机权限，无法拍照。可在系统设置里为本应用打开权限。"
         override val cameraUnavailable = "这台设备上没有可用的相机应用。"
-        override val thinkingLevelLabel = "思考等级"
 
         override fun thinkingLevelDescription(id: String) = when (id) {
             "off" -> "直接回答，不做思考"
@@ -132,8 +131,6 @@ internal object ChineseStrings : Strings {
             else -> ""
         }
 
-
-        override val switchModel = "模型"
         override val contextDetails = "上下文"
         override val contextEmpty = "尚未发送内容"
         override fun cacheHit(percent: Int) = "缓存命中 $percent%"
@@ -238,7 +235,6 @@ internal object ChineseStrings : Strings {
         override val closeTerminal = "关闭当前终端"
         override val switchTerminal = "切换终端"
         override fun exited(code: Int?) = "已退出（$code）"
-        override val sessionsRunOn = "离开此页面后会话仍在后台运行"
         override fun closeSession(label: String) = "关闭 $label"
         override val closeAllTerminals = "关闭全部终端"
         override val ctrl = "CTRL"
@@ -295,7 +291,6 @@ internal object ChineseStrings : Strings {
         override val openNewOnLaunch = "冷启动时打开新对话"
         override val openNewOnLaunchSubtitle = "打开时开新对话；关闭则续上次"
         override val theme = "主题"
-        override val themeSubtitle = "浅色、深色或跟随系统"
         override val themeSystem = "跟随系统"
         override val themeLight = "浅色"
         override val themeDark = "深色"
@@ -314,12 +309,8 @@ internal object ChineseStrings : Strings {
             else -> "紫色"
         }
         override val launcherIcon = "应用图标"
-        override val launcherIconSubtitle = "桌面上的样子"
         override val launcherIconBlack = "黑底白字"
         override val launcherIconWhite = "白底黑字"
-        override val launcherIconFootnote =
-            "切换后桌面上的图标会被重新创建：有的桌面要过几秒才刷新，" +
-                "也可能把图标挪到别的位置。"
         override val avatars = "头像"
         override val showAvatars = "显示头像"
         override val showAvatarsSubtitle = "在每条消息上方显示头像"
@@ -336,29 +327,17 @@ internal object ChineseStrings : Strings {
         override val avatarPictureFailed = "无法读取这张图片。"
         override val fontSize = "字体大小"
         override val fontSizeSubtitle = "共 7 档，松手即生效"
-        override val personalizationNote =
-            "「冷启动」指完全关闭后再次打开 App。中途重启 Agent（例如改了设置）" +
-                "仍会回到当前对话。主题改动立即生效。"
         override val essentials = "常用设置"
         override val advancedSection = "高级"
-        override val bundlesNote =
-            "PiKit 把完整的 Termux 运行环境、Node.js 和 Pi Agent 都打包在 APK 里：" +
-                "无需额外安装任何组件，在向模型提问之前也不会产生任何下载。"
         override val running = "运行中"
         override val starting = "启动中…"
         override val stopped = "已停止"
         override fun failedWith(message: String) = "失败 — $message"
-        override val notInstalled = "未安装"
         override val notFound = "在内置运行环境中未找到"
         override val storageTitle = "手机存储"
         override val storageSubtitle = "允许 Agent 访问的文件夹"
         override val storageGrant = "去授权"
         override val storageMissing = "未授权"
-        override val storageNote =
-            "Android 的这项权限只能在系统的「所有文件访问权限」页面授予，所以这个按钮会打开系统设置。" +
-                "权限本身就是整台设备一起给的：Agent 与 PiKit 用同一个应用身份运行，所以这里打开的" +
-                "文件夹不是 Android 筑起的墙，而是 PiKit 替你执行的规则——没有打开的文件夹，" +
-                "Agent 的访问命令会被 PiKit 拒绝。"
         override val storageAskTitle = "让 Agent 访问你的文件？"
         override val storageAskBody =
             "Agent 现在只能看到自己内部的目录，读不到你的照片、文档或下载。" +
@@ -416,10 +395,6 @@ internal object ChineseStrings : Strings {
         override val storageGuardTitle = "安全扩展"
         override val storageGuardSubtitle = "工具执行前先检查，危险操作直接拒绝"
         override val storageGuardMissing = "这个运行镜像里没有安全扩展，无法开关"
-        override val storageGuardNote =
-            "它拒绝的是：工作区之外的递归删除、创建或修改文件系统、写入原始设备、删除或改写" +
-                "pi 自己的凭据和设置，以及命令里出现你没有授权的共享存储路径。" +
-                "关闭后这些都不再检查——扩展仍然装着并随 pi 加载，只是不再生效，随时可以再打开。"
         override val storageGuardOffTitle = "关闭安全扩展？"
         override val storageGuardOffBody =
             "关闭后 Agent 的工具调用不再被检查：工作区之外的递归删除、创建或修改文件系统、" +
@@ -456,7 +431,6 @@ internal object ChineseStrings : Strings {
             "当前这段会话，包括工具调用与结果，随每条消息一起发送，并写入会话文件。"
         override val agentContextInstructions = "全局 AGENTS.md"
         override val agentContextInstructionsEditable = "可编辑"
-        override val agentContextNote = "pi 启动时读取该文件；保存后 Agent 会重启。"
         override val agentContextSave = "保存"
         override val agentContextSaved = "已保存"
         override val agentContextFailed = "保存失败，文件没有改动"
@@ -466,7 +440,6 @@ internal object ChineseStrings : Strings {
         override val agentContextRestoreConfirm = "恢复"
 
         override val profilesTitle = "模型与供应商"
-        override val profilesSubtitle = "Agent 启动时使用的配置"
         override val savedProfiles = "已保存的配置"
         override val active = "当前使用"
         override val editProfile = "编辑配置"
@@ -475,9 +448,6 @@ internal object ChineseStrings : Strings {
         override val noModelChosen = "未选择模型"
         override val noKey = "无 Key"
         override val keySaved = "已保存 Key"
-        override val tapToActivate =
-            "点击配置即可切换为当前使用。Agent 会随之重启，让新的供应商、模型和 Key 生效" +
-                "——它们在进程启动时通过命令行参数和环境变量传入。"
         override val addProfile = "新增配置"
         override val lastProfile = "至少需要保留一个配置。"
         override val deleteProfileTitle = "删除配置？"
@@ -496,7 +466,6 @@ internal object ChineseStrings : Strings {
         override val modelId = "模型 ID"
         override val modelIdPlaceholder = "例如：deepseek-chat"
         override val models = "模型"
-        override val modelsSubtitle = "点选 Agent 使用的模型"
         override val addModel = "添加模型"
         override val removeModel = "移除模型"
         override val removeModelTitle = "移除这个模型？"
@@ -520,10 +489,6 @@ internal object ChineseStrings : Strings {
                 "localhost:11434 这种写法缺少协议头。"
         override val apiType = "API 协议"
         override val apiTypeSubtitle = "选错会解析失败"
-        override val apiTypeNote =
-            "这个接口使用的线上协议。多数中转是 `openai-completions`；" +
-                "Anthropic 风格的网关选 `anthropic-messages`，" +
-                "Responses 风格的选 `openai-responses`。选错会得到解析失败的流，而不是清晰的报错。"
         override val modelsJsonWriteFailed =
             "无法写入 pi 的 models.json，本次配置的接口地址和模型设置不会生效。" +
                 "请检查接口地址和应用存储权限，然后点重试。"
@@ -531,9 +496,6 @@ internal object ChineseStrings : Strings {
         override val fetchModels = "获取模型列表"
         override val fetching = "获取中…"
         override val chooseProviderFirst = "请先选择供应商。"
-        override val fetchNote =
-            "获取列表会向供应商询问这个 Key 可用的模型；如果供应商没有提供列表，则回退到 " +
-                "pi 自带的模型目录。你也可以手动输入模型 ID。"
         override fun modelCount(count: Int) = "$count 个模型"
         override val fromProvider = "由供应商直接返回，这个 Key 可以使用它们。"
         override val fromCatalog = "来自 pi 的目录；未用你的 Key 校验"
@@ -598,36 +560,17 @@ internal object ChineseStrings : Strings {
         override val contextWindowLabel = "上下文窗口"
         override val maxTokensLabel = "最大输出"
         override val modelNumbersNote = "留空表示不改这一项，按上面显示的数值使用。"
-        override val imageInputNote =
-            "打开等于声明这个模型能接收图片；模型本身认不出图片时，打开也没用。" +
-                "关掉则会收回图片支持。"
-        override val imageInputCustomNote =
-            "自定义接口 pi 不认识，读不到它的模型目录，所以这三项只是起点：" +
-                "不支持图片、窗口 128k、最大输出 16k。改哪一项就按你填的来。"
-        override val terminalModelNote =
-            "同一套供应商、模型和 Key 也会写入 pi 自己的 settings.json，因此终端页手动启动的" +
-                "pi 用的也是同一个模型。"
 
         override val workspace = "工作区"
         override fun workingDirSubtitle(workspace: String) = "留空时，Agent 在 $workspace 中工作"
-        override val workingDirNote =
-            "Agent 视为根目录、并且其 bash 工具启动时所在的目录。它也是唯一允许递归删除的目录——" +
-                "它之外的一切递归删除都会被安全守卫拒绝。它只在进程启动时读取，" +
-                "因此修改后需要重启 Agent。"
         override val process = "进程"
         override val agentProcess = "Agent 进程"
         override val restartAgent = "重启 Agent"
         override val restartedAgent = "Agent 已重启"
-        override val failedStartNote =
-            "启动失败几乎总是配置问题：确认当前配置填写了 Key，并且该供应商确实存在这个模型 ID。" +
-                "手册里有更完整的排查清单。"
         override val keepAliveTitle = "后台保活"
         override val keepAliveGranted = "已关闭电池优化"
         override val keepAliveDenied = "仍受电池优化限制"
         override val keepAliveAsk = "申请保活白名单"
-        override val keepAliveNote =
-            "息屏或切后台时，系统可能回收 Agent 进程导致对话中断。加入电池优化白名单后，" +
-                "前台服务与唤醒锁才能真正把回合保住。"
         override val keepAliveAskBody =
             "系统可能在你息屏或切到后台时回收 Agent 进程，让正在进行的回答中断。把 PiKit " +
                 "加入电池优化白名单可以避免这一点，代价是它会一直驻留后台、略微更耗电。" +
@@ -674,22 +617,17 @@ internal object ChineseStrings : Strings {
             "由 PiKit $version 于 $date 生成"
         override val backupReviewKeys = "包含 API Key"
         override val backupReviewNoKeys = "不含 API Key"
-        override val backupReviewEmpty = "这个备份包里没有本应用能恢复的内容。"
         override val backupImportConfirm = "恢复"
         override val backupImportNote =
             "恢复只覆盖同名文件，不会删除任何东西：备份包里的文件会盖掉设备上的同名文件，" +
                 "其余文件原样保留。恢复期间 Agent 会先停止，结束后按恢复的配置重新启动。"
         override val backupNothingSelected = "至少勾选一类，否则备份包里只有一个空名单。"
-        override val backupNote =
-            "备份包不带运行环境本身——它由 APK 解包得到，重新安装就有了。文件位置由系统" +
-                "文件选择器决定，可以放进下载目录或网盘。"
 
         override val environment = "运行环境"
         override val prefix = "前缀目录"
         override val home = "主目录"
         override val appFiles = "应用文件"
         override val bundledTools = "内置工具"
-        override val runtimePrefixNote = "在这里安装的软件包会自动重定位到这个前缀。"
         override val maintenanceSubtitle = "模型列表，以及已安装软件包的修复"
         override val piAgent = "Pi Agent"
         override val installedVersion = "已安装版本"
@@ -702,10 +640,6 @@ internal object ChineseStrings : Strings {
         override val modelListStateUpdated = "已更新"
         override val modelListStateCurrent = "最新"
         override val modelListStateFailed = "刷新失败"
-        override val modelListNote =
-            "一般不需要手动点：模型列表每 4 小时自动刷新一次，只有想立刻用到刚发布的新模型时才需要" +
-                "点这个按钮。刷新会向每个已配置的服务商请求一次目录，因此需要联网；其余功能离线" +
-                "照常可用。Pi 本体不在这里更新 —— 它属于应用的一部分，随 PiKit 更新一起升级。"
         override val dismiss = "关闭"
         override val installedPackages = "已安装的软件包"
         override val relocate = "软件包重定位"
@@ -749,13 +683,6 @@ internal object ChineseStrings : Strings {
         override val storageCheckRunning = "检查中"
         override val storageCheckPassed = "通过"
         override val storageCheckFailed = "有检查未通过"
-        override val storageCheckNote =
-            "它在运行环境里以子进程运行，位置和 Agent、终端一样，所以报告的是 Agent 实际能做到" +
-                "什么，而不是 Android 记录了什么。它不会开放任何权限：列出 Agent 能访问的文件夹，" +
-                "在每个里写入并删除一个探针文件，构造出防误删必须扛住的「链接 + 哨兵文件」，" +
-                "再让重定位器拒绝运行环境之外的路径。过程中产生的临时文件会随手清除。"
-        override val storageCheckTerminalHint =
-            "这里只显示结论和未通过的行。想看完整列表，在终端里运行 pikit-storage-check。"
 
         override val aboutTitle = "关于 PiKit"
         override val application = "应用"
@@ -776,10 +703,6 @@ internal object ChineseStrings : Strings {
         override val searchTitle = "搜索设置"
         override val searchSubtitle = "Agent 的联网搜索"
         override val searchPageSubtitle = "内置的 web-access 扩展"
-        override val searchFreeNote =
-            "这一页什么都不用改就能用。没有配置任何 Key 时，扩展会走 Exa 的免费接口" +
-                "（不需要账号）；它可能因为繁忙而限流，在下面填一个 Key 就能解除。" +
-                "不设置任何选项，Agent 也能联网搜索。"
         override val searchNotBundled =
             "当前运行环境里没有 web-access 扩展。请先在「维护与修复」中更新运行环境，" +
                 "再回到本页。"
@@ -846,7 +769,6 @@ internal object ChineseStrings : Strings {
             else -> ""
         }
 
-        override val searchContent = "内容与限制"
         override val inlineContentLimit = "内联内容上限（字符）"
         override val fetchTimeout = "抓取超时（秒）"
         override fun searchProviderFootnote(count: Int) =
@@ -854,13 +776,8 @@ internal object ChineseStrings : Strings {
                 "每个服务仍需对应的 Key，见下面的配置文件。"
 
         override val searchConfig = "配置项"
-        override val searchConfigNote =
-            "这里的内容都会写进扩展自己的 web-search.json，也就是 Agent 实际读取的文件。" +
-                "上面的控件会写它们自己的键；下面的列表是文件里其余的键。添加不会覆盖任何东西，" +
-                "而是在现有生效配置的基础上加一项。"
         override val searchConfigAdd = "添加配置项"
         override val searchConfigAddBody = "选一项键名并填入值"
-        override val searchConfigEmpty = "还没有添加任何配置项。上面的控件就是全部配置。"
         override val searchConfigPickTitle = "扩展可读的配置项"
         override val searchConfigPickSearch = "筛选配置项"
         override val searchConfigPickFootnote =
@@ -910,10 +827,8 @@ internal object ChineseStrings : Strings {
                 "而这个文件很可能正是你手写的。注释和结尾多余的逗号都可以，缺一个大括号不行。" +
                 "这里没有改动任何内容。修改或替换下面的文本并保存，这一页就会恢复可编辑。"
 
-        override val searchAdvanced = "网络"
         override val searchProxy = "代理"
         override val searchProxySubtitle = "填写后会作为联网访问的代理"
-        override val searchRestartNote = "改动会在下次启动 Agent 时生效。"
 
     }
 

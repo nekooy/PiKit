@@ -114,7 +114,6 @@ internal object EnglishStrings : Strings {
             "PiKit does not have the camera permission, so it cannot take a photo. " +
                 "You can turn it on for this app in the system settings."
         override val cameraUnavailable = "No camera app on this device can take a photo."
-        override val thinkingLevelLabel = "Thinking level"
 
         // The chip is one line beside two other chips, and the level it names is
         // pi's own id (`off`, `medium`, `xhigh`, …) — the value that is passed to
@@ -131,8 +130,6 @@ internal object EnglishStrings : Strings {
             else -> ""
         }
 
-
-        override val switchModel = "Model"
         override val contextDetails = "Context"
         override val contextEmpty = "Nothing sent yet"
         override fun cacheHit(percent: Int) = "Cache hit $percent%"
@@ -243,7 +240,6 @@ internal object EnglishStrings : Strings {
         override val closeTerminal = "Close this terminal"
         override val switchTerminal = "Switch terminal"
         override fun exited(code: Int?) = "exited ($code)"
-        override val sessionsRunOn = "Sessions keep running when you leave this tab"
         override fun closeSession(label: String) = "Close $label"
         override val closeAllTerminals = "Close all terminals"
         override val ctrl = "CTRL"
@@ -313,7 +309,6 @@ internal object EnglishStrings : Strings {
         override val openNewOnLaunch = "Open a new conversation on launch"
         override val openNewOnLaunchSubtitle = "New chat on open; off resumes"
         override val theme = "Theme"
-        override val themeSubtitle = "Light, dark, or follow the system"
         override val themeSystem = "Follow system"
         override val themeLight = "Light"
         override val themeDark = "Dark"
@@ -332,12 +327,8 @@ internal object EnglishStrings : Strings {
             else -> "Purple"
         }
         override val launcherIcon = "App icon"
-        override val launcherIconSubtitle = "How it looks on the home screen"
         override val launcherIconBlack = "White on black"
         override val launcherIconWhite = "Black on white"
-        override val launcherIconFootnote =
-            "Switching recreates the icon on your home screen: some launchers take " +
-                "a few seconds to catch up, and may move it somewhere else."
         override val avatars = "Avatars"
         override val showAvatars = "Show avatars"
         override val showAvatarsSubtitle = "An avatar over each message"
@@ -354,32 +345,17 @@ internal object EnglishStrings : Strings {
         override val avatarPictureFailed = "That picture could not be read."
         override val fontSize = "Text size"
         override val fontSizeSubtitle = "Seven steps, applied when you let go"
-        override val personalizationNote =
-            "A cold start is opening the app after it has been fully closed. Restarting the " +
-                "agent mid-session (after a settings change, say) still keeps the conversation " +
-                "you are in. A theme change applies immediately."
         override val essentials = "Essentials"
         override val advancedSection = "Advanced"
-        override val bundlesNote =
-            "PiKit bundles a complete Termux runtime, Node.js and the Pi agent inside " +
-                "the APK: nothing has to be installed separately, and nothing is downloaded " +
-                "at all until you ask a model something."
         override val running = "Running"
         override val starting = "Starting…"
         override val stopped = "Stopped"
         override fun failedWith(message: String) = "Failed — $message"
-        override val notInstalled = "not installed"
         override val notFound = "Not found in the bundled runtime"
         override val storageTitle = "Shared storage"
         override val storageSubtitle = "Folders the agent may access"
         override val storageGrant = "Grant"
         override val storageMissing = "Not granted"
-        override val storageNote =
-            "Android grants access to your files only on its own \"All files access\" page, " +
-                "so the button opens system settings. That permission is all-or-nothing for the " +
-                "app, and the agent runs as this app — so the folders you switch on here are not " +
-                "a wall Android builds for you, they are a rule PiKit holds the agent to: a call " +
-                "that names any other folder is refused."
         override val storageAskTitle = "Let the agent reach your files?"
         override val storageAskBody =
             "The agent can only see its own private directory right now, so it cannot read " +
@@ -444,12 +420,6 @@ internal object EnglishStrings : Strings {
         override val storageGuardTitle = "Safety extension"
         override val storageGuardSubtitle = "Checks every tool call before it runs"
         override val storageGuardMissing = "This runtime image carries no safety extension"
-        override val storageGuardNote =
-            "It refuses a recursive delete outside the workspace, a filesystem command, a write " +
-                "to a raw device, a delete or rewrite of pi's own credentials and settings, and " +
-                "a command naming shared storage you did not grant. Switched off, none of that " +
-                "is checked — the extension stays installed and loaded, it just does nothing, " +
-                "and it can be switched back on at any time."
         override val storageGuardOffTitle = "Switch the safety extension off?"
         override val storageGuardOffBody =
             "With it off, the agent's tool calls are no longer checked: a recursive delete " +
@@ -493,7 +463,6 @@ internal object EnglishStrings : Strings {
                 "written to the session file."
         override val agentContextInstructions = "Global AGENTS.md"
         override val agentContextInstructionsEditable = "Editable"
-        override val agentContextNote = "pi reads this file at startup; the agent restarts after a save."
         override val agentContextSave = "Save"
         override val agentContextSaved = "Saved"
         override val agentContextFailed = "Could not save; the file is unchanged"
@@ -504,7 +473,6 @@ internal object EnglishStrings : Strings {
         override val agentContextRestoreConfirm = "Restore"
 
         override val profilesTitle = "Model & provider"
-        override val profilesSubtitle = "What the agent starts with"
         override val savedProfiles = "Saved profiles"
         override val active = "Active"
         override val editProfile = "Edit profile"
@@ -513,10 +481,6 @@ internal object EnglishStrings : Strings {
         override val noModelChosen = "no model chosen"
         override val noKey = "no key"
         override val keySaved = "key saved"
-        override val tapToActivate =
-            "Tapping a profile makes it active. The agent restarts so the new provider, " +
-                "model and key take effect — they are passed on the command line and " +
-                "through the environment when the process starts."
         override val addProfile = "Add a profile"
         override val lastProfile = "At least one profile has to remain."
         override val deleteProfileTitle = "Delete profile?"
@@ -536,7 +500,6 @@ internal object EnglishStrings : Strings {
         override val modelId = "Model id"
         override val modelIdPlaceholder = "e.g. deepseek-chat"
         override val models = "Models"
-        override val modelsSubtitle = "Tap a model to use it"
         override val addModel = "Add model"
         override val removeModel = "Remove model"
         override val removeModelTitle = "Remove this model?"
@@ -567,11 +530,6 @@ internal object EnglishStrings : Strings {
                 "https://relay.example.com/v1. `localhost:11434` is missing its scheme."
         override val apiType = "API"
         override val apiTypeSubtitle = "The wrong choice fails to parse"
-        override val apiTypeNote =
-            "The wire protocol this endpoint speaks. Most relays are " +
-                "`openai-completions`; pick `anthropic-messages` for an Anthropic-style " +
-                "gateway and `openai-responses` for a Responses-style one. The wrong " +
-                "choice produces a stream that fails to parse rather than a clear error."
         override val modelsJsonWriteFailed =
             "Could not write pi's models.json, so this profile's endpoint and model " +
                 "settings will not reach pi. Check the endpoint URL and the app's " +
@@ -582,10 +540,6 @@ internal object EnglishStrings : Strings {
         override val fetchModels = "Fetch models"
         override val fetching = "Fetching…"
         override val chooseProviderFirst = "Choose a provider first."
-        override val fetchNote =
-            "Fetching asks the provider which models this key can use, and falls back to " +
-                "pi's own catalog when the provider has no model list. You can also type " +
-                "an id by hand."
         override fun modelCount(count: Int) = "$count models"
         override val fromProvider = "Reported by the provider, so this key can use them."
         override val fromCatalog = "From pi's catalog; not checked against your key"
@@ -659,40 +613,17 @@ internal object EnglishStrings : Strings {
         override val maxTokensLabel = "Max output"
         override val modelNumbersNote =
             "Leave one empty to change nothing: the value shown above is what pi uses."
-        override val imageInputNote =
-            "On declares that this model accepts images; a model that does not will still " +
-                "not recognise one. Off takes image input away."
-        override val imageInputCustomNote =
-            "pi does not know a custom endpoint and has no catalog for it, so these three " +
-                "are only a starting point: no images, a 128k window and a 16k max-out. " +
-                "Whatever you change is used as you typed it."
-        override val terminalModelNote =
-            "The same provider, model and key are written into pi's own settings.json, so a " +
-                "pi you start in the Terminal tab answers with the same model."
 
         override val workspace = "Workspace"
         override fun workingDirSubtitle(workspace: String) = "Left blank, the agent works in $workspace"
-        override val workingDirNote =
-            "The directory the agent treats as its root, and where its bash tool starts. " +
-                "It is also the only directory a recursive delete is allowed in — " +
-                "everything else outside it is refused by the safety guard. It is read " +
-                "when the process is spawned, so restart the agent after changing it."
         override val process = "Process"
         override val agentProcess = "Agent process"
         override val restartAgent = "Restart agent"
         override val restartedAgent = "Agent restarted"
-        override val failedStartNote =
-            "A failed start is almost always configuration: check that the active profile " +
-                "has a key and that the model id exists for that provider. The manual has " +
-                "a longer checklist."
         override val keepAliveTitle = "Keep alive"
         override val keepAliveGranted = "Battery optimisation is off for this app"
         override val keepAliveDenied = "Still subject to battery optimisation"
         override val keepAliveAsk = "Ask for the exemption"
-        override val keepAliveNote =
-            "With the screen off or the app in the background the OS may reclaim the agent " +
-                "and cut the turn short. The battery-optimisation exemption is what lets the " +
-                "foreground service and the wake lock actually hold it."
         override val keepAliveAskBody =
             "With the screen off or the app in the background, the system may reclaim the " +
                 "agent and cut a running answer short. Adding PiKit to the battery-optimisation " +
@@ -745,7 +676,6 @@ internal object EnglishStrings : Strings {
             "Written by PiKit $version on $date"
         override val backupReviewKeys = "API keys included"
         override val backupReviewNoKeys = "No API keys"
-        override val backupReviewEmpty = "There is nothing in this archive this build can restore."
         override val backupImportConfirm = "Restore"
         override val backupImportNote =
             "A restore only overwrites files of the same name and deletes nothing: what is " +
@@ -754,18 +684,12 @@ internal object EnglishStrings : Strings {
                 "configuration."
         override val backupNothingSelected =
             "Tick at least one group — an archive of nothing is an empty contents list."
-        override val backupNote =
-            "The archive does not carry the runtime itself: that is unpacked from the APK, " +
-                "so a reinstall brings it back. Where the file goes is up to the system file " +
-                "picker, so Downloads or a cloud drive both work."
 
         override val environment = "Runtime"
         override val prefix = "Prefix"
         override val home = "Home"
         override val appFiles = "App files"
         override val bundledTools = "Bundled tools"
-        override val runtimePrefixNote =
-            "Packages installed here are relocated to this prefix automatically."
         override val maintenanceSubtitle = "Model list and package repair"
         override val piAgent = "Pi agent"
         override val installedVersion = "Installed version"
@@ -778,13 +702,6 @@ internal object EnglishStrings : Strings {
         override val modelListStateUpdated = "Updated"
         override val modelListStateCurrent = "Latest"
         override val modelListStateFailed = "Refresh failed"
-        override val modelListNote =
-            "Usually nothing to do here: the list refreshes by itself every four hours, " +
-                "and a model released since then is the only reason to press the button. " +
-                "A refresh asks each configured provider for its catalogue, so it needs a " +
-                "network connection; the rest of the app keeps working offline. Pi itself " +
-                "is not updated here — it is part of the app, and arrives with a " +
-                "PiKit update."
         override val dismiss = "Dismiss"
         override val installedPackages = "Installed packages"
         override val relocate = "Package relocation"
@@ -838,18 +755,6 @@ internal object EnglishStrings : Strings {
         override val storageCheckRunning = "Checking…"
         override val storageCheckPassed = "Passed"
         override val storageCheckFailed = "Some checks failed"
-        override val storageCheckNote =
-            "Runs a script inside the runtime, as a child process of this app — the " +
-                "same position the agent and the terminal are in — and prints one line " +
-                "per check, so the answer is what the agent can really do rather than " +
-                "what Android recorded. It grants nothing: it lists the folders the " +
-                "agent can reach, writes and deletes one probe file in each, builds " +
-                "the link-and-sentinel shape a delete guard has to survive, and asks " +
-                "the package relocator to refuse a path outside the runtime. Its " +
-                "scratch files are removed as it goes."
-        override val storageCheckTerminalHint =
-            "Only the verdict and any failing line are shown here. Run " +
-                "pikit-storage-check in the Terminal tab for the whole list."
 
         override val aboutTitle = "About PiKit"
         override val application = "Application"
@@ -870,12 +775,6 @@ internal object EnglishStrings : Strings {
         override val searchTitle = "Search settings"
         override val searchSubtitle = "Web search for the agent"
         override val searchPageSubtitle = "Bundled web-access extension"
-        override val searchFreeNote =
-            "You can leave this page exactly as it is. With no key configured the " +
-                "extension searches through Exa's free endpoint, which needs no account " +
-                "— it may be rate-limited when it is busy, and adding a key below is " +
-                "what lifts that. Nothing here has to be set up for the agent to search " +
-                "the web."
         override val searchNotBundled =
             "This runtime has no web-access extension. Update the runtime under Maintenance & " +
                 "repair, then open this page again."
@@ -947,7 +846,6 @@ internal object EnglishStrings : Strings {
             else -> ""
         }
 
-        override val searchContent = "Content and limits"
         override val inlineContentLimit = "Inline content limit (characters)"
         override val fetchTimeout = "Fetch timeout (seconds)"
         override fun searchProviderFootnote(count: Int) =
@@ -955,15 +853,8 @@ internal object EnglishStrings : Strings {
                 "A provider still needs its key — see the file below."
 
         override val searchConfig = "Configuration"
-        override val searchConfigNote =
-            "Everything here is written to the extension's own web-search.json, the file " +
-                "the agent reads. The controls above write their own keys; the list below " +
-                "is every other key the file holds. Adding one does not replace anything — " +
-                "it layers a new key on top of what is already in effect."
         override val searchConfigAdd = "Add an option"
         override val searchConfigAddBody = "Pick a key and give it a value"
-        override val searchConfigEmpty =
-            "Nothing added yet. The controls above are the whole configuration."
         override val searchConfigPickTitle = "Options the extension reads"
         override val searchConfigPickSearch = "Filter options"
         override val searchConfigPickFootnote =
@@ -1024,10 +915,8 @@ internal object EnglishStrings : Strings {
                 "missing brace is not. Nothing here has been changed. Fix or replace the " +
                 "text below and save to make the page editable again."
 
-        override val searchAdvanced = "Network"
         override val searchProxy = "Proxy"
         override val searchProxySubtitle = "Sent as the web-access proxy, if set"
-        override val searchRestartNote = "Changes take effect the next time the agent starts."
 
     }
 

@@ -115,7 +115,6 @@ internal object JapaneseStrings : Strings {
         override val cameraDenied =
             "カメラの権限がないため撮影できません。システム設定でこのアプリに権限を与えてください。"
         override val cameraUnavailable = "この端末には撮影できるカメラアプリがありません。"
-        override val thinkingLevelLabel = "思考レベル"
 
         override fun thinkingLevelDescription(id: String) = when (id) {
             "off" -> "思考せずにすぐ回答します"
@@ -128,8 +127,6 @@ internal object JapaneseStrings : Strings {
             else -> ""
         }
 
-
-        override val switchModel = "モデル"
         override val contextDetails = "コンテキスト"
         override val contextEmpty = "まだ送信していません"
         override fun cacheHit(percent: Int) = "キャッシュ命中 $percent%"
@@ -235,7 +232,6 @@ internal object JapaneseStrings : Strings {
         override val closeTerminal = "このターミナルを閉じる"
         override val switchTerminal = "ターミナルを切り替え"
         override fun exited(code: Int?) = "終了（$code）"
-        override val sessionsRunOn = "このタブを離れてもセッションは動き続けます"
         override fun closeSession(label: String) = "$label を閉じる"
         override val closeAllTerminals = "すべてのターミナルを閉じる"
         override val ctrl = "CTRL"
@@ -293,7 +289,6 @@ internal object JapaneseStrings : Strings {
         override val openNewOnLaunch = "起動時に新しい会話を開く"
         override val openNewOnLaunchSubtitle = "起動時に新規会話。オフで前回を続行"
         override val theme = "テーマ"
-        override val themeSubtitle = "ライト・ダーク・システムに合わせる"
         override val themeSystem = "システムに合わせる"
         override val themeLight = "ライト"
         override val themeDark = "ダーク"
@@ -312,12 +307,8 @@ internal object JapaneseStrings : Strings {
             else -> "パープル"
         }
         override val launcherIcon = "アプリアイコン"
-        override val launcherIconSubtitle = "ホーム画面での見た目"
         override val launcherIconBlack = "黒地に白"
         override val launcherIconWhite = "白地に黒"
-        override val launcherIconFootnote =
-            "切り替えるとホーム画面のアイコンが作り直されます。ランチャーによっては" +
-                "反映に数秒かかり、アイコンの位置が変わることがあります。"
         override val avatars = "アバター"
         override val showAvatars = "アバターを表示"
         override val showAvatarsSubtitle = "各メッセージの上にアバターを表示します"
@@ -334,31 +325,17 @@ internal object JapaneseStrings : Strings {
         override val avatarPictureFailed = "この画像を読み込めませんでした。"
         override val fontSize = "文字サイズ"
         override val fontSizeSubtitle = "7 段階。指を離すとすぐ反映されます"
-        override val personalizationNote =
-            "「起動時」とは、アプリを完全に閉じてから開き直すときです。セッション途中の" +
-                "エージェント再起動（設定変更など）では、いまの会話が続きます。テーマは" +
-                "すぐに反映されます。"
         override val essentials = "基本設定"
         override val advancedSection = "詳細"
-        override val bundlesNote =
-            "PiKit は完全な Termux 実行環境、Node.js、Pi エージェントを APK に同梱しています。" +
-                "別途インストールするものはなく、モデルに質問するまでダウンロードも発生しません。"
         override val running = "実行中"
         override val starting = "起動中…"
         override val stopped = "停止"
         override fun failedWith(message: String) = "失敗 — $message"
-        override val notInstalled = "未インストール"
         override val notFound = "同梱の実行環境に見つかりません"
         override val storageTitle = "共有ストレージ"
         override val storageSubtitle = "許可するフォルダー"
         override val storageGrant = "許可する"
         override val storageMissing = "未許可"
-        override val storageNote =
-            "この権限は Android の「すべてのファイルへのアクセス」画面でしか付与できないため、" +
-                "ボタンはシステム設定を開きます。権限そのものはアプリ全体に与えられ、エージェントは" +
-                "このアプリと同じ権限で動くため、ここでオンにしたフォルダーは Android の壁ではなく、" +
-                "PiKit がエージェントに守らせる規則です——オンにしていないフォルダーを指定した" +
-                "アクセスは PiKit が拒否します。"
         override val storageAskTitle = "エージェントにファイルを許可しますか？"
         override val storageAskBody =
             "現在エージェントは自分の専用ディレクトリしか見えず、写真・書類・ダウンロードを" +
@@ -422,11 +399,6 @@ internal object JapaneseStrings : Strings {
         override val storageGuardTitle = "安全拡張"
         override val storageGuardSubtitle = "ツール実行前に検査し、危険な操作を拒否します"
         override val storageGuardMissing = "このランタイムイメージには安全拡張が含まれていません"
-        override val storageGuardNote =
-            "拒否するのは、ワークスペース外の再帰削除、ファイルシステムの作成・変更、生デバイスへの" +
-                "書き込み、pi 自身の認証情報と設定の削除・上書き、そして許可していない共有ストレージ" +
-                "のパスを名指ししたコマンドです。オフにするとこれらは検査されなくなります。拡張は" +
-                "インストールされたまま読み込まれ、効果がなくなるだけで、いつでも戻せます。"
         override val storageGuardOffTitle = "安全拡張をオフにしますか？"
         override val storageGuardOffBody =
             "オフにすると、エージェントのツール呼び出しは検査されなくなります。ワークスペース外の" +
@@ -468,7 +440,6 @@ internal object JapaneseStrings : Strings {
                 "セッションファイルに書き込まれます。"
         override val agentContextInstructions = "グローバル AGENTS.md"
         override val agentContextInstructionsEditable = "編集可"
-        override val agentContextNote = "pi が起動時に読み込みます。保存するとエージェントが再起動します。"
         override val agentContextSave = "保存"
         override val agentContextSaved = "保存しました"
         override val agentContextFailed = "保存できませんでした。ファイルは変更されていません"
@@ -478,7 +449,6 @@ internal object JapaneseStrings : Strings {
         override val agentContextRestoreConfirm = "戻す"
 
         override val profilesTitle = "モデルとプロバイダー"
-        override val profilesSubtitle = "起動時に使う設定"
         override val savedProfiles = "保存済みのプロファイル"
         override val active = "使用中"
         override val editProfile = "プロファイルを編集"
@@ -487,10 +457,6 @@ internal object JapaneseStrings : Strings {
         override val noModelChosen = "モデル未選択"
         override val noKey = "キーなし"
         override val keySaved = "キー保存済み"
-        override val tapToActivate =
-            "プロファイルをタップすると使用中になります。新しいプロバイダー・モデル・キーを" +
-                "反映するためエージェントは再起動します。これらは起動時にコマンドラインと" +
-                "環境変数で渡されます。"
         override val addProfile = "プロファイルを追加"
         override val lastProfile = "プロファイルは最低 1 つ必要です。"
         override val deleteProfileTitle = "プロファイルを削除しますか？"
@@ -510,7 +476,6 @@ internal object JapaneseStrings : Strings {
         override val modelId = "モデル ID"
         override val modelIdPlaceholder = "例：deepseek-chat"
         override val models = "モデル"
-        override val modelsSubtitle = "回答に使うモデルをタップ"
         override val addModel = "モデルを追加"
         override val removeModel = "モデルを削除"
         override val removeModelTitle = "このモデルを削除しますか？"
@@ -538,11 +503,6 @@ internal object JapaneseStrings : Strings {
                 "（例：https://relay.example.com/v1）。localhost:11434 はスキームがありません。"
         override val apiType = "API"
         override val apiTypeSubtitle = "誤るとパースに失敗します"
-        override val apiTypeNote =
-            "このエンドポイントが話すプロトコルです。ほとんどのリレーは " +
-                "`openai-completions` です。Anthropic 系のゲートウェイは " +
-                "`anthropic-messages`、Responses 系は `openai-responses` を選んでください。" +
-                "選ぶものを誤ると、明確なエラーではなくパースできないストリームになります。"
         override val modelsJsonWriteFailed =
             "pi の models.json を書き込めなかったため、このプロフィールのエンドポイントと" +
                 "モデル設定は pi に届きません。エンドポイントとアプリの保存領域を確認してから" +
@@ -553,9 +513,6 @@ internal object JapaneseStrings : Strings {
         override val fetchModels = "モデルを取得"
         override val fetching = "取得中…"
         override val chooseProviderFirst = "先にプロバイダーを選択してください。"
-        override val fetchNote =
-            "取得すると、このキーで使えるモデルをプロバイダーに問い合わせます。プロバイダーが" +
-                "一覧を提供しない場合は pi のカタログにフォールバックします。ID を手入力もできます。"
         override fun modelCount(count: Int) = "$count 個のモデル"
         override val fromProvider = "プロバイダーが返した一覧です。このキーで使用できます。"
         override val fromCatalog = "pi カタログの内容。キー未照合"
@@ -625,38 +582,17 @@ internal object JapaneseStrings : Strings {
         override val contextWindowLabel = "コンテキストウィンドウ"
         override val maxTokensLabel = "最大出力"
         override val modelNumbersNote = "空欄ならこの項目は変更しません。上の値がそのまま使われます。"
-        override val imageInputNote =
-            "オンにすると「このモデルは画像を受け取れる」と宣言します。対応していない" +
-                "モデルでは、オンにしても画像は認識されません。オフにすると画像対応を外します。"
-        override val imageInputCustomNote =
-            "カスタムエンドポイントは pi が知らないためカタログがなく、この 3 項目は" +
-                "あくまで出発点です（画像なし・128k・16k）。変更した項目はその値で使われます。"
-        override val terminalModelNote =
-            "同じプロバイダー・モデル・キーは pi 自身の settings.json にも書き込まれるため、" +
-                "ターミナルタブで起動した pi も同じモデルを使います。"
 
         override val workspace = "ワークスペース"
         override fun workingDirSubtitle(workspace: String) = "空欄の場合、エージェントは $workspace で作業します"
-        override val workingDirNote =
-            "エージェントがルートとして扱い、bash ツールが開始するディレクトリです。" +
-                "再帰的な削除が許可される唯一のディレクトリでもあり、その外側は安全ガードが拒否します。" +
-                "プロセス起動時に一度だけ読まれるため、変更後は再起動してください。"
         override val process = "プロセス"
         override val agentProcess = "エージェントのプロセス"
         override val restartAgent = "エージェントを再起動"
         override val restartedAgent = "エージェントを再起動しました"
-        override val failedStartNote =
-            "起動失敗のほとんどは設定が原因です。使用中のプロファイルにキーがあるか、" +
-                "そのプロバイダーにモデル ID が存在するかを確認してください。" +
-                "マニュアルに詳しいチェックリストがあります。"
         override val keepAliveTitle = "バックグラウンド保護"
         override val keepAliveGranted = "バッテリー最適化はオフです"
         override val keepAliveDenied = "まだバッテリー最適化の対象です"
         override val keepAliveAsk = "除外を申請する"
-        override val keepAliveNote =
-            "画面オフやバックグラウンド時に OS がエージェントを回収し、ターンが途切れることが" +
-                "あります。バッテリー最適化の除外があると、フォアグラウンドサービスと" +
-                "ウェイクロックがターンを保持できます。"
         override val keepAliveAskBody =
             "画面オフやバックグラウンド時に OS がエージェントを回収し、実行中の回答が途切れる" +
                 "ことがあります。PiKit をバッテリー最適化の許可リストに入れると防げますが、" +
@@ -705,24 +641,18 @@ internal object JapaneseStrings : Strings {
             "PiKit $version が $date に作成"
         override val backupReviewKeys = "API キーを含む"
         override val backupReviewNoKeys = "API キーなし"
-        override val backupReviewEmpty = "このビルドで復元できる内容が入っていません。"
         override val backupImportConfirm = "復元"
         override val backupImportNote =
             "復元は同名のファイルを上書きするだけで、何も削除しません。アーカイブの中身が端末の" +
                 "同名ファイルを置き換え、それ以外はそのまま残ります。復元の間はエージェントを停止し、" +
                 "終わってから復元後の設定で起動し直します。"
         override val backupNothingSelected = "少なくとも 1 つ選んでください。空の一覧を書き出すだけになります。"
-        override val backupNote =
-            "アーカイブに実行環境そのものは入りません。APK から展開されるものなので、" +
-                "入れ直せば戻ります。保存先はシステムのファイル選択で決めるので、" +
-                "ダウンロードでもクラウドでも構いません。"
 
         override val environment = "実行環境"
         override val prefix = "プレフィックス"
         override val home = "ホーム"
         override val appFiles = "アプリのファイル"
         override val bundledTools = "同梱ツール"
-        override val runtimePrefixNote = "ここで入れたパッケージは自動的にこのプレフィックスへ再配置されます。"
         override val maintenanceSubtitle = "モデル一覧とパッケージ修復"
         override val piAgent = "Pi エージェント"
         override val installedVersion = "インストール済みバージョン"
@@ -735,12 +665,6 @@ internal object JapaneseStrings : Strings {
         override val modelListStateUpdated = "更新済み"
         override val modelListStateCurrent = "最新"
         override val modelListStateFailed = "更新失敗"
-        override val modelListNote =
-            "通常は何も押す必要はありません。モデル一覧は 4 時間ごとに自動で更新され、" +
-                "このボタンが要るのは公開されたばかりのモデルを今すぐ使いたいときだけです。" +
-                "更新は設定済みの各プロバイダにカタログを問い合わせるため、ネットワーク接続が" +
-                "必要です。それ以外はオフラインでも動作します。Pi 本体はここでは更新されません" +
-                "（アプリの一部であり、PiKit の更新と一緒に届きます）。"
         override val dismiss = "閉じる"
         override val installedPackages = "インストール済みパッケージ"
         override val relocate = "パッケージの再配置"
@@ -788,16 +712,6 @@ internal object JapaneseStrings : Strings {
         override val storageCheckRunning = "確認中…"
         override val storageCheckPassed = "合格"
         override val storageCheckFailed = "失敗した確認があります"
-        override val storageCheckNote =
-            "実行環境の中で、このアプリの子プロセスとして動きます。エージェントやターミナルと" +
-                "同じ立場なので、Android が記録した内容ではなく、エージェントが実際にできることを" +
-                "報告します。何も許可しません：エージェントが参照できるフォルダーを一覧し、" +
-                "それぞれに探針ファイルを書いて削除し、削除ガードが耐えるべき「リンクと番人の" +
-                "ファイル」を作り、再配置ツールに実行環境の外のパスを拒否させます。" +
-                "作業用の一時ファイルはその場で消します。"
-        override val storageCheckTerminalHint =
-            "ここに出るのは結果と失敗した行だけです。すべての行はターミナルで " +
-                "pikit-storage-check を実行すると見られます。"
 
         override val aboutTitle = "PiKit について"
         override val application = "アプリケーション"
@@ -818,11 +732,6 @@ internal object JapaneseStrings : Strings {
         override val searchTitle = "検索設定"
         override val searchSubtitle = "エージェントのウェブ検索"
         override val searchPageSubtitle = "同梱の web-access 拡張"
-        override val searchFreeNote =
-            "このページは何も変更しなくても使えます。キーを設定していなければ、拡張は Exa の" +
-                "無料エンドポイントを使います（アカウント不要）。混雑時はレート制限がかかる" +
-                "ことがあり、下にキーを入れると解除されます。何も設定しなくてもエージェントは" +
-                "ウェブ検索できます。"
         override val searchNotBundled =
             "この実行環境には web-access 拡張がありません。「メンテナンスと修復」で" +
                 "実行環境を更新してから、このページを開き直してください。"
@@ -889,7 +798,6 @@ internal object JapaneseStrings : Strings {
             else -> ""
         }
 
-        override val searchContent = "内容と上限"
         override val inlineContentLimit = "インライン内容の上限（文字）"
         override val fetchTimeout = "取得タイムアウト（秒）"
         override fun searchProviderFootnote(count: Int) =
@@ -897,14 +805,8 @@ internal object JapaneseStrings : Strings {
                 "各サービスにはそれぞれキーが必要です。下の設定ファイルを参照してください。"
 
         override val searchConfig = "設定項目"
-        override val searchConfigNote =
-            "ここに書いた内容は拡張自身の web-search.json、つまりエージェントが実際に読む" +
-                "ファイルに書き込まれます。上のコントロールはそれぞれのキーを書き、下の一覧は" +
-                "ファイルにある残りのキーです。追加は既存の設定を置き換えず、有効な設定の上に" +
-                "1 項目を足します。"
         override val searchConfigAdd = "設定項目を追加"
         override val searchConfigAddBody = "キーを選び値を入力"
-        override val searchConfigEmpty = "まだ何も追加していません。上のコントロールが設定のすべてです。"
         override val searchConfigPickTitle = "拡張が読む項目"
         override val searchConfigPickSearch = "項目を絞り込む"
         override val searchConfigPickFootnote =
@@ -957,10 +859,8 @@ internal object JapaneseStrings : Strings {
                 "ここまでの内容は変更していません。下のテキストを直すか置き換えて保存すれば、" +
                 "このページは再び編集できます。"
 
-        override val searchAdvanced = "ネットワーク"
         override val searchProxy = "プロキシ"
         override val searchProxySubtitle = "設定するとウェブアクセスのプロキシとして使われます"
-        override val searchRestartNote = "変更は次にエージェントを起動したときに反映されます。"
 
     }
 

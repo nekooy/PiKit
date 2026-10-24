@@ -362,9 +362,6 @@ interface Strings {
         val cameraDenied: String
         val cameraUnavailable: String
 
-        /** The thinking-level chip's own name, e.g. "Thinking level". */
-        val thinkingLevelLabel: String
-
         /**
          * One thinking level's *meaning*, in the interface language.
          *
@@ -378,9 +375,6 @@ interface Strings {
          * the sentence explaining the level, and that is this.
          */
         fun thinkingLevelDescription(id: String): String
-
-        /** The model chip's own name. */
-        val switchModel: String
 
         /** The percent chip's own name, and the title of what it opens. */
         val contextDetails: String
@@ -570,7 +564,6 @@ interface Strings {
         val closeTerminal: String
         val switchTerminal: String
         fun exited(code: Int?): String
-        val sessionsRunOn: String
 
         /** The ✕ beside a row of the session picker; `label` names that session. */
         fun closeSession(label: String): String
@@ -694,7 +687,6 @@ interface Strings {
         val openNewOnLaunch: String
         val openNewOnLaunchSubtitle: String
         val theme: String
-        val themeSubtitle: String
         val themeSystem: String
         val themeLight: String
         val themeDark: String
@@ -731,19 +723,8 @@ interface Strings {
          * black icon.
          */
         val launcherIcon: String
-        val launcherIconSubtitle: String
         val launcherIconBlack: String
         val launcherIconWhite: String
-
-        /**
-         * The icon picker's footnote: what happens to the home screen on a switch.
-         *
-         * The icon is not repainted but *re-declared*, so the launcher is free to
-         * take a moment over it and to put it somewhere other than where it was.
-         * Saying so in advance is the whole of the difference between a preference
-         * and a fault.
-         */
-        val launcherIconFootnote: String
 
         /**
          * The transcript's avatars: whether they are drawn, and what each one is.
@@ -791,16 +772,12 @@ interface Strings {
         val fontSize: String
         val fontSizeSubtitle: String
 
-        /** Under the rows: what "cold start" means here, and when a theme change applies. */
-        val personalizationNote: String
         val essentials: String
         val advancedSection: String
-        val bundlesNote: String
         val running: String
         val starting: String
         val stopped: String
         fun failedWith(message: String): String
-        val notInstalled: String
         val notFound: String
 
         // Shared storage
@@ -808,7 +785,6 @@ interface Strings {
         val storageSubtitle: String
         val storageGrant: String
         val storageMissing: String
-        val storageNote: String
 
         /**
          * The one-time prompt shown after the first launch. Android has no runtime
@@ -838,7 +814,6 @@ interface Strings {
         val storageFolderDcim: String
         val storageFolderMusic: String
         val storageFolderMovies: String
-
 
         /**
          * The question asked before *any* folder is switched on.
@@ -899,7 +874,6 @@ interface Strings {
 
         /** Shown instead of [storageGuardSubtitle] when the image carries no guard. */
         val storageGuardMissing: String
-        val storageGuardNote: String
         val storageGuardOffTitle: String
         val storageGuardOffBody: String
         val storageGuardOffConfirm: String
@@ -951,9 +925,6 @@ interface Strings {
         val agentContextInstructions: String
         val agentContextInstructionsEditable: String
 
-        /** Under the row: the file is read at startup, and what stays read-only. */
-        val agentContextNote: String
-
         val agentContextSave: String
         val agentContextSaved: String
         val agentContextFailed: String
@@ -964,7 +935,6 @@ interface Strings {
 
         // Model profiles
         val profilesTitle: String
-        val profilesSubtitle: String
         val savedProfiles: String
         val active: String
         val editProfile: String
@@ -973,7 +943,6 @@ interface Strings {
         val noModelChosen: String
         val noKey: String
         val keySaved: String
-        val tapToActivate: String
         val addProfile: String
         val lastProfile: String
         val deleteProfileTitle: String
@@ -1019,8 +988,6 @@ interface Strings {
          */
         val models: String
 
-        /** The line under the [models] section label: what tapping a row does. */
-        val modelsSubtitle: String
         val addModel: String
 
         /** The spoken name of the control that drops a model from the list. */
@@ -1086,8 +1053,6 @@ interface Strings {
         /** The protocol row's own line, under its title. Not for the picker's rows. */
         val apiTypeSubtitle: String
 
-        val apiTypeNote: String
-
         /**
          * The launch failure for a `models.json` that had to be written and could
          * not be.
@@ -1106,7 +1071,6 @@ interface Strings {
         val fetchModels: String
         val fetching: String
         val chooseProviderFirst: String
-        val fetchNote: String
         fun modelCount(count: Int): String
         val fromProvider: String
         val fromCatalog: String
@@ -1259,41 +1223,6 @@ interface Strings {
          */
         val modelNumbersNote: String
 
-        /**
-         * The line under one model's image switch, and the only place the switch itself is
-         * explained.
-         *
-         * ## Why it is under the switch rather than at the top of the section
-         *
-         * It used to be one paragraph under the section's heading, which was both too far
-         * from the control it describes — "此开关" with two rows and a divider in between —
-         * and written from a premise that is no longer true: it said a model pi's catalogue
-         * contains cannot be declared at all ("该选项无作用"). It can, now, for every model;
-         * what differs is only where the statement is written ([imageInputRowSubtitle] says
-         * that, per model).
-         *
-         * What is left for this line is the one thing the switch *is*: a claim about what the
-         * model accepts, which the provider may still refuse. A model that really cannot take
-         * images will not recognise one however this is set, and that is worth saying where
-         * the switch is rather than a screen above it.
-         */
-        val imageInputNote: String
-
-        /**
-         * Shown instead of the per-model line for a custom endpoint — above the rows, because
-         * it is about the whole provider rather than one control.
-         *
-         * pi has no catalogue entry for a provider the user invented, so there is nothing to
-         * check the ids against and no catalogue value to start from: the three values are a
-         * starting *point* (pi's own defaults for a definition that names nothing), not a
-         * description of the model, and everything the user types is written into the model's
-         * own entry.
-         */
-        val imageInputCustomNote: String
-
-        /** Why a pi started by hand in the terminal now answers with a model. */
-        val terminalModelNote: String
-
         // Agent page
         val workspace: String
 
@@ -1306,7 +1235,6 @@ interface Strings {
          * configuration, the saved sessions and the shared-storage links.
          */
         fun workingDirSubtitle(workspace: String): String
-        val workingDirNote: String
         val process: String
         val agentProcess: String
         val restartAgent: String
@@ -1320,7 +1248,6 @@ interface Strings {
          * tap read as doing nothing. A toast names the outcome instead of the state.
          */
         val restartedAgent: String
-        val failedStartNote: String
 
         /**
          * The keep-alive row: opting the app out of battery optimisation.
@@ -1335,7 +1262,6 @@ interface Strings {
         val keepAliveGranted: String
         val keepAliveDenied: String
         val keepAliveAsk: String
-        val keepAliveNote: String
 
         /**
          * The first-launch dialog that asks for the same exemption as [keepAliveTitle].
@@ -1428,7 +1354,6 @@ interface Strings {
         fun backupReviewFrom(version: String, date: String): String
         val backupReviewKeys: String
         val backupReviewNoKeys: String
-        val backupReviewEmpty: String
         val backupImportConfirm: String
 
         /**
@@ -1440,7 +1365,6 @@ interface Strings {
          */
         val backupImportNote: String
         val backupNothingSelected: String
-        val backupNote: String
 
         // About PiKit: the app's own facts and, since the environment's page was
         // folded into it, what the runtime is and where it lives.
@@ -1449,7 +1373,6 @@ interface Strings {
         val home: String
         val appFiles: String
         val bundledTools: String
-        val runtimePrefixNote: String
         // Maintenance
         val maintenanceSubtitle: String
         val piAgent: String
@@ -1481,15 +1404,6 @@ interface Strings {
         val modelListStateUpdated: String
         val modelListStateCurrent: String
         val modelListStateFailed: String
-
-        /**
-         * The paragraph under the button.
-         *
-         * Its whole job is to stop the button being pressed for no reason: the list is
-         * refreshed automatically on a four-hour window, so this says when a manual
-         * refresh is worth it and what it costs (a network round trip per provider).
-         */
-        val modelListNote: String
 
         val dismiss: String
         val installedPackages: String
@@ -1591,17 +1505,6 @@ interface Strings {
         val storageCheckRunning: String
         val storageCheckPassed: String
         val storageCheckFailed: String
-        val storageCheckNote: String
-
-        /**
-         * Under a finished run: where the full output went.
-         *
-         * The page prints the verdict and any failing line and nothing else — the
-         * script's fourteen `ok` lines are not what the user came for — so this is
-         * what says the rest is still available, by the name the image puts on
-         * `PATH` (see `StorageSelfTest`).
-         */
-        val storageCheckTerminalHint: String
 
         // About
         val aboutTitle: String
@@ -1657,17 +1560,6 @@ interface Strings {
         val searchSubtitle: String
         val searchPageSubtitle: String
 
-        /**
-         * The first thing on the page, above every control.
-         *
-         * The extension searches through Exa's keyless endpoint when nothing is
-         * configured (its `auto` routing tries Exa — `searchWithExa` over
-         * `mcp.exa.ai` — before any provider that needs a key), so a user can stop
-         * reading here and still have working web search. Rate limits are the one
-         * caveat, and saying so up front is what keeps "add a key" from reading as
-         * a requirement.
-         */
-        val searchFreeNote: String
         val searchNotBundled: String
         val webAccess: String
         val webAccessSubtitle: String
@@ -1698,7 +1590,6 @@ interface Strings {
          */
         fun searchProviderFootnote(count: Int): String
 
-        val searchContent: String
         val inlineContentLimit: String
         val fetchTimeout: String
 
@@ -1716,7 +1607,6 @@ interface Strings {
          * the button adds one from the extension's documented options.
          */
         val searchConfig: String
-        val searchConfigNote: String
 
         /** The button that opens the option picker. */
         val searchConfigAdd: String
@@ -1730,9 +1620,6 @@ interface Strings {
          * it opens is for. This is that sentence, in this page's terms.
          */
         val searchConfigAddBody: String
-
-        /** Shown in place of the list when the file has nothing but the controls. */
-        val searchConfigEmpty: String
 
         /** The picker's title and its filter field's placeholder. */
         val searchConfigPickTitle: String
@@ -1832,10 +1719,8 @@ interface Strings {
          */
         val searchConfigUnreadable: String
 
-        val searchAdvanced: String
         val searchProxy: String
         val searchProxySubtitle: String
-        val searchRestartNote: String
 
     }
 
