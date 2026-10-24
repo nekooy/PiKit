@@ -653,6 +653,14 @@ object ConversationReducer {
                 val reason = raw.str("reason").orEmpty()
                 val error = raw.str("errorMessage")
                 val willRetry = raw.bool("willRetry") == true
+                // A manual compaction of a conversation too small to summarise is
+                // not a failure the reader can act on — the header's compress icon
+                // is enabled on an empty conversation, and every tap left a warning
+                // row that nothing ever clears. pi names the case in its own
+                // message; it is the one error that reads as an answer here.
+                if (error != null && reason == "manual" && error.contains("Nothing to compact")) {
+                    return state.copy(isCompacting = false, statusMessage = null)
+                }
                 val notice = when {
                     // pi names the failure in the message itself for some paths, and
                     // the prefix went on regardless: the transcript showed

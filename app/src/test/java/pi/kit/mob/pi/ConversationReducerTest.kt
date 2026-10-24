@@ -288,20 +288,46 @@ class ConversationReducerTest {
     fun `does not put its own prefix on a compaction failure pi already named`() {
         // pi 0.87 answers a failed manual compaction with the prefix already on the
         // message, and the transcript read `Compaction failed: Compaction failed:
-        // Nothing to compact (session too small)`.
+        // Nothing to compact (session too small)`. The "nothing to compact" case
+        // draws nothing at all today (see the test below); a *named* failure that
+        // is something else still needs the row.
         val named = fold(
-            """{"type":"compaction_end","reason":"manual","errorMessage":"Compaction failed: Nothing to compact (session too small)"}""",
+            """{"type":"compaction_end","reason":"manual","errorMessage":"Compaction failed: session grew a second head"}""",
         ).items.filterIsInstance<ChatItem.Notice>().single()
         val bare = fold(
             """{"type":"compaction_end","reason":"manual","errorMessage":"session too small"}""",
         ).items.filterIsInstance<ChatItem.Notice>().single()
 
         assertEquals(
-            "Compaction failed: Nothing to compact (session too small)",
+            "Compaction failed: session grew a second head",
             named.text,
         )
         // A message that does not say what failed still has to be told.
         assertEquals("Compaction failed: session too small", bare.text)
+    }
+
+    @Test
+    fun `a manual compaction with nothing to compact draws nothing`() {
+        // The header's compress icon is enabled on an empty conversation, and every
+        // tap left a warning row nothing ever cleared — measured on an emulator:
+        // three taps, three identical rows. The transcript is not the place to
+        // narrate that an empty conversation has nothing to summarise.
+        val state = fold(
+            """{"type":"compaction_end","reason":"manual","errorMessage":"Compaction failed: Nothing to compact (session too small)"}""",
+        )
+        assertTrue(state.items.filterIsInstance<ChatItem.Notice>().isEmpty())
+        assertFalse(state.isCompacting)
+    }
+
+    @Test
+    fun `an auto-compaction that finds nothing to compact still reports`() {
+        // The auto path runs without a tap behind it, so silence there would hide
+        // that pi tried and gave up — the reader with a growing context needs the
+        // row to know compaction is not going to save them.
+        val notices = fold(
+            """{"type":"compaction_end","reason":"threshold","errorMessage":"Compaction failed: Nothing to compact (session too small)"}""",
+        ).items.filterIsInstance<ChatItem.Notice>()
+        assertEquals(1, notices.size)
     }
 
     @Test
