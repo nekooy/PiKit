@@ -289,7 +289,7 @@ interface Strings {
         val commandClear: String
 
         /**
-         * The `/model` row's description, and it is **not** [switchModel].
+         * The `/model` row's description, and it is **not** the control's own name.
          *
          * It was, and the sheet read `/model` over the single word "模型" — which is
          * the *control's* name, the thing a screen reader announces for the chip above
@@ -865,8 +865,7 @@ interface Strings {
          * Its own section rather than a folder row, because it decides whether those
          * switches are *checked* rather than what they allow — see `SafetyGuard`. The
          * switch is an effectiveness switch: the extension stays installed either
-         * way, which is what [storageGuardNote] says, and turning it off asks first
-         * ([storageGuardOffTitle]).
+         * way, and turning it off asks first ([storageGuardOffTitle]).
          */
         val storageGuardSection: String
         val storageGuardTitle: String
@@ -1043,10 +1042,10 @@ interface Strings {
          *
          * [apiTypeSubtitle] is the one line the row itself carries, and it is the
          * fact that decides the choice rather than a description of the row: what
-         * a wrong value costs. [apiTypeNote] is the paragraph under the row that
-         * says which one to pick — three sentences, and a subtitle sized to all
-         * three of them made one picker taller than the section around it, which
-         * is why the explanation is not all in the row.
+         * a wrong value costs. The paragraph that said which one to pick is gone
+         * with the note row it lived in; three sentences in a subtitle made one
+         * picker taller than the section around it, which is why it was never in
+         * the row.
          */
         val apiType: String
 
