@@ -117,7 +117,7 @@ object PiShapes {
      *
      * `percent = 50` rather than a large radius in dp: the guidance's "full" is
      * half of the *shorter side of the container*, so a fixed radius would be a
-     * pill on a 32dp icon button and a rounded rectangle on a 96dp extended FAB.
+     * pill on a 32dp icon button and a rounded rectangle on a 96dp button.
      */
     val pill: Shape = RoundedCornerShape(percent = 50)
 

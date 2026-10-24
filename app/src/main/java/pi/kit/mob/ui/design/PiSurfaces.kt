@@ -638,19 +638,6 @@ fun PiEmptyState(
  */
 private val EMPTY_STATE_MARK = 64.dp
 
-/** The group's own divider, for a page that wants the hairline without the inset
- * arithmetic: a group whose rows have no leading marks. */
-@Composable
-fun PiFullDivider() {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-    )
-}
-
 /** An inset that keeps a page's own content clear of the rounded screen edge. */
 val PiPagePadding = PaddingValues(horizontal = 12.dp)
 

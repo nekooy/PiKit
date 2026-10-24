@@ -467,39 +467,3 @@ fun PiConnectedGroup(
     }
 }
 
-/**
- * The one floating action a page may have.
- *
- * Extended — icon plus label — rather than a bare circle, because both places it
- * is used ("new conversation", "new file in this directory") are the page's primary
- * verb and a label is what makes a FAB understood in the first week. It is the only
- * element in the app that carries elevation: the guidance's expressive colour
- * tactics ask for hierarchy, and a FAB that is merely a colour on the background
- * stops being a FAB.
- */
-@Composable
-fun PiFab(
-    label: String,
-    onClick: () -> Unit,
-    icon: @Composable () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Button(
-        onClick = onClick,
-        shapes = ButtonDefaults.shapes(shape = PiShapes.pill, pressedShape = PiShapes.card),
-        modifier = modifier.height(56.dp),
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        ),
-    ) {
-        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(start = 8.dp),
-            maxLines = 1,
-        )
-    }
-}

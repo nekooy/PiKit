@@ -562,16 +562,3 @@ fun PickerRow(
 
 /** The sheet's list stops growing here, as a share of the height the sheet may take. */
 private const val SHEET_LIST_FRACTION = 0.6f
-
-/**
- * A row's floor, so a picker of one-line entries is still a comfortable target.
- *
- * It is [PiSheetRow]'s own floor — a menu row is taller than a settings row,
- * because it is a target rather than a line of a table — and it is published
- * rather than private for a page that draws its own sheet rows: `StoragePage`'s
- * folder tree steps into a directory instead of choosing it, so its rows cannot be
- * picker rows, and a tree row that was a different height from the rows beside it
- * is the mismatch this figure exists to prevent. It was 52dp when the picker row
- * was this file's own; the design row's 56dp is the one that is real now.
- */
-internal val PICKER_ROW_MIN_HEIGHT = 56.dp
