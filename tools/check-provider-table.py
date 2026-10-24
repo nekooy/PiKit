@@ -60,7 +60,7 @@ ABSENT_ID = re.compile(r'^\s{8}"([^"]+)",\s*$', re.M)
 #: name check. Neither is a single-key provider this app offers in the same shape,
 #: so the fixture's single entry for `anthropic` is this app's simplification and
 #: is not compared against the literal.
-SPECIAL_CASED = {"anthropic", "github-copilot", "openai-codex"}
+SPECIAL_CASED = {"anthropic", "github-copilot"}
 
 
 def find_provider_chunk() -> Path | None:

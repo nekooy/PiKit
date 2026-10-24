@@ -13,7 +13,7 @@ import org.junit.Test
  * provider reports "no authentication method configured" or answers `401` with a key that
  * is perfectly good — with the wrong variable name nowhere in the message. So the table
  * below is pi's, copied from `getApiKeyEnvVars` in the bundled
- * `@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-VIV3CWXG.js`
+ * `@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-UKVNB6C4.js`
  * (the same table pi's help text prints), and this test is what makes a typo in the enum a
  * failing build rather than a support question.
  *
@@ -73,16 +73,15 @@ class PiProviderTest {
      *
      * Not a list of bugs: each of these needs something the form has no field for, so
      * offering it would produce a provider that looks configurable and cannot work.
-     * `GithubCopilot` and `OpenaiCodex` are the normal credential being an interactive
-     * login; the rest need a second input.
+     * `github-copilot` is the normal credential being an interactive login; the rest
+     * need a second input.
      */
     private val deliberatelyAbsent = listOf(
         // OAuth login, which is the provider's normal credential path.
         "github-copilot",
-        "openai-codex",
-        // More than one input: a resource endpoint, a project and location, an account
-        // id (+ a gateway slug), AWS credentials. (`azure` is pi 1.0.3's rename of
-        // `azure-openai-responses`; the key alone is not enough without the resource.)
+        // More than one input: a resource endpoint, a project and location, AWS
+        // credentials. (`azure` is pi 1.0.3's rename of `azure-openai-responses`;
+        // the key alone is not enough without the resource.)
         "azure",
         "google-vertex",
         "cloudflare-workers-ai",
@@ -90,9 +89,6 @@ class PiProviderTest {
         "amazon-bedrock",
         // A gateway URL fetched from a service before anything can be selected.
         "radius",
-        // A local server with no credential at all: llama.cpp is added by one of pi's own
-        // extensions, and `LLAMA_API_KEY` is for a *hosted* llama.cpp, not the local one.
-        "llama.cpp",
     )
 
     @Test

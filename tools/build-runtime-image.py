@@ -234,6 +234,30 @@ WEB_ACCESS_RUNTIME_DEPS = {
     "mathml-to-latex": "1.8.0",
 }
 
+#: Transitive packages vendored at a floor of their own, as npm `overrides`, so an
+#: advisory below pi's or the extension's own pin cannot ride into the image while
+#: upstream catches up.
+#:
+#: npm writes an override into the tree it resolves, so the versions here are what
+#: both caches actually install — the floor is not advisory. The floor must stay
+#: inside the range the dependent declares (or npm refuses the install): undici is
+#: an exact pin of pi's own, while `body-parser`/`fast-uri` take a caret floor that
+#: express/ajv still accept. Bumping these is a content-layer change like any other
+#: vendored byte; nothing else in the seed sees them.
+#:
+#: What is deliberately *not* here: a floor for every transitive package. Only
+#: packages an advisory has actually named, so the list is a record of what was
+#: answered rather than a standing guess at what npm resolves next.
+PACKAGE_OVERRIDES = {
+    # pi 1.4.0 pins 8.10.2; GHSA-4qv8-2p9j-2685 / GHSA-f72v-6w45-q472 /
+    # GHSA-xjj6-f33q-929c name >=8.12.2 fixed.
+    "undici": "8.12.3",
+    # GHSA-27r3-jxmh-p828 (body-parser) and the fast-uri 3.1.x advisories
+    # (GHSA-w74x-v6f9-jxgq &c) through pi-web-access 0.42.0's express/ajv.
+    "body-parser": "^2.4.0",
+    "fast-uri": "^3.1.9",
+}
+
 #: What the app reads to find the extension and to describe it on the settings
 #: page. Written as data rather than duplicated in Kotlin so that a runtime image
 #: without the extension (an older one, or a build that dropped it) is a missing
@@ -847,6 +871,19 @@ def vendor_pi(pi_cache: Path, pi_version: str) -> Path:
 
     pi_cache.mkdir(parents=True, exist_ok=True)
     log(f"vendoring {spec} with npm ci (this downloads ~100 MiB)")
+    package_json = pi_cache / "package.json"
+    # The dependency floor (see [PACKAGE_OVERRIDES]) is written *before* npm runs,
+    # so one `npm install` resolves pi and the overrides together; a separate
+    # `npm install undici@…` afterwards would rewrite the lock against a tree it
+    # had already resolved once.
+    package_json.write_text(
+        json.dumps(
+            {"dependencies": {PI_PACKAGE: f"^{pi_version}"}, "overrides": PACKAGE_OVERRIDES},
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     run(
         [
             "npm", "install", spec,
@@ -1034,6 +1071,8 @@ def vendor_web_access(cache: Path) -> Path:
                 # Named here rather than installed in a second npm call, so the
                 # whole tree is resolved once and the lock file records it.
                 "dependencies": dict(WEB_ACCESS_RUNTIME_DEPS),
+                # The same floor pi's tree is vendored under; see [PACKAGE_OVERRIDES].
+                "overrides": PACKAGE_OVERRIDES,
             },
             indent=2,
         )
