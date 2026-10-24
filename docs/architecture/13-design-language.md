@@ -453,7 +453,10 @@ that the shared components do not:
   its laid-out content when the content fits and fills only when there is something
   to scroll to, so the frame ends where the last row ends. It also gained the 8dp
   top gap every other list in the app has, because flush under the header the first
-  row read as part of the bar. The preview's **Open with** is a button rather than a
+  row read as part of the bar. A row's glyph is **by what the file is**: directories
+  keep the folder in the secondary role, and code, image and archive suffixes get
+  their own marks, because a listing where every file wears the same sheet of paper
+  asks the reader to read names to tell anything apart. The preview's **Open with** is a button rather than a
   list row inside the body — the one thing the sheet can do with what was read — and
   it is the sheet's only control: there is no *Close* beside it, because the scrim,
   back and a downward drag all leave the preview.
