@@ -40,18 +40,33 @@ SCRIPT = REPO_ROOT / "tools" / "pikit-relocate.js"
 OLD_ID = b"com.termux"
 NEW_ID = b"pi.kit.mob"
 
-#: Real packages from the build cache. Small ones, but all four are affected:
-#: `ripgrep` and `fd` are ELF binaries with a compiled-in RUNPATH, `pcre2`
-#: carries the shared library they link against, and `openssl` is the one that
-#: also names the prefix in its `control.tar` member — in `conffiles`, which is
-#: where a rewrite that only handled `data.tar` used to leave it.
-SAMPLES = [
-    "ripgrep_15.2.0_x86_64.deb",
-    "fd_10.5.0_x86_64.deb",
-    "pcre2_10.47_x86_64.deb",
-    "zlib_1.3.2_x86_64.deb",
-    "openssl_1_3.6.3_x86_64.deb",
+#: Real packages from the build cache, named by *package* rather than by file.
+#: Small ones, but all five are affected: `ripgrep` and `fd` are ELF binaries
+#: with a compiled-in RUNPATH, `pcre2` carries the shared library they link
+#: against, and `openssl` is the one that also names the prefix in its
+#: `control.tar` member — in `conffiles`, which is where a rewrite that only
+#: handled `data.tar` used to leave it.
+#:
+#: **The version is the cache's to decide, not this file's.** A sample list
+#: written as exact file names goes stale the moment the apt index moves, and it
+#: did: a cold CI cache resolved `openssl` 1.3.6.5 where a warm one still held
+#: 1.3.6.3, so none of the samples that carry a `control.tar` prefix matched, and
+#: a release build failed on the non-vacuity check below rather than on the
+#: relocator. A package name survives that drift, and every version the cache
+#: holds for it is tested, so a stale entry beside a fresh one is covered rather
+#: than picked between.
+SAMPLE_PACKAGES = [
+    "ripgrep",
+    "fd",
+    "pcre2",
+    "zlib",
+    "openssl",
 ]
+
+#: Every sample is an `x86_64` package. The rewrite is architecture-independent
+#: — a byte pattern in a container — so one ABI is enough, and it keeps the
+#: fallback scan below to half the cache.
+SAMPLE_ARCH = "x86_64"
 
 #: The image the relocator actually ships in. The script is checked as it is
 #: *packed*, not only as it is written: the build's prefix rewrite must skip it,
@@ -61,6 +76,31 @@ OVERLAY = {
     "arm64-v8a": "arm64",
     "x86_64": "x64",
 }
+
+
+def resolve_samples() -> list[str]:
+    """
+    The cached `.deb` file names for [SAMPLE_PACKAGES], newest version last.
+
+    Matched by prefix and suffix rather than by splitting on `_`, because a
+    sanitised Debian version carries underscores of its own
+    (`ca-certificates_1_2026.08.13_all.deb` was `1:2026.08.13`) and a package
+    name may too (`libc++` becomes `libc__`). Every version present is returned:
+    a warm cache holds the previous one beside the current, and testing both is
+    what keeps a moved apt index from silently emptying the sample set.
+    """
+    if not CACHE.is_dir():
+        return []
+    names: list[str] = []
+    for package in SAMPLE_PACKAGES:
+        prefix, suffix = f"{package}_", f"_{SAMPLE_ARCH}.deb"
+        found = sorted(
+            path.name
+            for path in CACHE.iterdir()
+            if path.name.startswith(prefix) and path.name.endswith(suffix)
+        )
+        names.extend(found)
+    return names
 
 
 def read_ar(blob: bytes) -> list[tuple[str, bytes]]:
@@ -173,9 +213,13 @@ def main() -> int:
             "are available to test against.",
         )
 
-    available = [name for name in SAMPLES if (CACHE / name).is_file()]
+    available = resolve_samples()
     if not available:
-        raise SystemExit(f"none of the sample packages are in {CACHE}")
+        raise SystemExit(
+            f"none of {', '.join(SAMPLE_PACKAGES)} is in {CACHE}.\n"
+            "Run `python tools/build-runtime-image.py --all` once so real packages "
+            "are available to test against.",
+        )
 
     for name in available:
         print(f"=== {name}")
@@ -374,7 +418,7 @@ def check_packed_relocator(check) -> None:
         print("  note  no build cache, so the packed relocator was not exercised")
         return
 
-    sample = next((name for name in SAMPLES if (CACHE / name).is_file()), None)
+    sample = next(iter(resolve_samples()), None)
     for abi, flavor in OVERLAY.items():
         images = REPO_ROOT / "app" / f"src/{flavor}" / "assets" / "runtime" / abi
         blob = None

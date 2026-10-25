@@ -198,6 +198,18 @@ cache and asserts, with nothing but the Python standard library:
   real package, which is the only check that fails when the build rewrites the
   relocator.
 
+**The samples are named by package, and the cache decides the version.** They were
+exact file names once — `openssl_1_3.6.3_x86_64.deb` among them — which made the
+suite depend on a cache that happened to hold that build. A cold CI cache resolves
+whatever the apt index says today: `openssl` 1.3.6.5, `pcre2` 10.49, and no
+1.3.6.3 anywhere. None of the three samples left carried a prefix in its
+`control.tar`, so the non-vacuity check — the one that exists so a rewrite touching
+only `data.tar` cannot pass unnoticed — failed, and the 0.5.3 release stopped on
+it while the relocator was working correctly. `resolve_samples()` matches a package
+name against the cache and returns *every* version it finds, so a warm cache's
+stale copy is tested beside the current one rather than chosen between, and a moved
+index cannot empty the sample set without also emptying the cache.
+
 A Windows build host has no `xz`, so the test points the relocator at
 `tools/pikit-compress.py` through `PIKIT_RELOCATE_HELPER`; the app never sets that
 variable, and on a device the image's own tools are used.
