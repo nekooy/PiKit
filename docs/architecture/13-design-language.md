@@ -165,6 +165,15 @@ not the pill: the pill is the app's *action* voice, and a message with no contro
 does not wear it. `Toast.makeText` is a different object entirely and is never used — the
 missing corners are what a shipping build showed.
 
+**It fades, and it does not travel.** The first version slid in from half its own height
+below and slid back down on the way out, and that read as an *entrance*: a message that
+arrives from somewhere asks the reader to notice the movement, in the one place on the
+screen their attention already is — the bottom edge, where the composer and the send
+button are. A toast is not a page and has no direction to be wrong about, so it does what
+`PiTabFade` does between peers: opacity on the effects spring, and nothing moves. The
+specs are still the theme's (`defaultEffects` in, `fastEffects` out); what went is the
+spatial one.
+
 **`ToastHost` has one slot, and that is the design.** A second `show()` replaces the
 first and restarts the clock, which is what makes a quick run's start and its verdict read
 as one statement rather than as two overlapping ones — and what means a caller never

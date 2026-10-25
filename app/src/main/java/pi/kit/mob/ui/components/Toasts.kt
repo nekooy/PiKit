@@ -40,8 +40,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -60,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import pi.kit.mob.ui.design.PiMotion
@@ -122,6 +119,21 @@ val LocalToastHost = staticCompositionLocalOf<ToastHost> {
  * [modifier] is the caller's, and the root gives it the page's own bottom inset — the
  * navigation bar, the keyboard or the gesture strip, whichever is largest — so the
  * message lands where the composer's band ends rather than under the bar.
+ *
+ * ## A fade, and no travel
+ *
+ * The first version slid in from half its own height below and slid back down on the
+ * way out (`slideInVertically`/`slideOutVertically` over `IntOffset`). It was read as
+ * an entrance rather than as a remark: a message that *arrives* from somewhere asks
+ * the reader to notice the movement, and the movement happens in the one place on the
+ * screen where the reader's attention already is — the bottom edge, where the
+ * composer and the send button are. A toast is not a page and has no direction to be
+ * wrong about, so it now does the same thing `PiTabFade` does between peers: opacity
+ * on the effects spring, and nothing moves.
+ *
+ * The specs are still the theme's — `defaultEffects` in, `fastEffects` out — because
+ * the duration of a toast is a motion decision like any other; what changed is that
+ * there is no spatial spec left to read.
  */
 @Composable
 fun ToastLayer(host: ToastHost, modifier: Modifier = Modifier) {
@@ -144,14 +156,11 @@ fun ToastLayer(host: ToastHost, modifier: Modifier = Modifier) {
 
     val enter: FiniteAnimationSpec<Float> = PiMotion.defaultEffects()
     val exit: FiniteAnimationSpec<Float> = PiMotion.fastEffects()
-    // The slide's own spec is over `IntOffset` — a vertical slide moves the panel by a
-    // pixel count — so it is asked for at that type rather than the float one above.
-    val travel: FiniteAnimationSpec<IntOffset> = PiMotion.defaultEffects()
 
     AnimatedVisibility(
         visible = shown != null,
-        enter = fadeIn(enter) + slideInVertically(travel) { height -> height / 2 },
-        exit = fadeOut(exit) + slideOutVertically(travel) { height -> height / 2 },
+        enter = fadeIn(enter),
+        exit = fadeOut(exit),
         modifier = modifier,
     ) {
         last?.let { toast ->
