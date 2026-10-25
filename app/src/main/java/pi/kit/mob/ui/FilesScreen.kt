@@ -1,10 +1,51 @@
+/*
+ * The Files tab: a file manager over the agent's home directory.
+ *
+ * ## What this page is, and what it deliberately is not
+ *
+ * It is **read-only** — writes go through the agent or the terminal, because the
+ * question this page exists to answer is "what did the agent actually change?", and
+ * a half file manager with no undo is a worse tool for that than a browser with a
+ * good one. Read-only is a statement about the *verbs*, not about the layout.
+ *
+ * The first version was built out of the settings pages' vocabulary — a card holding
+ * a list of peer rows — and that is the wrong shape for a directory. Settings is a
+ * set of *controls*: each row is a decision with a value beside it. A listing is a
+ * *table of objects*: each row is a name with a size and a date, and the page has to
+ * say where you are and let you move. So:
+ *
+ *  - **A location bar** under the header: the path as a trail of tappable segments.
+ *    The header's subtitle is not the path any more — a path is not a subtitle, it is
+ *    navigation, and a path you can tap is worth more than a path you can only read.
+ *  - **A toolbar**: a filter field and a sort control, directly above the rows they
+ *    act on, in the shape a page's own tools take rather than a settings group.
+ *  - **A table**: a glyph tile, the name, the kind and the date under it, and one
+ *    right-aligned column holding the number the row is about — bytes for a file, how
+ *    many entries for a folder. No card around the list and no hairline under every
+ *    row: a directory of two thousand entries is scanned, not read, and the frame
+ *    that makes eight settings rows one object makes a listing look like a panel.
+ *  - **A hold on a row** for what can be done to that one file — copy its path, open
+ *    it in another app — rather than a trailing button on every row, which is the
+ *    column the size wants.
+ *
+ * ## Why entering a folder is a page swap
+ *
+ * It is the one move in the app that replaces the whole screen with another one: the
+ * path changes, the rows are new, and the way back is the same action — so it moves
+ * the way a second level moves everywhere else (§9.1). Only the *listing* travels,
+ * not the bar: the header's title is the folder's own name and updates in place as the
+ * listing slides, which is what the platform's document UI does too.
+ *
+ * ## Back walks up the filesystem
+ *
+ * `PageBackHandler` and not `BackHandler` — a preview is a sheet over this page and
+ * the gesture belongs to it first. At the top of the tree there is no parent, so back
+ * from there leaves the tab as it always did.
+ */
 package pi.kit.mob.ui
 
-import android.content.Context
-import android.content.Intent
-import android.util.Log
-import android.webkit.MimeTypeMap
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,128 +53,162 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.components.LocalSheetHost
 import pi.kit.mob.ui.components.LocalToastHost
+import pi.kit.mob.ui.components.MenuAnchor
 import pi.kit.mob.ui.components.PageBackHandler
+import pi.kit.mob.ui.components.PiMenuRow
 import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
+import pi.kit.mob.ui.components.menuAnchor
+import pi.kit.mob.ui.components.rememberMenuAnchor
+import pi.kit.mob.ui.components.showMenu
 import pi.kit.mob.ui.design.PiEmptyState
 import pi.kit.mob.ui.design.PiLoading
 import pi.kit.mob.ui.design.PiPageBottom
 import pi.kit.mob.ui.design.PiPageSwap
-import pi.kit.mob.ui.design.PiRowDivider
 import pi.kit.mob.ui.design.PiScaffold
+import pi.kit.mob.ui.design.PiSearchField
 import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiSheetList
-import pi.kit.mob.ui.design.PiSheetTitle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.files.Crumb
+import pi.kit.mob.ui.files.FileEntry
+import pi.kit.mob.ui.files.FilePreviewSheet
+import pi.kit.mob.ui.files.FileSort
+import pi.kit.mob.ui.files.arrange
+import pi.kit.mob.ui.files.crumbs
+import pi.kit.mob.ui.files.depthUnder
+import pi.kit.mob.ui.files.fileKind
+import pi.kit.mob.ui.files.humanSize
+import pi.kit.mob.ui.files.openExternally
+import pi.kit.mob.ui.files.readDirectory
+import pi.kit.mob.ui.files.stampFor
 import java.io.File
 import java.util.Locale
 
 /**
- * A read-only browser over the agent's own filesystem, rooted at `$HOME`.
+ * The tab.
  *
- * Scope is deliberately narrow: it is here to answer "what did the agent
- * actually change?" without needing a second app, not to be a general file
- * manager. Writes go through the agent or the terminal.
- *
- * ## The page is the path
- *
- * Where the header's title is a fact that never changes ("Files"), its subtitle is
- * the one that does, and it is the path the reader is standing in. That is what this
- * page has to say about itself, so it says it under the title rather than in a band
- * of its own — the browser's whole state is one string.
- *
- * ## Why entering a folder is a page swap
- *
- * It is the one move in the app that replaces the whole screen with another one
- * and had no animation at all: the list cut from one directory to the next. It is
- * the Files tab's second level in every sense — the path changes, the rows are
- * new, and the way back is the same action — so it moves the way a second level
- * moves everywhere else in the app.
- *
- * Only the *listing* travels, not the bar. Unlike the Settings pages, this page's
- * title does not change (it is always "Files"); what changes is the path under
- * it, and sliding an unchanged title out and back in would be motion without a
- * reason. The path updates in place as the listing slides, which is also what the
- * platform's document UI does.
+ * State is four values: where the reader is, which way the last move went, what the
+ * filter says, and how the list is ordered. Everything else — the entries, the sizes,
+ * the dates — is read from the directory [current] names.
  */
 @Composable
 fun FilesScreen(session: PiAgentSession) {
     val text = strings
     val home = remember { session.env.home }
-    var current by remember { mutableStateOf(home) }
     val sheets = LocalSheetHost.current
+    val toasts = LocalToastHost.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
-    // Which way the last move went. A child is deeper than its parent by
-    // definition, so comparing two depths is the whole rule; going home from
-    // three levels down is one long slide backwards, which is what it is.
+    var current by remember { mutableStateOf(home) }
+    // Which way the last move went. A child is deeper than its parent by definition,
+    // so comparing two depths is the whole rule; going home from three levels down is
+    // one long slide backwards, which is what it is.
     var forward by remember { mutableStateOf(true) }
+    var query by remember { mutableStateOf("") }
+    var sort by remember { mutableStateOf(FileSort.Name) }
+    // How many entries the folder on screen holds, reported up by the listing. Held
+    // here because the header's subtitle is the page's own furniture and the listing
+    // is a child of the swap — see [Listing] for why the read cannot happen up here.
+    var itemCount by remember { mutableStateOf<Int?>(null) }
 
     fun navigate(to: File) {
         forward = to.depthUnder(home) > current.depthUnder(home)
         current = to
+        // A filter is a statement about the folder it was typed in. Carrying it into
+        // the next folder opens a listing that is silently hiding rows.
+        query = ""
+        // And the old folder's count is not the new folder's: the header says nothing
+        // until the new listing has been read, rather than the previous number sitting
+        // under the new title for the length of the slide.
+        itemCount = null
     }
 
-    // The back gesture walks *up* the filesystem, exactly like the parent arrow in
-    // the header, rather than leaving the app. A browser whose back gesture closes
-    // the app from three directories down is the report this answers — on a phone
-    // the gesture is the primary way back, and "back" on a listing means the
-    // listing above it. At the top of the tree it is disabled (there is no parent
-    // to go to), so back from there still leaves the tab as it always did.
-    //
-    // `PageBackHandler` and not `BackHandler`: a file preview is a sheet over this
-    // page, and the gesture belongs to it first.
+    fun open(entry: FileEntry) {
+        if (entry.isDirectory) {
+            navigate(entry.file)
+        } else {
+            sheets.show(
+                Sheet(key = "files-preview:${entry.file.absolutePath}") {
+                    FilePreviewSheet(entry)
+                },
+            )
+        }
+    }
+
+    fun copyPath(entry: FileEntry) {
+        scope.launch {
+            clipboard.setClipEntry(clipEntryFor(entry.file.absolutePath))
+            toasts.show(text.files.pathCopied)
+        }
+    }
+
     PageBackHandler(enabled = current.parentFile != null) {
         current.parentFile?.let(::navigate)
     }
 
     PiScaffold(
-        title = text.header.files,
-        subtitle = relativeTo(home, current),
+        // The folder's own name, not the tab's: on a file manager the title is the
+        // place you are standing in, and "Files" over a folder called `workspace` is
+        // the one fact the page already knows better.
+        title = if (current == home) text.header.files else current.name,
+        subtitle = itemCount?.let { text.files.itemCount(it) },
         actions = {
             IconButton(
                 onClick = { navigate(home) },
@@ -149,22 +224,291 @@ fun FilesScreen(session: PiAgentSession) {
             }
         },
     ) { body ->
-        PiPageSwap(
-            key = current,
-            forward = forward,
-            modifier = body,
-        ) { page ->
-            DirectoryList(
-                directory = page as File,
+        Column(body) {
+            LocationBar(
+                trail = crumbs(home, current),
+                onOpen = ::navigate,
+            )
+            ListToolbar(
+                query = query,
+                onQueryChange = { query = it },
+                sort = sort,
+                onSortChange = { sort = it },
                 text = text,
-                onOpen = { file ->
-                    if (file.isDirectory) {
-                        navigate(file)
+            )
+
+            // Only the listing travels; the two strips above it are the page's own
+            // furniture and stay put (§9.1). The count is reported only by the page
+            // being shown — the outgoing one is still composed for the length of the
+            // slide, and its count would arrive last.
+            PiPageSwap(
+                key = current,
+                forward = forward,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            ) { page ->
+                val directory = page as File
+                Listing(
+                    directory = directory,
+                    sort = sort,
+                    query = query,
+                    text = text,
+                    onLoaded = if (directory == current) {
+                        { itemCount = it }
                     } else {
-                        sheets.show(
-                            Sheet(key = "files-preview:${file.absolutePath}") {
-                                PreviewSheet(file = file, text = text)
-                            },
+                        null
+                    },
+                    onOpen = ::open,
+                    onCopyPath = ::copyPath,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One directory's body: the loading state, the two kinds of nothing, or the table.
+ *
+ * A composable of its own, keyed on the directory, because `PiPageSwap` draws two of
+ * these at once for the length of the slide: the listing has to be a function of the
+ * directory it belongs to, or the outgoing page would show the incoming page's files
+ * on the way out. That is also why the read lives *here* rather than in the screen —
+ * a single read keyed on the screen's state would be replaced the instant the move
+ * started, and both pages would then draw the new folder.
+ *
+ * The two nothings are said differently — a folder with nothing in it, and a filter
+ * that matched nothing in a folder that has something — because they call for
+ * different actions: one is a place, the other is a query the reader can clear. The
+ * first version drew one sentence for both, and drew *nothing at all* for a folder it
+ * could not read.
+ */
+@Composable
+private fun Listing(
+    directory: File,
+    sort: FileSort,
+    query: String,
+    text: Strings,
+    onLoaded: ((Int) -> Unit)?,
+    onOpen: (FileEntry) -> Unit,
+    onCopyPath: (FileEntry) -> Unit,
+) {
+    // Null until the directory has been read: an empty list here would draw the
+    // *empty folder* state for a frame on every step into a directory — a claim about
+    // the folder, made before anything looked at it.
+    val entries by produceState<List<FileEntry>?>(initialValue = null, directory) {
+        value = withContext(Dispatchers.IO) { readDirectory(directory) }
+    }
+    val rows = entries
+
+    if (onLoaded != null) {
+        LaunchedEffect(rows) { rows?.let { onLoaded(it.size) } }
+    }
+
+    if (rows == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PiLoading() }
+        return
+    }
+    val visible = remember(rows, sort, query) { arrange(rows, sort, query) }
+
+    when {
+        rows.isEmpty() -> PiEmptyState(title = text.files.empty, body = text.files.emptyBody)
+
+        visible.isEmpty() -> PiEmptyState(
+            title = text.files.noMatches(query.trim()),
+            body = text.files.noMatchesBody,
+        )
+
+        else -> DirectoryTable(
+            rows = visible,
+            text = text,
+            onOpen = onOpen,
+            onCopyPath = onCopyPath,
+        )
+    }
+}
+
+/**
+ * The path, as a trail of segments.
+ *
+ * Horizontally scrollable because a deep path is wider than a phone, and scrolled to
+ * its end whenever the trail changes — the last segment is where the reader is, and a
+ * bar that opened showing `~ / storage` while the page showed something eight levels
+ * down would be a bar about a different folder.
+ */
+@Composable
+private fun LocationBar(
+    trail: List<Crumb>,
+    onOpen: (File) -> Unit,
+) {
+    val state = rememberLazyListState()
+    LaunchedEffect(trail) {
+        if (trail.isNotEmpty()) state.animateScrollToItem(trail.lastIndex)
+    }
+    LazyRow(
+        state = state,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        contentPadding = PaddingValues(vertical = 2.dp),
+    ) {
+        itemsIndexed(trail, key = { _, crumb -> crumb.target.absolutePath }) { index, crumb ->
+            val last = index == trail.lastIndex
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (index > 0) {
+                    Icon(
+                        Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Text(
+                    text = crumb.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    // The segment being shown is the page's subject; its ancestors
+                    // are the way back. One weight apart is the whole difference.
+                    color = if (last) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(PiShapes.small)
+                        .then(if (last) Modifier else Modifier.clickable { onOpen(crumb.target) })
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The page's tools, directly above the rows they act on.
+ *
+ * A filter field and a sort button, and nothing else: a file manager's toolbar is
+ * about *this listing*, and every control in it has to be answerable by one of the
+ * rows below. The sort control is a floating menu at its own button — the same control
+ * the terminal's session switcher uses (§7.1) — because three orders are a question
+ * with three answers, not a page.
+ */
+@Composable
+private fun ListToolbar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    sort: FileSort,
+    onSortChange: (FileSort) -> Unit,
+    text: Strings,
+) {
+    val sheets = LocalSheetHost.current
+    val anchor = rememberMenuAnchor()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PiSearchField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = text.files.filterHint,
+            clearContentDescription = text.common.clear,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(
+            onClick = {
+                sheets.showMenu(
+                    key = "files-sort",
+                    anchor = anchor,
+                    alignEnd = true,
+                ) {
+                    SortMenu(sort = sort, text = text, onSortChange = onSortChange)
+                }
+            },
+            modifier = Modifier.menuAnchor(anchor),
+        ) {
+            Icon(Icons.Filled.Sort, contentDescription = text.files.sort)
+        }
+    }
+}
+
+/** The three orders, as a menu at the sort button. */
+@Composable
+private fun SortMenu(
+    sort: FileSort,
+    text: Strings,
+    onSortChange: (FileSort) -> Unit,
+) {
+    val host = LocalSheetHost.current
+    // Dismissed first, then applied: the layer keeps drawing for the length of its
+    // exit, and a row that ran after the menu was gone would be a tap on the page
+    // behind it (`SessionsScreen`'s `sheetAction` is the same gate).
+    fun choose(order: FileSort): () -> Unit = {
+        if (host.isOpen) {
+            host.dismiss()
+            onSortChange(order)
+        }
+    }
+
+    PiMenuRow(
+        label = text.files.sortName,
+        selected = sort == FileSort.Name,
+        onClick = choose(FileSort.Name),
+    )
+    PiMenuRow(
+        label = text.files.sortModified,
+        selected = sort == FileSort.Modified,
+        onClick = choose(FileSort.Modified),
+    )
+    PiMenuRow(
+        label = text.files.sortSize,
+        selected = sort == FileSort.Size,
+        onClick = choose(FileSort.Size),
+    )
+}
+
+/**
+ * The listing itself: a table of rows, with no frame around it.
+ *
+ * `wrapContentHeight` is not applied here and does not need to be: the rows are
+ * lazy, so the list reports the height of what it laid out when the content fits and
+ * fills only when there is something to scroll to. The page's body is a `Column` whose
+ * last child takes the rest of the window, which is what a table wants — a column of
+ * rows that ends where the page ends, rather than a card that ends where the last row
+ * does.
+ */
+@Composable
+private fun DirectoryTable(
+    rows: List<FileEntry>,
+    text: Strings,
+    onOpen: (FileEntry) -> Unit,
+    onCopyPath: (FileEntry) -> Unit,
+) {
+    val sheets = LocalSheetHost.current
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        // The navigation bar's height as content padding rather than as a band of
+        // empty page: the last row scrolls past it, and at rest it is the gap that
+        // keeps the last row off the bar (`PiPageBottom`).
+        contentPadding = PaddingValues(bottom = PiPageBottom),
+    ) {
+        itemsIndexed(rows, key = { _, entry -> entry.file.absolutePath }) { _, entry ->
+            FileRow(
+                entry = entry,
+                text = text,
+                onOpen = { onOpen(entry) },
+                onActions = { anchor ->
+                    sheets.showMenu(
+                        key = "file-actions:${entry.file.absolutePath}",
+                        anchor = anchor,
+                        alignEnd = true,
+                    ) {
+                        FileActionsMenu(
+                            entry = entry,
+                            text = text,
+                            onCopyPath = { onCopyPath(entry) },
                         )
                     }
                 },
@@ -174,430 +518,238 @@ fun FilesScreen(session: PiAgentSession) {
 }
 
 /**
- * One directory's entries.
+ * One row of the table: a glyph tile, the name, the kind and date under it, and the
+ * size at the trailing edge.
  *
- * A composable of its own, keyed on the directory, because `PiPageSwap` draws two
- * of these at once for the length of the slide: the listing has to be a function
- * of the directory it belongs to, or the outgoing page would show the incoming
- * page's files on the way out.
+ * The trailing column is the *number* the row is about — bytes for a file, how many
+ * entries for a folder — and it is monospace so a column of them has one right edge.
+ * It is deliberately not a `PiRow`: a settings row names a control and puts a value or
+ * a chevron at its end, and this one is a line of a table.
  *
- * ## The rows are inset, and the hairline follows them
- *
- * The rows were drawn edge to edge with a full-bleed hairline, 16dp from the screen
- * instead of the 24dp a row's text sits at everywhere else, and the tap target had
- * square corners where every other row in the app has the row radius. The
- * conversations list was the same flat list and the same complaint — "a full-bleed
- * hairline that did not match the settings pages the rest of the app reads as one
- * with" — so this is that fix applied to the last list that had not had it.
- */
-@Composable
-private fun DirectoryList(
-    directory: File,
-    text: Strings,
-    onOpen: (File) -> Unit,
-) {
-    // Null until the directory has been read. `listFiles()` runs on IO and a
-    // listing has no rows to show in the meantime, so an empty list here would
-    // draw the *empty folder* state for a frame or two on every step into a
-    // directory — a claim about the folder, made before anything looked at it.
-    val entries by produceState<List<File>?>(initialValue = null, directory) {
-        value = withContext(Dispatchers.IO) {
-            directory.listFiles()
-                ?.sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
-                .orEmpty()
-        }
-    }
-
-    val rows = entries
-    if (rows == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PiLoading() }
-        return
-    }
-
-    if (rows.isEmpty()) {
-        // An empty directory and an unreadable one draw the same thing here, which
-        // is why the sentence says only that there is nothing to show: the list is
-        // `listFiles()`'s answer either way, and a folder the user cannot read is
-        // usually one they did not mean to open. Before this the page was blank —
-        // no list, no message, nothing to say whether the folder was empty or the
-        // app was broken.
-        PiEmptyState(title = text.files.empty, body = text.files.emptyBody)
-        return
-    }
-
-    // The listing is one surface, the way every other set of peer rows in the app
-    // is: a directory's entries share a frame, so the list has a top and a bottom
-    // rather than trailing off into the page. It is a `Surface` around the
-    // `LazyColumn` rather than a `PiGroup` because a group holds a plain `Column`
-    // — the frame has to be outside the scrolling container when the rows are
-    // lazy, and a directory of a few thousand entries is exactly why they are.
-    //
-    // ## The frame is the listing's size, not the page's
-    //
-    // `fillMaxSize` made this card the height of the window whatever the directory
-    // held, so a folder of three files drew one grey slab with two rows at the top
-    // of it — a panel that claims to be full and is not. A `LazyColumn` reports the
-    // height of its laid-out content when the content fits (it fills only when
-    // there is something to scroll to), so the frame is `wrapContentHeight` and the
-    // card ends where the last row ends. `wrapContentHeight` rather than nothing
-    // because it is what *relaxes the incoming minimum*: the page's body arrives
-    // with a minimum of the whole viewport, and only this drops it.
-    //
-    // The top gap is new with it: flush under the header the first row read as part
-    // of the bar rather than as the first line of a list, and every other list in
-    // the app has that gap (`SettingsBody`, the transcript's own top margin).
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = PiShapes.card,
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentHeight(Alignment.Top)
-            .padding(horizontal = 12.dp)
-            .padding(top = 8.dp)
-            // A gap above the navigation bar, so the listing's own lower rounded
-            // corners read as corners rather than as the bottom edge of the window:
-            // flush against the bar the card reads as cut off.
-            .padding(bottom = PiPageBottom),
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(vertical = 4.dp),
-        ) {
-            itemsIndexed(rows, key = { _, file -> file.absolutePath }) { index, file ->
-                FileRow(file = file, text = text, onOpen = { onOpen(file) })
-                // Between two rows only: a hairline after the last one would be
-                // drawn along the group's own bottom edge, which is the rule every
-                // other list here follows for the same reason.
-                if (index < rows.lastIndex) {
-                    PiRowDivider()
-                }
-            }
-        }
-    }
-}
-
-/**
- * One entry: its name, what kind of thing it is, and — for a file — how big.
- *
- * Three facts rather than one, because a browser's row is a *table* line: the
- * name is what the reader is looking for, the kind is what tells two names that
- * start the same way apart, and the size is the one number a file has. A
- * directory gets no trailing number: `length()` on one is meaningless, and a
- * directory's size would be either a lie or a directory walk.
+ * A hold opens the row's actions; the tap is the row's own — a folder opens, a file
+ * previews. Nothing in the row is a second tap target, which is why there is no
+ * trailing button: the size column is what a file manager puts there.
  */
 @Composable
 private fun FileRow(
-    file: File,
+    entry: FileEntry,
     text: Strings,
     onOpen: () -> Unit,
+    onActions: (MenuAnchor) -> Unit,
 ) {
+    val anchor = rememberMenuAnchor()
+    val tone = toneOf(entry)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            // 12dp of page inset, then the row's own padding, so the press
-            // outline is a rounded rectangle inside the page — the row radius
-            // every other row in the app is clipped to, where this list used to
-            // be a full-bleed band with square corners.
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = 12.dp, vertical = 1.dp)
+            // Clipped to the row's radius before the ripple, so the press outline is
+            // a rounded rectangle inside the page rather than a full-bleed band.
             .clip(PiShapes.row)
-            .clickable(onClick = onOpen)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .menuAnchor(anchor)
+            .combinedClickable(
+                onLongClickLabel = text.files.actions,
+                onLongClick = { onActions(anchor) },
+                onClick = onOpen,
+            )
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        // 16dp, the gap every other `PiRow` in the app uses: it is what puts this
-        // row's text at the 64dp a `PiRowDivider` is inset to, so the hairlines
-        // under a listing start in the same place as the ones under a settings group.
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(
-            imageVector = glyphOf(file),
-            contentDescription = null,
-            // A directory is the page's navigation rather than content, so it
-            // carries the secondary role and the files stay neutral: a listing of
-            // one kind of glyph in one colour is a listing where the reader's eye
-            // has nothing to catch on.
-            tint = if (file.isDirectory) {
-                MaterialTheme.colorScheme.secondary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
+        // A tile rather than a bare glyph: at 40dp in a tinted container the kind of
+        // a row is readable before its name is, which is the whole reason a file
+        // manager spends a column on it.
+        Surface(
+            color = tone.container(MaterialTheme.colorScheme),
+            shape = PiShapes.small,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = glyphOf(entry),
+                    contentDescription = null,
+                    tint = tone.onContainer(MaterialTheme.colorScheme),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
         Column(Modifier.weight(1f)) {
             Text(
-                file.name,
+                text = entry.name,
                 style = MaterialTheme.typography.bodyLarge,
-                // Two lines: a file name is how the row is told apart from
-                // its neighbour, and a one-line cap ellipsised the suffix that
-                // does the telling (`report-2024` vs `report-2025`).
+                color = MaterialTheme.colorScheme.onSurface,
+                // Two lines: a file name is how a row is told apart from its
+                // neighbour, and a one-line cap ellipsised the suffix that does the
+                // telling (`report-2024` vs `report-2025`).
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                kindOf(file, text),
+                text = metaOf(entry, text),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
-        if (!file.isDirectory) {
-            Text(
-                humanSize(file.length()),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+
+        // The size column. A folder's number is its children, a file's is its bytes,
+        // and a link gets neither: `length()` on a link is the target's path length on
+        // some filesystems and zero on others, which is a number that means nothing
+        // either way.
+        val size = when {
+            entry.isLink -> null
+            entry.isDirectory -> entry.children?.let { text.files.items(it) }
+            else -> humanSize(entry.size)
         }
+        Text(
+            text = size.orEmpty(),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // End-aligned inside a fixed column: measured on the emulator, a
+            // left-aligned one put `1 项` and `0 项` at the column's start, so the
+            // numbers were ragged on the right and the column read as text with a gap
+            // after it rather than as a column.
+            textAlign = TextAlign.End,
+            modifier = Modifier
+                .width(SIZE_COLUMN)
+                .semantics { if (size != null) contentDescription = size },
+        )
     }
 }
 
 /**
- * What kind of thing a row is, in one word or one extension.
+ * The second line: what kind of thing this is, and when it changed.
  *
- * A directory says so; a file with an extension is named by it in capitals, which
- * is the kind column of every file browser there has ever been; and a file with
- * no extension says `File` rather than leaving the line empty, because an empty
- * second line reads as a row that failed to load.
+ * Two facts in one line rather than two columns, because the size column is the one
+ * fact worth aligning and a phone's width is not a desktop's: kind and date are read
+ * once, in passing, where the size is compared row to row.
  */
-private fun kindOf(file: File, text: Strings): String = when {
-    file.isDirectory -> text.files.folder
-    file.extension.isNotBlank() -> file.extension.uppercase(Locale.ROOT)
-    else -> text.files.file
+private fun metaOf(entry: FileEntry, text: Strings): String {
+    val kind = fileKind(
+        file = entry.file,
+        isDirectory = entry.isDirectory,
+        isLink = entry.isLink,
+        folder = text.files.folder,
+        link = text.files.link,
+        plain = text.files.file,
+    )
+    val stamp = stampFor(entry.modifiedAt, System.currentTimeMillis())
+    return if (stamp.isEmpty()) kind else "$kind · $stamp"
+}
+
+/**
+ * What can be done to one row, without opening it.
+ *
+ * A floating menu at the row that was held, on the layer's anchored half — two short
+ * actions on one file do not cover the list to ask their question (§7.1). A file
+ * additionally offers **Open with**, which the preview sheet also carries: the reader
+ * who has found the file in the listing should not have to open a preview to hand it
+ * to another app.
+ */
+@Composable
+private fun FileActionsMenu(
+    entry: FileEntry,
+    text: Strings,
+    onCopyPath: () -> Unit,
+) {
+    val host = LocalSheetHost.current
+    val toasts = LocalToastHost.current
+    val context = LocalContext.current
+
+    fun run(action: () -> Unit): () -> Unit = {
+        if (host.isOpen) {
+            host.dismiss()
+            action()
+        }
+    }
+
+    PiMenuRow(
+        label = text.files.copyPath,
+        leading = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+        onClick = run(onCopyPath),
+    )
+    if (!entry.isDirectory) {
+        PiMenuRow(
+            label = text.files.openWith,
+            leading = { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null) },
+            onClick = run {
+                if (!openExternally(context, entry.file)) toasts.show(text.files.openFailed)
+            },
+        )
+    }
 }
 
 /**
  * A row's glyph, by what the file is rather than only whether it is a directory.
  *
  * A listing where every file wears the same sheet-of-paper mark asks the reader to
- * read the *name* to tell anything apart; three more glyphs — code, image, archive —
- * cover the kinds a phone user actually steps into this tab to find, and everything
- * else keeps the paper. The extension's first letter is not a glyph: a row of
- * one-letter marks reads as a bespoke alphabet nobody agreed on.
+ * read the *name* to tell anything apart; seven kinds — code, image, archive, video,
+ * audio, sheet, document — cover what a phone user steps into this tab to find, and
+ * everything else keeps the paper. The extension's first letter is not a glyph: a row
+ * of one-letter marks reads as a bespoke alphabet nobody agreed on.
  */
-private fun glyphOf(file: File): ImageVector = when {
-    file.isDirectory -> Icons.Filled.Folder
-    file.extension.lowercase(Locale.ROOT) in CODE_SUFFIXES -> Icons.Filled.Code
-    file.extension.lowercase(Locale.ROOT) in IMAGE_SUFFIXES -> Icons.Filled.Image
-    file.extension.lowercase(Locale.ROOT) in ARCHIVE_SUFFIXES -> Icons.Filled.FolderZip
-    else -> Icons.Filled.Description
+private fun glyphOf(entry: FileEntry): ImageVector {
+    if (entry.isLink) return Icons.Filled.Link
+    if (entry.isDirectory) return Icons.Filled.Folder
+    return when (entry.file.extension.lowercase(Locale.ROOT)) {
+        in CODE_SUFFIXES -> Icons.Filled.Code
+        in IMAGE_SUFFIXES -> Icons.Filled.Image
+        in ARCHIVE_SUFFIXES -> Icons.Filled.Archive
+        in VIDEO_SUFFIXES -> Icons.Filled.VideoFile
+        in AUDIO_SUFFIXES -> Icons.Filled.AudioFile
+        in SHEET_SUFFIXES -> Icons.Filled.TableChart
+        in DOCUMENT_SUFFIXES -> Icons.Filled.PictureAsPdf
+        else -> Icons.Filled.Description
+    }
+}
+
+/**
+ * The tile's colour, by kind.
+ *
+ * A folder is the page's navigation and takes the accent's container; a picture or a
+ * video takes the live tone so a long listing can be scanned by colour before it is
+ * read. Everything else stays neutral — six tones on one page is a palette, and this
+ * is a list.
+ */
+private fun toneOf(entry: FileEntry): PiTone = when {
+    entry.isDirectory -> PiTone.Accent
+    entry.file.extension.lowercase(Locale.ROOT) in IMAGE_SUFFIXES ||
+        entry.file.extension.lowercase(Locale.ROOT) in VIDEO_SUFFIXES -> PiTone.Live
+    else -> PiTone.Neutral
 }
 
 /** Written by a programmer, or by a tool a programmer runs, or about one. */
-private val CODE_SUFFIXES = setOf("kt", "kts", "java", "py", "js", "ts", "mjs", "cjs", "sh", "json", "yaml", "yml", "toml", "xml", "html", "css", "md", "txt")
+private val CODE_SUFFIXES = setOf(
+    "kt", "kts", "java", "py", "js", "ts", "mjs", "cjs", "sh", "json", "yaml", "yml",
+    "toml", "xml", "html", "css", "md", "txt", "log", "ini", "conf", "gradle",
+)
 
-/** Openable by the preview sheet's `Open with`. */
-private val IMAGE_SUFFIXES = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
+/** Drawn by the preview sheet, and openable by any phone. */
+private val IMAGE_SUFFIXES = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif", "svg")
 
 /** One thing that unpacks into several. */
-private val ARCHIVE_SUFFIXES = setOf("zip", "tar", "gz", "tgz", "xz", "bz2", "7z", "rar")
+private val ARCHIVE_SUFFIXES = setOf("zip", "tar", "gz", "tgz", "xz", "bz2", "7z", "rar", "zst")
+
+private val VIDEO_SUFFIXES = setOf("mp4", "mkv", "webm", "mov", "avi", "3gp")
+
+private val AUDIO_SUFFIXES = setOf("mp3", "m4a", "wav", "ogg", "flac", "opus", "aac")
+
+private val SHEET_SUFFIXES = setOf("csv", "tsv", "xls", "xlsx", "ods")
+
+private val DOCUMENT_SUFFIXES = setOf("pdf", "doc", "docx", "odt", "ppt", "pptx", "epub")
 
 /**
- * The preview, in the app's modal layer.
+ * The width of the size column.
  *
- * A dialog with a plain `Text` inside cannot be scrolled, so anything longer
- * than the screen was unreadable — which is most of what is worth previewing.
- * The sheet also leaves room for the action that actually gets the file out of
- * the app.
- *
- * Text is selected from the file on IO; the body scrolls, and "Open with" hands
- * the file to whatever else on the device claims it through a `content://` URI.
- *
- * A body for the layer rather than a sheet of its own: the panel, the grabber,
- * the scrim and the drag all belong to `SheetLayer`, and this is what goes inside
- * it. It is the one sheet in the app that is not a menu of choices — a preview is
- * one file, so its body is one block of monospace text and the only two things to
- * do with it are reading it and handing it on. That is why both actions come
- * *after* the text: the sheet is read first and acted on second, and the two
- * buttons under it are the two things that can be done with what was read.
+ * Wide enough for `999.9 MB` in the app's monospace at the default text size, and
+ * fixed rather than wrap-to-content so every row's number ends on the same x — which
+ * is the only thing that makes a column of sizes scannable.
  */
-@Composable
-private fun PreviewSheet(file: File, text: Strings) {
-    val context = LocalContext.current
-    val host = LocalSheetHost.current
-    val toasts = LocalToastHost.current
-    var body by remember(file) { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(file) {
-        body = withContext(Dispatchers.IO) { readPreview(file, text) }
-    }
-
-    Column(Modifier.fillMaxWidth()) {
-        PiSheetTitle(
-            title = file.name,
-            subtitle = "${kindOf(file, text)} · ${humanSize(file.length())}",
-        )
-
-        // The body takes the height it needs and no more (`fill = false`), which
-        // is what makes the text scroll inside the sheet instead of pushing the
-        // row and the action under it off the bottom of the panel: the weight
-        // caps the list at the space left over after the title and the action
-        // row, and the body's own ceiling is the 520dp below.
-        Box(Modifier.weight(1f, fill = false)) {
-            PiSheetList {
-                item {
-                    val current = body
-                    if (current == null) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 160.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            PiLoading()
-                        }
-                    } else {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 160.dp, max = 520.dp)
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                        ) {
-                            Text(
-                                current,
-                                fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Open with is a button — it used to be a list row inside the body, so the
-        // one action that takes the file *out* of the app looked like one more line
-        // of the preview rather than like a thing to press. It collects at the
-        // trailing edge, like every other action row in the app.
-        //
-        // There is no **Close** beside it any more. A sheet is dismissed four ways
-        // that need no control — the scrim, the back gesture, a downward drag and
-        // the panel's own exit — and a fifth button that does what all four already
-        // do was the largest thing on the panel's last line.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PiButton(
-                text = text.files.openWith,
-                // Gated on the sheet still being open for the same reason every
-                // control in a sheet is: the panel keeps drawing while it leaves,
-                // and a second tap must not hand the file to another app after the
-                // reader has dismissed the preview.
-                // The failure is the app's one transient message rather than a strip
-                // on the panel: it is the answer to the press, and the reader is
-                // standing in front of a button that did nothing and deserves to be
-                // told why — see [openExternally]. It is raised from here rather than
-                // held in state because nothing on the sheet depends on it.
-                onClick = {
-                    if (host.isOpen && !openExternally(context, file)) {
-                        toasts.show(text.files.openFailed)
-                    }
-                },
-                kind = PiButtonKind.Outlined,
-                size = PiButtonSize.Small,
-                leadingIcon = {
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
-                },
-            )
-        }
-    }
-}
-
-/**
- * Hands the file to another app, and says so when it cannot.
- *
- * `FLAG_GRANT_READ_URI_PERMISSION` is required: the URI points into this app's
- * private directory, which the receiving app cannot read on its own. The
- * chooser is explicit rather than a bare `ACTION_VIEW` so that a file with no
- * viewer still shows a list (and Android's own "no apps can do this" message)
- * instead of throwing `ActivityNotFoundException` at the user.
- *
- * ## Why the failure is returned rather than swallowed
- *
- * This used to be `FileProvider.getUriForFile(...) ?: return`, and that `return`
- * was the whole bug report: with shared storage switched on, tapping **Open with**
- * on a file under the `storage` links did nothing whatsoever — no chooser, no
- * error. The provider resolves a file's *canonical* path, and `~/storage/shared` is
- * a symlink to `/storage/emulated/0`, so the file was outside every configured
- * root and the call threw. The roots are fixed in `res/xml/file_paths.xml`; this
- * returns a failure anyway, because a silent no-op is the worst possible answer
- * from a button.
- *
- * @return true when a chooser was actually shown.
- */
-private fun openExternally(context: Context, file: File): Boolean {
-    val uri = runCatching {
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    }.onFailure {
-        Log.w(TAG, "no FileProvider root covers ${file.absolutePath}", it)
-    }.getOrNull() ?: return false
-
-    val mime = mimeTypeOf(file)
-    val view = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, mime)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = mime
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-
-    // The chooser always exists, so this does not throw for "no viewer" — the
-    // fallback is for an OEM build that has taken it away, and it keeps the failure
-    // path honest rather than pretending the first attempt worked.
-    return runCatching {
-        context.startActivity(
-            Intent.createChooser(view, file.name).putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(send)),
-        )
-    }.recoverCatching {
-        context.startActivity(Intent.createChooser(send, file.name))
-    }.isSuccess
-}
-
-private fun mimeTypeOf(file: File): String {
-    val extension = file.extension.lowercase()
-    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
-}
-
-private const val PREVIEW_LIMIT_BYTES = 64 * 1024
-
-/** The one tag every log line in this app carries. */
-private const val TAG = "PiKit"
-
-private fun readPreview(file: File, text: Strings): String = runCatching {
-    if (!file.isFile) return@runCatching text.files.notAFile
-    if (file.length() > PREVIEW_LIMIT_BYTES) {
-        return@runCatching text.files.tooLarge(humanSize(file.length()))
-    }
-    val bytes = file.readBytes()
-    if (bytes.any { it == 0.toByte() }) {
-        return@runCatching text.files.binary(humanSize(file.length()))
-    }
-    bytes.toString(Charsets.UTF_8)
-}.getOrElse { text.files.unreadable(it.message.orEmpty()) }
-
-private fun relativeTo(root: File, file: File): String {
-    val rootPath = root.absolutePath
-    return if (file.absolutePath == rootPath) "~" else "~/" + file.absolutePath.removePrefix("$rootPath/")
-}
-
-/**
- * How many directories below [root] this one is.
- *
- * The direction of the page slide is the sign of the difference between two of
- * these. Counting separators rather than comparing path lengths because the two
- * agree on every path that can be reached — a child's path is its parent's plus
- * one component — and only one of them is the reason.
- */
-private fun File.depthUnder(root: File): Int =
-    absolutePath.removePrefix(root.absolutePath).count { it == '/' }
-
-private fun humanSize(bytes: Long): String = when {
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
-    else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
-}
+private val SIZE_COLUMN = 76.dp

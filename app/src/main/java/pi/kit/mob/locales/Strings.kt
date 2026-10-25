@@ -605,10 +605,17 @@ interface Strings {
         val newline: String
     }
 
+    /**
+     * The Files tab: a read-only file manager over the agent's home directory.
+     *
+     * The page's vocabulary is a table's rather than a settings page's — a filter, an
+     * order, a count, a size — because the tab is a listing of objects and not a list
+     * of controls. The words that only a *browser* needs (a parent arrow's label, an
+     * empty folder's sentence) are here for the same reason they always were.
+     */
     interface Files {
         val home: String
         val parent: String
-        val close: String
         val openWith: String
         val notAFile: String
 
@@ -630,8 +637,45 @@ interface Strings {
         /** The kind column's word for a directory. */
         val folder: String
 
+        /** The kind column's word for a symlink, which is neither a file nor a folder. */
+        val link: String
+
         /** The kind column's word for a file whose name carries no extension. */
         val file: String
+
+        /** The filter field's placeholder, directly above the rows it narrows. */
+        val filterHint: String
+
+        /** The sort button's description, and the menu it opens. */
+        val sort: String
+        val sortName: String
+        val sortModified: String
+        val sortSize: String
+
+        /** A row's hold, read out by a screen reader as what the hold is for. */
+        val actions: String
+
+        /** What the header's subtitle says: how many things this folder holds. */
+        fun itemCount(count: Int): String
+
+        /**
+         * A folder's size column: how many entries it holds.
+         *
+         * A folder's own `length()` is meaningless and its tree's size would be a
+         * walk, so the number a folder gets is its children — which is the number a
+         * file manager puts there.
+         */
+        fun items(count: Int): String
+
+        /** The empty state's heading when a filter matched nothing in a folder that has rows. */
+        fun noMatches(query: String): String
+
+        /** [noMatches]'s second line. */
+        val noMatchesBody: String
+
+        /** The row menu's and the preview's copy-the-path action, and what it says. */
+        val copyPath: String
+        val pathCopied: String
 
         fun tooLarge(size: String): String
         fun binary(size: String): String
@@ -640,13 +684,14 @@ interface Strings {
         /**
          * The file could not be handed to another app at all.
          *
-         * Shown under the preview's buttons. It used to be nothing: `openExternally`
-         * swallowed the failure of `FileProvider.getUriForFile` and returned, so
-         * tapping **Open with** on a file under the `storage` links did *nothing* on
-         * screen — which is the report. The cause was that the provider's roots
-         * covered the app's private directory only and a `~/storage` link resolves
-         * to `/storage/emulated/0/…`, outside every root; the roots are fixed, and
-         * this is what says so if some other path is ever exposed the same way.
+         * Raised as the app's one transient message. It used to be nothing:
+         * `openExternally` swallowed the failure of `FileProvider.getUriForFile` and
+         * returned, so tapping **Open with** on a file under the `storage` links did
+         * *nothing* on screen — which is the report. The cause was that the provider's
+         * roots covered the app's private directory only and a `~/storage` link
+         * resolves to `/storage/emulated/0/…`, outside every root; the roots are
+         * fixed, and this is what says so if some other path is ever exposed the same
+         * way.
          */
         val openFailed: String
     }

@@ -452,23 +452,34 @@ that the shared components do not:
   the chrome around it stays out of the way; the key bar is the action voice at its
   smallest, and its own background is the tab strip's `surfaceContainer` because it is
   the page's bottom edge — anything else drew a seam between the terminal and the bar.
-- **Files** — a browser, not a file manager: a path that is a subtitle, a listing
-  whose rows are dense, and a preview sheet. It does not have to match the settings
-  pages, and it does not. The listing's frame **wraps its rows**: it was
-  `fillMaxSize`, so a directory of three files drew one grey slab the height of the
-  window with two rows at the top of it, and the fix is `wrapContentHeight` — which
-  is the modifier that *relaxes the incoming minimum*, the page's body having
-  arrived with a minimum of the whole viewport. A `LazyColumn` reports the height of
-  its laid-out content when the content fits and fills only when there is something
-  to scroll to, so the frame ends where the last row ends. It also gained the 8dp
-  top gap every other list in the app has, because flush under the header the first
-  row read as part of the bar. A row's glyph is **by what the file is**: directories
-  keep the folder in the secondary role, and code, image and archive suffixes get
-  their own marks, because a listing where every file wears the same sheet of paper
-  asks the reader to read names to tell anything apart. The preview's **Open with** is a button rather than a
-  list row inside the body — the one thing the sheet can do with what was read — and
-  it is the sheet's only control: there is no *Close* beside it, because the scrim,
-  back and a downward drag all leave the preview.
+- **Files** — a file manager, and the one page whose furniture is not the settings
+  pages'. It is read-only (writes go through the agent or the terminal), but read-only
+  is a statement about the *verbs*: the first version was a settings group holding
+  peer rows, and a directory is not a set of controls — it is a table of objects, and
+  the page has to say where you are and let you move. So it carries a **location bar**
+  (the path as a trail of tappable segments; the header's subtitle is the count, not
+  the path, because a path is navigation and a path you can tap is worth more than one
+  you can only read), a **toolbar** directly above the rows it acts on — a filter field
+  and a sort button whose three orders are a floating menu at the button (§7.1) — and
+  a **table** with no frame around it: a glyph tile, the name, the kind and the date
+  under it, and one right-aligned monospace column holding the number the row is about
+  (bytes for a file, entries for a folder, nothing for a link, whose `length()` means
+  different things on different filesystems). No card and no hairline per row: a
+  directory of two thousand entries is scanned, not read, and the frame that makes
+  eight settings rows one object makes a listing look like a panel. A row's glyph is
+  **by what the file is** — folder, link, code, image, archive, video, audio, sheet,
+  document — because a listing where every file wears the same sheet of paper asks the
+  reader to read names to tell anything apart; a folder takes the accent's container
+  and a picture or a video the live tone, and everything else stays neutral, since six
+  tones on one page is a palette. A hold opens that row's actions (copy path, open
+  with) rather than a trailing button taking the column the size wants. The preview is
+  still a sheet — one file, read once, dismissed four ways — and it now **draws a
+  picture** instead of calling it binary, states kind, size and time in its title, and
+  carries **Copy path** beside **Open with**: the path is the one thing this page knows
+  that the chat page accepts, so it has to be copyable from where it is shown. The two
+  bodies are one decision — a picture that was drawn is not followed by the text body's
+  "preview is limited to 64 KB", which the first version printed under every image
+  over the limit.
 - **Settings** — the only place `PiGroup` and `PiRow` are the whole page. Groups by
   subject, rows that act, and a page whose second level is a page rather than a
   dialog.

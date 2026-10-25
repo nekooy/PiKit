@@ -199,10 +199,15 @@ chat page agree.
 
 The Files tab browses the agent's home
 directory, read-only: it exists so you can see
-what the agent changed without a second app. Tap
-a file to preview it — text up to 64 KB, binary
-as binary. **Open with** hands it to another
-app.
+what the agent changed without a second app. The
+bar under the title is the path; tap a segment
+to go back up. The field filters the folder you
+are in, and the button beside it orders it by
+name, modified time or size. A row's right-hand
+number is a file's size or a folder's entry
+count; hold a row for **Copy path** and **Open
+with**. Tap a file to preview it — pictures are
+drawn, text up to 64 KB, binary as binary.
 
 ## 6. What the agent can see
 
