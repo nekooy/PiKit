@@ -134,8 +134,10 @@ this is the whole recipe:
    **linear `parentId` chain**, because pi stores messages as a tree and `get_messages` returns
    only the branch that reaches the last record — five tool calls hanging off one prompt
    collapse to one step — and the file only reaches the screen if the app *restores* it, which
-   needs `open_new_on_launch=false` (or a tap on its row in History). `adb push` to
-   `/data/local/tmp` needs `MSYS_NO_PATHCONV=1` in Git Bash, or the path arrives as `D:/…`.
+   needs `open_new_on_launch=false` (or a tap on its row in History). The file is written
+   to `.tooling/seed.jsonl` first — the ignored scratch directory, so it is never a commit
+   — and `adb push` from there needs `MSYS_NO_PATHCONV=1` in Git Bash, or the destination
+   arrives as a drive-rooted path instead of `/data/local/tmp/seed.jsonl`.
 3. **Make the chips read something.** With no profile configured, `get_state` reports the model
    as `unknown`, so the composer's chips say `unknown` and `0%`. A `files/pikit-config.json`
    naming a provider and a model fixes the first (a dummy key is fine — nothing is sent), and a

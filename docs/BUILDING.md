@@ -274,11 +274,15 @@ environment variable did not reach the process that resolves it.
 ## Working on a device
 
 ```bash
+mkdir -p .tooling/shots
 adb install -r -d app/build/outputs/apk/x64/debug/app-x64-debug.apk
 adb shell am start -n pi.kit.mob/.ui.MainActivity
-adb exec-out screencap -p > shot.png
-adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml
+adb exec-out screencap -p > .tooling/shots/shot.png
+adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml .tooling/ui.xml
 ```
+
+Everything a device hands back lands under `.tooling/`, the directory `.gitignore`
+already covers: a capture is a means to a diff, not a file the tree keeps.
 
 `uiautomator dump` gives exact node bounds: a screenshot tells you something is
 wrong, bounds tell you by how much. `tools/android-ui-dump.py` prints an app's
@@ -296,15 +300,18 @@ Four traps, each of which produces a plausible-looking wrong answer rather than 
 error:
 
 - **`MSYS_NO_PATHCONV=1` on every `adb` path argument.** Git Bash rewrites a leading
-  `/` into a drive path, so `adb push x.jsonl /data/local/tmp/x.jsonl` transfers to
-  `D:/APP/Git/data/local/tmp/…` and fails, and `adb shell sh -c 'cat /data/…'` reads a
-  file that does not exist. `adb pull` needs it **and** a Windows-style destination:
-  `MSYS_NO_PATHCONV=1 adb pull /sdcard/ui.xml D:/tmp/ui.xml`.
-- **Write output to a real Windows path, never `/tmp`.** The `python` in this shell is
-  a Windows python, so a script that opens `/d/tmp/…` fails and a file written to
-  `/tmp` inside `adb shell` is on the device, not on the host — which is also why a
-  screenshot is cheapest with no remote file at all:
-  `adb exec-out screencap -p > D:/tmp/shot.png`.
+  `/` into a drive path, so `adb push x.jsonl /data/local/tmp/x.jsonl` transfers to a
+  `…/Git/data/local/tmp/…` inside the Git installation and fails, and `adb shell sh -c
+  'cat /data/…'` reads a file that does not exist. `adb pull` needs it **and** a
+  Windows-style destination, so the pair is
+  `MSYS_NO_PATHCONV=1 adb pull /sdcard/ui.xml .tooling/ui.xml`.
+- **Write output to a repository-relative path, never a drive-rooted one.** The
+  `python` in this shell is a Windows python, so a script that opens `/tmp/…` fails, and
+  a file written to `/tmp` inside `adb shell` is on the device, not on the host. A
+  capture is cheapest with no remote file at all, and its destination belongs to the
+  tree it reports on: `adb exec-out screencap -p > .tooling/shots/shot.png`. Naming a
+  path outside the repository in a command someone else will paste works only on the
+  machine that wrote it.
 - **`screencap` returns a stale cached frame when the display pipeline has frozen.**
   Two captures byte-identical while the app animates, and a status-bar clock behind
   `adb shell date`, mean the capture is the lie — `uiautomator dump` and `logcat` stay
@@ -333,10 +340,12 @@ previous dump lands on the row that took its place.
 
 An emulator has no API key, so a prompt produces no answer and the chat tab opens on its
 empty state — which is no use for anything the transcript draws. The way in is a seeded
-session file:
+session file, written to the tree's own scratch directory first:
 
 ```bash
-MSYS_NO_PATHCONV=1 adb push D:/tmp/seed.jsonl /data/local/tmp/seed.jsonl
+# .tooling/seed.jsonl — the records are described in MAINTAINING.md, step 2 of
+# "The README preview strip": a session line, then one record per message.
+MSYS_NO_PATHCONV=1 adb push .tooling/seed.jsonl /data/local/tmp/seed.jsonl
 MSYS_NO_PATHCONV=1 adb shell \
   "run-as pi.kit.mob sh -c 'cp /data/local/tmp/seed.jsonl files/pi-sessions/seed.jsonl'"
 ```
@@ -346,5 +355,6 @@ records and the two traps — a **linear `parentId` chain**, because pi stores m
 tree and `get_messages` returns only the branch reaching the last record, and the profile
 file that makes the composer's chips read a real model instead of `unknown` — are written
 out in [MAINTAINING.md](MAINTAINING.md)'s *The README preview strip*, steps 2 and 3,
-which is the recipe for exactly this. Delete the seed file afterwards: it lands in the
-app's real session directory.
+which is the recipe for exactly this. Delete the seed file from the app afterwards: it
+lands in its real session directory. Nothing here is committed — `.tooling/` is ignored,
+and a seeded transcript is scaffolding for a screenshot, not a fixture.
