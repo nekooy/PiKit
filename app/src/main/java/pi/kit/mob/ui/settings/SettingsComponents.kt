@@ -42,7 +42,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -51,7 +50,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -77,16 +75,16 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
+import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.BasicComponentColors
-import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -148,8 +146,9 @@ fun SettingsValue(
  * The label is drawn with `SmallTitleDefaults.InsideMargin` and
  * `MiuixTheme.textStyles.subtitle` — the same 28/8 inset and the same face `SmallTitle`
  * uses — so this is that component with a trailing slot rather than a second heading
- * style, and the card under it is `PiSection`'s own shape (a `Card` inset by 12dp),
- * which is why the frame is drawn here rather than composed.
+ * style. The frame under the label is [PiSection]'s, taken with no title of its own:
+ * one group frame in the app rather than a second copy of it that would drift on the
+ * first change to either.
  */
 @Composable
 fun SettingsSection(
@@ -181,14 +180,7 @@ fun SettingsSection(
                 )
             }
         }
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 12.dp),
-        ) {
-            Column { content() }
-        }
+        PiSection(content = content)
     }
 }
 
@@ -247,28 +239,33 @@ fun SettingsParagraph(
 }
 
 /**
- * A settings field: Miuix's own, with the inset a row group needs.
+ * A settings field: Miuix's own, with its supporting line under it.
  *
- * The field is inset 12dp inside the card's frame on each side and 4dp above and below
- * — which is what makes a run of fields sit inside the group rather than edge to edge,
- * and what keeps two stacked fields 8dp apart (their own outlines separate them, and a
- * hairline beside a field would be a boundary too many). [supporting] is the sentence
- * under the box: Miuix's `TextField` has a floating label and no supporting slot, and
- * that sentence is help for *this* field, so it stays with it.
+ * The field carries 4dp above and below and no horizontal padding of its own, so a run
+ * of fields sits inside the group rather than edge to edge and two stacked fields stay
+ * 8dp apart (their own outlines separate them, and a hairline beside a field would be a
+ * boundary too many). [supporting] is the sentence under the box: Miuix's `TextField`
+ * has a floating label and no supporting slot, and that sentence is help for *this*
+ * field, so it stays with it.
  *
- * [placeholder] is drawn as the supporting line while the field is empty, which is the
- * one way to show it: the library's field takes one string and either floats it as a
- * label or leaves it in the box, and a settings field's label has to stay visible.
+ * [placeholder] is drawn under the box while the field is empty, beside [supporting]
+ * rather than instead of it: a call site that passes both wants the sentence about the
+ * field *and* an example of what goes in it, and the version that drew one or the other
+ * silently dropped every example the model form passes.
  *
  * [password] exists because an API key must not be drawn in the clear; everything else
  * about the two fields is the same, which is why this is a parameter rather than a
  * second field at each call site.
  *
- * [inset] is the field's own gutter, and it exists because the two places a field is
- * drawn disagree about how wide it should be: inside a group it is 12dp, which is the
- * group's frame (12dp) plus this, so the box lines up with the rows' text; inside a
- * bottom sheet the sheet itself already supplies 24dp, and a second 12 would put the box
- * inside the rows beside it. Sheets pass 0.
+ * ## The gutter is the library's, not this wrapper's
+ *
+ * `TextFieldDefaults.InsideMargin` is 16dp on each side and
+ * `BasicComponentDefaults.InsideMargin` is 16dp, so a field with no gutter of its own
+ * starts its label on the same column a row starts its title — inside a `Card` inset by
+ * 12dp both land at 28dp from the page edge, and inside a sheet (24dp) both land at 40.
+ * This used to add a 12dp gutter on top, which put every field 12dp to the right of the
+ * rows it sat among. There is no parameter for it any more: the two places a field is
+ * drawn do not actually disagree.
  */
 @Composable
 fun SettingsTextField(
@@ -281,12 +278,9 @@ fun SettingsTextField(
     enabled: Boolean = true,
     singleLine: Boolean = true,
     password: Boolean = false,
-    minLines: Int = 1,
-    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
     monospace: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
     visualTransformation: VisualTransformation? = null,
-    inset: Dp = 12.dp,
 ) {
     Column(modifier.fillMaxWidth()) {
         TextField(
@@ -295,8 +289,6 @@ fun SettingsTextField(
             label = label,
             enabled = enabled,
             singleLine = singleLine,
-            minLines = minLines,
-            maxLines = maxLines,
             textStyle = if (monospace) {
                 MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace)
             } else {
@@ -310,15 +302,22 @@ fun SettingsTextField(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = inset, vertical = 4.dp),
+                .padding(vertical = 4.dp),
         )
-        val hint = supporting ?: placeholder?.takeIf { value.isBlank() }
+        // Both lines, when both are given: `supporting` explains the field and
+        // `placeholder` shows an example of its content, and the version that drew the
+        // placeholder only in the supporting slot's absence silently dropped every
+        // example the model form passes (its name, its base URL, pi's fallback number).
+        val hint = when {
+            value.isNotBlank() -> supporting
+            else -> listOfNotNull(supporting, placeholder).joinToString(" ").ifEmpty { null }
+        }
         if (hint != null) {
             Text(
                 text = hint,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = inset + 4.dp, end = inset + 4.dp, top = 2.dp, bottom = 4.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
                 style = MiuixTheme.textStyles.footnote2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
@@ -348,9 +347,15 @@ internal fun flatDialogAction(): TextButtonColors = ButtonDefaults.textButtonCol
  *
  * The settings pages' shape for an *event* that came back wrong — announced, then
  * dismissed — rather than a strip that stays on the page until something replaces it.
- * [lines] is the installer's own output, bounded and scrolled inside the bound: the
- * version that printed such lines into a page pushed that page's own controls off the
- * screen and buried the one line the reader came for.
+ *
+ * The sentence is *not* the dialog's `summary`: the library draws a summary with no
+ * height bound (`DialogContentLayout` measures it as one `Text`), so a pi stderr of ten
+ * lines pushed the acknowledgement off the bottom of the panel and left a dialog that
+ * could not be closed by its own button. It is the body's first block here, bounded and
+ * scrolled like [lines], and the acknowledgement sits under both.
+ *
+ * [lines] is the installer's own output, one line per file a walk could not rewrite:
+ * there is no ceiling on that count, so it is bounded too.
  */
 @Composable
 fun SettingsAlert(
@@ -360,44 +365,55 @@ fun SettingsAlert(
     confirm: String,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
-    danger: Boolean = true,
     lines: List<String> = emptyList(),
 ) {
     WindowDialog(
         show = show,
         modifier = modifier,
         title = title,
-        summary = body,
-        summaryColor = if (danger) {
-            MiuixTheme.colorScheme.error
-        } else {
-            MiuixTheme.colorScheme.onSurfaceVariantSummary
-        },
         onDismissRequest = onConfirm,
     ) {
         Column(Modifier.fillMaxWidth()) {
-            if (lines.isNotEmpty()) {
-                Column(
+            if (body.isNotBlank()) {
+                Text(
+                    text = body,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainerHigh)
-                        // Bounded, then scrolled inside the bound: a walk reports one
-                        // line per file it could not rewrite and there is no ceiling on
-                        // that count.
-                        .heightIn(max = ALERT_LINES_MAX)
+                        .heightIn(max = ALERT_BODY_MAX)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                        .padding(bottom = 8.dp),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.error,
+                )
+            }
+            if (lines.isNotEmpty()) {
+                // Miuix's own `Card`, not a rounded box of this file's: 16dp is the
+                // library's corner radius and `surfaceContainer` its panel role, and a
+                // second pair of each beside them read as a different kind of surface.
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
                 ) {
-                    lines.forEach { line ->
-                        Text(
-                            text = line,
-                            style = MiuixTheme.textStyles.footnote2,
-                            color = MiuixTheme.colorScheme.error,
-                            fontFamily = FontFamily.Monospace,
-                        )
+                    Column(
+                        modifier = Modifier
+                            // Bounded, then scrolled inside the bound: a walk reports one
+                            // line per file it could not rewrite and there is no ceiling
+                            // on that count.
+                            .fillMaxWidth()
+                            .heightIn(max = ALERT_LINES_MAX)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        lines.forEach { line ->
+                            Text(
+                                text = line,
+                                style = MiuixTheme.textStyles.footnote2,
+                                color = MiuixTheme.colorScheme.error,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        }
                     }
                 }
             }
@@ -413,6 +429,12 @@ fun SettingsAlert(
 
 /** How tall a dialog's error lines may get before they scroll: fifteen lines. */
 private val ALERT_LINES_MAX = 240.dp
+
+/** How tall a dialog's sentence may get before it scrolls: about ten lines. */
+private val ALERT_BODY_MAX = 240.dp
+
+/** The spinner a run shows in a row: 20dp, the library's own circular size. */
+private val WORKING_SIZE = 20.dp
 
 /**
  * A colour a settings row offers, as a circle.
@@ -457,8 +479,8 @@ fun SettingsSwatch(
  * picture wins over a label and a label over a glyph: a label is up to three characters
  * the user typed for this circle, and it says which speaker this is more precisely than
  * any icon can. [ink] is decided by the background's luminance — white on a dark swatch,
- * black on a light one — because the eight accent colours range from the palette's
- * darkest to its lightest and a fixed ink is unreadable at one end.
+ * black on a light one — because the eight avatar colours range from a deep red to an
+ * amber and a fixed ink is unreadable at one end.
  *
  * ## Why the picture is decoded here rather than loaded
  *
@@ -480,7 +502,8 @@ fun SettingsAvatar(
     imagePath: String? = null,
     mark: Boolean = false,
     size: Dp = 28.dp,
-    labelStyle: TextStyle = MiuixTheme.textStyles.body2,
+    /** Null scales the label to [size]; the 96dp preview passes `title1` instead. */
+    labelStyle: TextStyle? = null,
 ) {
     val ink = if (color.luminance() > 0.5f) Color.Black else Color.White
     val picture = rememberAvatarBitmap(imagePath)
@@ -503,9 +526,22 @@ fun SettingsAvatar(
 
             label != null -> Text(
                 text = label,
-                style = labelStyle,
+                // Scaled to the circle rather than fixed: `body2` is 14sp, which is
+                // more than half of the 28dp row avatar, so the three-character label
+                // the field allows was already wider than the disc it sits in. The
+                // editor passes `title1` for its 96dp preview; a call site that passes
+                // nothing gets the row size.
+                style = if (labelStyle == null) {
+                    MiuixTheme.textStyles.body2.copy(fontSize = (size.value * 0.38f).sp)
+                } else {
+                    labelStyle
+                },
                 color = ink,
                 maxLines = 1,
+                // Elided rather than clipped: the label is capped at three characters
+                // but a large font scale still overflows, and a glyph cut in half reads
+                // as a rendering fault where an ellipsis reads as "there is more".
+                overflow = TextOverflow.Ellipsis,
             )
 
             icon != null -> Icon(
@@ -574,14 +610,13 @@ private fun rememberAvatarBitmap(path: String?): ImageBitmap? {
 fun SettingsWorking(
     modifier: Modifier = Modifier,
     label: String? = null,
-    size: Dp = 20.dp,
 ) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        CircularProgressIndicator(size = size)
+        CircularProgressIndicator(size = WORKING_SIZE)
         if (label != null) {
             Text(
                 text = label,
@@ -601,9 +636,10 @@ fun SettingsWorking(
  * of them on one page read as a toolbar of buttons rather than as each row's own verb.
  * 12/6 keeps the 40dp touch target and gives the label back to the row.
  *
- * [danger] is the error role, for the one action on a page that cannot be taken back.
- * A text button's ink *is* its `color` in Miuix, which is why the danger variant sets
- * `textButtonColorsPrimary(color = error)` rather than a border or a fill.
+ * There is no destructive variant. Every action that cannot be taken back is a question
+ * first (`PiConfirm(destructive = true)`), and the confirming word of a question is
+ * where the error role belongs — a row action that is itself red would be a second,
+ * weaker copy of that warning.
  */
 @Composable
 fun SettingsAction(
@@ -611,7 +647,6 @@ fun SettingsAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    danger: Boolean = false,
 ) {
     TextButton(
         text = text,
@@ -619,11 +654,7 @@ fun SettingsAction(
         modifier = modifier,
         enabled = enabled,
         insideMargin = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-        colors = if (danger) {
-            ButtonDefaults.textButtonColorsPrimary(color = MiuixTheme.colorScheme.error)
-        } else {
-            ButtonDefaults.textButtonColorsPrimary()
-        },
+        colors = ButtonDefaults.textButtonColorsPrimary(),
     )
 }
 
@@ -652,14 +683,18 @@ data class SettingsPick(
  * this same sheet is used for. One shape for both, so a picker is recognisable wherever
  * it appears.
  *
- * The rows are `RadioButtonPreference`s: the radio *is* Miuix's mark for "one of these",
- * which is what a picker asks, and it says which one is current without a tick glyph
- * being drawn for it. [searchHint] adds a filter field above the list, for a list of
- * *things that exist* rather than a handful of alternatives.
+ * The rows are `RadioButtonPreference`s when the list *has* a current value, and
+ * `ArrowPreference`s when it does not: the radio is Miuix's mark for "one of these is in
+ * effect", which is the question the provider, workflow and API-type pickers ask, while
+ * the add-an-option and fetched-model lists ask "which of these do I want" and a column of
+ * unselected radios answered that with the other question's mark. [searchHint] adds a
+ * filter field above the list, for a list of *things that exist* rather than a handful of
+ * alternatives.
  *
  * An empty filter result draws no card at all. That is a gap rather than a decision: the
- * catalog has no "no matches" string, and inventing one is not this file's call — the
- * alternative was a card with nothing in it, which reads as a rendering fault.
+ * catalog has no "no matches" member on `Strings.Settings` — the sentence belongs to
+ * `Strings.Files`, which is the file list's — and inventing one here is not this file's
+ * call; the alternative was a card with nothing in it, which reads as a rendering fault.
  */
 @Composable
 fun SettingsPickerSheet(
@@ -703,7 +738,6 @@ fun SettingsPickerSheet(
                     value = query,
                     onValueChange = { query = it },
                     label = searchHint,
-                    inset = 0.dp,
                 )
             }
             if (shown.isNotEmpty()) {
@@ -722,12 +756,28 @@ fun SettingsPickerSheet(
                             .verticalScroll(rememberScrollState()),
                     ) {
                         shown.forEach { option ->
-                            RadioButtonPreference(
-                                title = option.label,
-                                summary = option.description,
-                                selected = option.id == selectedId,
-                                onClick = { onPick(option.id) },
-                            )
+                            // A radio only when the list *has* a current value. The sheet
+                            // is used for two different questions: "which of these is in
+                            // effect" (the provider, the workflow, the API type) and
+                            // "which of these do I want to add" (the extension's options,
+                            // a fetched model), where `selectedId` is null and a column of
+                            // unselected radios says the second thing with the first
+                            // question's mark. The row that opens something is
+                            // `ArrowPreference`, so the add lists use that.
+                            if (selectedId == null) {
+                                ArrowPreference(
+                                    title = option.label,
+                                    summary = option.description,
+                                    onClick = { onPick(option.id) },
+                                )
+                            } else {
+                                RadioButtonPreference(
+                                    title = option.label,
+                                    summary = option.description,
+                                    selected = option.id == selectedId,
+                                    onClick = { onPick(option.id) },
+                                )
+                            }
                         }
                     }
                 }

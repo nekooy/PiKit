@@ -7,7 +7,6 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -39,7 +37,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -72,6 +69,7 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowListPopup
 import kotlinx.coroutines.CoroutineScope
@@ -95,7 +93,10 @@ private const val MAX_TEXT_SIZE_SP = 40
  *
  * The shells themselves belong to [PiAgentSession.terminalSessions], not to this
  * composable — switching to another tab disposes the whole screen, and a shell
- * that died with it would make a long build or an upgrade impossible.
+ * that died with it would make a long build or an upgrade impossible. Nothing is
+ * reconciled on the way out either: a package is rewritten before dpkg unpacks it
+ * (ARCHITECTURE §4), so a page that is left is not a state to repair, and
+ * Settings -> Maintenance & repair is the fallback — the only place it is mentioned.
  *
  * ## What is chrome here, and what is not
  *
@@ -132,19 +133,6 @@ fun TerminalScreen(session: PiAgentSession) {
     // If every session is gone we are one blank page away from being unable to
     // type anything at all, so make sure one exists before the first frame.
     LaunchedEffect(Unit) { manager.begin() }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            // Deliberately nothing at all. Closing the sessions here is what used
-            // to kill the shell on a tab switch; relocating the packages the user
-            // had just installed was what this block did next, and that is gone
-            // too. Leaving a page is not a moment the user chose and not one they
-            // were told about, and it is not where the problem is: a package is
-            // rewritten before dpkg unpacks it (ARCHITECTURE §4), so there is
-            // nothing to reconcile afterwards. Settings -> Maintenance & repair is
-            // the fallback, and the only place it is mentioned.
-        }
-    }
 
     var ctrlOn by remember { mutableStateOf(false) }
     var altOn by remember { mutableStateOf(false) }
@@ -206,25 +194,38 @@ fun TerminalScreen(session: PiAgentSession) {
         } else {
             t.header.terminalSubtitleIdle
         },
-        // The header's height is the terminal's, and it is the shell that fixes it:
-        // the PTY is sized from the rectangle under the header, so a strip that grew
-        // to two lines and shrank again would re-measure the terminal on every
-        // scroll. Miuix's small top bar is what this page wants for that (§9.2): it
-        // is pinned — its height is `max(52dp, title + subtitle + 8dp)` and scroll
-        // cannot move any of it — where a large bar that collapsed would have moved
-        // the rectangle while its own height animated.
-        //
-        // The subtitle is the one term in that sum this page fills in, so it is the
-        // one thing that could move the rectangle: it is measured against the room
-        // left beside four action icons, and its English idle sentence is the long
-        // value here — the count is shorter than the idle line in English and
-        // Chinese, and fits in Japanese. A second line there costs the terminal a
-        // row once, for the bar being what it is, and never per frame.
+        // The header's height is the terminal's: the PTY is sized from the rectangle
+        // under it, so anything that grew the header while the reader watched would
+        // resize the shell under them. The bar is Miuix's small bar at its fixed
+        // height — pinned, `CollapsedHeight` (52dp), and scroll cannot move any of it
+        // — and the subtitle is not the library's: [PiPage] draws it beneath the bar
+        // itself, one line with an ellipsis. That is what keeps the header constant
+        // in every language: the library's own subtitle has no line limit, so this
+        // page's English idle sentence wrapped onto a second line where the Chinese
+        // one did not, and the bar — and therefore the PTY's rectangle — moved by a
+        // line when the language changed. The line's text then changes between the
+        // idle sentence and the roster count without moving anything, because it is
+        // always one line. §9.2 has the measurement.
         actions = {
-            IconButton(onClick = { selected?.write("clear\n") }) {
+            IconButton(
+                onClick = { selected?.write("clear\n") },
+                // Nothing to clear when the page has no shell to clear: the close
+                // button beside it is gated on the same condition, and a button that
+                // takes a tap and does nothing is worse than one that refuses it.
+                enabled = selected != null,
+            ) {
                 Icon(
                     imageVector = MiuixIcons.Refresh,
                     contentDescription = t.terminal.clear,
+                    // `IconButton` refuses the tap without drawing the refusal —
+                    // Miuix's `IconButton` has no disabled appearance at all — so a
+                    // gated button looked live. The disabled ink is the scheme's own
+                    // role for exactly this, applied at the glyph.
+                    tint = if (selected != null) {
+                        LocalContentColor.current
+                    } else {
+                        MiuixTheme.colorScheme.disabledOnSurface
+                    },
                 )
             }
             IconButton(onClick = { manager.create() }) {
@@ -240,6 +241,13 @@ fun TerminalScreen(session: PiAgentSession) {
                 Icon(
                     imageVector = MiuixIcons.Close,
                     contentDescription = t.terminal.closeTerminal,
+                    // The same disabled ink as the clear button beside it: one rule
+                    // for both, or the pair disagree about what "no shell" looks like.
+                    tint = if (selected != null) {
+                        LocalContentColor.current
+                    } else {
+                        MiuixTheme.colorScheme.disabledOnSurface
+                    },
                 )
             }
             // The roster's switch. Miuix's icon set has no terminal glyph, so the
@@ -493,6 +501,10 @@ private fun TerminalSessionMenu(
             } else {
                 text.terminal.exited(entry.exitStatus)
             },
+            // The shell on screen is one of a set, so the row is selectable rather
+            // than merely clickable: the radio mark beside it is then decoration for
+            // the state a screen reader already reports.
+            selected = entry.id == current?.id,
             startAction = {
                 RadioButton(selected = entry.id == current?.id, onClick = null)
             },

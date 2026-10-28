@@ -321,10 +321,14 @@ private fun workflowLabel(id: String, text: Strings): String = when (id) {
 /**
  * A whole-number field that saves what parses and keeps what does not.
  *
- * The draft is keyed on the stored number, so the field is a copy of it the way
- * `AgentPage`'s working directory is: a reload — or a clamp — rewrites the field,
- * and a value that is still being typed (`""`, `"30"` on the way to `"30000"`) is
- * left in the field instead of being rounded to something the user did not type.
+ * The draft is the field's, and the store is written beside it — never back into it. The
+ * first version keyed the draft on the stored number (`remember(stored)`), which looks
+ * equivalent and is not: a clamp written to the store re-created the draft, so the digit
+ * the reader had just typed was replaced under the cursor. Typing `05` produced `15` —
+ * the `0` was clamped to `1` on the way out, the field was rewritten to `1`, and the `5`
+ * landed after it. The field therefore keeps exactly what was typed, and a value that
+ * arrives from *elsewhere* (a restore, a file edited in the terminal) re-seeds it through
+ * [sent], which only ever holds what this field itself last wrote.
  */
 @Composable
 private fun NumberField(
@@ -333,12 +337,23 @@ private fun NumberField(
     max: Int,
     onParsed: (Int) -> Unit,
 ) {
-    var draft by remember(stored) { mutableStateOf(stored.toString()) }
+    var draft by remember { mutableStateOf(stored.toString()) }
+    var sent by remember { mutableStateOf(stored) }
+    if (stored != sent) {
+        draft = stored.toString()
+        sent = stored
+    }
     SettingsTextField(
         value = draft,
         onValueChange = { raw ->
             draft = raw
-            raw.trim().toIntOrNull()?.coerceIn(1, max)?.let(onParsed)
+            val parsed = raw.trim().toIntOrNull() ?: return@SettingsTextField
+            // Clamped on the way to the store and not on the way back into the field: the
+            // extension applies its own cap, so a larger number here is one the page would
+            // show and pi would not use.
+            val accepted = parsed.coerceIn(1, max)
+            sent = accepted
+            onParsed(accepted)
         },
         label = label,
         singleLine = true,

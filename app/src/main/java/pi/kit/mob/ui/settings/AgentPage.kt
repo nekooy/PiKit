@@ -17,7 +17,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import kotlinx.coroutines.launch
 import pi.kit.mob.env.AgentContext
 import pi.kit.mob.env.BatteryOptimisation
 import pi.kit.mob.locales.Strings
@@ -83,7 +81,6 @@ internal fun AgentPage(
     workingDir: String,
     onBack: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     var working by remember(workingDir) { mutableStateOf(workingDir) }
     // The restart is two suspending calls — stop, then start — and pi takes about two
     // seconds to handshake. Without a state of its own the button was inert for that
@@ -91,11 +88,38 @@ internal fun AgentPage(
     // landed and a tap that missed looked identical. The flag drives the row's own
     // indicator and takes the second tap that would otherwise queue a second restart.
     var restarting by remember { mutableStateOf(false) }
+    // Whether the process has actually been seen to leave `Running` since the press.
+    // Without it the effect below would fire on the frame of the press, when the
+    // status is still `Running` from the agent that is about to be stopped, and
+    // announce a restart that had not started.
+    var restartMoved by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
     var showInstructions by remember { mutableStateOf(false) }
     val text = strings
     val toasts = LocalPiToast.current
     val instructions = remember(session) { AgentContext.file(session.env) }
+    LaunchedEffect(agent) {
+        if (!restarting) return@LaunchedEffect
+        if (agent is AgentStatus.Starting || agent is AgentStatus.Stopped) restartMoved = true
+        if (!restartMoved) return@LaunchedEffect
+        when (agent) {
+            is AgentStatus.Running -> {
+                restarting = false
+                restartMoved = false
+                // The toast reports the *outcome*, and only a start that succeeded has
+                // one: a failed launch writes `AgentStatus.Failed`, which the note under
+                // this row is already showing with pi's own stderr in it.
+                toasts?.show(text.settings.restartedAgent)
+            }
+
+            is AgentStatus.Failed -> {
+                restarting = false
+                restartMoved = false
+            }
+
+            else -> Unit
+        }
+    }
 
     PiPage(
         // The row this page opens reads "Agent process" (`text.settings.agentProcess`),
@@ -194,23 +218,17 @@ internal fun AgentPage(
                         } else {
                             SettingsAction(
                                 text = text.settings.restartAgent,
+                                // `PiAgentSession.restartAgent` and not a coroutine of
+                                // this page's: a scope tied to the composition is
+                                // cancelled when the page leaves, and cancelled between
+                                // the stop and the start it leaves a stopped agent
+                                // behind. The session's scope outlives the page, and
+                                // `restarting` is only this row's spinner — cleared by
+                                // the effect above when the status settles.
                                 onClick = {
-                                    scope.launch {
-                                        restarting = true
-                                        try {
-                                            session.stopAgent()
-                                            // The toast reports the *outcome*, and only
-                                            // a start that succeeded has one: a failed
-                                            // launch writes `AgentStatus.Failed`, which
-                                            // the note under this row is already showing
-                                            // with pi's own stderr in it.
-                                            if (session.startAgent()) {
-                                                toasts?.show(text.settings.restartedAgent)
-                                            }
-                                        } finally {
-                                            restarting = false
-                                        }
-                                    }
+                                    restarting = true
+                                    restartMoved = false
+                                    session.restartAgent()
                                 },
                             )
                         }

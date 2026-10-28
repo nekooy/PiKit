@@ -952,7 +952,6 @@ interface Strings {
         /** What the page says when no profile exists yet — the first-run empty state. */
         val profilesEmptyHint: String
         val savedProfiles: String
-        val active: String
         val editProfile: String
         val deleteProfile: String
         val noProfileProvider: String
@@ -1085,7 +1084,6 @@ interface Strings {
         val saveFailed: String
 
         val fetchModels: String
-        val fetching: String
         val chooseProviderFirst: String
         fun modelCount(count: Int): String
         val fromProvider: String
@@ -1421,7 +1419,6 @@ interface Strings {
         val modelListStateCurrent: String
         val modelListStateFailed: String
 
-        val dismiss: String
         val installedPackages: String
         val relocate: String
 

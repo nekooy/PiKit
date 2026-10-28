@@ -3,11 +3,8 @@ package pi.kit.mob.ui.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -55,16 +52,14 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Clear
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -848,6 +843,9 @@ internal fun ModelEditPage(
     var fetchedFootnote by remember { mutableStateOf("") }
     var modelPicker by remember { mutableStateOf(false) }
     var editingNumber by remember { mutableStateOf<NumberEdit?>(null) }
+    // The number the panel is drawing; replaced when another row is tapped, never cleared
+    // by the sheet's own dismissal (see the sheet below).
+    var shownEdit by remember { mutableStateOf<NumberEdit?>(null) }
 
     PiPage(
         title = if (isNew) text.settings.newProfile else text.settings.editProfile,
@@ -977,9 +975,14 @@ internal fun ModelEditPage(
                         ),
                         selected = model == activeModel,
                         endActions = {
+                            // `Close`, the glyph the search page's key rows use for the same
+                            // action: taking one entry out of a list. `Delete` is reserved for
+                            // the profile row above, which removes the whole configuration
+                            // rather than one of its models — two weights of the same act need
+                            // two marks, and one act needs one.
                             IconButton(onClick = { pendingRemove = model }) {
                                 Icon(
-                                    imageVector = MiuixIcons.Clear,
+                                    imageVector = MiuixIcons.Close,
                                     contentDescription = text.settings.removeModel,
                                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 )
@@ -1226,11 +1229,13 @@ internal fun ModelEditPage(
                                 fallback = window,
                                 unknown = text.settings.unknown,
                                 onClick = {
-                                    editingNumber = NumberEdit(
+                                    val edit = NumberEdit(
                                         model = current,
                                         maxTokens = false,
                                         fallback = window,
                                     )
+                                    shownEdit = edit
+                                    editingNumber = edit
                                 },
                             )
                             ModelNumberRow(
@@ -1239,11 +1244,13 @@ internal fun ModelEditPage(
                                 fallback = max,
                                 unknown = text.settings.unknown,
                                 onClick = {
-                                    editingNumber = NumberEdit(
+                                    val edit = NumberEdit(
                                         model = current,
                                         maxTokens = true,
                                         fallback = max,
                                     )
+                                    shownEdit = edit
+                                    editingNumber = edit
                                 },
                             )
                         }
@@ -1391,33 +1398,38 @@ internal fun ModelEditPage(
 
     // One number, typed in a sheet. A sheet rather than a dialog because the keyboard has to
     // stay up and the field has to keep focus.
+    //
+    // `shownEdit` is what the panel draws, `edit` is what it is open *on*: `show` goes false
+    // on Save while Miuix's exit animation is still playing, and a title and a body read off
+    // the same null value play that last 200 ms as an empty panel.
     val edit = editingNumber
     PiSheet(
         show = edit != null,
-        title = edit?.let {
+        title = shownEdit?.let {
             if (it.maxTokens) text.settings.maxTokensLabel else text.settings.contextWindowLabel
         },
         onDismiss = { editingNumber = null },
     ) {
-        if (edit != null) {
+        val subject = shownEdit
+        if (subject != null) {
             ModelNumberBody(
-                label = if (edit.maxTokens) {
+                label = if (subject.maxTokens) {
                     text.settings.maxTokensLabel
                 } else {
                     text.settings.contextWindowLabel
                 },
-                model = edit.model,
+                model = subject.model,
                 initial = (
-                    if (edit.maxTokens) settings[edit.model]?.maxTokens
-                    else settings[edit.model]?.contextWindow
+                    if (subject.maxTokens) settings[subject.model]?.maxTokens
+                    else settings[subject.model]?.contextWindow
                     )?.toString().orEmpty(),
-                fallback = edit.fallback,
+                fallback = subject.fallback,
                 text = text,
                 onSave = { value ->
-                    settings = if (edit.maxTokens) {
-                        settings.withMaxTokens(edit.model, value)
+                    settings = if (subject.maxTokens) {
+                        settings.withMaxTokens(subject.model, value)
                     } else {
-                        settings.withWindow(edit.model, value)
+                        settings.withWindow(subject.model, value)
                     }
                     editingNumber = null
                 },
@@ -1427,32 +1439,17 @@ internal fun ModelEditPage(
 
     // The fetched list's failure: a provider that answered with an auth failure and a wrong
     // endpoint produces two paragraphs, and a pill that disappears after three seconds is not
-    // where a reader can read two paragraphs. Bounded and scrolled inside the bound, because
-    // an unbounded body pushes the acknowledgement off the bottom.
+    // where a reader can read two paragraphs. `SettingsAlert` is the settings pages' shape for
+    // exactly this — an operation that came back wrong, announced and then dismissed — and it
+    // bounds the sentence so a long one cannot push the acknowledgement off the panel.
     val failure = discoveryError
-    WindowDialog(
+    SettingsAlert(
         show = failure != null,
         title = text.settings.fetchModels,
-        onDismissRequest = { discoveryError = null },
-    ) {
-        Column(Modifier.fillMaxWidth()) {
-            Text(
-                text = failure.orEmpty(),
-                modifier = Modifier
-                    .heightIn(max = DISCOVERY_FAILURE_MAX)
-                    .verticalScroll(rememberScrollState()),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.error,
-            )
-            androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
-            TextButton(
-                text = text.common.ok,
-                onClick = { discoveryError = null },
-                modifier = Modifier.fillMaxWidth(),
-                colors = flatDialogAction(),
-            )
-        }
-    }
+        body = failure.orEmpty(),
+        confirm = text.common.ok,
+        onConfirm = { discoveryError = null },
+    )
 
     // The model row's ✕, asked about. Its own question rather than the profile delete's: the
     // two are different actions with different consequences, and the borrowed strings said
@@ -1482,6 +1479,12 @@ internal fun ModelEditPage(
     // reason is written at the bottom of the page the dialog is still covering, and the user
     // is back at the same question. So the refusal is the dialog's own body and the answer is
     // "keep editing" — the one action that makes the other button possible.
+    //
+    // A tap outside or the back gesture is *not* the second button. `PiConfirm` defaults
+    // `onDismissRequest` to `onDismiss`, which here means "discard the edits", so the scrim
+    // — the easiest target on the screen — was the destructive answer while the two buttons
+    // said otherwise. It closes the question and stays on the page instead, which is the
+    // third answer this dialog is deliberately without a button for.
     val refused = refusal()
     PiConfirm(
         show = askingToSave,
@@ -1497,6 +1500,7 @@ internal fun ModelEditPage(
             askingToSave = false
             leave()
         },
+        onDismissRequest = { askingToSave = false },
     )
 }
 
@@ -1562,14 +1566,6 @@ private fun ModelNumberRow(
  * reading the catalogue again.
  */
 private data class NumberEdit(val model: String, val maxTokens: Boolean, val fallback: Long?)
-
-/**
- * How tall a discovery failure may get before it scrolls: about ten lines.
- *
- * A provider that answered with an auth failure *and* a wrong endpoint produces two
- * paragraphs, and an unbounded body pushes the acknowledgement off the bottom of the dialog.
- */
-private val DISCOVERY_FAILURE_MAX = 320.dp
 
 /**
  * One number, typed in a sheet.

@@ -165,18 +165,22 @@ Two row rules are behaviour rather than taste:
   storage grants and the safety guard ask every time they are turned on or off, so
   the row does not toggle and the finger has to reach the switch. Backup's switches
   stay row-toggling, because nothing there asks.
-- **A `BasicComponent` with `endActions` must not go inside a `ListPopupColumn`.**
-  Miuix 0.9.4 sizes a popup column from its children's intrinsic sizes, and the
-  component's end-action budget overflows `Int` at the unbounded width it is asked
-  about — the arithmetic is `(available - 8dp) * 6 / 10`, which is negative at
-  `Constraints.Infinity`, and the crash is `maxWidth must be >= than minWidth`. It was
-  reproduced on the terminal's session roster. `ui/kit/PiMenuRow` is the row for a
-  popup that needs a trailing mark; a `BasicComponent` *without* end actions is safe.
+- **A `BasicComponent` with `startAction` or `endActions` must not go inside a
+  `ListPopupColumn`.** Miuix 0.9.4 sizes a popup column from its children's intrinsic
+  sizes, and the component's end-action budget overflows `Int` at the unbounded width
+  it is asked about — the arithmetic is `(available - 8dp) * 6 / 10`, which is
+  negative at `Constraints.Infinity`, and the crash is `maxWidth must be >= than
+  minWidth`. It was reproduced twice: on the terminal's session roster, and on the
+  composer's `+` menu, whose rows carry a *leading* mark and hit the same branch. A
+  `BasicComponent` *without* either slot is safe. `ui/kit/PiMenuRow` is the row for a
+  popup, marks and all, and it takes the library's own popup-mode metrics —
+  `body1`/`body2`, 20dp at the sides — so a menu of these sits beside a menu of
+  `DropdownImpl`s without a seam.
 
 ## Dialogs, sheets and the one message
 
-**Dialogs are window-level.** `PiConfirm` and `PiAlert` wrap Miuix's `WindowDialog`
-rather than the overlay variant, and the reason is this app's shape rather than a
+**Dialogs are window-level.** `PiConfirm` wraps Miuix's `WindowDialog` rather than the
+overlay variant, and the reason is this app's shape rather than a
 preference: the first-launch permission prompts are raised before there is a page to
 attach an overlay to, a pi question can arrive over any destination, and a sheet
 belongs to a page that may be disposed while it closes. A window dialog needs no
@@ -195,6 +199,16 @@ competes with the page behind it for the same emphasis.
 downward drag all dismiss, and the page only owns *which* sheet is open. A picker is
 a sheet of radio rows with a filter field, not a dropdown, when its content is longer
 than a few words — a dropdown's popup is sized for a list, not for a search.
+
+**A window is driven by `show`, never by whether it is composed.** Miuix's
+`WindowDialog` and `WindowBottomSheet` animate in *and out* through that flag, so a
+call site that raises one by writing `if (question != null) PiDialogHost(...)` removes
+it from the hierarchy with the content already gone: the exit plays over an empty
+panel, `onDismissFinished` never fires, and the window a reader answers keeps a
+remembered field's last answer for the next question. `PiDialogHost` therefore takes a
+required `show` and the caller holds the last value — `pendingDialog != null` opens it,
+the held copy is what it draws while it leaves. The sessions page's three dialogs and
+the personalization page's avatar sheet were the same bug and now follow the same rule.
 
 **Transient messages are one snackbar**, hosted once at the root and raised through
 `LocalPiToast`. The old pill became the library's snackbar, and two of its rules
@@ -315,8 +329,11 @@ the transcript's meta row and a tool card's output still use the same control.
   live/error tones are content, not chrome; they are derived from the scheme where
   they can be and fixed where the terminal requires it.
 - **The terminal's sixteen colours.** A terminal with a theme-derived palette is a
-  terminal whose output changes meaning with the wallpaper.
+  terminal whose output changes meaning with the scheme, and a `ls` colour that means
+  "directory" in one theme and something else in the next is a terminal that has to
+  be re-read.
 - **The formula line box** — the box, the ascent/descent measurement and the
   typesetter are the app's; only their ink and text style come from the theme.
-- **The window-level dialog phrasing** (`PiConfirm`/`PiAlert`) and the snackbar host,
-  because Miuix ships the window and not this app's two-answer question.
+- **The window-level dialog phrasing** (`PiConfirm` in the kit, `SettingsAlert` on the
+  settings pages) and the snackbar host, because Miuix ships the window and not this
+  app's two-answer question.

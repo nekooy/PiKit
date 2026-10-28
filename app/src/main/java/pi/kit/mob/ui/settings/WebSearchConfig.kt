@@ -38,7 +38,6 @@ import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
@@ -113,10 +112,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * what the section is for is one line of a field's own help, and a paragraph over a list
  * nobody reads is clutter (§13).
  *
- * The hairline is Miuix's `HorizontalDivider`, inset to the column the rows' titles start
- * on, and it exists only when the list has something in it: it separates the list from
- * the row, and a rule with one thing on each side of it is a boundary drawn between two
- * things that are not there.
+ * There is no hairline between the key rows, and the one that used to be there was the
+ * page's only exception to the shape: Miuix's group is a card whose rows touch, and the
+ * separation is the row's own press feedback rather than a rule between every pair. A
+ * `HorizontalDivider` there also had to be inset to the titles' column to avoid touching
+ * the card's edge, which is a second number to keep in step with the row margin for no
+ * gain.
  *
  * ## A write restarts the agent itself
  *
@@ -152,8 +153,7 @@ internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSessi
     var opening by remember { mutableStateOf(0) }
 
     PiSection(title = text.settings.searchConfig) {
-        entries.forEachIndexed { index, entry ->
-            if (index > 0) HorizontalDivider(Modifier.padding(horizontal = ROW_DIVIDER_INSET))
+        entries.forEach { entry ->
             BasicComponent(
                 title = entry.path,
                 // The value is shown on the row's own second line rather than in
@@ -176,9 +176,6 @@ internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSessi
                     }
                 },
             )
-        }
-        if (entries.isNotEmpty()) {
-            HorizontalDivider(Modifier.padding(horizontal = ROW_DIVIDER_INSET))
         }
 
         // The add row: icon, title, one line saying what the picker it opens is for, and
@@ -292,12 +289,6 @@ internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSessi
     )
 }
 
-/**
- * The inset a group's hairline starts at: Miuix's own row margin, so the rule begins on
- * the column the row titles do rather than against the card's edge.
- */
-private val ROW_DIVIDER_INSET = 16.dp
-
 /** The mark in front of a row that adds something, inset from the row's title. */
 @Composable
 private fun StartIcon(icon: ImageVector) {
@@ -344,7 +335,11 @@ internal fun WebSearchResetSection(store: WebSearchStore, session: PiAgentSessio
     val toasts = LocalPiToast.current
     var confirming by remember { mutableStateOf(false) }
 
-    PiSection(title = text.settings.searchConfigRestore) {
+    // Untitled: the card holds this one row and the row's own title is the name of the
+    // action, so a label above it would be the heading drawn twice. The KDoc above says
+    // the section exists to *separate* this action from the list; a card of its own does
+    // that without repeating the sentence.
+    PiSection {
         BasicComponent(
             title = text.settings.searchConfigRestore,
             summary = text.settings.searchConfigRestoreSubtitle,

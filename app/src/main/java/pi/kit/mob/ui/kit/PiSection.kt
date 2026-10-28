@@ -9,9 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * A titled group of rows: Miuix's own settings shape.
@@ -42,30 +40,6 @@ fun PiSection(
             content = content,
         )
     }
-}
-
-/**
- * A paragraph inside a group, for the sentence a row cannot carry.
- *
- * Miuix's rows hold a title and a one-line summary; a settings page sometimes has
- * to explain a mechanism rather than name a value, and that text is not a summary —
- * it is prose, it wraps, and it belongs inside the card so that what it explains is
- * the thing it sits under. Drawn in the summary colour because it is explanation,
- * not a control.
- */
-@Composable
-fun PiHint(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = text,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        style = MiuixTheme.textStyles.body2,
-        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-    )
 }
 
 /**

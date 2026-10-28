@@ -47,12 +47,20 @@
  * updates in place as the listing slides, which is what the platform's document UI
  * does too.
  *
- * ## Back walks up the filesystem
+ * ## Back walks up the filesystem, and stops at the page's root
  *
  * The tab is a root, so it draws no back arrow in its bar (`PiPage`'s arrow belongs
  * to a pushed page) — the location bar and the up button are its visible navigation,
- * and the back gesture follows them: at the top of the tree there is no parent, so
- * the gesture is not claimed and leaves the tab as it always did.
+ * and the back gesture follows them.
+ *
+ * The walk stops at `$HOME`, not at the filesystem's root. `$HOME` is
+ * `<filesDir>/home`, so its parent *exists* — it is the app's private data, the
+ * directory that holds the runtime, the session files and the terminal's home. Both
+ * the gesture and the up button therefore gate on being somewhere other than `$HOME`
+ * rather than on a parent being present: gating on `parentFile != null` let one tap
+ * from the page's own root walk above the home directory into the app's private data,
+ * which is not what this page is a view of. [`crumbs`] has the matching rule for a path
+ * that is not under `$HOME` at all.
  */
 package pi.kit.mob.ui
 
@@ -63,7 +71,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,10 +80,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -87,7 +93,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -111,6 +116,7 @@ import pi.kit.mob.ui.files.Crumb
 import pi.kit.mob.ui.files.FileEntry
 import pi.kit.mob.ui.files.FilePreviewSheet
 import pi.kit.mob.ui.files.FileSort
+import pi.kit.mob.ui.files.IMAGE_SUFFIXES
 import pi.kit.mob.ui.files.arrange
 import pi.kit.mob.ui.files.crumbs
 import pi.kit.mob.ui.files.depthUnder
@@ -137,7 +143,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Backup
-import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Clear
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Folder
@@ -229,8 +235,9 @@ fun FilesScreen(session: PiAgentSession) {
     }
 
     // The tab root draws no bar arrow; the gesture follows the up button instead, and
-    // is released at the top of the tree so it leaves the tab as it always did.
-    BackHandler(enabled = current.parentFile != null) {
+    // is released at `$HOME` so it leaves the tab as it always did — not one step
+    // further, which is where the home directory's own parent sits (see the header).
+    BackHandler(enabled = current != home) {
         current.parentFile?.let(::navigate)
     }
 
@@ -253,8 +260,11 @@ fun FilesScreen(session: PiAgentSession) {
                 Icon(MiuixIcons.Home, contentDescription = text.files.home)
             }
             IconButton(
+                // Up one level *within* the page: at `$HOME` the button is off, even
+                // though `$HOME` has a parent (`<filesDir>`) — that parent is the
+                // app's private data, not a place this page shows.
                 onClick = { current.parentFile?.let(::navigate) },
-                enabled = current.parentFile != null,
+                enabled = current != home,
             ) {
                 // The arrow of Miuix's own basic set, turned through a right angle at
                 // the call site: "up one level" is a direction this library never
@@ -486,20 +496,10 @@ private fun ListToolbar(
                 // Drawn only when there is something to clear: an always-present cross
                 // is a target that does nothing on an empty field.
                 if (query.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .clip(CircleShape)
-                            .clickable { onQueryChange("") },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Close,
-                            contentDescription = text.common.clear,
-                            tint = MiuixTheme.colorScheme.onSurfaceSecondary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
+                    ClearFieldButton(
+                        onClick = { onQueryChange("") },
+                        contentDescription = text.common.clear,
+                    )
                 }
             },
         )
@@ -680,7 +680,14 @@ private fun FileRow(
                     // with a gap after it rather than as a column.
                     textAlign = TextAlign.End,
                     modifier = Modifier
-                        .width(SIZE_COLUMN)
+                        // A *minimum*, not a fixed width: the column is measured for the
+                        // default text size and the app's seven-step text-size setting
+                        // multiplies `fontScale`, so a fixed box that fits ten characters
+                        // at 1.0 ellipsises the tenth at the largest step. `widthIn` lets
+                        // the box grow with the type while the row keeps a floor, and the
+                        // numbers still share one right edge because the column sits at
+                        // the row's end.
+                        .widthIn(min = SIZE_COLUMN)
                         .semantics { if (size != null) contentDescription = size },
                 )
             }
@@ -743,6 +750,32 @@ private fun FileRow(
             maxHeight = null,
             dropdownColors = DropdownDefaults.dropdownColors(),
             renderInRootScaffold = true,
+        )
+    }
+}
+
+/**
+ * The clear button a filter field carries, shared by this page and the history page.
+ *
+ * It is a library `IconButton` and not a `Box` with a `clickable` around an 18dp glyph,
+ * which is what both fields had: the glyph was the whole touch target, so the one
+ * control a full field needs was the smallest thing on the page. `IconButton` brings
+ * Miuix's own 40dp minimum and its press feedback, and `MiuixIcons.Clear` is the
+ * library's mark for a field — the same pairing the storage page's remove control uses.
+ *
+ * The caller decides when it exists: an always-present cross is a target that does
+ * nothing on an empty field.
+ */
+@Composable
+internal fun ClearFieldButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+) {
+    IconButton(onClick = onClick) {
+        Icon(
+            imageVector = MiuixIcons.Clear,
+            contentDescription = contentDescription,
+            tint = MiuixTheme.colorScheme.onSurfaceSecondary,
         )
     }
 }
@@ -851,14 +884,17 @@ private fun tileToneOf(entry: FileEntry): Pair<Color, Color> {
     }
 }
 
-/** Written by a programmer, or by a tool a programmer runs, or about one. */
+/**
+ * Written by a programmer, or by a tool a programmer runs, or about one.
+ *
+ * The image kinds are not here: [IMAGE_SUFFIXES] lives beside the preview that decides
+ * whether the sheet can draw a file, because a glyph and a tone that promise a picture
+ * over a preview that shows text is the one disagreement a listing must not have.
+ */
 private val CODE_SUFFIXES = setOf(
     "kt", "kts", "java", "py", "js", "ts", "mjs", "cjs", "sh", "json", "yaml", "yml",
     "toml", "xml", "html", "css", "md", "txt", "log", "ini", "conf", "gradle",
 )
-
-/** Drawn by the preview sheet, and openable by any phone. */
-private val IMAGE_SUFFIXES = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif", "svg")
 
 /** One thing that unpacks into several. */
 private val ARCHIVE_SUFFIXES = setOf("zip", "tar", "gz", "tgz", "xz", "bz2", "7z", "rar", "zst")
@@ -870,20 +906,23 @@ private val AUDIO_SUFFIXES = setOf("mp3", "m4a", "wav", "ogg", "flac", "opus", "
 private val SHEET_SUFFIXES = setOf("csv", "tsv", "xls", "xlsx", "ods")
 
 /**
- * The width of the size column.
+ * The width of the size column at the default text size — its floor, not its size.
  *
- * Fixed rather than wrap-to-content so every row's number ends on the same x — which
- * is the only thing that makes a column of sizes scannable — and wide enough for the
- * longest string the column can hold, in the interface's monospace at the body size.
- *
- * That string is ten characters: `10240.0 MB` for a file over ten gibibytes (the size
+ * The column is the one thing on a row that has to line up with the column above and
+ * below it, so it gets a floor rather than a wrap-to-content width: the numbers end on
+ * one x, which is the only thing that makes a column of sizes scannable. The floor is
+ * measured for the longest string the column can hold, in the interface's monospace at
+ * the body size: ten characters — `10240.0 MB` for a file over ten gibibytes (the size
  * formatter has no unit above MB) and `1234 items` for a folder with four digits of
  * children. The monospace advance is 0.6 em, so ten characters at 14sp need 84dp; 88
  * leaves room for the glyph rounding and for a locale whose count reads one glyph
- * longer (`12345 項目`). The column this replaced was 76dp against a 12sp cell —
- * which was 10.5 characters of room, and the two sizes below that look identical
- * differ by exactly that: at 76dp the tenth character is ellipsised and the unit is
- * the first thing lost, so `10240.0 M…` said nothing about the unit at all.
+ * longer (`12345 項目`).
+ *
+ * It is a minimum because the type is not fixed: the app's text-size setting
+ * multiplies `fontScale`, and at the largest step the same ten characters are more than
+ * twice as wide. A fixed 88dp box ellipsised the tenth character there — the very
+ * failure this number exists to prevent — so the box grows with the type and only the
+ * *floor* is written down.
  */
 private val SIZE_COLUMN = 88.dp
 

@@ -33,6 +33,16 @@
  * thread, in a `produceState` keyed on the file. A 12-megapixel photo is 48 MB as an
  * `ARGB_8888` bitmap and about 3 MB at the size the sheet can show, and the sheet is
  * the only place in the app that would have paid for it.
+ *
+ * ## The body is capped against the window, not against a constant
+ *
+ * Miuix's bottom sheet caps itself at the window's height minus the top inset and does
+ * not scroll: everything the body draws has to fit above the two action buttons, or
+ * those buttons are pushed off the sheet. A portrait photo is the case that does it —
+ * a 3:4 picture at the width of a phone is taller than the sheet — and a fixed body
+ * cap of 420dp is no better on a phone held sideways, where the window is 360dp tall.
+ * So the cap is solved from [LocalWindowInfo] the same way the delete dialog's is:
+ * a share of the window, with the old 420dp as its ceiling on a tall one.
  */
 package pi.kit.mob.ui.files
 
@@ -63,8 +73,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -129,6 +141,14 @@ internal fun FilePreviewSheet(entry: FileEntry) {
     }
     val drawn = picture
 
+    // The room the body may take: the sheet caps itself at the window height and does
+    // not scroll, so the body has to leave the heading and the two buttons inside it.
+    // A dialog/sheet window is full-screen, so this is the window the sheet is drawn in.
+    val bodyHeight = minOf(
+        PREVIEW_BODY_HEIGHT,
+        LocalWindowInfo.current.containerDpSize.height * PREVIEW_BODY_SHARE,
+    )
+
     Column(Modifier.fillMaxWidth()) {
         Column(
             Modifier
@@ -155,12 +175,12 @@ internal fun FilePreviewSheet(entry: FileEntry) {
         }
 
         if (drawn != null) {
-            FileImage(drawn)
+            FileImage(drawn, bodyHeight)
         } else {
             // No picture: either not an image at all, or one this device cannot
             // decode — in which case the text body's sentence about a binary file is
             // the right answer.
-            PreviewBody(body)
+            PreviewBody(body, bodyHeight)
         }
 
         // Two actions, both about the file rather than about the sheet: a sheet is
@@ -208,11 +228,11 @@ internal fun FilePreviewSheet(entry: FileEntry) {
  * The minimum height is the sheet's own promise that a one-line file still looks like
  * a preview rather than like a sheet that failed to load, and the ceiling is what
  * keeps a 64 KB file from covering the window: the text scrolls inside it. The sheet's
- * own column is bounded by the window height and does not scroll, so a body that grew
- * without a cap would push the two actions off the bottom edge instead.
+ * own column does not scroll, so the ceiling is what keeps the two action buttons on
+ * screen — see the header for why it comes from the window rather than from a constant.
  */
 @Composable
-private fun PreviewBody(body: String?) {
+private fun PreviewBody(body: String?, maxHeight: Dp) {
     val current = body
     if (current == null) {
         Box(
@@ -228,7 +248,7 @@ private fun PreviewBody(body: String?) {
     Box(
         Modifier
             .fillMaxWidth()
-            .heightIn(max = 420.dp)
+            .heightIn(max = maxHeight)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
@@ -241,15 +261,24 @@ private fun PreviewBody(body: String?) {
     }
 }
 
-/** The picture itself, decoded once at sheet size. */
+/**
+ * The picture itself, decoded once at sheet size.
+ *
+ * Drawn into a box that is width-bound and height-capped: a portrait photo is taller
+ * than the sheet, so the cap is the picture's own bound as well as the body's, and
+ * `ContentScale.Fit` letterboxes it inside rather than letting it push the action row
+ * off the bottom. Without the cap the sheet grew to the picture and the two buttons
+ * went with the part that was cut.
+ */
 @Composable
-private fun FileImage(bitmap: ImageBitmap) {
+private fun FileImage(bitmap: ImageBitmap, maxHeight: Dp) {
     Image(
         bitmap = bitmap,
         contentDescription = null,
         contentScale = ContentScale.Fit,
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = maxHeight)
             .padding(horizontal = 24.dp, vertical = 12.dp),
     )
 }
@@ -303,6 +332,20 @@ private const val PREVIEW_LIMIT_BYTES = 64 * 1024
 
 /** The box an image preview is decoded into; the sheet is about 411dp wide. */
 private const val PREVIEW_IMAGE_EDGE = 1024
+
+/**
+ * The body's height on a tall window, and the share of a short one it may take.
+ *
+ * 420dp was this body's fixed ceiling, measured on a portrait phone where the sheet is
+ * about 800dp tall: heading, body and two buttons fit inside the sheet's own
+ * `windowHeight - topInset` bound. A landscape phone is ~360dp tall, so the same body
+ * has to yield — just under half the window leaves the heading, the two buttons and the
+ * sheet's drag handle their places.
+ */
+private val PREVIEW_BODY_HEIGHT = 420.dp
+
+/** The share of a short window the preview body may take. */
+private const val PREVIEW_BODY_SHARE = 0.45f
 
 /** The one tag every log line in this app carries. */
 private const val TAG = "PiKit"

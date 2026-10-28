@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,7 +41,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Clear
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
 
@@ -280,7 +281,10 @@ fun StoragePage(
                         endActions = {
                             IconButton(onClick = { pendingRemove = path }) {
                                 Icon(
-                                    imageVector = MiuixIcons.Clear,
+                                    // `Close`, the one mark the settings pages use for "take
+                                    // this entry out of the list" (the search page's key rows,
+                                    // the model form's model rows).
+                                    imageVector = MiuixIcons.Close,
                                     contentDescription = text.settings.storageCustomRemove,
                                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 )
@@ -307,7 +311,9 @@ fun StoragePage(
             }
 
             if (!policy.isEmpty) {
-                PiSection(title = text.settings.storageRevokeAll) {
+                // Untitled: the card holds this one row, and a label reading the same
+                // sentence as the row under it is the heading drawn twice.
+                PiSection {
                     BasicComponent(
                         title = text.settings.storageRevokeAll,
                         summary = text.settings.storageRevokeAllSubtitle,
@@ -512,14 +518,31 @@ private fun FolderPicker(
                 onClick = onUp,
             )
         }
-        children.forEach { child ->
-            ArrowPreference(
-                title = child.name,
-                onClick = { onOpen(child) },
-            )
+        // The tree scrolls *inside* the card, and the two navigation rows above it do not.
+        // Miuix's sheet caps its content at `windowHeight - topInset` and clips the rest
+        // rather than scrolling it (`BottomSheetContentLayout`), so a directory with more
+        // entries than fit — `/sdcard` on any phone with a few apps installed — used to
+        // end at the panel's edge with the remaining folders unreachable and no gesture
+        // that reached them. Bounded, then scrolled, is the shape `SettingsPickerSheet`
+        // gives its own list for the same reason.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = PICKER_LIST_MAX)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            children.forEach { child ->
+                ArrowPreference(
+                    title = child.name,
+                    onClick = { onOpen(child) },
+                )
+            }
         }
     }
 }
+
+/** How tall a picker's list may get before it scrolls: about eight rows. */
+private val PICKER_LIST_MAX = 420.dp
 
 /**
  * The one-line summary: none, some folders, or everything, and the way to the

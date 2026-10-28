@@ -86,7 +86,13 @@ internal fun AboutPage(
 ) {
     val text = strings
     val env = session.env
-    val tools = PiInstallation.requiredTools(env)
+    // Remembered rather than called from the composition body: `requiredTools` stats four
+    // paths and `installedVersion` reads and parses pi's `package.json`, and the page
+    // recomposes on every settings emission and every update-row change. Keyed on the
+    // environment, which is the only thing that can make the answer different — a
+    // reinstall behind the page is picked up on the next visit, as it was before.
+    val tools = remember(env) { PiInstallation.requiredTools(env) }
+    val piVersion = remember(env) { PiInstallation.installedVersion(env) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // The check's answer lives in the composition and nowhere else: it is a fact
@@ -227,7 +233,7 @@ internal fun AboutPage(
                     summary = PiInstallation.CLI_ENTRY_RELATIVE,
                     endActions = {
                         SettingsValue(
-                            PiInstallation.installedVersion(env) ?: text.settings.unknown,
+                            piVersion ?: text.settings.unknown,
                             monospace = true,
                         )
                     },

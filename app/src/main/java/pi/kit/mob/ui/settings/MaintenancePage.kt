@@ -1,10 +1,7 @@
 package pi.kit.mob.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,7 +26,6 @@ import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * Maintenance: the model catalogue, repairing the prefix, and the storage check.
@@ -257,7 +253,11 @@ internal fun MaintenancePage(
             // file under $PREFIX — but the *check* is a maintenance action, and it
             // is the only place a user can get an answer to "can the agent really
             // reach my files, and will it ever delete them" without a terminal.
-            PiSection(title = text.settings.storageCheck) {
+            //
+            // No group label: the card holds one row and that row's title is the
+            // heading the label would have repeated. An untitled `PiSection` is the
+            // library's own answer for a card that is obviously one thing.
+            PiSection {
                 BasicComponent(
                     title = text.settings.storageCheck,
                     summary = text.settings.storageCheckSubtitle,
@@ -394,68 +394,6 @@ private fun PackagesNotices(report: PiAgentSession.PackagesReport) {
         }
         if (report.upgradable.isNotEmpty()) {
             SettingsNote(text.settings.packagesUpgradableNote)
-        }
-    }
-}
-
-/**
- * The controls of one run: the button that starts it, the one that clears what it
- * left behind, and the word for it while it is going.
- *
- * ## Why this is one component
- *
- * §9.3 records what the three runs looked like when each was written out at its
- * call site, and the fix was a shared strip; this is that strip on Miuix. The button,
- * the optional dismiss and the indicator are one shape, the caller passes the wording,
- * and the backup page presses the same two buttons in the same order for the same
- * reason — an export and a repair are both "start a long walk, then read what it says".
- *
- * ## The details, each of which was a drift
- *
- *  - **12dp, the card's own gutter.** A row's text starts at 12 (the card's inset) +
- *    16 (the row's own), and a button carries its own 12dp inside margin, so a button
- *    at 12dp starts its label on the column the rows use. It used to sit at a literal
- *    24dp next to a note at 16dp, which read as a mistake rather than as a decision.
- *  - **They start at the leading edge, not the trailing one.** The row was
- *    `Spacer(weight)` then the buttons, which pushed them to the right; the pages'
- *    other standalone actions read as a column that starts where the page's content
- *    starts.
- *  - **`working` is a spinner and its word.** The indeterminate bar it replaces was a
- *    second way to say the same thing.
- *  - **The dismiss is optional and its label is not.** All three runs can dismiss their
- *    result, but only while there is one, so the button is present exactly when
- *    [onDismiss] is not null.
- */
-@Composable
-internal fun RunActions(
-    label: String,
-    onAction: () -> Unit,
-    dismissLabel: String,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    onDismiss: (() -> Unit)? = null,
-    working: String? = null,
-) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        ) {
-            SettingsAction(text = label, onClick = onAction, enabled = enabled)
-            if (onDismiss != null) {
-                SettingsAction(text = dismissLabel, onClick = onDismiss)
-            }
-        }
-        if (working != null) {
-            SettingsWorking(
-                label = working,
-                modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 4.dp),
-            )
         }
     }
 }

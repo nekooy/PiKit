@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import pi.kit.mob.BuildConfig
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.locales.Lang
@@ -391,7 +394,17 @@ private fun RootPage(
     val settings by session.settingsStore.settings.collectAsState()
     val config by session.settingsStore.profiles.snapshots.collectAsState()
     val activeProfile = config.activeProfile
-    val piVersion = PiInstallation.installedVersion(session.env)
+    // Read on the IO dispatcher and remembered: `installedVersion` opens and parses pi's
+    // `package.json`, which is a filesystem read on every recomposition of a page that
+    // recomposes on every store emission. Keyed on the profile so a reinstall behind the
+    // page is picked up when the agent's own state moves, not on every frame.
+    val piVersion by produceState(
+        initialValue = PiInstallation.installedVersion(session.env),
+        session.env,
+        agent,
+    ) {
+        value = withContext(Dispatchers.IO) { PiInstallation.installedVersion(session.env) }
+    }
     val text = strings
     var choosingLanguage by remember { mutableStateOf(false) }
 
@@ -520,19 +533,23 @@ private fun RootPage(
         }
     }
 
-    if (choosingLanguage) {
-        LanguageDialog(
-            text = text,
-            current = settings.language,
-            onDismiss = { choosingLanguage = false },
-            onPick = { entry ->
-                choosingLanguage = false
-                // The root of the tree is keyed on this field, so writing it
-                // rebuilds the whole interface in the chosen language.
-                session.settingsStore.update { it.copy(language = entry) }
-            },
-        )
-    }
+    // Always composed, and told whether it is open — not wrapped in `if (choosingLanguage)`.
+    // A Miuix window is dismissed by animating itself out, and a window that is only
+    // composed while the flag is true has nothing to animate: it vanished on the tap and
+    // the rest of the app jumped into the hole. This is the same shape `PiConfirm` call
+    // sites use (`show = …`).
+    LanguageDialog(
+        show = choosingLanguage,
+        text = text,
+        current = settings.language,
+        onDismiss = { choosingLanguage = false },
+        onPick = { entry ->
+            choosingLanguage = false
+            // The root of the tree is keyed on this field, so writing it
+            // rebuilds the whole interface in the chosen language.
+            session.settingsStore.update { it.copy(language = entry) }
+        },
+    )
 }
 
 /**
@@ -558,22 +575,26 @@ private fun RootPage(
  * palette that is the same near-white as the card above it, so the two answers and the
  * list of languages merged into one tall grey block, and the pair read as two filled
  * pills under a panel rather than as the question's two words. The app's dialogs are
- * text actions on the dialog's own surface (`PiConfirm`, `PiAlert`, `PiDialogHost`), so
- * these two pass a transparent container and keep the neutral label colour: same
- * component, same side-by-side weights, no fill. If the kit's pair is ever given a
- * transparent container too, these two lines become redundant and can go.
+ * text actions on the dialog's own surface (`PiConfirm`), so these two pass a
+ * transparent container and keep the neutral label colour: same component, same
+ * side-by-side weights, no fill. If the kit's pair is ever given a transparent container
+ * too, these two lines become redundant and can go.
  */
 @Composable
 private fun LanguageDialog(
+    show: Boolean,
     text: Strings,
     current: Lang,
     onDismiss: () -> Unit,
     onPick: (Lang) -> Unit,
 ) {
-    var chosen by remember(current) { mutableStateOf(current) }
+    // Keyed on `show` as well as on the stored language, so reopening the question starts
+    // at the language that is actually in effect rather than at whatever the last
+    // opening's finger left selected and then cancelled.
+    var chosen by remember(show, current) { mutableStateOf(current) }
 
     WindowDialog(
-        show = true,
+        show = show,
         title = text.settings.language,
         onDismissRequest = onDismiss,
     ) {

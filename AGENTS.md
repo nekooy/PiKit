@@ -202,7 +202,7 @@ and it refuses any path outside the app's private data directory. Do not add
 
 **No vertically scrollable component may be measured with an unbounded height, and
 `MarkdownText` is the one that is shared.** It is a plain `Column`, and it has to stay
-one: it is drawn inside the transcript's `LazyColumn` *and* inside `SettingsBody`'s
+one: it is drawn inside the transcript's `LazyColumn` *and* inside the manual page's
 `Column(verticalScroll)`, where a `LazyColumn` throws `IllegalStateException:
 Vertically scrollable component was measured with an infinity maximum height
 constraints`. The rule is about the *call sites*, not the composable: a shared

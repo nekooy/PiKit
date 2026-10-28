@@ -437,7 +437,6 @@ internal object JapaneseStrings : Strings {
         override val profilesEmptyHint =
             "Pi が答えるにはプロファイルが必要です。キーとモデルを 1 つずつ選ぶだけで使えます。"
         override val savedProfiles = "保存済みのプロファイル"
-        override val active = "使用中"
         override val editProfile = "プロファイルを編集"
         override val deleteProfile = "プロファイルを削除"
         override val noProfileProvider = "プロバイダー未選択"
@@ -498,7 +497,6 @@ internal object JapaneseStrings : Strings {
             "保存できませんでした：設定ファイルを書き込めませんでした。" +
                 "次回起動時に今回の変更は失われます。"
         override val fetchModels = "モデルを取得"
-        override val fetching = "取得中…"
         override val chooseProviderFirst = "先にプロバイダーを選択してください。"
         override fun modelCount(count: Int) = "$count 個のモデル"
         override val fromProvider = "プロバイダーが返した一覧です。このキーで使用できます。"
@@ -652,7 +650,6 @@ internal object JapaneseStrings : Strings {
         override val modelListStateUpdated = "更新済み"
         override val modelListStateCurrent = "最新"
         override val modelListStateFailed = "更新失敗"
-        override val dismiss = "閉じる"
         override val installedPackages = "インストール済みパッケージ"
         override val relocate = "パッケージの再配置"
         override val relocateSubtitle = "Termux のパスを指したままのパッケージを直します"

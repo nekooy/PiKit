@@ -1046,8 +1046,8 @@ internal fun TurnSummaryRow(
  *
  * The four meanings are the transcript's whole vocabulary: a fact, the app's own
  * emphasis, a thing that is running, and a thing that failed. The kit names the two
- * that a Miuix palette has no role for ([PiTone.live] and [PiTone.error], drawn from
- * the secondary and error pairs); the other two are the palette's own `primary` and
+ * that a Miuix palette has no single role for ([PiTone.live] and [PiTone.error], drawn
+ * from the tertiary and error pairs); the other two are the palette's own `primary` and
  * its high surface step. A call site picks a meaning and the roles follow, which is
  * what stops this page's "warning" from being another page's "information".
  */
@@ -1070,7 +1070,10 @@ internal enum class ChatTone {
     fun onContainer(): Color = when (this) {
         Neutral -> MiuixTheme.colorScheme.onSurfaceContainerHigh
         Accent -> MiuixTheme.colorScheme.onPrimaryContainer
-        Live -> MiuixTheme.colorScheme.onSecondaryContainer
+        // The pair of [container]'s `tertiaryContainer` — `PiTone.live()` is the kit's
+        // name for that ink, and the two are one pair: a live pill drawn with the
+        // secondary container's ink was two different families on one surface.
+        Live -> PiTone.live()
         Danger -> MiuixTheme.colorScheme.onErrorContainer
     }
 
@@ -1108,7 +1111,9 @@ internal fun ChatStatusPill(
 ) {
     val ink = tone.ink()
     Surface(
-        modifier = modifier.height(PILL_HEIGHT),
+        // A minimum, not a fixed height: the label is one line at 13sp by default, and
+        // the app's text-size setting draws it larger — a `height` would clip it.
+        modifier = modifier.heightIn(min = PILL_HEIGHT),
         shape = RoundedCornerShape(percent = 50),
         color = tone.container(),
         // The pill's ink, for its label and for whatever mark the caller draws: a

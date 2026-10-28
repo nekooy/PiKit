@@ -183,10 +183,11 @@ internal enum class MdAlign { Start, Center, End }
  * which is what makes this a comment rather than a style preference.
  *
  * `MarkdownText` is not only drawn inside the transcript. `ManualPage` draws it
- * inside `SettingsBody`, which is a `Column(verticalScroll)`, and so does
- * `FilesScreen`'s preview. A vertically scrollable container measured inside
- * another one is measured with `Constraints.Infinity` on the main axis, and
- * `LazyColumn` refuses that outright:
+ * inside a `Column(verticalScroll)` — every settings page body is one, and the
+ * manual is the one that hands its text to this composable — and the transcript's
+ * own item is inside the page's `LazyColumn`. A vertically scrollable container
+ * measured inside another one is measured with `Constraints.Infinity` on the main
+ * axis, and `LazyColumn` refuses that outright:
  *
  * ```
  * java.lang.IllegalStateException: Vertically scrollable component was measured
@@ -225,7 +226,7 @@ internal enum class MdAlign { Start, Center, End }
  * **twice**, and it threw
  * `IllegalStateException: Vertically scrollable component was measured with an infinity
  * maximum height constraints` **both times** — once from `ManualPage`, which draws this
- * inside `SettingsBody`'s `Column(verticalScroll)`, and once from the transcript, which
+ * inside a `Column(verticalScroll)`, and once from the transcript, which
  * one would expect to supply a bounded height because an answer is an item of a
  * `LazyColumn`. Read from `logcat` on the second attempt rather than assumed: the
  * transcript does not, because the item is wrapped in `SelectionContainer` and the bubble,
@@ -587,6 +588,17 @@ private fun MarkdownQuote(block: MdBlock.Quote, style: InlineStyle) {
  * over-wide formula and drags horizontally pans it instead — and the formula is
  * inside the selection either way, so the selection they get by starting one
  * character earlier is the selection they wanted.
+ *
+ * ## The two hints are drawn, not a scrollbar
+ *
+ * The report behind them is "当一行的公式过长时，无明显暗示能够滑动查看完整内容": a clipped
+ * formula with nothing at its edge says nothing. So an edge fade appears on whichever
+ * side has more to show, and a pill at the bottom reports how much of the formula is on
+ * screen and where the reader is in it. Miuix does have a `HorizontalScrollBar`, and it
+ * is not used here: it fades out a second after the last drag, so a reader who has not
+ * yet touched a clipped formula still sees nothing — the state the hint exists to fix.
+ * Both hints are drawn by this node, persist for as long as the formula is clipped, and
+ * cover no touch, because a draw pass takes no pointer events.
  */
 @Composable
 private fun ScrollableFormula(content: @Composable () -> Unit) {
@@ -602,14 +614,14 @@ private fun ScrollableFormula(content: @Composable () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .horizontalScroll(state)
-            // A formula wider than the screen is panned, and **nothing used to say so**: the report
-            // "当一行的公式过长时，无明显暗示能够滑动查看完整内容". Two hints now, because one is not
-            // enough on a dark background: a gradient that fades the last few dp on whichever side
-            // has more to show, and a pill at the bottom that reports how much of the formula is on
-            // screen and where the reader is in it. The pill is drawn, not a scrollbar — there is no
-            // `HorizontalScrollbar` on Android, and a real one would want the drag gestures the
-            // scroller already owns.
+            // The draw node is **outside** the scroller, and that is the whole of the
+            // geometry: a `Modifier` before `.horizontalScroll` sees the viewport's
+            // `size`, while one after it is measured with the content's width. Inside
+            // the scroller the edge fade was painted at the far end of the formula — off
+            // screen, so the hint that says "this formula is wider than the line" was
+            // invisible exactly when it was needed — and the progress pill was 90% of
+            // the *content*, so it slid out of view with the ink it reports on. The
+            // composer's chip band draws its fades the same way, for the same reason.
             .drawWithContent {
                 drawContent()
                 val faded = EDGE_FADE.toPx()
@@ -637,6 +649,10 @@ private fun ScrollableFormula(content: @Composable () -> Unit) {
                 if (state.maxValue > 0) {
                     val track = size.width * 0.9f
                     val left = size.width * 0.05f
+                    // `viewport / (viewport + maxValue)` is `viewport / content`: the
+                    // content is what the viewport shows plus what is still to scroll.
+                    // Both numbers are now the viewport's, which is what makes this the
+                    // fraction of the formula on screen rather than of the track.
                     val thumbWidth = (track * (size.width / (size.width + state.maxValue)))
                         .coerceAtLeast(MIN_THUMB)
                     val at = left + (track - thumbWidth) * (state.value.toFloat() / state.maxValue)
@@ -653,7 +669,8 @@ private fun ScrollableFormula(content: @Composable () -> Unit) {
                         cornerRadius = CornerRadius(THUMB_HEIGHT.toPx() / 2f),
                     )
                 }
-            },
+            }
+            .horizontalScroll(state),
     ) {
         content()
     }

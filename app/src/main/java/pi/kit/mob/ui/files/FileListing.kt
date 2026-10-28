@@ -229,7 +229,18 @@ internal fun fileKind(
 internal val FileEntry.isImage: Boolean
     get() = !isDirectory && file.extension.lowercase(Locale.ROOT) in IMAGE_SUFFIXES
 
-/** Suffixes `BitmapFactory` decodes: the ones a phone can also open with another app. */
+/**
+ * Suffixes `BitmapFactory` decodes: the ones a phone can also open with another app.
+ *
+ * The one image list in the app: the preview reads it through [isImage], and the
+ * listing reads the same set for the row's image glyph and its live tone. It used to
+ * exist twice — a copy in the screen carried `svg` and this one did not — so an `.svg`
+ * row wore a picture's mark and a picture's colour over a preview that showed text:
+ * the row promised something the sheet could not do. `.svg` is therefore *not* an image
+ * here; its row takes the paper mark and the neutral tone, and the row's second line
+ * still says `SVG`, which is the honest pair. A vector this build learns to draw joins
+ * this set, and the glyph and the tone follow it without a second list to drift.
+ */
 internal val IMAGE_SUFFIXES =
     setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif")
 

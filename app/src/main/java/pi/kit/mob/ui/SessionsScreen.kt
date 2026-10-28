@@ -1,6 +1,5 @@
 package pi.kit.mob.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,11 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,7 +24,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
@@ -37,6 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -107,17 +105,35 @@ fun SessionsScreen(
     var query by remember { mutableStateOf("") }
     var selecting by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var renaming by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
-    // The live session's file, read through a state the composition owns: reading
-    // `conversation.value` inside the dialog below answered the same lint trap the
-    // root's dialog flow documents — a `.value` in composition is a read nothing
-    // schedules an invalidation for.
-    var activeSessionFile by remember { mutableStateOf<String?>(null) }
-    val conversation by session.conversation.collectAsState()
-    activeSessionFile = conversation.sessionFile
-    var confirmingDelete by remember { mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList()) }
+    // The page needs one string from the live conversation — the file the agent is
+    // writing to — and nothing else. Collecting the whole state here would rebuild this
+    // page on every streamed token (`ChatScreen` collects it for the transcript, where
+    // that is the point); mapping first and dropping repeats means a turn in flight
+    // invalidates nothing on this screen. The `initial` reads `.value` once, before the
+    // first frame, which is the one place a `.value` read in composition is safe — it is
+    // replaced by the collector's own first emission, and it is why the value is no
+    // longer assigned to a state variable from the composition body.
+    val activeSessionFileFlow = remember(session) {
+        session.conversation.map { it.sessionFile }.distinctUntilChanged()
+    }
+    val activeSessionFile by activeSessionFileFlow.collectAsState(
+        initial = remember(session) { session.conversation.value.sessionFile },
+    )
+    // The three dialogs are kept composed and opened by a flag: a dialog raised by
+    // composing it (`target?.let { Dialog(show = true) }`) vanishes the frame its answer
+    // clears the target, which skips Miuix's exit animation, and a title recomputed from
+    // the live list reads "0 conversations" while the panel leaves. Each keeps its
+    // subject in one state and its visibility in another — the shape the Files page's
+    // preview sheet uses.
+    var renameTarget by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
+    var renameUp by remember { mutableStateOf(false) }
     // A conversation the user tapped while the agent was answering.
-    var pendingSwitch by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
+    var switchTarget by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
+    var switchUp by remember { mutableStateOf(false) }
+    var deleteTargets by remember {
+        mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList())
+    }
+    var deleteUp by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
     var matches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var matchedQuery by remember { mutableStateOf("") }
@@ -135,6 +151,11 @@ fun SessionsScreen(
     // that can be megabytes), so it waits for a pause in typing: the effect is
     // cancelled and restarted on every keystroke, and the delay before the work is
     // what debounces it.
+    //
+    // `searching` is raised *before* the delay, not after it: the filter's own title
+    // match runs on the keystroke, so for the length of the wait `visible` can already be
+    // empty and the page would say "nothing matches" — a claim about a scan that had not
+    // started. Raised first, the whole wait is the "still reading" state it is.
     LaunchedEffect(query, summaries) {
         val needle = query.trim()
         if (needle.length < MIN_SEARCH_CHARS || summaries.isEmpty()) {
@@ -143,8 +164,8 @@ fun SessionsScreen(
             searching = false
             return@LaunchedEffect
         }
-        delay(SEARCH_DEBOUNCE_MS)
         searching = true
+        delay(SEARCH_DEBOUNCE_MS)
         matches = session.searchSessionContent(summaries, needle)
         matchedQuery = needle
         searching = false
@@ -235,7 +256,8 @@ fun SessionsScreen(
                 }
                 IconButton(
                     onClick = {
-                        confirmingDelete = summaries.filter { it.path in selected }
+                        deleteTargets = summaries.filter { it.path in selected }
+                        deleteUp = true
                     },
                     enabled = selected.isNotEmpty(),
                 ) {
@@ -283,20 +305,10 @@ fun SessionsScreen(
                 },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 12.dp)
-                                .clip(CircleShape)
-                                .clickable { query = "" },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Close,
-                                contentDescription = text.common.clear,
-                                tint = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
+                        ClearFieldButton(
+                            onClick = { query = "" },
+                            contentDescription = text.common.clear,
+                        )
                     }
                 },
             )
@@ -349,59 +361,69 @@ fun SessionsScreen(
                         // would stop an answer the reader may still want. See
                         // [InterruptTurnDialog].
                         if (session.turnInFlight) {
-                            pendingSwitch = item
+                            switchTarget = item
+                            switchUp = true
                         } else {
                             session.switchSession(item)
                             onOpened()
                         }
                     },
-                    onRename = { renaming = it },
+                    onRename = {
+                        renameTarget = it
+                        renameUp = true
+                    },
                     onTogglePin = ::togglePinned,
-                    onDelete = { confirmingDelete = listOf(it) },
+                    onDelete = {
+                        deleteTargets = listOf(it)
+                        deleteUp = true
+                    },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
         }
     }
 
-    renaming?.let { target ->
-        RenameDialog(
-            text = text,
-            initial = if (target.hasExplicitName) target.title else "",
-            isActive = target.path == activeSessionFile,
-            onDismiss = { renaming = null },
-            onConfirm = { name ->
-                renaming = null
-                scope.launch {
-                    session.renameSession(target, name)
-                        .onFailure {
-                            toasts?.show(text.sessions.renameFailed(it.message.orEmpty()))
-                        }
-                    reload++
-                }
-            },
-        )
-    }
+    // All three are composed for as long as the page is; `show` is what changes, so the
+    // panel animates out with its subject still on screen (see the state block above).
+    RenameDialog(
+        show = renameUp,
+        text = text,
+        initial = renameTarget?.let { if (it.hasExplicitName) it.title else "" }.orEmpty(),
+        isActive = renameTarget != null && renameTarget?.path == activeSessionFile,
+        onDismiss = { renameUp = false },
+        onConfirm = { name ->
+            val target = renameTarget ?: return@RenameDialog
+            renameUp = false
+            scope.launch {
+                session.renameSession(target, name)
+                    .onFailure {
+                        toasts?.show(text.sessions.renameFailed(it.message.orEmpty()))
+                    }
+                reload++
+            }
+        },
+    )
 
-    pendingSwitch?.let { target ->
-        InterruptTurnDialog(
-            text = text,
-            onDismiss = { pendingSwitch = null },
-            onConfirm = {
-                pendingSwitch = null
-                session.switchSession(target, interrupt = true)
-                onOpened()
-            },
-        )
-    }
+    InterruptTurnDialog(
+        show = switchUp,
+        text = text,
+        onDismiss = { switchUp = false },
+        onConfirm = {
+            val target = switchTarget ?: return@InterruptTurnDialog
+            switchUp = false
+            session.switchSession(target, interrupt = true)
+            onOpened()
+        },
+    )
 
     DeleteConfirm(
+        show = deleteUp,
         text = text,
-        targets = confirmingDelete,
-        onDismiss = { confirmingDelete = emptyList() },
+        targets = deleteTargets,
+        onDismiss = { deleteUp = false },
         onConfirm = {
-            val targets = confirmingDelete
-            confirmingDelete = emptyList()
+            val targets = deleteTargets
+            deleteUp = false
             exitSelection()
             scope.launch {
                 session.deleteSessions(targets)
@@ -748,32 +770,42 @@ private fun SearchingNote(label: String) {
     }
 }
 
-/** The empty state: a heading and the sentence that says what is missing. */
+/**
+ * The empty state: a heading and the sentence that says what is missing.
+ *
+ * Centred like the other three states of the list (`loading` and `searching` are centred
+ * `Box`es, and the Files page's note is the same shape). It used to be a bare `Column`
+ * under a `weight(1f)`, which is a Column that starts at the top — so "no conversations"
+ * sat against the search field while "searching" sat in the middle of the page, and the
+ * heading jumped between the two as the state changed.
+ */
 @Composable
 private fun SessionsNote(
     title: String,
     body: String,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = title,
-            style = MiuixTheme.textStyles.headline1,
-            color = MiuixTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = body,
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onBackgroundVariant,
-            textAlign = TextAlign.Center,
-        )
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp, vertical = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = title,
+                style = MiuixTheme.textStyles.headline1,
+                color = MiuixTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = body,
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -783,19 +815,28 @@ private fun SessionsNote(
  * A window dialog of Miuix's own, with the library's text field inside it: the field
  * is a rectangle with the content radius while a search field is a capsule, which is
  * the one distinction that keeps a typed name from reading as a query.
+ *
+ * The dialog stays composed and [show] opens it, so answering it slides the panel away
+ * instead of removing the window mid-animation. The field therefore needs to be reset
+ * by the *open* rather than by the composition: [LaunchedEffect] on [show] puts [initial]
+ * back when the panel comes up, and leaves the text alone while it slides out.
  */
 @Composable
 private fun RenameDialog(
+    show: Boolean,
     text: Strings,
     initial: String,
     isActive: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var value by remember(initial) { mutableStateOf(initial) }
+    var value by remember { mutableStateOf(initial) }
+    LaunchedEffect(show) {
+        if (show) value = initial
+    }
 
     WindowDialog(
-        show = true,
+        show = show,
         title = text.sessions.renameTitle,
         // The note under the field says what naming the conversation the agent is
         // currently writing to does, which is the one case where the answer is not
@@ -858,6 +899,7 @@ private fun RenameDialog(
  */
 @Composable
 private fun DeleteConfirm(
+    show: Boolean,
     text: Strings,
     targets: List<PiAgentSession.SessionSummary>,
     onDismiss: () -> Unit,
@@ -876,9 +918,11 @@ private fun DeleteConfirm(
     )
 
     WindowDialog(
-        // Shown from the list rather than from a boolean of its own: a delete is a
-        // question about these conversations, and an empty list is no question.
-        show = count > 0,
+        // Visibility is a flag of its own, and the target list is *not* cleared on
+        // confirm: shown from `count > 0` on the live list, the panel spent its exit
+        // animation reading "Delete 0 conversations" — the question changed while it was
+        // leaving. The list survives the close, and the next delete overwrites it.
+        show = show,
         title = if (count == 1) {
             text.sessions.deleteTitleOne
         } else {
@@ -976,15 +1020,20 @@ private fun DeleteConfirm(
  * The history list's rows are one, and the chat page's own new-session (`/new`, and
  * the header's `+`) is the other — pi implements both with the same abort, so a second
  * dialog written beside the second call site would be the same dialog twice.
+ *
+ * [show] rather than a dialog raised by composing it: the caller keeps this composed and
+ * flips the flag, so the panel animates out instead of the window disappearing when the
+ * answer clears the target it was built from.
  */
 @Composable
 internal fun InterruptTurnDialog(
+    show: Boolean,
     text: Strings,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     PiConfirm(
-        show = true,
+        show = show,
         title = text.sessions.switchInterruptTitle,
         text = text.sessions.switchInterruptBody,
         confirm = text.sessions.switchInterruptConfirm,

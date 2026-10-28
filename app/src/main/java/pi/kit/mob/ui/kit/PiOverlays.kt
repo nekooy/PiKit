@@ -2,7 +2,6 @@ package pi.kit.mob.ui.kit
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,31 +41,6 @@ import top.yukonga.miuix.kmp.window.WindowDialog
  * corner radius, dim and slide animation inside that window, so it is Miuix's
  * shape with a platform window around it.
  */
-
-/** A message with one acknowledgement. */
-@Composable
-fun PiAlert(
-    show: Boolean,
-    title: String,
-    text: String,
-    confirm: String,
-    onConfirm: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    WindowDialog(
-        show = show,
-        modifier = modifier,
-        title = title,
-        summary = text,
-        onDismissRequest = onConfirm,
-    ) {
-        TextButton(
-            text = confirm,
-            onClick = onConfirm,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
 
 /**
  * A message with a confirm and a dismiss.
@@ -210,14 +184,4 @@ fun PiToastProvider(host: PiToastHost, content: @Composable () -> Unit) {
 @Composable
 fun PiToastHostLayer(host: PiToastHost, modifier: Modifier = Modifier) {
     SnackbarHost(state = host.state, modifier = modifier)
-}
-
-/** A label in Miuix's body style, for the rows a dialog body needs. */
-@Composable
-fun PiDialogBody(text: String) {
-    Text(
-        text = text,
-        style = MiuixTheme.textStyles.body2,
-        color = MiuixTheme.colorScheme.onSurface,
-    )
 }

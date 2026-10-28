@@ -2,8 +2,11 @@ package pi.kit.mob.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.data.BackupArchive
@@ -28,7 +32,7 @@ import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 
 /**
@@ -177,7 +181,6 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                     suggested = BackupArchive.suggestedName()
                     createArchive.launch(suggested)
                 },
-                dismissLabel = text.settings.dismiss,
                 enabled = !busy && selection.isNotEmpty(),
                 working = exportWorking,
             )
@@ -187,20 +190,26 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 }
             }
 
-            // The import is two states, and only one of them has a group: with nothing
-            // read yet there is nothing to put in a card, so the section is its label
-            // and its button; once an archive has been read the group is the archive's
-            // own contents and the button beside it is the restore.
+            // The import is two states, and both are the same shape: a labelled group
+            // whose action is a row inside it. With nothing read yet the group holds the
+            // one row that opens the picker; once an archive has been read it holds the
+            // archive's own contents and the restore beside it. The version that drew
+            // the empty state as a bare `SmallTitle` over a card-less row put the only
+            // unframed section in settings between two carded ones.
             val pending = review
             if (pending == null) {
-                SmallTitle(text = text.settings.backupImportSection)
-                RunActions(
-                    label = text.settings.backupImport,
-                    onAction = { pickArchive.launch(arrayOf("*/*")) },
-                    dismissLabel = text.settings.dismiss,
-                    enabled = !busy,
-                    working = importWorking,
-                )
+                PiSection(title = text.settings.backupImportSection) {
+                    // The row's own title is the action ("Choose an archive…") and the
+                    // group's label is the subject, so neither sentence is drawn twice.
+                    ArrowPreference(
+                        title = text.settings.backupImport,
+                        enabled = !busy,
+                        endActions = {
+                            if (importWorking != null) SettingsWorking(label = importWorking)
+                        },
+                        onClick = { pickArchive.launch(arrayOf("*/*")) },
+                    )
+                }
             } else {
                 // Re-seeded whenever a different archive is read, so the ticks are the
                 // archive's contents rather than the last import's choices.
@@ -249,9 +258,9 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 RunActions(
                     label = text.settings.backupImportConfirm,
                     onAction = { manager.restore(chosen) },
-                    dismissLabel = text.common.cancel,
                     enabled = !busy && chosen.isNotEmpty(),
                     onDismiss = if (busy) null else manager::cancelReview,
+                    dismissLabel = text.common.cancel,
                     working = importWorking,
                 )
             }
@@ -286,6 +295,71 @@ private fun Categories(
             enabled = enabled,
             onCheckedChange = { onToggle(category) },
         )
+    }
+}
+
+/**
+ * The controls of one run: the button that starts it, the one that clears what it
+ * left behind, and the word for it while it is going.
+ *
+ * ## Why this is one component
+ *
+ * §9.3 records what the three runs looked like when each was written out at its
+ * call site, and the fix was a shared strip; this is that strip on Miuix. The button,
+ * the optional dismiss and the indicator are one shape, the caller passes the wording,
+ * and the backup page presses the same two buttons in the same order for the same
+ * reason — an export and a repair are both "start a long walk, then read what it says".
+ *
+ * ## The details, each of which was a drift
+ *
+ *  - **16dp, which is where a row's text starts.** A row inside a group begins at the
+ *    card's 12dp inset plus `BasicComponentDefaults.InsideMargin`'s 16dp, so its title
+ *    is 28dp from the page edge; a `TextButton` carries a 12dp inside margin of its own,
+ *    so a 16dp gutter puts this label on the same 28dp column. The literal 12dp this
+ *    used to be started the label 4dp left of every row above it.
+ *  - **They start at the leading edge, not the trailing one.** The row was
+ *    `Spacer(weight)` then the buttons, which pushed them to the right; the pages'
+ *    other standalone actions read as a column that starts where the page's content
+ *    starts.
+ *  - **`working` is a spinner and its word.** The indeterminate bar it replaces was a
+ *    second way to say the same thing.
+ *  - **The dismiss and its label travel together.** A run can dismiss its result only
+ *    while there is one, so the button is present exactly when [onDismiss] is not null —
+ *    and [dismissLabel] is nullable for the same reason, since the export passes neither
+ *    and used to pass a label for a button that was never drawn.
+ */
+@Composable
+internal fun RunActions(
+    label: String,
+    onAction: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onDismiss: (() -> Unit)? = null,
+    /** Required when [onDismiss] is given: a button with no label is not a button. */
+    dismissLabel: String? = null,
+    working: String? = null,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SettingsAction(text = label, onClick = onAction, enabled = enabled)
+            if (onDismiss != null && dismissLabel != null) {
+                SettingsAction(text = dismissLabel, onClick = onDismiss)
+            }
+        }
+        if (working != null) {
+            SettingsWorking(
+                label = working,
+                modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 4.dp),
+            )
+        }
     }
 }
 

@@ -457,7 +457,6 @@ internal object EnglishStrings : Strings {
         override val profilesEmptyHint =
             "Save a profile before Pi can answer — a key and one model is enough."
         override val savedProfiles = "Saved profiles"
-        override val active = "Active"
         override val editProfile = "Edit profile"
         override val deleteProfile = "Delete profile"
         override val noProfileProvider = "No provider"
@@ -521,7 +520,6 @@ internal object EnglishStrings : Strings {
             "Save failed: the config file could not be written. This change will be " +
                 "lost on the next launch."
         override val fetchModels = "Fetch models"
-        override val fetching = "Fetching…"
         override val chooseProviderFirst = "Choose a provider first."
         override fun modelCount(count: Int) = "$count models"
         override val fromProvider = "Reported by the provider, so this key can use them."
@@ -685,7 +683,6 @@ internal object EnglishStrings : Strings {
         override val modelListStateUpdated = "Updated"
         override val modelListStateCurrent = "Latest"
         override val modelListStateFailed = "Refresh failed"
-        override val dismiss = "Dismiss"
         override val installedPackages = "Installed packages"
         override val relocate = "Package relocation"
         override val relocateSubtitle = "Rewrite a package that still points at Termux"
