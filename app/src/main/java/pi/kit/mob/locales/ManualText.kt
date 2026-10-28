@@ -299,7 +299,7 @@ of it.
 | --- | --- |
 | Model & provider | Provider, key, models |
 | Search settings | Web search: how, where, limits, keys |
-| Personalization | New conversation on launch; theme; home-screen icon |
+| Personalization | New conversation on launch; light or dark; home-screen icon |
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
@@ -308,12 +308,13 @@ of it.
 | Maintenance & repair | Model list, packages, relocation, rebuild, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
 
-**Accent colour** (under Personalization) is the
-one colour the whole interface is drawn in:
-buttons, selections and section headings. The
-neutral greys follow it. **Keep-alive** (on the
-Agent process page) is the battery-optimisation
-exemption: with the screen off or the app in the
+**Light or dark** (under Personalization) is the
+only colour choice the app offers: the palette
+itself is Miuix's, the component library the
+interface is drawn with, so both schemes come
+with it. **Keep-alive** (on the Agent process
+page) is the battery-optimisation exemption:
+with the screen off or the app in the
 background, Android may reclaim the agent
 process and cut a turn short, and the exemption
 is what lets the foreground service and its wake

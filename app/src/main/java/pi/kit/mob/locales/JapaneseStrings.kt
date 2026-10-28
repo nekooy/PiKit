@@ -1,6 +1,5 @@
 package pi.kit.mob.locales
 
-import pi.kit.mob.data.ThemeColor
 
 /** Japanese catalog. */
 internal object JapaneseStrings : Strings {
@@ -292,20 +291,6 @@ internal object JapaneseStrings : Strings {
         override val themeSystem = "システムに合わせる"
         override val themeLight = "ライト"
         override val themeDark = "ダーク"
-        override val themeColor = "アクセントカラー"
-        override val themeColorSubtitle = "ボタン・選択状態・見出しの色"
-        override val themeDynamic = "ダイナミックカラー"
-        override val themeDynamicSubtitle = "壁紙から配色を取得（Android 12+、それ以前は選択した色にフォールバック）"
-        override fun themeColorName(code: String) = when (code) {
-            ThemeColor.BLUE.code -> "ブルー"
-            ThemeColor.INDIGO.code -> "インディゴ"
-            ThemeColor.TEAL.code -> "ティール"
-            ThemeColor.GREEN.code -> "グリーン"
-            ThemeColor.AMBER.code -> "アンバー"
-            ThemeColor.RED.code -> "レッド"
-            ThemeColor.PINK.code -> "ピンク"
-            else -> "パープル"
-        }
         override val launcherIcon = "アプリアイコン"
         override val launcherIconBlack = "黒地に白"
         override val launcherIconWhite = "白地に黒"

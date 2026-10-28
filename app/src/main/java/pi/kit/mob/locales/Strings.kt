@@ -716,33 +716,18 @@ interface Strings {
          */
         val openNewOnLaunch: String
         val openNewOnLaunchSubtitle: String
+
+        /**
+         * Light, dark, or the system's own answer.
+         *
+         * The palette itself is Miuix's and is not offered: there is no accent to
+         * name and no wallpaper switch, because the interface is drawn in the
+         * library's own light and dark schemes (`PiKitMiuixTheme`).
+         */
         val theme: String
         val themeSystem: String
         val themeLight: String
         val themeDark: String
-
-        /**
-         * The accent: the one colour the user picks, and everything it reaches.
-         *
-         * The names are per colour and live in [themeColorName] rather than in
-         * eight fields each: the set is the enum's (`ThemeColor`), and a catalog
-         * that enumerated them as fields would have to be edited twice for every
-         * colour added.
-         */
-        val themeColor: String
-        val themeColorSubtitle: String
-        fun themeColorName(code: String): String
-
-        /**
-         * The wallpaper-derived palette (Android 12's Material You), offered as the
-         * row above the eight swatches.
-         *
-         * A row rather than a ninth swatch: the swatches are seeds, and "whatever
-         * this phone's wallpaper is" is not one. The subtitle names the fallback so
-         * a reader on Android 11 or below knows what the switch will actually do.
-         */
-        val themeDynamic: String
-        val themeDynamicSubtitle: String
 
         /**
          * The launcher icon: the black mark or the white one.

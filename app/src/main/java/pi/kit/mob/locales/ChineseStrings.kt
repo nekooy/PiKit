@@ -1,6 +1,5 @@
 package pi.kit.mob.locales
 
-import pi.kit.mob.data.ThemeColor
 
 /**
  * Simplified Chinese catalog.
@@ -294,20 +293,6 @@ internal object ChineseStrings : Strings {
         override val themeSystem = "跟随系统"
         override val themeLight = "浅色"
         override val themeDark = "深色"
-        override val themeColor = "主题色"
-        override val themeColorSubtitle = "按钮、选中状态与小标题的颜色"
-        override val themeDynamic = "动态配色"
-        override val themeDynamicSubtitle = "跟随系统壁纸取色（Android 12+，低版本回退到所选颜色）"
-        override fun themeColorName(code: String) = when (code) {
-            ThemeColor.BLUE.code -> "蓝色"
-            ThemeColor.INDIGO.code -> "靛蓝"
-            ThemeColor.TEAL.code -> "青色"
-            ThemeColor.GREEN.code -> "绿色"
-            ThemeColor.AMBER.code -> "琥珀"
-            ThemeColor.RED.code -> "红色"
-            ThemeColor.PINK.code -> "粉色"
-            else -> "紫色"
-        }
         override val launcherIcon = "应用图标"
         override val launcherIconBlack = "黑底白字"
         override val launcherIconWhite = "白底黑字"

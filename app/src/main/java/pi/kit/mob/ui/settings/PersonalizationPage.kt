@@ -2,7 +2,6 @@ package pi.kit.mob.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +28,7 @@ import pi.kit.mob.data.AvatarSlot
 import pi.kit.mob.data.AvatarStore
 import pi.kit.mob.data.FontSize
 import pi.kit.mob.data.LauncherIcon
-import pi.kit.mob.data.ThemeColor
+import pi.kit.mob.data.AvatarColor
 import pi.kit.mob.data.ThemeMode
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -38,7 +37,6 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -51,20 +49,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
 /**
- * Cold-start conversation behaviour, the interface theme and its accent, the text
- * size, the launcher icon and the transcript's two speakers.
+ * Cold-start conversation behaviour, the light/dark choice, the text size, the
+ * launcher icon and the transcript's two speakers.
  *
- * Six settings that are all "how the app feels when I open it" and none of which
- * is about the agent: which conversation a launch lands in, how large its text is,
- * which palette that text is drawn in, which colour the app's actions and section
- * names are drawn in, which of the two marks the home screen shows, and whether the
- * transcript draws who is talking. They share a page because a page each would be
- * six rows deep — the same mistake the old "Advanced" group made.
+ * Five settings that are all "how the app feels when I open it" and none of which is
+ * about the agent: which conversation a launch lands in, how large its text is,
+ * whether the palette is light or dark, which of the two marks the home screen shows,
+ * and whether the transcript draws who is talking. They share a page because a page
+ * each would be five rows deep — the same mistake the old "Advanced" group made.
  *
- * The theme and the accent are two questions rather than one — light/dark *and*
- * hue — so they are two groups: the mode is three radio rows, the accent is a row of
- * swatches. `ThemeColor` says why the accent is derived from one seed instead of
- * being two hand-written palettes per colour.
+ * The *palette* is not on this page at all any more. The interface is drawn in
+ * Miuix's own light and dark schemes, so "follow the system / light / dark" is the
+ * whole of the colour choice, and an accent would be the app re-deciding a scheme the
+ * library has already decided. `PiKitMiuixTheme` carries the reasoning.
  *
  * The switch is **on** when a cold start opens a *new* conversation. That is the
  * default because a launch is usually a new question, and the previous
@@ -72,16 +69,13 @@ import kotlin.math.roundToInt
  * used to be the only behaviour. Agent restarts after the first launch still
  * restore — see `shouldRestoreRememberedSession`.
  *
- * ## The theme is radio rows, the accent is swatches, the size is a slider
+ * ## The modes are radio rows, the size is a slider
  *
- * All of these used to be a row that opened a picker sheet. Three of them are a *set*
- * — three palettes, eight colours, two marks — and a set is better read at once than
- * one at a time behind a scrim: the modes and the marks as radio rows mean the choice
- * is visible, the current one is marked, and picking one re-themes the very rows that
- * were just tapped. That is the live preview the old sheet hid behind its own scrim.
- * The accent is the one of the three drawn as a row of swatches rather than as rows of
- * names, because a colour is recognised before it is read and eight rows of colour
- * names would be the longest group on the page for the least text.
+ * Both used to be a row that opened a picker sheet. Three palettes are a *set*, and a
+ * set is better read at once than one at a time behind a scrim: the modes as radio
+ * rows mean the choice is visible, the current one is marked, and picking one
+ * re-themes the very rows that were just tapped. That is the live preview the old
+ * sheet hid behind its own scrim.
  *
  * The text size is the one that is a *range*, and Miuix has the component for it:
  * `SliderPreference` keeps the slider on the row instead of behind a panel, which
@@ -108,6 +102,8 @@ internal fun PersonalizationPage(
     // of its own and is dismissed by the scrim, the back gesture and a downward drag, so
     // the page only has to hold *which* one is open. Null closes it.
     var editingAvatar by remember { mutableStateOf<AvatarSlot?>(null) }
+    // The slot the panel is drawing: replaced by a newer one, never cleared by the tap.
+    var shownSlot by remember { mutableStateOf<AvatarSlot?>(null) }
 
     PiPage(
         title = text.settings.personalization,
@@ -154,59 +150,6 @@ internal fun PersonalizationPage(
                 }
             }
 
-            // The accent, as swatches rather than as rows of names: a colour is
-            // recognised before it is read, and eight rows of colour names would be the
-            // longest group on the page for the least text. The row above them is what
-            // names the current one — the swatches have no room for a label, and a ring
-            // cannot say *which* colour it is, only that one is chosen.
-            PiSection(title = text.settings.themeColor) {
-                // The wallpaper's palette first, as a row rather than a ninth swatch:
-                // the swatches are *seeds* (the avatars' picker reuses them), and
-                // "whatever this phone's wallpaper is" is not one. The system supplies
-                // the palette only from Android 12; below that `PiKitMiuixTheme` falls
-                // back to the swatches, which is what the subtitle says.
-                SwitchPreference(
-                    title = text.settings.themeDynamic,
-                    summary = text.settings.themeDynamicSubtitle,
-                    checked = settings.themeDynamic,
-                    onCheckedChange = { on ->
-                        session.settingsStore.update { it.copy(themeDynamic = on) }
-                    },
-                )
-                BasicComponent(
-                    title = text.settings.themeColor,
-                    summary = text.settings.themeColorSubtitle,
-                    endActions = {
-                        SettingsValue(
-                            text.settings.themeColorName(settings.themeColor.code),
-                            emphasised = true,
-                        )
-                    },
-                )
-                // Scrollable as a safety rather than as the normal case: eight 38dp
-                // swatches and their gaps are 332dp, which fits the narrowest phone this
-                // app targets, and a larger font scale or a longer translation cannot
-                // push them off the edge because the row scrolls instead of clipping.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ThemeColor.entries.forEach { color ->
-                        SettingsSwatch(
-                            color = color.seed,
-                            selected = settings.themeColor == color,
-                            onClick = {
-                                session.settingsStore.update { it.copy(themeColor = color) }
-                            },
-                        )
-                    }
-                }
-            }
-
             PiSection(title = text.settings.launcherIcon) {
                 LauncherIcon.entries.forEach { icon ->
                     RadioButtonPreference(
@@ -242,7 +185,10 @@ internal fun PersonalizationPage(
                             mark = true,
                         )
                     },
-                    onClick = { editingAvatar = AvatarSlot.Ai },
+                    onClick = {
+                        shownSlot = AvatarSlot.Ai
+                        editingAvatar = AvatarSlot.Ai
+                    },
                 )
                 ArrowPreference(
                     title = text.settings.userAvatar,
@@ -255,7 +201,10 @@ internal fun PersonalizationPage(
                             icon = MiuixIcons.Contacts,
                         )
                     },
-                    onClick = { editingAvatar = AvatarSlot.User },
+                    onClick = {
+                        shownSlot = AvatarSlot.User
+                        editingAvatar = AvatarSlot.User
+                    },
                 )
             }
         }
@@ -263,17 +212,24 @@ internal fun PersonalizationPage(
 
     // One sheet for both speakers: the body is told which slot it edits, so the two rows
     // cannot drift into two editors that save differently.
+    //
+    // The slot and the panel are two values, not one: `show` goes false on the tap while
+    // Miuix's exit animation is still playing, and a body and a title read off the same
+    // null slot play that last 200 ms empty — the panel shrinks away with no title and no
+    // content in it. `shownSlot` is the slot the panel is *drawing*, and it is only ever
+    // replaced by a newer one, which is the shape `WebSearchConfig` uses for its own
+    // value sheet for the same reason.
     val slot = editingAvatar
     PiSheet(
         show = slot != null,
-        title = when (slot) {
+        title = when (shownSlot) {
             AvatarSlot.Ai -> text.settings.aiAvatar
             AvatarSlot.User -> text.settings.userAvatar
             null -> null
         },
         onDismiss = { editingAvatar = null },
     ) {
-        when (slot) {
+        when (shownSlot) {
             AvatarSlot.Ai -> AvatarSheet(
                 slot = AvatarSlot.Ai,
                 label = settings.aiAvatarLabel,
@@ -376,9 +332,9 @@ private fun FontSizeRow(
  * The avatar editor: a large preview, the picture, the label field, and the eight
  * colours.
  *
- * Saves as it is typed and on a swatch tap, like the working directory and the theme
- * accent — none of them restarts anything, and the sheet is dismissed by the scrim, the
- * drag and back, so a second "done" control would be the third of three.
+ * Saves as it is typed and on a swatch tap, like the working directory and the text size
+ * — none of them restarts anything, and the sheet is dismissed by the scrim, the drag and
+ * back, so a second "done" control would be the third of three.
  *
  * Everything is inside one card, which is what keeps the sheet on a single column: the
  * sheet's own 24dp gutter plus a card's 16dp is where the rows' text starts, and the
@@ -403,10 +359,10 @@ private fun AvatarSheet(
     imagePath: String,
     mark: Boolean,
     fallbackIcon: ImageVector?,
-    color: ThemeColor,
+    color: AvatarColor,
     onChangeLabel: (String) -> Unit,
     onChangeImage: (String) -> Unit,
-    onChangeColor: (ThemeColor) -> Unit,
+    onChangeColor: (AvatarColor) -> Unit,
     text: Strings,
 ) {
     val context = LocalContext.current
@@ -495,25 +451,35 @@ private fun AvatarSheet(
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp),
             )
+            // Eight swatches on one line, and the line is *measured* rather than scrolled:
+            // 8 x 38dp + 7 x 4dp of gap + 32dp of gutter is 364dp, against 312dp inside a
+            // sheet on a 360dp phone (the sheet supplies 24dp a side and the card 16dp
+            // more), so the last two colours sat past the edge behind a scroll gesture
+            // nothing announced. A palette that has to be dragged to be seen is not read
+            // as a palette. 34dp instead: 8 x 34dp + 7 x 4dp = 300dp, inside the 312dp
+            // the narrowest phone leaves, and still a 34dp touch target.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
                     .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ThemeColor.entries.forEach { entry ->
+                AvatarColor.entries.forEach { entry ->
                     SettingsSwatch(
                         color = entry.seed,
                         selected = entry == color,
                         onClick = { onChangeColor(entry) },
+                        size = SWATCH_SIZE,
                     )
                 }
             }
         }
     }
 }
+
+/** The swatch's diameter: eight of them plus seven 4dp gaps is 300dp, inside 312dp. */
+private val SWATCH_SIZE = 34.dp
 
 /** Anything the system picker can hand back as an image. */
 private const val IMAGE_MIME = "image/*"

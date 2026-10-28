@@ -26,9 +26,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             // The theme is assembled from the preferences here rather than inside
-            // the composable's default: the mode, the accent and the wallpaper
-            // switch all live in the settings store, and a theme that read the
-            // store itself would be a second owner of those decisions.
+            // the composable's default: the light/dark choice and the text size
+            // both live in the settings store, and a theme that read the store
+            // itself would be a second owner of those decisions.
             val settings by session.settingsStore.settings.collectAsState()
 
             // The launcher icon is the system's to draw, so choosing one is a
@@ -44,10 +44,10 @@ class MainActivity : ComponentActivity() {
                 applyLauncherIcon(this@MainActivity, settings.launcherIcon)
             }
 
-            // The theme owns the palette, the type scale and the system bars. An
-            // accent change re-themes the page that chose it because the settings
-            // flow is read above every screen, and the wallpaper switch is one
-            // more field on the same controller rather than a second palette.
+            // The theme owns the palette, the type scale and the system bars. A
+            // light/dark change re-themes the page that chose it because the
+            // settings flow is read above every screen; the palette itself is
+            // Miuix's own and is not a preference (`PiKitMiuixTheme`).
             PiKitMiuixTheme(settings = settings) {
                 // The text size, applied as one multiplier on the composition's own
                 // density rather than by overriding each type style at each of the

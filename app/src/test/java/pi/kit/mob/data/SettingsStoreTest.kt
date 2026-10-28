@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import pi.kit.mob.locales.Lang
 import java.io.File
@@ -15,11 +15,11 @@ import java.nio.file.Files
  *
  * The two halves name every field separately — the preference write and the
  * [SettingsStore.update] publish call — and one that is written but never
- * published is a control that snaps back off while the file says on. That is
- * how `themeDynamic` shipped: the switch could not be turned on in place, and
+ * published is a control that snaps back off while the file says on. That is how
+ * the first switch of this shape shipped: it could not be turned on in place, and
  * the value only reached the snapshot on the next cold start, which reads the
- * file. The sweep below sets every preference field to a non-default value, so
- * an omission fails here instead of on a phone.
+ * file. The sweep below sets every preference field to a non-default value, so an
+ * omission fails here instead of on a phone.
  */
 class SettingsStoreTest {
 
@@ -27,11 +27,11 @@ class SettingsStoreTest {
     fun `update publishes the flag it just wrote`() {
         val store = newStore()
 
-        val updated = store.update { it.copy(themeDynamic = true) }
+        val updated = store.update { it.copy(openNewOnLaunch = false) }
 
-        assertTrue("the returned snapshot carries the value", updated.themeDynamic)
-        assertTrue("the published snapshot carries the value", store.read().themeDynamic)
-        assertTrue("observers see the value", store.settings.value.themeDynamic)
+        assertFalse("the returned snapshot carries the value", updated.openNewOnLaunch)
+        assertFalse("the published snapshot carries the value", store.read().openNewOnLaunch)
+        assertFalse("observers see the value", store.settings.value.openNewOnLaunch)
     }
 
     @Test
@@ -40,10 +40,10 @@ class SettingsStoreTest {
         val files = tempDir()
 
         SettingsStore(FakeContext(preferences, files))
-            .update { it.copy(themeDynamic = true) }
+            .update { it.copy(openNewOnLaunch = false) }
         val rebuilt = SettingsStore(FakeContext(preferences, files))
 
-        assertTrue(rebuilt.read().themeDynamic)
+        assertFalse(rebuilt.read().openNewOnLaunch)
     }
 
     @Test
@@ -57,18 +57,16 @@ class SettingsStoreTest {
             language = Lang.JAPANESE,
             openNewOnLaunch = false,
             themeMode = ThemeMode.DARK,
-            themeColor = ThemeColor.TEAL,
-            themeDynamic = true,
             fontSize = FontSize.XL,
             launcherIcon = LauncherIcon.DARK,
             safetyExtension = false,
             showAvatars = false,
             aiAvatarLabel = "Pi",
             aiAvatarImage = "avatar.png",
-            aiAvatarColor = ThemeColor.RED,
+            aiAvatarColor = AvatarColor.RED,
             userAvatarLabel = "Me",
             userAvatarImage = "",
-            userAvatarColor = ThemeColor.PURPLE,
+            userAvatarColor = AvatarColor.PURPLE,
         )
 
         val resolved = store.update { wanted }

@@ -1,6 +1,5 @@
 package pi.kit.mob.locales
 
-import pi.kit.mob.data.ThemeColor
 
 internal object EnglishStrings : Strings {
     override val tabs = object : Strings.Tabs {
@@ -308,20 +307,6 @@ internal object EnglishStrings : Strings {
         override val themeSystem = "Follow system"
         override val themeLight = "Light"
         override val themeDark = "Dark"
-        override val themeColor = "Accent colour"
-        override val themeColorSubtitle = "Buttons, selections and section names"
-        override val themeDynamic = "Dynamic colour"
-        override val themeDynamicSubtitle = "Take the palette from the wallpaper (Android 12+; earlier releases fall back to the chosen colour)"
-        override fun themeColorName(code: String) = when (code) {
-            ThemeColor.BLUE.code -> "Blue"
-            ThemeColor.INDIGO.code -> "Indigo"
-            ThemeColor.TEAL.code -> "Teal"
-            ThemeColor.GREEN.code -> "Green"
-            ThemeColor.AMBER.code -> "Amber"
-            ThemeColor.RED.code -> "Red"
-            ThemeColor.PINK.code -> "Pink"
-            else -> "Purple"
-        }
         override val launcherIcon = "App icon"
         override val launcherIconBlack = "White on black"
         override val launcherIconWhite = "Black on white"

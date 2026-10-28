@@ -22,13 +22,14 @@ Material upgrade had to be re-read against it.
 
 The rewrite replaced it with a library that already owns the vocabulary:
 `compose-miuix-ui/miuix` 0.9.4, a Compose Multiplatform component library drawing the
-MIUI/HyperOS idiom. Its theme engine derives a palette from a seed colour; its
-preference components are the rows a settings page is made of; its window dialogs,
+MIUI/HyperOS idiom. Its theme engine ships the two palettes and derives a third
+from a seed colour if asked; its preference components are the rows a settings page
+is made of; its window dialogs,
 sheets, snackbars, icons and navigation are the furniture. What is left for this app
-is exactly one design decision — the accent — and a small set of compositions the
-library does not have: the page frame, the section, the popup row, the window-level
-dialog phrasing, the snackbar host, and the content rendering (Markdown, formulas,
-the terminal).
+is *no colour decision at all* — the palette is the library's, both schemes of it —
+and a small set of compositions the library does not have: the page frame, the
+section, the popup row, the window-level dialog phrasing, the snackbar host, and the
+content rendering (Markdown, formulas, the terminal).
 
 **A wrapper approach was rejected.** Keeping the `Pi*` API and re-implementing its
 internals with Miuix would have compiled the same screens with less churn, but it
@@ -49,38 +50,49 @@ like, and Miuix is an experimental library — a bump can move the interface. Th
 the trade: one coherent idiom owned by a library, against a hand-kept design system
 maintained alongside every screen.
 
-## The palette: one seed in, the library's engine out
+## The palette: the library's own, both schemes
 
-`PiKitMiuixTheme(settings)` is the one place the theme is assembled. It builds a
-`ThemeController` from the preferences:
+`PiKitMiuixTheme(settings)` is the one place the theme is assembled, and it makes
+exactly one decision:
 
 | Preference | What it becomes |
 | --- | --- |
-| `ThemeMode` | `MonetSystem` / `MonetLight` / `MonetDark` — for `SYSTEM` the library reads the system's dark setting |
-| `ThemeColor` (eight seeds) | `keyColor` — the palette is derived from the chosen hue, every role of it |
-| `themeDynamic` | `keyColor = null` — the palette comes from the wallpaper (Android 12+), with the library's own fallback below that |
+| `ThemeMode.SYSTEM` | `ColorSchemeMode.System` with `isDark = null` — the library reads the platform's setting |
+| `ThemeMode.LIGHT` / `DARK` | the same mode with `isDark = false` / `true` — one controller, one override |
 
-The principle the previous design language arrived at by hand survives as the
-library's engine: **the hue is the choice, the lightness is not.** Every role is
-derived at fixed tonal steps from the seed, so the eight choices are interchangeable
-rather than eight hand-tuned palettes, and the error pair does not move with the
-accent.
+Nothing else is passed. The controller's default `lightColors` and `darkColors` are
+Miuix's `lightColorScheme()` and `darkColorScheme()`, and those are the interface:
+the blue `#3482FF` primary, the `#F7F7F7` page against a white card, the `#E0E0E0`
+divider, the disabled pairs, the slider's track. A page assembled from the library's
+components is drawn in the colours those components were drawn for, which is what
+"the interface is Miuix" has to mean.
 
-Dynamic colour remains an **opt-in**, for the reason it always was: the terminal's
-sixteen colours, the transcript's syntax palette and the diff tints are fixed content
-colours, and a wallpaper-derived palette can land them on top of one another. The
-switch trades that guarantee for a palette that matches the home screen, and below
-Android 12 the library falls back to its built-in scheme rather than losing the
-choice.
+**An accent picker and a wallpaper switch were tried and removed.** The rewrite
+first kept both: a `ThemeColor` seed went in as `keyColor` and the library's
+material-colour engine derived all hundred and forty roles from it, with dynamic
+colour expressed as "no key colour" so the platform's wallpaper palette answered.
+It compiled, it looked plausible, and it was the wrong thing to own — a derived
+scheme is a *different* palette wearing the library's component shapes, so the
+container steps and the disabled pairs no longer sat where the library's own
+screens put them. The measured consequence is small and real: a seeded tonal-spot
+scheme paints `secondary` as a tinted grey, so `PiTone.live()` — a role this app
+names — had to move to the tertiary pair, where the library's own scheme keeps a
+quiet blue.
 
-Two roles the app names itself:
+The eight-colour enum outlived the picker as `AvatarColor`: an avatar's disc is
+*content*, not a scheme role, and a red avatar is red in both schemes the way a
+photograph is.
 
-- **`PiTone.live()`** — the colour that means *a turn is streaming*, *an agent is
-  working*, *a process is still going*. Miuix has no "live" role; the kit maps it to
-  the palette's `secondary`, the seed's own hue and quieter than `primary`, so a live
-  state is tellable from an action without being a second accent.
-- **`PiTone.error()/errorContainer()`** — the scheme's error pair, re-exported so a
-  call site says *danger* rather than naming a role.
+Two roles the app names itself, both taken from the library's scheme rather than
+invented:
+
+- **`PiTone.live()` / `liveContainer()`** — the colour that means *a turn is
+  streaming*, *an agent is working*, *a process is still going*. Miuix has no
+  "live" role; the kit maps it to the `tertiaryContainer` / `onTertiaryContainer`
+  pair, which is the palette's quiet blue — tellable from an action without being a
+  second accent.
+- **`PiTone.error()` / `errorContainer()`** — the scheme's error pair, re-exported so
+  a call site says *danger* rather than naming a role.
 
 The system-bar icon appearance is set here too, from the resolved dark state. It is a
 property of the theme rather than of a page, and one authority is what keeps a

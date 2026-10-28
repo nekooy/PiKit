@@ -516,34 +516,16 @@ enum class FontSize(val code: String, val scale: Float) {
      * every launch used to — see `PiAgentSession.restoreRememberedSession`.
      */
     val openNewOnLaunch: Boolean = true,
-    /** Interface theme. Persisted here because it is not part of a profile. */
+    /**
+     * Light, dark, or the system's own answer.
+     *
+     * Persisted here because it is not part of a profile. The *palette* is not a
+     * preference: it is Miuix's own, taken whole from the library, which is what
+     * "drawn by Miuix" means — see `PiKitMiuixTheme`. The two fields this data class
+     * used to carry (an accent seed and a wallpaper switch) are gone with the hand-
+     * kept scheme they fed.
+     */
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
-    /**
-     * The accent every action, selection and section name is drawn in.
-     *
-     * Persisted for the same reason as [themeMode] and applied the same way: read
-     * where the theme is assembled (`MainActivity`), so choosing one re-themes the
-     * page that was just tapped rather than the next launch. The *lightness* of every
-     * role and the error pair do not move with it; the hue of the whole scheme does,
-     * neutrals included — see `ThemeColor` and `PiColor.accentScheme`.
-     */
-    val themeColor: ThemeColor = ThemeColor.DEFAULT,
-    /**
-     * Whether the palette follows the wallpaper (Android 12's Material You)
-     * instead of [themeColor].
-     *
-     * A separate switch rather than a ninth `ThemeColor` entry: the enum is a
-     * *seed* per choice and its seeds are reused by the avatars' colour pickers,
-     * where "whatever the phone's wallpaper is" is not a colour. `PiKitTheme`
-     * resolves the switch — on below Android 12 it falls back to [themeColor],
-     * because the system cannot supply a palette there. It is deliberately
-     * **off** by default: the terminal's sixteen colours and the transcript's
-     * syntax tinting are fixed, and a wallpaper-derived palette can land them on
-     * top of each other — `PiColor`'s own header records that reasoning — so the
-     * opt-in is the reader trading that guarantee for a palette that matches
-     * their home screen.
-     */
-    val themeDynamic: Boolean = false,
     /**
      * The interface's text size. Persisted here for the same reason [themeMode] is:
      * it is not part of a profile, and it applies to the app rather than to a launch.
@@ -596,7 +578,7 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val aiAvatarLabel: String = "",
     val aiAvatarImage: String = "",
-    val aiAvatarColor: ThemeColor = ThemeColor.INDIGO,
+    val aiAvatarColor: AvatarColor = AvatarColor.INDIGO,
     /**
      * The reader's avatar, the same three. A blank label and no picture is the person
      * silhouette rather than the agent's mark, so the two speakers never fall back to
@@ -604,7 +586,7 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val userAvatarLabel: String = "",
     val userAvatarImage: String = "",
-    val userAvatarColor: ThemeColor = ThemeColor.TEAL,
+    val userAvatarColor: AvatarColor = AvatarColor.TEAL,
 ) {
     /**
      * Whether the agent can actually be started with this.
@@ -741,8 +723,6 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
-            themeColor = ThemeColor.fromCode(prefs.getString(KEY_THEME_COLOR, null)),
-            themeDynamic = prefs.getBoolean(KEY_THEME_DYNAMIC, false),
             fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
@@ -751,10 +731,10 @@ class SettingsStore(context: Context) {
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
             aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
-            aiAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
+            aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
             userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
             userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
-            userAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
+            userAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         ),
     )
 
@@ -826,8 +806,6 @@ class SettingsStore(context: Context) {
             .putString(KEY_LANGUAGE, next.language.code)
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
             .putString(KEY_THEME, next.themeMode.code)
-            .putString(KEY_THEME_COLOR, next.themeColor.code)
-            .putBoolean(KEY_THEME_DYNAMIC, next.themeDynamic)
             .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
             .putBoolean(KEY_SAFETY, next.safetyExtension)
@@ -853,8 +831,6 @@ class SettingsStore(context: Context) {
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
-            themeColor = next.themeColor,
-            themeDynamic = next.themeDynamic,
             fontSize = next.fontSize,
             launcherIcon = next.launcherIcon,
             safetyExtension = next.safetyExtension,
@@ -898,18 +874,16 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
-            themeColor = ThemeColor.fromCode(prefs.getString(KEY_THEME_COLOR, null)),
-            themeDynamic = prefs.getBoolean(KEY_THEME_DYNAMIC, false),
             fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
             aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
-            aiAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
+            aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
             userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
             userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
-            userAvatarColor = ThemeColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
+            userAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         )
     }
 
@@ -926,18 +900,16 @@ class SettingsStore(context: Context) {
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
-        themeColor: ThemeColor = current.get().themeColor,
-        themeDynamic: Boolean = current.get().themeDynamic,
         fontSize: FontSize = current.get().fontSize,
         launcherIcon: LauncherIcon = current.get().launcherIcon,
         safetyExtension: Boolean = current.get().safetyExtension,
         showAvatars: Boolean = current.get().showAvatars,
         aiAvatarLabel: String = current.get().aiAvatarLabel,
         aiAvatarImage: String = current.get().aiAvatarImage,
-        aiAvatarColor: ThemeColor = current.get().aiAvatarColor,
+        aiAvatarColor: AvatarColor = current.get().aiAvatarColor,
         userAvatarLabel: String = current.get().userAvatarLabel,
         userAvatarImage: String = current.get().userAvatarImage,
-        userAvatarColor: ThemeColor = current.get().userAvatarColor,
+        userAvatarColor: AvatarColor = current.get().userAvatarColor,
     ): PiSettings {
         val next = current.updateAndGet {
             it.copy(
@@ -952,8 +924,6 @@ class SettingsStore(context: Context) {
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
-                themeColor = themeColor,
-                themeDynamic = themeDynamic,
                 fontSize = fontSize,
                 launcherIcon = launcherIcon,
                 safetyExtension = safetyExtension,
@@ -1013,12 +983,6 @@ class SettingsStore(context: Context) {
 
         /** [ThemeMode.code]; absent means [ThemeMode.DEFAULT]. */
         private const val KEY_THEME = "theme_mode"
-
-        /** [ThemeColor.code]; absent means [ThemeColor.DEFAULT] — blue. */
-        private const val KEY_THEME_COLOR = "theme_color"
-
-        /** True once the user opted the palette into following the wallpaper. */
-        private const val KEY_THEME_DYNAMIC = "theme_dynamic"
 
         /** [FontSize.code]; absent means [FontSize.DEFAULT] — the fourth of seven. */
         private const val KEY_FONT_SIZE = "font_size"
