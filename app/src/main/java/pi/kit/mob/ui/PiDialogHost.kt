@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.strings
 import top.yukonga.miuix.kmp.basic.Card
@@ -46,6 +49,19 @@ import top.yukonga.miuix.kmp.window.WindowDialog
  * and so is the corner, which comes from the screen's own radius rather than from a
  * constant here.
  *
+ * ## Why the host stays composed
+ *
+ * The window is *driven*, not raised: [show] is the switch, and the composable
+ * itself is drawn once at the root for the life of the screen. Composing it only
+ * while a question is pending — which is what `pending != null` around this call
+ * does — tears the composable out the instant it is answered, so [WindowDialog]
+ * never runs its exit animation, never reports [onDismissFinished], and the next
+ * question starts a new window from nothing. The contract that makes the driven
+ * form safe is in the parameters: while [show] is false the values must still be the
+ * question that is leaving — the window is animating out with them — and
+ * [onDismissFinished] is the moment the window has actually gone, for a caller that
+ * wants to forget the question then rather than replace it when the next arrives.
+ *
  * ## The three shapes it takes
  *
  * `options` is a question with a fixed answer, `placeholder`/`prefill` is a
@@ -56,6 +72,7 @@ import top.yukonga.miuix.kmp.window.WindowDialog
  */
 @Composable
 fun PiDialogHost(
+    show: Boolean,
     title: String,
     message: String?,
     options: List<String>,
@@ -64,26 +81,47 @@ fun PiDialogHost(
     onValue: (String) -> Unit,
     onConfirmed: (Boolean) -> Unit,
     onCancel: () -> Unit,
+    onDismissFinished: () -> Unit = {},
 ) {
     val text = strings
-    // Keyed on the prefill, so a question re-asked with a different starting point
-    // starts from that point rather than from what was typed into the last one. It is
-    // Miuix's state-based field because that is the API the library's `TextField`
-    // takes now, and the answer is read out of the state at the moment the button is
-    // tapped — nothing pushes a value back into it, so a keystroke cannot be undone
-    // by a recomposition.
-    val field = remember(prefill) { TextFieldState(prefill.orEmpty()) }
+    // One field per *question*, not per composition: the host outlives a question
+    // (see the KDoc), so a remembered buffer would otherwise carry the last answer
+    // into the next one. It is refilled whenever a question begins, which is also
+    // the moment the prefill can have changed; Miuix's state-based field takes the
+    // text through this helper, so the cursor lands at the end of the prefill rather
+    // than at its start.
+    val field = remember { TextFieldState(prefill.orEmpty()) }
+    LaunchedEffect(show) {
+        if (show) field.setTextAndPlaceCursorAtEnd(prefill.orEmpty())
+    }
 
     // `confirm` carries neither options nor a field: the only branch that is a
     // question with no input at all.
     val confirmOnly = options.isEmpty() && placeholder == null && prefill == null && message != null
 
+    // The body's bound comes from the window it is drawn in, not from a constant: a
+    // landscape phone's window is about 360dp tall, where a fixed 320dp body leaves
+    // no room for the title and the two answers and pushes the buttons off the
+    // screen. Half the window keeps room for both in either orientation, the 320dp
+    // ceiling stops a portrait phone or a tablet stretching the body into a wall of
+    // text, and the floor keeps a scroll region usable on a window too short for the
+    // arithmetic to matter.
+    val windowHeight = LocalWindowInfo.current.containerDpSize.height
+    val bodyMaxHeight = remember(windowHeight) {
+        (windowHeight * DIALOG_BODY_FRACTION)
+            .coerceIn(MIN_DIALOG_BODY_HEIGHT, MAX_DIALOG_BODY_HEIGHT)
+    }
+
     WindowDialog(
-        show = true,
+        show = show,
         title = title,
         // The window's dismissal is the cancel answer, not a no-op: a question
         // closed by tapping outside has been answered "no".
         onDismissRequest = onCancel,
+        // The moment the window has actually gone, after its exit animation: a
+        // caller that wants to forget the question — rather than keep the last one
+        // until the next arrives — lets go of it here.
+        onDismissFinished = onDismissFinished,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // The body is one bounded, scrolling column rather than two: an
@@ -95,7 +133,7 @@ fun PiDialogHost(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 320.dp)
+                    .heightIn(max = bodyMaxHeight)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -173,3 +211,10 @@ fun PiDialogHost(
         }
     }
 }
+
+/** The share of the window's height the question body may take. */
+private const val DIALOG_BODY_FRACTION = 0.5f
+
+/** The body's bounds: a ceiling for tall windows, a floor for very short ones. */
+private val MAX_DIALOG_BODY_HEIGHT = 320.dp
+private val MIN_DIALOG_BODY_HEIGHT = 120.dp

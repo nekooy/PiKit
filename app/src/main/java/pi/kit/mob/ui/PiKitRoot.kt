@@ -28,9 +28,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +46,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,8 +85,10 @@ import pi.kit.mob.ui.kit.PiToastHost
 import pi.kit.mob.ui.kit.PiToastHostLayer
 import pi.kit.mob.ui.kit.PiToastProvider
 import pi.kit.mob.ui.kit.rememberPiToastHost
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -96,6 +100,7 @@ import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -392,64 +397,80 @@ private fun RootContent(
         session.refreshTerminalBanner()
     }
 
-    Box(Modifier.fillMaxSize()) {
-        Scaffold(
-            // The pages own their top inset (every one of them is a `Scaffold`
-            // with a top bar of its own), so the root asks for no content insets
-            // and takes only the bottom bar's height out of the content. Asking
-            // for `systemBars` here would pad every page's top bar a second time.
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = MiuixTheme.colorScheme.surface,
-            snackbarHost = { PiToastHostLayer(snackbar) },
-            bottomBar = {
-                NavigationBar {
-                    Destination.entries.forEach { entry ->
-                        NavigationBarItem(
-                            selected = destination == entry,
-                            onClick = { destination = entry },
-                            icon = entry.icon(),
-                            label = entry.label(text),
-                        )
-                    }
+    Scaffold(
+        // The pages own their top inset (every one of them is a `Scaffold`
+        // with a top bar of its own), so the root asks for no content insets
+        // and takes only the bottom bar's height out of the content. Asking
+        // for `systemBars` here would pad every page's top bar a second time.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MiuixTheme.colorScheme.surface,
+        snackbarHost = { PiToastHostLayer(snackbar) },
+        bottomBar = {
+            // `showDivider = false`: the bar is the page's floor, not a panel
+            // laid over it. Miuix's own divider is a hairline the same colour as
+            // the card outlines *inside* the page, so a bar that drew one read as
+            // one more card edge at the bottom of every screen — a line across the
+            // interface that divides nothing, because the surface above and the
+            // surface below are the same surface.
+            NavigationBar(showDivider = false) {
+                Destination.entries.forEach { entry ->
+                    NavigationBarItem(
+                        selected = destination == entry,
+                        onClick = { destination = entry },
+                        icon = entry.icon(),
+                        label = entry.label(text),
+                    )
                 }
-            },
-        ) { padding ->
-            // `padding` is the bar's height. `consumeWindowInsets` makes the
-            // keyboard inset below subtract it instead of adding to it, so the page
-            // ends at `max(bar, keyboard)` — the bar's height is not left as a dead
-            // band above the keyboard, and with the keyboard down the page ends
-            // exactly at the bar's top edge.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .consumeWindowInsets(padding)
-                    .imePadding()
-                    .background(MiuixTheme.colorScheme.surface),
-            ) {
-                Crossfade(targetState = destination, label = "tab") { shown ->
-                    when (shown) {
-                        Destination.Terminal -> TerminalScreen(session = session)
-                        Destination.Chat -> ChatTab(
-                            session = session,
-                            agent = agent,
-                            composer = composer,
-                        )
+            }
+        },
+    ) { padding ->
+        // `padding` is the bar's height. `consumeWindowInsets` makes the
+        // keyboard inset below subtract it instead of adding to it, so the page
+        // ends at `max(bar, keyboard)` — the bar's height is not left as a dead
+        // band above the keyboard, and with the keyboard down the page ends
+        // exactly at the bar's top edge.
+        //
+        // The modifiers are on the crossfade itself and there is no wrapper `Box`:
+        // the scaffold already paints `surface`, and a `Box` around a single child
+        // that paints the same colour again was a third copy of one background.
+        Crossfade(
+            targetState = destination,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding(),
+            label = "tab",
+        ) { shown ->
+            when (shown) {
+                Destination.Terminal -> TerminalScreen(session = session)
+                Destination.Chat -> ChatTab(
+                    session = session,
+                    agent = agent,
+                    composer = composer,
+                )
 
-                        Destination.Files -> FilesScreen(session = session)
-                        Destination.Settings -> SettingsScreen(session = session)
-                    }
-                }
+                Destination.Files -> FilesScreen(session = session)
+                Destination.Settings -> SettingsScreen(session = session)
             }
         }
     }
 
-    if (runtime is RuntimeStatus.Ready && (runtime as RuntimeStatus.Ready).warnings.isNotEmpty()) {
-        val warnings = (runtime as RuntimeStatus.Ready).warnings
-        top.yukonga.miuix.kmp.window.WindowDialog(
-            show = true,
+    // The installer's warnings, raised once and dismissible.
+    //
+    // It used to be `show = true` with an empty `onDismissRequest` and an OK button
+    // whose `onClick` was also empty: `RuntimeStatus.Ready.warnings` is a property of
+    // the *process*, not of a moment, so nothing could ever close it and one missing
+    // tool held the whole app behind a modal until it was killed. The answer is a
+    // local "have I read this", which is also what makes the button's own word true.
+    val warnings = (runtime as? RuntimeStatus.Ready)?.warnings.orEmpty()
+    var warningsDismissed by rememberSaveable { mutableStateOf(false) }
+    if (warnings.isNotEmpty()) {
+        val dismiss = { warningsDismissed = true }
+        WindowDialog(
+            show = !warningsDismissed,
             title = text.root.environmentIncomplete,
-            onDismissRequest = { },
+            onDismissRequest = dismiss,
         ) {
             Text(
                 text = warnings.joinToString("\n\n"),
@@ -459,19 +480,30 @@ private fun RootContent(
                 // installer's own warnings, which run past a screen, and an
                 // unbounded one pushed the acknowledgement off the bottom.
                 modifier = Modifier
-                    .heightIn(max = 320.dp)
+                    .heightIn(max = DIALOG_BODY_MAX_HEIGHT)
                     .verticalScroll(rememberScrollState()),
             )
             TextButton(
                 text = text.common.ok,
-                onClick = { },
+                onClick = dismiss,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
     }
 
-    pendingDialog?.let { dialog ->
+    // The pi dialog, held while it leaves.
+    //
+    // `pendingDialog` is null the instant it is answered, and composing the host from
+    // it meant the window was removed from the hierarchy with its content already
+    // gone — Miuix's window animates out through `show`, so the exit ran over an empty
+    // panel and the host's own `onDismissFinished` never fired. The last value is
+    // therefore kept and `show` is what the answer changes.
+    var shownDialog by remember { mutableStateOf(pendingDialog) }
+    if (pendingDialog != null) shownDialog = pendingDialog
+    val dialog = shownDialog
+    if (dialog != null) {
         PiDialogHost(
+            show = pendingDialog != null,
             title = dialog.title ?: dialog.method,
             message = dialog.message,
             options = dialog.options,
@@ -664,6 +696,14 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
             LinearProgressIndicator(
                 progress = shown,
                 modifier = Modifier.fillMaxWidth(),
+                // The screen is the one dark surface in an app that may be light, so
+                // the bar cannot take the scheme's own `primary` on
+                // `secondaryContainer`: in light mode that is a pale blue on a pale
+                // track, drawn on near-black. These two colours are the setup field's.
+                colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                    foregroundColor = SETUP_PRIMARY,
+                    backgroundColor = SETUP_MARK_FIELD,
+                ),
             )
 
             Spacer(Modifier.height(14.dp))
@@ -701,6 +741,16 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
  * unbounded one pushed the retry button off the bottom — the screen said neither
  * of the two things that fixes. `fill = false` keeps a short message the height it
  * needs rather than the height available.
+ *
+ * ## It is a surface and it owns its insets
+ *
+ * This screen is returned *before* the root `Scaffold`, so nothing above it paints a
+ * background or takes the system bars out of the content. Left as a bare `Column` it
+ * therefore drew the scheme's `onSurface` and `error` ink on whatever the window's
+ * own background is — near-black in this app's launch theme — and put the retry
+ * button under the gesture area. Both are fixed here rather than at the call site
+ * because a failure screen that is unreadable is the one state the user cannot
+ * navigate out of.
  */
 @Composable
 private fun SetupFailure(
@@ -709,25 +759,31 @@ private fun SetupFailure(
     actionLabel: String,
     onAction: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    Surface(Modifier.fillMaxSize(), color = SETUP_BACKGROUND) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
         Box(
             modifier = Modifier
                 .size(64.dp)
                 .clip(CircleShape)
-                .background(MiuixTheme.colorScheme.errorContainer),
+                .background(SETUP_MARK_FIELD),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_pi_mark),
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
-                tint = MiuixTheme.colorScheme.onErrorContainer,
+                // The scheme's error role, not its container pair: this screen is
+                // always the dark setup field, so a container from a light scheme
+                // would be a near-white disc around the mark. The error ink is
+                // legible on both — it is the one role that reads as red either way.
+                tint = MiuixTheme.colorScheme.error,
             )
         }
         Spacer(Modifier.height(20.dp))
@@ -735,13 +791,15 @@ private fun SetupFailure(
             text = title,
             style = MiuixTheme.textStyles.title4,
             textAlign = TextAlign.Center,
-            color = MiuixTheme.colorScheme.onSurface,
+            // The setup screen's own inks, for the reason its palette is fixed:
+            // `onSurface` is black in the light scheme and this page is never light.
+            color = SETUP_PRIMARY,
         )
         Spacer(Modifier.height(12.dp))
         Text(
             text = body,
             style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.error,
+            color = SETUP_SECONDARY,
             modifier = Modifier
                 .weight(1f, fill = false)
                 .verticalScroll(rememberScrollState()),
@@ -751,7 +809,15 @@ private fun SetupFailure(
             text = actionLabel,
             onClick = onAction,
             modifier = Modifier.fillMaxWidth(),
+            // The one control on a page with no theme of its own: the setup field's
+            // ink on the field's own fill, so it is the button the page is built for
+            // rather than a pale blue pill from a scheme this screen does not use.
+            colors = ButtonDefaults.textButtonColors(
+                color = SETUP_MARK_FIELD,
+                textColor = SETUP_PRIMARY,
+            ),
         )
+        }
     }
 }
 
@@ -765,6 +831,9 @@ private fun SetupFailure(
  * in the first minute, and this one is about a run that gets cut short later.
  */
 private enum class PromptStep { None, Notification, Storage, KeepAlive }
+
+/** The tallest a window dialog's body may be before it scrolls inside itself. */
+private val DIALOG_BODY_MAX_HEIGHT = 320.dp
 
 /** An answer faster than this is the platform, not a person. See the retry. */
 private const val INSTANT_ANSWER_MS = 1_200L
