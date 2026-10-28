@@ -6,9 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.rememberedThinkingLevels
-import pi.kit.mob.locales.Lang
-import pi.kit.mob.locales.stringsFor
-import pi.kit.mob.ui.components.thinkingLevelOptions
 
 /**
  * pi's own rule for a thinking level, and the app's two additions to it.
@@ -117,28 +114,6 @@ class ThinkingLevelTest {
         val none = saved.rememberedThinkingLevels("something-else")
         assertTrue(none.isEmpty())
         assertTrue(thinkingLevelsFor(emptyList(), none).isEmpty())
-        assertEquals(
-            PiLaunchOptions.THINKING_LEVELS,
-            thinkingLevelOptions(stringsFor(Lang.ENGLISH), thinkingLevelsFor(emptyList(), none))
-                .map { it.id },
-        )
-    }
-
-    // ------------------------------------------------------- what the UI shows
-
-    @Test
-    fun `a level is named with pi's own id in every language`() {
-        // The report: the chip said `中` and pi's status line said `medium` for the
-        // same level. The name is the value that is sent, in every language; only
-        // the sentence explaining it is translated.
-        PiLaunchOptions.THINKING_LEVELS.forEach { level ->
-            Lang.entries.forEach { lang ->
-                val options = thinkingLevelOptions(stringsFor(lang))
-                val option = options.single { it.id == level }
-                assertEquals("$lang/$level", level, option.label)
-                assertTrue("$lang/$level has a description", option.description.orEmpty().isNotBlank())
-            }
-        }
     }
 
 }

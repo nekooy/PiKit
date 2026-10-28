@@ -299,27 +299,23 @@ dependencies {
     implementation(project(":terminal-view"))
 
     implementation(platform(libs.androidx.compose.bom))
-    // Declared rather than inherited from material3: `AnimatedContent`, the
-    // slide/fade specs and `SizeTransform` are all in this artifact, and leaning
-    // on a transitive `api` dependency for a type named in our own source means
-    // a material3 bump could break a file that never mentioned material3.
+    // `AnimatedContent`, the slide/fade specs and the Crossfade the root runs on are
+    // in this artifact, and leaning on a transitive `api` dependency for a type named
+    // in our own source means a Compose bump could break a file that never mentioned
+    // it.
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
 
-    // The interface. Every screen is drawn from Miuix rather than from material3:
+    // The interface. Every screen is drawn from Miuix rather than from Material:
     // the theme engine, the preference rows the settings pages are built from, the
-    // icons, and the navigation runtime behind the settings stack. Miuix is a
-    // Compose Multiplatform library whose Android artifacts target the same
-    // androidx.compose 1.12 this build already resolves, and its Kotlin metadata is
-    // 2.4.20 against this project's 2.4.21.
+    // icons, and the window-level dialogs and sheets. Miuix is a Compose
+    // Multiplatform library whose Android artifacts target the same androidx.compose
+    // 1.12 this build already resolves, and its Kotlin metadata is 2.4.20 against
+    // this project's 2.4.21.
     implementation(libs.miuix.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
-    implementation(libs.miuix.nav)
-    implementation(libs.miuix.squircle)
 
     // Formula typesetting. JLaTeXMath carries the OpenType math metrics the platform's
     // text API does not expose, and it lays a formula out in **422 µs** where the KaTeX

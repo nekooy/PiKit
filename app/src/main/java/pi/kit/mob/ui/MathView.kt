@@ -70,8 +70,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -94,13 +92,14 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * What a formula is typeset with.
  *
  * ## Why the ink comes from the scheme and not from a composable call
  *
- * The ink is `onSurface`, read from `MaterialTheme.colorScheme` and memoised on it, because it
+ * The ink is `onSurface`, read from `MiuixTheme.colorScheme` and memoised on it, because it
  * is part of the cache key: a light/dark switch has to re-typeset, and a recomposition that
  * changed nothing must not. It is an `Int` rather than a `Color` because it crosses to the
  * worker, and it is read here rather than inside the text walk so that the walk stays pure —
@@ -115,7 +114,7 @@ import kotlin.math.abs
  */
 @Composable
 internal fun mathSpec(fontSize: TextUnit): MathSpec {
-    val ink = MaterialTheme.colorScheme.onSurface
+    val ink = MiuixTheme.colorScheme.onSurface
     val density = LocalDensity.current
     return remember(fontSize, ink, density) {
         MathSpec(sizePx = with(density) { fontSize.toPx() }, ink = ink.toArgb())
@@ -354,6 +353,9 @@ private const val MIN_FORMULA_SCALE = 0.5f
  */
 @Composable
 internal fun WarmFormulaRenderer() {
-    val spec = mathSpec(MaterialTheme.typography.bodyMedium.fontSize)
+    // The paragraph style's size, because that is the size a reply's prose is set in and
+    // therefore the size most formulas will be asked for — warming any other size would
+    // fill the cache with an entry nothing draws.
+    val spec = mathSpec(MiuixTheme.textStyles.paragraph.fontSize)
     LaunchedEffect(spec) { MathCache.warm(spec) }
 }

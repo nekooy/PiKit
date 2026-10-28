@@ -8,8 +8,9 @@ and Pi's RPC protocol.
 
 Chapters 1–6 are those constraints. 7–9 are the interface, where several designs
 were tried and rejected and the number that settled each one is recorded. 10–12 are
-ownership, vendored code and rendering, and 13 is the design language the interface
-is now built from. [AGENTS.md](../AGENTS.md) has the commands
+ownership, vendored code and rendering, and 13 is the Miuix interface the app is now
+drawn from — the theme, the page frame, the rows, and the rules a screen obeys.
+[AGENTS.md](../AGENTS.md) has the commands
 and the hard rules this document explains; [docs/README.md](README.md) is the index
 of everything under `docs/`.
 
@@ -37,7 +38,7 @@ of everything under `docs/`.
 | 12.1 | [What the model writes](architecture/12.1-markdown-and-math.md) | The Markdown half: what the parser accepts, the inline walk, and the test that could not catch a bug |
 | 12.2 | [Mathematics](architecture/12.2-mathematics.md) | Why the renderer is a library, how a formula's line box is built, and every measurement that chose it |
 | 12.3 | [Tables, display formulas, and the marks](architecture/12.3-display-and-marks.md) | Table layout, display formulas as paragraphs, the glyphs that were chosen, and the colour one action carries |
-| 13 | [The design language](architecture/13-design-language.md) | Material 3 Expressive as the rule for what a page may look like: the palette and the accent the user chooses, the two shape voices, which buttons are outlined and how an action row ends, the dismiss a sheet does without, where a note goes, the springs, the component inventory, and why the dependency was raised for it |
+| 13 | [The interface, drawn by Miuix](architecture/13-design-language.md) | Miuix as the rule for what a page may look like: why the app's own design system was removed, the seed-to-palette theme, the fourteen text styles, the page and its one-line subtitle, the rows, the window dialogs and sheets, the one snackbar, navigation, and the `ListPopupColumn` and subtitle traps a change has to obey |
 
 ## How to read it
 

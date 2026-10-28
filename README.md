@@ -14,15 +14,16 @@ first launch — no repository to reach, no package to fetch. The only connectio
 needed is one that can reach the model provider.
 
 <p align="center">
-  <img src="docs/assets/preview-0.5.0.webp" width="90%" alt="PiKit 0.5.0 — the Chat, Terminal, Files and Settings tabs">
+  <img src="docs/assets/preview-miuix.webp" width="90%" alt="PiKit's Miuix interface — the Chat, Terminal, Files and Settings tabs">
 </p>
 
-<p align="center"><sub>PiKit 0.5.0 interface preview</sub></p>
+<p align="center"><sub>PiKit's interface, drawn with Miuix</sub></p>
 
 ## Features
 
 - **A simple idea, an elegant native interface.** Kotlin and Jetpack Compose on
-  Material 3 Expressive (MD3E), four tabs, no WebView. English, 简体中文 or 日本語.
+  Miuix, the MIUI/HyperOS component library for Compose, four tabs, no WebView.
+  English, 简体中文 or 日本語.
 - **Chat on pi's RPC protocol.** A finished turn folds to one line
   (`Worked 47s · 5 steps`) and reopens on a tap; thinking level, model, context use and
   cache hits are chips above the input, and both switches apply without restarting the

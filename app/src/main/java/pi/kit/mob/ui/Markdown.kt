@@ -1,8 +1,8 @@
 package pi.kit.mob.ui
 
 import android.content.ClipData
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,39 +14,25 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
@@ -72,7 +58,13 @@ import kotlinx.coroutines.launch
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.chat.MONO_LINE_HEIGHT
 import pi.kit.mob.ui.components.CopyButton
-import pi.kit.mob.ui.design.PiShapes
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.LocalContentColor
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * A deliberately small Markdown renderer for agent output.
@@ -242,8 +234,9 @@ internal enum class MdAlign { Start, Center, End }
  * So: **do not make this a lazy list.** A caller cannot be trusted to have a bounded
  * height, and the failure is a crash rather than a slow frame. What pays for a long reply
  * instead is [MathCache]: every formula's measurement is moved off the UI thread, so the
- * frame that draws a reply does none of the 17 ms-per-formula work. See that file for the
- * numbers.
+ * frame that draws a reply does no typesetting at all — the cost it removes is the
+ * renderer's, and the number for it is one paragraph above rather than a second figure
+ * kept here. See that file for the measurements.
  */
 @Composable
 fun MarkdownText(
@@ -277,11 +270,11 @@ private val BLOCK_GAP = 8.dp
 /**
  * The colours one block's inline runs are drawn with.
  *
- * Passed down rather than read from `MaterialTheme` inside the token walk so that
+ * Passed down rather than read from `MiuixTheme` inside the token walk so that
  * the *walk* stays pure — which is what lets the JVM suite assert on the tokens —
- * and so that a bubble can supply its own answer: the prompt's `primaryContainer`
- * needs a code tint that contrasts with the fill behind it, and the answer's
- * surface needs a different one.
+ * and so that a bubble can supply its own answer: the prompt's own bubble needs a
+ * code tint that contrasts with the fill behind it, and the answer's surface needs
+ * a different one.
  *
  * [codeBackground] is `Color.Unspecified` for "no fill", which is what the table
  * measurement passes: a filled chip in every cell of a measured grid reads as a
@@ -295,36 +288,43 @@ internal data class InlineStyle(
 )
 
 /**
- * The answer's own inline colours: a code span filled against the card it is drawn in.
+ * The answer's own inline colours: a code span filled against the surface it is drawn in.
  *
- * `surfaceContainerHigh` is one step past the answer's card (`surfaceContainerLow`) —
- * the inset voice, which is the same tone the fenced block below uses — and it is
- * deliberately not a `primary`- or `secondary`-tinted fill: a chip that borrowed the
- * accent would make every identifier in a sentence look like a control. It was
- * `surfaceContainerHighest`, which was two steps of the *page* in an answer that was
- * not in a card; a step is measured from the surface it sits on, and the surface a
- * reply sits on is now its card.
+ * `secondaryContainer` is Miuix's *inset* fill — the role its own text field draws its
+ * resting well in — and it is deliberately not a `primary`-tinted fill: a chip that
+ * borrowed the accent would make every identifier in a sentence look like a control.
+ * `surfaceContainerHigh` was the Material3 step this used to be, and the substitution is
+ * forced rather than chosen: in Miuix's dark scheme `surfaceContainerHigh` is the same
+ * value as the card it would sit on (`#242424`), so a chip so coloured would be invisible
+ * there. `secondaryContainer` is a step away from the card in both modes.
  */
 @Composable
 internal fun inlineStyle(): InlineStyle = InlineStyle(
-    linkColor = MaterialTheme.colorScheme.primary,
-    codeBackground = MaterialTheme.colorScheme.surfaceContainerHigh,
+    linkColor = MiuixTheme.colorScheme.primary,
+    codeBackground = MiuixTheme.colorScheme.secondaryContainer,
 )
 
 /**
  * The style an answer's prose is drawn in.
  *
- * `bodyMedium` with a taller line box than the theme's own 20sp. The theme has no
- * `Typography` override, so 20sp is Material 3's default for 14sp text — a 1.43
- * ratio, which is below the 1.5 that WCAG's visual-presentation criterion asks for
- * within a paragraph, and which reads as cramped for running prose on a phone.
- * 22sp is 1.57, and it is set *here* rather than in the theme because it is a
- * property of a block of agent prose and not of the application's type scale: a
- * settings row at 22sp would be a different mistake.
+ * The size is Miuix's own running-prose style, `paragraph` — 17sp, the size every
+ * Miuix page sets its body text at — because a reply is the most prose the app draws
+ * and the library is now the type scale. The **line box** is raised here rather than
+ * taken from that style: `paragraph` carries 1.2em, which is barely above the font's
+ * own box (about 1.17em for a Latin face), and the inline code fill below is drawn
+ * from the font's box outwards with 1dp of breathing room — inside a 1.2em line a
+ * chip and the line above it touch, which is the "two lines of code joined" defect
+ * `CodeChip.kt` exists to prevent. 26sp keeps that pad inside the line. It is set
+ * *here* rather than in a theme, because it is a property of a block of agent prose
+ * and not of the application's type scale: a settings row at 26sp would be a
+ * different mistake.
  */
 @Composable
 private fun bodyStyle(): TextStyle =
-    MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
+    MiuixTheme.textStyles.paragraph.copy(lineHeight = BODY_LINE_HEIGHT)
+
+/** The reply's line box — see [bodyStyle] for why it is not the style's own. */
+private val BODY_LINE_HEIGHT = 26.sp
 
 /**
  * One parsed block.
@@ -335,7 +335,6 @@ private fun bodyStyle(): TextStyle =
  */
 @Composable
 private fun MdBlockView(block: MdBlock, style: InlineStyle) {
-    val codeBackground = MaterialTheme.colorScheme.surfaceContainerHigh
 
     when (block) {
         is MdBlock.Paragraph -> {
@@ -350,19 +349,18 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
 
         is MdBlock.Heading -> {
             // Chapter titles need to read as breaks, not as body text: `##` is the
-            // manual's section level and was `titleMedium` — the same 16sp as body
-            // — so the ten chapters ran together. The three levels are the design
-            // system's own emphasized ladder rather than sizes and weights written
-            // out here: the design language's rule is that emphasized styles carry
-            // *hierarchy* (a page title, a section's count) and not emphasis on a
-            // word, which is exactly what a Markdown heading is — and a hand-picked
-            // 19sp for level 2 was a fourth size the type scale did not have. The gap
-            // above a heading is the chapter's edge: `BLOCK_GAP` alone left a manual
-            // section looking like the paragraph before it.
+            // manual's section level and is what most of a manual is written in, so
+            // without a step up the ten chapters ran together. The three levels are
+            // Miuix's own title ladder — 24 / 20 / 18sp — rather than sizes written out
+            // here: the library carries hierarchy by *size* (its titles are normal
+            // weight, which is what HyperOS titles are), and a hand-picked 19sp for level
+            // 2 was a fourth size the scale did not have. The gap above a heading is the
+            // chapter's edge: `BLOCK_GAP` alone left a manual section looking like the
+            // paragraph before it.
             val textStyle = when (block.level) {
-                1 -> MaterialTheme.typography.headlineSmallEmphasized
-                2 -> MaterialTheme.typography.titleLargeEmphasized
-                else -> MaterialTheme.typography.titleMediumEmphasized
+                1 -> MiuixTheme.textStyles.title2
+                2 -> MiuixTheme.textStyles.title3
+                else -> MiuixTheme.textStyles.title4
             }
             val topGap = when (block.level) {
                 1 -> 12.dp
@@ -383,7 +381,7 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
 
         is MdBlock.Quote -> MarkdownQuote(block, style)
 
-        is MdBlock.Code -> CodeBlock(block, codeBackground)
+        is MdBlock.Code -> CodeBlock(block)
 
         is MdBlock.Formula -> {
             // A display formula is a *paragraph* whose whole content is one inline
@@ -448,9 +446,9 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
  * [LIST_MARKER_WIDTH], which is the compromise a Compose `Column` forces: the
  * honest width is the widest marker *in this list* — `10.` is wider than `1.` —
  * and measuring it would mean a `SubcomposeLayout` for a number this cheap. 26dp
- * holds `10.` and both checkbox glyphs at `bodyMedium`; a wider column pushes the
- * item's text away from its marker for no gain, and a narrower one wraps `10.` onto
- * two lines. Nested items are indented by [LIST_INDENT] per level.
+ * holds `10.` and both checkbox glyphs at the reply's own `paragraph` size; a wider
+ * column pushes the item's text away from its marker for no gain, and a narrower one
+ * wraps `10.` onto two lines. Nested items are indented by [LIST_INDENT] per level.
  *
  * The checkbox of a task item is the marker, so a checklist lines up with the
  * bullets beside it instead of starting a column of its own.
@@ -480,7 +478,7 @@ private fun MarkdownList(block: MdBlock.ListBlock, style: InlineStyle) {
                 Text(
                     text = marker,
                     style = bodyStyle(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     modifier = Modifier.width(LIST_MARKER_WIDTH),
                 )
                 Box(Modifier.weight(1f)) {
@@ -495,7 +493,7 @@ private fun MarkdownList(block: MdBlock.ListBlock, style: InlineStyle) {
                             null
                         },
                         color = if (item.checked == true) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            MiuixTheme.colorScheme.onSurfaceVariantSummary
                         } else {
                             Color.Unspecified
                         },
@@ -523,15 +521,16 @@ private const val MAX_LIST_DEPTH = 5
  * A block quote: a left rule and the blocks inside it, in the muted ink.
  *
  * A left rule reads better than italicising, which loses the visual grouping when
- * several lines are quoted, and it is the one shape in this file that is *not* the
- * design system's: a quote is not a container and not a control, so it is a rule
+ * several lines are quoted, and it is the one shape in this file that is *not* a
+ * Miuix container: a quote is not a container and not a control, so it is a rule
  * rather than a rounded surface. `IntrinsicSize.Min` on the row is what makes the
  * rule as tall as the quoted content, however many blocks that turns out to be.
  *
  * What carries the "quoted" reading besides the rule is the *ink*: the nested blocks
- * are drawn through `LocalContentColor`, which every `Text` in this file defaults to
- * (and which a heading or a paragraph inside the quote therefore picks up without
- * knowing it is inside one). A quote in muted text is one statement — this is
+ * are drawn through `LocalContentColor`, which every `Text` in this file resolves
+ * its colour from — Miuix's own local, and Miuix's text styles carry no colour of
+ * their own, so a heading or a paragraph inside the quote picks the muted ink up
+ * without knowing it is inside one. A quote in muted text is one statement — this is
  * someone else's words — where a rule alone is a line beside body text; italic, the
  * other convention for it, is not available to this app because the platform
  * synthesises a slant for a CJK face, which is the same measurement that removed the
@@ -545,14 +544,14 @@ private fun MarkdownQuote(block: MdBlock.Quote, style: InlineStyle) {
                 .padding(end = 8.dp)
                 .width(3.dp)
                 .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
+                .background(MiuixTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
         )
         Column(
             Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(BLOCK_GAP),
         ) {
             CompositionLocalProvider(
-                LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant,
+                LocalContentColor provides MiuixTheme.colorScheme.onSurfaceVariantSummary,
             ) {
                 block.blocks.forEach { inner -> MdBlockView(inner, style) }
             }
@@ -592,8 +591,14 @@ private fun MarkdownQuote(block: MdBlock.Quote, style: InlineStyle) {
 @Composable
 private fun ScrollableFormula(content: @Composable () -> Unit) {
     val state = rememberScrollState()
-    val fade = MaterialTheme.colorScheme.surface
-    val thumb = MaterialTheme.colorScheme.onSurfaceVariant
+    // The fade has to be the colour *behind* the formula, because it hides the ink it
+    // fades out. `surfaceContainer` is that colour at both call sites in Miuix's scheme:
+    // the answer's card is drawn with it, and the page behind the manual is `background`,
+    // which the library gives the same value (`#FFFFFF` light, `#242424` dark). The
+    // Material3 version of this line had to pick one of the two and be slightly wrong on
+    // the other page.
+    val fade = MiuixTheme.colorScheme.surfaceContainer
+    val thumb = MiuixTheme.colorScheme.onSurfaceContainerVariant
     Box(
         Modifier
             .fillMaxWidth()
@@ -675,19 +680,23 @@ internal fun clipEntryFor(text: String): ClipEntry =
 /**
  * A fenced code block: a label, a copy button, and the text in a well of its own.
  *
- * The well is `PiShapes.row` — the dense voice's step, one below the answer card's
- * `16dp` — on `surfaceContainerHigh`, which is the same step and the same tone as the
- * inline chip and the tool output panel beside it. A code block is an information
- * surface, and the shape guidance is explicit that information-dense surfaces stay
- * square-ish: a large radius on one eats the first and last character of every line.
+ * The well is Miuix's [Card] — the library's own 16dp radius, the same step the rows and
+ * the table below use — filled with `secondaryContainer`, which is the inset tone the
+ * inline chip uses too and the role Miuix's own text field draws its well in. A code
+ * block is an information surface, and the shape guidance is explicit that
+ * information-dense surfaces stay square-ish: a large radius on one eats the first and
+ * last character of every line. A `Card` also *clips* what it holds, which the hand-
+ * ordered `background(shape)` it replaces did not: a line scrolled to its end painted
+ * past the rounded corner.
  *
  * The text is monospace at [MONO_LINE_HEIGHT], the one line box every monospace block
- * in the app is drawn at — the tool output panel included. It used to be `bodySmall`'s
- * own 16sp, which is tight for a face whose glyphs are all one width and therefore
- * have no natural word rhythm to read along.
+ * in the app is drawn at — the tool output panel included — on Miuix's `body2`, the size
+ * step its own rows set content in. It used to be `bodySmall`'s own 16sp, which is tight
+ * for a face whose glyphs are all one width and therefore have no natural word rhythm to
+ * read along.
  */
 @Composable
-private fun CodeBlock(block: MdBlock.Code, background: Color) {
+private fun CodeBlock(block: MdBlock.Code) {
     // `LocalClipboard`, not the deprecated `LocalClipboardManager`: the replacement
     // API is suspend, because the platform clipboard is a binder call, so the copy
     // needs a scope to run in. The launch is fire-and-forget on purpose — there is
@@ -703,8 +712,8 @@ private fun CodeBlock(block: MdBlock.Code, background: Color) {
         ) {
             Text(
                 block.language.ifBlank { text.chat.codeBlockFallback },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 modifier = Modifier.weight(1f),
             )
             // The same control as the copy button under a message — one composable, `CopyButton`,
@@ -716,25 +725,30 @@ private fun CodeBlock(block: MdBlock.Code, background: Color) {
                 contentDescription = text.chat.copyCode,
             )
         }
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(background, PiShapes.row)
-                // Long lines scroll rather than wrap: wrapped code is much harder
-                // to read than clipped code.
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer),
         ) {
-            // Monospace and uncoloured. A highlighter used to be here and was removed
-            // on request: it cannot cover every language an agent writes a fence for,
-            // and a wrong colour a reader cannot tell from a right one is worse than
-            // no colour at all. The fence's own name is still shown, which is the part
-            // that helps — it says what the block is.
-            Text(
-                block.body,
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = MONO_LINE_HEIGHT),
-                fontFamily = FontFamily.Monospace,
-            )
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    // Long lines scroll rather than wrap: wrapped code is much harder
+                    // to read than clipped code.
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                // Monospace and uncoloured. A highlighter used to be here and was removed
+                // on request: it cannot cover every language an agent writes a fence for,
+                // and a wrong colour a reader cannot tell from a right one is worse than
+                // no colour at all. The fence's own name is still shown, which is the part
+                // that helps — it says what the block is.
+                Text(
+                    block.body,
+                    style = MiuixTheme.textStyles.body2,
+                    lineHeight = MONO_LINE_HEIGHT,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
     }
 }
@@ -745,12 +759,13 @@ private fun CodeBlock(block: MdBlock.Code, background: Color) {
  * Compose has no table widget, so this is a stack of rows with cells. The two
  * decisions here are both about a table that is wider than the screen:
  *
- *  - **The rounded outline clips its contents.** `border(…, shape)` draws the
- *    outline; it does not clip what is inside it. The header row's own fill is a
- *    rectangle, so at the top two corners it painted *past* the rounded border —
- *    two square colour blocks sticking out either side of a rounded corner,
- *    which is the "colour blocks outside the table" a reader sees first.
- *    `clip(shape)` before the border is what makes the fill stop at the corner.
+ *  - **The rounded outline clips its contents.** A drawn outline does not clip what is
+ *    inside it, and the header row's own fill is a rectangle, so at the top two corners
+ *    it painted *past* the rounded border — two square colour blocks sticking out
+ *    either side of a rounded corner, which is the "colour blocks outside the table" a
+ *    reader sees first. The fix used to be a hand-ordered `clip(shape)` before the
+ *    border; it is Miuix's [Surface] now, which clips, outlines and fills in the one
+ *    order that works.
  *  - **A table too wide to hold its columns scrolls sideways.** The old layout
  *    gave every column a weight derived from a character count, so a table with
  *    a handful of columns was squeezed until every cell wrapped: the rows grew to
@@ -786,8 +801,8 @@ private fun MarkdownTable(block: MdBlock.Table, style: InlineStyle) {
 
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val headerStyle = MaterialTheme.typography.labelLarge
-    val cellStyle = MaterialTheme.typography.bodySmall
+    val headerStyle = MiuixTheme.textStyles.subtitle
+    val cellStyle = MiuixTheme.textStyles.body2
 
     // The style the widths are measured in: no code fill, because a filled span in
     // every cell reads as a grid of errors and only the widths are wanted here.
@@ -853,11 +868,13 @@ private fun MarkdownTable(block: MdBlock.Table, style: InlineStyle) {
         }
     }
 
-    val borderColor = MaterialTheme.colorScheme.outlineVariant
-    // The dense voice's step rather than the theme's `extraSmall`: a table is the
-    // densest thing in a reply — every cell is content — and 4dp on a table whose
-    // corners are half a row tall reads as a rectangle that failed to be square.
-    val shape = PiShapes.row
+    // Miuix's line colour rather than a hand-picked outline: the table's grid and the
+    // dividers between its rows are the same kind of line as a `HorizontalDivider`.
+    val borderColor = MiuixTheme.colorScheme.dividerLine
+    // 16dp, Miuix's own card radius and the dense step: a table is the densest thing in a
+    // reply — every cell is content — and 4dp on a table whose corners are half a row tall
+    // reads as a rectangle that failed to be square.
+    val shape = RoundedCornerShape(TABLE_CORNER_RADIUS)
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val available = maxWidth
@@ -881,41 +898,51 @@ private fun MarkdownTable(block: MdBlock.Table, style: InlineStyle) {
                 .fillMaxWidth()
                 .then(if (fits) Modifier else Modifier.horizontalScroll(rememberScrollState())),
         ) {
-            Column(
-                Modifier
-                    .then(
-                        if (fits) {
-                            Modifier.fillMaxWidth()
-                        } else {
-                            Modifier.width(naturalTotal)
-                        },
-                    )
-                    .clip(shape)
-                    .border(1.dp, borderColor, shape),
+            // Miuix's `Surface` rather than `clip` and `border` written out by hand: the
+            // component is what owns the three orders of business at once — clip the
+            // contents, draw the outline, paint the fill — and getting the order wrong is
+            // the bug this table already had (a rectangular header fill painted past the
+            // rounded border it was supposed to sit inside).
+            Surface(
+                modifier = if (fits) Modifier.fillMaxWidth() else Modifier.width(naturalTotal),
+                shape = shape,
+                color = Color.Transparent,
+                border = BorderStroke(1.dp, borderColor),
             ) {
-                TableRow(
-                    cells = headerCells,
-                    columns = columns,
-                    widths = if (fits) null else natural,
-                    weights = weights,
-                    aligns = block.aligns,
-                    header = true,
-                )
-                rowCells.forEachIndexed { index, row ->
-                    if (index > 0) HorizontalDivider(color = borderColor)
+                Column {
                     TableRow(
-                        cells = row,
+                        cells = headerCells,
                         columns = columns,
                         widths = if (fits) null else natural,
                         weights = weights,
                         aligns = block.aligns,
-                        header = false,
+                        header = true,
                     )
+                    rowCells.forEachIndexed { index, row ->
+                        if (index > 0) HorizontalDivider(color = borderColor)
+                        TableRow(
+                            cells = row,
+                            columns = columns,
+                            widths = if (fits) null else natural,
+                            weights = weights,
+                            aligns = block.aligns,
+                            header = false,
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+/**
+ * The table's corner radius: 16dp, the dense-surface step.
+ *
+ * There is no named shape to read it from any more — Miuix's components take a radius as
+ * a `Dp` and draw a squircle, and `Surface` is the one container that takes a `Shape` —
+ * so it is written here, at the table, which is the only place that asks for it.
+ */
+private val TABLE_CORNER_RADIUS = 16.dp
 
 /**
  * One row of a table.
@@ -934,9 +961,9 @@ private fun TableRow(
     header: Boolean,
 ) {
     val textStyle = if (header) {
-        MaterialTheme.typography.labelLarge
+        MiuixTheme.textStyles.subtitle
     } else {
-        MaterialTheme.typography.bodySmall
+        MiuixTheme.textStyles.body2
     }
 
     Row(
@@ -949,7 +976,7 @@ private fun TableRow(
                 },
             )
             .background(
-                if (header) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Unspecified,
+                if (header) MiuixTheme.colorScheme.secondaryContainer else Color.Unspecified,
             ),
     ) {
         for (column in 0 until columns) {
@@ -960,10 +987,12 @@ private fun TableRow(
             // *same* object the width was measured from, so the drawn text and the
             // measured text cannot drift.
             val cell = cells.getOrNull(column) ?: EMPTY_INLINE
+            // No weight override: `subtitle` is the one Miuix style that carries Bold, and
+            // the header is set in it — that is the library's own emphatic step, where the
+            // old table asked for `labelLarge` plus a semibold weight on top.
             Text(
                 text = cell.text,
                 style = textStyle,
-                fontWeight = if (header) FontWeight.SemiBold else null,
                 textAlign = when (aligns.getOrNull(column)) {
                     MdAlign.Center -> TextAlign.Center
                     MdAlign.End -> TextAlign.End
@@ -1023,8 +1052,8 @@ private val CELL_PADDING = 16.dp
 /**
  * The narrowest column worth having.
  *
- * 72dp holds about nine characters of `bodySmall` — a header such as `Size` and
- * a value such as `1.2 MB`, which is a column. Below it a cell wraps every word
+ * 72dp holds about eight characters of the cell's `body2` — a header such as `Size`
+ * and a value such as `1.2 MB`, which is a column. Below it a cell wraps every word
  * and the table reads as a paragraph of vertically stacked words.
  */
 private val MIN_COLUMN_WIDTH = 72.dp

@@ -1,35 +1,16 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,12 +22,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.data.CustomApi
 import pi.kit.mob.data.ModelProfile
@@ -66,32 +43,28 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.anyProviderModelFacts
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.modelDefinitionFacts
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.LocalToastHost
-import pi.kit.mob.ui.components.PiIcons
-import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.design.PiBadge
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
-import pi.kit.mob.ui.design.PiEmptyState
-import pi.kit.mob.ui.design.PiGap
-import pi.kit.mob.ui.design.PiGroup
-import pi.kit.mob.ui.design.PiLoading
-import pi.kit.mob.ui.design.PiPageBottom
-import pi.kit.mob.ui.design.PiPagePadding
-import pi.kit.mob.ui.design.PiRow
-import pi.kit.mob.ui.design.PiRowDivider
-import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiSearchField
-import pi.kit.mob.ui.design.PiSectionHeader
-import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiSheetActions
-import pi.kit.mob.ui.design.PiSheetList
-import pi.kit.mob.ui.design.PiSheetRow
-import pi.kit.mob.ui.design.PiSheetTitle
-import pi.kit.mob.ui.design.PiSwitchRow
-import pi.kit.mob.ui.design.PiTextField
+import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiGroupAction
+import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.PiSheet
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Clear
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -117,10 +90,10 @@ import kotlinx.serialization.json.put
  * line: the level that configuration's model would run at is a fact about the model,
  * and a fact belongs beside the model it is about.
  *
- * The shell is `PiScaffold`'s pinned bar, whose subtitle is the count of saved
- * configurations — what the page is. A row states the rest: the configuration's name
- * (its model id until the user names it), the provider it is an endpoint and a key
- * for, the level its model runs at, and whether a key is saved.
+ * The shell is Miuix's top bar, whose subtitle is the count of saved configurations —
+ * what the page is. A row states the rest: the configuration's name (its model id until
+ * the user names it), the provider it is an endpoint and a key for, the level its model
+ * runs at, and whether a key is saved.
  */
 @Composable
 internal fun ModelPage(
@@ -129,7 +102,7 @@ internal fun ModelPage(
     onEdit: (String) -> Unit,
 ) {
     val store = session.settingsStore.profiles
-    val toasts = LocalToastHost.current
+    val toasts = LocalPiToast.current
     var pendingDelete by remember { mutableStateOf<ModelProfile?>(null) }
     // Collected rather than copied into local state: the store publishes what it
     // has, so a profile saved on the form behind this page, or a model changed
@@ -175,74 +148,53 @@ internal fun ModelPage(
     // `clampThinkingLevel` are still what that sheet and the chip's label use, and
     // `thinkingLevelFor` below reads the saved pair for a row's line.
 
-    PiScaffold(
+    PiPage(
         title = text.settings.profilesTitle,
         subtitle = text.settings.modelCount(profiles.size),
         onBack = onBack,
-    ) { body ->
+    ) { padding ->
         Column(
-            modifier = body
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding)
-                .padding(top = 8.dp, bottom = PiPageBottom),
+                .padding(top = 4.dp, bottom = 12.dp),
         ) {
-            // An empty list is not drawn as an empty frame: `PiGroup` is a rounded
-            // surface, and one with no rows in it is a slab of nothing under a heading.
-            // The store refuses to delete the last configuration, so this is only
-            // reachable before the first one is saved — the button below is the page then.
+            // An empty list is not drawn as an empty frame: a card with no rows in it is a
+            // slab of nothing under a heading. The store refuses to delete the last
+            // configuration, so this is only reachable before the first one is saved — the
+            // action below is the page then.
             if (profiles.isNotEmpty()) {
-                PiSectionHeader(text.settings.savedProfiles)
-                PiGroup {
-                    profiles.forEachIndexed { index, profile ->
-                        if (index > 0) PiRowDivider()
-                        PiRow(
+                PiSection(title = text.settings.savedProfiles) {
+                    profiles.forEach { profile ->
+                        // The row *is* the switch: a radio says which configuration the
+                        // agent launches with, and tapping the one already marked is a read
+                        // rather than a change. The edit and delete pair sits at the row's
+                        // end because a settings row's trailing slot is where its controls
+                        // live, and the mark that says "this is the one" is the radio's own —
+                        // one glyph per meaning rather than a tick beside a button.
+                        RadioButtonPreference(
                             title = profile.displayName,
-                            subtitle = subtitleFor(
+                            summary = subtitleFor(
                                 profile,
                                 text,
                                 thinkingLevelFor(preferences, profile.modelId),
                             ),
-                            // The model mark, as on the settings root's own row into this
-                            // page: the row is about which model answers, not about the key
-                            // that carries it.
-                            leading = { Icon(PiIcons.Model, contentDescription = null) },
-                            trailing = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    if (profile.id == activeId) {
-                                        Icon(
-                                            Icons.Filled.Check,
-                                            contentDescription = text.settings.active,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            // The mark "in use" has always been: the primary tick
-                                            // every picker in the app draws (`PiSheetRow`), at
-                                            // the same 20dp, so the answer looks the same here as
-                                            // in the sheet it was chosen in. `PiChoiceRow` — the
-                                            // container a settings page fills for its own
-                                            // selection — was the alternative, and it does not fit
-                                            // this row: it draws its control in the trailing slot,
-                                            // which is where the edit and delete pair lives, and a
-                                            // filled row beside a row of icon buttons reads as the
-                                            // row being unavailable rather than as the chosen one.
-                                            // It was unsized before (24dp), which made the mark
-                                            // bigger here than in every picker.
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                    IconButton(onClick = { onEdit(profile.id) }) {
-                                        Icon(
-                                            Icons.Filled.Edit,
-                                            contentDescription = text.settings.editProfile,
-                                        )
-                                    }
-                                    IconButton(onClick = { pendingDelete = profile }) {
-                                        Icon(
-                                            Icons.Filled.Delete,
-                                            contentDescription = text.settings.deleteProfile,
-                                        )
-                                    }
+                            selected = profile.id == activeId,
+                            endActions = {
+                                IconButton(onClick = { onEdit(profile.id) }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Edit,
+                                        contentDescription = text.settings.editProfile,
+                                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    )
+                                }
+                                IconButton(onClick = { pendingDelete = profile }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Delete,
+                                        contentDescription = text.settings.deleteProfile,
+                                        tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    )
                                 }
                             },
                             onClick = {
@@ -263,77 +215,48 @@ internal fun ModelPage(
                 }
             }
 
-            PiGap(12.dp)
-            // An empty page is the first-run page, and it should say so rather
-            // than present a lone button over a blank screen: the mark, the
-            // sentence, then the action, vertically centred in the space the
-            // list will occupy once there is one. With profiles saved, the
-            // button stays at the leading edge of the column — a page that
-            // already has content needs a control, not a hero.
+            // The first-run state is a sentence rather than an empty frame: the page has
+            // to say why there is nothing here and what to do about it, and the action
+            // under it is the same one the list's foot carries once there is something in
+            // it. With profiles saved this is the page's one additive row.
             if (profiles.isEmpty()) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PiEmptyState(
-                        title = text.settings.profilesTitle,
-                        body = text.settings.profilesEmptyHint,
-                        action = {
-                            PiButton(
-                                text = text.settings.addProfile,
-                                onClick = { onEdit("") },
-                                kind = PiButtonKind.Filled,
-                                size = PiButtonSize.Small,
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Add, contentDescription = null)
-                                },
-                            )
-                        },
-                    )
+                PiSection(title = text.settings.profilesTitle) {
+                    SettingsNote(text.settings.profilesEmptyHint)
                 }
-            } else {
-                PiButton(
-                    text = text.settings.addProfile,
-                    onClick = { onEdit("") },
-                    kind = PiButtonKind.Filled,
-                    size = PiButtonSize.Small,
-                    leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                )
             }
+            PiGroupAction(
+                text = text.settings.addProfile,
+                onClick = { onEdit("") },
+            )
         }
     }
 
-    pendingDelete?.let { target ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text(text.settings.deleteProfileTitle) },
-            text = { Text(text.settings.deleteProfileBody(target.displayName)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val deleted = store.delete(target.id)
-                    if (deleted) {
-                        if (target.id == activeId) session.scheduleRestart()
-                    } else {
-                        // The last profile cannot go: pi would have nothing to launch
-                        // with. A toast rather than a strip under the list, because it
-                        // is the answer to the press and the list itself is unchanged.
-                        toasts.show(text.settings.lastProfile)
-                    }
-                    pendingDelete = null
-                }) {
-                    // Red, because this takes the model out of the list and discards what
-                    // the user declared about it — the image switch and the two numbers.
-                    // Nothing on this page can put that back.
-                    Text(text.settings.deleteProfile, color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text(text.settings.cancel) }
-            },
-        )
-    }
+    // Deleting a configuration takes the model out of the list and discards what the user
+    // declared about it — the image switch and the two numbers — and nothing on this page
+    // can put that back, so the question carries the error role on its confirming word.
+    val deleting = pendingDelete
+    PiConfirm(
+        show = deleting != null,
+        title = text.settings.deleteProfileTitle,
+        text = text.settings.deleteProfileBody(deleting?.displayName.orEmpty()),
+        confirm = text.settings.deleteProfile,
+        dismiss = text.settings.cancel,
+        destructive = true,
+        onConfirm = {
+            val target = deleting ?: return@PiConfirm
+            val deleted = store.delete(target.id)
+            if (deleted) {
+                if (target.id == activeId) session.scheduleRestart()
+            } else {
+                // The last profile cannot go: pi would have nothing to launch with. A
+                // toast rather than a strip under the list, because it is the answer to
+                // the press and the list itself is unchanged.
+                toasts?.show(text.settings.lastProfile)
+            }
+            pendingDelete = null
+        },
+        onDismiss = { pendingDelete = null },
+    )
 }
 
 /**
@@ -373,17 +296,7 @@ private fun thinkingLevelFor(preferences: PiSettings, modelId: String): String? 
             )
         }
 
-/**
- * The inset a field keeps inside its group: 12dp horizontally, the gutter `PiRow`'s own
- * padding leaves, so a field's box lines up with the rows above and below it; 4dp
- * vertically, which is the 8dp two stacked fields then sit apart by — a run of fields is
- * separated by their own outlines rather than by a rule between them.
- *
- * Written once because four fields share it, and because it is the measurement that
- * agrees with `PiRow`'s: a literal at each call site is how the card's left edge goes
- * ragged, which is one of the three faults the parameter rows were rewritten for.
- */
-private val FIELD_INSET = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+
 
 /**
  * The model form.
@@ -401,12 +314,13 @@ private val FIELD_INSET = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
  * [requestLeave], which asks when the form differs from what is stored and leaves
  * directly when it does not.
  *
- * The back *gesture* is the shell's: `PiScaffold` registers a `PageBackHandler` inside
- * the page, so it is deeper than the tab's own handler and runs first, and it yields to
- * a sheet — which is the behaviour this page's pickers depend on (a swipe while the
- * provider sheet is up must close the sheet, not the page under it). The one thing that
- * handler cannot express is [leaving], because it is always enabled: the flag is
- * therefore read in [requestLeave] itself, where the decision is made.
+ * The back *gesture* is the page's own: `PiPage` registers it whenever it is given an
+ * `onBack`, and this page passes [requestLeave]. A Miuix sheet or dialog is a window of
+ * its own and takes the gesture before the page behind it, which is the behaviour this
+ * page's pickers depend on (a swipe while the provider list is up closes the list, not
+ * the page under it). The one thing a handler cannot express is [leaving], because it is
+ * always enabled: the flag is therefore read in [requestLeave] itself, where the decision
+ * is made.
  */
 @Composable
 internal fun ModelEditPage(
@@ -417,13 +331,10 @@ internal fun ModelEditPage(
     val store = session.settingsStore.profiles
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Every sheet on this page — the provider picker, the protocol picker, the fetched
-    // model list and the two number editors — goes into the root's one modal layer, and
-    // each body is a `PiSheet*` component. The two number rows open one rather than
-    // holding a field of their own — see the custom-parameters section for what that
-    // replaced.
-    val sheets = LocalSheetHost.current
-    val toasts = LocalToastHost.current
+    // Both modal editors — the provider list and the fetched model list — are Miuix
+    // sheets, which are windows of their own: their state is a boolean in this composable
+    // rather than an entry in a host, and the sheet body reads the choice it was given.
+    val toasts = LocalPiToast.current
     // The saved preference, read for the thinking level each model row reports. It is not
     // a field of this form: the composer's chip is the one control for it.
     val preferences by session.settingsStore.settings.collectAsState()
@@ -763,7 +674,7 @@ internal fun ModelEditPage(
      */
     fun save(): Boolean {
         refusal()?.let { message ->
-            toasts.show(message)
+            toasts?.show(message)
             return false
         }
         val chosen = provider ?: return false
@@ -904,7 +815,7 @@ internal fun ModelEditPage(
         // until the next launch re-reads the old file. Say so here rather than
         // leave the page claiming success.
         if (store.lastWriteFailed) {
-            toasts.show(text.settings.saveFailed)
+            toasts?.show(text.settings.saveFailed)
             return false
         }
         return true
@@ -928,255 +839,157 @@ internal fun ModelEditPage(
         if (dirty) askingToSave = true else leave()
     }
 
-    PiScaffold(
+    // The form's modal state, as three small values rather than a sheet host: Miuix's
+    // sheets and dialogs are windows of their own, so each is a boolean (or the subject it
+    // is about) in this composable and the body reads it.
+    var providerPicker by remember { mutableStateOf(false) }
+    var apiPicker by remember { mutableStateOf(false) }
+    var fetched by remember { mutableStateOf<List<DiscoveredModel>>(emptyList()) }
+    var fetchedFootnote by remember { mutableStateOf("") }
+    var modelPicker by remember { mutableStateOf(false) }
+    var editingNumber by remember { mutableStateOf<NumberEdit?>(null) }
+
+    PiPage(
         title = if (isNew) text.settings.newProfile else text.settings.editProfile,
         // The provider is what the page is about: the model ids below are its ids and the
         // key is its credential. `isNew` is `existing == null`, so a profile being created
         // has no name to show and the provider is what the reader has to choose.
         subtitle = provider?.label ?: text.settings.notChosen,
+        // Every way out goes through the question: the arrow, the Cancel button and the
+        // system's back gesture are one action, and a form that saves nothing on the way
+        // out has to say so first.
         onBack = ::requestLeave,
-    ) { body ->
+    ) { padding ->
         Column(
-            modifier = body
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding)
-                .padding(top = 8.dp, bottom = PiPageBottom),
+                .padding(top = 4.dp, bottom = 12.dp),
         ) {
-            PiSectionHeader(text.settings.profile)
-            PiGroup {
-                PiTextField(
+            PiSection(title = text.settings.profile) {
+                SettingsTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = text.settings.name,
                     placeholder = text.settings.namePlaceholder,
                     // The row that used to sit above this field with the same sentence as
-                    // its subtitle is gone: a field carries its own explanation, and the
-                    // two of them said "Name" twice.
-                    supportingText = text.settings.nameSubtitle,
-                    modifier = FIELD_INSET,
+                    // its summary is gone: a field carries its own explanation, and the two
+                    // of them said "Name" twice.
+                    supporting = text.settings.nameSubtitle,
                 )
             }
 
-            PiSectionHeader(text.settings.provider)
-            // One frame for the endpoint: which provider, where it lives, how it speaks
-            // and the key it wants are one decision, and the design's own rule is that a
-            // group is a set of peer rows in a frame rather than a card each.
-            PiGroup {
-                PiRow(
+            // One card for the endpoint: which provider, where it lives, how it speaks and
+            // the key it wants are one decision, and a group is a set of peer rows in a
+            // frame rather than a card each.
+            PiSection(title = text.settings.provider) {
+                ArrowPreference(
                     title = text.settings.provider,
-                    subtitle = provider?.let { text.settings.keyPassedAs(it.envVar) }
+                    summary = provider?.let { text.settings.keyPassedAs(it.envVar) }
                         ?: text.settings.providerSubtitle,
-                    leading = { Icon(Icons.Filled.Key, contentDescription = null) },
-                    trailing = {
-                        RowValue(provider?.label ?: text.settings.notChosen, chevron = true)
-                    },
-                    onClick = {
-                        // pi ships more than thirty single-key providers, so this sheet is a
-                        // list to search rather than a handful of rows to compare — see
-                        // `ProviderPickerSheet`.
-                        sheets.show(
-                            Sheet(key = "provider-picker", fullBleedBottom = true) {
-                                ProviderPickerSheet(
-                                    selectedId = provider?.id,
-                                    onPick = { entry ->
-                                        if (entry != provider) {
-                                            provider = entry
-                                            // Model ids are provider-specific: a list built for one
-                                            // provider is not a list for another, and pi would
-                                            // reject every entry in it. The list is emptied rather
-                                            // than carried across, and the key is deliberately
-                                            // *not* cleared — switching to the same account's other
-                                            // endpoint is the case this page exists for.
-                                            models = emptyList()
-                                            activeModel = ""
-                                            // The three declarations are keyed by *model id* and nothing
-                                            // else, so they cannot tell one provider's `gpt-4o` from
-                                            // another's: carrying them across a switch applied the
-                                            // window and the image switch the user had set for provider
-                                            // A to the same id on provider B. That is a statement about
-                                            // a model they never made, and it is written into pi's file
-                                            // for B — so they go with the list, and the half-typed id
-                                            // goes too (it was for the provider just left).
-                                            settings = emptyMap()
-                                            draft = ""
-                                            // The endpoint goes with the provider for the same reason,
-                                            // and more sharply since the field became an *override*:
-                                            // a relay URL typed for `pikit-custom` kept on the form and
-                                            // saved against DeepSeek would rewrite every DeepSeek model
-                                            // to that relay (`applyModelsJson`). The withdrawal record
-                                            // goes too — it belongs to the provider just left, and a
-                                            // blank one here would leave that provider's override in
-                                            // pi's file for ever.
-                                            baseUrl = ""
-                                            // Same reason as the URL: an `anthropic-messages` choice
-                                            // left on the form after a switch to DeepSeek is a statement
-                                            // about a relay this profile no longer has.
-                                            api = ""
-                                        }
-                                    },
-                                )
-                            },
-                        )
-                    },
+                    endActions = { SettingsValue(provider?.label ?: text.settings.notChosen) },
+                    // pi ships more than thirty single-key providers, so this is a list to
+                    // search rather than a handful of rows to compare — see the sheet below.
+                    onClick = { providerPicker = true },
                 )
 
-                // The endpoint is a property of every provider, not only of the custom
-                // one. A built-in provider leaves it blank to use pi's own URL; filling
-                // it in is how a proxy or relay in front of DeepSeek/OpenAI is used
-                // without giving up the catalogue. A custom endpoint has no default to
-                // fall back to, so the same field is required there — `refusal` says so.
-                // Inside this group rather than its own so which provider, and where it
-                // lives, read as one decision; the note is the field's own supporting
-                // text, which is where the reader is when they need it.
-                PiTextField(
+                // The endpoint is a property of every provider, not only of the custom one.
+                // A built-in provider leaves it blank to use pi's own URL; filling it in is
+                // how a proxy or relay in front of DeepSeek/OpenAI is used without giving
+                // up the catalogue. A custom endpoint has no default to fall back to, so the
+                // same field is required there — `refusal` says so. Inside this group rather
+                // than its own so which provider, and where it lives, read as one decision.
+                SettingsTextField(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
                     label = text.settings.baseUrl,
                     placeholder = text.settings.baseUrlPlaceholder,
-                    supportingText = if (provider in PiProvider.needsBaseUrl) {
+                    supporting = if (provider in PiProvider.needsBaseUrl) {
                         text.settings.baseUrlNote
                     } else {
                         text.settings.baseUrlOptionalNote
                     },
                     keyboardType = KeyboardType.Uri,
-                    modifier = FIELD_INSET,
                 )
 
-                // The wire protocol, only for a custom endpoint: a built-in
-                // provider's client is pi's own and its models already name it.
-                // Offering it there would be a second answer to a question pi
-                // has already settled. The labels are pi's identifiers because
-                // those are the values the relay's own docs name — see
+                // The wire protocol, only for a custom endpoint: a built-in provider's client
+                // is pi's own and its models already name it. Offering it there would be a
+                // second answer to a question pi has already settled. The labels are pi's
+                // identifiers because those are the values the relay's own docs name — see
                 // `CustomApi`.
-                //
-                // The row carries the one line of the explanation that decides the
-                // choice — what a wrong value costs — and the rest is the paragraph
-                // under the group. All three sentences in the row made one picker
-                // taller than the whole section around it.
-                //
-                // The row used to need 8dp of space above it: the URL field's own 4dp
-                // bottom pad and the row's top pad met as one dense block, so the
-                // protocol control looked attached to the input above it rather than a
-                // separate decision. A field's outline and the row's own 14dp of padding
-                // are that separation now, which is why the literal is gone.
                 if (isCustomEndpoint) {
-                    PiRow(
+                    ArrowPreference(
                         title = text.settings.apiType,
-                        subtitle = text.settings.apiTypeSubtitle,
-                        leading = { Icon(Icons.Filled.Key, contentDescription = null) },
-                        trailing = { RowValue(CustomApi.fromId(api).id, chevron = true) },
-                        onClick = {
-                            sheets.show(
-                                Sheet(key = "api-picker", fullBleedBottom = true) {
-                                    ApiTypePickerSheet(
-                                        selectedId = CustomApi.fromId(api).id,
-                                        onPick = { api = it },
-                                    )
-                                },
-                            )
-                        },
+                        summary = text.settings.apiTypeSubtitle,
+                        endActions = { SettingsValue(CustomApi.fromId(api).id, monospace = true) },
+                        onClick = { apiPicker = true },
                     )
                 }
 
-                // The key field is the app's one field that does not come from the
-                // design package, and the reason is exact: `PiTextField` has no
-                // `visualTransformation`, and a field whose contents are a secret has to
-                // mask them. Everything else about it — the shape, the transparent
-                // container, the inset — is `PiTextField`'s, so the two are the same
-                // field to anyone looking at the page.
+                // The key is masked, which is the one thing a settings field cannot say by
+                // itself: `SettingsTextField`'s `password` flag is that statement, and the
+                // field is otherwise the same box as the URL above it.
                 //
-                // The key also goes on the *command line* for a custom endpoint, and that
-                // is deliberate rather than an oversight: pi does not expand the `$VAR`
+                // The key also goes on the *command line* for a custom endpoint, and that is
+                // deliberate rather than an oversight: pi does not expand the `$VAR`
                 // reference in a `models.json` provider's `apiKey`, so a relay configured
-                // that way and given only its environment variable answers
-                // `401 无效的令牌` while the identical request with `--api-key` succeeds
-                // (measured; ARCHITECTURE §6.1). The cost is real and accepted — the key
-                // ends up in argv, which `/proc` exposes to anything that can see this
-                // app's processes — and without it a custom endpoint cannot authenticate
-                // at all.
-                OutlinedTextField(
+                // that way and given only its environment variable answers `401 无效的令牌`
+                // while the identical request with `--api-key` succeeds (measured;
+                // ARCHITECTURE §6.1). The cost is real and accepted — the key ends up in
+                // argv, which `/proc` exposes to anything that can see this app's processes —
+                // and without it a custom endpoint cannot authenticate at all.
+                SettingsTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text(text.settings.apiKey) },
+                    label = text.settings.apiKey,
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    shape = PiShapes.card,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = FIELD_INSET,
+                    password = true,
+                    keyboardType = KeyboardType.Password,
                 )
             }
 
-            // The protocol's own paragraph, and the note about pi's settings.json, are
-            // outside the frame: both are sentences about the whole endpoint rather than
-            // about the control above them, which is what `PiNotice` is for. The protocol
-            // paragraph follows the frame rather than the row it explains, because a note
-            // inside a group would break the group's own 24dp/64dp rhythm with a third
-            // left edge.
-            PiSectionHeader(
-                text = text.settings.models,
-                trailing = { PiBadge(text.settings.modelCount(models.size)) },
-            )
-            // What this provider can answer with. Choosing one — the row's
-            // whole surface — is what makes it the model the agent answers
-            // with; the ✕ takes one out of the list without touching the
-            // provider's key.
+            // What this provider can answer with. Choosing one — the row's whole surface —
+            // is what makes it the model the agent answers with; the ✕ takes one out of the
+            // list without touching the provider's key.
             //
             // The row carries **no switch**, and that is the fix rather than a
-            // simplification: a clickable row with a switch in its trailing slot
-            // runs both the row's tap and the switch's for one press, so the
-            // image switch also moved the selection — and, when the two
-            // cancelled out, looked like it did nothing. The capability has its
-            // own section below, on inert rows.
+            // simplification: a clickable row with a switch in its trailing slot runs both
+            // the row's tap and the switch's for one press, so the image switch also moved
+            // the selection — and, when the two cancelled out, looked like it did nothing.
+            // The capability has its own section below, on rows of its own.
             //
-            // Every row states the provider and the level its model would run at: the
-            // level is clamped *per model* (`thinkingLevelFor`), so two models of one
-            // provider can legitimately show two different ones, and a model row is the
-            // only place that fact can appear beside the id it is about.
-            PiGroup {
-                models.forEachIndexed { index, model ->
-                    if (index > 0) PiRowDivider()
-                    PiRow(
+            // Every row states the provider and the level its model would run at: the level
+            // is clamped *per model* (`thinkingLevelFor`), so two models of one provider can
+            // legitimately show two different ones, and a model row is the only place that
+            // fact can appear beside the id it is about.
+            SettingsSection(
+                title = text.settings.models,
+                trailing = text.settings.modelCount(models.size),
+            ) {
+                models.forEach { model ->
+                    RadioButtonPreference(
                         title = model,
-                        subtitle = modelSubtitle(
+                        summary = modelSubtitle(
                             provider?.label,
                             null,
                             thinkingLevelFor(preferences, model),
                         ),
-                        // The same mark the model row uses on the settings root: this list
-                        // is the choice that row's value stands for.
-                        leading = { Icon(PiIcons.Model, contentDescription = null) },
-                        trailing = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                if (model == activeModel) {
-                                    Icon(
-                                        Icons.Filled.Check,
-                                        contentDescription = text.settings.active,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        // 20dp, the size the picker's own tick is
-                                        // drawn at (was unsized 24dp).
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                                IconButton(onClick = { pendingRemove = model }) {
-                                    Icon(
-                                        Icons.Filled.Close,
-                                        contentDescription = text.settings.removeModel,
-                                    )
-                                }
+                        selected = model == activeModel,
+                        endActions = {
+                            IconButton(onClick = { pendingRemove = model }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Clear,
+                                    contentDescription = text.settings.removeModel,
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
                             }
                         },
                         onClick = { activeModel = model },
                     )
                 }
 
-                PiTextField(
+                SettingsTextField(
                     value = draft,
                     onValueChange = { draft = it },
                     label = text.settings.modelId,
@@ -1184,27 +997,26 @@ internal fun ModelEditPage(
                     // the *provider's* id, and a field that accepted one would produce a row
                     // nothing can be said about — the model list would be non-empty while the
                     // section above had no endpoint to ask about, which is the state the
-                    // status row was reporting as "could not read pi's catalogue". A
-                    // disabled field says the same thing before the typing rather than after
-                    // it. A profile that somehow has models and no provider — one restored
-                    // from a config file — keeps its rows readable and its ids removable;
-                    // only adding is closed.
+                    // status row was reporting as "could not read pi's catalogue". A disabled
+                    // field says the same thing before the typing rather than after it. A
+                    // profile that somehow has models and no provider — one restored from a
+                    // config file — keeps its rows readable and its ids removable; only
+                    // adding is closed.
                     enabled = provider != null,
                     placeholder = text.settings.modelIdPlaceholder,
-                    modifier = FIELD_INSET,
                 )
             }
 
-            // 8dp under the field and the page's own 12dp gutter, which is the distance
-            // every other action row in the settings keeps from the control above it. The
-            // pair used to be inset 12h/10v here and 8v elsewhere, which put these two
-            // buttons nearer to the field than every other action row in the app.
-            PiGap(8.dp)
+            // 8dp under the field and the page's own gutter, which is the distance every
+            // other action row in the settings keeps from the control above it.
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PiButton(
+                SettingsButton(
                     text = text.settings.addModel,
                     onClick = {
                         val id = draft.trim()
@@ -1213,266 +1025,163 @@ internal fun ModelEditPage(
                             prefill = if (isCustomEndpoint) prefillFrom(customIdFacts[id]) else null,
                         )
                     },
-                    kind = PiButtonKind.Filled,
-                    size = PiButtonSize.Small,
                     enabled = draft.isNotBlank() && provider != null,
-                    leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    primary = true,
                 )
                 // The runner-up, not a second primary: one filled action per screen is the
                 // design's own rule, and adding an id by hand is what this pair is really
                 // for — the fetch is the shortcut.
-                PiButton(
+                SettingsButton(
                     text = text.settings.fetchModels,
                     onClick = {
                         val chosen = provider
                         if (chosen == null) {
-                            // One sentence about the press, so a toast: see the note on
-                            // `discoveryError` for why the failures are a dialog.
-                            toasts.show(text.settings.chooseProviderFirst)
-                            return@PiButton
-                        }
-                        discoveryError = null
-                        fetching = true
-                        scope.launch {
-                            when (
-                                val result = discovery.discover(
-                                    provider = chosen,
-                                    apiKey = apiKey,
-                                    baseUrl = baseUrl.trim(),
-                                )
-                            ) {
-                                is ModelDiscovery.Success -> {
-                                    sheets.show(
-                                        Sheet(key = "model-picker", fullBleedBottom = true) {
-                                            ModelPickerSheet(
-                                                models = result.models,
-                                                // The source of each entry is shown rather than
-                                                // hidden: a model from pi's catalog is not
-                                                // guaranteed to be one the key can use, and the
-                                                // user is the only one who can decide whether
-                                                // that is worth trying.
-                                                footnote = if (
-                                                    result.models.any { it.source == ModelSource.PROVIDER }
-                                                ) {
-                                                    text.settings.fromProvider
-                                                } else {
-                                                    text.settings.fromCatalog
-                                                },
-                                                onPick = { model ->
-                                                    // The picker already shows each
-                                                    // model's window and image
-                                                    // capability; picking one is the
-                                                    // moment those become the
-                                                    // controls' starting point rather
-                                                    // than a caption that vanishes.
-                                                    //
-                                                    // A catalogue match wins over the
-                                                    // `/models` answer: the store
-                                                    // carries `cost`,
-                                                    // `thinkingLevelMap` and
-                                                    // `samplingParams` too, and those
-                                                    // are what the entry has to name
-                                                    // for the id to behave like the
-                                                    // model it shares a name with.
-                                                    addModel(
-                                                        model.id,
-                                                        prefill = prefillFrom(customIdFacts[model.id])
-                                                            ?: ModelSettings(
-                                                                images = model.supportsImages
-                                                                    .takeIf { it },
-                                                                contextWindow = model.contextWindow,
-                                                                maxTokens = null,
-                                                                inherited = buildJsonObject {
-                                                                    if (model.reasoning) {
-                                                                        put("reasoning", true)
-                                                                    }
-                                                                    model.contextWindow?.let {
-                                                                        put("contextWindow", it)
-                                                                    }
-                                                                }.takeIf { it.isNotEmpty() },
-                                                            ),
-                                                    )
-                                                },
-                                            )
-                                        },
-                                    )
-                                }
-                                is ModelDiscovery.Failure ->
-                                    discoveryError = result.problems
-                                        .joinToString("\n\n") { text.settings.discoveryProblem(it) }
-                            }
-                            fetching = false
-                        }
-                    },
-                    kind = PiButtonKind.Tonal,
-                    size = PiButtonSize.Small,
-                    enabled = !fetching && provider != null,
-                    leadingIcon = {
-                        // The label stays put while the call runs: swapping
-                        // "获取模型列表" for "获取中…" resized the button and shifted
-                        // the one beside it. The mark carries the busy state, and it
-                        // is the app's own indicator rather than a Material spinner.
-                        if (fetching) {
-                            PiLoading(size = 18.dp)
+                            // One sentence about the press, so a toast: the failures below
+                            // are a dialog because a provider can answer with two paragraphs.
+                            toasts?.show(text.settings.chooseProviderFirst)
                         } else {
-                            Icon(Icons.Filled.Search, contentDescription = null)
+                            discoveryError = null
+                            fetching = true
+                            scope.launch {
+                                when (
+                                    val result = discovery.discover(
+                                        provider = chosen,
+                                        apiKey = apiKey,
+                                        baseUrl = baseUrl.trim(),
+                                    )
+                                ) {
+                                    is ModelDiscovery.Success -> {
+                                        fetched = result.models
+                                        // The source of each entry is shown rather than
+                                        // hidden: a model from pi's catalog is not guaranteed
+                                        // to be one the key can use, and the user is the only
+                                        // one who can decide whether that is worth trying.
+                                        fetchedFootnote = if (
+                                            result.models.any { it.source == ModelSource.PROVIDER }
+                                        ) {
+                                            text.settings.fromProvider
+                                        } else {
+                                            text.settings.fromCatalog
+                                        }
+                                        modelPicker = true
+                                    }
+
+                                    is ModelDiscovery.Failure ->
+                                        discoveryError = result.problems
+                                            .joinToString("\n\n") { text.settings.discoveryProblem(it) }
+                                }
+                                fetching = false
+                            }
                         }
                     },
+                    enabled = !fetching && provider != null,
                 )
+                // The label stays put while the call runs: swapping "获取模型列表" for
+                // "获取中…" resized the button and shifted the one beside it. The spinner is
+                // the mark that carries the busy state, and the word beside it is the sheet
+                // it opened.
+                if (fetching) {
+                    SettingsWorking(modifier = Modifier.padding(start = 4.dp))
+                }
             }
 
-            discoveryError?.let { message ->
-                AlertDialog(
-                    onDismissRequest = { discoveryError = null },
-                    title = { Text(text.settings.fetchModels) },
-                    text = {
-                        Text(
-                            message,
-                            // Bounded and scrolled inside the bound: a provider that
-                            // answered with two failures produces two paragraphs, and
-                            // an unbounded body pushes the acknowledgement off the
-                            // bottom — the same treatment the installer's warnings get.
-                            modifier = Modifier
-                                .heightIn(max = 320.dp)
-                                .verticalScroll(rememberScrollState()),
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { discoveryError = null }) { Text(text.common.ok) }
-                    },
-                )
-            }
-
-            // Its own section, and one *group* of rows per model: the model's name, the
-            // image switch, and the two numbers. The switch cannot live in the trailing
-            // slot of the model list's rows — that pattern runs the row's tap and the
-            // switch's for one press, so the same tap changed the selection and toggled
-            // the capability — and it was tried, which is why this page's model list says
-            // so.
+            // Its own section, and one *card* of rows per model: the model's name, the image
+            // switch, and the two numbers. The switch cannot live in the trailing slot of the
+            // model list's rows — that pattern runs the row's tap and the switch's for one
+            // press, so the same tap changed the selection and toggled the capability — and
+            // it was tried, which is why this page's model list says so.
             //
             // ## The shape, and what it replaced
             //
             // The three controls used to be a switch row with the model id in its value
-            // column, followed by two outlined boxes side by side on a 12dp inset of their
-            // own. Three problems, and the rewrite is one answer to all of them:
+            // column, followed by two outlined boxes side by side on an inset of their own.
+            // Three problems, and the rewrite is one answer to all of them:
             //
             //  * **Nothing named the group.** With two declarable models the page drew
-            //    switch/boxes/divider/switch/boxes, and the boxes belonged to a model only
-            //    by position.
-            //  * **The boxes did not line up with anything.** Every other row starts at a
-            //    24dp mark with a 16dp gap; the fields started at 12dp, so the frame's left
-            //    edge was ragged in two places.
+            //    switch/boxes/divider/switch/boxes, and the boxes belonged to a model only by
+            //    position.
+            //  * **The boxes did not line up with anything.** Every other row starts at the
+            //    row's own text column; the fields started at the card's edge, so the frame's
+            //    left edge was ragged in two places.
             //  * **Two floating labels and two numbers is a lot of furniture** for an
             //    advanced setting, and the numbers are the rare half of it.
             //
-            // So a model is now a group of rows of its own: a heading row (its id, with the
-            // rule that applies to it underneath — the same two sentences the switch and the
-            // catalogue rows used to carry separately), then its rows: the switch, and the
-            // two numbers as ordinary rows whose value is the number, edited in a sheet. A
-            // row is 54dp tall and a field is 56dp plus its padding, so this is also the
-            // shorter of the two layouts — and the sheet is where the app already edits one
-            // value at a time (`WebSearchValueSheet`), keyboard and focus included.
-            //
-            // The two number rows carry no icon and are indented to where the *title* of
-            // the row above starts, which is what makes them read as that switch's
-            // continuation rather than as two more subjects.
+            // So a model is now a card of rows of its own: a heading row (its id, with the
+            // rule that applies to it underneath), then its rows: the switch, and the two
+            // numbers as ordinary rows whose value is the number, edited in a sheet. A row is
+            // shorter than a field plus its padding, and the sheet is where the app already
+            // edits one value at a time, keyboard and focus included.
             //
             // ## Nothing is drawn before there is an answer
             //
-            // The controls used to be drawn from the first frame, disabled, with a subtitle
+            // The controls used to be drawn from the first frame, disabled, with a summary
             // that said "reading…". Measured against the report: three states in a row — a
             // block of inert switches and empty number fields saying "cannot be filled in
             // yet", the same block saying "reading…", and then the real thing — so the
-            // section visibly *jumped* on every visit, and the jump was the tallest state
-            // of a card whose content the user could not touch. A state that cannot be
-            // acted on should not be drawn at all: until the answer is in, this is one
-            // status row, and it is tappable so a failed check can be asked again.
-            //
-            // The rule behind it is worth stating once: the controls describe what will be
-            // *written* to pi's file, and what gets written depends on the answer, so a
-            // control drawn before the answer is a control whose meaning is not known yet.
-            PiSectionHeader(text.settings.imageInputSection)
+            // section visibly *jumped* on every visit, and the jump was the tallest state of
+            // a card whose content the user could not touch. A state that cannot be acted on
+            // should not be drawn at all: until the answer is in, this is one status row, and
+            // it is tappable so a failed check can be asked again.
+            SmallTitle(text = text.settings.imageInputSection)
             if (needsProvider) {
-                PiGap(8.dp)
-                // The honest subject. The catalogue was never the problem, and the row
-                // is not tappable because there is nothing to retry: the missing half
-                // is the provider, which is a control above this one.
-                PiGroup {
-                    PiRow(
+                // The honest subject. The catalogue was never the problem, and the row is
+                // not tappable because there is nothing to retry: the missing half is the
+                // provider, which is a control above this one.
+                PiSection {
+                    BasicComponent(
                         title = text.settings.catalogueTitle,
-                        subtitle = text.settings.needProviderSubtitle,
-                        leading = { Icon(Icons.Filled.Key, contentDescription = null) },
+                        summary = text.settings.needProviderSubtitle,
                     )
                 }
             } else if (awaitingCatalogue) {
-                PiGap(8.dp)
-                PiGroup {
-                    PiRow(
+                PiSection {
+                    BasicComponent(
                         title = text.settings.catalogueTitle,
                         // The reason when there is one, because "could not read it" alone
                         // leaves the reader with nothing to act on: a `pi` that would not
                         // start, a scratch directory that could not be made and an empty
                         // answer are three different problems with three different fixes.
-                        subtitle = when {
+                        summary = when {
                             catalogueChecking -> text.settings.imageInputChecking
                             catalogueError != null ->
                                 text.settings.discoveryProblem(catalogueError!!)
                             else -> text.settings.imageInputUnavailable
                         },
-                        // The subject of the row is the catalogue, so the mark is the
-                        // magnifier the model list's own "Fetch models" button carries
-                        // rather than the picture icon the image switch uses.
-                        leading = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        // The app's own indicator while the answer is coming, and the app's
-                        // usual "this row can be tapped" chevron when it did not come: the
-                        // failure is an action, not a page, so the alternative would be
-                        // another custom vector for one row. The indicator is 20dp, the box
-                        // the chevron it replaces draws in, so the row does not change size
-                        // when the mark swaps; it is absent while the check is running,
-                        // because a retry then would queue a second process behind the first.
-                        trailing = if (catalogueChecking) {
-                            { PiLoading(size = 20.dp) }
-                        } else {
-                            null
+                        // The app's own indicator while the answer is coming, and no control
+                        // when it did not come: a retry while the check is running would queue
+                        // a second process behind the first, so the row is inert then.
+                        endActions = {
+                            if (catalogueChecking) SettingsWorking()
                         },
                         onClick = if (catalogueChecking) null else { { retries++ } },
                     )
                 }
             } else {
-                PiGap(8.dp)
                 if (models.isEmpty()) {
-                    // No model listed yet: the section still needs a row, or a
-                    // paragraph floating under a heading reads as a rendering fault.
-                    // The row is informational — the same shape the model list's own
-                    // intro row uses.
-                    PiGroup {
-                        PiRow(
+                    // No model listed yet: the section still needs a row, or a paragraph
+                    // floating under a heading reads as a rendering fault. The row is
+                    // informational — the same shape the model list's own intro row uses.
+                    PiSection {
+                        BasicComponent(
                             title = text.settings.imageInput,
-                            subtitle = text.settings.noModelChosen,
-                            leading = { Icon(Icons.Filled.Image, contentDescription = null) },
+                            summary = text.settings.noModelChosen,
                         )
                     }
                 }
-                models.forEachIndexed { index, current ->
-                    // An id pi's catalogue contains is *not* a different kind of model
-                    // to the user: it is a model with three parameters, and this page
-                    // is where they are changed. What differs is which mechanism
-                    // carries the change — a `modelOverrides` entry, which pi merges
-                    // field by field, for an id it resolved; a `models` entry, which
-                    // has to stand alone, for one it did not — and that is the writer's
-                    // problem, not the reader's. See `modelDefinitions`.
-                    //
-                    // The controls used to be omitted entirely for a catalogued id,
-                    // with a row saying "pi's catalog already lists this model". That
-                    // is true and was the wrong conclusion: pi's entry is the
-                    // *starting point*, and there was no way to say the catalogue's
-                    // window is wrong for the endpoint in front of you.
+                models.forEach { current ->
+                    // An id pi's catalogue contains is *not* a different kind of model to the
+                    // user: it is a model with three parameters, and this page is where they
+                    // are changed. What differs is which mechanism carries the change — a
+                    // `modelOverrides` entry, which pi merges field by field, for an id it
+                    // resolved; a `models` entry, which has to stand alone, for one it did
+                    // not — and that is the writer's problem, not the reader's. See
+                    // `modelDefinitions`.
                     val known = catalogueIds?.contains(current) == true
-                    // The numbers this model actually has. A built-in provider answers
-                    // from its own catalogue; a custom endpoint answers from
-                    // `customIdFacts` — the same id under whichever provider catalogues
-                    // it — and only an id nothing names falls through to the fallback
-                    // model (which a custom endpoint does not have either).
+                    // The numbers this model actually has. A built-in provider answers from
+                    // its own catalogue; a custom endpoint answers from `customIdFacts` — the
+                    // same id under whichever provider catalogues it — and only an id nothing
+                    // names falls through to the fallback model (which a custom endpoint does
+                    // not have either).
                     val facts = if (isCustomEndpoint) {
                         customIdFacts[current]
                     } else {
@@ -1480,86 +1189,60 @@ internal fun ModelEditPage(
                     }
                     val window = facts.number("contextWindow") ?: fallbackFacts.number("contextWindow")
                     val max = facts.number("maxTokens") ?: fallbackFacts.number("maxTokens")
-                    // Nothing is known about this id and the throwaway pi that would have
-                    // told us what it resolves to could not run. The controls are withheld
-                    // rather than drawn empty: a definition written without the fallback's
-                    // facts names pi's hard-coded 128k/16k for a model whose real window
-                    // nobody asked about, which is the bug this whole path is written
-                    // around. The heading row below says which of the two this row is, and
-                    // the status row above explains why there is no answer.
+                    // Nothing is known about this id and the throwaway pi that would have told
+                    // us what it resolves to could not run. The controls are withheld rather
+                    // than drawn empty: a definition written without the fallback's facts
+                    // names pi's hard-coded 128k/16k for a model whose real window nobody asked
+                    // about, which is the bug this whole path is written around. The heading
+                    // row below says which of the two this row is, and the status row above
+                    // explains why there is no answer.
                     val declarable = isCustomEndpoint || known || facts != null || fallbackFacts != null
 
-                    if (index > 0) PiGap(8.dp)
-                    PiGroup {
-                        PiRow(
+                    PiSection {
+                        BasicComponent(
                             title = current,
-                            subtitle = if (known) {
+                            summary = if (known) {
                                 text.settings.imageInputCatalogRow
                             } else {
                                 text.settings.imageInputRowSubtitle
                             },
-                            leading = { Icon(PiIcons.Model, contentDescription = null) },
                         )
                         if (declarable) {
-                            PiRowDivider()
-                            PiSwitchRow(
+                            SwitchPreference(
                                 title = text.settings.imageInput,
                                 // Null is "the user has not said", and what the switch shows
-                                // then is what the model would have had anyway: the catalogue's
-                                // own capability list for a model it describes, the fallback's
-                                // for one it does not.
+                                // then is what the model would have had anyway: the
+                                // catalogue's own capability list for a model it describes,
+                                // the fallback's for one it does not.
                                 checked = settings[current]?.images
                                     ?: (facts ?: fallbackFacts).hasImageInput(),
                                 onCheckedChange = { on ->
                                     settings = settings.withImages(current, on)
                                 },
-                                leading = { Icon(Icons.Filled.Image, contentDescription = null) },
                             )
-                            // Both dividers keep `PiRowDivider`'s inset, which is where the two
-                            // rules meet: the line begins at 64dp, which is the title column of
-                            // a row that has a mark *and* the text column of an indented row
-                            // that does not — see `NUMBER_ROW_INDENT`.
-                            PiRowDivider()
                             ModelNumberRow(
                                 title = text.settings.contextWindowLabel,
                                 set = settings[current]?.contextWindow,
                                 fallback = window,
                                 unknown = text.settings.unknown,
                                 onClick = {
-                                    sheets.show(
-                                        Sheet(key = "model-window:$current") {
-                                            ModelNumberSheet(
-                                                title = text.settings.contextWindowLabel,
-                                                model = current,
-                                                initial = settings[current]?.contextWindow?.toString().orEmpty(),
-                                                fallback = window,
-                                                onSave = { value ->
-                                                    settings = settings.withWindow(current, value)
-                                                },
-                                            )
-                                        },
+                                    editingNumber = NumberEdit(
+                                        model = current,
+                                        maxTokens = false,
+                                        fallback = window,
                                     )
                                 },
                             )
-                            PiRowDivider()
                             ModelNumberRow(
                                 title = text.settings.maxTokensLabel,
                                 set = settings[current]?.maxTokens,
                                 fallback = max,
                                 unknown = text.settings.unknown,
                                 onClick = {
-                                    sheets.show(
-                                        Sheet(key = "model-max:$current") {
-                                            ModelNumberSheet(
-                                                title = text.settings.maxTokensLabel,
-                                                model = current,
-                                                initial = settings[current]?.maxTokens?.toString().orEmpty(),
-                                                fallback = max,
-                                                onSave = { value ->
-                                                    settings = settings.withMaxTokens(current, value)
-                                                },
-                                            )
-                                        },
+                                    editingNumber = NumberEdit(
+                                        model = current,
+                                        maxTokens = true,
+                                        fallback = max,
                                     )
                                 },
                             )
@@ -1568,110 +1251,253 @@ internal fun ModelEditPage(
                 }
             }
 
-            // Cancel and Save sit together on the right — the primary last — rather than
-            // split across the row, which put the secondary action on the far left where the
-            // eye does not look for a pair. Ask the same question the back arrow does, because
-            // Cancel is the same action: this button has always meant "leave without saving".
-            //
-            // **`Small`, and that is the whole of what this row was getting wrong.** The
-            // pair used to be Material's `Medium` — 56dp tall — which made the two controls
-            // at the foot of this form a size larger than *every* other action pair in the
-            // settings: `RunActions` on the maintenance and backup pages, the AGENTS.md
-            // editor's Restore-and-Save, and the document editor's Revert-and-Save are all
-            // `Small`, because a page's own actions are one component at one weight rather
-            // than one weight per page (§9.2).
-            PiGap(12.dp)
+            // Cancel and Save sit together on the trailing edge — the primary last — rather
+            // than split across the row, which put the secondary action on the far left where
+            // the eye does not look for a pair. Ask the same question the back arrow does,
+            // because Cancel is the same action: this button has always meant "leave without
+            // saving".
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 12.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PiButton(
+                SettingsButton(
                     text = text.settings.cancel,
                     onClick = ::requestLeave,
-                    kind = PiButtonKind.Outlined,
-                    size = PiButtonSize.Small,
                 )
-                PiButton(
+                SettingsButton(
                     text = text.settings.save,
                     onClick = { if (save()) leave() },
-                    size = PiButtonSize.Small,
+                    primary = true,
                 )
             }
-            PiGap(12.dp)
         }
     }
 
-    // The model row's ✕, asked about. Its own dialog rather than the profile delete's: the
-    // two are different actions with different consequences, and the borrowed strings said
-    // "Delete profile?" while naming the profile — neither of which was what the button did.
-    pendingRemove?.let { target ->
-        AlertDialog(
-            onDismissRequest = { pendingRemove = null },
-            title = { Text(text.settings.removeModelTitle) },
-            text = { Text(text.settings.removeModelBody(target)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    removeModel(target)
-                    pendingRemove = null
-                }) {
-                    Text(text.settings.removeModel, color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemove = null }) { Text(text.settings.cancel) }
-            },
-        )
+    // The provider list: pi ships more than thirty providers that take a single key,
+    // regional variants of one service included, so the list is filtered rather than
+    // compared. The sheet matches the label and pi's own provider id, which is the string a
+    // reader may have from the docs instead of from this app.
+    SettingsPickerSheet(
+        show = providerPicker,
+        title = text.settings.provider,
+        subtitle = text.settings.providerSubtitle,
+        options = PiProvider.entries.map { SettingsPick(id = it.id, label = it.label) },
+        selectedId = provider?.id,
+        searchHint = text.settings.providerPickSearch,
+        onPick = { id ->
+            providerPicker = false
+            val entry = PiProvider.entries.firstOrNull { it.id == id }
+            if (entry != null && entry != provider) {
+                provider = entry
+                // Model ids are provider-specific: a list built for one provider is not a
+                // list for another, and pi would reject every entry in it. The list is
+                // emptied rather than carried across, and the key is deliberately *not*
+                // cleared — switching to the same account's other endpoint is the case this
+                // page exists for.
+                models = emptyList()
+                activeModel = ""
+                // The three declarations are keyed by *model id* and nothing else, so they
+                // cannot tell one provider's `gpt-4o` from another's: carrying them across a
+                // switch applied the window and the image switch the user had set for
+                // provider A to the same id on provider B. That is a statement about a model
+                // they never made, and it is written into pi's file for B — so they go with
+                // the list, and the half-typed id goes too (it was for the provider just
+                // left).
+                settings = emptyMap()
+                draft = ""
+                // The endpoint goes with the provider for the same reason, and more sharply
+                // since the field became an *override*: a relay URL typed for `pikit-custom`
+                // kept on the form and saved against DeepSeek would rewrite every DeepSeek
+                // model to that relay (`applyModelsJson`). The withdrawal record goes too — it
+                // belongs to the provider just left, and a blank one here would leave that
+                // provider's override in pi's file for ever.
+                baseUrl = ""
+                // Same reason as the URL: an `anthropic-messages` choice left on the form
+                // after a switch to DeepSeek is a statement about a relay this profile no
+                // longer has.
+                api = ""
+            }
+        },
+        onDismiss = { providerPicker = false },
+    )
+
+    // Three options, so there is no filter: a search field over three rows is a control whose
+    // only effect is to hide the answer. The labels are pi's own identifiers and are not
+    // translated — they are the strings in pi's `docs/models.md` and in the relay's own
+    // documentation, and the two have to match (see `CustomApi`).
+    SettingsPickerSheet(
+        show = apiPicker,
+        title = text.settings.apiType,
+        subtitle = text.settings.apiTypeSubtitle,
+        options = CustomApi.entries.map { SettingsPick(id = it.id, label = it.id) },
+        selectedId = CustomApi.fromId(api).id,
+        onPick = { id ->
+            apiPicker = false
+            api = id
+        },
+        onDismiss = { apiPicker = false },
+    )
+
+    // The fetched list. The title is the *count* rather than the word "models": the sheet was
+    // opened by a button that already says what it fetched, and how many rows came back is
+    // the fact the reader cannot see from behind the panel. The ids are the list's own
+    // indices because an id can appear twice — once from the provider and once from pi's own
+    // catalog — and a picker keyed on the id itself would then have two rows with one key.
+    SettingsPickerSheet(
+        show = modelPicker,
+        title = text.settings.modelCount(fetched.size),
+        subtitle = fetchedFootnote,
+        options = fetched.mapIndexed { index, model ->
+            SettingsPick(
+                id = index.toString(),
+                label = model.id,
+                description = capabilityLine(model, text),
+            )
+        },
+        selectedId = null,
+        searchHint = text.settings.modelPickSearch,
+        onPick = { key ->
+            modelPicker = false
+            val model = fetched.getOrNull(key.toIntOrNull() ?: -1)
+            if (model != null) {
+                // The picker already shows each model's window and image capability; picking
+                // one is the moment those become the controls' starting point rather than a
+                // caption that vanishes.
+                //
+                // A catalogue match wins over the `/models` answer: the store carries
+                // `cost`, `thinkingLevelMap` and `samplingParams` too, and those are what the
+                // entry has to name for the id to behave like the model it shares a name with.
+                addModel(
+                    model.id,
+                    prefill = prefillFrom(customIdFacts[model.id])
+                        ?: ModelSettings(
+                            images = model.supportsImages.takeIf { it },
+                            contextWindow = model.contextWindow,
+                            maxTokens = null,
+                            inherited = buildJsonObject {
+                                if (model.reasoning) put("reasoning", true)
+                                model.contextWindow?.let { put("contextWindow", it) }
+                            }.takeIf { it.isNotEmpty() },
+                        ),
+                )
+            }
+        },
+        onDismiss = { modelPicker = false },
+    )
+
+    // One number, typed in a sheet. A sheet rather than a dialog because the keyboard has to
+    // stay up and the field has to keep focus.
+    val edit = editingNumber
+    PiSheet(
+        show = edit != null,
+        title = edit?.let {
+            if (it.maxTokens) text.settings.maxTokensLabel else text.settings.contextWindowLabel
+        },
+        onDismiss = { editingNumber = null },
+    ) {
+        if (edit != null) {
+            ModelNumberBody(
+                label = if (edit.maxTokens) {
+                    text.settings.maxTokensLabel
+                } else {
+                    text.settings.contextWindowLabel
+                },
+                model = edit.model,
+                initial = (
+                    if (edit.maxTokens) settings[edit.model]?.maxTokens
+                    else settings[edit.model]?.contextWindow
+                    )?.toString().orEmpty(),
+                fallback = edit.fallback,
+                text = text,
+                onSave = { value ->
+                    settings = if (edit.maxTokens) {
+                        settings.withMaxTokens(edit.model, value)
+                    } else {
+                        settings.withWindow(edit.model, value)
+                    }
+                    editingNumber = null
+                },
+            )
+        }
     }
 
-    if (askingToSave) {
-        // Two buttons, and no third: the dialog's question is what to do with the edits,
-        // and its Cancel would be the third meaning of the same word on this screen —
-        // the page's own Cancel already means "leave without saving". Back and a tap
-        // outside stay on the page, which is the third answer, without a button saying
-        // so.
-        //
-        // What the first button *is* depends on whether the form can be stored at all.
-        // Offering Save on a form that [refusal] refuses is a loop with no exit: the press
-        // fails, its reason is written at the bottom of the page the dialog is still
-        // covering, and the user is back at the same question. So the refusal is the
-        // dialog's own body and the answer is "keep editing" — the one action that makes
-        // the other button possible.
-        val refused = refusal()
-        AlertDialog(
-            onDismissRequest = { askingToSave = false },
-            title = { Text(text.settings.unsavedTitle) },
-            text = { Text(refused ?: text.settings.unsavedBody) },
-            confirmButton = {
-                if (refused == null) {
-                    TextButton(
-                        onClick = {
-                            askingToSave = false
-                            if (save()) leave()
-                        },
-                    ) { Text(text.settings.save) }
-                } else {
-                    // Stays on the page, which is where the missing field is.
-                    TextButton(onClick = { askingToSave = false }) {
-                        Text(text.settings.keepEditing)
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        askingToSave = false
-                        leave()
-                    },
-                ) {
-                    Text(
-                        text.settings.discard,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-        )
+    // The fetched list's failure: a provider that answered with an auth failure and a wrong
+    // endpoint produces two paragraphs, and a pill that disappears after three seconds is not
+    // where a reader can read two paragraphs. Bounded and scrolled inside the bound, because
+    // an unbounded body pushes the acknowledgement off the bottom.
+    val failure = discoveryError
+    WindowDialog(
+        show = failure != null,
+        title = text.settings.fetchModels,
+        onDismissRequest = { discoveryError = null },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Text(
+                text = failure.orEmpty(),
+                modifier = Modifier
+                    .heightIn(max = DISCOVERY_FAILURE_MAX)
+                    .verticalScroll(rememberScrollState()),
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.error,
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+            TextButton(
+                text = text.common.ok,
+                onClick = { discoveryError = null },
+                modifier = Modifier.fillMaxWidth(),
+                colors = flatDialogAction(),
+            )
+        }
     }
+
+    // The model row's ✕, asked about. Its own question rather than the profile delete's: the
+    // two are different actions with different consequences, and the borrowed strings said
+    // "Delete profile?" while naming the profile — neither of which was what the button did.
+    val removing = pendingRemove
+    PiConfirm(
+        show = removing != null,
+        title = text.settings.removeModelTitle,
+        text = text.settings.removeModelBody(removing.orEmpty()),
+        confirm = text.settings.removeModel,
+        dismiss = text.settings.cancel,
+        destructive = true,
+        onConfirm = {
+            removing?.let { removeModel(it) }
+            pendingRemove = null
+        },
+        onDismiss = { pendingRemove = null },
+    )
+
+    // Two buttons, and no third: the dialog's question is what to do with the edits, and its
+    // Cancel would be the third meaning of the same word on this screen — the page's own
+    // Cancel already means "leave without saving". Back and a tap outside stay on the page,
+    // which is the third answer, without a button saying so.
+    //
+    // What the first button *is* depends on whether the form can be stored at all. Offering
+    // Save on a form that `refusal` refuses is a loop with no exit: the press fails, its
+    // reason is written at the bottom of the page the dialog is still covering, and the user
+    // is back at the same question. So the refusal is the dialog's own body and the answer is
+    // "keep editing" — the one action that makes the other button possible.
+    val refused = refusal()
+    PiConfirm(
+        show = askingToSave,
+        title = text.settings.unsavedTitle,
+        text = refused ?: text.settings.unsavedBody,
+        confirm = if (refused == null) text.settings.save else text.settings.keepEditing,
+        dismiss = text.settings.discard,
+        onConfirm = {
+            askingToSave = false
+            if (refused == null && save()) leave()
+        },
+        onDismiss = {
+            askingToSave = false
+            leave()
+        },
+    )
 }
 
 /**
@@ -1689,240 +1515,23 @@ private fun modelSubtitle(provider: String?, modelId: String?, level: String?): 
         level?.takeIf { it.isNotBlank() },
     ).joinToString(" · ")
 
-/**
- * The provider picker, as a sheet body.
- *
- * A list to *search* rather than a handful of rows to compare: pi ships more than thirty
- * providers that take a single key, regional variants of one service included. The filter
- * is local to the sheet — a question asked right now — so a sheet opened again starts with
- * the whole list rather than with the last search still hiding it, and it matches the label
- * and pi's own provider id, which is the string a reader may have from the docs instead of
- * from this app.
- *
- * The tick is the app's choice mark and nothing else: `PiSheetRow` draws it, the profile
- * list draws the same one at the same 20dp, and a filled row was rejected — in this palette
- * a `secondaryContainer` fill on a `surfaceContainerLow` panel is a 3% difference that reads
- * as a rendering artifact rather than as a selection.
- *
- * The body owns its own `Column` because the layer hands the sheet's content a `Box`: three
- * siblings in it would be drawn on top of one another, and the body is what knows the order
- * its own parts go in.
- */
-@Composable
-private fun ProviderPickerSheet(
-    selectedId: String?,
-    onPick: (PiProvider) -> Unit,
-) {
-    val text = strings
-    val host = LocalSheetHost.current
-    var query by remember { mutableStateOf("") }
-    val needle = query.trim()
-    val shown = if (needle.isEmpty()) {
-        PiProvider.entries.toList()
-    } else {
-        PiProvider.entries.filter { entry ->
-            entry.label.contains(needle, ignoreCase = true) ||
-                entry.id.contains(needle, ignoreCase = true)
-        }
-    }
 
-    Column(SHEET_BODY_PADDING) {
-        PiSheetTitle(title = text.settings.provider, subtitle = text.settings.providerSubtitle)
-        PiSearchField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = text.settings.providerPickSearch,
-            clearContentDescription = text.common.clear,
-            modifier = FIELD_INSET,
-        )
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            PiSheetList(Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION)) {
-                shown.forEach { entry ->
-                    item(key = entry.id) {
-                        PiSheetRow(
-                            label = entry.label,
-                            selected = entry.id == selectedId,
-                            onClick = {
-                                // Dismissed before the pick is applied, which is the order a leaving
-                                // panel needs: the pick is what the user meant, so it must not wait
-                                // for the panel's animation, and the row must stop taking taps.
-                                host.dismiss()
-                                onPick(entry)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * The custom endpoint's wire-protocol picker, as a sheet body.
- *
- * The labels are pi's own identifiers and are not translated: they are the strings in pi's
- * `docs/models.md` and in the relay's own documentation, and the two have to match — see
- * [CustomApi]. Three options, so there is no filter: a search field over three rows is a
- * control whose only effect is to hide the answer.
- */
-@Composable
-private fun ApiTypePickerSheet(
-    selectedId: String,
-    onPick: (String) -> Unit,
-) {
-    val text = strings
-    val host = LocalSheetHost.current
-
-    Column(SHEET_BODY_PADDING) {
-        PiSheetTitle(title = text.settings.apiType, subtitle = text.settings.apiTypeSubtitle)
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            PiSheetList(Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION)) {
-                CustomApi.entries.forEach { entry ->
-                    item(key = entry.id) {
-                        PiSheetRow(
-                            label = entry.id,
-                            selected = entry.id == selectedId,
-                            onClick = {
-                                host.dismiss()
-                                onPick(entry.id)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * The fetched model list, as a sheet body.
- *
- * The title is the *count* rather than the word "models": the sheet was opened by a button
- * that already says what it fetched, and how many rows came back is the fact the reader
- * cannot see from behind the panel. The count is the answer's, not the filter's, for the
- * same reason the panel is dismissed when a row is picked.
- *
- * Each row's second line is the source of the entry — reported by the provider, or read out
- * of pi's own catalog — because a catalog model is not guaranteed to be one this key can
- * use, and the user is the only one who can decide whether that is worth trying.
- *
- * The filter is here for the same reason the provider picker has one: the fetched list is
- * both sources merged, and on a well-catalogued provider that is well over a hundred rows,
- * so *finding* a model is the problem rather than choosing between them.
- */
-@Composable
-private fun ModelPickerSheet(
-    models: List<DiscoveredModel>,
-    footnote: String,
-    onPick: (DiscoveredModel) -> Unit,
-) {
-    val text = strings
-    val host = LocalSheetHost.current
-    var query by remember { mutableStateOf("") }
-    val needle = query.trim()
-    val shown = if (needle.isEmpty()) {
-        models
-    } else {
-        models.filter { model ->
-            model.id.contains(needle, ignoreCase = true) ||
-                model.name.contains(needle, ignoreCase = true) ||
-                model.source.label.contains(needle, ignoreCase = true)
-        }
-    }
-
-    Column(SHEET_BODY_PADDING) {
-        PiSheetTitle(
-            title = text.settings.modelCount(models.size),
-            subtitle = footnote,
-        )
-        PiSearchField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = text.settings.modelPickSearch,
-            clearContentDescription = text.common.clear,
-            modifier = FIELD_INSET,
-        )
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            PiSheetList(Modifier.heightIn(max = maxHeight * SHEET_LIST_FRACTION)) {
-                // Keyed on the index *and* the source, because an id can appear twice — once
-                // from the provider and once from pi's own catalog — and the same id twice
-                // would key two rows identically, which `LazyColumn` refuses outright.
-                shown.forEachIndexed { index, model ->
-                    item(key = "$index:${model.source}:${model.id}") {
-                        PiSheetRow(
-                            label = model.id,
-                            subtitle = capabilityLine(model, text),
-                            onClick = {
-                                host.dismiss()
-                                onPick(model)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 /** The digits of [raw], and at most [MAX_TOKEN_DIGITS] of them: all a token count may be. */
 private fun tokenDigits(raw: String): String = raw.filter { it.isDigit() }.take(MAX_TOKEN_DIGITS)
 
 /**
- * A sheet body's own frame: full width.
+ * One of a model's two numbers, as a row.
  *
- * The layer hands a sheet's content a `Box`, so a body with more than one part has to be a
- * `Column` itself — two siblings in a `Box` are drawn on top of each other. There is no
- * bottom padding here: these bodies end in a scrolling list, and `PiSheetList` carries the
- * panel's bottom inset as the list's own content padding, so the rows scroll flush to the
- * window's edge instead of stopping behind a band of empty panel (the report "滑动时文字
- * 不会直接触底而是会被底下一个白色条块遮挡"). A body with a *tail* after its list — this
- * file's forms — pads itself instead; see `SHEET_FORM_PADDING`.
- */
-private val SHEET_BODY_PADDING = Modifier
-    .fillMaxWidth()
-
-/** The same frame for a body whose last line is a button row, which brings its own padding. */
-private val SHEET_FORM_PADDING = Modifier
-    .fillMaxWidth()
-    .padding(bottom = 8.dp)
-
-/**
- * The share of the height a sheet may take that its list is allowed to fill: 60%.
+ * The value is the user's number, or — muted — the number pi will use while the user has
+ * said nothing. That difference is the whole of what an empty field used to mean, and it was
+ * previously invisible: the boxes were pre-filled with the fallback, so a number the user had
+ * chosen and a number pi would have used anyway looked identical.
  *
- * Past that a list stops being something the reader glances at and becomes a page that hides
- * the screen it is being chosen from. A ceiling rather than a height — a two-item picker keeps
- * its own — and a share rather than a figure in dp, so it survives a shorter phone. The picker
- * body in `ui/components/Forms.kt` holds the same number for its own list; it is repeated
- * rather than shared because that constant is private to its file, and the two lists are the
- * same control on the same panel, so they must not end at two different heights.
- */
-private const val SHEET_LIST_FRACTION = 0.6f
-
-/**
- * Where a row with no icon starts, so that its *title* lines up with the title of the row
- * above it.
- *
- * A `PiRow`'s title sits at 12dp of outer gutter + 12dp of inner padding + a 24dp leading
- * mark + the 16dp gap between them = 64dp, and a row without a mark starts its title at the
- * 24dp two paddings add up to. 40dp is the difference, and it is the same 64dp
- * `PiRowDivider` insets its line to — which is why the rule reads in one place: a number
- * row's label, the divider above it and the title of the switch row it belongs under all
- * begin on the same column.
- */
-private val NUMBER_ROW_INDENT = 40.dp
-
-/**
- * One of a model's two numbers, as a row rather than a box.
- *
- * The value is the user's number, or — in the muted colour — the number pi will use while
- * the user has said nothing. That difference is the whole of what an empty field used to
- * mean, and it was previously invisible: the boxes were pre-filled with the fallback, so a
- * number the user had chosen and a number pi would have used anyway looked identical.
- *
- * Editing happens in [ModelNumberSheet]. A row cannot hold a text field without either a
- * floating label inside a 33%-wide value column or a full-width field that breaks the
- * frame's rhythm, and these two numbers are the rare half of the section — see the section
- * itself for what the two boxes looked like.
+ * Editing happens in the sheet below. A row cannot hold a text field without either a
+ * floating label inside a third of the row or a full-width field that breaks the card's
+ * rhythm, and these two numbers are the rare half of the section — see the section itself
+ * for what the two boxes looked like.
  */
 @Composable
 private fun ModelNumberRow(
@@ -1932,15 +1541,13 @@ private fun ModelNumberRow(
     unknown: String,
     onClick: () -> Unit,
 ) {
-    PiRow(
+    ArrowPreference(
         title = title,
-        modifier = Modifier.padding(start = NUMBER_ROW_INDENT),
-        trailing = {
-            RowValue(
-                value = set?.toString() ?: fallback?.toString() ?: unknown,
-                emphasised = set != null,
+        endActions = {
+            SettingsValue(
+                text = set?.toString() ?: fallback?.toString() ?: unknown,
                 monospace = true,
-                chevron = true,
+                emphasised = set != null,
             )
         },
         onClick = onClick,
@@ -1948,109 +1555,86 @@ private fun ModelNumberRow(
 }
 
 /**
- * A row's value, plus the chevron the row would draw for itself.
+ * Which of a model's two numbers is open in the number sheet.
  *
- * `PiRow` draws a chevron only when its trailing slot is empty, and a row whose value is in
- * that slot — the provider, the wire protocol, one of a model's two numbers — needs both:
- * the value is the fact and the chevron is what says the row opens something, and a value
- * that replaced the chevron would be a row that does something and looks like one that does
- * not.
- *
- * Muted for a value the app is reporting, plain for one the user chose, which is the
- * difference between a number the user typed and the number pi would use if they said
- * nothing about it.
+ * The fallback travels with the subject rather than being looked up when the sheet opens:
+ * it comes from the catalogue answer this form is holding, and the sheet has no business
+ * reading the catalogue again.
  */
-@Composable
-private fun RowValue(
-    value: String,
-    emphasised: Boolean = false,
-    monospace: Boolean = false,
-    chevron: Boolean = false,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (emphasised) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            fontFamily = if (monospace) FontFamily.Monospace else null,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (chevron) {
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
+private data class NumberEdit(val model: String, val maxTokens: Boolean, val fallback: Long?)
+
+/**
+ * How tall a discovery failure may get before it scrolls: about ten lines.
+ *
+ * A provider that answered with an auth failure *and* a wrong endpoint produces two
+ * paragraphs, and an unbounded body pushes the acknowledgement off the bottom of the dialog.
+ */
+private val DISCOVERY_FAILURE_MAX = 320.dp
 
 /**
  * One number, typed in a sheet.
  *
- * A sheet rather than a dialog for the reason every other input in this app is one
- * (`Sheets.kt`): this app's modal layer is a view in the page, so the keyboard stays up and
- * the field keeps focus, where an `AlertDialog` closes the keyboard the moment it appears.
+ * A sheet rather than a dialog because the keyboard has to stay up and the field has to keep
+ * focus, where a dialog closes the keyboard the moment it appears.
  *
  * The field starts from what the user saved and *not* from pi's fallback, with the fallback
- * as the placeholder: saving a number pi would have used anyway would write an entry that
- * says nothing, and the whole point of the entry is to say something. It follows
- * `WebSearchValueSheet`'s rule for the same reason — a value that arrives because a
- * placeholder showed it is a configuration the user never chose.
+ * as the placeholder: saving a number pi would have used anyway would write an entry that says
+ * nothing, and the whole point of the entry is to say something. A value that arrives because
+ * a placeholder showed it is a configuration the user never chose.
  *
  * Emptying the field is a real answer, not a mistake: it removes the number from the entry,
  * which is how pi's own value comes back.
+ *
+ * The model's id is the line over the box rather than a second title: a model has two of
+ * these numbers, and the pair is what says which one is being edited without the reader
+ * having to remember which row they tapped.
  */
 @Composable
-private fun ModelNumberSheet(
-    title: String,
+private fun ModelNumberBody(
+    label: String,
     model: String,
     initial: String,
     fallback: Long?,
+    text: Strings,
     onSave: (Long?) -> Unit,
 ) {
-    val host = LocalSheetHost.current
-    val text = strings
-    var draft by remember(model, title) { mutableStateOf(initial) }
+    var draft by remember(model, initial) { mutableStateOf(initial) }
 
-    // The number's name over the model it belongs to: a model has two of these, and the
-    // pair is what says which one is being edited without the reader having to remember
-    // which row they tapped. The body owns its own `Column`, because the layer hands the
-    // sheet's content a `Box` and four siblings in it would be drawn on top of each other.
-    Column(SHEET_FORM_PADDING) {
-        PiSheetTitle(title = title, subtitle = model)
-        PiTextField(
-            value = draft,
-            onValueChange = { draft = tokenDigits(it) },
-            placeholder = fallback?.toString() ?: text.settings.unknown,
-            // What a blank box means, on the field rather than in a paragraph above
-            // the button: it is a rule about *this* value, and the sheet has room
-            // for one line under the box.
-            supportingText = text.settings.modelNumbersNote,
-            keyboardType = KeyboardType.Number,
-            modifier = FIELD_INSET,
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = model,
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.padding(bottom = 6.dp),
         )
-        // No dismiss beside the save: the scrim, the back gesture and the downward
-        // drag already close a sheet.
-        PiSheetActions {
-            PiButton(
+        Card(Modifier.fillMaxWidth()) {
+            SettingsTextField(
+                value = draft,
+                onValueChange = { draft = tokenDigits(it) },
+                label = label,
+                placeholder = fallback?.toString() ?: text.settings.unknown,
+                // What a blank box means, on the field rather than in a paragraph above the
+                // button: it is a rule about *this* value.
+                supporting = text.settings.modelNumbersNote,
+                keyboardType = KeyboardType.Number,
+            )
+        }
+        // No dismiss beside the save: the scrim, the back gesture and a downward drag
+        // already close a sheet.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        ) {
+            SettingsButton(
                 text = text.settings.save,
                 onClick = {
-                    // Null for an emptied field, which `withWindow`/`withMaxTokens` turn
-                    // into "no number in the entry" rather than into a zero.
+                    // Null for an emptied field, which `withWindow`/`withMaxTokens` turn into
+                    // "no number in the entry" rather than into a zero.
                     onSave(draft.toLongOrNull())
-                    host.dismiss()
                 },
-                size = PiButtonSize.Small,
+                primary = true,
             )
         }
     }
@@ -2117,8 +1701,9 @@ private const val MAX_TOKEN_DIGITS = 9
  * The fetched model list's second line.
  *
  * An id can appear twice — once from the provider and once from pi's catalog — so the
- * picker's rows carry the source as their second line rather than in their identity, and
- * the row key is the source plus the id for that reason (`ModelPickerSheet`).
+ * picker's rows carry the source as their second line rather than in their identity, and the
+ * row's key is its index in the fetched list for that reason: `SettingsPick`'s id is what a
+ * row is identified by, and the model id itself is not unique in this list.
  */
 private fun capabilityLine(model: DiscoveredModel, text: Strings): String = buildList {
     if (model.name.isNotBlank() && model.name != model.id) add(model.name)

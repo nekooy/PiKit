@@ -6,8 +6,9 @@
  *
  * The page is a file manager, but a preview is not a page: it is one file, read once,
  * and the way out of it is the scrim, the back gesture or a downward drag — the same
- * three a picker has. So it is a `Sheet` body on the app's one modal layer, not a
- * third level of navigation with its own back arrow.
+ * three a picker has. So this is the body of Miuix's window bottom sheet, raised by
+ * `FilesScreen` from its own state, not a third level of navigation with its own back
+ * arrow.
  *
  * ## What a file manager shows that a text box did not
  *
@@ -17,8 +18,8 @@
  * with a size and a date worth knowing said neither. This body therefore has:
  *
  *  - **an image, drawn**, when the suffix says the bytes are a picture;
- *  - the kind, the size and the modified time, in the title's second line;
- *  - the text, for a text file, in the same monospace well as before;
+ *  - the kind, the size and the modified time, in the heading's second line;
+ *  - the text, for a text file, in a monospace well;
  *  - **Copy path**, beside **Open with** — the one action a file manager is asked
  *    for on a phone, and the one that makes the path in this page useful at all: a
  *    path that can be copied is a path that can be pasted into the chat page, which
@@ -38,19 +39,15 @@ package pi.kit.mob.ui.files
 import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +64,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -74,30 +72,30 @@ import kotlinx.coroutines.withContext
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.clipEntryFor
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.LocalToastHost
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
-import pi.kit.mob.ui.design.PiLoading
-import pi.kit.mob.ui.design.PiSheetActions
-import pi.kit.mob.ui.design.PiSheetList
-import pi.kit.mob.ui.design.PiSheetTitle
+import pi.kit.mob.ui.kit.LocalPiToast
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
 
 /**
  * The sheet's body for [entry].
  *
- * The title carries the facts a file manager puts on a preview — the name, then the
+ * The heading carries the facts a file manager puts on a preview — the name, then the
  * kind, the size and the modified time — because a file the agent wrote is usually
- * being looked at to answer "when did this change".
+ * being looked at to answer "when did this change". It is drawn here rather than as
+ * the sheet's own `title`, which takes one string: a preview's two lines are one
+ * block, and a single-line title would either drop the facts or run them into the
+ * name.
  */
 @Composable
 internal fun FilePreviewSheet(entry: FileEntry) {
     val text = strings
     val context = LocalContext.current
-    val host = LocalSheetHost.current
-    val toasts = LocalToastHost.current
+    val toasts = LocalPiToast.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
 
@@ -110,7 +108,7 @@ internal fun FilePreviewSheet(entry: FileEntry) {
         plain = text.files.file,
     )
     val stamp = stampFor(entry.modifiedAt, System.currentTimeMillis())
-    val subtitle = listOfNotNull(
+    val facts = listOfNotNull(
         kind,
         humanSize(entry.size).takeIf { !entry.isDirectory },
         stamp.takeIf { it.isNotEmpty() },
@@ -132,64 +130,74 @@ internal fun FilePreviewSheet(entry: FileEntry) {
     val drawn = picture
 
     Column(Modifier.fillMaxWidth()) {
-        PiSheetTitle(title = entry.name, subtitle = subtitle)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+        ) {
+            Text(
+                text = entry.name,
+                style = MiuixTheme.textStyles.title4,
+                color = MiuixTheme.colorScheme.onSurface,
+                // Two lines, like the row that opened this: the suffix is what tells
+                // one export of a file from the next, and it is at the end.
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = facts,
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
 
-        // `fill = false`: the body takes the height it needs and no more, which is
-        // what makes a long text scroll inside the sheet instead of pushing the action
-        // row off the bottom of the panel.
-        Box(Modifier.weight(1f, fill = false)) {
-            PiSheetList {
-                item {
-                    Column(Modifier.fillMaxWidth()) {
-                        if (drawn != null) {
-                            FileImage(drawn)
-                        } else {
-                            // No picture: either not an image at all, or one this
-                            // device cannot decode — in which case the text body's
-                            // sentence about a binary file is the right answer.
-                            PreviewBody(body)
-                        }
-                    }
-                }
-            }
+        if (drawn != null) {
+            FileImage(drawn)
+        } else {
+            // No picture: either not an image at all, or one this device cannot
+            // decode — in which case the text body's sentence about a binary file is
+            // the right answer.
+            PreviewBody(body)
         }
 
         // Two actions, both about the file rather than about the sheet: a sheet is
         // dismissed four ways that need no control, so a *Close* would be a fifth
-        // (§13). `PiSheetActions` end-aligns them, which puts the one real action under
-        // the reader's thumb.
-        PiSheetActions {
-            PiButton(
+        // (§13). The primary one is a filled button and sits last, under the reader's
+        // thumb; the path is the secondary answer and keeps the quiet treatment.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(top = 12.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
                 text = text.files.copyPath,
                 onClick = {
-                    // Gated on the sheet still being open for the same reason every
-                    // control in a sheet is: the panel keeps drawing while it leaves,
-                    // and a second tap must not copy after the reader dismissed it.
-                    if (!host.isOpen) return@PiButton
                     scope.launch {
                         clipboard.setClipEntry(clipEntryFor(entry.file.absolutePath))
-                        toasts.show(text.files.pathCopied)
+                        toasts?.show(text.files.pathCopied)
                     }
                 },
-                kind = PiButtonKind.Outlined,
-                size = PiButtonSize.Small,
-                leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                modifier = Modifier.weight(1f),
             )
-            PiButton(
-                text = text.files.openWith,
+            Button(
                 onClick = {
                     // See `openExternally`: the failure is a toast rather than a
                     // silent no-op, because the button visibly did nothing.
-                    if (host.isOpen && !openExternally(context, entry.file)) {
-                        toasts.show(text.files.openFailed)
+                    if (!openExternally(context, entry.file)) {
+                        toasts?.show(text.files.openFailed)
                     }
                 },
-                kind = PiButtonKind.Filled,
-                size = PiButtonSize.Small,
-                leadingIcon = {
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
-                },
-            )
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) {
+                Text(text = text.files.openWith, style = MiuixTheme.textStyles.button)
+            }
         }
     }
 }
@@ -199,7 +207,9 @@ internal fun FilePreviewSheet(entry: FileEntry) {
  *
  * The minimum height is the sheet's own promise that a one-line file still looks like
  * a preview rather than like a sheet that failed to load, and the ceiling is what
- * keeps a 64 KB file from covering the window: the text scrolls inside it.
+ * keeps a 64 KB file from covering the window: the text scrolls inside it. The sheet's
+ * own column is bounded by the window height and does not scroll, so a body that grew
+ * without a cap would push the two actions off the bottom edge instead.
  */
 @Composable
 private fun PreviewBody(body: String?) {
@@ -211,7 +221,7 @@ private fun PreviewBody(body: String?) {
                 .heightIn(min = 120.dp),
             contentAlignment = Alignment.Center,
         ) {
-            PiLoading()
+            CircularProgressIndicator()
         }
         return
     }
@@ -220,12 +230,13 @@ private fun PreviewBody(body: String?) {
             .fillMaxWidth()
             .heightIn(max = 420.dp)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
         Text(
             text = current,
             fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.bodySmall,
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurface,
         )
     }
 }
@@ -239,7 +250,7 @@ private fun FileImage(bitmap: ImageBitmap) {
         contentScale = ContentScale.Fit,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
     )
 }
 

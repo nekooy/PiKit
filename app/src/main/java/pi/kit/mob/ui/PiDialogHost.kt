@@ -2,26 +2,26 @@ package pi.kit.mob.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.strings
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
-import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiTextField
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * Renders a dialog raised by a pi extension.
@@ -31,15 +31,20 @@ import pi.kit.mob.ui.design.PiTextField
  * extension indefinitely. In particular `editor` has no server-side timeout and
  * must always be answered or cancelled.
  *
- * ## Why this stays a platform dialog
+ * ## Why this is a window-level dialog
  *
- * Every other panel in the app is a sheet in the app's own modal layer, for the
- * two reasons measured in `components/Sheets.kt`. This one is the exception and
- * keeps it: the caller is pi waiting on an answer rather than the user navigating,
- * it can arrive over any destination and while a sheet is already open, and a
- * question that blocks a process is the one case where the platform's own
- * attention-grabbing dialog is the honest shape. It is drawn in the app's colours
- * and its corner from [PiShapes.panel], so it does not read as a stranger.
+ * Every other panel in the app is a sheet, because the user is navigating. This
+ * one keeps the platform's own window: the caller is pi waiting on an answer
+ * rather than the user browsing, the question can arrive over any destination and
+ * while a sheet is already open, and a question that blocks a process is the one
+ * case where the window's own attention-grabbing panel is the honest shape.
+ *
+ * [WindowDialog] rather than Miuix's `OverlayDialog` for the same reason it is not
+ * a sheet: an overlay dialog needs a `Scaffold` above it to draw its host, and this
+ * is raised from the root, which is outside every page's scaffold. It is Miuix's
+ * shape either way — the background, the title and the summary are the library's,
+ * and so is the corner, which comes from the screen's own radius rather than from a
+ * constant here.
  *
  * ## The three shapes it takes
  *
@@ -60,96 +65,111 @@ fun PiDialogHost(
     onConfirmed: (Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
-    val text0 = strings
-    var text by remember(prefill) { mutableStateOf(prefill.orEmpty()) }
+    val text = strings
+    // Keyed on the prefill, so a question re-asked with a different starting point
+    // starts from that point rather than from what was typed into the last one. It is
+    // Miuix's state-based field because that is the API the library's `TextField`
+    // takes now, and the answer is read out of the state at the moment the button is
+    // tapped — nothing pushes a value back into it, so a keystroke cannot be undone
+    // by a recomposition.
+    val field = remember(prefill) { TextFieldState(prefill.orEmpty()) }
 
-    AlertDialog(
+    // `confirm` carries neither options nor a field: the only branch that is a
+    // question with no input at all.
+    val confirmOnly = options.isEmpty() && placeholder == null && prefill == null && message != null
+
+    WindowDialog(
+        show = true,
+        title = title,
+        // The window's dismissal is the cancel answer, not a no-op: a question
+        // closed by tapping outside has been answered "no".
         onDismissRequest = onCancel,
-        shape = PiShapes.panel,
-        title = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // The body is one bounded, scrolling column rather than two: an
+            // extension's message is a sentence or a specification depending on
+            // the extension, and an unbounded one pushed the answer buttons off
+            // the bottom of the dialog. The bound is on the body, not on the
+            // dialog, so the answers stay where the reader learned to find them
+            // whatever the extension sent.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 message?.let {
                     Text(
                         text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        // Bounded and scrolled inside the bound. A message an
-                        // extension sends is a sentence or a specification,
-                        // depending on the extension, and an unbounded one pushed
-                        // the answer buttons off the bottom of the dialog — the
-                        // same measurement the runtime warnings dialog cites.
-                        modifier = Modifier
-                            .heightIn(max = 260.dp)
-                            .verticalScroll(rememberScrollState()),
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
 
                 when {
-                    options.isNotEmpty() -> options.forEach { option ->
-                        // A text button like the cancel under the whole dialog, and
-                        // the separation is the full width the option takes rather
-                        // than a border: the app's dialogs are all words that differ
-                        // by colour and nothing else. An outlined option was a filled
-                        // boundary around an answer, which made the cancel the odd one.
-                        PiButton(
-                            text = option,
-                            onClick = { onValue(option) },
-                            kind = PiButtonKind.Text,
-                            size = PiButtonSize.Small,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                    // The options are one list of one-of-these answers, which is
+                    // what a radio row is: the circle says "choose one" and the
+                    // row answers on tap, so a question whose answer closes the
+                    // dialog never shows a tick it would have to take back.
+                    //
+                    // A card around them because the dialog's own background is the
+                    // page's: Miuix's rows carry no surface of their own, and a set
+                    // of answers reads as one group the way a settings page's do.
+                    options.isNotEmpty() -> Card(modifier = Modifier.fillMaxWidth()) {
+                        options.forEach { option ->
+                            RadioButtonPreference(
+                                title = option,
+                                selected = false,
+                                onClick = { onValue(option) },
+                            )
+                        }
                     }
 
-                    // `confirm` carries neither options nor a placeholder.
-                    placeholder == null && prefill == null && message != null -> Unit
+                    confirmOnly -> Unit
 
-                    else -> PiTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        placeholder = placeholder,
-                        singleLine = true,
+                    else -> TextField(
+                        state = field,
+                        label = placeholder.orEmpty(),
+                        // The placeholder is the field's label until something is
+                        // typed, which is what a placeholder is; a label that
+                        // floats above an empty box would add a second line of
+                        // text to a dialog that is one question.
+                        useLabelAsPlaceholder = true,
+                        lineLimits = TextFieldLineLimits.SingleLine,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
-        },
-        confirmButton = {
-            when {
-                options.isNotEmpty() -> Unit
-                placeholder == null && prefill == null && message != null ->
-                    PiButton(
-                        text = text0.common.confirm,
-                        onClick = { onConfirmed(true) },
-                        kind = PiButtonKind.Text,
-                        size = PiButtonSize.Small,
-                    )
 
-                else -> PiButton(
-                    text = text0.common.ok,
-                    onClick = { onValue(text) },
-                    kind = PiButtonKind.Text,
-                    size = PiButtonSize.Small,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // A dialog keeps its dismiss even when the question has options:
+                // a question with a destructive answer has to have both answers.
+                TextButton(
+                    text = text.common.cancel,
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f),
                 )
+                // One confirm at most: an options question is answered by picking,
+                // so the row is the cancel alone in that case.
+                if (options.isEmpty()) {
+                    TextButton(
+                        text = if (confirmOnly) text.common.confirm else text.common.ok,
+                        onClick = {
+                            if (confirmOnly) {
+                                onConfirmed(true)
+                            } else {
+                                onValue(field.text.toString())
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
-        },
-        dismissButton = {
-            // A text button, like the confirm beside it: a dialog is two words that
-            // differ by colour, neither carrying a fill or a border. A dialog keeps
-            // its dismiss — a sheet does not need one, but a question with a
-            // destructive answer has to have both answers.
-            PiButton(
-                text = text0.common.cancel,
-                onClick = onCancel,
-                kind = PiButtonKind.Text,
-                size = PiButtonSize.Small,
-            )
-        },
-    )
+        }
+    }
 }

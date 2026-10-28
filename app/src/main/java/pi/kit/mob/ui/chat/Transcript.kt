@@ -1,10 +1,11 @@
 package pi.kit.mob.ui.chat
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,17 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -46,25 +40,31 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import pi.kit.mob.R
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.pi.ChatItem
 import pi.kit.mob.pi.NoticeKind
 import pi.kit.mob.pi.ToolState
 import pi.kit.mob.ui.clipEntryFor
 import pi.kit.mob.ui.components.CopyButton
-import pi.kit.mob.ui.components.PiIcons
-import pi.kit.mob.ui.design.PiMotion
-import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiStatePill
+import pi.kit.mob.ui.kit.PiTone
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * One reading of the list's scroll state.
@@ -351,13 +351,13 @@ internal data class TurnSummaryData(
  *
  * ## One shape, and only the mark inside it changes
  *
- * A call wears the app's state pill ([PiStatePill]) from the moment it starts until
- * the reader opens its output — the same pill, in the same place, at the same
- * height. While it runs the pill carries the morphing live indicator ([PiTone.Live],
- * `tertiary`, reserved for "this is still going" and for nothing else). When it
- * settles the indicator is swapped for the app's own tick or cross: the tick on a
- * success, on a muted [PiTone.Neutral] pill, and the cross on a failure, on
- * [PiTone.Danger] — the one red mark in a turn. The argument stays beside the pill
+ * A call wears the screen's state pill ([ChatStatusPill]) from the moment it starts
+ * until the reader opens its output — the same pill, in the same place, at the same
+ * height. While it runs the pill carries the live mark ([PiTone.live], the palette's
+ * secondary pair, reserved for "this is still going" and for nothing else). When it
+ * settles the mark is swapped for the app's own tick or cross: the tick on a
+ * success, on a muted [ChatTone.Neutral] pill, and the cross on a failure, on
+ * [ChatTone.Danger] — the one red mark in a turn. The argument stays beside the pill
  * as one line of muted monospace, because for a call that has not finished yet the
  * argument is the only thing that says *what* it is doing — `ls -la` is the answer,
  * the tool's name is not — and keeping it there once the call is done is what leaves
@@ -370,7 +370,7 @@ internal data class TurnSummaryData(
  * ## What this replaced
  *
  * A finished call used to *drop* the pill and become a dense 22dp row: a bare 14dp
- * mark beside the tool's name, on `PiShapes.row` and with no fill of its own. So the
+ * mark beside the tool's name, on the row radius and with no fill of its own. So the
  * same call changed shape — and its name moved — at the instant it ended, and the
  * height change was doing the work of saying "this step finished". The pill is now
  * kept and the tick says it in place instead; the reader's rule is one shape per
@@ -387,10 +387,10 @@ internal data class TurnSummaryData(
  *    thinking and the answer they belong to.
  *  - **The ripple.** See [disclosureClickable].
  *
- * The state mark is the app's own tick and cross — `Icons.Filled.Check` and
- * `Icons.Filled.Close`, the glyphs the model list marks an active profile and its
+ * The state mark is the app's own tick and cross — [MiuixIcons.Ok] and
+ * [MiuixIcons.Close], the glyphs the model list marks an active profile and its
  * remove button with — rather than the `✓`/`✕` characters this used to draw. At
- * `labelSmall` a text check is a thin diagonal that reads as a stray punctuation
+ * `footnote2` a text check is a thin diagonal that reads as a stray punctuation
  * mark beside the bold icons on every other row in the app.
  *
  * The collapsed line is exactly one text line tall and the summary is ellipsised
@@ -411,9 +411,9 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
     val scope = rememberCoroutineScope()
 
     val tone = when (item.state) {
-        ToolState.Failed -> PiTone.Danger
-        ToolState.Succeeded -> PiTone.Neutral
-        else -> PiTone.Live
+        ToolState.Failed -> ChatTone.Danger
+        ToolState.Succeeded -> ChatTone.Neutral
+        else -> ChatTone.Live
     }
     // Pending and Running share one shape — the live pill — because from the
     // reader's side they are one fact: the call has not come back yet.
@@ -448,7 +448,7 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
                         // long-press, which would leave the output impossible to
                         // select or copy — the opposite of what a tool result is for.
                         Modifier
-                            .clip(PiShapes.row)
+                            .clip(ROW_SHAPE)
                             // The label is on the control rather than on the arrow
                             // inside it: a screen reader reaching this row should hear
                             // what the row does.
@@ -469,14 +469,14 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
             // about a step they did not open, and the pill's label already says which
             // tool ran. There is no per-tool glyph (a magnifier for a read, a terminal
             // for a shell) and that is deliberate.
-            PiStatePill(
+            ChatStatusPill(
                 label = item.name.ifBlank { text.chat.toolFallback },
                 tone = tone,
                 mark = when (item.state) {
                     ToolState.Failed -> {
                         {
                             Icon(
-                                Icons.Filled.Close,
+                                imageVector = MiuixIcons.Close,
                                 contentDescription = null,
                                 modifier = Modifier.size(TOOL_MARK_SIZE),
                             )
@@ -486,7 +486,7 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
                     ToolState.Succeeded -> {
                         {
                             Icon(
-                                Icons.Filled.Check,
+                                imageVector = MiuixIcons.Ok,
                                 contentDescription = null,
                                 modifier = Modifier.size(TOOL_MARK_SIZE),
                             )
@@ -507,20 +507,20 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
                 // use the whole remainder before it ellipsises. Weighted children are
                 // measured last, so the chevron is never pushed off the row.
                 Text(
-                    summary,
+                    text = summary,
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .padding(start = 6.dp),
-                    // `bodySmall`, not `labelSmall`: the preview is a *command*, and
+                    // `footnote1`, not `footnote2`: the preview is a *command*, and
                     // 11sp monospace on a phone is the size at which a path or a flag
                     // has to be read twice. The same size the expanded panel prints
                     // it at, so opening the card does not resize the text the reader
                     // was already looking at.
-                    style = MaterialTheme.typography.bodySmall.copy(
+                    style = MiuixTheme.textStyles.footnote1.copy(
                         lineHeight = MONO_LINE_HEIGHT,
                     ),
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -544,35 +544,35 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
             // The panel is the only filled surface a tool call has, so it says "this
             // is the thing you opened" without decorating every closed row in the
             // turn. It is one step past the card it sits in — the card is
-            // `surfaceContainerLow`, so an inset inside it is `…High` — and at the
-            // dense `row` radius, which is the same step and the same shape as the
-            // reasoning panel beside it: two expanded blocks in one turn are one
-            // shape.
+            // `surfaceContainer`, so an inset inside it is `…High` — and at the dense
+            // row radius, which is the same step and the same shape as the reasoning
+            // panel beside it: two expanded blocks in one turn are one shape.
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = PiShapes.row,
+                color = MiuixTheme.colorScheme.surfaceContainerHigh,
+                shape = ROW_SHAPE,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 8.dp)) {
                     if (summary.isNotBlank()) {
                         Text(
-                            summary,
-                            style = MaterialTheme.typography.bodySmall.copy(
+                            text = summary,
+                            style = MiuixTheme.textStyles.footnote1.copy(
                                 lineHeight = MONO_LINE_HEIGHT,
                             ),
                             fontFamily = FontFamily.Monospace,
+                            color = MiuixTheme.colorScheme.onSurfaceContainerHigh,
                         )
                     }
                     if (item.output.isNotBlank()) {
                         HorizontalDivider(Modifier.padding(top = 6.dp, bottom = 2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text.chat.outputLines(lines),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = text.chat.outputLines(lines),
+                                style = MiuixTheme.textStyles.footnote2,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 modifier = Modifier.weight(1f),
                             )
-                            // The same `CopyButton` the meta row and a code block
+                            // The same copy control the meta row and a code block
                             // use: one glyph set, one weight, one confirmation.
                             CopyButton(
                                 onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(item.output)) } },
@@ -592,11 +592,12 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
                                 .verticalScroll(rememberScrollState()),
                         ) {
                             Text(
-                                item.output,
-                                style = MaterialTheme.typography.bodySmall.copy(
+                                text = item.output,
+                                style = MiuixTheme.textStyles.footnote1.copy(
                                     lineHeight = MONO_LINE_HEIGHT,
                                 ),
                                 fontFamily = FontFamily.Monospace,
+                                color = MiuixTheme.colorScheme.onSurfaceContainerHigh,
                             )
                         }
                     }
@@ -615,7 +616,7 @@ private val TOOL_CHEVRON_GAP = 4.dp
 /**
  * The vertical padding every one-line row on the transcript carries.
  *
- * 3dp top and bottom around a `labelMedium` line box of about 16dp, which puts a
+ * 3dp top and bottom around a 13sp label's line box of about 17dp, which puts a
  * row at 22dp: enough that two rows in a row do not read as one wrapped paragraph,
  * and short enough that a turn of six tool calls is still a glance rather than a
  * screen. It is *inside* the tap target, so the whole of that 22dp responds to a
@@ -630,7 +631,7 @@ internal val ROW_PADDING = 3.dp
 /**
  * The line box every monospace block in the app is drawn at.
  *
- * `bodySmall`'s own 16sp is tight for monospace, whose glyphs are all one width and
+ * the 13sp footnote style's own leading is tight for monospace, whose glyphs are one width and
  * therefore have no natural word rhythm to read along; 18sp is what makes a
  * directory listing legible. One number for a tool's preview, a tool's output, the
  * reasoning block and a fenced code block in a reply — the three used to hold their
@@ -652,20 +653,19 @@ private val TOOL_OUTPUT_MAX_HEIGHT = 240.dp
 private val TOOL_PANEL_GAP = 4.dp
 
 /**
- * A disclosure row's tap target, without Material's ripple.
+ * A disclosure row's tap target, with the page's own press feedback.
  *
- * The ripple is the one piece of Material feedback that does not survive on this
- * page. `clickable`'s default indication is a *bounded* ripple, so on a row that
- * spans the transcript it fills the whole width — a bar of colour flashing across
- * the conversation on every tap, which is what the reader reported as "点击反馈的条
- * 块", a block of feedback under the finger rather than a highlight on the control.
- * None of the reference implementations this page was rebuilt against has it: what
- * a disclosure row shows when it is tapped is the thing it opened.
+ * The ripple this used to have to switch off is gone with the theme it belonged to: a
+ * *bounded* ripple on a row that spans the transcript filled the whole width — a bar
+ * of colour flashing across the conversation on every tap, which is what the reader
+ * reported as "点击反馈的条块", a block of feedback under the finger rather than a
+ * highlight on the control. Miuix's theme installs its own indication instead: a 10%
+ * tint over the node that was pressed and nothing outside it, so the row that
+ * answers a tap is the row the finger is on.
  *
- * The interaction source is remembered rather than defaulted, because `clickable`
- * without one creates a source per recomposition — harmless for a ripple that is
- * never drawn, but it is also what `indication = null` needs to be honest about:
- * this control reports no interaction, so nothing can be listening.
+ * The helper is kept rather than inlined because the label belongs to the *control*
+ * on all three disclosures, and one place that says so is what stops a fourth
+ * caller from putting it on the arrow.
  */
 @Composable
 internal fun Modifier.disclosureClickable(
@@ -673,8 +673,6 @@ internal fun Modifier.disclosureClickable(
     onClickLabel: String? = null,
     onClick: () -> Unit,
 ): Modifier = this.clickable(
-    interactionSource = remember { MutableInteractionSource() },
-    indication = null,
     enabled = enabled,
     onClickLabel = onClickLabel,
     onClick = onClick,
@@ -695,28 +693,26 @@ internal fun Modifier.disclosureClickable(
  * tappable row should hear what the row does, and an arrow inside it is decoration.
  * Each caller passes its own through `onClickLabel`.
  *
- * ## Why the turn is a spring and not the 160 ms tween it was
+ * ## Why the turn is a 160 ms tween
  *
- * The design language's first motion rule is that spatial movement — anything that
- * moves, rotates or resizes — is animated by the scheme's spatial spring, and that
- * nothing at a call site names a spring of its own. A chevron turning over is
- * spatial movement and a small component, so it is the *fast* spatial spec, and the
- * hand-picked duration it used to carry is gone with it: the same gesture on three
- * rows should not be the one place in the app with a motion of its own.
+ * It was the design language's fast spatial spring, and Miuix publishes no motion
+ * tokens to inherit — the chevron is the one thing on this page that moves on a tap,
+ * and a rotation this small is over before a spring's settle is readable. A short
+ * tween is the whole of the motion, named here rather than at three call sites.
  */
 @Composable
 internal fun DisclosureChevron(
     expanded: Boolean,
     modifier: Modifier = Modifier,
-    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    tint: Color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = PiMotion.fastSpatial(),
+        animationSpec = tween(durationMillis = CHEVRON_TURN_MILLIS),
         label = "disclosure-chevron",
     )
     Icon(
-        imageVector = Icons.Filled.ExpandMore,
+        imageVector = MiuixIcons.ExpandMore,
         contentDescription = null,
         modifier = modifier
             .size(CHEVRON_SIZE)
@@ -727,6 +723,9 @@ internal fun DisclosureChevron(
 
 /** One size for every disclosure arrow on the page. */
 private val CHEVRON_SIZE = 16.dp
+
+/** How long the chevron takes to turn over. Short: it is a state, not a journey. */
+private const val CHEVRON_TURN_MILLIS = 160
 
 /**
  * The row that opens a message's reasoning.
@@ -772,7 +771,7 @@ internal fun ReasoningToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(PiShapes.row)
+            .clip(ROW_SHAPE)
             .disclosureClickable(
                 onClickLabel = if (expanded) text.chat.hideReasoning else text.chat.showReasoning,
                 onClick = onToggle,
@@ -781,20 +780,20 @@ internal fun ReasoningToggle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = PiIcons.Thinking,
+            painter = painterResource(R.drawable.ic_thinking),
             contentDescription = null,
             modifier = Modifier.size(TOOL_MARK_SIZE),
             // The app's own accent: the thinking mark is primary everywhere it
             // appears — this row, the composer's thinking-level chip — so the mark
             // means "reasoning" before the label beside it is read.
-            tint = PiTone.Accent.ink(MaterialTheme.colorScheme),
+            tint = MiuixTheme.colorScheme.primary,
         )
         Text(
             text = text.chat.reasoningLabel(chars),
             modifier = Modifier.padding(start = 6.dp),
-            style = MaterialTheme.typography.labelMedium,
+            style = MiuixTheme.textStyles.footnote1,
             fontWeight = FontWeight.Medium,
-            color = PiTone.Neutral.ink(MaterialTheme.colorScheme),
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -840,18 +839,18 @@ internal fun ReasoningToggle(
  *
  * ## Why the fill is a step *past* its container
  *
- * The block is drawn inside the answer's card, which is `surfaceContainerLow`, so
- * its own fill is `surfaceContainerHigh`: an inset reads one step away from the
- * surface it sits on in both schemes, and at three steps it would read as a
- * different panel rather than as a step — the mistake the palette's own note warns
- * about. Same shape as the tool output panel beside it, `PiShapes.row`, because the
- * two are the same thing: an information-dense inset inside a turn.
+ * The block is drawn inside the answer's card, which is `surfaceContainer`, so its
+ * own fill is `surfaceContainerHigh`: an inset reads one step away from the surface
+ * it sits on in both schemes, and at three steps it would read as a different panel
+ * rather than as a step — the mistake the palette's own note warns about. Same shape
+ * as the tool output panel beside it, [ROW_SHAPE], because the two are the same
+ * thing: an information-dense inset inside a turn.
  */
 @Composable
 internal fun ReasoningBlock(thinking: String) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = PiShapes.row,
+        color = MiuixTheme.colorScheme.surfaceContainerHigh,
+        shape = ROW_SHAPE,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -860,10 +859,10 @@ internal fun ReasoningBlock(thinking: String) {
                 .heightIn(max = REASONING_MAX_HEIGHT)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 12.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodySmall.copy(
+            style = MiuixTheme.textStyles.footnote1.copy(
                 lineHeight = MONO_LINE_HEIGHT,
             ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MiuixTheme.colorScheme.onSurfaceContainerHigh,
         )
     }
 }
@@ -907,19 +906,18 @@ internal fun turnSummaryLabel(summary: TurnSummaryData, text: Strings): String {
  */
 @Composable
 internal fun NoticeCard(item: ChatItem.Notice) {
-    // `PiTone`'s middle three, and the *ink* accessor rather than a container: a
-    // notice is a remark about the conversation rather than a control, so it wears
-    // its colour as text and rule with no fill of its own. A warning is the app's
-    // own accent and not the live tone — live means "still running", and nothing in
-    // a notice is.
+    // [ChatTone]'s middle three, and the *ink* rather than a container: a notice is
+    // a remark about the conversation rather than a control, so it wears its colour
+    // as text and rule with no fill of its own. A warning is the app's own accent and
+    // not the live tone — live means "still running", and nothing in a notice is.
     val tone = when (item.kind) {
-        NoticeKind.Info -> PiTone.Neutral
-        NoticeKind.Warning -> PiTone.Accent
-        NoticeKind.Error -> PiTone.Danger
+        NoticeKind.Info -> ChatTone.Neutral
+        NoticeKind.Warning -> ChatTone.Accent
+        NoticeKind.Error -> ChatTone.Danger
     }
-    val color = tone.ink(MaterialTheme.colorScheme)
+    val color = tone.ink()
     Text(
-        item.text,
+        text = item.text,
         modifier = Modifier
             .fillMaxWidth()
             .drawBehind {
@@ -931,7 +929,7 @@ internal fun NoticeCard(item: ChatItem.Notice) {
             }
             .padding(start = NOTICE_TEXT_INSET),
         color = color,
-        style = MaterialTheme.typography.bodySmall.copy(lineHeight = MONO_LINE_HEIGHT),
+        style = MiuixTheme.textStyles.footnote1.copy(lineHeight = MONO_LINE_HEIGHT),
         fontFamily = FontFamily.Monospace,
     )
 }
@@ -962,8 +960,8 @@ internal fun durationSeconds(millis: Long): Long = (millis / 1000).coerceAtLeast
  *
  * `工作 47 秒 · 5 个步骤` — the duration and the count, in one bare line, with a
  * chevron at the end of the words. It used to be a filled chip as wide as its own
- * text, with the time in `labelMedium` and the count in the same size after a
- * separator, and the report was two-fold: the word "已" in front of the time read as
+ * text, with the time in the reading label size and the count in the same size after
+ * a separator, and the report was two-fold: the word "已" in front of the time read as
  * a second statement about a turn the reader had just watched finish, and the count
  * was drawn only when there was something hidden — which is every finished turn, so
  * the row that was supposed to *be* the count did not have one on it.
@@ -998,7 +996,7 @@ internal fun TurnSummaryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(PiShapes.row)
+            .clip(ROW_SHAPE)
             .disclosureClickable(
                 enabled = foldable,
                 onClickLabel = if (expanded) text.chat.stepsHide else text.chat.stepsShow,
@@ -1011,22 +1009,22 @@ internal fun TurnSummaryRow(
             text = label,
             // One style for both cases, and that is a correction rather than a
             // simplification. The two differ only in whether there is something
-            // behind the row, and the style used to change with it — `labelMedium`
-            // + Medium when the row was a control, `labelSmall` + Normal when it
-            // was not — so the same sentence about the same turn (`工作 47 秒`) was
-            // drawn at two sizes in one conversation, which is exactly the report:
-            // "有步骤时和没步骤时上面的工作X秒字体大小样式不一样". A turn with no
+            // behind the row, and the style used to change with it — the reading
+            // style + Medium when the row was a control, the smaller one + Normal
+            // when it was not — so the same sentence about the same turn (`工作 47 秒`)
+            // was drawn at two sizes in one conversation, which is exactly the
+            // report: "有步骤时和没步骤时上面的工作X秒字体大小样式不一样". A turn with no
             // hidden rows is not a lesser fact about the turn; it is the same line
             // with nothing behind it, and the chevron below is what says which of
             // the two it is.
-            style = MaterialTheme.typography.labelMedium,
+            style = MiuixTheme.textStyles.footnote1,
             fontWeight = FontWeight.Medium,
             // The accent, and the chevron beside it is the same colour. Both used to be
             // `onSurfaceVariant`, with the arrow `primary` as "the one coloured mark among the
             // page's three disclosures" — and the reader's report is that this line, a message's
             // timestamp and its copy button are the furniture of a finished turn and should read
             // as one accent: "把工作几秒、几个步骤、消息时间、消息复制按钮等都变成主题蓝色".
-            color = PiTone.Accent.ink(MaterialTheme.colorScheme),
+            color = ChatTone.Accent.ink(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1034,12 +1032,132 @@ internal fun TurnSummaryRow(
             DisclosureChevron(
                 expanded = expanded,
                 modifier = Modifier.padding(start = TOOL_CHEVRON_GAP),
-                tint = PiTone.Accent.ink(MaterialTheme.colorScheme),
+                tint = ChatTone.Accent.ink(),
             )
         }
     }
 }
 
+
+// ------------------------------------------------------------------ furniture
+
+/**
+ * What a piece of the page's furniture means, rather than what colour it is.
+ *
+ * The four meanings are the transcript's whole vocabulary: a fact, the app's own
+ * emphasis, a thing that is running, and a thing that failed. The kit names the two
+ * that a Miuix palette has no role for ([PiTone.live] and [PiTone.error], drawn from
+ * the secondary and error pairs); the other two are the palette's own `primary` and
+ * its high surface step. A call site picks a meaning and the roles follow, which is
+ * what stops this page's "warning" from being another page's "information".
+ */
+internal enum class ChatTone {
+    Neutral,
+    Accent,
+    Live,
+    Danger,
+    ;
+
+    @Composable
+    fun container(): Color = when (this) {
+        Neutral -> MiuixTheme.colorScheme.surfaceContainerHigh
+        Accent -> MiuixTheme.colorScheme.primaryContainer
+        Live -> PiTone.liveContainer()
+        Danger -> PiTone.errorContainer()
+    }
+
+    @Composable
+    fun onContainer(): Color = when (this) {
+        Neutral -> MiuixTheme.colorScheme.onSurfaceContainerHigh
+        Accent -> MiuixTheme.colorScheme.onPrimaryContainer
+        Live -> MiuixTheme.colorScheme.onSecondaryContainer
+        Danger -> MiuixTheme.colorScheme.onErrorContainer
+    }
+
+    @Composable
+    fun ink(): Color = when (this) {
+        Neutral -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+        Accent -> MiuixTheme.colorScheme.primary
+        Live -> PiTone.live()
+        Danger -> PiTone.error()
+    }
+}
+
+/**
+ * A small state, on a pill: the tool card's name and state, and the two "something is
+ * running" rows at the foot of the transcript.
+ *
+ * A [Surface] rather than a hand-drawn background, so the pill is clipped and filled
+ * by the same code every other Miuix surface is. The radius is a full round rather
+ * than a [top.yukonga.miuix.kmp.basic.Button]'s 16dp because a pill is the app's
+ * shape for a *state*, and 28dp is the height the tool rows were measured at: two
+ * rows in a turn are one glance, not two settings rows.
+ *
+ * [mark] is the state inside the label — the tick, the cross — and it is the only
+ * thing about the pill that changes when a call settles. A live pill with no mark of
+ * its own draws the running dot, which is what says "this has not come back yet"
+ * without a word of its own; that is the same job the old design system's morphing
+ * indicator had, done with the one palette role that means it.
+ */
+@Composable
+internal fun ChatStatusPill(
+    label: String,
+    tone: ChatTone,
+    modifier: Modifier = Modifier,
+    mark: (@Composable () -> Unit)? = null,
+) {
+    val ink = tone.ink()
+    Surface(
+        modifier = modifier.height(PILL_HEIGHT),
+        shape = RoundedCornerShape(percent = 50),
+        color = tone.container(),
+        // The pill's ink, for its label and for whatever mark the caller draws: a
+        // mark passed in is an `Icon`, and Miuix's own `Icon` takes the tint from
+        // the content colour its container provides.
+        contentColor = ink,
+    ) {
+        // No `fillMaxWidth` anywhere here, and it is not tidiness: this pill is a
+        // child of a row that has other children (the tool card's argument, its
+        // chevron), so a minimum width asked for in here would push both off the
+        // row — the two-word-prompt-as-a-slab defect, one level down.
+        Row(
+            modifier = Modifier.padding(horizontal = PILL_INSET),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when {
+                mark != null -> Box(Modifier.padding(end = PILL_MARK_GAP)) { mark() }
+
+                tone == ChatTone.Live -> Box(
+                    Modifier
+                        .padding(end = PILL_MARK_GAP)
+                        .size(LIVE_DOT_SIZE)
+                        .background(ink, CircleShape),
+                )
+            }
+            Text(
+                text = label,
+                style = MiuixTheme.textStyles.footnote1,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** The pill's height, its inset and the air around its mark. */
+private val PILL_HEIGHT = 28.dp
+private val PILL_INSET = 10.dp
+private val PILL_MARK_GAP = 5.dp
+private val LIVE_DOT_SIZE = 6.dp
+
+/**
+ * The radius of an inset panel inside a card — a tool's output, a message's reasoning.
+ *
+ * Miuix's [top.yukonga.miuix.kmp.basic.Card] is 16dp and its buttons are 16dp, so a
+ * panel that sits *inside* a card takes one step in. Two expanded blocks in one turn
+ * are this one shape.
+ */
+internal val ROW_SHAPE = RoundedCornerShape(12.dp)
 
 // ------------------------------------------------------------------ arguments
 

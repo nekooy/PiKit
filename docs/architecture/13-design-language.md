@@ -1,495 +1,310 @@
-# The design language
-
-Material 3 Expressive is the whole of this app's interface: the palette, the type
-scale, the shape vocabulary, the motion and every component drawn from them. This
-chapter is the rule for what a page may look like, and the reason each rule is
-there. The code it describes is `app/src/main/java/pi/kit/mob/ui/design/`, eight
-files, and the rule is that a screen composes *those* and does not invent a
-colour, a radius, a spring or a control of its own.
-
-## Why the dependency was raised for it
-
-M3 Expressive arrives with Material 3 **1.5**, which is the release that made the
-emphasized type scale, the shape library and the expressive widgets public API:
-`displayLargeEmphasized` through `labelSmallEmphasized`, `MaterialShapes`'s
-thirty-five polygons with built-in morphing, `ButtonGroup`, `LoadingIndicator`,
-`FloatingToolbar` and `FloatingActionButtonMenu`. **1.4.0** — the version this
-build used before — has the *structure* (`MaterialExpressiveTheme`, `MotionScheme`,
-the flexible app bars, `ShortNavigationBar`) and **none of the widgets**.
-
-The upgrade is not a version bump and was not treated as one. `material3`
-1.5.0-beta01 declares `minCompileSdk=37` and `minAndroidGradlePluginVersion=9.1.0`
-in its AAR metadata, and every Compose 1.12.x artifact declares the same pair, so
-the version forces `compileSdk` 37, AGP 9 and Gradle 9 together. Three AGP 9
-defaults had to be turned off to keep the change to a dependency upgrade — recorded
-in `gradle.properties` with the reasoning — and `targetSdk` staying 28 was
-verified in the merged and packaged manifests of every variant, because AGP 9
-defaults a module's `targetSdk` to its `compileSdk` and 28 is a *ceiling* for this
-app rather than a conservative choice (§1).
-
-## The palette
-
-Low-chroma neutrals in the accent's own hue, one saturated accent, and one role
-that means *live*. `PiColor.kt` has both schemes written out in full. Dynamic
-colour — Android 12's wallpaper-derived Material You palette — exists as an
-**opt-in** (`PersonalizationPage`'s 动态配色 switch, off by default), not as the
-default: the terminal's own sixteen colours and the transcript's syntax tinting are
-fixed, and a wallpaper-derived palette can land them on top of each other. The
-switch trades that guarantee for a palette that matches the home screen, and
-`PiKitTheme` resolves it — below Android 12 there is nothing to follow, so the
-flag falls back to the chosen accent rather than to a missing palette. When it is
-on, the system's scheme is used as the system derived it: `accentScheme`'s
-re-derivation is skipped, because re-deriving the roles would undo exactly what
-the system worked out from the wallpaper.
-
-| Role | Hue | What it is for |
-| --- | --- | --- |
-| `primary` | the chosen accent, blue by default | The app's own voice: selection, the active destination, primary actions, section names, the launcher mark |
-| `secondary` | the accent desaturated | Supporting containers and chips — present without competing with a primary fill |
-| `tertiary` | the accent's neighbour, 14° round and quieter | **Live state, and nothing else.** A turn that is streaming, an agent that is working, a process that is still going |
-| `error` | red, always | A thing that failed, and a confirmation that cannot be taken back |
-
-### The hue is the choice; the lightness is not
-
-A user has an opinion about the accent, so `data/ThemeColor.kt` offers eight — blue
-is `DEFAULT`, and indigo is the violet-indigo the app shipped with before the choice
-existed — and `PiColor.accentScheme` moves the *hue* of the whole scheme:
-
-- the **accent roles** are re-derived from the seed at **fixed lightness steps**:
-  0.45 for a light scheme's primary, 0.90 for its container, 0.16 for the ink on that
-  container, and the dark scheme's mirror images. Fixing lightness rather than
-  contrast is what makes the eight interchangeable — a yellow held at the blue's
-  contrast ratio is a brown, and a palette whose roles move per hue is a palette
-  where one choice is legible and another is not. The saturation is the seed's own,
-  clamped to 0.35–0.9, and each container is a *fraction* of it;
-- the **neutral ramp and the outlines are re-hued**, keeping their own lightness and
-  their own very low chroma. This is the half that had to be found by getting it
-  wrong first: deriving only the accent left a blue button on a lavender surface, and
-  a low-chroma colour sitting next to a saturated one is not read as a neutral — it is
-  read as *that* colour, drained, which is what "the greys look dirty" is describing.
-  A surface is a blue-grey under a blue accent and a green-grey under a green one,
-  which is what the palette did before the choice existed: 0.4.1's greys run `#F8F9FE`
-  to `#EDEEF2`, all around hue 210, the same family as its `#35597F` primary.
-
-What does **not** move is the lightness of anything — the tonal ramp is what the
-transcript and the terminal are read on — and the error pair, because a failure is
-the one colour that has to mean the same thing whatever was picked.
-
-`tertiary` used to be a reserved coral, and that is the one part of the old scheme
-the choice replaced. It is the accent's hue rotated 14° at a lower saturation: still
-tellable from `primary` — which is the whole job of the role, `PiTone.Live` against
-`PiTone.Accent` — and no longer a colour from outside the scheme, which in practice
-was an orange patch in a blue interface that the user had not chosen and could not
-change. 0.4.1's own tertiary was `#3F6373` against a `#35597F` primary: the same
-relationship, a neighbouring hue, quieter.
-
-The surfaces are a strict five-step ramp — `surfaceContainerLowest` through
-`surfaceContainerHighest` — and a page picks a step rather than a colour. The steps
-are close in value on purpose: a step that reads as a *different panel* rather than
-as a step turns a list into a stack of unrelated slabs, and the same instruction
-appears in the shape guidance as "do not over-round information-dense components".
-
-A role with one job is a role a reader learns. That is the whole of the expressive
-colour tactic — "use contrast to emphasize the main takeaway" — applied to one
-meaning at a time, and it is why `PiTone` exists as an enum: a call site says
-*live*, not a colour. Keeping the job and giving the hue to the user is what makes
-the accent a preference rather than a re-skin.
-
-## The type scale
-
-Material's expressive scale is thirty styles: the fifteen baseline ones and an
-emphasized variant of each, the same size and line height at a heavier weight. The
-library ships both, so nothing here defines them. Two rules:
-
-- **Emphasized styles are for hierarchy, not for emphasis on a word.** A page
-  title, a section's count, a primary action's label, a hero heading. Applying one
-  to a sentence is how a page ends up shouting in three places at once.
-- **No font is bundled.** The app's text is overwhelmingly machine output — a
-  transcript, a terminal, file paths — where the reader's familiarity with the
-  platform's face is worth more than a distinctive one. The hierarchy is carried by
-  the emphasized styles and by size contrast instead.
-- **A section heading is the accent, not a grey.** `PiSectionHeader` draws
-  `labelLargeEmphasized`, upper-cased, letterspaced and inset 24dp, in `primary`.
-  It was `secondary` on the theory that the primary colour belongs to actions and a
-  heading in it would look tappable; against the light scheme's own values the
-  theory does not hold — `secondary` is `#5C5D72`, which on the page surface is a
-  *grey* label, so the section names that give a settings page its structure read as
-  one more shade of body text. Form answers the concern the colour raised: nothing
-  in the app that can be pressed looks like an upper-cased, letterspaced label.
-
-## Shape: two voices, one mark
-
-The corner scale is Material's ten steps, and every step of the app's own vocabulary sits
-**one step up the ramp** from where it started: 4→8, 8→12, 12→16, 16→20, 20→24, 28→32,
-32→36, 48→56. What this app decides is *which step a surface uses*, and it does so by
-picking a side:
-
-| Voice | Radii | Where |
-| --- | --- | --- |
-| Dense | `row` 16dp, `card` 20dp | Information-dense surfaces: transcript tool rows, settings rows, file rows, terminal chrome |
-| Action | `pill`, fully round | Buttons, chips, badges, the navigation bar's indicator, the composer's send control |
-
-The tension between the two is load-bearing and is the expressive shape tactic
-("unexpected moments by switching between square and fully rounded shapes") applied
-at the level of the whole app: an action reads as an action because it is the only
-round thing on the page. A surface in the *middle* — a 32dp radius on a list row —
-is neither dense nor an action and reads as neither, so it is not available.
-
-Everything read from `PiShapes`, so the move was one edit rather than a sweep; the two
-things that had to be checked were that the nested pairs are still concentric (they are
-a *difference* of steps, and `opticalRadius` subtracts the padding) and that the dense
-voice is still dense — a settings row is a 16dp rectangle, not a 24dp one.
-
-Nested corners follow the guidance's optical-roundness rule,
-`outer radius - padding = inner radius`, which `opticalRadius` computes. Two nested
-rectangles at the same radius look unbalanced; this is the one line that fixes it.
-
-`MaterialShapes`'s thirty-five polygons are decorative and the guidance says to use
-abstract shapes sparingly, so the app spends its one licence on a single silhouette:
-a **seven-sided cookie** (`PiShapes.agent`). It is the agent's mark and its working
-indicator, and it appears nowhere else. Seven sides is the count that still reads as a
-distinct outline at the 20dp it is drawn at smallest; at twelve it is a circle and at
-four it is a square. It used to be the empty state's medallion as well, and that is the
-use that was given up: an empty page draws the **Pi mark** — the launcher icon's own
-glyph, tinted `primary` — because the one thing a page with nothing on it should say is
-which app it is (§7.3).
-
-## One transient message, and what it is for
-
-`components/Toasts.kt` holds the app's only transient UI: `ToastHost`, `LocalToastHost`
-and the `ToastLayer` the root draws. A page reports a finished action by calling
-`show`, and the message appears over the page, is read, and goes after 3.5 s. It can
-never carry a button — a message with a control on it is a question, and a question
-belongs in a dialog. Its shape is `PiShapes.largeIncreased` (24dp) on `inverseSurface`,
-not the pill: the pill is the app's *action* voice, and a message with no control on it
-does not wear it. `Toast.makeText` is a different object entirely and is never used — the
-missing corners are what a shipping build showed.
-
-**It fades, and it does not travel.** The first version slid in from half its own height
-below and slid back down on the way out, and that read as an *entrance*: a message that
-arrives from somewhere asks the reader to notice the movement, in the one place on the
-screen their attention already is — the bottom edge, where the composer and the send
-button are. A toast is not a page and has no direction to be wrong about, so it does what
-`PiTabFade` does between peers: opacity on the effects spring, and nothing moves. The
-specs are still the theme's (`defaultEffects` in, `fastEffects` out); what went is the
-spatial one.
-
-**`ToastHost` has one slot, and that is the design.** A second `show()` replaces the
-first and restarts the clock, which is what makes a quick run's start and its verdict read
-as one statement rather than as two overlapping ones — and what means a caller never
-queues messages itself. A queue here would be a log nobody reads, the same argument as the
-one-sheet rule in §7.1.
-
-The split against `PiNotice` is by **tense**, which is what makes it decidable rather
-than a matter of taste:
-
-| | For | Example |
-| --- | --- | --- |
-| Toast | A moment: something finished | "Saved", "4 entries restored", "Agent restarted" |
-| `PiNotice` | A condition: something *is* | The agent failed to start, the web extension is not bundled, a folder cannot be read |
-
-A sentence about an action that has already finished used to be an in-page strip, and it
-stayed on the page until the next action replaced it — a settings page that had been
-used twice carried three notes, each about something already done — or a `PiNote` line
-under a field, which the reader had to clear by typing. The condition notices stay
-because a message that disappears after four seconds is the wrong shape for them: they
-name what to do about something that is still true.
-
-Two failure shapes are neither: a **dialog** for a failure the reader has to read —
-an operation that came back wrong (the settings pages' "announced then dismissed":
-a title, the failure's own sentence in the error-tone frame, one OK — the About page's
-update check, and every run on the maintenance page, where the failing lines are
-bounded and scrolled inside the dialog and the OK is the run's own clear call), and
-the model page's discovery problems, which are two paragraphs for the same frame — and
-an in-sheet note for a field's own validation error (the web-search value sheet's
-"that is not JSON"), which belongs beside the box being typed into.
-
-`PiFeedback.kt`'s components stay the page's own vocabulary: `PiNotice`, `PiNote`,
-`PiBadge`, `PiStatePill`, `PiLoading`, `PiProgress`.
-
-## Motion
-
-Springs, not durations. `PiMotion` reads all six specs — spatial and effects, each
-in fast, default and slow — from `MaterialTheme.motionScheme`, which `PiTheme` sets
-to `MotionScheme.expressive()` for the whole product. Nothing in the app names a
-spring value: that is what makes swapping the scheme one line and no call sites.
-
-- **Spatial** animates anything that moves, rotates or resizes, and overshoots.
-- **Effects** animates colour and opacity and must not overshoot, because a colour
-  that passes through a brighter value on its way reads as a flash.
-- **Speed** follows size: fast for a switch or a button, default for most
-  movement, slow for a whole screen.
-
-Two hand-written specs exist and both are named in `PiMotion` rather than at a call
-site, so there are exactly two places to look if the motion feels wrong. One is
-`PiMotion.settle()`, a spring that *releases* rather than travels — a sheet sprung
-back after a short drag — which wants different damping from a token and settles in
-about three quarters of the time of the nearest token.
-
-`PiPageSwap` is a spring-based directional slide and `PiTabFade` a crossfade on the
-effects spring. The slide's two pages travel *different* distances — the incoming
-one a full width, the outgoing one a fifth of it — because equal and opposite
-offsets park both pages' text on the same pixels mid-animation and read as a smear
-rather than as one page replacing another.
-
-## The components
-
-Everything a page needs is in `pi.kit.mob.ui.design`. No screen invents a control.
-
-**`PiSurfaces.kt`** — `PiScaffold` (one fixed header over a body, `PiHeaderHeight` tall with
-the status-bar inset consumed inside the header's own `Surface`, so a page cannot get it
-wrong), `PiCard` (one subject), `PiGroup` (peer rows in one frame), `PiSectionHeader`,
-`PiRow`, `PiRowDivider`, `PiNote` (the one prose voice), `PiEmptyState`, `PiFullDivider`.
-`PiPagePadding` and `PiPageBottom` are the page's own insets — the second is how far above
-the navigation bar a scrolling body stops, so the last row or card is never read against the
-bar's edge — and both exist so a page cannot pick its own number.
-
-Two of `PiRow`'s slots are sized by the language rather than by the caller. Its **chevron is
-20dp** — `SettingsRow`, which draws the settings tab, has used that box all along, and the two
-were 16x27 px of ink against 19x31 on the same 420dpi screen until they were unified (§9.2) —
-and its **`valueColor`** is a parameter, because a row that reports the outcome of something the
-reader just started carries that outcome in a `PiTone` while every other row's value is the
-neutral. `PiScaffold` takes a **`titleStyle`**, defaulting to the shell's `titleLarge`: the chat
-page's title is prose (the reader's own first line) and asks for `titleMedium`, and no other page
-does, so the exception is a parameter rather than a second header.
-
-**`PiActions.kt`** — `PiButton` (`PiButtonKind` × `PiButtonSize` × `PiTone`:
-Material's own five heights, 32, 40, 56, 96 and 136dp, with a destructive action
-being the same button in the error role), `PiSelectChip`. A connected button group
-(`PiConnectedGroup`, the expressive replacement for a segmented control) lived here
-too and was deleted with its last call site — no page had a group of options left
-that a row of chips did not answer better.
-
-**`PiInputs.kt`** — `PiSearchField`, `PiTextField`, `PiSwitchRow`, `PiChoiceRow`,
-`PiValueRow`.
-
-**`PiFeedback.kt`** — `PiLoading`, `PiStatePill` (a word and either the live indicator
-or a settled mark), `PiAgentMark`, `PiAvatar` (a picture, a label, a framework glyph or the
-app's Pi mark, in that order), `PiBadge`, `PiNotice`, `PiProgress`,
-`PiDot`, and `PiTone` (Neutral / Accent / Live / Danger).
-
-**`ui/components/Toasts.kt`** — `ToastHost`, `LocalToastHost` and `ToastLayer`: the app's
-one transient message, drawn by the root above the sheet layer and inset by the page's own
-bottom inset so it lands where the composer's band ends. See the section above for the split
-against `PiNotice`.
-
-**`PiSheets.kt`** — `PiSheetTitle`, `PiSheetList` (with a ceiling, because a sheet
-that grows to cover the window has stopped being a sheet), `PiSheetRow` (whose tap is
-gated on the sheet still being open), `PiSheetActions`, `PiSwatch`. These are
-*bodies*: `ui/components/Sheets.kt` still owns the panel, the grabber, the scrim and
-the drag, and it does so for measured reasons (a `ModalBottomSheet` is a second
-window, which is why the keyboard used to close and why taps were swallowed for up
-to 0.9 s after a dismissal). Nothing here re-opens that.
-
-**`ui/components/Menus.kt`** — the anchored half of that same layer: `MenuAnchor` and
-`Modifier.menuAnchor` (a trigger reporting its own window-relative bounds), `showMenu`,
-and `PiMenuRow` — a menu row at the height and width a dropdown carries (44dp,
-content-wide, tick at the end) where `PiSheetRow` is a sheet's 56dp. The panel it
-draws is placed at the anchor rather than at the window's edge, fades rather than
-slides, and dims nothing; the rows carry the same tap gate. Which surfaces are menus
-and which are sheets is §7.1's rule — a choice the panel hangs off is a menu, a
-report or a form is a sheet.
-
-**The panel has a ceiling too, and it is the status bar.** A sheet taller than the space
-between the keyboard and the top of the window used to be laid out from the window's bottom
-edge with nothing stopping it, so its top — the grabber and the sheet's title — was drawn
-*over* the clock and the battery. The measured case is the `AGENTS.md` editor: a 240–440dp
-field with two buttons under it, against a keyboard that takes 300dp of a 411×891dp window
-(`弹出输入法后页面顶部会直接冲到手机状态栏那里`). `SheetLayer` now bounds the panel to the
-height it was given (the window, less the keyboard, because the IME inset is consumed on the
-way in) minus the status bar. Every body is measured against that bound, so a body that can
-scroll scrolls — the editor's own column became a `Column(verticalScroll)`, which is safe
-there because it holds no lazy list — and a body that cannot is at least never over the
-system bars. `PiSheetList`'s 0.7 cap follows the new ceiling automatically, because it is a
-share of what it is given.
-
-**The panel's bottom edge is the other bound, and a list owns the room up to it.** The
-navigation bar's inset used to pad the body at the panel level, which left a band of
-empty panel between a scrolling list's text and the window's bottom edge — visible as
-a white bar under the text for as long as the list scrolled
-(`滑动时文字不会直接触底而是会被底下一个白色条块遮挡`). A body that scrolls declares
-`fullBleedBottom`, the layer hands it the inset through `LocalSheetBottomInset`
-instead of padding, and `PiSheetList` carries it as the list's content padding: the
-inset is inside the scroll, so text travels to the panel's edge and the last item
-still clears the gesture bar. A body with a tail after its list — a footnote, a form's
-buttons — pads itself below that tail instead (§7.1).
-
-### The bump
-
-Buttons are a **pill at rest and square up to `card` while held**. It is the
-smallest possible version of the guidance's "unexpected moment by switching between
-square and fully rounded shapes", it costs one animation and no layout, and it
-answers a question a touch screen otherwise cannot: whether the press landed. The
-quiet kinds — `Text` in a row, a chip in a filter bar — do not morph, because a
-control that jumps under the finger is only delightful when the finger meant it, and
-a list of twelve of them is a twitch.
-
-### No kind is outlined by the app; a dialog is two words
-
-**No `PiButtonKind` carries a hairline of its own.** `Outlined` keeps the framework's
-border — the kind that means "this is a control with an edge" — and `Text` is Material's
-own text button and nothing more: no fill, no outline, its whole difference from the fill
-kinds being the colour of its label. That is what a *dialog* is: a confirm and a dismiss
-that are two words differing by colour, the destructive one in the error role, rather than
-a filled pill beside a bordered word, which is two weights for one question. The app added
-a 1dp `outlineVariant` hairline to `Text` for a while, to stop a bare button reading as a
-word on a page whose cards and background are the same neutral; every `Text` button left in
-the app lives inside a tinted notice, whose own container is that edge, so the hairline was
-a second boundary around one thing and it is gone.
-
-A first draft put the hairline on *all five* kinds, and it was wrong in both directions at
-once: it made the app's primary actions look timid, and it turned the composer's chips and
-its two icon buttons — already separated from the panel by their fill and their glyph —
-into a row of boxes. The chips were the case that had a real problem in it, and the answer
-to that one is not a boundary either: an unselected chip is the accent's **container**,
-which is darker than the panel and visibly coloured, where the neutral step it used to use
-was a shade of grey.
-
-A toolbar **icon** is chrome rather than a button — a page header's back arrow, the
-terminal's own actions, the composer's four controls — and carries no outline either way.
-
-The **composer's field** is the one hairline that is not a `PiButtonKind.Text`, and it
-is the same rule rather than an exception to it: the words above it are about *actions*,
-and a field is not one — it is a place, and a place with no edge is a place the reader has
-to be told about. `surface` one step above the band's own `surfaceContainer`, 1dp
-`outlineVariant` and `largeIncreased`'s 24dp, which is where 0.4.1's 22dp
-`shapes.medium` lands on this scale (§7.1).
-
-**Action rows end-align, and a sheet's dismiss is not a button.** `PiSheetActions`,
-the document editors' footers, a dialog's confirm and cancel: every row of buttons
-collects at the trailing edge, the dismiss first and the action it commits last — and a
-control that belongs to *one row* is that row's `trailing` instead of a strip under it (§9.2,
-§9.3). The first draft spread them from the leading edge, which put a
-sheet's one real action under the left thumb and its dismiss under the right.
-
-The **standalone page action** is the exception, and it is the leading edge: the backup
-page's export/import pair (`RunActions`) and the model page's "new configuration" both
-start where the page's own content column starts, at one size (`Filled`, `Small`) and one
-alignment. A page action that floats at the opposite edge from the next page's was the
-inconsistency; a *row's* action still belongs at the row's trailing edge, which is a
-different question from the page's.
-
-The **dismiss itself is gone** from every sheet. A sheet is closed four ways that need
-no control at all — the scrim above it, the back gesture, a downward drag, and the
-panel's own exit — and a *Cancel* or *Close* button was a fifth way to do what four
-already did, on the one line that has room for the action the sheet exists for. What
-remains in a footer is what *changes* something: the files preview keeps *Open with*,
-the model numbers keep *Save*, the AGENTS.md editor keeps *Restore* and *Save*. A
-dialog is not a sheet and keeps its two buttons: an `AlertDialog` is a decision with a
-question above it, and its cancel is half of the answer.
-
-### Where a sentence goes — and why most of them are gone
-
-The app carries three kinds of prose, and a sentence that is none of them does not get
-written:
-
-- about **one control** — what pressing it does, what a field's value is for — it
-  goes *inside that control*: a row's `subtitle`, or a field's `supportingText`. The
-  model-numbers sheet's "a blank box leaves the value alone" is its field's help. A
-  button's `caption` — a second line inside its own fill — was a third home for one of
-  these and it is gone: the one caller (the AGENTS.md editor's *Save*) dropped it because
-  a two-line *Save* beside a one-line *Restore* read as two sizes for two peer actions.
-- about a **state** — a save that failed, a file that could not be read, a shell that
-  exited — it is `PiNotice`, in its container, beside the thing in that state.
-- about a **moment** — an action that has just finished — it is a **toast**, which is
-  the third home and the one that was missing. "Saved", "restored", "removed", "agent
-  restarted": each used to be a strip on the page or a line of `PiNote` prose under the
-  control, and each stayed there until the next action replaced it, so a settings page
-  that had been used twice carried notes about things nobody could act on any more. A
-  sentence in the past tense does not belong on the page it describes: it appears, it is
-  read, and it goes.
-
-What is deliberately **not** written is a fourth kind, and it was written in this app
-for a long time: a paragraph about the *page* — what it is for, when a change takes
-effect, why the default is what it is. Those paragraphs were on every settings page,
-under a heading and in a voice of their own (`PiNote`, and `SettingsNote` on the
-settings pages), and they were removed rather than restyled. The reasons are worth
-keeping, because the design looks under-explained without them and that is the
-point:
-
-- **Nobody reads them.** They sit under the controls they describe, so they are met
-  after the decision rather than before it, and a reader who has already tapped the
-  switch has no reason to keep going. Nothing measured this; the app simply had a
-  page's worth of them and the answer to "what does the maintenance page do" was
-  still the page's rows.
-- **They made the pages heavy.** Five settings pages carried fourteen paragraphs
-  between them, in two different containers, at three different indents — the drift
-  `PiNote`'s single inset had been invented to stop. Removing them is what let the
-  pages be read as lists.
-- **The manual is where they belong.** It is one document with chapters, it is
-  reachable from the settings root, and it can say a thing once instead of at every
-  place the thing is true. The keep-alive explanation and the accent colour's reach
-  moved into it in the same change; the workspace's "only directory a recursive
-  delete is allowed in" was already there.
-
-A fact that a user *must* know before acting — a change that only takes effect on the
-next agent start — is not a paragraph: it is a clause in the subtitle of the control
-that makes the change. And it is not always needed even there: where the app can act on
-the fact itself, it does, and the clause goes with it. Every write on the web-access page
-now restarts the agent instead of saying that the next start is when the change lands.
-
-### Containers: a card is not a group
-
-A **card** is one subject with its own body. A **group** is a set of peer rows that
-share a frame, with dividers between the rows. The distinction is what keeps a page
-readable: eight cards stacked is eight visual objects where the reader needs one
-list, and a group's rows must not each be a card.
+# The interface, drawn by Miuix
+
+Miuix is the whole of this app's interface: the palette, the type scale, the shapes,
+the motion, the preference rows, the dialogs and the sheets. This chapter is the rule
+for what a page may look like, and the reason each rule is there. The code it
+describes is `app/src/main/java/pi/kit/mob/ui/kit/` — the theme, the page, the
+section, the menu row and the window-level overlays — plus the screens that compose
+it.
+
+**A page composes the library and the kit. It does not invent a colour, a radius, a
+type style or a spring of its own.** That is the whole rule; the rest of this chapter
+is what it means where it is not obvious.
+
+## Why the app stopped drawing its own design system
+
+Until the Miuix rewrite the interface was Material 3 Expressive with a design system
+of the app's own: `ui/design/` (nine files — palette, type, shapes, motion, surfaces,
+inputs, actions, feedback, sheets) and `ui/components/` (six wrappers over Material
+widgets) — **15 files and about 5,100 lines** whose job was to turn the library's
+tokens into the app's vocabulary. Every screen depended on that vocabulary, and every
+Material upgrade had to be re-read against it.
+
+The rewrite replaced it with a library that already owns the vocabulary:
+`compose-miuix-ui/miuix` 0.9.4, a Compose Multiplatform component library drawing the
+MIUI/HyperOS idiom. Its theme engine derives a palette from a seed colour; its
+preference components are the rows a settings page is made of; its window dialogs,
+sheets, snackbars, icons and navigation are the furniture. What is left for this app
+is exactly one design decision — the accent — and a small set of compositions the
+library does not have: the page frame, the section, the popup row, the window-level
+dialog phrasing, the snackbar host, and the content rendering (Markdown, formulas,
+the terminal).
+
+**A wrapper approach was rejected.** Keeping the `Pi*` API and re-implementing its
+internals with Miuix would have compiled the same screens with less churn, but it
+would have left two vocabularies in the tree — one wrapper per component, re-exposing
+the library's parameters a few at a time — and the result would have been a re-skin
+of the old design rather than a rewrite on the new one. The final tree has no `Pi*`
+component that duplicates a Miuix one.
+
+**Keeping Material 3 alongside Miuix was rejected for the final state.** Two palettes
+and two type scales on one screen is exactly the drift this change removes. Both
+libraries also draw press indications and squircle cards differently, so a screen
+mixing them reads as two apps in one frame. Material 3's AAR metadata is no longer
+what fixes `compileSdk` 37 either: that floor is the Compose artifacts' own, and it
+stayed when the dependency left.
+
+The cost is real and accepted: the app no longer decides what a Miuix component looks
+like, and Miuix is an experimental library — a bump can move the interface. That is
+the trade: one coherent idiom owned by a library, against a hand-kept design system
+maintained alongside every screen.
+
+## The palette: one seed in, the library's engine out
+
+`PiKitMiuixTheme(settings)` is the one place the theme is assembled. It builds a
+`ThemeController` from the preferences:
+
+| Preference | What it becomes |
+| --- | --- |
+| `ThemeMode` | `MonetSystem` / `MonetLight` / `MonetDark` — for `SYSTEM` the library reads the system's dark setting |
+| `ThemeColor` (eight seeds) | `keyColor` — the palette is derived from the chosen hue, every role of it |
+| `themeDynamic` | `keyColor = null` — the palette comes from the wallpaper (Android 12+), with the library's own fallback below that |
+
+The principle the previous design language arrived at by hand survives as the
+library's engine: **the hue is the choice, the lightness is not.** Every role is
+derived at fixed tonal steps from the seed, so the eight choices are interchangeable
+rather than eight hand-tuned palettes, and the error pair does not move with the
+accent.
+
+Dynamic colour remains an **opt-in**, for the reason it always was: the terminal's
+sixteen colours, the transcript's syntax palette and the diff tints are fixed content
+colours, and a wallpaper-derived palette can land them on top of one another. The
+switch trades that guarantee for a palette that matches the home screen, and below
+Android 12 the library falls back to its built-in scheme rather than losing the
+choice.
+
+Two roles the app names itself:
+
+- **`PiTone.live()`** — the colour that means *a turn is streaming*, *an agent is
+  working*, *a process is still going*. Miuix has no "live" role; the kit maps it to
+  the palette's `secondary`, the seed's own hue and quieter than `primary`, so a live
+  state is tellable from an action without being a second accent.
+- **`PiTone.error()/errorContainer()`** — the scheme's error pair, re-exported so a
+  call site says *danger* rather than naming a role.
+
+The system-bar icon appearance is set here too, from the resolved dark state. It is a
+property of the theme rather than of a page, and one authority is what keeps a
+dialog's separate window from disagreeing with the page behind it.
+
+## The type scale is the library's fourteen styles
+
+Miuix ships fourteen text styles — `title1`–`title4`, `headline1`–`headline2`,
+`subtitle`, `main`, `paragraph`, `body1`–`body2`, `button`, `footnote1`–`footnote2` —
+and the app defines none of them. What each is used for:
+
+| Where | Style |
+| --- | --- |
+| Hero number, setup percentage | `title1` (32sp) |
+| Page-opening heading | `title2`–`title4` |
+| A row's title, a menu row's title | `headline1` at medium weight, the library's own row typography |
+| Running prose (a reply, the manual) | `paragraph` (17sp) |
+| Secondary line, code, table cells | `body2` (14sp) |
+| Captions, dates, fences, key-bar keys | `footnote1`/`footnote2` |
+| Action labels | `button` |
+
+**No font is bundled**, the rule the previous design language settled and this one
+keeps: the app's text is overwhelmingly machine output — a transcript, a terminal,
+file paths — where the reader's familiarity with the platform's face is worth more
+than a distinctive one, and the hierarchy is carried by the library's size ladder.
+
+**The transcript's prose is `paragraph` with its line box raised at the call site.**
+Miuix's `paragraph` carries a `1.2em` line height, barely above a Latin font's own
+box; an inline code span's fill is the font box plus a point of padding, so on the
+library's own line box the fill touches the line above. `Markdown.kt` raises the line
+box to 26sp where the style's own 1.2em would be 20.4sp, and that 5.6sp is the fix —
+a call-site decision, because the same style is drawn elsewhere without code in it.
+ARCHITECTURE §12.1 carries the measurement.
+
+The text-size preference is one multiplier on the composition's `LocalDensity`
+`fontScale` (in `MainActivity`), so every `sp` in the app — every row, the
+transcript, the terminal banner, the dialogs — moves together. The library needs to
+know nothing about it.
+
+## A page is a scaffold, a bar and a one-line subtitle
+
+`PiPage(title, subtitle, onBack, actions, floating)` is the frame every destination
+and every settings page uses. It is a Miuix `Scaffold` with a pinned
+`SmallTopAppBar`, a `BackHandler` that exists only when `onBack` does (a tab root has
+no back arrow and does not swallow the system gesture), and a body that receives the
+scaffold's `PaddingValues`.
+
+The subtitle is drawn by the kit, not passed to the bar, and that is a measured rule:
+`SmallTopAppBar` renders its `subtitle` with **no line limit**, so a sentence wider
+than the space beside the action icons wraps and the bar — and every page's content
+rectangle with it — grows by a line. The terminal page measured it: its English idle
+sentence wraps on a phone where the Chinese one does not. The kit draws the subtitle
+itself, one line with an ellipsis, and distinguishes `null` ("this page has no
+subtitle") from `""` ("reserve the line while the value is being read") — the files
+page's item count is null while a folder is listed, and a line that appeared and
+disappeared once per folder moved the whole page by its height twice.
+
+## Sections, rows, and the one thing a row may not do
+
+A settings page is a sequence of `PiSection`s: a `SmallTitle` and a `Card` of rows.
+The rows are the library's preference components — `BasicComponent`,
+`ArrowPreference`, `SwitchPreference`, `SliderPreference`, `RadioButtonPreference`,
+`CheckboxPreference`, the dropdown and spinner preferences — and the app has no row
+wrapper of its own. A value sits in the trailing slot; an arrow means "this row opens
+something"; a switch means "this row is the switch".
+
+Two row rules are behaviour rather than taste:
+
+- **A row that raises a question is inert, and its switch is the control.** The
+  storage grants and the safety guard ask every time they are turned on or off, so
+  the row does not toggle and the finger has to reach the switch. Backup's switches
+  stay row-toggling, because nothing there asks.
+- **A `BasicComponent` with `endActions` must not go inside a `ListPopupColumn`.**
+  Miuix 0.9.4 sizes a popup column from its children's intrinsic sizes, and the
+  component's end-action budget overflows `Int` at the unbounded width it is asked
+  about — the arithmetic is `(available - 8dp) * 6 / 10`, which is negative at
+  `Constraints.Infinity`, and the crash is `maxWidth must be >= than minWidth`. It was
+  reproduced on the terminal's session roster. `ui/kit/PiMenuRow` is the row for a
+  popup that needs a trailing mark; a `BasicComponent` *without* end actions is safe.
+
+## Dialogs, sheets and the one message
+
+**Dialogs are window-level.** `PiConfirm` and `PiAlert` wrap Miuix's `WindowDialog`
+rather than the overlay variant, and the reason is this app's shape rather than a
+preference: the first-launch permission prompts are raised before there is a page to
+attach an overlay to, a pi question can arrive over any destination, and a sheet
+belongs to a page that may be disposed while it closes. A window dialog needs no
+`Scaffold` host, so it works in all three cases with one call. The cost is the
+platform's dialog window around Miuix content — the content still inherits the
+theme, density and language, and Miuix draws its own background, corner radius, dim
+and animation inside it.
+
+**Actions in a dialog are flat text buttons**, with the dismiss answer neutral and the
+confirm answer in the error role only when it cannot be taken back
+(`destructive = true`). Filled buttons were tried in the language picker and rejected:
+a dialog's confirm is not the page's primary action, and a filled pill in a dialog
+competes with the page behind it for the same emphasis.
+
+**Sheets are `PiSheet`** (Miuix's `WindowBottomSheet`): scrim, back gesture and
+downward drag all dismiss, and the page only owns *which* sheet is open. A picker is
+a sheet of radio rows with a filter field, not a dropdown, when its content is longer
+than a few words — a dropdown's popup is sized for a list, not for a search.
+
+**Transient messages are one snackbar**, hosted once at the root and raised through
+`LocalPiToast`. The old pill became the library's snackbar, and two of its rules
+survive with it: there is **one slot** (a second message replaces the first and
+restarts the clock — a queue is a log nobody reads), and the split against an
+in-page notice is by tense — a *moment* ("Saved", "Agent restarted") is a snackbar, a
+*condition* ("the agent failed to start", "this folder cannot be read") stays on the
+page in the error role, because a message that disappears after four seconds is the
+wrong shape for something that is still true. A failure the reader has to *read* is a
+dialog with a bounded, scrolling body (the maintenance runs, the model catalogue's
+discovery problems); a field's own validation error is a line under the box.
+
+## Navigation
+
+The four destinations are a Miuix `NavigationBar` at the root, one item per
+destination — icon and label, the library's own selected state, no custom indicator.
+The tab switch is a `Crossfade` with the bar outside it, so the bar does not travel
+with the page and a draft in the composer survives a look at the terminal (the
+composer is hoisted above the destination for the same reason). The terminal's
+glyph — a chevron and an underscore — is the one mark drawn for this app, because
+Miuix's set has no terminal icon.
+
+The settings stack keeps its own model: a sealed `SettingsPage` with a `parent`, a
+`rememberSaveable` encode/decode, and a per-page `PiPage(onBack)` rather than one
+handler above the stack. It survives process death, which a single "current page"
+variable does not.
+
+## Shapes, motion, icons
+
+**Shapes are the library's.** Cards, fields and menus are squircles; buttons are
+capsules. The two voices the previous design language described — dense surfaces
+against round actions — survive as the same distinction in Miuix, but the app no
+longer owns a radius, and nested-corner arithmetic is the library's business.
+
+**Motion is the library's**, except for the one page-level move a page has to spell
+out (the settings stack's forward/back slide, the files page's folder transition, the
+chat history swap). There is no app-level spring scale: the library's dialogs, sheets,
+switches, sliders and navigation bar carry their own animation, and a page that adds a
+spring of its own is a page that will move differently the next time the library does.
+
+**Icons are Miuix's**, at the library's 24-unit weight and tinted by the component
+drawing them. The exceptions are four glyphs the reader chose at the size the app
+draws them — the model mark, the thinking mark, ⌘ and the copy/check pair — which
+predate the rewrite and are kept: a glyph chosen that way is not replaced because the
+container around it changed. They are drawn through Miuix's `Icon`, from the same
+drawables. The Pi mark is the launcher icon's geometry, drawn from `ic_pi_mark.xml`.
+
+Two glyph rules survive from the previous interface because they are still true: a
+glyph from another set has another weight, so **its size is a call-site decision** (⌘
+is drawn at 17dp where the library's glyphs are 21dp); and a glyph that was not drawn
+here is not edited here — scaling it at the call site is a layout decision, changing
+its geometry is not.
 
 ## What the pages do with it
 
-The app's four destinations and their second levels, and the one decision each makes
-that the shared components do not:
+The four destinations and their second levels, and the one decision each makes that
+the shared vocabulary does not:
 
-- **Chat** — the transcript is the app's densest surface and the one place a *card*
-  per turn is right, because a turn is a subject: a prompt card in the reader's own
-  words at the end edge on the app's own colour, and an answer card holding that turn's
-  reasoning, its tool calls and its reply. Tool calls are dense rows inside it, a live
-  turn carries the live tone, and the composer is the one surface that *floats* — a panel
-  drawn over the transcript with an elevation shadow, so the list keeps the whole height
-  of the page. A conversation with nothing in it draws the app's hero moment instead of
-  a blank area, because the blank is the first thing the app ever shows.
-- **Terminal** — the terminal is a black rectangle with its own sixteen colours, so
-  the chrome around it stays out of the way; the key bar is the action voice at its
-  smallest, and its own background is the tab strip's `surfaceContainer` because it is
-  the page's bottom edge — anything else drew a seam between the terminal and the bar.
-- **Files** — a file manager, and the one page whose furniture is not the settings
-  pages'. It is read-only (writes go through the agent or the terminal), but read-only
-  is a statement about the *verbs*: the first version was a settings group holding
-  peer rows, and a directory is not a set of controls — it is a table of objects, and
-  the page has to say where you are and let you move. So it carries a **location bar**
-  (the path as a trail of tappable segments; the header's subtitle is the count, not
-  the path, because a path is navigation and a path you can tap is worth more than one
-  you can only read), a **toolbar** directly above the rows it acts on — a filter field
-  and a sort button whose three orders are a floating menu at the button (§7.1) — and
-  a **table** with no frame around it: a glyph tile, the name, the kind and the date
-  under it, and one right-aligned monospace column holding the number the row is about
-  (bytes for a file, entries for a folder, nothing for a link, whose `length()` means
-  different things on different filesystems). No card and no hairline per row: a
-  directory of two thousand entries is scanned, not read, and the frame that makes
-  eight settings rows one object makes a listing look like a panel. A row's glyph is
-  **by what the file is** — folder, link, code, image, archive, video, audio, sheet,
-  document — because a listing where every file wears the same sheet of paper asks the
-  reader to read names to tell anything apart; a folder takes the accent's container
-  and a picture or a video the live tone, and everything else stays neutral, since six
-  tones on one page is a palette. A hold opens that row's actions (copy path, open
-  with) rather than a trailing button taking the column the size wants. The preview is
-  still a sheet — one file, read once, dismissed four ways — and it now **draws a
-  picture** instead of calling it binary, states kind, size and time in its title, and
-  carries **Copy path** beside **Open with**: the path is the one thing this page knows
-  that the chat page accepts, so it has to be copyable from where it is shown. The two
-  bodies are one decision — a picture that was drawn is not followed by the text body's
-  "preview is limited to 64 KB", which the first version printed under every image
-  over the limit.
-- **Settings** — the only place `PiGroup` and `PiRow` are the whole page. Groups by
-  subject, rows that act, and a page whose second level is a page rather than a
-  dialog.
-- **History** — a list of conversations is a list of *questions the reader asked*,
-  so a row is the reader's own words on one line — ellipsised, so every row is the
-  same height, where a two-line cap made the list a mix of one- and two-line rows —
-  beside when it was and how much followed. It shares no row with Settings. The
-  row's actions are a hold, and what the hold opens is a floating menu on the row
-  (§7.1), not a panel from the bottom edge. The **pinned group is one panel**
-  (`primaryContainer` at half strength, the card's radius), not one lift per row:
-  a stack of individually tinted rounded rectangles read as a stack of selected
-  rows ("已置顶对话不应该每个分别蓝色背景而应该整体蓝色背景"), and the group frame is
-  the same move `PiGroup` makes around a settings page's peer rows.
+- **Chat** — the transcript is the app's densest surface and the one place a `Card`
+  per turn is right, because a turn is a subject: a prompt card on the reader's own
+  colour at the end edge, an answer card holding that turn's reasoning, tool calls and
+  reply. Tool calls are dense rows inside it, a live turn carries `PiTone.live()`, and
+  the composer is the page's bottom band — a `surfaceContainer` strip holding the four
+  chips, the `TextField` and the action row — so the transcript keeps the rest of the
+  height. A conversation with nothing in it draws the Pi mark and the page's hint
+  instead of a blank area, because the blank is the first thing the app ever shows.
+- **Terminal** — a black rectangle with its own sixteen colours, so the chrome stays
+  out of the way: a `PiPage` bar with the shell's name and the session roster, and a
+  key bar of Miuix buttons on a `surfaceContainer` track. The keys are the same glyph
+  weight as everything else, a latched modifier takes `primary`, and the bar scrolls
+  horizontally because English labels need more room than Chinese ones.
+- **Files** — a directory is a list of objects, and it is drawn as one: a
+  `BreadcrumbBar` location trail, a filter field with a sort menu, and a `LazyColumn`
+  of Miuix `Card` rows with press feedback and a hold menu (copy path, open with). A
+  row's glyph is **by what the file is** — folder, link, code, image, archive, video,
+  audio, sheet, document — because a listing where every file wears the same sheet of
+  paper asks the reader to read names to tell anything apart. The preview is a sheet
+  that draws a picture instead of calling it binary, and carries **Copy path** beside
+  **Open with**. This page chose cards where the previous interface deliberately had
+  none: the Miuix card's press feedback is the row's touch affordance, and a table of
+  unframed rows had none.
+- **History** — a list of conversations is a list of *questions the reader asked*, so
+  a row is the reader's own words, ellipsised to one line, beside when it was and how
+  much followed, with selection as a checkbox and actions on a hold. The pinned group
+  is tinted with the secondary container under its own `SmallTitle`, not one lift per
+  row, so a run of pinned conversations reads as a group rather than a stack of
+  separate selections.
+- **Settings** — `PiSection` groups by subject, rows that act, and a page whose second
+  level is a page rather than a dialog. The rows carry the library's own typography
+  and spacing; what the page decides is *which* group a fact belongs to, not how a
+  row looks.
+
+## What the rewrite kept, and what it removed
+
+Kept, because they are behaviour rather than skin: the strings catalogs and the three
+languages; the transcript's parser, turn cards, folding, tool rows and status pills;
+JLaTeXMath, `MathCache`'s worker and the formula line box (§12.2); the terminal's
+vendored `TerminalView`, its fixed sixteen colours and every key it sends; the copy
+glyph and its 1400 ms confirmation; and every settings rule — validation, the restart
+schedule, "ask before discarding a form", the font-size commit on release,
+per-grant storage questions.
+
+Removed in the same change: the Material 3 palette, shapes, motion and typography;
+`ui/design/**` and the six shared component wrappers (15 files, about 5,100 lines);
+the `androidx.compose.material3` and `material-icons-extended` dependencies, with
+nothing left importing them; and two `Strings` members whose call sites died — the
+sessions page's back label, which `PiPage` now names from `common.back`, and the
+thinking-level descriptions, which the composer's menu stopped showing when it became
+a list of ids.
+
+`components/CopyButton.kt` is the one survivor of the old `ui/components/` package,
+and only because its content was rewritten to Miuix while keeping the two call sites:
+the transcript's meta row and a tool card's output still use the same control.
+
+## What is still the app's, not the library's
+
+- **The transcript's content colours.** Syntax highlighting, diff tints and the
+  live/error tones are content, not chrome; they are derived from the scheme where
+  they can be and fixed where the terminal requires it.
+- **The terminal's sixteen colours.** A terminal with a theme-derived palette is a
+  terminal whose output changes meaning with the wallpaper.
+- **The formula line box** — the box, the ascent/descent measurement and the
+  typesetter are the app's; only their ink and text style come from the theme.
+- **The window-level dialog phrasing** (`PiConfirm`/`PiAlert`) and the snackbar host,
+  because Miuix ships the window and not this app's two-answer question.

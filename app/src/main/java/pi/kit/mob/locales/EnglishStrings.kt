@@ -115,21 +115,6 @@ internal object EnglishStrings : Strings {
                 "You can turn it on for this app in the system settings."
         override val cameraUnavailable = "No camera app on this device can take a photo."
 
-        // The chip is one line beside two other chips, and the level it names is
-        // pi's own id (`off`, `medium`, `xhigh`, …) — the value that is passed to
-        // `set_thinking_level` and printed by `pi --list-models`. The picker carries
-        // the meaning, in the interface's language.
-        override fun thinkingLevelDescription(id: String) = when (id) {
-            "off" -> "Answer straight away, with no reasoning step"
-            "minimal" -> "The shortest reasoning pi allows"
-            "low" -> "Quick answers, light reasoning"
-            "medium" -> "The default balance of speed and depth"
-            "high" -> "Thinks longer before answering"
-            "xhigh" -> "Thorough reasoning; slow and expensive"
-            "max" -> "No limit on the reasoning step"
-            else -> ""
-        }
-
         override val contextDetails = "Context"
         override val contextEmpty = "Nothing sent yet"
         override fun cacheHit(percent: Int) = "Cache hit $percent%"
@@ -192,7 +177,6 @@ internal object EnglishStrings : Strings {
         override val deleteSelected = "Delete selected"
         override val cancelSelection = "Cancel selection"
         override val recent = "Recent"
-        override val back = "Back"
         override val emptyHeading = "No saved conversations yet"
         override val empty = "A conversation is written to disk once pi replies."
         override fun nothingMatches(query: String) = "Nothing matches \u201c$query\u201d."
@@ -960,7 +944,7 @@ internal object EnglishStrings : Strings {
                 "undici, p-limit and typebox",
             "Command-line tools bundled for the agent: ripgrep (MIT/Unlicense) and " +
                 "fd (MIT/Apache-2.0)",
-            "Interface: Jetpack Compose and Material 3 (Apache-2.0), Kotlin and " +
+            "Interface: Jetpack Compose and Miuix (Apache-2.0), Kotlin and " +
                 "kotlinx.serialization (Apache-2.0), Okio (Apache-2.0)",
             "Formula typesetting: JLaTeXMath, as the Android port jlatexmath-android " +
                 "(GPL-2.0, and GPL-2.0 with a linking exception upstream)",

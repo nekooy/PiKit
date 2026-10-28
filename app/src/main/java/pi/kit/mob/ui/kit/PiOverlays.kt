@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
@@ -86,13 +87,22 @@ fun PiConfirm(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onDismissRequest: (() -> Unit)? = onDismiss,
+    /**
+     * Whether the confirm answer cannot be taken back.
+     *
+     * The confirm label is drawn in the scheme's error colour and the dismiss
+     * label stays neutral, which is the one distinction a two-button question
+     * needs: *delete* and *keep* should not look like two equivalent choices.
+     */
+    destructive: Boolean = false,
 ) {
     WindowDialog(
         show = show,
         modifier = modifier,
         title = title,
         summary = text,
-        onDismissRequest = onDismiss,
+        onDismissRequest = onDismissRequest,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -108,6 +118,13 @@ fun PiConfirm(
                 text = confirm,
                 onClick = onConfirm,
                 modifier = Modifier.weight(1f),
+                colors = if (destructive) {
+                    ButtonDefaults.textButtonColors(
+                        textColor = MiuixTheme.colorScheme.error,
+                    )
+                } else {
+                    ButtonDefaults.textButtonColors()
+                },
             )
         }
     }
@@ -155,8 +172,19 @@ class PiToastHost internal constructor(
     private val scope: CoroutineScope,
     internal val state: SnackbarHostState,
 ) {
+    /**
+     * One slot, like the pill it replaces.
+     *
+     * A second message replaces the first and restarts the clock. A queue here
+     * would be a log nobody reads — the same argument as the one-sheet rule — and
+     * two messages about one tap ("Saved", then "Agent restarted") are one
+     * sentence, not two. Miuix's host draws every visible entry, so the previous
+     * one is dismissed before the new one is shown rather than being left to its
+     * own timeout.
+     */
     fun show(message: String) {
         scope.launch {
+            state.newestSnackbarData()?.dismiss()
             state.showSnackbar(message = message, duration = SnackbarDuration.Short)
         }
     }

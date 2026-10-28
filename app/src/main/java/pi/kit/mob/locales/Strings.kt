@@ -362,20 +362,6 @@ interface Strings {
         val cameraDenied: String
         val cameraUnavailable: String
 
-        /**
-         * One thinking level's *meaning*, in the interface language.
-         *
-         * The level's **name** is not here, and that is deliberate: a level is
-         * `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`, exactly the
-         * string [pi.kit.mob.pi.PiCommand.setThinkingLevel] puts on the wire, and it
-         * is shown as it is. Translating the names was the bug — the chip, the
-         * picker, the footnote and `pi --list-models` in the terminal all name the
-         * same level, and a user who reads `中` on the chip and `medium` in pi's own
-         * output has no way to know they are the same thing. What *is* language is
-         * the sentence explaining the level, and that is this.
-         */
-        fun thinkingLevelDescription(id: String): String
-
         /** The percent chip's own name, and the title of what it opens. */
         val contextDetails: String
 
@@ -480,7 +466,6 @@ interface Strings {
          * pinned group ends.
          */
         val recent: String
-        val back: String
 
         /**
          * The empty page's heading, with [empty] as the sentence under it.

@@ -242,7 +242,7 @@ Measured on one 42-construct sweep: the debug APK fell back on `\oiint`/`\oiiint
 APK additionally on `\dfrac`, `\tfrac`, `\left\{…\right.`, `\begin{align}`, `\operatorname` and
 `\substack` — a difference no debug build shows, which is how it reached a phone while
 every formula test on the emulator was green. `app/proguard-rules.pro` keeps the whole
-`org.scilab.forge.jlatexmath` package (330 KB of classes against a 107 MB APK, and **218**
+`org.scilab.forge.jlatexmath` package (330 KB of classes against a 112 MB release APK, and **218**
 reflective entry points to guess wrong about otherwise), and `tools/check-release-math.py` — called
 by `build-apks.py` **after** the APKs are built, not from its `checks` list — fails when a release
 APK's dex has lost them. **A formula verified on a debug build is not a formula verified on the
@@ -251,7 +251,11 @@ the numbers.
 
 **Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
 glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12.3 has that
-sequence. **Render candidates at the size the app draws them, and choose from those** — a 64dp
+sequence. The one exception is the terminal destination's mark in `PiKitRoot.kt` — a chevron and
+an underscore, two strokes at Miuix's own line weight — because the library's set has no terminal
+icon and the navigation bar needs one; it is a *navigation* mark, not the app's mark, and the
+launcher glyph is still the only hand-drawn figure that has to survive being looked at.
+**Render candidates at the size the app draws them, and choose from those** — a 64dp
 preview says nothing about whether a glyph survives at 21dp. And **a resource that fails to compile
 is silently replaced by a cached older one**, which is how a drawable went missing from three APKs:
 `unzip -l app-debug.apk | grep ic_whatever` is the check that settles it — **on a debug APK**,
@@ -259,10 +263,27 @@ because a release one renames every resource to a two-character path (`res/0K.xm
 grep returns nothing for a resource that is present and correct.
 
 **A glyph from another set has another weight, so its size is a call-site decision.** ⌘ at the
-21dp the Material glyphs beside it use is too heavy: Lucide draws that
-figure out to 21 of its 24 units where Material's `Add` keeps its ink inside 14. It is drawn at
+21dp the Miuix glyphs beside it use is too heavy: Lucide draws that
+figure out to 21 of its 24 units where Miuix's `Add` keeps its ink inside 14. It is drawn at
 **17dp** in `ChatScreen.kt`, and the vector is untouched — scaling a borrowed glyph at the call
 site is a layout decision; editing its geometry is the mistake the bullet above is about.
+
+**Never put a `BasicComponent` with `endActions` inside a `ListPopupColumn`.** Miuix 0.9.4
+measures a popup column's children with an unbounded width to size itself, and
+`BasicComponent` answers an intrinsic query by measuring with that width: its end-action budget
+`(available - 8dp) * 6 / 10` overflows `Int` at `Constraints.Infinity` and hands
+`Constraints.copy` a negative `maxWidth` — `IllegalArgumentException: maxWidth must be >= than
+minWidth`, reproduced on the terminal's session roster. A `BasicComponent` *without* end
+actions survives the same measurement, which is why the command and attachment menus do not
+crash. `ui/kit/PiMenuRow` is the row to use when a popup row needs a trailing mark;
+ARCHITECTURE §13 has the arithmetic and the reason the row is hand-built.
+
+**A page's subtitle is `PiPage`'s, not `SmallTopAppBar`'s.** The library renders its own
+`subtitle` with no line limit, so a sentence wider than the space beside the action icons wraps
+and the bar — and every page's content rectangle with it — grows by a line; the terminal
+measured it in English where the Chinese fits. `PiPage` draws the subtitle itself, one line with
+an ellipsis, and reads `null` as "no subtitle" and `""` as "reserve the line while the value is
+being read". Do not bypass it with `SmallTopAppBar(subtitle = …)`.
 
 **When the question is how something should look, ask for a picture of the thing wanted — not for a
 menu.** The copy button took four rounds — six *containers*, then six glyphs from other icon sets,

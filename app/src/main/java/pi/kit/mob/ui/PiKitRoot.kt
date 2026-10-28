@@ -7,8 +7,7 @@ import android.os.Build
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -23,42 +22,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.BatterySaver
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ShortNavigationBar
-import androidx.compose.material3.ShortNavigationBarItem
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -76,13 +51,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import pi.kit.mob.R
 import pi.kit.mob.env.BatteryOptimisation
 import pi.kit.mob.env.StorageAccess
@@ -95,35 +78,33 @@ import pi.kit.mob.locales.stringsFor
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.RuntimeStatus
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.LocalToastHost
-import pi.kit.mob.ui.components.SheetHost
-import pi.kit.mob.ui.components.SheetLayer
-import pi.kit.mob.ui.components.ToastHost
-import pi.kit.mob.ui.components.ToastLayer
-import pi.kit.mob.ui.design.PiAgentMark
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiMotion
-import pi.kit.mob.ui.design.PiNotice
-import pi.kit.mob.ui.design.PiProgress
-import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiTabFade
-import pi.kit.mob.ui.design.PiTone
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
+import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiToastHost
+import pi.kit.mob.ui.kit.PiToastHostLayer
+import pi.kit.mob.ui.kit.PiToastProvider
+import pi.kit.mob.ui.kit.rememberPiToastHost
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Messages
+import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The four destinations, in the bar's order.
  *
  * The order is by how often the app is opened for each: the conversation first,
- * then the shell it drives, then what it changed, and the settings last. It is the
- * order the old navigation bar used and it was arrived at the same way, so it is
- * kept — a destination that moves because the bar was redesigned is a destination
- * the reader has to find twice.
+ * then the shell it drives, then what it changed, and the settings last. A
+ * destination that moves because the bar was redesigned is a destination the
+ * reader has to find twice.
  */
 private enum class Destination {
     Chat,
@@ -144,40 +125,36 @@ fun PiKitRoot(session: PiAgentSession) {
     // the block returns Unit, which the lint is right to flag.
     LaunchedEffect(language) { applyLocale(language) }
 
-    // One sheet for the whole app. It is created here rather than inside the
-    // language key because a language switch disposes everything under that key,
-    // and a sheet that was open when it happened still has to animate away.
-    val sheets = remember { SheetHost() }
-
-    // One transient message for the whole app, held for the same reason and above
-    // the same key: a toast raised by a page that a language switch rebuilds has to
-    // finish being read rather than vanishing with the page that asked for it.
-    val toasts = remember { ToastHost() }
+    // One transient message for the whole app. It is created here rather than
+    // inside the language key because a language switch disposes everything under
+    // that key, and a message raised just before the switch still has to finish
+    // being read rather than vanishing with the page that asked for it.
+    val snackbar = rememberPiToastHost()
 
     CompositionLocalProvider(
         LocalStrings provides stringsFor(language),
         LocalLanguage provides language,
-        // Held *above* the language key on purpose. Switching the language
-        // rebuilds every screen under this key — including the page that asked
-        // for a sheet — and the sheet it was switched from must still be able to
-        // finish sliding out rather than blinking off the screen.
-        LocalSheetHost provides sheets,
-        LocalToastHost provides toasts,
     ) {
-        // The first-launch prompts sit *above* the language key, not inside it.
-        // That is the fix for a measured bug rather than tidiness: a subtree
-        // restart disposes the `rememberLauncherForActivityResult` registration
-        // while its request is in flight, and the platform then closes the dialog
-        // the request had opened. Everything under `key(language)` is rebuilt when
-        // the language arrives, which is exactly long enough after launch to hit
-        // that window. See `PermissionPrompts`.
-        PermissionPrompts(session = session)
+        PiToastProvider(snackbar) {
+            // The first-launch prompts sit *above* the language key, not inside it.
+            // That is the fix for a measured bug rather than tidiness: a subtree
+            // restart disposes the `rememberLauncherForActivityResult` registration
+            // while its request is in flight, and the platform then closes the dialog
+            // the request had opened. Everything under `key(language)` is rebuilt when
+            // the language arrives, which is exactly long enough after launch to hit
+            // that window. See `PermissionPrompts`.
+            PermissionPrompts(session = session)
 
-        // Keyed on the language so that switching it rebuilds every screen. The
-        // catalogs are plain objects, not observable state, so without this the
-        // pages that are already composed would keep the old text.
-        key(language) {
-            RootContent(session = session, language = language, sheets = sheets, toasts = toasts)
+            // Keyed on the language so that switching it rebuilds every screen. The
+            // catalogs are plain objects, not observable state, so without this the
+            // pages that are already composed would keep the old text.
+            key(language) {
+                RootContent(
+                    session = session,
+                    language = language,
+                    snackbar = snackbar,
+                )
+            }
         }
     }
 }
@@ -215,17 +192,9 @@ private object NotificationPrompt {
  * answer *or* its result callback, so the order cannot invert and none of them can
  * be skipped by a lost effect.
  *
- * Raised only once the runtime is ready, and only once per process: asking over
- * the unpacking screen means asking while the app's own window is still settling,
- * and asking from a subtree that is rebuilt asks twice. It sits above
- * `key(language)` in [PiKitRoot] for the second half of that. A prompt the platform
- * closes on its own frame — which is what happens on the emulator — is asked again
- * at most twice; see the callback.
- *
- * The keep-alive step was added last and it is the only one of the three whose
- * absence was invisible: the other two gate features the user tries immediately,
- * while a process reclaimed with the screen off looks like the answer simply
- * stopping. It used to be reachable only from the agent page, three taps in.
+ * The dialogs are Miuix's window dialogs, which do not need a `Scaffold` above
+ * them — the point of asking here, before the runtime is ready, is that there is
+ * no page to attach an overlay to yet.
  */
 @Composable
 private fun PermissionPrompts(session: PiAgentSession) {
@@ -298,11 +267,15 @@ private fun PermissionPrompts(session: PiAgentSession) {
     }
 
     if (step == PromptStep.Storage) {
-        PiPromptDialog(
+        PiConfirm(
+            show = true,
             title = text.settings.storageAskTitle,
-            body = text.settings.storageAskBody,
+            text = text.settings.storageAskBody,
             confirm = text.settings.storageAskOpen,
             dismiss = text.settings.storageAskLater,
+            // Neither an outside tap nor the back gesture may dismiss this one:
+            // "later" is an answer, and it records that the question was asked.
+            onDismissRequest = null,
             onConfirm = {
                 StorageAccess.markPrompted(context)
                 step = afterStorage()
@@ -316,14 +289,15 @@ private fun PermissionPrompts(session: PiAgentSession) {
     }
 
     if (step == PromptStep.KeepAlive) {
-        PiPromptDialog(
+        PiConfirm(
+            show = true,
             title = text.settings.keepAliveTitle,
             // The row on the agent page says the same two things, from the same
             // key as this title: the state there and the ask here are one subject.
-            body = text.settings.keepAliveAskBody,
+            text = text.settings.keepAliveAskBody,
             confirm = text.settings.keepAliveAskOpen,
             dismiss = text.settings.keepAliveAskLater,
-            icon = { Icon(Icons.Filled.BatterySaver, contentDescription = null) },
+            onDismissRequest = null,
             onConfirm = {
                 // Recorded before the system box is opened, not after: there is
                 // no result callback for it — the user may answer it, ignore it,
@@ -342,44 +316,11 @@ private fun PermissionPrompts(session: PiAgentSession) {
     }
 }
 
-/**
- * One of the first-launch explanations.
- *
- * An `AlertDialog` still, and deliberately: these are the platform's own
- * conversations — a permission the system will also ask about, and a system
- * settings page about to open — so they are drawn in the platform's dialog shape
- * with the app's colours rather than as a sheet in the app's own modal layer. A
- * sheet that covers the screen to explain a system dialog is a second frame in
- * front of the first one.
- */
-@Composable
-private fun PiPromptDialog(
-    title: String,
-    body: String,
-    confirm: String,
-    dismiss: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-    icon: (@Composable () -> Unit)? = null,
-) {
-    AlertDialog(
-        onDismissRequest = { },
-        shape = PiShapes.panel,
-        icon = icon,
-        title = { Text(title, style = MaterialTheme.typography.headlineSmallEmphasized) },
-        text = { Text(body, style = MaterialTheme.typography.bodyMedium) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(dismiss) } },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun RootContent(
     session: PiAgentSession,
     language: Lang,
-    sheets: SheetHost,
-    toasts: ToastHost,
+    snackbar: PiToastHost,
 ) {
     val runtime by session.runtime.collectAsState()
     val agent by session.agent.collectAsState()
@@ -389,20 +330,18 @@ private fun RootContent(
 
     // The chat page's composer, owned here rather than inside `ChatScreen`.
     //
-    // `PiTabFade` is a `Crossfade`: when the fade finishes, the destination that
-    // left is removed from the composition and its whole subtree with it. So a
-    // draft, the images attached to it, and the transcript's scroll position were
-    // all destroyed by a look at the terminal, and were reported as exactly that.
-    // Hoisted to the one scope that outlives every destination — see
+    // The tab crossfade removes the destination that left from the composition
+    // and its whole subtree with it. A draft, the images attached to it, and the
+    // transcript's scroll position would all be destroyed by a look at the
+    // terminal. Hoisted to the one scope that outlives every destination — see
     // [ChatComposerState] for why `rememberSaveable` is not the fix.
     val composer = rememberChatComposerState()
 
     // The conversation is *not* read here, and that is a performance decision rather
     // than a style one: a streaming answer changes it several times a second, and a
-    // value read in this body invalidates the whole body — the insets, the
-    // navigation bar and its four items, the sheet layer — for a change only the
-    // chat page can see. The page that shows the transcript collects it instead
-    // (see [ChatTab]).
+    // value read in this body invalidates the whole body — the navigation bar and
+    // its four items, the sheet layer — for a change only the chat page can see.
+    // The page that shows the transcript collects it instead (see [ChatTab]).
     //
     // The one part of it the root does need is a dialog from pi, which can arrive
     // over any destination. Collected as its own flow so the root recomposes when a
@@ -453,77 +392,44 @@ private fun RootContent(
         session.refreshTerminalBanner()
     }
 
-    // enableEdgeToEdge() sets decorFitsSystemWindows=false, so the window no
-    // longer shrinks for the soft keyboard: the keyboard is drawn *over* the app,
-    // the system bars become insets the app has to consume, and the app is
-    // responsible for keeping its own content out from under both.
-    //
-    // ## Why the navigation bar is outside the keyboard's inset
-    //
-    // The bar is pinned to the window's own bottom edge, and the *page* — not the
-    // bar — is padded by the keyboard's inset. So when the keyboard rises it
-    // slides up over the bar and hides it, and the page above shrinks to end
-    // exactly at the keyboard's top edge.
-    //
-    // That is the whole mechanism, and it is worth spelling out because three
-    // earlier designs got it wrong in ways that all produced the same complaint —
-    // "the tab bar is not smooth" — for three different reasons:
-    //
-    //  1. `AnimatedVisibility` driven by `WindowInsets.isImeVisible`. That flag
-    //     flips several times while one keyboard animation plays, as the IME's
-    //     insets settle, so the bar expanded and collapsed repeatedly — a visible
-    //     flicker — and each flip re-measured the entire page above it.
-    //  2. `if (!imeVisible)`, a second mechanism layered on top of the padding
-    //     that already moved the bar: the bar appeared and the page resized in
-    //     opposite directions.
-    //  3. The bar inside the keyboard's inset, so it rode *up* the screen on top
-    //     of the keyboard instead of getting out of the way. That is where it was
-    //     until now, and it is why the bar never actually disappeared.
-    //
-    // With the bar outside that inset there is no visibility state, no animation
-    // and no second clock: the bar's disappearance *is* the keyboard's own
-    // motion, so the two can never disagree or drift apart. Swiping the keyboard
-    // down reveals the bar progressively, which is the opposite of a jump.
-    //
-    // One consequence worth naming: while the keyboard is up the bar is still
-    // composed, merely covered. That is deliberate — the alternative is removing
-    // it from the layout, which is exactly the re-measure this avoids.
-    val density = LocalDensity.current
-    var barHeightPx by remember { mutableIntStateOf(0) }
-    val navBarInset = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-    val pageBottom = navBarInset
-        .union(WindowInsets.ime.only(WindowInsetsSides.Bottom))
-        .union(WindowInsets(bottom = with(density) { barHeightPx.toDp() }))
-
-    // The bar takes the colour of the page it belongs to, and the root Surface
-    // underneath uses the same colour. The bar's container does not reach the
-    // gesture strip below it — that area is filled by the window background — so
-    // without matching them the strip showed through as a paler band under the bar.
-    val barColor = MaterialTheme.colorScheme.surfaceContainer
-
-    Surface(Modifier.fillMaxSize(), color = barColor) {
-        Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            // The pages own their top inset (every one of them is a `Scaffold`
+            // with a top bar of its own), so the root asks for no content insets
+            // and takes only the bottom bar's height out of the content. Asking
+            // for `systemBars` here would pad every page's top bar a second time.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = MiuixTheme.colorScheme.surface,
+            snackbarHost = { PiToastHostLayer(snackbar) },
+            bottomBar = {
+                NavigationBar {
+                    Destination.entries.forEach { entry ->
+                        NavigationBarItem(
+                            selected = destination == entry,
+                            onClick = { destination = entry },
+                            icon = entry.icon(),
+                            label = entry.label(text),
+                        )
+                    }
+                }
+            },
+        ) { padding ->
+            // `padding` is the bar's height. `consumeWindowInsets` makes the
+            // keyboard inset below subtract it instead of adding to it, so the page
+            // ends at `max(bar, keyboard)` — the bar's height is not left as a dead
+            // band above the keyboard, and with the keyboard down the page ends
+            // exactly at the bar's top edge.
             Box(
                 Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                    // `union` takes the larger inset, which is the point: with the
-                    // keyboard down the page ends at the bar's top edge, and with
-                    // it up the page ends at the keyboard's top edge. Summing them
-                    // instead would leave a dead band one bar tall above the
-                    // keyboard.
-                    .windowInsetsPadding(pageBottom)
-                    .background(MaterialTheme.colorScheme.surface),
+                    .padding(padding)
+                    .consumeWindowInsets(padding)
+                    .imePadding()
+                    .background(MiuixTheme.colorScheme.surface),
             ) {
-                // The crossfade runs inside this box rather than around it, so
-                // that its own `.background(...)` above stays put: for the whole
-                // of the fade both destinations are composed at once, and with a
-                // transparent host the outgoing page would read through the
-                // incoming one instead of being replaced by it.
-                PiTabFade(key = destination, modifier = Modifier.fillMaxSize()) { shown ->
-                    when (shown as Destination) {
+                Crossfade(targetState = destination, label = "tab") { shown ->
+                    when (shown) {
                         Destination.Terminal -> TerminalScreen(session = session)
-
                         Destination.Chat -> ChatTab(
                             session = session,
                             agent = agent,
@@ -535,99 +441,33 @@ private fun RootContent(
                     }
                 }
             }
-
-            ShortNavigationBar(
-                containerColor = barColor,
-                // The gesture strip only, so the bar's background reaches the
-                // bottom of the window while its items stay clear of the gesture
-                // area — and the page above it is padded by the bar's full
-                // measured height rather than by a constant that would have to be
-                // kept in step with Material's.
-                windowInsets = navBarInset,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .onSizeChanged { barHeightPx = it.height },
-            ) {
-                Destination.entries.forEach { entry ->
-                    val selected = destination == entry
-                    ShortNavigationBarItem(
-                        selected = selected,
-                        onClick = { destination = entry },
-                        // Filled when it is the destination being shown, outlined
-                        // when it is not. The bar's own indicator already says
-                        // which one is active; the weight of the glyph says it a
-                        // second time, in the form a reader notices without
-                        // reading the labels.
-                        icon = {
-                            Icon(
-                                imageVector = if (selected) entry.filledIcon() else entry.icon(),
-                                contentDescription = null,
-                            )
-                        },
-                        label = {
-                            // One line, always. The item measures its label with
-                            // loose constraints, so a label wider than the item
-                            // *wraps* rather than ellipsising: measured on the
-                            // emulator in Japanese at font scale 1.8, `ターミナル`
-                            // took two lines and pushed the bar's contents out of
-                            // it. Every other label in the app is capped; this one
-                            // was the exception.
-                            Text(
-                                entry.label(text),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        // No `colors`: the library's own defaults for this bar are
-                        // already the spec's — the active label on `secondary`, the
-                        // indicator a pill on `secondaryContainer`, the rest on
-                        // `onSurfaceVariant` — and naming them here would be a second
-                        // place for the same four roles to drift out of step with it.
-                    )
-                }
-            }
-
-            // The modal layer, over everything — the navigation bar included, which
-            // is what makes a sheet modal. Drawn here rather than inside the page it
-            // belongs to because the page is inset above that bar, and a panel
-            // anchored to the page's bottom edge would float a bar's height above
-            // the window's.
-            SheetLayer(host = sheets, modifier = Modifier.fillMaxSize())
-
-            // The one transient message, above even the sheet: it reports what a tap
-            // just did, and the tap that raised it may have been a sheet's own row.
-            // The inset is the page's own bottom inset — the bar, the keyboard and
-            // the gesture strip, whichever is largest — so the pill lands where the
-            // composer's band ends rather than under the navigation bar.
-            ToastLayer(
-                host = toasts,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(pageBottom)
-                    .padding(bottom = 8.dp),
-            )
         }
     }
 
     if (runtime is RuntimeStatus.Ready && (runtime as RuntimeStatus.Ready).warnings.isNotEmpty()) {
         val warnings = (runtime as RuntimeStatus.Ready).warnings
-        AlertDialog(
+        top.yukonga.miuix.kmp.window.WindowDialog(
+            show = true,
+            title = text.root.environmentIncomplete,
             onDismissRequest = { },
-            shape = PiShapes.panel,
-            title = { Text(text.root.environmentIncomplete) },
-            text = {
-                Text(
-                    warnings.joinToString("\n\n"),
-                    // Bounded and scrolled inside the bound: this body is the
-                    // installer's own warnings, which run past a screen, and an
-                    // unbounded one pushed the acknowledgement off the bottom.
-                    modifier = Modifier
-                        .heightIn(max = 320.dp)
-                        .verticalScroll(rememberScrollState()),
-                )
-            },
-            confirmButton = { TextButton(onClick = { }) { Text(text.common.ok) } },
-        )
+        ) {
+            Text(
+                text = warnings.joinToString("\n\n"),
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                // Bounded and scrolled inside the bound: this body is the
+                // installer's own warnings, which run past a screen, and an
+                // unbounded one pushed the acknowledgement off the bottom.
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState()),
+            )
+            TextButton(
+                text = text.common.ok,
+                onClick = { },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 
     pendingDialog?.let { dialog ->
@@ -668,20 +508,52 @@ private fun Destination.label(text: pi.kit.mob.locales.Strings): String = when (
     Destination.Settings -> text.tabs.settings
 }
 
-/** The outlined glyph, for a destination that is not being shown. */
-private fun Destination.icon(): androidx.compose.ui.graphics.vector.ImageVector = when (this) {
-    Destination.Chat -> Icons.AutoMirrored.Outlined.Chat
-    Destination.Terminal -> Icons.Outlined.Terminal
-    Destination.Files -> Icons.Outlined.Folder
-    Destination.Settings -> Icons.Outlined.Settings
+private fun Destination.icon(): ImageVector = when (this) {
+    Destination.Chat -> MiuixIcons.Messages
+    Destination.Terminal -> TerminalGlyph
+    Destination.Files -> MiuixIcons.Folder
+    Destination.Settings -> MiuixIcons.Settings
 }
 
-/** The filled glyph, for the destination being shown. */
-private fun Destination.filledIcon(): androidx.compose.ui.graphics.vector.ImageVector = when (this) {
-    Destination.Chat -> Icons.AutoMirrored.Filled.Chat
-    Destination.Terminal -> Icons.Filled.Terminal
-    Destination.Files -> Icons.Filled.Folder
-    Destination.Settings -> Icons.Filled.Settings
+/**
+ * The shell's glyph: a chevron and an underscore.
+ *
+ * Miuix carries no terminal icon, and this is the one destination mark the
+ * library cannot supply. It is drawn rather than borrowed from another set
+ * because a mark from another set carries that set's weight, and a heavier glyph
+ * beside three Miuix icons reads as a different control — the rule that also
+ * sized ⌘ down at its call site. Two strokes at the library's own line weight on
+ * a 24-unit grid, tinted by the bar: a chevron at the left, a bar at the right.
+ */
+private val TerminalGlyph: ImageVector by lazy {
+    val stroke = SolidColor(Color.Black)
+    ImageVector.Builder(
+        name = "Terminal",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = stroke,
+            strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(5.5f, 7.5f)
+            lineTo(10.5f, 12.5f)
+            lineTo(5.5f, 17.5f)
+        }
+        path(
+            stroke = stroke,
+            strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(12.5f, 17.5f)
+            lineTo(19f, 17.5f)
+        }
+    }.build()
 }
 
 /**
@@ -733,7 +605,7 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
     // otherwise arrive in visible lurches.
     val shown by animateFloatAsState(
         targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = PiMotion.defaultSpatial(),
+        animationSpec = tween(durationMillis = 320),
         label = "fraction",
     )
 
@@ -741,32 +613,39 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(horizontal = 32.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_pi_mark),
-                contentDescription = null,
+            Box(
                 modifier = Modifier
-                    .size(72.dp)
-                    // A slow breath between 88% and 100% opacity. Enough to say
-                    // "working" without pulling the eye off the number.
-                    .alpha(0.88f + pulse * 0.12f),
-            )
+                    .size(88.dp)
+                    .clip(CircleShape)
+                    .background(SETUP_MARK_FIELD),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_pi_mark),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(56.dp)
+                        // A slow breath between 88% and 100% opacity. Enough to say
+                        // "working" without pulling the eye off the number.
+                        .alpha(0.88f + pulse * 0.12f),
+                )
+            }
 
             Spacer(Modifier.height(28.dp))
 
             Text(
                 text = text.root.settingUp,
-                style = MaterialTheme.typography.titleMediumEmphasized,
+                style = MiuixTheme.textStyles.title3,
                 color = SETUP_PRIMARY,
                 textAlign = TextAlign.Center,
             )
             Text(
                 text = text.root.setupSubtitle,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MiuixTheme.textStyles.body2,
                 color = SETUP_SECONDARY,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 6.dp),
@@ -776,17 +655,15 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
 
             Text(
                 text = "${(shown * 100).toInt()}%",
-                style = MaterialTheme.typography.displaySmallEmphasized,
+                style = MiuixTheme.textStyles.title1,
                 color = SETUP_PRIMARY,
             )
 
             Spacer(Modifier.height(16.dp))
 
-            PiProgress(
-                fraction = shown,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(PiShapes.pill),
+            LinearProgressIndicator(
+                progress = shown,
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(Modifier.height(14.dp))
@@ -796,7 +673,7 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
             // "Activating environment".
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodySmall,
+                style = MiuixTheme.textStyles.footnote1,
                 color = SETUP_SECONDARY,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
@@ -808,31 +685,13 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
 
             Text(
                 text = text.root.setupNote,
-                style = MaterialTheme.typography.bodySmall,
+                style = MiuixTheme.textStyles.footnote1,
                 color = SETUP_TERTIARY,
                 textAlign = TextAlign.Center,
             )
         }
     }
 }
-
-/**
- * The setup screen's palette, fixed rather than taken from the theme.
- *
- * This screen is the only one that is dark while the rest of the app may be light,
- * so it cannot use `colorScheme` without depending on the system's dark-mode
- * setting — and a user in light mode would then get a light setup screen again. It
- * is the launcher icon's black and the launcher icon's white, and nothing else: the
- * mark and the progress bar used to be amber, which made the first thing the app
- * shows the one surface whose colours did not come from the icon. The greys below
- * are the same white at lower opacities, and the one departure from monochrome is
- * the progress bar, which takes the app's own violet because it is the only thing
- * on the screen that is *moving*.
- */
-private val SETUP_BACKGROUND = Color(0xFF0B0E13)
-private val SETUP_PRIMARY = Color(0xFFF2F4F8)
-private val SETUP_SECONDARY = Color(0xFF9AA3B2)
-private val SETUP_TERTIARY = Color(0xFF69717F)
 
 /**
  * The screen a runtime that could not be prepared lands on.
@@ -857,27 +716,41 @@ private fun SetupFailure(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PiAgentMark(size = 64.dp, container = MaterialTheme.colorScheme.errorContainer)
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MiuixTheme.colorScheme.errorContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_pi_mark),
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = MiuixTheme.colorScheme.onErrorContainer,
+            )
+        }
         Spacer(Modifier.height(20.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmallEmphasized,
+            style = MiuixTheme.textStyles.title4,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MiuixTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(12.dp))
-        PiNotice(
+        Text(
             text = body,
-            tone = PiTone.Danger,
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.error,
             modifier = Modifier
                 .weight(1f, fill = false)
                 .verticalScroll(rememberScrollState()),
         )
         Spacer(Modifier.height(20.dp))
-        PiButton(
+        TextButton(
             text = actionLabel,
             onClick = onAction,
-            kind = PiButtonKind.Filled,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
@@ -919,3 +792,19 @@ private fun needsNotificationPermission(context: Context): Boolean =
  */
 private fun needsStoragePrompt(context: Context): Boolean =
     !StorageAccess.isGranted() && !StorageAccess.hasPrompted(context)
+
+/**
+ * The setup screen's palette, fixed rather than taken from the theme.
+ *
+ * This screen is the only one that is dark while the rest of the app may be light,
+ * so it cannot use `colorScheme` without depending on the system's dark-mode
+ * setting — and a user in light mode would then get a light setup screen again. It
+ * is the launcher icon's black and the launcher icon's white, and nothing else: a
+ * mark on the field it was drawn for. The greys below are the same white at lower
+ * opacities.
+ */
+private val SETUP_BACKGROUND = Color(0xFF0B0E13)
+private val SETUP_MARK_FIELD = Color(0xFF151A22)
+private val SETUP_PRIMARY = Color(0xFFF2F4F8)
+private val SETUP_SECONDARY = Color(0xFF9AA3B2)
+private val SETUP_TERTIARY = Color(0xFF69717F)

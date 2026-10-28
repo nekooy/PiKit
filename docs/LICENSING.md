@@ -59,7 +59,8 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
 | Node.js | MIT | [nodejs.org](https://nodejs.org) |
 | ripgrep | MIT / Unlicense | [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep) |
 | fd | MIT / Apache-2.0 | [sharkdp/fd](https://github.com/sharkdp/fd) |
-| AndroidX, Jetpack Compose, Material 3, Kotlin, kotlinx.serialization, Okio | Apache-2.0 | [developer.android.com/jetpack](https://developer.android.com/jetpack) |
+| AndroidX, Jetpack Compose, Kotlin, kotlinx.serialization, Okio | Apache-2.0 | [developer.android.com/jetpack](https://developer.android.com/jetpack) |
+| Miuix (the interface: theme, components, icons, navigation) | Apache-2.0 | [compose-miuix-ui/miuix](https://github.com/compose-miuix-ui/miuix) |
 | `ru.noties:jlatexmath-android` (formula typesetting) | GPL-2.0, over upstream JLaTeXMath's GPL-2.0 **with a linking exception** | [noties/jlatexmath-android](https://github.com/noties/jlatexmath-android), [opencollab/jlatexmath](https://github.com/opencollab/jlatexmath) |
 | Lucide (the model, thinking, command and check marks) | ISC | [lucide.dev](https://lucide.dev) |
 

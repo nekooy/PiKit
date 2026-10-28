@@ -1,6 +1,7 @@
 package pi.kit.mob.ui
 
 import android.Manifest
+import android.graphics.BitmapFactory
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -19,13 +20,15 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,40 +38,24 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Compress
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
@@ -83,14 +70,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -99,14 +92,18 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import pi.kit.mob.R
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.rememberedThinkingLevels
@@ -118,49 +115,64 @@ import pi.kit.mob.pi.ChatTurn
 import pi.kit.mob.pi.ConversationState
 import pi.kit.mob.pi.ImageAttachment
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.pi.PiLaunchOptions
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.thinkingLevelsFor
 import pi.kit.mob.pi.SessionMetadata
+import pi.kit.mob.ui.chat.ChatStatusPill
+import pi.kit.mob.ui.chat.ChatTone
 import pi.kit.mob.ui.chat.NoticeCard
 import pi.kit.mob.ui.chat.ReasoningBlock
 import pi.kit.mob.ui.chat.ReasoningToggle
+import pi.kit.mob.ui.chat.ROW_SHAPE
 import pi.kit.mob.ui.chat.ToolCallRow
 import pi.kit.mob.ui.chat.TurnSummaryData
 import pi.kit.mob.ui.chat.TurnSummaryRow
 import pi.kit.mob.ui.chat.FollowTailController
-import pi.kit.mob.ui.chat.rememberFollowTail
-import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.components.CopyButtonInkInset
-import pi.kit.mob.ui.components.MenuAnchor
-import pi.kit.mob.ui.components.PiIcons
-import pi.kit.mob.ui.components.PiMenuRow
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.ReadOnlyBody
-import pi.kit.mob.ui.components.ReadOnlySheetRow
-import pi.kit.mob.ui.components.menuAnchor
-import pi.kit.mob.ui.components.rememberMenuAnchor
-import pi.kit.mob.ui.components.showMenu
-import pi.kit.mob.ui.components.thinkingLevelOptions
-import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.components.PageBackHandler
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
-import pi.kit.mob.ui.design.PiCard
-import pi.kit.mob.ui.design.PiAvatar
-import pi.kit.mob.ui.design.PiNotice
-import pi.kit.mob.ui.design.PiPageSwap
-import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiSectionHeader
-import pi.kit.mob.ui.design.PiSelectChip
-import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiSheetActions
-import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiStatePill
-import pi.kit.mob.ui.design.PiEmptyState
+import pi.kit.mob.ui.chat.rememberFollowTail
+import pi.kit.mob.ui.chat.scrollToEnd
+import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiMenuRow
+import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiTone
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
+import top.yukonga.miuix.kmp.icon.extended.File
+import top.yukonga.miuix.kmp.icon.extended.Image
+import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Layers
+import top.yukonga.miuix.kmp.icon.extended.Merge
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Pause
+import top.yukonga.miuix.kmp.icon.extended.Photos
+import top.yukonga.miuix.kmp.icon.extended.Recent
+import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.Send
+import top.yukonga.miuix.kmp.icon.extended.Stopwatch
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowListPopup
 
 /**
  * What a picked file is until it is actually sent.
@@ -251,18 +263,27 @@ private const val MAX_ATTACHMENTS = 4
 private const val THUMBNAIL_EDGE = 160
 
 /**
- * Which of the composer's sheets is being asked for.
+ * Which of the composer's menus or sheets is being asked for.
  *
- * One enum rather than five booleans: the sheets are mutually exclusive by
- * construction (each is modal that covers the others), and a name per sheet keeps
- * the five bodies one `when` apart from the controls that open them.
+ * One name for all six rather than six booleans: they are mutually exclusive by
+ * construction (each is modal, and each covers the others), and a name per one keeps
+ * the six bodies one `when` apart from the controls that open them.
  *
- * There is no matching `sheet` state: the open sheet lives in the app's one
- * [SheetHost] (`components/Sheets.kt`), which is also what the back gesture and
- * the scrim close. A second copy of "which sheet is open" here would be a second
- * answer to a question that already has one.
+ * The *state* lives in [ChatScreen] and this enum is passed down to the composer,
+ * because two of the six are not the composer's: the context sheet is opened from
+ * two chips, and the shell sheet is opened from the command menu. A sheet the
+ * composer owned privately would be a second answer to "which one is open" — the
+ * question the app's one sheet host used to answer for every screen.
  */
 private enum class ComposerSheet { Thinking, Model, Context, Commands, Attach, Shell }
+
+/**
+ * How long the history list takes to slide over the conversation.
+ *
+ * Short enough that the page is usable while it lands, long enough that the two
+ * pages are readable as one moving over the other rather than as a cut.
+ */
+private const val PAGE_SLIDE_MILLIS = 220
 
 @Composable
 internal fun ChatScreen(
@@ -283,7 +304,29 @@ internal fun ChatScreen(
     // history list's rows ask before a switch, and the same dialog: pi's
     // `new_session` aborts the running turn exactly as `switch_session` does.
     var confirmNewSession by remember { mutableStateOf(false) }
-    val sheets = LocalSheetHost.current
+
+    // Which of the composer's menus or sheets is open, and the prompt-extras sheet.
+    //
+    // One state per *kind* rather than a `SheetHost` at the root, because Miuix's
+    // menus are anchored to the composable that asks for them: a `WindowListPopup`
+    // opens at its own parent's bounds, so the model menu has to be composed at the
+    // model chip even when the `/model` command row opened it. The state is read by
+    // the chip and by the renderer, which is what lets one open land on the other's
+    // anchor.
+    //
+    // The prompt's extras are a sheet of their own rather than a composer sheet: it
+    // is opened from a message in the transcript, and it must be able to outlive a
+    // scroll of the row that raised it.
+    var openSheet by remember { mutableStateOf<ComposerSheet?>(null) }
+    var promptExtras by remember { mutableStateOf<PromptExtras?>(null) }
+    // The extras sheet keeps its value while it leaves: a Miuix sheet animates out
+    // with the content it was showing, so clearing the value on dismissal would play
+    // the exit over an empty panel.
+    var showPromptExtras by remember { mutableStateOf(false) }
+
+    fun closeSheet() {
+        openSheet = null
+    }
 
     /** Adds picked documents or images to the composer, refusing oversized images. */
     fun accept(uris: List<Uri>) {
@@ -464,221 +507,74 @@ internal fun ChatScreen(
     val follow = rememberFollowTail(listState, programmatic)
 
     // The conversation list is a page, not a dialog: it needs room for search,
-    // multi-select and per-conversation actions. `PageBackHandler`, so a sheet
-    // opened over this page closes on the first back rather than this page
-    // closing behind it.
-    PageBackHandler(enabled = showSessions) { showSessions = false }
+    // multi-select and per-conversation actions. It registers its own back handler
+    // ([PiPage]'s `onBack`), and a Miuix sheet or popup registers one inside the
+    // window it opens — which is what makes the first back close the sheet rather
+    // than the page behind it, the ordering the app's one sheet host used to provide
+    // centrally.
 
-    // The open sheet is drawn by the root's modal layer rather than here, and the
-    // back gesture that closes it is registered there too — one handler for every
-    // sheet in the app instead of one per call site.
-    //
-    // The model menu's anchor lives *here* rather than on its chip, because the
-    // same menu is opened from two places: the chip, and the `/model` command
-    // row — which runs outside the composer and has no bounds of its own to
-    // anchor to. The chip reports its bounds into this anchor continuously
-    // (`Modifier.menuAnchor`), so both opens land on the chip.
-    val modelMenuAnchor = rememberMenuAnchor()
+    /**
+     * Starts a new conversation, asking first when an answer is running.
+     *
+     * The same question the history list's rows ask before a switch, and the same
+     * dialog: pi's `new_session` ends the running answer as its first step. It used
+     * to be a flat refusal with a notice, which was a tap that produced a sentence
+     * and no result.
+     */
+    fun newSession() {
+        if (session.turnInFlight) {
+            confirmNewSession = true
+        } else {
+            session.newSession()
+            composer.attachments = emptyList()
+            composer.notice = null
+        }
+    }
 
-    fun openSheet(which: ComposerSheet, anchor: MenuAnchor? = null) {
-        when (which) {
-            // The two *choices* above the field — the level and the model — are
-            // floating menus anchored to the chip that opened them, not sheets:
-            // they are read once and tapped once, and a panel from the bottom edge
-            // covers the conversation to ask which level of thinking the next
-            // answer should do. Context and cache stay sheets, because what they
-            // open is a report to *read* (§7.1).
-            ComposerSheet.Thinking -> {
-                val at = anchor ?: return
-                sheets.showMenu("chat-thinking", at, preferAbove = true) {
-                    // The level is read live rather than captured: the menu is
-                    // over a conversation that is still running, and the tick on
-                    // it must be the level pi is on *now*. See [Sheet].
-                    val live by session.conversation.collectAsState()
-                    val saved by session.settingsStore.settings.collectAsState()
-                    // Live levels once the agent has answered for the model that is
-                    // running, the remembered ones otherwise — see
-                    // `thinkingLevelsFor`, and `thinkingLevelOf` for why the saved
-                    // model id is the fallback key. The menu cannot offer a level
-                    // the model does not have.
-                    val available = thinkingLevelsFor(
-                        live.availableThinkingLevels,
-                        saved.rememberedThinkingLevels(live.model?.id ?: saved.modelId),
-                    )
-                    val current = thinkingLevelOf(live, saved)
-                    val host = LocalSheetHost.current
-                    thinkingLevelOptions(text, available).forEach { option ->
-                        PiMenuRow(
-                            // The id alone. The menu carried each level's
-                            // sentence under it once, and seven rows of "off —
-                            // 直接回答，不做思考" made a menu of two-line entries
-                            // out of seven one-word choices; the ids are the wire
-                            // strings pi documents, and the picker that explains
-                            // them is the model page's own rows.
-                            label = option.label,
-                            selected = option.id == current,
-                            onClick = {
-                                if (host.isOpen) {
-                                    host.dismiss()
-                                    if (option.id != current) {
-                                        // Applied to the running process
-                                        // immediately: pi accepts the change over
-                                        // RPC, so unlike the provider and model it
-                                        // needs no restart.
-                                        session.settingsStore.update { it.copy(thinkingLevel = option.id) }
-                                        session.setThinkingLevel(option.id)
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
+    /**
+     * Runs one of the command list's rows.
+     *
+     * The list is what this page implements — see [BUILT_IN_COMMANDS] for why pi's
+     * own registry is not in it — so every row is a call into state this page owns,
+     * and this is the only place that dispatch exists: the row that was tapped knows
+     * its id and nothing else.
+     */
+    fun runCommand(command: BuiltInCommand) {
+        when (command.id) {
+            // Asked, not refused: see [newSession].
+            "/new" -> newSession()
+
+            "/compact" -> session.compact()
+
+            // The same stop the composer's button performs, queue and all, with the
+            // same answer to "where did my queued message go".
+            "/stop" -> session.abort { dropped ->
+                if (composer.input.isBlank()) composer.input = dropped
             }
 
-            ComposerSheet.Model -> {
-                sheets.showMenu("chat-model", modelMenuAnchor, preferAbove = true) {
-                    // Every model of every profile, one line each, so the menu is
-                    // the whole configuration rather than one entry per provider.
-                    //
-                    // Read live, *inside* the menu: the profile store is state and
-                    // the menu is drawn from it on every open, so a model changed
-                    // on the settings page moves the tick too. Reading it from the
-                    // click handler's closure was the bug — the chip was rebuilt
-                    // from the current store while the menu still ticked the model
-                    // from the previous composition, and the two disagreed.
-                    val config by session.settingsStore.profiles.snapshots.collectAsState()
-                    val profiles = config.profiles
-                    val active = config.activeProfile
-                    val selectedId = active
-                        ?.takeIf { it.modelId.isNotBlank() }
-                        ?.let { modelOptionId(it.id, it.modelId) }
-                    val host = LocalSheetHost.current
-                    profiles.forEach { profile ->
-                        val heading = providerLabel(profile, text)
-                        val hint = modelRowHint(profile, text)
-                        profile.selectableModels.forEach { model ->
-                            PiMenuRow(
-                                label = model,
-                                // The provider is the line under the model, and
-                                // the profile's own name when two profiles share
-                                // one provider — the same pair the sheet picker
-                                // grouped and captioned by.
-                                subtitle = listOfNotNull(heading, hint).joinToString(" · "),
-                                selected = modelOptionId(profile.id, model) == selectedId,
-                                // A provider this build does not know cannot be
-                                // sent to pi at all, so its rows are shown but
-                                // not offered.
-                                enabled = profile.providerEntry != null,
-                                onClick = {
-                                    if (host.isOpen && profile.providerEntry != null) {
-                                        host.dismiss()
-                                        session.selectProfile(profile, model)
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
-            }
+            // Both of these are pi's own operations and both report their outcome as
+            // a row in the transcript — a path for the export, an error for a refusal
+            // — because neither has a return value a tap could show any other way.
+            "/clone" -> session.cloneSession()
+            "/export" -> session.exportHtml()
 
-            ComposerSheet.Context -> sheets.show(
-                // Full bleed: this body is a list of numbers that scrolls, and its
-                // text should travel to the window's bottom edge rather than stop
-                // behind the navigation bar's band of empty panel (§7.1).
-                Sheet(key = "chat-context", fullBleedBottom = true) {
-                    ContextSheet(session = session, text = text)
-                },
-            )
+            // The picker, not a model: this page has no way to know which model the
+            // reader wants, and the menu that does is one key away — composed at the
+            // model chip, which is where it opens from every path.
+            "/model" -> openSheet = ComposerSheet.Model
 
-            ComposerSheet.Commands -> {
-                val at = anchor ?: return
-                sheets.showMenu("chat-commands", at, preferAbove = true) {
-                    CommandMenu(
-                        text = text,
-                        onRun = { command ->
-                            when (command.id) {
-                                "/new" -> {
-                                    // Asked, not refused: pi's `new_session` aborts
-                                    // the running answer as its first step, so the
-                                    // tap costs the answer on screen. The dialog is
-                                    // the same one the history list raises for a
-                                    // switch, because it is the same action.
-                                    if (session.turnInFlight) {
-                                        confirmNewSession = true
-                                    } else {
-                                        session.newSession()
-                                        composer.attachments = emptyList()
-                                    }
-                                }
+            "/clear" -> composer.input = ""
 
-                                "/compact" -> session.compact()
+            else -> Unit
+        }
+    }
 
-                                // The same stop the composer's button performs, queue
-                                // and all, with the same answer to "where did my
-                                // queued message go".
-                                "/stop" -> session.abort { dropped ->
-                                    if (composer.input.isBlank()) composer.input = dropped
-                                }
-
-                                // Both of these are pi's own operations and both
-                                // report their outcome as a row in the transcript —
-                                // a path for the export, an error for a refusal —
-                                // because neither has a return value a tap could
-                                // show any other way.
-                                "/clone" -> session.cloneSession()
-                                "/export" -> session.exportHtml()
-
-                                // The picker, not a model: this page has no way to
-                                // know which model the reader wants, and the menu
-                                // that does is one key away — anchored at the model
-                                // chip, which is where it opens from every path.
-                                "/model" -> openSheet(ComposerSheet.Model)
-
-                                "/clear" -> composer.input = ""
-
-                                else -> Unit
-                            }
-                        },
-                        onShell = { openSheet(ComposerSheet.Shell) },
-                    )
-                }
-            }
-
-            ComposerSheet.Shell -> sheets.show(
-                Sheet(key = "chat-shell") {
-                    ShellCommandSheet(
-                        text = text,
-                        onRun = { line ->
-                            when {
-                                // A shell line that runs a command this page asked
-                                // for: `runBash` puts the output in the transcript
-                                // as a notice, which is the same path the `!` prefix
-                                // in the composer takes.
-                                line.isNotBlank() -> {
-                                    follow.enable()
-                                    session.runBash(line)
-                                }
-                            }
-                        },
-                    )
-                },
-            )
-
-            ComposerSheet.Attach -> {
-                val at = anchor ?: return
-                sheets.showMenu("chat-attach", at, preferAbove = true) {
-                    AttachMenu(
-                        text = text,
-                        onPick = { kind ->
-                            when (kind) {
-                                "image" -> pickImages.launch("image/*")
-                                "camera" -> capture()
-                                else -> pickFiles.launch(arrayOf("*/*"))
-                            }
-                        },
-                    )
-                }
-            }
+    /** The `+` menu's three rows: the system pickers, and the one capture. */
+    fun pickAttachment(kind: String) {
+        when (kind) {
+            "image" -> pickImages.launch("image/*")
+            "camera" -> capture()
+            else -> pickFiles.launch(arrayOf("*/*"))
         }
     }
 
@@ -696,18 +592,26 @@ internal fun ChatScreen(
 
     // The history list is the chat tab's second level, so it moves like one — it
     // used to replace the conversation between two frames, with no transition at
-    // all, while every Settings sub-page slid. `forward` is the direction of the
-    // move itself: opening the list goes deeper, and the back arrow or the system
-    // gesture that closes it comes back. The move itself is the design system's
-    // `PiPageSwap`, which is the app's one page transition — springs, and the two
-    // pages travelling different distances so their text does not park on the same
-    // pixels mid-slide.
-    PiPageSwap(
-        key = showSessions,
-        forward = showSessions,
+    // all, while every Settings sub-page slid. `AnimatedContent` is the whole of the
+    // transition now, and the two pages travel different distances — the one that
+    // arrives the full width, the one that leaves a quarter of it — so their text
+    // never parks on the same pixels mid-slide. Both fade as they travel, which is
+    // what keeps a page from reading as a card dragged over another.
+    AnimatedContent(
+        targetState = showSessions,
         modifier = Modifier.fillMaxSize(),
+        transitionSpec = {
+            val entering = slideInHorizontally(tween(PAGE_SLIDE_MILLIS)) { width ->
+                if (targetState) width else -width / 4
+            } + fadeIn(tween(PAGE_SLIDE_MILLIS))
+            val leaving = slideOutHorizontally(tween(PAGE_SLIDE_MILLIS)) { width ->
+                if (targetState) -width / 4 else width
+            } + fadeOut(tween(PAGE_SLIDE_MILLIS))
+            entering togetherWith leaving
+        },
+        label = "session-page",
     ) { shown ->
-        if (shown as Boolean) {
+        if (shown) {
             SessionsScreen(
                 session = session,
                 onBack = { showSessions = false },
@@ -739,23 +643,17 @@ internal fun ChatScreen(
                 },
                 notice = composer.notice,
                 onDismissNotice = { composer.notice = null },
-                onOpenSheet = ::openSheet,
-                modelMenuAnchor = modelMenuAnchor,
-                onOpenSessions = { showSessions = true },
-                onNewSession = {
-                    // Same question as `/new` above and as the history list's rows:
-                    // pi's `new_session` ends the running answer before it starts the
-                    // new session, so the reader is asked what that costs. It used to
-                    // be a flat refusal with a notice, which was a tap that produced
-                    // a sentence and no result.
-                    if (session.turnInFlight) {
-                        confirmNewSession = true
-                    } else {
-                        session.newSession()
-                        composer.attachments = emptyList()
-                        composer.notice = null
-                    }
+                openSheet = openSheet,
+                onOpenSheet = { openSheet = it },
+                onCloseSheet = ::closeSheet,
+                onRunCommand = ::runCommand,
+                onPickAttachment = ::pickAttachment,
+                onShowPromptExtras = { extras ->
+                    promptExtras = extras
+                    showPromptExtras = true
                 },
+                onOpenSessions = { showSessions = true },
+                onNewSession = ::newSession,
                 onSend = {
                     val prompt = composer.input
                     val images = composer.attachments
@@ -804,20 +702,69 @@ internal fun ChatScreen(
     }
 
     // Drawn over whichever of the two pages above is showing — the history list is
-    // where the same question is asked about a saved conversation, and an
-    // `AlertDialog` is a window of its own, so it belongs to the screen rather than
-    // to either page the swap holds.
-    if (confirmNewSession) {
-        InterruptTurnDialog(
+    // where the same question is asked about a saved conversation, and a Miuix
+    // dialog is a window of its own, so it belongs to the screen rather than to
+    // either page the swap holds.
+    PiConfirm(
+        show = confirmNewSession,
+        title = text.sessions.switchInterruptTitle,
+        text = text.sessions.switchInterruptBody,
+        confirm = text.sessions.switchInterruptConfirm,
+        dismiss = text.common.cancel,
+        // The one dialog in the app whose confirm throws work away: an answer that is
+        // still arriving dies with the session, and the two buttons should not look
+        // like equivalent choices.
+        destructive = true,
+        onConfirm = {
+            confirmNewSession = false
+            session.newSession(interrupt = true)
+            composer.attachments = emptyList()
+            composer.notice = null
+        },
+        onDismiss = { confirmNewSession = false },
+    )
+
+    // The composer's two report sheets and the prompt's extras, in Miuix's own
+    // window sheets. They are drawn here rather than inside the band that opens
+    // them: a sheet is a window of its own, and one composed inside the composer
+    // would be measured against the band's bounds instead of the screen's.
+    //
+    // The extras sheet is closed by `showPromptExtras` rather than by clearing the
+    // value, so the panel still has its own content for the length of its exit.
+    PiSheet(
+        show = openSheet == ComposerSheet.Context,
+        title = text.chat.contextDetails,
+        onDismiss = ::closeSheet,
+    ) {
+        ContextSheet(session = session, text = text)
+    }
+
+    PiSheet(
+        show = openSheet == ComposerSheet.Shell,
+        title = null,
+        onDismiss = ::closeSheet,
+    ) {
+        ShellCommandSheet(
             text = text,
-            onDismiss = { confirmNewSession = false },
-            onConfirm = {
-                confirmNewSession = false
-                session.newSession(interrupt = true)
-                composer.attachments = emptyList()
-                composer.notice = null
+            onRun = { line ->
+                closeSheet()
+                if (line.isNotBlank()) {
+                    // A shell line that runs a command this page asked for:
+                    // `runBash` puts the output in the transcript as a notice,
+                    // which is the same path the `!` prefix in the composer takes.
+                    follow.enable()
+                    session.runBash(line)
+                }
             },
         )
+    }
+
+    PiSheet(
+        show = showPromptExtras,
+        title = text.chat.extrasTitle,
+        onDismiss = { showPromptExtras = false },
+    ) {
+        promptExtras?.let { PromptExtrasSheet(extras = it, text = text) }
     }
 }
 
@@ -832,22 +779,25 @@ internal fun ChatScreen(
  *
  * ## The header
  *
- * The page frame is [PiScaffold] with the shell's one fixed header: this page's title
- * is the first thing the reader asked, and the whole of it is a line the header
+ * The page frame is [PiPage] with the shell's one fixed header: this page's title is
+ * the first thing the reader asked, and the whole of it is a line the header
  * ellipsises rather than a band that grows and shrinks with it. The header used to be
  * the large *collapsing* bar, on the argument that a moving title should give its
  * height back to the transcript as the reader scrolled — the price was that this page's
  * chrome was 36dp taller than the settings pages' and moved while the others did not,
- * and §9.2 has the tokens that made the two heights unequal.
+ * and §9.2 has the tokens that made the two heights unequal. Miuix's small bar is
+ * pinned by construction, which is the same decision the rest of the app already made.
  *
- * The title is drawn a step smaller than every other page's (`titleMedium`, through
- * [PiScaffold]'s `titleStyle`), because it is the one title that can be a whole sentence
- * and the reader asked for more of it to fit.
+ * The title is drawn in the one size every Miuix page's title is drawn in — the top
+ * bar owns that decision, and a page that styled its own title was how the chat page
+ * ended up with a header a size smaller than the Terminal's, Files' and Settings'
+ * when its title was derived from the reader's first sentence rather than from a
+ * session name.
  *
- * The **agent's mark** used to stand in the header's action row, which is why
- * `PiFeedback.PiAgentMark` exists; it is gone, because to the reader it was a
- * placeholder before the compress button with nothing to say that the subtitle does not
- * already say in words. What remains is the three actions, ordered compress, history,
+ * The **agent's mark** used to stand in the header's action row, drawn by a component
+ * of the old design system that nothing else used; it is gone, because to the reader
+ * it was a placeholder before the compress button with nothing to say that the
+ * subtitle does not already say in words. What remains is the three actions, ordered compress, history,
  * new: left to right as "do something to this conversation, look at the others, start
  * another", which is also the order of how much each disturbs what is on screen.
  *
@@ -856,7 +806,7 @@ internal fun ChatScreen(
  * The composer and its notices are the page column's own last children, below the box
  * the transcript is drawn in rather than over it, so nothing overlaps and nothing has
  * to be measured to be cleared: the list ends where the band begins and its tail
- * padding is one line of `bodyMedium` ([TRANSCRIPT_TAIL_SPACE]). The panel this
+ * padding is one line of the body style ([TRANSCRIPT_TAIL_SPACE]). The panel this
  * replaced was an overlay with a measured height; §7.1 has the whole of why it is a
  * band again and where the field's frame came back from.
  *
@@ -884,8 +834,13 @@ private fun ChatPage(
     onRemoveImage: (String) -> Unit,
     notice: String?,
     onDismissNotice: () -> Unit,
-    onOpenSheet: (ComposerSheet, MenuAnchor?) -> Unit,
-    modelMenuAnchor: MenuAnchor,
+    /** Which composer menu or sheet is open, or null. Read by the chip that owns it. */
+    openSheet: ComposerSheet?,
+    onOpenSheet: (ComposerSheet) -> Unit,
+    onCloseSheet: () -> Unit,
+    onRunCommand: (BuiltInCommand) -> Unit,
+    onPickAttachment: (String) -> Unit,
+    onShowPromptExtras: (PromptExtras) -> Unit,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     onSend: () -> Unit,
@@ -911,7 +866,7 @@ private fun ChatPage(
         } else {
             ChatAvatars(
                 // Blank is the mark, not a word: the agent's fallback is the app's own
-                // Pi logo, drawn by `PiAvatar`'s `mark` flag.
+                // Pi logo, drawn by `ChatAvatar`'s `mark` flag.
                 aiLabel = saved.aiAvatarLabel.ifBlank { null },
                 aiImage = saved.aiAvatarImage.ifBlank { null },
                 aiColor = saved.aiAvatarColor.seed,
@@ -963,43 +918,46 @@ private fun ChatPage(
         }
     }
 
-    PiScaffold(
+    PiPage(
         title = conversationTitle(state),
         subtitle = agentSubtitle(agent, text),
-        // The one page whose title can be a whole sentence: the reader's own first
-        // line, ellipsised at one line by the header. `titleMedium` rather than the
-        // shell's `titleLarge` is what fits the opening words of a question where
-        // the large style fitted two of them.
-        //
-        // Only *while* the title is that sentence, though. The same slot holds the
-        // app's name on a new conversation and a session's own name when it has one,
-        // and `titleMedium` for those made the chat page's header the one header in
-        // the app drawn a size smaller than the Terminal, Files and Settings pages'.
-        titleStyle = if (conversationTitleIsProse(state)) {
-            MaterialTheme.typography.titleMedium
-        } else {
-            MaterialTheme.typography.titleLarge
-        },
         actions = {
             IconButton(onClick = { session.compact() }) {
-                Icon(Icons.Filled.Compress, contentDescription = text.chat.compact)
+                Icon(
+                    imageVector = MiuixIcons.Merge,
+                    contentDescription = text.chat.compact,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                )
             }
             IconButton(onClick = onOpenSessions) {
-                Icon(Icons.Filled.History, contentDescription = text.chat.sessions)
+                Icon(
+                    imageVector = MiuixIcons.Recent,
+                    contentDescription = text.chat.sessions,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                )
             }
             IconButton(onClick = onNewSession) {
-                Icon(Icons.Filled.Add, contentDescription = text.chat.newSession)
+                Icon(
+                    imageVector = MiuixIcons.Add,
+                    contentDescription = text.chat.newSession,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                )
             }
         },
-    ) { bodyModifier ->
+    ) { pagePadding ->
         Column(
             Modifier
                 .fillMaxSize()
+                // The page's own insets: the top bar's height at the top and the
+                // navigation strip at the bottom. Applied here rather than to the
+                // transcript alone, so the composer ends above the strip instead of
+                // under it.
+                .padding(pagePadding)
                 // Tapping anywhere that is not a control gives up the composer's
                 // focus, and clearing focus is what closes the text toolbar — the
                 // floating "粘贴 / 全选" strip Compose shows over a long-pressed field.
                 //
-                // Nothing else did. `BasicTextField` deselects and hides its toolbar
+                // Nothing else did. The text field deselects and hides its toolbar
                 // when it *loses* focus, but Compose does not move focus on a tap: a
                 // tap on the transcript is delivered to the `LazyColumn`, which has no
                 // opinion about focus, so the field stayed focused with its selection
@@ -1036,17 +994,17 @@ private fun ChatPage(
                 // The transcript is capped and centred on a window wide enough to need
                 // it, and uncapped on a phone.
                 //
-                // A line of `bodyMedium` on a 411dp phone inside the 12dp gutters is
-                // about 55 Latin characters — inside the 45–75 band, so nothing needs
-                // fixing there. A tablet at 800dp is about 107, and for this app the
-                // count that matters is the CJK one: at 14sp a Han glyph is a full em, so
-                // 800dp is 57 characters against the 40 that WCAG's visual-presentation
-                // criterion allows. 560dp is where 80 Latin characters and 40 Han
-                // characters coincide, so it is the one number that satisfies the rule
-                // in both scripts — and the cap is the *prose* measure rather than the
-                // column's width, which is why [MAX_TRANSCRIPT_WIDTH] adds the answer
-                // card's own inset to it: an answer that measured 560dp of text inside
-                // a 16dp frame would be 560dp of text one step too wide.
+                // A line of the reading style (Miuix's `paragraph`, 17sp) on a 411dp
+                // phone inside the 12dp gutters is about 45 Latin characters — the
+                // bottom of the 45–75 band, so nothing needs fixing there. A tablet at
+                // 800dp is about 88, and for this app the count that matters is the
+                // CJK one: a Han glyph is a full em, so 800dp is 47 of them against the
+                // 40 that WCAG's visual-presentation criterion allows.
+                // [MAX_TRANSCRIPT_WIDTH] caps the column well inside that, and the cap
+                // has to be the *prose* measure rather than the column's width, which is
+                // why the answer card's own inset is added to it: an answer that
+                // measured the cap in text inside a 16dp frame would be that much text
+                // one step too wide.
                 //
                 // The cap used to sit on a `Box` that also held the turn rail beside the
                 // list; with the rail gone the wrapper had one child and no job of its
@@ -1085,10 +1043,13 @@ private fun ChatPage(
                                     Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    PiStatePill(label = text.chat.loadingConversation)
+                                    ChatStatusPill(
+                                        label = text.chat.loadingConversation,
+                                        tone = ChatTone.Live,
+                                    )
                                 }
                             } else {
-                                PiEmptyState(
+                                ChatEmptyState(
                                     title = text.chat.newConversation,
                                     body = remember(cards) { text.chat.tips.random() },
                                 )
@@ -1096,20 +1057,13 @@ private fun ChatPage(
                         } else {
                             LazyColumn(
                                 state = listState,
-                                modifier = bodyModifier
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     // The transcript is a log the reader is watching fill
                                     // up. Without this every streamed token is a silent
                                     // change; with it the platform announces the row once it
                                     // stops growing, which is the one moment the
                                     // announcement is useful.
-                                    //
-                                    // The scroll connection the header needs lives on this
-                                    // node rather than on the page's column, and the design
-                                    // system's scaffold hands it out for exactly this: the
-                                    // nested-scroll link belongs on the scrolling container,
-                                    // and the only thing that knows which container that is
-                                    // is the page.
                                     .semantics { liveRegion = LiveRegionMode.Polite },
                                 // The bottom inset is the transcript's breathing room against
                                 // the composer. An answer that ended flush against the band
@@ -1171,18 +1125,19 @@ private fun ChatPage(
                                             expandedTurns = expandedTurns,
                                             onToggleTurn = onToggleTurn,
                                             avatars = avatars,
+                                            onShowExtras = onShowPromptExtras,
                                         )
                                     }
                                 }
                                 if (state.isCompacting) {
-                                    // The app's own loading indicator rather than a
-                                    // `CircularProgressIndicator`: the design language replaced
-                                    // every spinner in the app with the shape-morphing one, and
-                                    // a pill says *what* is running as well as *that* something
-                                    // is — which is the whole reason it carries a label.
+                                    // A labelled pill rather than a spinner: it says
+                                    // *what* is running as well as *that* something is,
+                                    // and it is the same shape the tool rows wear while
+                                    // they have not come back yet.
                                     item(key = "compacting") {
-                                        PiStatePill(
+                                        ChatStatusPill(
                                             label = text.chat.compacting,
+                                            tone = ChatTone.Live,
                                             modifier = Modifier.padding(top = MODULE_GAP),
                                         )
                                     }
@@ -1213,7 +1168,7 @@ private fun ChatPage(
                 // does, so this recomposes only at the two ends of the range rather
                 // than once per frame.
                 if (listState.canScrollForward) {
-                    FilledTonalIconButton(
+                    IconButton(
                         onClick = {
                             // The flag is raised *before* the follow flips, so the
                             // effect above cannot slip a snap in between: on the
@@ -1242,20 +1197,19 @@ private fun ChatPage(
                             // not a clearance from a floating panel.
                             .padding(end = 10.dp, bottom = 10.dp)
                             // 40dp, the same drawn size as the composer's send control
-                            // at the other end of the page. It was 38dp, which made two
-                            // "round action over the transcript" controls two different
-                            // sizes, and `PiShapes.pill` is what makes both of them
-                            // round: an action is the only fully round thing on this
-                            // page, and the two controls the thumb reaches for are the
-                            // ones that say so.
+                            // at the other end of the page — Miuix's icon button *is* a
+                            // 40dp pill by default, so the two controls the thumb reaches
+                            // for are the same shape without either of them stating a
+                            // radius of its own.
                             .size(40.dp),
-                        shape = PiShapes.pill,
+                        backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
                     ) {
                         Icon(
-                            Icons.Filled.ArrowDownward,
+                            imageVector = MiuixIcons.ExpandMore,
                             contentDescription = text.chat.jumpToLatest,
                             // 20dp, matching the send/stop glyphs in the composer.
                             modifier = Modifier.size(20.dp),
+                            tint = MiuixTheme.colorScheme.onSecondaryContainer,
                         )
                     }
                 }
@@ -1291,30 +1245,35 @@ private fun ChatPage(
             // tab's job.
             val failure = (agent as? AgentStatus.Failed)?.message
             if (failure != null) {
-                PiNotice(
+                ChatNotice(
                     text = noticeLines(failure),
-                    tone = PiTone.Danger,
-                    icon = Icons.Filled.Error,
+                    tone = ChatTone.Danger,
+                    icon = MiuixIcons.Info,
                     action = {
-                        PiButton(
+                        TextButton(
                             text = text.common.retry,
                             onClick = { session.restartAgent() },
-                            kind = PiButtonKind.Filled,
-                            size = PiButtonSize.ExtraSmall,
+                            // A notice is a strip, not a form: the button sits inside
+                            // it at the strip's own scale rather than at a button's
+                            // 40dp minimum, which would make the notice as tall as the
+                            // field under it.
+                            minHeight = 28.dp,
+                            insideMargin = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            textStyle = MiuixTheme.textStyles.footnote1,
                         )
                     },
                 )
             } else {
                 state.lastError?.let { error ->
-                    PiNotice(
+                    ChatNotice(
                         text = noticeLines(error),
-                        tone = PiTone.Danger,
-                        icon = Icons.Filled.Error,
+                        tone = ChatTone.Danger,
+                        icon = MiuixIcons.Info,
                         // Tapping the strip puts it away, which is the behaviour the
                         // banner this replaced had: a failure that has been read is
                         // clutter, and a close button on a notice that is itself the
                         // message would be a second control for one action.
-                        modifier = Modifier.clickable(onClick = { session.clearError() }),
+                        onClick = { session.clearError() },
                     )
                 }
             }
@@ -1324,11 +1283,11 @@ private fun ChatPage(
                 // pick over the cap — are not failures: the accent tone rather than the
                 // error one, which is what stops a warning and a failure from training
                 // the eye the same way.
-                PiNotice(
+                ChatNotice(
                     text = message,
-                    tone = PiTone.Accent,
-                    icon = Icons.Filled.Info,
-                    modifier = Modifier.clickable(onClick = onDismissNotice),
+                    tone = ChatTone.Accent,
+                    icon = MiuixIcons.Info,
+                    onClick = onDismissNotice,
                 )
             }
 
@@ -1352,8 +1311,11 @@ private fun ChatPage(
                 inputEnabled = agent is AgentStatus.Running || agent is AgentStatus.Starting,
                 agent = agent,
                 state = state,
+                openSheet = openSheet,
                 onOpenSheet = onOpenSheet,
-                modelMenuAnchor = modelMenuAnchor,
+                onCloseSheet = onCloseSheet,
+                onRunCommand = onRunCommand,
+                onPickAttachment = onPickAttachment,
                 onSend = onSend,
                 onStop = {
                     // The queue behind the run is cleared with it (see
@@ -1372,6 +1334,250 @@ private fun ChatPage(
         }
     }
 }
+
+/**
+ * A sentence about the page, in the page: Miuix's own card shape, at the strip's
+ * height rather than a panel's.
+ *
+ * The fill is the [ChatTone]'s container and the *ink* is its matching pair, so a
+ * failure and a warning are told apart by the palette rather than by a second
+ * component. There is no dismiss button: the whole strip dismisses where the caller
+ * passes a `clickable`, which is the behaviour the banner this replaced had.
+ */
+@Composable
+private fun ChatNotice(
+    text: String,
+    tone: ChatTone,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    action: (@Composable () -> Unit)? = null,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            // The tap area is put on *after* the margin, so what answers a tap is
+            // exactly the strip the reader can see: a dismissable notice whose
+            // gesture started in the gap beside it would be a control a few
+            // millimetres larger than it looks. The clip comes first for the same
+            // reason the chip's does — the press tint must not square off the corners.
+            .clip(ROW_SHAPE)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        shape = ROW_SHAPE,
+        color = tone.container(),
+        contentColor = tone.onContainer(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = tone.ink(),
+            )
+            Text(
+                text = text,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+                style = MiuixTheme.textStyles.footnote1,
+                color = tone.ink(),
+            )
+            if (action != null) {
+                Spacer(Modifier.width(8.dp))
+                action()
+            }
+        }
+    }
+}
+
+/**
+ * The page with nothing in it yet: the app's own mark, what this page is, and one
+ * tip out of the catalog's set.
+ *
+ * A conversation nothing has been sent to is not a blank area — it is the one place
+ * the page can say what it is for, which is why the mark here is the launcher icon's
+ * own geometry rather than a generic speech bubble.
+ */
+@Composable
+private fun ChatEmptyState(title: String, body: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_pi_mark),
+            contentDescription = null,
+            modifier = Modifier.size(EMPTY_MARK_SIZE),
+            tint = MiuixTheme.colorScheme.primary,
+        )
+        Text(
+            text = title,
+            modifier = Modifier.padding(top = 20.dp),
+            style = MiuixTheme.textStyles.title3,
+            color = MiuixTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = body,
+            modifier = Modifier.padding(top = 8.dp),
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** How large the mark is on an empty conversation. */
+private val EMPTY_MARK_SIZE = 64.dp
+
+/**
+ * The navigation strip's height, for a sheet's own bottom edge.
+ *
+ * Miuix's bottom sheet is a window of its own with `decorFitsSystemWindows = false`, and its
+ * inside margin is 24dp across and **zero** down — the panel's bottom edge *is* the window's,
+ * which is the gesture bar. So a sheet's last row would sit under the gesture bar unless the
+ * content clears it, and the inset belongs to the content rather than to the panel: on a
+ * scrolling body it goes inside the scroll (after `verticalScroll`), so the text travels
+ * through it and the panel's own fill still reaches the window's edge.
+ */
+@Composable
+private fun sheetBottomInset(): Dp =
+    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+/**
+ * One speaker's mark: a circle in the colour the reader chose, holding a label, a
+ * picture, or the fallback figure for that speaker.
+ *
+ * The two fallbacks are deliberately different figures — the agent's is the app's own
+ * Pi logo, the reader's is a person — because a null label means "the built-in mark",
+ * and two speakers falling back to the same figure is a transcript with one speaker.
+ *
+ * ## The two shares, and why they differ
+ *
+ * They were one number (0.62) until the Pi mark was looked at beside the silhouette it
+ * shares a slot with: a framework icon's box is not its ink. A person glyph draws
+ * between 4 and 20 of its 24 units, so at 62% of the circle its *ink* is
+ * 0.62 × 16/24 = **41%** of the diameter; `ic_pi_mark.xml`'s viewport **is** the
+ * glyph's bounding box — the path runs 29.9→67.5 in x and 40→77.6 in y of a 37.6-unit
+ * viewport — so the same 62% drew an ink twice the silhouette's and the agent's avatar
+ * read as a logo with a ring of colour around it rather than as a mark in a circle.
+ *
+ * [AVATAR_MARK_SHARE] is therefore set to the silhouette's *ink* (0.46 × 34dp = about
+ * 16dp of a 34dp circle) rather than to its box. It is still the heavier of the two at
+ * equal ink, because the mark is a solid blocky figure where the silhouette is an
+ * outline of one, which is what keeps the two speakers tellable apart at a glance.
+ */
+@Composable
+private fun ChatAvatar(
+    color: Color,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    icon: ImageVector? = null,
+    imagePath: String? = null,
+    mark: Boolean = false,
+    size: Dp = 28.dp,
+) {
+    // The ink is decided by the circle's own luminance rather than by the theme: the
+    // colour is the reader's choice and may be any hue at any lightness, so the only
+    // thing that can be known about it is how bright it is.
+    val ink = if (color.luminance() > 0.5f) Color.Black else Color.White
+    val picture = rememberAvatarBitmap(imagePath)
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(color),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            picture != null -> Image(
+                bitmap = picture,
+                contentDescription = null,
+                // Crop rather than fit: a portrait photo in a circle should fill it.
+                // `Alignment.Center` is the crop's own anchor, so the middle of the
+                // picture is what survives.
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            label != null -> Text(
+                text = label,
+                style = MiuixTheme.textStyles.footnote1,
+                color = ink,
+                maxLines = 1,
+            )
+
+            icon != null -> Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = ink,
+                modifier = Modifier.size(size * AVATAR_GLYPH_SHARE),
+            )
+
+            mark -> Icon(
+                painter = painterResource(R.drawable.ic_pi_mark),
+                contentDescription = null,
+                tint = ink,
+                modifier = Modifier.size(size * AVATAR_MARK_SHARE),
+            )
+        }
+    }
+}
+
+private const val AVATAR_GLYPH_SHARE = 0.62f
+private const val AVATAR_MARK_SHARE = 0.46f
+
+/**
+ * The custom avatar picture at [path], decoded once and downscaled to avatar size.
+ *
+ * ## Why not an image loader
+ *
+ * PiKit has no image-loading dependency, and this is the one picture in the app: a
+ * `BitmapFactory` decode off the main thread in a `produceState` is smaller than the
+ * dependency would be, and it is the same file the reader picked rather than a cache
+ * with its own eviction to reason about.
+ *
+ * The decode is **downscaled** on the way in. The file is whatever the user picked —
+ * a 12-megapixel photo is 48 MB as an `ARGB_8888` bitmap, drawn into a 34dp circle —
+ * so `inSampleSize` is solved from the file's own bounds until the longest side is
+ * near [AVATAR_DECODE_PX]. The bounds pass reads the header only, which is why it is
+ * two `decodeFile` calls rather than one.
+ *
+ * A path that no longer resolves (the file was deleted, the export was restored
+ * without it) decodes to null, and the avatar falls back to the label or the mark
+ * exactly as if no picture had been chosen — a broken reference costs the picture and
+ * nothing else.
+ */
+@Composable
+private fun rememberAvatarBitmap(path: String?): ImageBitmap? {
+    if (path.isNullOrBlank()) return null
+    return produceState<ImageBitmap?>(initialValue = null, path) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(path, bounds)
+                var sample = 1
+                while (
+                    bounds.outWidth / (sample * 2) >= AVATAR_DECODE_PX &&
+                    bounds.outHeight / (sample * 2) >= AVATAR_DECODE_PX
+                ) {
+                    sample *= 2
+                }
+                val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                BitmapFactory.decodeFile(path, options)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }.value
+}
+
+/** The longest side a decoded avatar is allowed to be, in pixels. 34dp at 4x, rounded up. */
+private const val AVATAR_DECODE_PX = 160
 
 /**
  * The thinking level to show, preferring what pi reports over what was saved.
@@ -1829,9 +2035,9 @@ private const val NOTICE_LINES = 3
 /**
  * The first [NOTICE_LINES] lines of a process dump, marked as cut.
  *
- * The notice's own style carries no line limit — the design system's notice wraps
- * rather than ellipsising, which is right for a sentence and wrong for stderr — so
- * the bound is applied to the text. The ellipsis is what keeps a truncated stack
+ * The notice's own style carries no line limit — a notice wraps rather than
+ * ellipsising, which is right for a sentence and wrong for stderr — so the bound is
+ * applied to the text. The ellipsis is what keeps a truncated stack
  * from reading as the whole failure.
  */
 private fun noticeLines(message: String): String {
@@ -1861,6 +2067,13 @@ private fun agentSubtitle(agent: AgentStatus, text: Strings): String = when (age
  * page is a new conversation because that is what an empty transcript is. The name
  * is a literal because it is a proper noun and not interface text — the same
  * spelling in all three catalogs, and the same one the About page writes.
+ *
+ * A name and a derived title are the same slot and no longer different styles: the
+ * top bar owns that decision now, where before this page styled its own title and
+ * drew a derived one (`titleMedium`) smaller than a session's name (`titleLarge`).
+ * The distinction the two facts above still make is *what* is shown, not how big it
+ * is: a name is a name, and the app's own name on an empty conversation is a proper
+ * noun.
  */
 private fun conversationTitle(state: ConversationState): String {
     state.sessionName?.takeIf { it.isNotBlank() }?.let { return it }
@@ -1869,68 +2082,9 @@ private fun conversationTitle(state: ConversationState): String {
     return if (message.isNullOrBlank()) APP_NAME else SessionMetadata.asTitle(message)
 }
 
-/**
- * Whether [conversationTitle] is the reader's own sentence rather than a name.
- *
- * The header's title style follows this, and it is deliberately the same two facts
- * [conversationTitle] reads in the same order: a name is a name (and the app's own
- * name on an empty conversation is a proper noun), while a *derived* title is the
- * opening words of a question — which is the only case that needs the smaller style.
- */
-private fun conversationTitleIsProse(state: ConversationState): Boolean =
-    state.sessionName.isNullOrBlank() &&
-        state.items.any { it is ChatItem.User && it.text.isNotBlank() }
-
 /** The application's name, as it is written wherever a proper noun is wanted. */
 private const val APP_NAME = "PiKit"
 
-/**
- * One card of the transcript, drawn: the prompt, or the answer it produced.
- *
- * ## Two widths, and that is the whole of the difference between them
- *
- * A **prompt** is sized to what the reader wrote and sits at the *end* edge. The
- * card is a `Surface` with a loose `0..max` constraint, so it settles at its
- * content's width; the cap and the side come from a `BoxWithConstraints` around it,
- * and there is deliberately no `fillMaxWidth` anywhere inside it — `fillMaxWidth`
- * sets the *minimum*, so one on the card or on a child of it is what turns "ok" into
- * a full-width slab. That is the same defect this page has already been through once
- * — a two-word prompt drawn as an 86%-wide bar — and the shape of the fix is that
- * the *parent* leaves the minimum at zero and the cap sits on the parent.
- *
- * `MessageMeta` used to carry a `fillMaxWidth` of its own, which was the same defect
- * one level down and defeated the cap entirely: the meta row's minimum became the
- * card's maximum, so every prompt *was* a full-width card, in the reader's own words
- * but with no side to read. It wraps to its content now; on the answer card, whose
- * frame is the transcript's measure either way, nothing changes.
- *
- * An **answer** is a body of text laid out as a document, so its card is the
- * transcript's full measure: `fillMaxWidth` on that card means "the column is the
- * measure", which is a statement about the answer rather than about its content.
- *
- * The two cards are the same rounded rectangle and differ in surface step, width and
- * side: a question and its answer are two halves of one exchange, and the reader's
- * own words take `secondaryContainer` at the end edge — a container the page's own
- * controls also wear (`PiSelectChip`, the jump-to-latest button), so the question
- * reads as *the reader's* half by the colour a control on this page already uses
- * rather than by a role nothing else on the page has. The side and the width cap do
- * the rest, and they are what the "heading of a section" treatment could not replace:
- * a question that is not distinguishable from its answer at a glance makes the
- * transcript unreadable at speed.
- *
- * ## Each card's own furniture is drawn under it
- *
- * A card holds what was *said*; the time and the copy glyph are drawn under the frame
- * by the card view itself, mirrored to the side the message sits on. See [MessageMeta].
- *
- * ## The rhythm inside a card is the rhythm between cards
- *
- * Every row is spaced by `rowGap` — the same pure function the list used between
- * two bare rows, and the same three numbers, so nothing about the transcript's
- * vertical rhythm changed when the frames arrived. What changed is where the rows
- * are drawn: the modules of a turn (a fold band, a thought, a call, its answer, a
- * notice) are now inside one card instead of loose in the list.
- */
 /**
  * The two avatars the transcript draws over its cards, or null when they are off.
  *
@@ -1966,6 +2120,54 @@ private data class ChatAvatars(
 private val AVATAR_SIZE = 34.dp
 private val AVATAR_GAP = 8.dp
 
+/**
+ * One card of the transcript, drawn: the prompt, or the answer it produced.
+ *
+ * ## Two widths, and that is the whole of the difference between them
+ *
+ * A **prompt** is sized to what the reader wrote and sits at the *end* edge. The
+ * card is a Miuix [Card], whose own `Box` passes its minimum constraint through
+ * (`propagateMinConstraints`), so under a loose `0..max` it settles at its content's
+ * width; the cap and the side come from a `BoxWithConstraints` around it, and there
+ * is deliberately no `fillMaxWidth` anywhere inside it — `fillMaxWidth` sets the
+ * *minimum*, so one on the card or on a child of it is what turns "ok" into a
+ * full-width slab. (The component changed; the measurement and the trap did not.) That is the same defect this page has already been through once
+ * — a two-word prompt drawn as an 86%-wide bar — and the shape of the fix is that
+ * the *parent* leaves the minimum at zero and the cap sits on the parent.
+ *
+ * `MessageMeta` used to carry a `fillMaxWidth` of its own, which was the same defect
+ * one level down and defeated the cap entirely: the meta row's minimum became the
+ * card's maximum, so every prompt *was* a full-width card, in the reader's own words
+ * but with no side to read. It wraps to its content now; on the answer card, whose
+ * frame is the transcript's measure either way, nothing changes.
+ *
+ * An **answer** is a body of text laid out as a document, so its card is the
+ * transcript's full measure: `fillMaxWidth` on that card means "the column is the
+ * measure", which is a statement about the answer rather than about its content.
+ *
+ * The two cards are the same rounded rectangle and differ in surface step, width and
+ * side: a question and its answer are two halves of one exchange, and the reader's
+ * own words take `secondaryContainer` at the end edge — a container the page's own
+ * controls also wear (the composer's chips, the jump-to-latest button), so the
+ * question reads as *the reader's* half by the colour a control on this page already
+ * uses rather than by a role nothing else on the page has. The side and the width cap do
+ * the rest, and they are what the "heading of a section" treatment could not replace:
+ * a question that is not distinguishable from its answer at a glance makes the
+ * transcript unreadable at speed.
+ *
+ * ## Each card's own furniture is drawn under it
+ *
+ * A card holds what was *said*; the time and the copy glyph are drawn under the frame
+ * by the card view itself, mirrored to the side the message sits on. See [MessageMeta].
+ *
+ * ## The rhythm inside a card is the rhythm between cards
+ *
+ * Every row is spaced by `rowGap` — the same pure function the list used between
+ * two bare rows, and the same three numbers, so nothing about the transcript's
+ * vertical rhythm changed when the frames arrived. What changed is where the rows
+ * are drawn: the modules of a turn (a fold band, a thought, a call, its answer, a
+ * notice) are now inside one card instead of loose in the list.
+ */
 @Composable
 private fun TranscriptCardView(
     card: TranscriptCard,
@@ -1973,6 +2175,7 @@ private fun TranscriptCardView(
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
     avatars: ChatAvatars?,
+    onShowExtras: (PromptExtras) -> Unit,
 ) {
     when (card) {
         // The prompt is measured against the transcript's own width so the cap can
@@ -1988,25 +2191,33 @@ private fun TranscriptCardView(
                 Column(horizontalAlignment = Alignment.End) {
                     // The reader's own mark, over the bubble and on the reader's
                     // side — the two things that say who is speaking without a name
-                    // line. See [PiAvatar]; a null label draws the silhouette and a
+                    // line. See [ChatAvatar]; a null label draws the silhouette and a
                     // stored picture replaces both.
                     avatars?.let { marks ->
-                        PiAvatar(
+                        ChatAvatar(
                             color = marks.userColor,
                             label = marks.userLabel,
-                            icon = Icons.Filled.Person,
+                            icon = MiuixIcons.ContactsCircle,
                             imagePath = marks.userImage,
                             size = AVATAR_SIZE,
                             modifier = Modifier.padding(bottom = AVATAR_GAP),
                         )
                     }
-                    PiCard(
-                        container = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        shape = PiShapes.card,
-                        padding = PROMPT_CARD_PADDING,
+                    Card(
+                        cornerRadius = CardDefaults.CornerRadius,
+                        insideMargin = PROMPT_CARD_PADDING,
+                        colors = CardDefaults.defaultColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer,
+                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                        ),
                     ) {
-                        TranscriptCardRow(card.row, text, expandedTurns, onToggleTurn)
+                        TranscriptCardRow(
+                            row = card.row,
+                            text = text,
+                            expandedTurns = expandedTurns,
+                            onToggleTurn = onToggleTurn,
+                            onShowExtras = onShowExtras,
+                        )
                     }
                     // Outside the card, and that is the rule for both sides: the time
                     // and the copy glyph are furniture *under* a message rather than
@@ -2023,7 +2234,7 @@ private fun TranscriptCardView(
             // rather than per row: the card *is* the turn, and the folded steps inside
             // it are the same speaker.
             avatars?.let { marks ->
-                PiAvatar(
+                ChatAvatar(
                     color = marks.aiColor,
                     label = marks.aiLabel,
                     imagePath = marks.aiImage,
@@ -2035,15 +2246,25 @@ private fun TranscriptCardView(
                     modifier = Modifier.padding(bottom = AVATAR_GAP),
                 )
             }
-            PiCard(
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                container = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = PiShapes.card,
-                padding = PaddingValues(ANSWER_CARD_INSET),
+                cornerRadius = CardDefaults.CornerRadius,
+                insideMargin = PaddingValues(ANSWER_CARD_INSET),
+                // The answer's card is the palette's standard surface step — one step
+                // off the page behind it — because it is *the page's* content rather
+                // than a bubble, and the reader's own half is the one that wears a
+                // container.
+                colors = CardDefaults.defaultColors(),
             ) {
                 card.rows.forEachIndexed { index, row ->
                     Column(Modifier.padding(top = rowGap(card.rows.getOrNull(index - 1), row))) {
-                        TranscriptCardRow(row, text, expandedTurns, onToggleTurn)
+                        TranscriptCardRow(
+                            row = row,
+                            text = text,
+                            expandedTurns = expandedTurns,
+                            onToggleTurn = onToggleTurn,
+                            onShowExtras = onShowExtras,
+                        )
                     }
                 }
             }
@@ -2084,8 +2305,9 @@ private const val PROMPT_MAX_SHARE = 0.86f
 /**
  * The prompt card's inset.
  *
- * Tighter than `PiCard`'s own 16dp, which is sized for a paragraph: a prompt is a
- * sentence or two, and a frame wider than its content is a box with a word in it.
+ * Tighter than the answer card's own 16dp inset, which is sized for a paragraph: a
+ * prompt is a sentence or two, and a frame wider than its content is a box with a
+ * word in it.
  * 14dp is still more than the copy glyph's own invisible margin, which is what the
  * meta row is pulled out by at its foot.
  */
@@ -2094,9 +2316,10 @@ private val PROMPT_CARD_PADDING = PaddingValues(horizontal = 14.dp, vertical = 1
 /**
  * The answer card's own inset, on every side.
  *
- * `PiCard`'s default padding, written down because [MAX_TRANSCRIPT_WIDTH] has to add
- * it back: the transcript's cap is a statement about the *prose* measure, and the
- * card's frame is around that measure rather than out of it.
+ * [Card]'s default inside margin is zero, so the card states its own; and
+ * [MAX_TRANSCRIPT_WIDTH] has to add it back, because the transcript's cap is a
+ * statement about the *prose* measure and the card's frame is around that measure
+ * rather than out of it.
  */
 private val ANSWER_CARD_INSET = 16.dp
 
@@ -2107,10 +2330,11 @@ private fun TranscriptCardRow(
     text: Strings,
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
+    onShowExtras: (PromptExtras) -> Unit,
 ) {
     when (row) {
         is TranscriptRow.Message -> when (val item = row.item) {
-            is ChatItem.User -> PromptBody(item, text)
+            is ChatItem.User -> PromptBody(item, text, onShowExtras)
 
             is ChatItem.Assistant ->
                 AssistantBlock(item, text, row.showReasoning)
@@ -2260,12 +2484,15 @@ internal fun parsePromptExtras(raw: String): PromptExtras {
  * transcript's own measure.
  */
 @Composable
-private fun PromptBody(item: ChatItem.User, text: Strings) {
+private fun PromptBody(
+    item: ChatItem.User,
+    text: Strings,
+    onShowExtras: (PromptExtras) -> Unit,
+) {
     // The prompt is the last thing the reader wrote; what follows it is the other
     // speaker. The space *between* the two cards is `rowGap`'s job — it is the only
     // place that knows whether an answer, a fold band or a tool card comes next.
     val extras = remember(item.key, item.text) { parsePromptExtras(item.text) }
-    val sheets = LocalSheetHost.current
     Column {
         // The machinery first: file paths and image notes are one chip above the
         // words, the same position the image-count chip has always held. Tapping it
@@ -2275,11 +2502,7 @@ private fun PromptBody(item: ChatItem.User, text: Strings) {
             PromptExtrasChip(
                 extras = extras,
                 text = text,
-                onClick = {
-                    sheets.show(Sheet(key = "prompt-extras-${item.key}", fullBleedBottom = true) {
-                        PromptExtrasSheet(extras, text)
-                    })
-                },
+                onClick = { onShowExtras(extras) },
             )
         }
         if (item.imageCount > 0) {
@@ -2291,35 +2514,40 @@ private fun PromptBody(item: ChatItem.User, text: Strings) {
                 ),
             ) {
                 Icon(
-                    Icons.Filled.Image,
+                    imageVector = MiuixIcons.Photos,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
                     // Furniture rather than prose: the count of pictures the reader
                     // attached is a fact about the message, not part of the sentence
-                    // they typed, so it takes the neutral ink and the words under it
+                    // they typed, so it takes the muted ink and the words under it
                     // take the card's own.
-                    tint = PiTone.Neutral.ink(MaterialTheme.colorScheme),
+                    tint = ChatTone.Neutral.ink(),
                 )
                 Text(
-                    text.chat.attachmentCount(item.imageCount),
+                    text = text.chat.attachmentCount(item.imageCount),
                     modifier = Modifier.padding(start = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = PiTone.Neutral.ink(MaterialTheme.colorScheme),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = ChatTone.Neutral.ink(),
                 )
             }
         }
         if (extras.displayText.isNotBlank()) {
             Text(
-                extras.displayText,
+                text = extras.displayText,
                 modifier = Modifier.padding(
                     top = when {
                         extras.hasExtras || item.imageCount > 0 -> 6.dp
                         else -> 0.dp
                     },
                 ),
-                // No colour: the card's `Surface` provides its own content colour
+                // The transcript's reading style, and the same one `MarkdownText`
+                // draws an answer in: the question and its answer are one block of
+                // text, and a prompt a size smaller than its reply reads as a caption.
+                //
+                // No colour: the card provides its own content colour
                 // (`onSecondaryContainer`), and the reader's own words are the one
                 // thing on this page that must never be muted.
+                style = MiuixTheme.textStyles.paragraph,
             )
         }
     }
@@ -2328,22 +2556,21 @@ private fun PromptBody(item: ChatItem.User, text: Strings) {
 /**
  * The chip that replaces a prompt's file-path list and its image notes.
  *
- * A 14dp glyph and a `labelMedium` label, like the image count beside it, and the
- * chevron is what says this one opens something. The label is a count rather than a
- * title (`2 files · 1 image note`) because that is the fact the reader wants before
+ * A 14dp glyph and a small label, like the image count beside it, and the chevron is
+ * what says this one opens something. The label is a count rather than a title
+ * (`2 files · 1 image note`) because that is the fact the reader wants before
  * deciding whether to look inside.
  *
  * ## Why it is a pill on a step of its own
  *
- * The design language's shape rule is that an *action* is fully round and an
- * information surface is not, and this is the one control inside a prompt: tapping
- * it opens the paths and the image notes in a sheet, so it is an action and it takes
- * `PiShapes.pill`. Its fill is one step past the card it sits on — the card is
- * `surfaceContainerLow`, so the chip is `Neutral`'s own container,
- * `surfaceContainerHigh` — because a control drawn *in* a card's colour is a control
- * the reader has to be told about. The height is the design system's 28dp, which is
- * what every other pill on the page is (`PiStatePill`, `PiBadge`), so the row of
- * machinery above a prompt cannot change the card's height.
+ * This is the one control inside a prompt: tapping it opens the paths and the image
+ * notes in a sheet, so it is an action and it takes the fully round shape — the
+ * page's shape for an action, the same one the composer's send button wears. Its
+ * fill is the palette's own *variant* of the container it sits on: the prompt card is
+ * `secondaryContainer`, and drawing the chip in the card's own colour would be a
+ * control the reader has to be told about. The height is 28dp, which is what every
+ * other pill on the page is, so the row of machinery above a prompt cannot change
+ * the card's height.
  */
 @Composable
 private fun PromptExtrasChip(
@@ -2351,83 +2578,87 @@ private fun PromptExtrasChip(
     text: Strings,
     onClick: () -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val ink = PiTone.Neutral.ink(scheme)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
         modifier = Modifier
-            .clip(PiShapes.pill)
-            .background(PiTone.Neutral.container(scheme))
+            .height(28.dp)
+            // Clip, then click: the press indication is drawn by the node that owns
+            // the gesture, so the clip has to be outside it.
+            .clip(RoundedCornerShape(percent = 50))
             .clickable(
                 onClickLabel = text.chat.extrasOpen,
                 onClick = onClick,
-            )
-            .height(28.dp)
-            .padding(start = 10.dp, end = 6.dp),
+            ),
+        shape = RoundedCornerShape(percent = 50),
+        color = MiuixTheme.colorScheme.secondaryContainerVariant,
+        contentColor = MiuixTheme.colorScheme.onSecondaryContainerVariant,
     ) {
-        Icon(
-            Icons.Filled.AttachFile,
-            contentDescription = null,
-            modifier = Modifier.size(14.dp),
-            tint = ink,
-        )
-        Text(
-            text.chat.extrasCount(extras.filePaths.size, extras.imageNotes.size),
-            modifier = Modifier.padding(start = 4.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = ink,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            modifier = Modifier
-                .padding(start = 2.dp)
-                .size(16.dp),
-            tint = ink,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 10.dp, end = 6.dp),
+        ) {
+            Icon(
+                imageVector = MiuixIcons.File,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = text.chat.extrasCount(extras.filePaths.size, extras.imageNotes.size),
+                modifier = Modifier.padding(start = 4.dp),
+                style = MiuixTheme.textStyles.footnote1,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                imageVector = MiuixIcons.ChevronForward,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(start = 2.dp)
+                    .size(16.dp),
+            )
+        }
     }
 }
 
 /**
  * The sheet a [PromptExtrasChip] opens: every path and every note, in full.
  *
- * The two headings are `PiSectionHeader`, which is the design system's own heading
- * for a group inside a sheet: small, emphasized and *secondary* — a heading that
- * borrowed the primary colour made every label look tappable, which is why it is a
- * component rather than a styled `Text`. The rows under them are the sheet's own
- * body, which is not this page's business: `ReadOnlyBody` owns the panel's title,
- * its scroll and its row insets.
+ * The two headings are Miuix's [SmallTitle] — the library's own name for a group
+ * inside a page: small, secondary, and deliberately quiet, so a heading is never
+ * mistaken for something tappable. The rows under them are the sheet's body: a plain
+ * scrolling column rather than a lazy list, because a prompt's machinery is a handful
+ * of paths and the sheet's own window already bounds the height.
  */
 @Composable
 private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
-    ReadOnlyBody(title = text.chat.extrasTitle) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            // Inside the scroll, not outside it: the inset is scrolled past rather than shown
+            // as a band of the panel's own fill under the text.
+            .padding(bottom = sheetBottomInset()),
+    ) {
         if (extras.filePaths.isNotEmpty()) {
-            item(key = "files-label") { PiSectionHeader(text.chat.extrasFiles) }
-            extras.filePaths.forEachIndexed { index, path ->
-                item(key = "file-$index") {
-                    Text(
-                        path,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
-                    )
-                }
+            SmallTitle(text = text.chat.extrasFiles)
+            extras.filePaths.forEach { path ->
+                Text(
+                    text = path,
+                    style = MiuixTheme.textStyles.footnote1,
+                    fontFamily = FontFamily.Monospace,
+                    color = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                )
             }
         }
         if (extras.imageNotes.isNotEmpty()) {
-            item(key = "notes-label") { PiSectionHeader(text.chat.extrasNotes) }
-            extras.imageNotes.forEachIndexed { index, note ->
-                item(key = "note-$index") {
-                    Text(
-                        note,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
-                    )
-                }
+            SmallTitle(text = text.chat.extrasNotes)
+            extras.imageNotes.forEach { note ->
+                Text(
+                    text = note,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                )
             }
         }
     }
@@ -2486,9 +2717,9 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
  * here changes with the clock — a message's time is a fact about the message — so
  * re-deriving it per frame would be work whose answer is always the same.
  *
- * The button is 28dp rather than Material's 48dp minimum, and that is a deliberate
- * exception: it sits *under* a message, next to text that is not a control, and a
- * 48dp disc there would be a second bubble.
+ * The button is 28dp rather than Miuix's own 40dp icon-button minimum, and that is a
+ * deliberate exception: it sits *under* a message, next to text that is not a
+ * control, and a 40dp disc there would be a second bubble.
  *
  * ## Which edge, and why the row is pulled out by the glyph's inset
  *
@@ -2518,7 +2749,7 @@ private fun MessageMeta(
     if (item is ChatItem.Assistant && item.isStreaming) return
     if (item is ChatItem.Assistant && item.text.isBlank()) return
 
-    val accent = PiTone.Accent.ink(MaterialTheme.colorScheme)
+    val accent = ChatTone.Accent.ink()
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val now = remember { System.currentTimeMillis() }
@@ -2556,7 +2787,7 @@ private fun MessageMeta(
             Text(
                 text = stamp,
                 modifier = Modifier.padding(end = 2.dp),
-                style = MaterialTheme.typography.labelSmall,
+                style = MiuixTheme.textStyles.footnote2,
                 color = accent,
                 maxLines = 1,
             )
@@ -2570,7 +2801,7 @@ private fun MessageMeta(
             Text(
                 text = stamp,
                 modifier = Modifier.padding(start = 2.dp),
-                style = MaterialTheme.typography.labelSmall,
+                style = MiuixTheme.textStyles.footnote2,
                 color = accent,
                 maxLines = 1,
             )
@@ -2709,33 +2940,49 @@ private fun AssistantBlock(
             // No `fillMaxWidth`: `MarkdownText` is a `BoxWithConstraints` over a
             // `Column` that fills its own width, so it takes the card's measure
             // without being asked — and asking would be the one `fillMaxWidth` that
-            // could travel back out of the card through `Surface`'s propagated
-            // minimum.
+            // could travel back out of the card, which passes its minimum
+            // constraint through (`propagateMinConstraints`).
             MarkdownText(item.text)
         }
 
         item.error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = it,
+                color = PiTone.error(),
+                style = MiuixTheme.textStyles.footnote1,
+            )
         }
     }
 }
 
+/** How many lines the field grows to before it scrolls inside itself. */
+private const val COMPOSER_MAX_LINES = 8
+
 /**
- * The composer: the page's bottom band, with the field framed inside it.
+ * The field's own inset: 14dp beside the text and 12dp above and below it.
  *
- * ## Not a panel any more, and why
+ * Miuix's default is 16dp on both axes, which is a settings field's height; a
+ * composer's field is written in, not filled in, and the smaller vertical inset is
+ * what keeps a one-line draft a field rather than a box.
+ */
+private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
+
+/**
+ * The composer: the page's bottom band, with the field inside it.
  *
- * It was one for a release: `PiShapes.panel` on `surfaceContainer`, floating over the
- * transcript on a 12dp ambient shadow with 12dp of margin on each side. What that
- * bought was a clear "this is in front of the list" — and what it cost was the field's
- * own shape. With the panel explaining where the message goes, the field needed no
- * edge, so it had none, and the reader's report is that they wanted it back
- * ("输入框形状改回 0.4.1 的样子，取代现在的悬浮样式"). So the composer is the strip the app
- * had before the panel: a full-bleed band in the page's column, under the transcript
- * rather than over it, on the tab strip's own `surfaceContainer` so the bottom of the
- * page is one band of chrome; and the field is a framed box inside it — `surface`, a
- * 1dp `outlineVariant` hairline and `largeIncreased`'s 20dp, which is where 0.4.1's
- * 22dp `shapes.medium` lands on Material's scale.
+ * ## A band, not a panel
+ *
+ * It was a panel for a release: a rounded surface floating over the transcript on an
+ * ambient shadow, with a margin on each side. What that bought was a clear "this is in
+ * front of the list" — and what it cost was the field's own shape. With the panel
+ * explaining where the message goes, the field needed no edge, so it had none, and the
+ * reader's report is that they wanted it back ("输入框形状改回 0.4.1 的样子，取代现在的悬浮
+ * 样式"). So the composer is the strip the app had before the panel: a full-bleed band
+ * in the page's column, under the transcript rather than over it, on the band's own
+ * `surfaceContainer` so the foot of the page is one band of chrome; and the field
+ * inside it is Miuix's own [TextField] — a filled box on `secondaryContainer`, its
+ * placeholder carried by the library's label slot, its focused border the palette's
+ * `primary`.
  *
  * Nothing about the *contents* changed. The four chips stay where they were, and they
  * still read as the settings the next message goes with rather than as part of the
@@ -2748,26 +2995,28 @@ private fun AssistantBlock(
  *  (🧠 中) (🤖 packy…) (⤓ 上下文…) (⚡ 缓存…)   the settings this message goes with
  *  ╭────────────────────────────────────╮
  *  │ Ask Pi…                            │   the field, growing upward
- *  │  ( / )                    (+)(↑)   │   the row a thumb reaches
  *  ╰────────────────────────────────────╯
+ *   ( ⌘ )                              (+) (→)   the row a thumb reaches
  * ```
  *
  * The four controls are above the field rather than below it: a chip between the
  * field and the keyboard sits in the busiest strip on a phone screen and reads as
  * part of the message being written, where a chip above the field reads as the
- * setting the next message will be sent with. They are `PiSelectChip`s — the design
- * system's own chip, which is also why the hand-rolled one this replaced is gone:
- * that one carried a luminance test to decide its own fill, one step off the bar it
- * sat on. They scroll horizontally once there are four of them, so a long profile
- * name cannot squeeze the last one off screen.
+ * setting the next message will be sent with. They are [ControlChip]s — a pill on the
+ * palette's high surface step, drawn with a Miuix `Surface` so the press feedback and
+ * the clip are the library's — and each one composes its own [WindowListPopup], which
+ * is what anchors the menu to the chip that opened it. They scroll horizontally once
+ * there are four of them, so a long profile name cannot squeeze the last one off
+ * screen.
  *
  * The agent's **state** is not one of them: it is a fact rather than a control, and
  * it lives in the header. Nor is the *live* tone — live means a turn is running, and
  * nothing in a composer is.
  *
- * The buttons sit on the field's last line because that is the row a one-handed thumb
- * reaches, and the field grows *upward* out of it rather than pushing them down the
- * screen.
+ * The action row is under the field: Miuix's field owns its whole box, so there is no
+ * last line of it to sit on, and a row under it is where a thumb already is when the
+ * keyboard is up — the field grows *upward* out of the row rather than pushing it
+ * down the screen.
  */
 @Composable
 private fun Composer(
@@ -2784,9 +3033,12 @@ private fun Composer(
     inputEnabled: Boolean,
     agent: AgentStatus,
     state: ConversationState,
-    onOpenSheet: (ComposerSheet, MenuAnchor?) -> Unit,
-    /** The model chip's anchor, hoisted so `/model`'s command row shares it. */
-    modelMenuAnchor: MenuAnchor,
+    /** Which of the four menus is open, or null. Each chip asks whether it is the one. */
+    openSheet: ComposerSheet?,
+    onOpenSheet: (ComposerSheet) -> Unit,
+    onCloseSheet: () -> Unit,
+    onRunCommand: (BuiltInCommand) -> Unit,
+    onPickAttachment: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -2826,10 +3078,9 @@ private fun Composer(
     val fieldFocus = LocalFocusManager.current
 
     // Whether the field currently holds the focus, which is what tells a *first*
-    // tap on it apart from a second one. See the composer `Surface`'s pointer
-    // handler: the first tap has to be allowed to focus the field and raise the
-    // keyboard, and the second has to put away the selection toolbar the first one
-    // made possible.
+    // tap on it apart from a second one. See the field's pointer handler: the first
+    // tap has to be allowed to focus the field and raise the keyboard, and the second
+    // has to put away the selection toolbar the first one made possible.
     var fieldFocused by remember { mutableStateOf(false) }
 
     // The band: full bleed, in the page's column, on the same `surfaceContainer` the
@@ -2840,7 +3091,7 @@ private fun Composer(
     // boundary — a drawn line here would compete with the transcript's own dividers
     // (§7.1 has the measurement that settled that).
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MiuixTheme.colorScheme.surfaceContainer,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.fillMaxWidth()) {
@@ -2877,31 +3128,63 @@ private fun Composer(
             // then draws the overflow past the edge — measured, the cache chip came
             // out at x=966..1048 and was sliced by the window rather than scrolled
             // to, which looks like a layout bug and is not scrollable either. The
-            // content padding is what makes a partly-visible chip read as "there is
-            // more to the right" instead of as clipped, and it is 12dp because the
-            // row is the band's own first line and its first chip should stand the
-            // same distance from the screen's edge as the field's box below it.
-            // The controls' menu anchors: each opens its floating menu at itself,
-            // and each reports its own bounds into the anchor the caller holds
-            // (`Modifier.menuAnchor`). The model chip's is [modelMenuAnchor],
-            // hoisted past this composable so the `/model` command row can open
-            // the same menu at the same chip. The context and cache chips share
-            // one anchor — both open the same report sheet, and neither anchors
-            // anything to itself.
-            val thinkingMenuAnchor = rememberMenuAnchor()
-            val contextMenuAnchor = rememberMenuAnchor()
-            val commandsMenuAnchor = rememberMenuAnchor()
-            val attachMenuAnchor = rememberMenuAnchor()
-
+            // content padding is the same 12dp as the band's other insets, so the
+            // first chip stands where the field below it starts.
+            //
+            // The fades are what say "there is more". Content padding alone was not
+            // enough: on a phone the fourth chip is cut at the screen edge with nothing
+            // between it and the edge to say the row continues, and a half-visible pill
+            // at a hard edge reads as a layout fault rather than as a scroll. Each fade
+            // is drawn in the band's own colour, and the draw pass reads the row's own
+            // scroll state, so one appears exactly while there is content behind it.
+            // It covers no touch: a `draw` pass takes no pointer events, so the chip
+            // under a fade is still tappable where it shows.
+            val chipState = rememberLazyListState()
+            // The band's own colour, read in composition: `MiuixTheme.colorScheme` is
+            // a composable read and a `DrawScope` is not one, and the fade has to end
+            // on exactly the colour behind the row or it is a visible rectangle.
+            val bandColor = MiuixTheme.colorScheme.surfaceContainer
             LazyRow(
-                modifier = Modifier.fillMaxWidth(),
+                state = chipState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .drawWithContent {
+                        drawContent()
+                        val fade = CHIP_FADE_WIDTH.toPx()
+                        val clear = bandColor.copy(alpha = 0f)
+                        // Each edge fades only while there is content behind it, so a
+                        // row that fits has no gradient at all and one scrolled to its
+                        // end keeps only the leading fade.
+                        if (chipState.canScrollBackward) {
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(bandColor, clear),
+                                    startX = 0f,
+                                    endX = fade,
+                                ),
+                                topLeft = Offset.Zero,
+                                size = Size(fade, size.height),
+                            )
+                        }
+                        if (chipState.canScrollForward) {
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(clear, bandColor),
+                                    startX = size.width - fade,
+                                    endX = size.width,
+                                ),
+                                topLeft = Offset(size.width - fade, 0f),
+                                size = Size(fade, size.height),
+                            )
+                        }
+                    },
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 item {
                     ControlChip(
-                        glyph = PiIcons.Thinking,
+                        glyph = painterResource(R.drawable.ic_thinking),
                         // The persisted level, not pi's report alone. pi reports it
                         // only once `get_state` has answered, so a label built from
                         // `state.thinkingLevel` alone was empty for the whole of the
@@ -2910,9 +3193,19 @@ private fun Composer(
                         // became ~89dp with "Medium". The same value the menu ticks
                         // and the settings row shows.
                         label = thinkingLevelOf(state, saved),
-                        anchor = thinkingMenuAnchor,
-                        onClick = { onOpenSheet(ComposerSheet.Thinking, thinkingMenuAnchor) },
-                    )
+                        onClick = { onOpenSheet(ComposerSheet.Thinking) },
+                    ) {
+                        WindowListPopup(
+                            show = openSheet == ComposerSheet.Thinking,
+                            onDismissRequest = onCloseSheet,
+                        ) {
+                            ThinkingMenu(
+                                show = openSheet == ComposerSheet.Thinking,
+                                session = session,
+                                onDismiss = onCloseSheet,
+                            )
+                        }
+                    }
                 }
                 item {
                     ControlChip(
@@ -2921,8 +3214,8 @@ private fun Composer(
                         // `Hub`, and before that the `SmartToy` face: a hub's three
                         // spokes at 14dp read as a five-pointed star, and a robot
                         // head is a picture of an assistant rather than of *which*
-                        // model is about to answer. See `PiIcons`.
-                        glyph = PiIcons.Model,
+                        // model is about to answer. See `ic_model.xml`.
+                        glyph = painterResource(R.drawable.ic_model),
                         // The model that will answer, not the profile's name: this
                         // is the "which model" control, and once one provider can
                         // hold several models the profile name stops saying which
@@ -2945,16 +3238,30 @@ private fun Composer(
                         label = config.activeProfile?.modelId?.takeIf { it.isNotBlank() }
                             ?: state.model?.takeIf { it.isUsable }?.id?.takeIf { it.isNotBlank() }
                             ?: text.chat.loadingModel,
-                        anchor = modelMenuAnchor,
-                        onClick = { onOpenSheet(ComposerSheet.Model, modelMenuAnchor) },
-                    )
+                        onClick = { onOpenSheet(ComposerSheet.Model) },
+                    ) {
+                        WindowListPopup(
+                            show = openSheet == ComposerSheet.Model,
+                            // Two dozen models in one menu: bounded, so the panel
+                            // stays a menu rather than covering the conversation it
+                            // is asking about.
+                            maxHeight = MENU_MAX_HEIGHT,
+                            onDismissRequest = onCloseSheet,
+                        ) {
+                            ModelMenu(
+                                show = openSheet == ComposerSheet.Model,
+                                session = session,
+                                text = text,
+                                onDismiss = onCloseSheet,
+                            )
+                        }
+                    }
                 }
                 item {
                     ControlChip(
-                        glyph = Icons.Filled.Compress,
+                        glyph = MiuixIcons.Layers,
                         label = contextPercentLabel(state, text),
-                        anchor = contextMenuAnchor,
-                        onClick = { onOpenSheet(ComposerSheet.Context, contextMenuAnchor) },
+                        onClick = { onOpenSheet(ComposerSheet.Context) },
                     )
                 }
                 // Always shown, so the row has the same shape whether or not the
@@ -2964,78 +3271,58 @@ private fun Composer(
                 // reading and it is what makes the number's *movement* visible.
                 item {
                     ControlChip(
-                        glyph = Icons.Filled.Bolt,
+                        glyph = MiuixIcons.Stopwatch,
                         label = text.chat.cacheHit(cacheHitPercent(state)),
-                        anchor = contextMenuAnchor,
-                        onClick = { onOpenSheet(ComposerSheet.Context, contextMenuAnchor) },
+                        onClick = { onOpenSheet(ComposerSheet.Context) },
                     )
                 }
             }
 
-            // The field in its own frame, and then the row of controls under it.
+            // The field, Miuix's own. Its label slot is the placeholder: the band's
+            // `Surface` still provides the content colour, and `useLabelAsPlaceholder`
+            // makes the label sit inline until the reader types rather than float up
+            // over the first line of a growing message.
             //
-            // The frame is back, and it is what the bar is *not* any more: while the
-            // composer floated it was the panel's own rounded outline that said where
-            // the field was, which left the field itself with no edge — the report
-            // "输入框形状改回 0.4.1 的样子，取代现在的悬浮样式" is that the reader wants the
-            // framed box back. The radius is the scale's `largeIncreased` (20dp),
-            // which is the step 0.4.1's 22dp `shapes.medium` lands on now that the app
-            // is on Material's own scale, and the hairline is `outlineVariant` — the
-            // same pair 0.4.1 drew, and the design language's one exception to "an
-            // action has no outline": a field is not an action, it is a place.
-            Column(
-                Modifier
+            // The pointer handler is the one thing the field cannot do for itself:
+            // dismissing the selection toolbar its own long-press raises — the
+            // 粘贴 / 全选 strip.
+            //
+            // The report was: long-press the input for the paste button, tap the input
+            // again, and the button stays. The field consumes a tap on its own bounds —
+            // that is how it moves its caret — so a handler on a parent never sees it.
+            //
+            // ## Why this is a tap detector and not a per-event `clearFocus`
+            //
+            // It was, and that is the report "现在打开app点击输入框无反应，无法输入文字".
+            // Clearing on *every* pointer event includes the down event of the tap that
+            // focuses the field, so the sequence for a first tap was: the field takes the
+            // focus from the down event, this handler clears it at the end of the same
+            // pass, and the field is left unfocused — no caret, no keyboard, and every
+            // subsequent tap repeating it. Confirmed from the emulator's accessibility
+            // dump rather than from the code: after `input tap` on the field, no node in
+            // the window had `focused="true"` and there was no `InputMethod` window at
+            // all.
+            //
+            // So the clear happens after a *completed* tap, and only when the field
+            // already had the focus when the finger went down. The first tap therefore
+            // focuses and stops; a second one dismisses. Asking `awaitFirstDown` for the
+            // `Initial` pass is what makes "already had" true without a frame of lag —
+            // the initial pass runs before the field's own gesture detector, so
+            // `fieldFocused` still holds the state from before this gesture began.
+            //
+            // A hand-rolled tap rather than `detectTapGestures`, because that helper owns
+            // the `awaitPointerEventScope` it is given and loops inside it forever — so
+            // there is no point at which a caller can read the field's focus before the
+            // tap that is about to change it. `clickable` is the other candidate and is
+            // wrong for a different reason: it would give the field a click semantics
+            // node, and this is a region, not a button.
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
-                    // The frame: a fill one step above the band's own and the
-                    // design language's hairline, both clipped to the field's radius
-                    // so the border and the fill are the same rounded rectangle.
-                    .clip(PiShapes.largeIncreased)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = PiShapes.largeIncreased,
-                    )
-                    // Dismissing the selection toolbar the field's own long-press
-                    // raises — the 粘贴 / 全选 strip — is the one thing the field
-                    // cannot do for itself: `BasicTextField` consumes a tap on its own
-                    // bounds, because that is how it moves its caret, so the
-                    // transcript's `detectTapGestures` underneath never sees a tap
-                    // inside the field. The report was exactly that: long-press the
-                    // input for the paste button, tap the input again, and the button
-                    // stays.
-                    //
-                    // ## Why this is a tap detector and not a per-event `clearFocus`
-                    //
-                    // It was, and that is the report "现在打开app点击输入框无反应，无法
-                    // 输入文字". Clearing on *every* pointer event includes the down
-                    // event of the tap that focuses the field, so the sequence for a
-                    // first tap was: the field takes the focus from the down event, this
-                    // handler clears it at the end of the same pass, and the field is
-                    // left unfocused — no caret, no keyboard, and every subsequent tap
-                    // repeating it. Confirmed from the emulator's accessibility dump
-                    // rather than from the code: after `input tap` on the field, no node
-                    // in the window had `focused="true"` and there was no `InputMethod`
-                    // window at all.
-                    //
-                    // So the clear happens after a *completed* tap, and only when the
-                    // field already had the focus when the finger went down. The first
-                    // tap therefore focuses and stops; a second one dismisses. Asking
-                    // `awaitFirstDown` for the `Initial` pass is what makes "already
-                    // had" true without a frame of lag — the initial pass runs before
-                    // the field's own gesture detector, so `fieldFocused` still holds
-                    // the state from before this gesture began, and the assignment to
-                    // it that this tap is about to cause has not been recomposed yet.
-                    //
-                    // A hand-rolled tap rather than `detectTapGestures`, because that
-                    // helper owns the `awaitPointerEventScope` it is given and loops
-                    // inside it forever — so there is no point at which a caller can
-                    // read the field's focus before the tap that is about to change
-                    // it, and no way to place one gesture's worth of work around it.
-                    // `clickable` is the other candidate and is wrong for a different
-                    // reason: it would give this card a ripple and a click semantics
-                    // node, and this is a region, not a button.
+                    .padding(horizontal = 12.dp)
+                    .onFocusChanged { fieldFocused = it.isFocused }
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
@@ -3056,175 +3343,147 @@ private fun Composer(
                             }
                         }
                     },
-            ) {
-                BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    enabled = inputEnabled,
-                    maxLines = 8,
-                    // `weight` has to be on the field itself, not on a Box
-                    // wrapped around it. `BasicTextField` measures its
-                    // decoration box with `minWidth = 0` and reports *that*
-                    // size, so a chain of `fillMaxWidth` around it is undone:
-                    // measured, the field came out 312px wide inside a 780px
-                    // pill — exactly the width of the placeholder — and the
-                    // rest of the composer did not respond to a tap. The
-                    // fixed width a Column gives it survives because it
-                    // arrives as a *minimum*.
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // 14dp above and 6dp below, inside the well's own insets.
-                        // Measured against the reference layout: at 10/4 the field's
-                        // own line box was 42dp and the whole card 97dp, so the box
-                        // read as a one-line toolbar with a stray glyph in it. The
-                        // taller inset is what makes it a place to write — and it is
-                        // what keeps the first line of a long message clear of the
-                        // panel's rounded top corner.
-                        .padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 6.dp)
-                        // The field's own focus, published for the well's tap
-                        // handler above. `onFocusChanged` rather than
-                        // `interactionSource`: focus is what the handler asks
-                        // about, and a press interaction would report a finger
-                        // down on the field even when the field did not take the
-                        // focus.
-                        .onFocusChanged { fieldFocused = it.isFocused },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { inner ->
-                        Box(contentAlignment = Alignment.TopStart) {
-                            if (value.isEmpty()) {
-                                Text(
-                                    // One short line. The previous hint
-                                    // explained the `!` convention as well,
-                                    // which wrapped to two lines in the field
-                                    // and looked like a rendering fault.
-                                    placeholder,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            inner()
-                        }
-                    },
-                )
+                enabled = inputEnabled,
+                // One short line: the hint that explained the `!` convention wrapped
+                // to two lines in the field and looked like a rendering fault.
+                label = placeholder,
+                useLabelAsPlaceholder = true,
+                maxLines = COMPOSER_MAX_LINES,
+                insideMargin = COMPOSER_FIELD_INSET,
+                textStyle = MiuixTheme.textStyles.body1,
+                cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+            )
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // The command list, at the field's *left* corner, mirrored by the
-                    // send button at its right, and sharing the `+`'s own style —
-                    // three plain `IconButton`s on one line, with the space between
-                    // the first and the other two held by a weighted spacer so the
-                    // layout does not depend on how wide the field's text is.
-                    //
-                    // It is the same control as the `+` beside it, deliberately.
-                    // It *was* a filled circle carrying the `/` character, and that
-                    // was wrong twice over: the character was a description of the
-                    // list rather than of the button — a reader who has not opened it
-                    // does not know what a slash means — and a filled 40dp disc
-                    // opposite a 40dp plain button made two controls that do the same
-                    // *kind* of thing look like two different kinds.
-                    //
-                    // [PiIcons.Commands] and **not** `Icons.Filled.Terminal`, which is
-                    // the bottom tab strip's terminal tab: a terminal glyph six
-                    // centimetres above it in the composer read as a second way into
-                    // the terminal tab rather than as the command list. It is also no
-                    // longer `Icons.Filled.Code`, which is what this was for two
-                    // rounds and is the report "目前 </> 没有正常显示" — that glyph is
-                    // drawn as an open *stroked* polyline whose stroke width lands on
-                    // zero, so it measured, reported a node to a screen reader, and
-                    // painted nothing. See `PiIcons.Commands` for the read of the
-                    // artefact and the drawable for the replacement geometry.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // The command list, at the field's *left* corner, mirrored by the
+                // send button at its right, and sharing the `+`'s own style —
+                // three plain icon buttons on one line, with the space between the
+                // first and the other two held by a weighted spacer so the layout does
+                // not depend on how wide the field's text is.
+                //
+                // It is the same control as the `+` beside it, deliberately. It *was*
+                // a filled circle carrying the `/` character, and that was wrong twice
+                // over: the character was a description of the list rather than of the
+                // button — a reader who has not opened it does not know what a slash
+                // means — and a filled 40dp disc opposite a 40dp plain button made two
+                // controls that do the same *kind* of thing look like two different
+                // kinds.
+                //
+                // `ic_commands.xml` and **not** a terminal glyph, which is the bottom
+                // tab strip's terminal tab: a terminal glyph six centimetres above it
+                // in the composer read as a second way into the terminal tab rather
+                // than as the command list. It is also no longer `</>`, which is what
+                // this was for two rounds and is the report "目前 </> 没有正常显示" — that
+                // glyph is drawn as an open *stroked* polyline whose stroke width lands
+                // on zero, so it measured, reported a node to a screen reader, and
+                // painted nothing. See `ic_commands.xml` for the read of the artefact
+                // and the replacement geometry.
+                PopupAnchor {
                     IconButton(
-                        onClick = {
-                            onOpenSheet(ComposerSheet.Commands, commandsMenuAnchor)
-                        },
+                        onClick = { onOpenSheet(ComposerSheet.Commands) },
                         enabled = enabled,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .menuAnchor(commandsMenuAnchor),
+                        modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
-                            PiIcons.Commands,
+                            painter = painterResource(R.drawable.ic_commands),
                             contentDescription = text.chat.commands,
                             // 17dp, against the 23dp of the `+` beside it, and that is a
                             // property of the glyph rather than of the button: Lucide's
                             // `command` draws its loops out to 21 of its 24 units, where
-                            // Material's `Add` keeps its ink inside 14 — so the same size
-                            // reads as a much bigger mark, which is the report "常用命令图标
-                            // 太大了". Scaled here, at the call site: the vector itself is
-                            // the library's and is not edited (see `PiIcons.Commands`).
+                            // a plus keeps its ink inside 14 — so the same size reads as
+                            // a much bigger mark, which is the report "常用命令图标 太大了".
+                            // Scaled here, at the call site: the vector itself is the
+                            // library's and is not edited (see `ic_commands.xml`).
                             modifier = Modifier.size(17.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
-                    Spacer(Modifier.weight(1f))
+                    WindowListPopup(
+                        show = openSheet == ComposerSheet.Commands,
+                        maxHeight = MENU_MAX_HEIGHT,
+                        onDismissRequest = onCloseSheet,
+                    ) {
+                        CommandMenu(
+                            show = openSheet == ComposerSheet.Commands,
+                            text = text,
+                            onRun = onRunCommand,
+                            onShell = { onOpenSheet(ComposerSheet.Shell) },
+                            onDismiss = onCloseSheet,
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                PopupAnchor {
                     IconButton(
-                        onClick = {
-                            onOpenSheet(ComposerSheet.Attach, attachMenuAnchor)
-                        },
+                        onClick = { onOpenSheet(ComposerSheet.Attach) },
                         enabled = enabled,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .menuAnchor(attachMenuAnchor),
+                        modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
-                            Icons.Filled.Add,
+                            imageVector = MiuixIcons.Add,
                             contentDescription = text.chat.attachTitle,
                             modifier = Modifier.size(23.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
-                    Spacer(Modifier.width(4.dp))
-                    // The page's one action, and the only fully round control on it:
-                    // `PiShapes.pill` is stated rather than inherited, because
-                    // Material's own default for an icon button varies with its size
-                    // in this release (the smaller sizes are rounded squares) and
-                    // "round" is the whole of what this control is saying. The stop
-                    // state is the same control with the same shape — the reader is
-                    // looking for one button there, not two.
-                    if (isStreaming) {
-                        FilledIconButton(
-                            onClick = onStop,
-                            modifier = Modifier.size(40.dp),
-                            shape = PiShapes.pill,
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                            ),
-                        ) {
-                            Icon(
-                                Icons.Filled.Stop,
-                                contentDescription = text.chat.stop,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    } else {
-                        FilledIconButton(
-                            onClick = onSend,
-                            enabled = enabled && (value.isNotBlank() || attachments.isNotEmpty()),
-                            modifier = Modifier.size(40.dp),
-                            shape = PiShapes.pill,
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                disabledContentColor = MaterialTheme.colorScheme.outline,
-                            ),
-                        ) {
-                            Icon(
-                                Icons.Filled.ArrowUpward,
-                                contentDescription = text.chat.send,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                    WindowListPopup(
+                        show = openSheet == ComposerSheet.Attach,
+                        onDismissRequest = onCloseSheet,
+                    ) {
+                        AttachMenu(
+                            show = openSheet == ComposerSheet.Attach,
+                            text = text,
+                            onPick = onPickAttachment,
+                            onDismiss = onCloseSheet,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(4.dp))
+                // The page's one action, and the only fully round control on it:
+                // Miuix's icon button is a 40dp pill by default, which is exactly the
+                // shape this control is saying. The stop state is the same control with
+                // the same shape and the error pair — the reader is looking for one
+                // button there, not two.
+                if (isStreaming) {
+                    IconButton(
+                        onClick = onStop,
+                        modifier = Modifier.size(40.dp),
+                        backgroundColor = MiuixTheme.colorScheme.errorContainer,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Pause,
+                            contentDescription = text.chat.stop,
+                            modifier = Modifier.size(20.dp),
+                            tint = MiuixTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                } else {
+                    val armed = enabled && (value.isNotBlank() || attachments.isNotEmpty())
+                    IconButton(
+                        onClick = onSend,
+                        enabled = armed,
+                        modifier = Modifier.size(40.dp),
+                        backgroundColor = if (armed) {
+                            MiuixTheme.colorScheme.primary
+                        } else {
+                            MiuixTheme.colorScheme.surfaceContainerHigh
+                        },
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Send,
+                            contentDescription = text.chat.send,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (armed) {
+                                MiuixTheme.colorScheme.onPrimary
+                            } else {
+                                MiuixTheme.colorScheme.disabledOnSurface
+                            },
+                        )
                     }
                 }
             }
@@ -3284,16 +3543,18 @@ private val MODULE_GAP = 8.dp
 /**
  * When the transcript starts being capped, and at what.
  *
- * 600dp is Material's own small/medium window boundary, and 560dp is where a line
- * of `bodyMedium` is 80 Latin characters *and* 40 Han characters — the two halves
- * of WCAG's visual-presentation limit, which happen to coincide at 14sp. See the
- * note at the transcript's own `BoxWithConstraints`.
+ * 600dp is the small/medium window boundary Android's own size classes use, and the
+ * cap is set from the prose rather than from the screen: 40 Han characters — the
+ * limit WCAG's visual-presentation criterion puts on a line — is 40 em, which is
+ * 680sp at the reading style's 17sp. [MAX_TRANSCRIPT_WIDTH] stays at the 560dp it was
+ * measured at, which is now *inside* that limit rather than exactly on it (about 33
+ * Han characters a line), because a transcript is read at speed and the narrower
+ * measure costs nothing on a phone. See the note at the transcript's own
+ * `BoxWithConstraints`.
  *
  * The cap is the **prose's** measure, so the answer card's own 16dp inset on each
  * side is added to it rather than taken out of it: a column capped at 560dp draws an
- * answer that is 528dp of text, which is 38 Han characters on a tablet where the
- * measurement above says 40 is the limit — inside the rule, and no longer the number
- * the rule was measured at. Capping the *column* so that the text lands on 560dp
+ * answer that is 528dp of text. Capping the *column* so that the text lands on 560dp
  * keeps one number doing one job, and the prompt card (sized to its content) is
  * inside the same measure either way.
  */
@@ -3388,14 +3649,13 @@ private val REASONING_ANSWER_GAP = 5.dp
 /**
  * How much blank transcript sits under the last line of an answer.
  *
- * One line of `bodyMedium` plus its leading, which is what keeps the last line of an
- * answer clear of the composer's rounded top edge. It was two lines — 40dp — while
- * the composer was a full-bleed bar of the page's own colour, and the *blank space*
- * was the only edge an answer had to end against; the composer is a `panel` well with
- * its own margin and its own outline now, so the shape says where the answer stops
- * and this only has to keep the two from touching.
+ * One line of the reading style's line box: Miuix's `paragraph` is 17sp on a 26sp
+ * leading, so this is 26dp and no longer the 24dp the old 14sp body style was
+ * measured at — the number means one line of whatever style the transcript is drawn
+ * in, and the style changed. What it separates is unchanged: the last line of an
+ * answer from the composer's edge, so the two do not touch.
  */
-private val TRANSCRIPT_TAIL_SPACE = 24.dp
+private val TRANSCRIPT_TAIL_SPACE = 26.dp
 
 /**
  * How full the context window is.
@@ -3439,69 +3699,251 @@ private fun cacheHitPercent(state: ConversationState): Int {
 }
 
 /**
- * One of the composer's four small controls: a chip, on the design system's chip.
+ * One of the composer's four small controls: a pill that opens a menu or a sheet.
  *
- * ## Why this is a thin wrapper and not a component of its own
+ * ## Why this is a Surface and not a component of its own
  *
  * The chip this used to be was hand-built, and almost every line of it was spent
- * working out its own *colour*: a 34dp pill on `surfaceContainerHigh` looked washed
- * out on the composer's own `#EDEEF2` bar — a 2% difference, measured — and the fix
- * was to step the light palette one further down (`surfaceContainer`, `#DCE3EB`)
- * while stepping the dark one nowhere, because the same move would have put the chip
- * at `#1A2028` on a `#171C23` bar and erased it. That is a luminance test at the call
- * site to answer a question the palette should answer, and it is exactly what the
- * design language means by a page not inventing a colour.
+ * working out its own *colour*: a 34dp pill on the high surface step looked washed
+ * out on the composer's own bar — a 2% difference, measured — and the fix was to step
+ * the light palette one further down while stepping the dark one nowhere, because the
+ * same move would have put the chip at `#1A2028` on a `#171C23` bar and erased it.
+ * That is a luminance test at the call site to answer a question the palette should
+ * answer.
  *
- * `PiSelectChip` is that answer: a pill at 32dp on `surfaceContainerHigh`, which
- * against this well (`surfaceContainerLow`) is two steps in *both* schemes — visible
- * without asking the colour anything. It is also the shape rule's own case: an action
- * is fully round, and these four chips are the actions of the composer.
- *
- * ## Why `selected` is always false
- *
- * A `PiSelectChip` carries a tick when it is selected, and none of these four is a
- * setting with an on state: each opens a menu or a sheet. `selected = false` is
- * therefore the honest reading, and the tick is not part of the control the reader
- * sees — the *glyph* is, which is why each chip passes its own mark through
- * `leadingIcon`.
- *
- * The [anchor] is what lets the two *choice* chips — thinking level and model —
- * open their floating menus at the chip rather than as a panel from the bottom
- * edge (§7.1). The chip reports its own bounds into it and hands it back on the
- * tap; a chip that opens a sheet ignores it.
+ * Miuix's palette already answers it: the band is `surfaceContainer`, so one step up
+ * is `surfaceContainerHigh` — visible in both schemes without asking the colour
+ * anything. The pill is a Miuix [Surface] at a full round, so the clip, the fill and
+ * the press feedback are the library's, and 32dp is the height every other pill on
+ * this page is.
  *
  * ## Why the chip has no separate accessibility name
  *
- * The chip this replaced took a `contentDescription` and never used it, and the
- * design system's chip has no slot for one — which is the right answer rather than a
- * gap: `PiSelectChip`'s row is a `clickable`, so it merges its own label, and the
- * label is what the control *says* (`high`, `packyapi-custom`, `缓存命中 0%`). A
- * description on that node would replace the value the reader needs with the noun
- * they can already infer from where the chip is.
+ * The chip this replaced took a `contentDescription` and never used it, and the row
+ * has no slot for one — which is the right answer rather than a gap: the pill is a
+ * `clickable`, so it merges its own label, and the label is what the control *says*
+ * (`high`, `packyapi-custom`, `缓存命中 0%`). A description on that node would replace
+ * the value the reader needs with the noun they can already infer from where the chip
+ * is.
+ *
+ * [menu] is the popup the chip opens, composed *here* rather than at the page: Miuix
+ * anchors a [WindowListPopup] to its own parent's bounds, so the popup has to be a
+ * sibling of the pill for the menu to open where the finger tapped — and that is also
+ * what lets the `/model` command row open the model menu at the model chip.
  */
 @Composable
 private fun ControlChip(
     glyph: ImageVector,
     label: String,
-    anchor: MenuAnchor,
     onClick: () -> Unit,
+    menu: @Composable () -> Unit = {},
 ) {
-    PiSelectChip(
-        label = label,
-        selected = false,
-        onClick = onClick,
-        modifier = Modifier.menuAnchor(anchor),
-        leadingIcon = {
-            Icon(
-                imageVector = glyph,
-                contentDescription = null,
-                // 14dp: the app's one small-mark size, which is also the box
-                // `PiSelectChip` gives its leading icon.
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
+    ControlChipBase(label = label, onClick = onClick, menu = menu) {
+        Icon(
+            imageVector = glyph,
+            contentDescription = null,
+            modifier = Modifier.size(CHIP_GLYPH),
+        )
+    }
+}
+
+/** The same chip, for a glyph that is a drawable resource rather than a vector. */
+@Composable
+private fun ControlChip(
+    glyph: Painter,
+    label: String,
+    onClick: () -> Unit,
+    menu: @Composable () -> Unit = {},
+) {
+    ControlChipBase(label = label, onClick = onClick, menu = menu) {
+        Icon(
+            painter = glyph,
+            contentDescription = null,
+            modifier = Modifier.size(CHIP_GLYPH),
+        )
+    }
+}
+
+@Composable
+private fun ControlChipBase(
+    label: String,
+    onClick: () -> Unit,
+    menu: @Composable () -> Unit,
+    glyph: @Composable () -> Unit,
+) {
+    Box {
+        Surface(
+            // Clip, then click: Miuix's press indication is drawn by the node that
+            // owns the gesture, so a `clickable` outside the shape would tint a
+            // rectangle behind a pill.
+            modifier = Modifier
+                .height(CHIP_HEIGHT)
+                .clip(RoundedCornerShape(percent = 50))
+                .clickable(onClick = onClick),
+            shape = RoundedCornerShape(percent = 50),
+            color = MiuixTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = CHIP_INSET),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                glyph()
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(start = 4.dp),
+                    style = MiuixTheme.textStyles.footnote1,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        menu()
+    }
+}
+
+/**
+ * How wide the fade at the end of the chip row is.
+ *
+ * One chip's own side inset plus its glyph — wide enough that a cut pill is visibly
+ * going away rather than chopped, short enough not to hide the label of a chip the
+ * reader has almost scrolled to.
+ */
+private val CHIP_FADE_WIDTH = 28.dp
+
+/** The chip's height, its side inset, and the glyph inside it. */
+private val CHIP_HEIGHT = 32.dp
+private val CHIP_INSET = 10.dp
+private val CHIP_GLYPH = 14.dp
+
+/**
+ * A box whose only job is to be the bounds a [WindowListPopup] opens against.
+ *
+ * Miuix's popups are positioned from their *parent's* bounds in the window, so a
+ * popup that has to open at a 40dp icon button must be composed as that button's
+ * sibling rather than at the page. One place that says so beats a bare `Box` at four
+ * call sites.
+ */
+@Composable
+private fun PopupAnchor(content: @Composable () -> Unit) {
+    Box { content() }
+}
+
+/** The tallest a menu may be before it scrolls: an answer's viewport, not the page. */
+private val MENU_MAX_HEIGHT = 320.dp
+
+/**
+ * The thinking levels the model in front of us can actually do.
+ *
+ * The level is read live rather than captured: the menu is over a conversation that
+ * is still running, and the tick on it must be the level pi is on *now*.
+ */
+@Composable
+private fun ThinkingMenu(
+    show: Boolean,
+    session: PiAgentSession,
+    onDismiss: () -> Unit,
+) {
+    val live by session.conversation.collectAsState()
+    val saved by session.settingsStore.settings.collectAsState()
+    // Live levels once the agent has answered for the model that is running, the
+    // remembered ones otherwise — see `thinkingLevelsFor`, and `thinkingLevelOf` for
+    // why the saved model id is the fallback key. The menu cannot offer a level the
+    // model does not have.
+    val available = thinkingLevelsFor(
+        live.availableThinkingLevels,
+        saved.rememberedThinkingLevels(live.model?.id ?: saved.modelId),
     )
+    val current = thinkingLevelOf(live, saved)
+    val options = available.takeIf { it.isNotEmpty() } ?: PiLaunchOptions.THINKING_LEVELS
+    ListPopupColumn {
+        options.forEachIndexed { index, level ->
+            DropdownImpl(
+                // The id alone. The menu carried each level's sentence under it
+                // once, and seven rows of "off — 直接回答，不做思考" made a menu of
+                // two-line entries out of seven one-word choices; the ids are the
+                // wire strings pi documents, and the picker that explains them is the
+                // model page's own rows.
+                text = level,
+                optionSize = options.size,
+                isSelected = level == current,
+                index = index,
+                onSelectedIndexChange = {
+                    if (show) {
+                        onDismiss()
+                        if (level != current) {
+                            // Applied to the running process immediately: pi
+                            // accepts the change over RPC, so unlike the provider and
+                            // model it needs no restart.
+                            session.settingsStore.update { it.copy(thinkingLevel = level) }
+                            session.setThinkingLevel(level)
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Every model of every profile, one line each, so the menu is the whole configuration
+ * rather than one entry per provider.
+ *
+ * Read live, *inside* the menu: the profile store is state and the menu is drawn from
+ * it on every open, so a model changed on the settings page moves the tick too.
+ * Reading it from the click handler's closure was the bug — the chip was rebuilt from
+ * the current store while the menu still ticked the model from the previous
+ * composition, and the two disagreed.
+ */
+@Composable
+private fun ModelMenu(
+    show: Boolean,
+    session: PiAgentSession,
+    text: Strings,
+    onDismiss: () -> Unit,
+) {
+    val config by session.settingsStore.profiles.snapshots.collectAsState()
+    val profiles = config.profiles
+    val active = config.activeProfile
+    val selectedId = active
+        ?.takeIf { it.modelId.isNotBlank() }
+        ?.let { modelOptionId(it.id, it.modelId) }
+
+    ListPopupColumn {
+        profiles.forEach { profile ->
+            val heading = providerLabel(profile, text)
+            val hint = modelRowHint(profile, text)
+            profile.selectableModels.forEach { model ->
+                val selected = modelOptionId(profile.id, model) == selectedId
+                PiMenuRow(
+                    title = model,
+                    // The provider is the line under the model, and the profile's own
+                    // name when two profiles share one provider — the same pair the
+                    // sheet picker grouped and captioned by.
+                    summary = listOfNotNull(heading, hint).joinToString(" · "),
+                    // A provider this build does not know cannot be sent to pi at
+                    // all, so its rows are shown but not offered.
+                    enabled = profile.providerEntry != null,
+                    trailing = {
+                        if (selected) {
+                            Icon(
+                                imageVector = MiuixIcons.Ok,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MiuixTheme.colorScheme.primary,
+                            )
+                        }
+                    },
+                    onClick = {
+                        if (show && profile.providerEntry != null) {
+                            onDismiss()
+                            session.selectProfile(profile, model)
+                        }
+                    },
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -3520,7 +3962,8 @@ private fun ControlChip(
  * One label per row rather than the two-column table this started as: the label
  * column has to be a fixed width (112dp was measured), which leaves 210dp for the
  * value, and a session file name needs 480px. Stacked, the value gets the sheet's
- * full width and a second line.
+ * full width and a second line — which is why each row is a Miuix [BasicComponent]
+ * with the label over the value instead of the library's title-beside-value shape.
  */
 @Composable
 private fun ContextSheet(session: PiAgentSession, text: Strings) {
@@ -3532,85 +3975,99 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
     val window = state.model?.contextWindow ?: 0
     val model = state.model
 
-    // Read-only rows, so the sheet's body is a lazy list for the scrolling and
-    // each fact is one `item`. Nothing here is tappable: the cache and context
-    // chips both open this sheet, and a sheet that answered a tap by opening
-    // itself again would be a loop.
-    //
-    // 0.8 of the sheet's height rather than the picker's 0.6: this list *is* the
-    // sheet — fourteen facts, more than fit on any panel — and more of them
-    // should be visible at once. It still scrolls; the ceiling only says how much
-    // of the page behind the panel is covered before it does.
-    ReadOnlyBody(title = text.chat.contextDetails, maxHeightFraction = 0.8f) {
-        item {
-            ReadOnlySheetRow(
-                label = text.chat.detailModel,
-                value = when {
-                    model == null -> text.chat.loadingModel
-                    !model.isUsable -> text.chat.noModel
-                    else -> model.id.ifBlank { model.name }
-                },
-            )
-        }
-        item {
-            ReadOnlySheetRow(
-                label = text.chat.detailProvider,
-                // `model == null` is the agent still starting; `provider == "unknown"`
-                // is pi's own word for "no profile is configured". Both have a
-                // translated sentence rather than pi's identifier, which a reader
-                // who has not configured anything reads as a fault.
-                value = when {
-                    model == null -> text.chat.loadingModel
-                    model.provider == "unknown" -> text.chat.noModel
-                    else -> model.provider.ifBlank { text.settings.none }
-                },
-            )
-        }
-        item { ReadOnlySheetRow(text.chat.thinkingLabel, thinking) }
-        item {
-            ReadOnlySheetRow(
-                label = text.chat.detailContext,
-                value = if (window > 0 && context.total > 0) {
-                    text.chat.contextOfWindow(
-                        percent = (context.total * 100 / window).toInt(),
-                        windowK = window / 1000,
-                    )
-                } else {
-                    text.chat.contextEmpty
-                },
-            )
-        }
-        item { ReadOnlySheetRow(text.chat.detailUsed, text.chat.tokens(context.total)) }
-        item { ReadOnlySheetRow(text.chat.detailInput, text.chat.tokens(context.input)) }
-        item { ReadOnlySheetRow(text.chat.detailOutput, text.chat.tokens(context.output)) }
-        item { ReadOnlySheetRow(text.chat.detailCacheRead, text.chat.tokens(context.cacheRead)) }
-        item { ReadOnlySheetRow(text.chat.detailCacheWrite, text.chat.tokens(context.cacheWrite)) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            // Inside the scroll, for the reason [sheetBottomInset] records.
+            .padding(bottom = sheetBottomInset()),
+    ) {
+        SheetFact(
+            label = text.chat.detailModel,
+            value = when {
+                model == null -> text.chat.loadingModel
+                !model.isUsable -> text.chat.noModel
+                else -> model.id.ifBlank { model.name }
+            },
+        )
+        SheetFact(
+            label = text.chat.detailProvider,
+            // `model == null` is the agent still starting; `provider == "unknown"` is
+            // pi's own word for "no profile is configured". Both have a translated
+            // sentence rather than pi's identifier, which a reader who has not
+            // configured anything reads as a fault.
+            value = when {
+                model == null -> text.chat.loadingModel
+                model.provider == "unknown" -> text.chat.noModel
+                else -> model.provider.ifBlank { text.settings.none }
+            },
+        )
+        SheetFact(label = text.chat.thinkingLabel, value = thinking)
+        SheetFact(
+            label = text.chat.detailContext,
+            value = if (window > 0 && context.total > 0) {
+                text.chat.contextOfWindow(
+                    percent = (context.total * 100 / window).toInt(),
+                    windowK = window / 1000,
+                )
+            } else {
+                text.chat.contextEmpty
+            },
+        )
+        SheetFact(label = text.chat.detailUsed, value = text.chat.tokens(context.total))
+        SheetFact(label = text.chat.detailInput, value = text.chat.tokens(context.input))
+        SheetFact(label = text.chat.detailOutput, value = text.chat.tokens(context.output))
+        SheetFact(label = text.chat.detailCacheRead, value = text.chat.tokens(context.cacheRead))
+        SheetFact(label = text.chat.detailCacheWrite, value = text.chat.tokens(context.cacheWrite))
         if (context.reasoning > 0) {
-            item { ReadOnlySheetRow(text.chat.detailReasoning, text.chat.tokens(context.reasoning)) }
+            SheetFact(label = text.chat.detailReasoning, value = text.chat.tokens(context.reasoning))
         }
-        item {
-            ReadOnlySheetRow(
-                label = text.chat.cacheHitLabel,
-                value = text.chat.cacheHit(cacheHitPercent(state)),
-            )
-        }
-        item {
-            ReadOnlySheetRow(
-                label = text.chat.detailCost,
-                value = if (usage.total.costUsd > 0) "$%.4f".format(usage.total.costUsd) else null,
-            )
-        }
-        item { ReadOnlySheetRow(text.chat.detailTotal, text.chat.tokens(usage.total.total)) }
-        item { ReadOnlySheetRow(text.chat.detailTurns, text.chat.turnCount(state.turns.size)) }
+        SheetFact(label = text.chat.cacheHitLabel, value = text.chat.cacheHit(cacheHitPercent(state)))
+        SheetFact(
+            label = text.chat.detailCost,
+            value = if (usage.total.costUsd > 0) "$%.4f".format(usage.total.costUsd) else null,
+        )
+        SheetFact(label = text.chat.detailTotal, value = text.chat.tokens(usage.total.total))
+        SheetFact(label = text.chat.detailTurns, value = text.chat.turnCount(state.turns.size))
         // The file's *name*: the sheet is 360dp wide and the container path is
         // 48 characters before the name. Which conversation this is, is the
         // question; where it lives on disk is not.
-        item {
-            ReadOnlySheetRow(
-                label = text.chat.detailSession,
-                value = state.sessionFile?.let { java.io.File(it).name },
-                monospaceValue = true,
-                valueLines = 2,
+        SheetFact(
+            label = text.chat.detailSession,
+            value = state.sessionFile?.let { java.io.File(it).name },
+            monospaceValue = true,
+        )
+    }
+}
+
+/**
+ * One read-only fact of the context report: its label over its value.
+ *
+ * The value is the thing to read, so it takes the body style and the card's own ink,
+ * and the label above it takes the summary colour — the same hierarchy a Miuix
+ * settings row draws between its title and its summary, turned so that the *value*
+ * is the title's position. A null value draws the label alone, which is how a cost
+ * that is not known yet stays a row rather than a blank.
+ */
+@Composable
+private fun SheetFact(
+    label: String,
+    value: String?,
+    monospaceValue: Boolean = false,
+) {
+    BasicComponent {
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.footnote1,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+        Spacer(Modifier.height(2.dp))
+        if (value != null) {
+            Text(
+                text = value,
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurface,
+                fontFamily = if (monospaceValue) FontFamily.Monospace else null,
             )
         }
     }
@@ -3647,6 +4104,11 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
  *   the one place a field is the right answer, because the whole point of `!` is
  *   that the reader has a shell line in mind.
  *
+ * Each row is a Miuix [BasicComponent] — the library's two-line settings row, which
+ * is what a command with a description is — rather than a `DropdownImpl`: the ids
+ * share no mutually exclusive choice, and the description under each one is half of
+ * what the row says.
+ *
  * ## Why `agentCommands()` is still on the session
  *
  * It is not called from here any more and it is deliberately not deleted: the
@@ -3656,35 +4118,35 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
  */
 @Composable
 private fun CommandMenu(
+    show: Boolean,
     text: Strings,
     onRun: (BuiltInCommand) -> Unit,
     onShell: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    val host = LocalSheetHost.current
-    // Each row dismisses before it acts, the gate every menu row carries: the
-    // panel is drawn for the length of its exit and a second tap aimed at the
-    // page behind it must not land on a row of a menu that is leaving.
-    PiMenuRow(
-        label = SHELL_SIGIL,
-        subtitle = text.chat.shellCommandHint,
-        onClick = {
-            if (host.isOpen) {
-                host.dismiss()
-                onShell()
-            }
-        },
-    )
-    BUILT_IN_COMMANDS.forEach { command ->
-        PiMenuRow(
-            label = command.id,
-            subtitle = command.description(text),
-            onClick = {
-                if (host.isOpen) {
-                    host.dismiss()
-                    onRun(command)
-                }
-            },
+    // Each row dismisses before it acts, the gate every menu row carries: the panel
+    // is drawn for the length of its exit and a second tap aimed at the page behind
+    // it must not land on a row of a menu that is leaving.
+    fun pick(action: () -> Unit) {
+        if (show) {
+            onDismiss()
+            action()
+        }
+    }
+
+    ListPopupColumn {
+        BasicComponent(
+            title = SHELL_SIGIL,
+            summary = text.chat.shellCommandHint,
+            onClick = { pick(onShell) },
         )
+        BUILT_IN_COMMANDS.forEach { command ->
+            BasicComponent(
+                title = command.id,
+                summary = command.description(text),
+                onClick = { pick { onRun(command) } },
+            )
+        }
     }
 }
 
@@ -3693,9 +4155,11 @@ private fun CommandMenu(
  *
  * It was a sheet of three rows and it is a dropdown now, for the same reason the
  * command list is: three choices at a toolbar button do not cover the page to ask
- * their question (§7.1). The rows keep their leading marks — a camera, a picture,
- * a document — because the three are told apart by what they *are* before they
- * are read.
+ * their question (§7.1). The rows keep their leading marks — a capture frame, a
+ * picture, a document — because the three are told apart by what they *are* before
+ * they are read. The camera's mark is the capture frame rather than a camera body:
+ * Miuix's icon set has no camera, and a frame is the same statement — this row takes
+ * a picture — without borrowing a glyph set that draws at another weight.
  *
  * **Camera first**, because it is the one row this control actually adds: the
  * other two hand the job to the system picker, and a photo of a whiteboard is not
@@ -3704,35 +4168,46 @@ private fun CommandMenu(
  */
 @Composable
 private fun AttachMenu(
+    show: Boolean,
     text: Strings,
     onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    val host = LocalSheetHost.current
     fun pick(kind: String) {
-        if (host.isOpen) {
-            host.dismiss()
+        if (show) {
+            onDismiss()
             onPick(kind)
         }
     }
-    PiMenuRow(
-        label = text.chat.attachCamera,
-        subtitle = text.chat.attachCameraHint,
-        leading = { Icon(Icons.Filled.PhotoCamera, contentDescription = null) },
-        onClick = { pick("camera") },
-    )
-    PiMenuRow(
-        label = text.chat.attachImage,
-        subtitle = text.chat.attachImageHint,
-        leading = { Icon(Icons.Filled.Image, contentDescription = null) },
-        onClick = { pick("image") },
-    )
-    PiMenuRow(
-        label = text.chat.attachFile,
-        subtitle = text.chat.attachFileHint,
-        leading = { Icon(Icons.Filled.Description, contentDescription = null) },
-        onClick = { pick("file") },
-    )
+
+    ListPopupColumn {
+        BasicComponent(
+            title = text.chat.attachCamera,
+            summary = text.chat.attachCameraHint,
+            startAction = {
+                Icon(imageVector = MiuixIcons.Scan, contentDescription = null)
+            },
+            onClick = { pick("camera") },
+        )
+        BasicComponent(
+            title = text.chat.attachImage,
+            summary = text.chat.attachImageHint,
+            startAction = {
+                Icon(imageVector = MiuixIcons.Photos, contentDescription = null)
+            },
+            onClick = { pick("image") },
+        )
+        BasicComponent(
+            title = text.chat.attachFile,
+            summary = text.chat.attachFileHint,
+            startAction = {
+                Icon(imageVector = MiuixIcons.File, contentDescription = null)
+            },
+            onClick = { pick("file") },
+        )
+    }
 }
+
 
 /**
  * One command this page implements itself.
@@ -3807,11 +4282,11 @@ private fun AttachmentChip(
         value = withContext(Dispatchers.IO) { loadThumbnail(context, image.uri) }
     }
 
-    // `PiShapes.small`: the dense voice's step for a small information tile. It was
-    // 10dp — between the 8dp chip and the 12dp row, which is the middle of the shape
-    // scale the design language does not offer — and the band's own bottom corners
-    // have to repeat the number because a clip rounds *all* four, which on a band
-    // that crosses the tile's foot would notch the picture in half.
+    // 8dp: the dense step for a small information tile — between the 8dp chip and
+    // the 12dp panel, which is as far as the shape scale is worth taking for a
+    // 64dp square — and the band's own bottom corners have to repeat the number
+    // because a clip rounds *all* four, which on a band that crosses the tile's foot
+    // would notch the picture in half.
     //
     // The tile's size is fixed on the *Box*, and that is load-bearing rather than
     // tidiness: a `LazyRow` measures its items with an unbounded main axis, so
@@ -3821,8 +4296,8 @@ private fun AttachmentChip(
     // therefore sat past the picture it belongs to.
     Box(Modifier.size(ATTACHMENT_TILE)) {
         Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = PiShapes.small,
+            color = MiuixTheme.colorScheme.surfaceContainerHigh,
+            shape = RoundedCornerShape(ATTACHMENT_CORNER),
             modifier = Modifier.size(ATTACHMENT_TILE),
         ) {
             val bitmap = thumbnail
@@ -3839,10 +4314,10 @@ private fun AttachmentChip(
                     // resolves would claim otherwise: the name beside the tile is
                     // what identifies it.
                     Icon(
-                        Icons.Filled.Description,
+                        imageVector = MiuixIcons.File,
                         contentDescription = null,
                         modifier = Modifier.size(22.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
             }
@@ -3857,7 +4332,7 @@ private fun AttachmentChip(
                         bottomEnd = ATTACHMENT_CORNER,
                     ),
                 )
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f))
+                .background(MiuixTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f))
                 .height(ATTACHMENT_BAND_HEIGHT),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -3866,8 +4341,8 @@ private fun AttachmentChip(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 5.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -3884,11 +4359,11 @@ private fun AttachmentChip(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Filled.Close,
+                    imageVector = MiuixIcons.Close,
                     contentDescription = null,
                     // 14dp, the app's one small-mark size (was 13).
                     modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             }
         }
@@ -3915,7 +4390,7 @@ private fun AttachmentChip(
  *
  * Monospace and with autocorrect off, because a command is machine text: an
  * autocorrected `git` is a shell error the reader cannot see coming. It is a
- * single-line `OutlinedTextField` rather than a `BasicTextField` because this is a
+ * single-line Miuix [TextField] rather than the composer's growing field: this is a
  * form, not a composer — it exists for one line and then leaves.
  */
 @Composable
@@ -3923,51 +4398,44 @@ private fun ShellCommandSheet(
     text: Strings,
     onRun: (String) -> Unit,
 ) {
-    val host = LocalSheetHost.current
     var line by remember { mutableStateOf("") }
 
-    Column(Modifier.fillMaxWidth()) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = sheetBottomInset()),
+    ) {
         Text(
             text = text.chat.shellCommandHint,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MiuixTheme.textStyles.footnote1,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
         )
-        // An `OutlinedTextField` and not the design system's `PiTextField`, and the
-        // reason is a gap in that component rather than a preference: `PiTextField`
-        // fixes its `KeyboardOptions` to a keyboard type and a Done action, and this
-        // field needs `autoCorrectEnabled = false` **and** a monospace `textStyle` —
-        // an autocorrected `git` is a shell error the reader cannot see coming. The
-        // shape it is given is the design system's `card` step, so it is at least the
-        // same rectangle as every other field in the app.
-        OutlinedTextField(
+        TextField(
             value = line,
             onValueChange = { line = it },
-            placeholder = { Text(text.chat.shellCommandPlaceholder) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            label = text.chat.shellCommandPlaceholder,
+            useLabelAsPlaceholder = true,
             singleLine = true,
-            shape = PiShapes.card,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+            textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Ascii,
                 autoCorrectEnabled = false,
             ),
+        )
+        Button(
+            onClick = { onRun(line.trim()) },
+            // Refused while the line is blank: `bash` with an empty command is a
+            // shell error the user would be reading for a reason they caused.
+            enabled = line.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-        )
-        PiSheetActions {
-            PiButton(
-                text = text.common.ok,
-                // Refused while the line is blank: `bash` with an empty command is a
-                // shell error the user would be reading for a reason they caused.
-                enabled = line.isNotBlank(),
-                onClick = {
-                    host.dismiss()
-                    onRun(line.trim())
-                },
-                kind = PiButtonKind.Filled,
-                size = PiButtonSize.Small,
-            )
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+        ) {
+            Text(text = text.common.ok)
         }
     }
 }
@@ -3975,7 +4443,7 @@ private fun ShellCommandSheet(
 /** One attachment tile's edge — square, as the composer's other tiles are. */
 private val ATTACHMENT_TILE = 64.dp
 
-/** The tile's own corner: `PiShapes.small`'s 8dp, repeated for the name band's foot. */
+/** The tile's own corner, repeated for the name band's foot. */
 private val ATTACHMENT_CORNER = 8.dp
 
 /** The foot band: the file name, and the remove control at its end. */
@@ -4139,7 +4607,7 @@ private fun readAtMost(stream: java.io.InputStream): ByteArray? {
 }
 
 private fun loadThumbnail(context: Context, uri: Uri): ImageBitmap? = runCatching {
-    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use {
         android.graphics.BitmapFactory.decodeStream(it, null, bounds)
     }
@@ -4149,7 +4617,7 @@ private fun loadThumbnail(context: Context, uri: Uri): ImageBitmap? = runCatchin
     var sample = 1
     while (longest / (sample * 2) >= THUMBNAIL_EDGE) sample *= 2
 
-    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+    val options = BitmapFactory.Options().apply { inSampleSize = sample }
     val bitmap = context.contentResolver.openInputStream(uri)?.use {
         android.graphics.BitmapFactory.decodeStream(it, null, options)
     } ?: return@runCatching null

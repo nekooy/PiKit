@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -12,11 +11,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
-import pi.kit.mob.data.ThemeMode
 import pi.kit.mob.data.applyLauncherIcon
 import pi.kit.mob.pi.PiAgentService
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.ui.design.PiKitTheme
 import pi.kit.mob.ui.kit.PiKitMiuixTheme
 
 class MainActivity : ComponentActivity() {
@@ -28,15 +25,11 @@ class MainActivity : ComponentActivity() {
         val session = PiAgentSession.of(applicationContext)
 
         setContent {
-            // The theme is read here rather than inside `PiKitTheme`'s default:
-            // `isSystemInDarkTheme()` is only the answer for `ThemeMode.SYSTEM`,
-            // and the preference lives with the rest of the app's settings.
+            // The theme is assembled from the preferences here rather than inside
+            // the composable's default: the mode, the accent and the wallpaper
+            // switch all live in the settings store, and a theme that read the
+            // store itself would be a second owner of those decisions.
             val settings by session.settingsStore.settings.collectAsState()
-            val darkTheme = when (settings.themeMode) {
-                ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
-            }
 
             // The launcher icon is the system's to draw, so choosing one is a
             // component switch rather than a redraw. Keyed on the preference,
@@ -51,46 +44,43 @@ class MainActivity : ComponentActivity() {
                 applyLauncherIcon(this@MainActivity, settings.launcherIcon)
             }
 
-            // The accent is read here with the theme mode and for the same reason:
-            // it is a preference, and `PiKitTheme` assembles a palette rather than
-            // owning one. Choosing a colour re-themes the page it was chosen on.
-            // The dynamic flag rides along: on Android 12 and up the palette then
-            // comes from the wallpaper, and below that `PiKitTheme` falls back to
-            // the accent rather than losing the choice.
+            // The theme owns the palette, the type scale and the system bars. An
+            // accent change re-themes the page that chose it because the settings
+            // flow is read above every screen, and the wallpaper switch is one
+            // more field on the same controller rather than a second palette.
             PiKitMiuixTheme(settings = settings) {
-                PiKitTheme(darkTheme = darkTheme, accent = settings.themeColor, dynamic = settings.themeDynamic) {
-                    // The text size, applied as one multiplier on the composition's own
-                    // density rather than by overriding each type style at each of the
-                    // seven steps.
+                // The text size, applied as one multiplier on the composition's own
+                // density rather than by overriding each type style at each of the
+                // seven steps.
+                //
+                // Read here, above every screen and above the modal windows, so it
+                // reaches the transcript, the terminal banner and the dialogs alike —
+                // Compose's `Dialog` runs in the parent composition and inherits its
+                // locals, so a dialog opened from a page drawn at this scale is scaled
+                // with it.
+                //
+                // It multiplies the *platform's* fontScale rather than replacing it: a
+                // user who has already set 1.3 in Android's display settings keeps their
+                // preference and gets this step on top of it. `density` itself is passed
+                // through untouched — it is dp, and the row above this one measured its
+                // paddings in it.
+                ScaledType(scale = settings.fontSize.scale) {
+                    // The foreground service is what keeps a long turn alive while the
+                    // user is in another app, so it starts as soon as there is a frame
+                    // to start it from.
                     //
-                    // Read here, above every screen and above the sheet layer, so it reaches
-                    // the transcript, the terminal banner and the dialogs alike — Compose's
-                    // `Dialog` runs in the parent composition and inherits its locals, so a
-                    // dialog opened from a page drawn at this scale is scaled with it.
-                    //
-                    // It multiplies the *platform's* fontScale rather than replacing it: a
-                    // user who has already set 1.3 in Android's display settings keeps their
-                    // preference and gets this step on top of it. `density` itself is passed
-                    // through untouched — it is dp, and the row above this one measured its
-                    // paddings in it.
-                    ScaledType(scale = settings.fontSize.scale) {
-                        // The foreground service is what keeps a long turn alive while the
-                        // user is in another app, so it starts as soon as there is a frame
-                        // to start it from.
-                        //
-                        // The permission prompts are deliberately **not** asked for here.
-                        // They used to be, from this same first composition, and the
-                        // notification request was cancelled by the system 251 ms after it
-                        // opened — the splash was still exiting, the window was being
-                        // replaced and this service was starting. `PiKitRoot` now owns both
-                        // prompts and raises them once the runtime is ready; the block there
-                        // has the measurement.
-                        LaunchedEffect(Unit) {
-                            PiAgentService.start(this@MainActivity)
-                        }
-
-                        PiKitRoot(session = session)
+                    // The permission prompts are deliberately **not** asked for here.
+                    // They used to be, from this same first composition, and the
+                    // notification request was cancelled by the system 251 ms after it
+                    // opened — the splash was still exiting, the window was being
+                    // replaced and this service was starting. `PiKitRoot` now owns both
+                    // prompts and raises them once the runtime is ready; the block there
+                    // has the measurement.
+                    LaunchedEffect(Unit) {
+                        PiAgentService.start(this@MainActivity)
                     }
+
+                    PiKitRoot(session = session)
                 }
             }
         }

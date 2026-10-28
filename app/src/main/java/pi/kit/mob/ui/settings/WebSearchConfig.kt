@@ -1,21 +1,11 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -23,8 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -41,20 +32,23 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebSearchEntry
 import pi.kit.mob.pi.WebSearchStore
 import pi.kit.mob.pi.WEB_SEARCH_OWNED_PATHS
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.LocalToastHost
-import pi.kit.mob.ui.components.PickerOption
-import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.components.showPicker
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonSize
-import pi.kit.mob.ui.design.PiGroup
-import pi.kit.mob.ui.design.PiRow
-import pi.kit.mob.ui.design.PiRowDivider
-import pi.kit.mob.ui.design.PiSectionHeader
-import pi.kit.mob.ui.design.PiSheetActions
-import pi.kit.mob.ui.design.PiSheetTitle
-import pi.kit.mob.ui.design.PiShapes
+import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.PiSheet
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Reset
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * The "add an option" half of the search settings page.
@@ -93,36 +87,36 @@ import pi.kit.mob.ui.design.PiShapes
  * key's value is deliberately not repeated in the dialog: the row above it already
  * shows it, and a credential copied into one more place is one more place to look at.
  *
- * ## The add row, in the storage page's shape
+ * ## The add row
  *
  * Adding a key used to be a bare title with a chevron, and that is the one row on the
  * page whose shape did not match anything else: a chevron meant "this opens a page",
- * and a menu entry is not what this is. The storage page's add-a-folder has had the
- * right shape for the same job since it was written — icon, title, one line saying
- * what the control is for — so this is that row with this page's words in it. The
- * chevron is still there, because the design language changed what it means: `PiRow`
- * draws one on every row that acts, which is how this row is told apart from the key
- * rows above it, and the picker rows on the page's first group carry a badge where
- * their own value goes instead.
+ * and a menu entry is not what this is. The shape it wants is the add-a-row one — icon,
+ * title, one line saying what the control is for — and Miuix already draws it:
+ * `ArrowPreference` is the library's row *that opens something*, and its chevron is the
+ * component's own, which is how this row is told apart from the key rows above it. Those
+ * are `BasicComponent`s — a row that states something and opens nothing — and their own
+ * control is the ✕ in the trailing slot, where the picker rows on the page's first group
+ * carry a value instead.
  *
  * ## The group holds rows and nothing else, which is what keeps the press feedback even
  *
- * The add row is the group's **last** row, the way the storage page's add-a-folder is,
- * and the sentences around it live outside the group. That was originally forced by
- * `SettingsSection` clipping its contents to the card's rounded shape: a row that was
- * the card's last one had a rounded ripple at its bottom edge and a row with anything
- * under it — a note — had a square one. Measured on this page: the add row's press
- * outline changed after the first option was added, because the outcome note appeared
- * *inside* the card under it, while the storage page's add-a-folder never moved. The
- * outcome is a **toast** now (`components/Toasts.kt`), which is what actually settles
- * it: a sentence about an action that has finished belongs nowhere on the page, and
- * the acting row still belongs last. The explanation that used to sit above the list is
- * gone too: what the section is for is one line of a field's own help, and a paragraph
- * over a list nobody reads is clutter (§13).
+ * The add row is the group's **last** row, and the sentences around it live outside the
+ * group. That was originally forced by the card clipping its contents to its rounded
+ * shape: a row that was the card's last one had a rounded ripple at its bottom edge and
+ * a row with anything under it — a note — had a square one. Measured on this page: the
+ * add row's press outline changed after the first option was added, because the outcome
+ * note appeared *inside* the card under it. The outcome is a **toast** now
+ * (`LocalPiToast`, the app's one transient message), which is what actually settles it: a
+ * sentence about an action that has finished belongs nowhere on the page, and the acting
+ * row still belongs last. The explanation that used to sit above the list is gone too:
+ * what the section is for is one line of a field's own help, and a paragraph over a list
+ * nobody reads is clutter (§13).
  *
- * The hairline above the row exists only when the list has something in it: it
- * separates the list from the row, and a rule with one thing on each side of it is a
- * boundary drawn between two things that are not there.
+ * The hairline is Miuix's `HorizontalDivider`, inset to the column the rows' titles start
+ * on, and it exists only when the list has something in it: it separates the list from
+ * the row, and a rule with one thing on each side of it is a boundary drawn between two
+ * things that are not there.
  *
  * ## A write restarts the agent itself
  *
@@ -138,18 +132,29 @@ internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSessi
     val text = strings
     val language = LocalLanguage.current
     val scope = rememberCoroutineScope()
-    val host = LocalSheetHost.current
-    val toasts = LocalToastHost.current
+    val toasts = LocalPiToast.current
     val entries by store.extra.collectAsState()
 
     var pendingRemoval by remember { mutableStateOf<WebSearchEntry?>(null) }
+    var picking by remember { mutableStateOf(false) }
+    // The option the value sheet is open on, rather than a boolean: the sheet's title,
+    // its example and what the value is parsed as are all the option's, and a sheet that
+    // remembered only "open" would have to look the option up again to ask its question.
+    var adding by remember { mutableStateOf<WebAccessParam?>(null) }
+    // And what the panel is *showing*, which is the same thing one dismissal longer.
+    // `show` and the content have to disagree for the length of Miuix's exit animation,
+    // or the panel plays its last 200 ms with an empty title and no field.
+    var shown by remember { mutableStateOf<WebAccessParam?>(null) }
+    // Bumped on every open, so the sheet's draft and its "invalid" mark are fresh each
+    // time: the panel outlives a dismissal (see `shown`), and a draft keyed on the option
+    // alone would hand the next opening of the *same* key the last one's half-typed
+    // value. The old sheet host threw its content away on dismiss, which is what this is.
+    var opening by remember { mutableStateOf(0) }
 
-    // Outside the group, deliberately: see the note above on the press feedback.
-    PiSectionHeader(text.settings.searchConfig)
-    PiGroup {
+    PiSection(title = text.settings.searchConfig) {
         entries.forEachIndexed { index, entry ->
-            if (index > 0) PiRowDivider(inset = false)
-            PiRow(
+            if (index > 0) HorizontalDivider(Modifier.padding(horizontal = ROW_DIVIDER_INSET))
+            BasicComponent(
                 title = entry.path,
                 // The value is shown on the row's own second line rather than in
                 // the trailing slot, and as JSON rather than as prose: the row is a
@@ -158,131 +163,150 @@ internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSessi
                 // `VALUE_DISPLAY_CHARS` of JSON in an unweighted trailing slot is
                 // the width the old value column was capped at 0.35 of the row to
                 // prevent it from taking.
-                subtitle = entry.value.display(),
-                trailing = {
+                summary = entry.value.display(),
+                endActions = {
+                    // The ✕ is the row's own control, in the summary ink: it removes one
+                    // key and is not the row's subject, which is the key's name and value.
                     IconButton(onClick = { pendingRemoval = entry }) {
                         Icon(
-                            Icons.Filled.Close,
+                            imageVector = MiuixIcons.Close,
                             contentDescription = text.settings.searchConfigRemove(entry.path),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
                 },
             )
         }
-        if (entries.isNotEmpty()) PiRowDivider(inset = false)
+        if (entries.isNotEmpty()) {
+            HorizontalDivider(Modifier.padding(horizontal = ROW_DIVIDER_INSET))
+        }
 
-        // A caption, and the storage page's add-a-folder shape: icon, title, one
-        // line saying what the picker it opens is for. The chevron is `PiRow`'s own —
-        // it goes on every row that acts — and it is the one mark that tells this row
-        // apart from the key rows above it, which carry a ✕ and no chevron.
-        PiRow(
+        // The add row: icon, title, one line saying what the picker it opens is for, and
+        // Miuix's own chevron — `ArrowPreference` is the row that opens something, which
+        // is the one mark that tells this row apart from the key rows above it.
+        ArrowPreference(
             title = text.settings.searchConfigAdd,
-            subtitle = text.settings.searchConfigAddBody,
-            leading = { Icon(Icons.Filled.Add, contentDescription = null) },
-            onClick = {
-                val options = WEB_ACCESS_PARAMS
-                    // The keys the controls above own are written from the settings on
-                    // every render, so a value added here would be overwritten by the
-                    // next tap anywhere on the page. They are left out rather than
-                    // shown-and-ignored.
-                    .filterNot { it.path in WEB_SEARCH_OWNED_PATHS }
-                    .map { param ->
-                        PickerOption(
-                            id = param.path,
-                            label = param.path,
-                            // The description is the option's own note — the same
-                            // sentence the commented document carried — with the shape
-                            // of its value appended, because that is what the sheet that
-                            // follows is going to ask for.
-                            description = "${param.note(language)}  (${param.type})",
-                        )
-                    }
-                host.showPicker(
-                    title = text.settings.searchConfigPickTitle,
-                    options = options,
-                    selectedId = null,
-                    onPick = { path ->
-                        val param = WEB_ACCESS_PARAMS.firstOrNull { it.path == path }
-                            ?: return@showPicker
-                        host.show(
-                            Sheet(key = "web-search-value:${param.path}") {
-                                WebSearchValueSheet(
-                                    param = param,
-                                    text = text,
-                                    onAdd = { value ->
-                                        scope.launch {
-                                            // The extension registers its tools when pi
-                                            // starts, so a key written under a running
-                                            // agent is one the model does not see until
-                                            // the next launch. Rather than telling the
-                                            // reader to restart it, the write says so
-                                            // itself — `scheduleRestart` waits for any
-                                            // turn in flight, so this cannot interrupt an
-                                            // answer (`PiAgentSession`).
-                                            toasts.show(
-                                                store.setValue(param.path, value).fold(
-                                                    onSuccess = {
-                                                        session.scheduleRestart()
-                                                        text.settings.searchConfigSaved
-                                                    },
-                                                    onFailure = { text.settings.searchConfigFailed },
-                                                ),
-                                            )
-                                        }
-                                    },
-                                )
-                            },
-                        )
-                    },
-                    footnote = text.settings.searchConfigPickFootnote,
-                    searchHint = text.settings.searchConfigPickSearch,
+            summary = text.settings.searchConfigAddBody,
+            startAction = { StartIcon(MiuixIcons.Add) },
+            onClick = { picking = true },
+        )
+    }
+
+    SettingsPickerSheet(
+        show = picking,
+        title = text.settings.searchConfigPickTitle,
+        // The keys the controls above own are written from the settings on every render,
+        // so a value added here would be overwritten by the next tap anywhere on the page.
+        // They are left out rather than shown-and-ignored.
+        options = WEB_ACCESS_PARAMS
+            .filterNot { it.path in WEB_SEARCH_OWNED_PATHS }
+            .map { param ->
+                SettingsPick(
+                    id = param.path,
+                    label = param.path,
+                    // The description is the option's own note — the same sentence the
+                    // commented document carried — with the shape of its value appended,
+                    // because that is what the sheet that follows is going to ask for.
+                    description = "${param.note(language)}  (${param.type})",
                 )
             },
-        )
+        selectedId = null,
+        onPick = { path ->
+            picking = false
+            val found = WEB_ACCESS_PARAMS.firstOrNull { it.path == path }
+            adding = found
+            shown = found ?: shown
+            if (found != null) opening++
+        },
+        onDismiss = { picking = false },
+        footnote = text.settings.searchConfigPickFootnote,
+        searchHint = text.settings.searchConfigPickSearch,
+    )
+
+    val param = adding ?: shown
+    PiSheet(
+        show = adding != null,
+        title = text.settings.searchConfigValueTitle(param?.path.orEmpty()),
+        onDismiss = { adding = null },
+    ) {
+        if (param != null) {
+            WebSearchValueSheet(
+                param = param,
+                text = text,
+                opening = opening,
+                onAdd = { value ->
+                    adding = null
+                    scope.launch {
+                        // The extension registers its tools when pi starts, so a key
+                        // written under a running agent is one the model does not see
+                        // until the next launch. Rather than telling the reader to
+                        // restart it, the write says so itself — `scheduleRestart` waits
+                        // for any turn in flight, so this cannot interrupt an answer
+                        // (`PiAgentSession`).
+                        toasts?.show(
+                            store.setValue(param.path, value).fold(
+                                onSuccess = {
+                                    session.scheduleRestart()
+                                    text.settings.searchConfigSaved
+                                },
+                                onFailure = { text.settings.searchConfigFailed },
+                            ),
+                        )
+                    }
+                },
+                onDismiss = { adding = null },
+            )
+        }
     }
 
     // The result of the last action is a toast (see the KDoc above), so nothing is
     // drawn here: a group is its rows and a sentence is not one, and a sentence about
     // an action that has already finished is what the toast layer is for.
 
-    pendingRemoval?.let { entry ->
-        AlertDialog(
-            onDismissRequest = { pendingRemoval = null },
-            title = { Text(text.settings.searchConfigRemoveTitle) },
-            text = { Text(text.settings.searchConfigRemoveBody(entry.path)) },
-            confirmButton = {
-                // A `TextButton` and not a `PiButton`: the confirmation's own colour
-                // is the design's `error` role and `PiButton` has no colour of its
-                // own to give it. The dialog's two slots are Material's text-button
-                // slots, so nothing here is a control this app invented.
-                TextButton(
-                    onClick = {
-                        pendingRemoval = null
-                        scope.launch {
-                            toasts.show(
-                                store.removeValue(entry.path).fold(
-                                    onSuccess = {
-                                        session.scheduleRestart()
-                                        text.settings.searchConfigRemoved
-                                    },
-                                    onFailure = { text.settings.searchConfigFailed },
-                                ),
-                            )
-                        }
-                    },
-                ) {
-                    Text(
-                        text.settings.searchConfigRemoveAction,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemoval = null }) { Text(text.common.cancel) }
-            },
-        )
-    }
+    val removing = pendingRemoval
+    PiConfirm(
+        show = removing != null,
+        title = text.settings.searchConfigRemoveTitle,
+        text = text.settings.searchConfigRemoveBody(removing?.path.orEmpty()),
+        confirm = text.settings.searchConfigRemoveAction,
+        dismiss = text.common.cancel,
+        // Destructive, so the confirming word carries the error role: "remove" and
+        // "keep" should not look like two equivalent answers.
+        destructive = true,
+        onConfirm = {
+            val entry = removing ?: return@PiConfirm
+            pendingRemoval = null
+            scope.launch {
+                toasts?.show(
+                    store.removeValue(entry.path).fold(
+                        onSuccess = {
+                            session.scheduleRestart()
+                            text.settings.searchConfigRemoved
+                        },
+                        onFailure = { text.settings.searchConfigFailed },
+                    ),
+                )
+            }
+        },
+        onDismiss = { pendingRemoval = null },
+    )
+}
+
+/**
+ * The inset a group's hairline starts at: Miuix's own row margin, so the rule begins on
+ * the column the row titles do rather than against the card's edge.
+ */
+private val ROW_DIVIDER_INSET = 16.dp
+
+/** The mark in front of a row that adds something, inset from the row's title. */
+@Composable
+private fun StartIcon(icon: ImageVector) {
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        modifier = Modifier.padding(end = 12.dp),
+    )
 }
 
 /**
@@ -317,163 +341,165 @@ internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSessi
 internal fun WebSearchResetSection(store: WebSearchStore, session: PiAgentSession) {
     val text = strings
     val scope = rememberCoroutineScope()
-    val toasts = LocalToastHost.current
+    val toasts = LocalPiToast.current
     var confirming by remember { mutableStateOf(false) }
 
-    PiSectionHeader(text.settings.searchConfigRestore)
-    PiGroup {
-        PiRow(
+    PiSection(title = text.settings.searchConfigRestore) {
+        BasicComponent(
             title = text.settings.searchConfigRestore,
-            subtitle = text.settings.searchConfigRestoreSubtitle,
-            leading = {
+            summary = text.settings.searchConfigRestoreSubtitle,
+            startAction = {
                 Icon(
-                    Icons.Filled.RestartAlt,
+                    imageVector = MiuixIcons.Reset,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = MiuixTheme.colorScheme.error,
+                    modifier = Modifier.padding(end = 12.dp),
                 )
             },
             // The title's own colour is the destructive one: a row that reports a
             // thing that cannot be taken back is the one place the `error` role
-            // belongs on this page.
-            titleColor = MaterialTheme.colorScheme.error,
+            // belongs on this page. `BasicComponent` rather than `ArrowPreference`
+            // because this row does its work where it stands — it asks a question —
+            // and a chevron is Miuix's mark for a row that opens something.
+            titleColor = BasicComponentDefaults.titleColor(color = MiuixTheme.colorScheme.error),
             onClick = { confirming = true },
         )
     }
 
-    if (confirming) {
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            title = { Text(text.settings.searchConfigRestoreTitle) },
-            text = { Text(text.settings.searchConfigRestoreBody) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirming = false
-                        scope.launch {
-                            // Rewriting the file also rewrites the `tools.*` keys, so
-                            // the agent is restarted from here rather than the reader
-                            // being told to do it — the same trade the add and remove
-                            // paths make.
-                            toasts.show(
-                                store.restoreDocument().fold(
-                                    onSuccess = {
-                                        session.scheduleRestart()
-                                        text.settings.searchConfigRestored
-                                    },
-                                    onFailure = { text.settings.searchConfigFailed },
-                                ),
-                            )
-                        }
-                    },
-                ) {
-                    Text(
-                        text.settings.searchConfigRestore,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirming = false }) { Text(text.common.cancel) }
-            },
-        )
-    }
+    PiConfirm(
+        show = confirming,
+        title = text.settings.searchConfigRestoreTitle,
+        text = text.settings.searchConfigRestoreBody,
+        confirm = text.settings.searchConfigRestore,
+        dismiss = text.common.cancel,
+        destructive = true,
+        onConfirm = {
+            confirming = false
+            scope.launch {
+                // Rewriting the file also rewrites the `tools.*` keys, so the agent is
+                // restarted from here rather than the reader being told to do it — the
+                // same trade the add and remove paths make.
+                toasts?.show(
+                    store.restoreDocument().fold(
+                        onSuccess = {
+                            session.scheduleRestart()
+                            text.settings.searchConfigRestored
+                        },
+                        onFailure = { text.settings.searchConfigFailed },
+                    ),
+                )
+            }
+        },
+        onDismiss = { confirming = false },
+    )
 }
 
 /**
  * The sheet that takes one option's value.
  *
- * A sheet rather than a dialog for the same reason every other input in this app is
- * one (`Sheets.kt`): this app's modal layer is a view in the page, so the keyboard
- * stays up and the field keeps focus. A `AlertDialog` here would close the keyboard
- * the moment it appeared, which is the one thing a field cannot survive.
+ * A sheet rather than a dialog because the value is something the reader types: the
+ * field sits in Miuix's bottom panel with the keyboard under it, where a dialog's small
+ * panel would put the keyboard over its own buttons. [PiSheet] is the app's one sheet,
+ * and this is a body inside it rather than a second modal layer.
  *
- * The field starts empty with the option's own example as its placeholder, and the
- * example is *not* pre-filled: adding `true` or `$XAI_API_KEY` to a file because
- * that was what the placeholder said is a configuration the user never chose.
+ * The field starts empty, and the option's own example is shown *above* it rather than
+ * filled into it: adding `true` or `$XAI_API_KEY` to a file because that was what the
+ * placeholder said is a configuration the user never chose.
  */
 @Composable
 private fun WebSearchValueSheet(
     param: WebAccessParam,
     text: Strings,
+    /** Changes on every opening — see `opening` at the call site. */
+    opening: Int,
     onAdd: (JsonElement) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    val host = LocalSheetHost.current
     val language = LocalLanguage.current
-    var draft by remember(param.path) { mutableStateOf("") }
-    var invalid by remember(param.path) { mutableStateOf(false) }
+    var draft by remember(param.path, opening) { mutableStateOf("") }
+    var invalid by remember(param.path, opening) { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        // The option's own note is the sheet's subtitle rather than a paragraph
-        // under it: it says what the key is for, which is the question the reader
-        // arrived with, and it lines up with the title instead of a paragraph
-        // starting 4dp to its left.
-        PiSheetTitle(
-            title = text.settings.searchConfigValueTitle(param.path),
-            subtitle = param.note(language),
+    // No bottom inset of its own: `PiSheet` already leaves the panel's own gap under its
+    // content, and a second one here would be 16dp of nothing above the navigation bar.
+    Column(Modifier.fillMaxWidth()) {
+        // The option's own note says what the key is for, which is the question the
+        // reader arrived with; it is the sheet body's first paragraph because Miuix's
+        // sheet title has no subtitle slot.
+        Text(
+            text = param.note(language),
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
         )
-        // The extension's own example, shown before the field rather than inside it:
-        // it is what a value of this option looks like, and it is not the value.
+        // The extension's own example: what a value of this option looks like, in the
+        // monospace face because it is a value rather than a sentence.
         Text(
             text = param.example,
-            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
+            style = MiuixTheme.textStyles.footnote2.copy(fontFamily = FontFamily.Monospace),
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
         )
 
-        // A `PiTextField` cannot be used here: it offers no way to turn autocorrect
-        // off, and that is load-bearing for this field. The rest of it is what
-        // `PiTextField` draws — the app's field radius, and no container of its own —
-        // so the two are indistinguishable on screen.
-        OutlinedTextField(
+        // `SettingsTextField` cannot be used here: its keyboard options carry the
+        // keyboard type only, and switching autocorrect off is load-bearing for this
+        // field. Everything else is what that helper draws — Miuix's field, no container
+        // of its own, and a supporting line under it in the summary ink.
+        TextField(
             value = draft,
             onValueChange = { next ->
                 draft = next
                 invalid = false
             },
-            label = { Text(text.settings.searchConfigValueLabel) },
-            placeholder = { Text(param.example) },
-            // What the field accepts, as its own supporting text rather than as a
-            // paragraph between it and the button: it is help for this box.
-            supportingText = { Text(text.settings.searchConfigValueNote) },
+            label = text.settings.searchConfigValueLabel,
             singleLine = !param.type.contains("object"),
+            textStyle = MiuixTheme.textStyles.main,
             // Machine text: an autocorrected key or `true` is a value the extension
             // ignores, and the failure is invisible until a search does nothing.
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Ascii,
                 autoCorrectEnabled = false,
             ),
-            shape = PiShapes.card,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            text = text.settings.searchConfigValueNote,
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier
                 .fillMaxWidth()
-                // 12/4, the inset every other value field uses (was 12/6).
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
         )
-
         if (invalid) {
-            ConfigNote(text.settings.searchConfigValueInvalid, MaterialTheme.colorScheme.error)
+            // The one thing this sheet can refuse is text that is not the value the
+            // option's type wants, and the reason is the field's own problem rather
+            // than the page's: it stays attached to the box it is about.
+            Text(
+                text = text.settings.searchConfigValueInvalid,
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp),
+            )
         }
 
-        // The design's own action row, holding the sheet's one real action. No
-        // dismiss beside it: a sheet is closed by the scrim, the back gesture or a
-        // downward drag, and this file's cancel was a fourth way to do the same
-        // thing.
-        PiSheetActions {
-            PiButton(
+        // The sheet's one real action, on the trailing edge. No dismiss beside it: a
+        // sheet is closed by the scrim, the back gesture or a downward drag, and a
+        // cancel here would be a fourth way to do the same thing.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.weight(1f))
+            SettingsAction(
                 text = text.settings.searchConfigValueAdd,
                 onClick = {
                     val parsed = parseValue(param, draft)
                     if (parsed == null) {
                         invalid = true
                     } else {
-                        host.dismiss()
+                        onDismiss()
                         onAdd(parsed)
                     }
                 },
-                size = PiButtonSize.Small,
             )
         }
     }

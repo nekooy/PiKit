@@ -19,8 +19,9 @@ runtime image has to exist at all is in
 - **Android SDK** with `compileSdk 37` and its build-tools, plus **NDK r29** — the
   vendored terminal emulator builds a small PTY shim through `ndk-build`. The 37 is
   an AAR floor rather than a preference: every AndroidX artifact this build resolves
-  (Compose 1.12.1, material3 1.5.0-beta01) declares `minCompileSdk=37` in its own
-  metadata, the same mechanism that made 36 the floor before it. CI installs exactly
+  (core-ktx 1.19.1, Compose 1.12.1, Miuix 0.9.4's AndroidX dependencies) declares
+  `minCompileSdk=37` in its own metadata, the same mechanism that made 36 the floor
+  before it. CI installs exactly
   `platforms;android-37.0` + `build-tools;37.0.0`. `targetSdk` is
   a separate property and stays 28 — AGP 9 otherwise defaults a module's `targetSdk`
   to its `compileSdk`, which is why `gradle.properties` pins that default off and why

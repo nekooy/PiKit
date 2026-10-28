@@ -12,15 +12,15 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 `pi` 命令行都打包在 APK 里，首次启动解包即用，无需软件源或额外下载——唯一要连的是模型供应商。
 
 <p align="center">
-  <img src="docs/assets/preview-0.5.0.webp" width="90%" alt="PiKit 0.5.0——对话、终端、文件、设置四个标签页">
+  <img src="docs/assets/preview-miuix.webp" width="90%" alt="PiKit 的 Miuix 界面——对话、终端、文件、设置四个标签页">
 </p>
 
-<p align="center"><sub>PiKit 0.5.0 界面预览</sub></p>
+<p align="center"><sub>PiKit 的界面，由 Miuix 绘制</sub></p>
 
 ## 特色
 
-- **简洁的理念，原生优雅的界面。** Kotlin 与 Jetpack Compose，界面按 Material 3
-  Expressive（MD3E）设计语言绘制，四个标签页，没有 WebView。界面有英文、简体中文和日文。
+- **简洁的理念，原生优雅的界面。** Kotlin 与 Jetpack Compose，界面用 Miuix
+  （MIUI/HyperOS 风格的 Compose 组件库）绘制，四个标签页，没有 WebView。界面有英文、简体中文和日文。
 - **对话走在 pi 的 RPC 协议上。** 回合结束折叠成一行（`Worked 47s · 5 steps`），点一下重新展开；
   思考等级、模型、上下文占用和缓存命中是输入框上方的一排按钮，两个开关都不重启 Agent 就生效。
 - **终端和文件管理器。** 切换标签页也不中断的 PTY 会话、手机键盘没有的按键，以及 `$HOME` 的只读

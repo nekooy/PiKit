@@ -1,15 +1,10 @@
 package pi.kit.mob.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -24,20 +19,10 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebSearchSettings
 import pi.kit.mob.pi.WebSearchStore
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.PickerOption
-import pi.kit.mob.ui.components.showPicker
-import pi.kit.mob.ui.design.PiGroup
-import pi.kit.mob.ui.design.PiNotice
-import pi.kit.mob.ui.design.PiPageBottom
-import pi.kit.mob.ui.design.PiPagePadding
-import pi.kit.mob.ui.design.PiRow
-import pi.kit.mob.ui.design.PiRowDivider
-import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiSectionHeader
-import pi.kit.mob.ui.design.PiSwitchRow
-import pi.kit.mob.ui.design.PiTextField
-import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiSection
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 
 /**
  * The bundled `pi-web-access` extension's options.
@@ -90,7 +75,8 @@ import pi.kit.mob.ui.design.PiTone
  * The workflow and the search provider were inline runs of radio rows: three plus
  * thirty-one rows on one page, each list as long as its own contents, which is what
  * made it read as a wall. They are the app's one selection control — a row that
- * opens a picker sheet — so each choice is one line whose value is the current one.
+ * opens a `SettingsPickerSheet` — so each choice is one line whose value is the
+ * current one.
  *
  * ## Where the state lives
  *
@@ -129,27 +115,27 @@ internal fun SearchPage(
     // this app does can change it while the page is open.
     val extension = store.extension
 
-    PiScaffold(
+    var workflowPicker by remember { mutableStateOf(false) }
+    var providerPicker by remember { mutableStateOf(false) }
+
+    PiPage(
         title = text.settings.searchTitle,
         subtitle = text.settings.searchPageSubtitle,
         onBack = onBack,
-        // Pinned rather than collapsing: the body is the point on this page, and a
-        // one-line bar gives the rows back their height.
-    ) { body ->
+    ) { padding ->
         Column(
-            modifier = body
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding)
-                .padding(top = 8.dp, bottom = PiPageBottom),
-            // `PiGap`'s own rhythm: a group and the heading over it are 20dp apart
-            // from the heading's own top padding, so this only has to be the step
-            // between two sections.
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(top = 4.dp, bottom = 12.dp),
         ) {
             if (extension == null) {
                 // Nothing interactive at all: there is no file for these controls
-                // to be about.
-                PiNotice(text.settings.searchNotBundled, tone = PiTone.Danger)
+                // to be about, so the note is the whole page.
+                PiSection {
+                    SettingsNote(text.settings.searchNotBundled, danger = true)
+                }
                 return@Column
             }
 
@@ -157,101 +143,53 @@ internal fun SearchPage(
                 // The six keys below are hidden rather than merely refused: the
                 // store will not write over a file it could not read, so every one
                 // of them would be a control that appears to work and does not.
-                PiNotice(text.settings.searchConfigUnreadable, tone = PiTone.Danger)
+                PiSection {
+                    SettingsNote(text.settings.searchConfigUnreadable, danger = true)
+                }
             } else {
                 // The extension's version used to ride this heading as a trailing
                 // number. It is gone: it is a fact about the bundled image rather
                 // than about anything the reader does here, it is not translated,
                 // and a version the reader cannot act on was noise on the one line
                 // whose whole job is to name the group.
-                PiSectionHeader(text = text.settings.webAccess)
-                PiGroup {
+                PiSection(title = text.settings.webAccess) {
                     // One switch over the extension's five keys. It is a real
                     // master: off takes the search, source-check, fetch and
-                    // retrieval tools all with it, which is what the subtitle
+                    // retrieval tools all with it, which is what the summary
                     // beside it promises.
                     //
                     // The four `tools.<name>.enabled` keys it writes are read when pi
                     // registers the extension's tools, so the restart is the write's
                     // own consequence rather than a sentence telling the reader to
                     // make one — the trade `WebSearchConfigOptions` records.
-                    PiSwitchRow(
+                    SwitchPreference(
                         title = text.settings.webAccess,
+                        summary = text.settings.webAccessSubtitle,
                         checked = settings.enabled,
                         onCheckedChange = { wanted ->
                             store.update { it.copy(enabled = wanted) }
                             session.scheduleRestart()
                         },
-                        subtitle = text.settings.webAccessSubtitle,
-                        leading = { Icon(Icons.Filled.Cloud, contentDescription = null) },
                     )
-                    PiRowDivider()
-                    OptionPickerRow(
+                    ArrowPreference(
                         title = text.settings.searchWorkflow,
-                        subtitle = text.settings.searchWorkflowSubtitle,
-                        value = workflowLabel(settings.workflow, text),
-                        leading = { Icon(Icons.Filled.Tune, contentDescription = null) },
-                        options = listOf(
-                            WebSearchSettings.WORKFLOW_NONE,
-                            WebSearchSettings.WORKFLOW_AUTO_SUMMARY,
-                            WebSearchSettings.WORKFLOW_SUMMARY_REVIEW,
-                        ).map { id ->
-                            PickerOption(
-                                id = id,
-                                label = workflowLabel(id, text),
-                                description = text.settings.workflowDescription(id),
-                            )
+                        summary = text.settings.searchWorkflowSubtitle,
+                        endActions = {
+                            SettingsValue(workflowLabel(settings.workflow, text))
                         },
-                        selectedId = settings.workflow,
-                        onPick = { id -> store.update { it.copy(workflow = id) } },
+                        onClick = { workflowPicker = true },
                     )
-                    PiRowDivider()
-                    OptionPickerRow(
+                    ArrowPreference(
                         title = text.settings.searchProvider,
-                        subtitle = text.settings.searchProviderSubtitle,
-                        value = settings.provider ?: text.settings.providerAutomatic,
-                        leading = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        options = listOf<PickerOption>(
-                            PickerOption(
-                                id = WebSearchSettings.PROVIDER_AUTO,
-                                label = text.settings.providerAutomatic,
-                                description = text.settings.providerDescription(
-                                    WebSearchSettings.PROVIDER_AUTO,
-                                ),
-                            ),
-                        ) + WebSearchSettings.SEARCH_PROVIDERS.map { id ->
-                            // The extension's own provider ids, untranslated: they
-                            // are product names, and they are the spelling its
-                            // documentation and its `provider` parameter use. The
-                            // line under each says what it needs, so the list can be
-                            // read without the extension's README.
-                            PickerOption(
-                                id = id,
-                                label = id,
-                                description = text.settings.providerDescription(id),
-                            )
+                        summary = text.settings.searchProviderSubtitle,
+                        endActions = {
+                            SettingsValue(settings.provider ?: text.settings.providerAutomatic)
                         },
-                        selectedId = settings.provider ?: WebSearchSettings.PROVIDER_AUTO,
-                        onPick = { id ->
-                            // Omitted and `"auto"` mean the same thing to the
-                            // extension, and the omission is what it writes.
-                            store.update {
-                                it.copy(
-                                    provider = id.takeIf { chosen ->
-                                        chosen != WebSearchSettings.PROVIDER_AUTO
-                                    },
-                                )
-                            }
-                        },
-                        // The one thing a picker of thirty rows owes the user: the
-                        // list is the extension's, not a selection of favourites.
-                        footnote = text.settings.searchProviderFootnote(
-                            WebSearchSettings.SEARCH_PROVIDERS.size,
-                        ),
+                        onClick = { providerPicker = true },
                     )
                     // No divider between the limit fields and the provider row
-                    // above them: a text field draws its own boundary, and a
-                    // hairline beside one is one boundary too many.
+                    // above them: a field draws its own boundary, and a hairline
+                    // beside one is one boundary too many.
                     NumberField(
                         label = text.settings.inlineContentLimit,
                         stored = settings.maxInlineContentChars,
@@ -287,7 +225,6 @@ internal fun SearchPage(
             // section: the explanations belong outside the group so that the group's
             // last row is the one that acts.
             if (unreadable) {
-                PiSectionHeader(text.settings.searchConfig)
                 WebSearchDocumentEditor(store = store, session = session)
             } else {
                 WebSearchConfigOptions(store = store, session = session)
@@ -299,48 +236,72 @@ internal fun SearchPage(
             // one more entry in that list. It is shown in both states, because it is
             // also the way out of a file nothing can parse. See [WebSearchResetSection].
             WebSearchResetSection(store = store, session = session)
-
         }
     }
-}
 
-/**
- * A row whose value is the current one and whose tap opens the list of the others.
- *
- * The app's one selection control, drawn as [PiRow]: a settings page is read far
- * more often than it is changed, so the current value is what the row is for and the
- * list is one tap behind it.
- *
- * The value is the row's own plain `value` slot and the chevron is [PiRow]'s, which
- * is exactly the shape every other picker in the app has — the language row on the
- * settings root is the same control (`PickerRow`). It used to end in a [PiBadge]
- * instead, on the theory that "what is chosen" and "that tapping opens a list" are
- * two facts that need two marks; the pill turned out to read as a *state* — a chip
- * that looks like it can be tapped to change something in place — where the row
- * itself is the target, and it made these two rows the only pickers in the app that
- * did not look like the others.
- *
- * The sheet itself is the app's existing one (`SheetHost.showPicker`), because the
- * modal layer, its filter field and its dismissal are not this page's to restyle.
- */
-@Composable
-private fun OptionPickerRow(
-    title: String,
-    subtitle: String,
-    value: String,
-    options: List<PickerOption>,
-    selectedId: String?,
-    onPick: (String) -> Unit,
-    leading: @Composable () -> Unit,
-    footnote: String? = null,
-) {
-    val host = LocalSheetHost.current
-    PiRow(
-        title = title,
-        subtitle = subtitle,
-        leading = leading,
-        value = value,
-        onClick = { host.showPicker(title, options, selectedId, onPick, footnote) },
+    SettingsPickerSheet(
+        show = workflowPicker,
+        title = text.settings.searchWorkflow,
+        subtitle = text.settings.searchWorkflowSubtitle,
+        options = listOf(
+            WebSearchSettings.WORKFLOW_NONE,
+            WebSearchSettings.WORKFLOW_AUTO_SUMMARY,
+            WebSearchSettings.WORKFLOW_SUMMARY_REVIEW,
+        ).map { id ->
+            SettingsPick(
+                id = id,
+                label = workflowLabel(id, text),
+                description = text.settings.workflowDescription(id),
+            )
+        },
+        selectedId = settings.workflow,
+        onPick = { id ->
+            workflowPicker = false
+            store.update { it.copy(workflow = id) }
+        },
+        onDismiss = { workflowPicker = false },
+    )
+
+    SettingsPickerSheet(
+        show = providerPicker,
+        title = text.settings.searchProvider,
+        subtitle = text.settings.searchProviderSubtitle,
+        options = listOf(
+            SettingsPick(
+                id = WebSearchSettings.PROVIDER_AUTO,
+                label = text.settings.providerAutomatic,
+                description = text.settings.providerDescription(WebSearchSettings.PROVIDER_AUTO),
+            ),
+        ) + WebSearchSettings.SEARCH_PROVIDERS.map { id ->
+            // The extension's own provider ids, untranslated: they are product
+            // names, and they are the spelling its documentation and its `provider`
+            // parameter use. The line under each says what it needs, so the list can
+            // be read without the extension's README.
+            SettingsPick(
+                id = id,
+                label = id,
+                description = text.settings.providerDescription(id),
+            )
+        },
+        selectedId = settings.provider ?: WebSearchSettings.PROVIDER_AUTO,
+        onPick = { id ->
+            providerPicker = false
+            // Omitted and `"auto"` mean the same thing to the extension, and the
+            // omission is what it writes.
+            store.update {
+                it.copy(
+                    provider = id.takeIf { chosen -> chosen != WebSearchSettings.PROVIDER_AUTO },
+                )
+            }
+        },
+        onDismiss = { providerPicker = false },
+        // The one thing a picker of thirty rows owes the user: the list is the
+        // extension's, not a selection of favourites.
+        footnote = text.settings.searchProviderFootnote(WebSearchSettings.SEARCH_PROVIDERS.size),
+        // Thirty-odd rows, so finding the provider is the problem rather than choosing
+        // between them. The hint is the catalog's own "search providers": the list is the
+        // same kind of list as the model form's provider picker.
+        searchHint = text.settings.providerPickSearch,
     )
 }
 
@@ -373,7 +334,7 @@ private fun NumberField(
     onParsed: (Int) -> Unit,
 ) {
     var draft by remember(stored) { mutableStateOf(stored.toString()) }
-    PiTextField(
+    SettingsTextField(
         value = draft,
         onValueChange = { raw ->
             draft = raw
@@ -382,10 +343,6 @@ private fun NumberField(
         label = label,
         singleLine = true,
         keyboardType = KeyboardType.Number,
-        // 12/4, the inset every other field inside a group uses: 4dp of vertical
-        // air beside a row's own 2dp, so a field and the rows above it are spaced
-        // by their containers rather than by a margin of their own.
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
     )
 }
 
@@ -395,8 +352,8 @@ private fun NumberField(
  * It used to be a label row *and* a field, which named the setting twice: the row's
  * title and the field's label were the same string, and the caption under them was
  * the only part that was not the name again. The caption is the field's own
- * supporting text now, so one control states the setting, what it is for and the
- * value, and the `Lock` the row carried was decoration on top of a name.
+ * supporting line now, so one control states the setting, what it is for and the
+ * value.
  */
 @Composable
 private fun ProxyField(
@@ -406,16 +363,15 @@ private fun ProxyField(
     onChanged: (String?) -> Unit,
 ) {
     var draft by remember(stored) { mutableStateOf(stored.orEmpty()) }
-    PiTextField(
+    SettingsTextField(
         value = draft,
         onValueChange = { value ->
             draft = value
             onChanged(value.ifBlank { null })
         },
         label = label,
-        supportingText = caption,
+        supporting = caption,
         singleLine = true,
         keyboardType = KeyboardType.Uri,
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
     )
 }

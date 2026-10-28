@@ -1,7 +1,6 @@
 package pi.kit.mob.ui
 
 import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -25,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.basic.Text
 
 /**
  * The rounded fill behind an inline code span.
@@ -61,11 +61,11 @@ import androidx.compose.ui.unit.dp
  * The fill is **the font's own box**, not the line box: `ascent` above the
  * baseline and `descent` below it, measured on `"Hg"` in the span's style with its
  * `lineHeight` dropped — the same measurement `MathView` makes for a formula's
- * baseline. The line box is 22sp for `bodyMedium` while the font's box is about
- * 16sp, and filling the line box is what made two consecutive lines of code look
- * joined together: the chip touched the line above and the line below it. With the
- * font's box plus [CODE_CHIP_PAD_Y] the chip has about 2dp of air on each side of
- * it inside the line.
+ * baseline. The reply's line box is 26sp for Miuix's 17sp `paragraph` while the
+ * font's box is about 20sp, and filling the line box is what made two consecutive
+ * lines of code look joined together: the chip touched the line above and the line
+ * below it. With the font's box plus [CODE_CHIP_PAD_Y] the chip has about 3sp of
+ * air on each side of it inside the line.
  *
  * The horizontal box is the span's own extent plus [CODE_CHIP_PAD_X], which is the
  * one thing the pad *can* be here: a background drawn from the glyphs' advances
@@ -220,27 +220,27 @@ private val CODE_CHIP_PAD_X = 3.dp
 /**
  * The fill's breathing room above and below the glyphs.
  *
- * 1dp, and the number is the *line*: at `bodyMedium` the font's box is about 16sp
- * inside a 22sp line, so the chip already has 3dp of the line's own leading on each
- * side of it and this is only what squares the corners off. More than that and the
- * chip grows past the line box again, which is the state this file was written to
- * leave behind.
+ * 1dp, and the number is the *line*: at the reply's 17sp prose style the font's box
+ * is about 20sp inside a 26sp line, so the chip already has 3sp of the line's own
+ * leading on each side of it and this is only what squares the corners off. More
+ * than that and the chip grows past the line box again, which is the state this file
+ * was written to leave behind.
  */
 private val CODE_CHIP_PAD_Y = 1.dp
 
 /**
- * The code chip's corner radius: `PiShapes.extraSmall`'s step.
+ * The code chip's corner radius: 4dp.
  *
  * It was 6dp, hand-picked, on the measurement that a block of code's 8dp was too
- * round for a chip one line tall — at 8dp on a 22sp line box the corners are nearly
- * half its height and the fill stops reading as a rounded rectangle. That
- * measurement is right and it says *less*, not *more*: 4dp is the design system's
- * smallest step, it is inside the one-line constraint with room to spare, and it is
- * a step of the scale rather than a number between two of them. The block it sits
- * above takes `PiShapes.row`, so the two shapes are four steps apart rather than two,
- * which is what keeps an inline span reading as a span.
+ * round for a chip one line tall — at 8dp on the 22sp line box the app had then, the
+ * corners are nearly half its height and the fill stops reading as a rounded
+ * rectangle. That
+ * measurement is right and it says *less*, not *more*: 4dp is inside the one-line
+ * constraint with room to spare and is a quarter of the code well's own 16dp, which
+ * is Miuix's card radius, so the inline span and the block it belongs to cannot be
+ * mistaken for one another.
  *
- * The value is written as a dp here rather than read off the shape because the fill
+ * The value is written as a dp here rather than read off a component because the fill
  * is drawn by a `DrawScope`, which wants a radius in pixels — see `CodeChipPen`.
  */
 private val CODE_CHIP_RADIUS = 4.dp

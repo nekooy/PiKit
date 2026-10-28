@@ -1,7 +1,12 @@
 package pi.kit.mob.ui.kit
 
+import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.ThemeMode
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
@@ -61,6 +66,27 @@ fun PiKitMiuixTheme(
             paletteStyle = ThemePaletteStyle.TonalSpot,
         )
     }
+
+    // `enableEdgeToEdge()` makes the app responsible for its own bar icons, and
+    // which colour they have to be is a property of the theme rather than of a
+    // page. Read from the same resolved dark state the palette uses, so a dialog's
+    // separate window cannot disagree with the page behind it — and so this stays
+    // one rule when the Material theme that used to do it is deleted.
+    val dark = when (settings.themeMode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            val bars = WindowCompat.getInsetsController(window, view)
+            bars.isAppearanceLightStatusBars = !dark
+            bars.isAppearanceLightNavigationBars = !dark
+        }
+    }
+
     MiuixTheme(controller = controller, content = content)
 }
 

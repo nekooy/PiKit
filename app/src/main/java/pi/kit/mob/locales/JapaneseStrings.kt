@@ -116,17 +116,6 @@ internal object JapaneseStrings : Strings {
             "カメラの権限がないため撮影できません。システム設定でこのアプリに権限を与えてください。"
         override val cameraUnavailable = "この端末には撮影できるカメラアプリがありません。"
 
-        override fun thinkingLevelDescription(id: String) = when (id) {
-            "off" -> "思考せずにすぐ回答します"
-            "minimal" -> "Pi が許す最短の思考"
-            "low" -> "素早い回答、軽い思考"
-            "medium" -> "速度と深さの標準的なバランス"
-            "high" -> "回答前に長く考えます"
-            "xhigh" -> "十分に思考。遅く、コストも高い"
-            "max" -> "思考の長さを制限しません"
-            else -> ""
-        }
-
         override val contextDetails = "コンテキスト"
         override val contextEmpty = "まだ送信していません"
         override fun cacheHit(percent: Int) = "キャッシュ命中 $percent%"
@@ -188,7 +177,6 @@ internal object JapaneseStrings : Strings {
         override val deleteSelected = "選択した項目を削除"
         override val cancelSelection = "選択を解除"
         override val recent = "最近"
-        override val back = "戻る"
         override val emptyHeading = "保存された会話はありません"
         override val empty = "Pi が返信すると、会話がディスクに保存されます。"
         override fun nothingMatches(query: String) = "「$query」に一致する会話はありません。"
@@ -903,7 +891,7 @@ internal object JapaneseStrings : Strings {
                 "typebox も含まれます",
             "エージェント用に同梱したコマンドラインツール：ripgrep（MIT/Unlicense）と " +
                 "fd（MIT/Apache-2.0）",
-            "インターフェース：Jetpack Compose と Material 3（Apache-2.0）、Kotlin と " +
+            "インターフェース：Jetpack Compose と Miuix（Apache-2.0）、Kotlin と " +
                 "kotlinx.serialization（Apache-2.0）、Okio（Apache-2.0）",
             "数式の組版：JLaTeXMath（Android 移植版 jlatexmath-android。" +
                 "GPL-2.0、上流はリンク例外付き GPL-2.0）",

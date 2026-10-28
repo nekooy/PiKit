@@ -4,28 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,9 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import pi.kit.mob.BuildConfig
@@ -48,21 +30,11 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.ui.MarkdownText
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
-import pi.kit.mob.ui.design.PiGroup
-import pi.kit.mob.ui.design.PiLoading
-import pi.kit.mob.ui.design.PiNotice
-import pi.kit.mob.ui.design.PiPageBottom
-import pi.kit.mob.ui.design.PiPagePadding
-import pi.kit.mob.ui.design.PiRow
-import pi.kit.mob.ui.design.PiRowDivider
-import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiSectionHeader
-import pi.kit.mob.ui.design.PiTone
-import pi.kit.mob.ui.design.PiValueRow
-import pi.kit.mob.ui.design.PiNote
+import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiSection
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 
 /**
  * What PiKit is, what it ships, and where those pieces live.
@@ -102,18 +74,10 @@ import pi.kit.mob.ui.design.PiNote
  * ## The machine strings, and where they are now
  *
  * §9.2's rule about a machine string is about *where it belongs*, and both halves still
- * hold: a path is handed in as the row's subtitle, which has the row's full width and
- * three lines, and a version or a revision sits in the value column beside the fact it
- * belongs to. Two things that chapter's own row did are out of reach here, and both are
- * recorded rather than worked around with a row of this file's own:
- *
- *  - **The monospace face** it asks for, because a revision "reads back wrong in
- *    proportional type". The design package's rows carry no font-family slot.
- *  - **The cap on the value column.** §9.2 held the value to 0.35 of the row — 351 px of
- *    the 1016 px a row has, which kept the label the other 349 — so that a 23-character
- *    revision could not squeeze the title beside it. `PiValueRow` gives the value its
- *    natural width and caps it at two lines instead, so the title keeps whatever is
- *    left of the row.
+ * hold: a path is handed in as the row's *summary*, which has the row's full width and
+ * wraps, and a version sits in the trailing value slot beside the fact it belongs to.
+ * A version is drawn in the monospace face there, because a revision "reads back wrong
+ * in proportional type" and Miuix's text takes a family per call site.
  */
 @Composable
 internal fun AboutPage(
@@ -134,49 +98,44 @@ internal fun AboutPage(
     // "no dialog"; the row keeps its own one-word status either way.
     var updateError by remember { mutableStateOf<String?>(null) }
 
-    PiScaffold(
+    PiPage(
         title = text.settings.aboutTitle,
         subtitle = "PiKit ${BuildConfig.VERSION_NAME}",
         onBack = onBack,
-    ) { modifier ->
+    ) { padding ->
         Column(
-            modifier
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding)
-                .padding(top = 8.dp, bottom = PiPageBottom),
+                .padding(top = 4.dp, bottom = 12.dp),
         ) {
-            PiSectionHeader(text.settings.application)
-            PiGroup {
-                PiValueRow(
+            PiSection(title = text.settings.application) {
+                BasicComponent(
                     title = "PiKit",
-                    subtitle = text.settings.appSubtitle,
-                    leading = { RowMark(Icons.Filled.Info) },
-                    value = BuildConfig.VERSION_NAME,
+                    summary = text.settings.appSubtitle,
+                    endActions = { SettingsValue(BuildConfig.VERSION_NAME, monospace = true) },
                 )
-                PiRowDivider()
-                PiRow(
+                BasicComponent(
                     title = text.settings.packageName,
-                    // The application id is a machine string the licence and
-                    // every bug report are read against, so it is the row's
-                    // subtitle and wraps rather than being cut at one line.
-                    subtitle = env.packageId,
-                    leading = { RowMark(Icons.Filled.Info) },
+                    // The application id is a machine string the licence and every bug
+                    // report are read against, so it is the row's summary and wraps
+                    // rather than being cut at one line.
+                    summary = env.packageId,
                 )
-                PiRowDivider()
-                // The last row of this section rather than a section of its own: it
-                // is a fact about the application, and the row above it already says
-                // which version this build is. See the note below the section for
-                // what tapping it does — the one thing on this page that reaches the
-                // network.
-                PiRow(
+                // The last row of this section rather than a section of its own: it is a
+                // fact about the application, and the row above it already says which
+                // version this build is. See the note below the section for what tapping
+                // it does — the one thing on this page that reaches the network.
+                ArrowPreference(
                     title = text.settings.checkForUpdates,
-                    // One short status line, and the idle text is kept short enough
-                    // to stay on it: a failure's reason used to sit here and wrapped
-                    // to two or three lines, so tapping the row grew it — the height
-                    // of the row depended on what the network said. The reason is a
-                    // note under the section now, and the idle subtitle is worded to
-                    // the same one-line budget so the row never resizes.
-                    subtitle = when (val state = updateState) {
+                    // One short status line, and the idle text is kept short enough to
+                    // stay on it: a failure's reason used to sit here and wrapped to two
+                    // or three lines, so tapping the row grew it — the height of the row
+                    // depended on what the network said. The reason is a dialog now, and
+                    // the idle summary is worded to the same one-line budget so the row
+                    // never resizes.
+                    summary = when (val state = updateState) {
                         UpdateRow.Idle -> text.settings.checkForUpdatesSubtitle
                         UpdateRow.Checking -> text.settings.updateChecking
                         UpdateRow.NoReleases -> text.settings.updateNoReleases
@@ -184,217 +143,127 @@ internal fun AboutPage(
                         is UpdateRow.Available -> text.settings.updateAvailable
                         is UpdateRow.Failed -> text.settings.updateFailedShort
                     },
-                    leading = { RowMark(Icons.Filled.Refresh) },
                     // Where the check goes while there is no answer to show, and the
-                    // version once there is one: a value column that changes subject
-                    // is better than two rows saying one thing each. One line either
-                    // way, so the row does not resize when the answer lands.
-                    trailing = if (updateState == UpdateRow.Checking) {
-                        {
-                            // 20dp, the chevron's own box, so the row does not change
-                            // size when the mark swaps — and the design system's
-                            // loading indicator rather than a spinner (§13).
-                            PiLoading(size = 20.dp)
-                        }
-                    } else {
-                        {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    text = when (val state = updateState) {
-                                        is UpdateRow.UpToDate -> state.version
-                                        is UpdateRow.Available -> state.version
-                                        else -> BuildConfig.REPOSITORY
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                // The chevron is drawn here because `PiRow` draws its
-                                // own only when the trailing slot is empty, and this
-                                // row reports a value *and* acts. 20dp, the box
-                                // `PiRow` gives its own — the two are the same mark and
-                                // the report was that they measured differently.
-                                Icon(
-                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
+                    // version once there is one: a value slot that changes subject is
+                    // better than two rows saying one thing each. One line either way, so
+                    // the row does not resize when the answer lands — and the spinner is
+                    // the row saying it is busy, which is why no second tap can queue a
+                    // second request.
+                    endActions = {
+                        if (updateState == UpdateRow.Checking) {
+                            SettingsWorking()
+                        } else {
+                            SettingsValue(
+                                text = when (val state = updateState) {
+                                    is UpdateRow.UpToDate -> state.version
+                                    is UpdateRow.Available -> state.version
+                                    else -> BuildConfig.REPOSITORY
+                                },
+                                monospace = true,
+                            )
                         }
                     },
-                    // No chevron while the check runs: a second tap would queue a
-                    // second request behind the first, and the indicator is already
-                    // the row saying it is busy.
-                    onClick = if (updateState == UpdateRow.Checking) {
-                        null
-                    } else {
-                        {
-                            val answered = updateState
-                            if (answered is UpdateRow.Available) {
-                                openReleasePage(context, answered.pageUrl)
-                            } else {
-                                updateState = UpdateRow.Checking
-                                scope.launch {
-                                    val outcome = checkForUpdates()
-                                    updateState = outcome
-                                    // A failed check raises the app's dialog with the
-                                    // reason: the row's own line is a one-word status,
-                                    // and "Update failed" with no reason is a report
-                                    // the reader cannot act on. The dialog is the
-                                    // settings pages' default for an operation that
-                                    // errors — the storage page's own confirmations
-                                    // are the same shape — and it is dismissed.
-                                    if (outcome is UpdateRow.Failed) updateError = outcome.reason
-                                }
+                    enabled = updateState != UpdateRow.Checking,
+                    onClick = {
+                        val answered = updateState
+                        if (answered is UpdateRow.Available) {
+                            openReleasePage(context, answered.pageUrl)
+                        } else {
+                            updateState = UpdateRow.Checking
+                            scope.launch {
+                                val outcome = checkForUpdates()
+                                updateState = outcome
+                                // A failed check raises the app's dialog with the reason:
+                                // the row's own line is a one-word status, and "Update
+                                // failed" with no reason is a report the reader cannot act
+                                // on. The dialog is the settings pages' default for an
+                                // operation that errors, and it is dismissed.
+                                if (outcome is UpdateRow.Failed) updateError = outcome.reason
                             }
                         }
                     },
                 )
             }
 
-            // The failure, in the app's one dialog shape rather than a note under the
-            // section: a check that failed is an *event* — the reader asked for it and
-            // it came back wrong — so it is announced and dismissed, not left as a
+            // The failure, in the app's dialog shape rather than a note under the
+            // section: a check that failed is an *event* — the reader asked for it and it
+            // came back wrong — so it is announced and dismissed, not left as a
             // paragraph that has to be found again by scrolling.
-            updateError?.let { reason ->
-                PiErrorDialog(
-                    title = text.settings.checkForUpdates,
-                    body = text.settings.failedWith(reason),
-                    onDismiss = { updateError = null },
-                )
-            }
+            SettingsAlert(
+                show = updateError != null,
+                title = text.settings.checkForUpdates,
+                body = text.settings.failedWith(updateError.orEmpty()),
+                confirm = text.common.ok,
+                onConfirm = { updateError = null },
+            )
 
-            PiSectionHeader(text.settings.environment)
-            PiGroup {
-                PiValueRow(
+            PiSection(title = text.settings.environment) {
+                BasicComponent(
                     title = text.settings.termuxEnvironment,
                     // The tag the version below was taken from, so the two can be read
                     // against each other and against the image builder's output.
-                    subtitle = BundledImage.metadata(context)?.bootstrapTag ?: text.settings.unknown,
-                    leading = { RowMark(Icons.Filled.Memory) },
-                    value = BundledImage.termuxVersion(context),
+                    summary = BundledImage.metadata(context)?.bootstrapTag ?: text.settings.unknown,
+                    endActions = {
+                        SettingsValue(BundledImage.termuxVersion(context), monospace = true)
+                    },
                 )
-                PiRowDivider()
-                // The rows about what the image *carries*, directly under the
-                // environment that names it. They were in the application section, and
-                // that was the wrong drawer: pi and `rg`/`fd` are not parts of this
-                // app — they live inside `$PREFIX`, they arrive with the unpacked
-                // image, and the row above says which environment that is. Read
-                // together they answer one question ("what runtime is this and what is
-                // in it"); split across two cards they answered two half-questions, and
-                // pi's version sat under "PiKit 0.2.1" as though the two came from the
-                // same place.
+                // The rows about what the image *carries*, directly under the environment
+                // that names it. They were in the application section, and that was the
+                // wrong drawer: pi and `rg`/`fd` are not parts of this app — they live
+                // inside `$PREFIX`, they arrive with the unpacked image, and the row above
+                // says which environment that is. Read together they answer one question
+                // ("what runtime is this and what is in it").
                 //
-                // The image's own revision row stood here and is gone: it was a digest
-                // of the image builder's inputs (`x86_64-974c4c37820b7790`), which
-                // changes exactly when the bootstrap above it does, and the bootstrap's
-                // tag and version are what a reader can act on. §3 is the chapter it
-                // was read against, and that reading is the builder's job, not a
-                // phone's.
-                PiValueRow(
+                // The image's own revision row stood here and is gone: it was a digest of
+                // the image builder's inputs (`x86_64-974c4c37820b7790`), which changes
+                // exactly when the bootstrap above it does, and the bootstrap's tag and
+                // version are what a reader can act on. §3 is the chapter it was read
+                // against, and that reading is the builder's job, not a phone's.
+                BasicComponent(
                     title = text.settings.bundledPi,
-                    // 74 characters of path. It measured 699 px on one line and
-                    // fits at font scale 1.0 only; as a subtitle it gets the row's
-                    // full width and three lines, which is what keeps it readable
-                    // when the user's font is larger.
-                    subtitle = PiInstallation.CLI_ENTRY_RELATIVE,
-                    leading = { RowMark(Icons.Filled.Build) },
-                    value = PiInstallation.installedVersion(env) ?: text.settings.unknown,
+                    // 74 characters of path: as a summary it gets the row's full width and
+                    // wraps, which is what keeps it readable when the user's font is
+                    // larger.
+                    summary = PiInstallation.CLI_ENTRY_RELATIVE,
+                    endActions = {
+                        SettingsValue(
+                            PiInstallation.installedVersion(env) ?: text.settings.unknown,
+                            monospace = true,
+                        )
+                    },
                 )
-                PiRowDivider()
-                PiRow(
+                BasicComponent(
                     title = text.settings.bundledTools,
-                    subtitle = tools.entries.joinToString(", ") { (tool, present) ->
+                    summary = tools.entries.joinToString(", ") { (tool, present) ->
                         if (present) tool else "$tool (${text.settings.bundledToolsMissing})"
                     },
-                    leading = { RowMark(Icons.AutoMirrored.Filled.MenuBook) },
                 )
-                PiRowDivider()
-                PiRow(
+                BasicComponent(
                     title = text.settings.prefix,
-                    subtitle = env.prefixPath,
-                    leading = { RowMark(Icons.Filled.Storage) },
+                    summary = env.prefixPath,
                 )
-                PiRowDivider()
-                PiRow(
+                BasicComponent(
                     title = text.settings.home,
-                    subtitle = env.homePath,
-                    leading = { RowMark(Icons.Filled.Home) },
+                    summary = env.homePath,
                 )
-                PiRowDivider()
-                PiRow(
+                BasicComponent(
                     title = text.settings.appFiles,
-                    subtitle = env.filesDir.absolutePath,
-                    leading = { RowMark(Icons.Filled.Folder) },
+                    summary = env.filesDir.absolutePath,
                 )
             }
 
-            // Prose, and *not* in a container: a card around a paragraph of licence
-            // text drew a box whose only content was the sentence, which is the one
-            // kind of surface §13 reserves for a control or a subject with a body.
-            // The reader's report — "许可证和致谢两项的内容文字都去掉背景色，更简洁" — is that
-            // the background was doing nothing the heading above it does not. `PiNote`
-            // is the design system's own in-page paragraph: the same 24dp column and
-            // `bodySmall` voice the text had, without the frame.
-            PiSectionHeader(text.notes.licenceTitle)
-            PiNote(text.notes.licence)
+            // Prose, and *not* in a container: a card around a paragraph of licence text
+            // drew a box whose only content was the sentence, which is the one kind of
+            // surface §13 reserves for a control or a subject with a body. The reader's
+            // report — "许可证和致谢两项的内容文字都去掉背景色，更简洁" — is that the
+            // background was doing nothing the heading above it does not.
+            SmallTitle(text = text.notes.licenceTitle)
+            SettingsParagraph(text = text.notes.licence)
 
-            PiSectionHeader(text.notes.creditsTitle)
-            PiNote(text.notes.credits)
+            SmallTitle(text = text.notes.creditsTitle)
+            SettingsParagraph(text = text.notes.credits)
         }
     }
-}
-
-/**
- * A failure, announced and then dismissed.
- *
- * The settings pages' one dialog for an operation that came back wrong: a title
- * naming what was asked for, the failure's own sentence in the error role, and a
- * single "OK". Both of the app's dialog buttons are the same plain text
- * (`PiButtonKind.Text`), so this is a title, a sentence and one word with nothing
- * to draw the eye but the colour.
- */
-@Composable
-private fun PiErrorDialog(
-    title: String,
-    body: String,
-    onDismiss: () -> Unit,
-) {
-    val text = strings
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { PiNotice(text = body, tone = PiTone.Danger) },
-        confirmButton = {
-            PiButton(
-                text = text.common.ok,
-                onClick = onDismiss,
-                kind = PiButtonKind.Text,
-                size = PiButtonSize.Small,
-            )
-        },
-    )
-}
-
-/**
- * A leading mark, in the muted role a list row draws one in.
- *
- * The design package's rows leave the tint to `LocalContentColor`, which a group sets
- * to `onSurface` — the title's own colour, at which a leading glyph competes with the
- * words beside it. Every list in this app draws its leading mark in `onSurfaceVariant`.
- */
-@Composable
-private fun RowMark(icon: ImageVector) {
-    Icon(
-        icon,
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 /**
@@ -461,19 +330,24 @@ private const val TAG = "PiKit"
  *
  * The manual is translated prose — `locales/ManualText*.kt` — and the renderer is
  * `MarkdownText`, the same one the transcript draws. Its block styles are the
- * renderer's: headings are sized by level with a wider gap above a level-1 or level-2
- * one, a code span is drawn on its own fill against the page, and a paragraph is set
- * in a 22sp line box where Material's own default for 14sp text is 20sp (see that
- * file). What is left for the page is the *measure*, and that is what it does here.
+ * renderer's: a paragraph is Miuix's own running-prose style, `paragraph` — 17sp — and
+ * its line box is raised to 26sp, where `paragraph`'s own 1.2em would be 20.4sp. The
+ * extra 5.6sp is what keeps an inline code span's fill — the font's box plus a point
+ * of padding — from touching the line above; a formula grows its own line through its
+ * placeholder instead (see `Markdown.kt`, which carries the measurement, and
+ * ARCHITECTURE §12.1 for the box it protects). A code span is drawn on its own fill
+ * against the page, and headings are sized by level with a wider gap above a level-1
+ * or level-2 one. What is left for the page is the *measure*, and that is what it
+ * does here.
  *
  * ## The measure
  *
  * [MANUAL_MEASURE] is 560dp of block and 520dp of text after the 20dp gutters — about
- * 74 characters at `bodyMedium`, which is the top of the 45–75 a line of prose is
- * comfortable at. The cap only binds on a tablet or a landscape phone: on the phone
- * this is written for, the screen is narrower than the cap and the block is the width
- * of the page. It is centred rather than left-aligned so that a wide window puts the
- * extra on both sides instead of leaving one long gap.
+ * 62 characters at 17sp, which is inside the 45–75 a line of prose is comfortable
+ * at. The cap only binds on a tablet or a landscape phone: on the phone this is
+ * written for, the screen is narrower than the cap and the block is the width of the
+ * page. It is centred rather than left-aligned so that a wide window puts the extra on
+ * both sides instead of leaving one long gap.
  *
  * ## It stays a plain scrolling `Column`
  *
@@ -492,24 +366,28 @@ internal fun ManualPage(onBack: () -> Unit) {
     val language = LocalLanguage.current
     val body = remember(language) { manualFor(language) }
 
-    PiScaffold(
-        // A document rather than a list of rows: the title keeps its two lines while
-        // the reader is at the top of the manual and gives the page the height back as
-        // they read into it (§13).
+    PiPage(
+        // A document rather than a list of rows: the subtitle is the manual's own, and
+        // the body below it is the only thing on the page.
         title = text.manual.title,
         subtitle = text.manual.subtitle,
         onBack = onBack,
-    ) { modifier ->
-        Column(modifier.verticalScroll(rememberScrollState())) {
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState()),
+        ) {
             MarkdownText(
                 text = body,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .widthIn(max = MANUAL_MEASURE)
                     // The bottom inset is the page's own gap above the navigation bar:
-                    // a manual's last line set against the bar reads as a page that
-                    // was cut rather than as one that ended.
-                    .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = PiPageBottom),
+                    // a manual's last line set against the bar reads as a page that was
+                    // cut rather than as one that ended.
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
             )
         }
     }

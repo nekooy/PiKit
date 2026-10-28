@@ -3,6 +3,7 @@ package pi.kit.mob.ui.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -23,17 +24,12 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.BackupStatus
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.ui.components.LocalToastHost
-import pi.kit.mob.ui.design.PiGroup
-import pi.kit.mob.ui.design.PiNotice
-import pi.kit.mob.ui.design.PiPageBottom
-import pi.kit.mob.ui.design.PiPagePadding
-import pi.kit.mob.ui.design.PiRow
-import pi.kit.mob.ui.design.PiRowDivider
-import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiSectionHeader
-import pi.kit.mob.ui.design.PiSwitchRow
-import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiSection
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 
 /**
  * Backup & restore: the archive's contents, and the two directions that move it.
@@ -52,24 +48,23 @@ import pi.kit.mob.ui.design.PiTone
  * ## What the page shows, and in which order
  *
  * The two directions are two labelled groups, and each draws the state that belongs
- * to it: an export's "packing…" pill appears under the export button and an import's
+ * to it: an export's "packing…" line appears under the export button and an import's
  * under the import button, because one shared status line under both reads as
  * having done the wrong thing. The selection is the same six switches both
  * times, which is the point of the design: what was ticked on the way out is what
  * is offered on the way back in, and an archive that came from someone else shows
  * exactly what it carries rather than what the reader picked last time.
  *
- * The switches are `PiSwitchRow`, where the whole row toggles: picking what an
- * archive holds is immediate and undoable, so a tap anywhere on the row is the
+ * The switches are `SwitchPreference`, whose row toggles with the switch: picking what
+ * an archive holds is immediate and undoable, so a tap anywhere on the row is the
  * right target. The storage page deliberately does the opposite with its folder
  * rows, because each of those can raise a question before it moves.
  *
  * A restore is the one destructive thing here — it replaces the files of the names
  * the archive carries, and what it replaced is not recoverable — so it is the one
- * action whose wording sits in an error-toned notice. `PiButtonKind` is Material's
- * five kinds and none of them is the error colour, so the frame is where that
- * meaning has a home; the sentence itself is unchanged, because "it deletes
- * nothing" is exactly what a reader needs before pressing it.
+ * action whose wording sits in a note in the error role, above the button that acts on
+ * it. The sentence itself is unchanged, because "it deletes nothing" is exactly what a
+ * reader needs before pressing it.
  *
  * ## The picker
  *
@@ -85,7 +80,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
     val status by manager.status.collectAsState()
     val review by manager.review.collectAsState()
     val text = strings
-    val toasts = LocalToastHost.current
+    val toasts = LocalPiToast.current
 
     var selection by rememberSaveable(stateSaver = CategoriesSaver) {
         mutableStateOf(BackupCategory.DEFAULT)
@@ -119,7 +114,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
 
     val busy = status is BackupStatus.Running
     val running = status as? BackupStatus.Running
-    // The pill's sentence, split by direction for the same reason the verdict is: a
+    // The line's sentence, split by direction for the same reason the verdict is: a
     // count of entries packed under the import button reads as an import that is
     // somehow writing a file.
     val exportWorking = running
@@ -142,28 +137,24 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
             else -> null
         }
         if (message != null) {
-            toasts.show(message)
+            toasts?.show(message)
             manager.dismiss()
         }
     }
 
-    // The bar has no inset of its own: `PiScaffold` zeroes it, because where a
-    // page's top edge is is the page's business. Nothing above a settings page
-    // applies the status bar inset (the root pads the horizontal safe-drawing and
-    // the bottom only), so it is applied here.
-    PiScaffold(
+    PiPage(
         title = text.settings.backupTitle,
         subtitle = text.settings.backupSubtitle,
         onBack = onBack,
-            ) { content ->
+    ) { padding ->
         Column(
-            content
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(PiPagePadding)
-                .padding(top = 8.dp, bottom = PiPageBottom),
+                .padding(top = 4.dp, bottom = 12.dp),
         ) {
-            PiSectionHeader(text.settings.backupExportSection)
-            PiGroup {
+            PiSection(title = text.settings.backupExportSection) {
                 Categories(
                     offered = BackupCategory.entries.toSet(),
                     selected = selection,
@@ -172,10 +163,9 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                         selection = selection.toggle(category)
                     },
                 )
-                PiRowDivider()
-                PiSwitchRow(
+                SwitchPreference(
                     title = text.settings.backupApiKeys,
-                    subtitle = text.settings.backupApiKeysSubtitle,
+                    summary = text.settings.backupApiKeysSubtitle,
                     checked = includeKeys,
                     enabled = !busy,
                     onCheckedChange = { includeKeys = it },
@@ -192,12 +182,18 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 working = exportWorking,
             )
             if (selection.isEmpty()) {
-                PiNotice(text = text.settings.backupNothingSelected, tone = PiTone.Neutral)
+                PiSection {
+                    SettingsNote(text.settings.backupNothingSelected)
+                }
             }
 
-            PiSectionHeader(text.settings.backupImportSection)
+            // The import is two states, and only one of them has a group: with nothing
+            // read yet there is nothing to put in a card, so the section is its label
+            // and its button; once an archive has been read the group is the archive's
+            // own contents and the button beside it is the restore.
             val pending = review
             if (pending == null) {
+                SmallTitle(text = text.settings.backupImportSection)
                 RunActions(
                     label = text.settings.backupImport,
                     onAction = { pickArchive.launch(arrayOf("*/*")) },
@@ -206,40 +202,36 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                     working = importWorking,
                 )
             } else {
+                // Re-seeded whenever a different archive is read, so the ticks are the
+                // archive's contents rather than the last import's choices.
+                var chosen by remember(pending) { mutableStateOf(pending.manifest.included) }
                 val available = pending.manifest.included
-                // Re-seeded whenever a different archive is read, so the ticks
-                // are the archive's contents rather than the last import's
-                // choices.
-                var chosen by remember(pending) { mutableStateOf(available) }
 
-                PiGroup {
-                    PiRow(
+                PiSection(title = text.settings.backupImportSection) {
+                    BasicComponent(
                         title = text.settings.backupReviewTitle,
-                        subtitle = text.settings.backupReviewFrom(
+                        summary = text.settings.backupReviewFrom(
                             version = pending.manifest.app,
-                            // The day only: the manifest's stamp is UTC and a time
-                            // of day would be right in one time zone and wrong in
-                            // the rest.
+                            // The day only: the manifest's stamp is UTC and a time of
+                            // day would be right in one time zone and wrong in the rest.
                             date = pending.manifest.createdAt.take(ISO_DATE_LENGTH),
                         ),
                     )
-                    // Nothing tickable when the archive carries nothing: the note
-                    // below says why, and the title row stays so the reader still
-                    // sees which archive was read.
+                    // Nothing tickable when the archive carries nothing: the note below
+                    // says why, and the title row stays so the reader still sees which
+                    // archive was read.
                     if (available.isNotEmpty()) {
-                        PiRowDivider()
                         Categories(
                             offered = available,
                             selected = chosen,
                             enabled = !busy,
                             onToggle = { category -> chosen = chosen.toggle(category) },
                         )
-                        PiRowDivider()
-                        // What the archive carries, said plainly: whether a key is
-                        // in it is not something the reader can see from the file
-                        // name, and it is the one fact that decides whether this
-                        // archive may be passed on.
-                        PiRow(
+                        // What the archive carries, said plainly: whether a key is in it
+                        // is not something the reader can see from the file name, and it
+                        // is the one fact that decides whether this archive may be passed
+                        // on.
+                        BasicComponent(
                             title = if (pending.manifest.apiKeys) {
                                 text.settings.backupReviewKeys
                             } else {
@@ -249,9 +241,11 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                     }
                 }
                 // The destructive half, in the error role: the wording says what a
-                // restore does *and* what it does not, and the button that acts on it
-                // is the next thing below.
-                PiNotice(text = text.settings.backupImportNote, tone = PiTone.Danger)
+                // restore does *and* what it does not, and the button that acts on it is
+                // the next thing below the card.
+                PiSection {
+                    SettingsNote(text.settings.backupImportNote, danger = true)
+                }
                 RunActions(
                     label = text.settings.backupImportConfirm,
                     onAction = { manager.restore(chosen) },
@@ -283,12 +277,11 @@ private fun Categories(
 ) {
     val text = strings
     val shown = BackupCategory.entries.filter { it in offered }
-    shown.forEachIndexed { index, category ->
-        if (index > 0) PiRowDivider()
+    shown.forEach { category ->
         val (title, subtitle) = category.label(text)
-        PiSwitchRow(
+        SwitchPreference(
             title = title,
-            subtitle = subtitle,
+            summary = subtitle,
             checked = category in selected,
             enabled = enabled,
             onCheckedChange = { onToggle(category) },

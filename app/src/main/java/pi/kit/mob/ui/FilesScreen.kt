@@ -8,44 +8,62 @@
  * a half file manager with no undo is a worse tool for that than a browser with a
  * good one. Read-only is a statement about the *verbs*, not about the layout.
  *
- * The first version was built out of the settings pages' vocabulary — a card holding
- * a list of peer rows — and that is the wrong shape for a directory. Settings is a
- * set of *controls*: each row is a decision with a value beside it. A listing is a
- * *table of objects*: each row is a name with a size and a date, and the page has to
- * say where you are and let you move. So:
+ * The page's shape, top to bottom, is the one a listing needs and a settings page
+ * does not:
  *
- *  - **A location bar** under the header: the path as a trail of tappable segments.
- *    The header's subtitle is not the path any more — a path is not a subtitle, it is
- *    navigation, and a path you can tap is worth more than a path you can only read.
- *  - **A toolbar**: a filter field and a sort control, directly above the rows they
- *    act on, in the shape a page's own tools take rather than a settings group.
- *  - **A table**: a glyph tile, the name, the kind and the date under it, and one
- *    right-aligned column holding the number the row is about — bytes for a file, how
- *    many entries for a folder. No card around the list and no hairline under every
- *    row: a directory of two thousand entries is scanned, not read, and the frame
- *    that makes eight settings rows one object makes a listing look like a panel.
- *  - **A hold on a row** for what can be done to that one file — copy its path, open
- *    it in another app — rather than a trailing button on every row, which is the
+ *  - **A location bar** under the header: the path as Miuix's own breadcrumb trail —
+ *    capsules that scroll sideways instead of collapsing. A path is navigation, not
+ *    a subtitle, and a path you can tap is worth more than one you can only read.
+ *  - **A toolbar**: a filter field and a sort menu, directly above the rows they act
+ *    on, in the shape a page's own tools take rather than a settings group.
+ *  - **A listing**: one card per entry — a glyph tile, the name, the kind and date
+ *    under it, and one right-aligned column holding the number the row is about
+ *    (bytes for a file, how many entries for a folder).
+ *  - **A hold on a row** for what can be done to that one file — copy its path, hand
+ *    it to another app — rather than a trailing button on every row, which is the
  *    column the size wants.
+ *
+ * ## Why a row is a card
+ *
+ * The listing used to be a bare table with no frame at all, and the reason was that
+ * a card built for eight settings rows makes a directory of two thousand entries
+ * look like a panel. Miuix changes what the frame is *for*: `BasicComponent`, the
+ * library's settings row, carries a title, a summary and one click, and this page
+ * needs a click **and** a hold — the hold is the only way to reach one file's
+ * actions without opening it. `Card` is the container in this library that takes
+ * both, and taking both is what lets the row be a Miuix component rather than a
+ * hand-rolled `Row` that only looks like one.
+ *
+ * So the frame is per row and thin: a 12dp page inset and a 2dp seam. The seam is
+ * also what keeps a long listing scannable — each row is one object with one
+ * outline, which is the reading the frame is meant to give at this density.
  *
  * ## Why entering a folder is a page swap
  *
  * It is the one move in the app that replaces the whole screen with another one: the
  * path changes, the rows are new, and the way back is the same action — so it moves
  * the way a second level moves everywhere else (§9.1). Only the *listing* travels,
- * not the bar: the header's title is the folder's own name and updates in place as the
- * listing slides, which is what the platform's document UI does too.
+ * not the two strips above it: the header's title is the folder's own name and
+ * updates in place as the listing slides, which is what the platform's document UI
+ * does too.
  *
  * ## Back walks up the filesystem
  *
- * `PageBackHandler` and not `BackHandler` — a preview is a sheet over this page and
- * the gesture belongs to it first. At the top of the tree there is no parent, so back
- * from there leaves the tab as it always did.
+ * The tab is a root, so it draws no back arrow in its bar (`PiPage`'s arrow belongs
+ * to a pushed page) — the location bar and the up button are its visible navigation,
+ * and the back gesture follows them: at the top of the tree there is no parent, so
+ * the gesture is not claimed and leaves the tab as it always did.
  */
 package pi.kit.mob.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,31 +75,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.TableChart
-import androidx.compose.material.icons.filled.VideoFile
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,14 +88,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -108,23 +107,6 @@ import kotlinx.coroutines.withContext
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.LocalToastHost
-import pi.kit.mob.ui.components.MenuAnchor
-import pi.kit.mob.ui.components.PageBackHandler
-import pi.kit.mob.ui.components.PiMenuRow
-import pi.kit.mob.ui.components.Sheet
-import pi.kit.mob.ui.components.menuAnchor
-import pi.kit.mob.ui.components.rememberMenuAnchor
-import pi.kit.mob.ui.components.showMenu
-import pi.kit.mob.ui.design.PiEmptyState
-import pi.kit.mob.ui.design.PiLoading
-import pi.kit.mob.ui.design.PiPageBottom
-import pi.kit.mob.ui.design.PiPageSwap
-import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiSearchField
-import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiTone
 import pi.kit.mob.ui.files.Crumb
 import pi.kit.mob.ui.files.FileEntry
 import pi.kit.mob.ui.files.FilePreviewSheet
@@ -137,6 +119,43 @@ import pi.kit.mob.ui.files.humanSize
 import pi.kit.mob.ui.files.openExternally
 import pi.kit.mob.ui.files.readDirectory
 import pi.kit.mob.ui.files.stampFor
+import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiTone
+import top.yukonga.miuix.kmp.basic.BreadcrumbBar
+import top.yukonga.miuix.kmp.basic.BreadcrumbItem
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.DropdownDefaults
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.extended.Backup
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.File
+import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Forward
+import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Home
+import top.yukonga.miuix.kmp.icon.extended.Image
+import top.yukonga.miuix.kmp.icon.extended.Link
+import top.yukonga.miuix.kmp.icon.extended.Music
+import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Play
+import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.icon.extended.Sort
+import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
+import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
+import top.yukonga.miuix.kmp.squircle.squircleSurface
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import java.io.File
 import java.util.Locale
 
@@ -145,15 +164,17 @@ import java.util.Locale
  *
  * State is four values: where the reader is, which way the last move went, what the
  * filter says, and how the list is ordered. Everything else — the entries, the sizes,
- * the dates — is read from the directory [current] names.
+ * the dates — is read from the directory [current] names. The preview is a fifth:
+ * Miuix's sheet is a window of its own, so the page that opens it owns the state
+ * instead of pushing a body into a layer above the whole app.
  */
 @Composable
 fun FilesScreen(session: PiAgentSession) {
     val text = strings
     val home = remember { session.env.home }
-    val sheets = LocalSheetHost.current
-    val toasts = LocalToastHost.current
+    val toasts = LocalPiToast.current
     val clipboard = LocalClipboard.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var current by remember { mutableStateOf(home) }
@@ -167,6 +188,11 @@ fun FilesScreen(session: PiAgentSession) {
     // here because the header's subtitle is the page's own furniture and the listing
     // is a child of the swap — see [Listing] for why the read cannot happen up here.
     var itemCount by remember { mutableStateOf<Int?>(null) }
+    // The file whose preview is up. Two values rather than one nullable entry: the
+    // sheet keeps drawing for the length of its exit, and a null entry would empty
+    // the body while the panel slides away.
+    var preview by remember { mutableStateOf<FileEntry?>(null) }
+    var previewUp by remember { mutableStateOf(false) }
 
     fun navigate(to: File) {
         forward = to.depthUnder(home) > current.depthUnder(home)
@@ -184,47 +210,69 @@ fun FilesScreen(session: PiAgentSession) {
         if (entry.isDirectory) {
             navigate(entry.file)
         } else {
-            sheets.show(
-                Sheet(key = "files-preview:${entry.file.absolutePath}") {
-                    FilePreviewSheet(entry)
-                },
-            )
+            preview = entry
+            previewUp = true
         }
     }
 
     fun copyPath(entry: FileEntry) {
         scope.launch {
             clipboard.setClipEntry(clipEntryFor(entry.file.absolutePath))
-            toasts.show(text.files.pathCopied)
+            toasts?.show(text.files.pathCopied)
         }
     }
 
-    PageBackHandler(enabled = current.parentFile != null) {
+    fun openWith(entry: FileEntry) {
+        // `openExternally` returns the failure instead of throwing it, so a file the
+        // provider cannot reach says so rather than the button doing nothing.
+        if (!openExternally(context, entry.file)) toasts?.show(text.files.openFailed)
+    }
+
+    // The tab root draws no bar arrow; the gesture follows the up button instead, and
+    // is released at the top of the tree so it leaves the tab as it always did.
+    BackHandler(enabled = current.parentFile != null) {
         current.parentFile?.let(::navigate)
     }
 
-    PiScaffold(
+    PiPage(
         // The folder's own name, not the tab's: on a file manager the title is the
         // place you are standing in, and "Files" over a folder called `workspace` is
         // the one fact the page already knows better.
         title = if (current == home) text.header.files else current.name,
-        subtitle = itemCount?.let { text.files.itemCount(it) },
+        // `orEmpty()` rather than letting the null through: the count is unknown while
+        // a folder is being listed, and a subtitle line that appeared and disappeared
+        // once per folder moved the whole page by its height twice. A blank subtitle
+        // reserves the line and says nothing in it — see `PiPage`'s *Null and blank are
+        // two different answers*.
+        subtitle = itemCount?.let { text.files.itemCount(it) }.orEmpty(),
         actions = {
             IconButton(
                 onClick = { navigate(home) },
                 enabled = current != home,
             ) {
-                Icon(Icons.Filled.Home, contentDescription = text.files.home)
+                Icon(MiuixIcons.Home, contentDescription = text.files.home)
             }
             IconButton(
                 onClick = { current.parentFile?.let(::navigate) },
                 enabled = current.parentFile != null,
             ) {
-                Icon(Icons.Filled.ArrowUpward, contentDescription = text.files.parent)
+                // The arrow of Miuix's own basic set, turned through a right angle at
+                // the call site: "up one level" is a direction this library never
+                // names, and borrowing the back chevron for it would draw the
+                // platform's *back* on a page whose back is the up.
+                Icon(
+                    imageVector = MiuixIcons.Basic.ArrowRight,
+                    contentDescription = text.files.parent,
+                    modifier = Modifier.rotate(-90f),
+                )
             }
         },
     ) { body ->
-        Column(body) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(body),
+        ) {
             LocationBar(
                 trail = crumbs(home, current),
                 onOpen = ::navigate,
@@ -241,12 +289,21 @@ fun FilesScreen(session: PiAgentSession) {
             // furniture and stay put (§9.1). The count is reported only by the page
             // being shown — the outgoing one is still composed for the length of the
             // slide, and its count would arrive last.
-            PiPageSwap(
-                key = current,
-                forward = forward,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            ) { page ->
-                val directory = page as File
+            AnimatedContent(
+                targetState = current,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                transitionSpec = {
+                    // A third of the width, not the whole of it: the page's furniture
+                    // above the listing does not move, so the incoming rows slide under
+                    // it rather than pushing a whole screen across.
+                    val step = if (forward) 1 else -1
+                    (slideInHorizontally { width -> step * width / 3 } + fadeIn()) togetherWith
+                        (slideOutHorizontally { width -> -step * width / 3 } + fadeOut())
+                },
+                label = "folder",
+            ) { directory ->
                 Listing(
                     directory = directory,
                     sort = sort,
@@ -259,16 +316,28 @@ fun FilesScreen(session: PiAgentSession) {
                     },
                     onOpen = ::open,
                     onCopyPath = ::copyPath,
+                    onOpenWith = ::openWith,
                 )
             }
         }
     }
+
+    // One sheet, opened from this page's own state. `title = null` and the body's own
+    // heading instead: the subject of a preview is the file's name, and a sheet title
+    // above it would say the same thing twice.
+    PiSheet(
+        show = previewUp,
+        title = null,
+        onDismiss = { previewUp = false },
+    ) {
+        preview?.let { FilePreviewSheet(entry = it) }
+    }
 }
 
 /**
- * One directory's body: the loading state, the two kinds of nothing, or the table.
+ * One directory's body: the loading state, the two kinds of nothing, or the rows.
  *
- * A composable of its own, keyed on the directory, because `PiPageSwap` draws two of
+ * A composable of its own, keyed on the directory, because the swap above draws two of
  * these at once for the length of the slide: the listing has to be a function of the
  * directory it belongs to, or the outgoing page would show the incoming page's files
  * on the way out. That is also why the read lives *here* rather than in the screen —
@@ -277,9 +346,7 @@ fun FilesScreen(session: PiAgentSession) {
  *
  * The two nothings are said differently — a folder with nothing in it, and a filter
  * that matched nothing in a folder that has something — because they call for
- * different actions: one is a place, the other is a query the reader can clear. The
- * first version drew one sentence for both, and drew *nothing at all* for a folder it
- * could not read.
+ * different actions: one is a place, the other is a query the reader can clear.
  */
 @Composable
 private fun Listing(
@@ -290,6 +357,7 @@ private fun Listing(
     onLoaded: ((Int) -> Unit)?,
     onOpen: (FileEntry) -> Unit,
     onCopyPath: (FileEntry) -> Unit,
+    onOpenWith: (FileEntry) -> Unit,
 ) {
     // Null until the directory has been read: an empty list here would draw the
     // *empty folder* state for a frame on every step into a directory — a claim about
@@ -304,15 +372,17 @@ private fun Listing(
     }
 
     if (rows == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PiLoading() }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
         return
     }
     val visible = remember(rows, sort, query) { arrange(rows, sort, query) }
 
     when {
-        rows.isEmpty() -> PiEmptyState(title = text.files.empty, body = text.files.emptyBody)
+        rows.isEmpty() -> FilesNote(title = text.files.empty, body = text.files.emptyBody)
 
-        visible.isEmpty() -> PiEmptyState(
+        visible.isEmpty() -> FilesNote(
             title = text.files.noMatches(query.trim()),
             body = text.files.noMatchesBody,
         )
@@ -322,65 +392,47 @@ private fun Listing(
             text = text,
             onOpen = onOpen,
             onCopyPath = onCopyPath,
+            onOpenWith = onOpenWith,
         )
     }
 }
 
 /**
- * The path, as a trail of segments.
+ * The path, as Miuix's breadcrumb trail.
  *
- * Horizontally scrollable because a deep path is wider than a phone, and scrolled to
- * its end whenever the trail changes — the last segment is where the reader is, and a
- * bar that opened showing `~ / storage` while the page showed something eight levels
- * down would be a bar about a different folder.
+ * The component is the library's own capsule strip: it scrolls sideways when a deep
+ * path is wider than a phone instead of collapsing segments, and it scrolls to the
+ * highlighted one whenever the trail changes — the last segment is where the reader
+ * is, and a bar that opened showing `~ / storage` while the page showed something
+ * eight levels down would be a bar about a different folder.
+ *
+ * [BreadcrumbBar] caps a segment at 160dp by default, which at the interface's body
+ * size is about ten CJK characters: a folder named longer than that was ellipsised in
+ * the bar *and* in the header, so its name was readable in full nowhere on the page.
+ * The cap is lifted here and the strip is allowed to be as wide as the path is — the
+ * bar already scrolls, so a long name costs a swipe rather than the name. This is the
+ * behaviour the pre-Miuix location bar had, where every segment was a label in a
+ * scrolling row.
  */
 @Composable
 private fun LocationBar(
     trail: List<Crumb>,
     onOpen: (File) -> Unit,
 ) {
-    val state = rememberLazyListState()
-    LaunchedEffect(trail) {
-        if (trail.isNotEmpty()) state.animateScrollToItem(trail.lastIndex)
-    }
-    LazyRow(
-        state = state,
+    BreadcrumbBar(
+        items = trail.map { crumb ->
+            BreadcrumbItem(path = crumb.target.absolutePath, text = crumb.label)
+        },
+        onItemClick = { index ->
+            // The segment being shown is the page's subject, not a way out of it; its
+            // ancestors are the way back.
+            if (index != trail.lastIndex) trail.getOrNull(index)?.let { onOpen(it.target) }
+        },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        contentPadding = PaddingValues(vertical = 2.dp),
-    ) {
-        itemsIndexed(trail, key = { _, crumb -> crumb.target.absolutePath }) { index, crumb ->
-            val last = index == trail.lastIndex
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (index > 0) {
-                    Icon(
-                        Icons.Filled.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-                Text(
-                    text = crumb.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    // The segment being shown is the page's subject; its ancestors
-                    // are the way back. One weight apart is the whole difference.
-                    color = if (last) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    modifier = Modifier
-                        .clip(PiShapes.small)
-                        .then(if (last) Modifier else Modifier.clickable { onOpen(crumb.target) })
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
-                )
-            }
-        }
-    }
+            .padding(top = 2.dp),
+        itemMaxWidth = Dp.Infinity,
+    )
 }
 
 /**
@@ -388,9 +440,17 @@ private fun LocationBar(
  *
  * A filter field and a sort button, and nothing else: a file manager's toolbar is
  * about *this listing*, and every control in it has to be answerable by one of the
- * rows below. The sort control is a floating menu at its own button — the same control
- * the terminal's session switcher uses (§7.1) — because three orders are a question
- * with three answers, not a page.
+ * rows below.
+ *
+ * The field is a plain `TextField` rather than the library's `SearchBar`, and the
+ * reason is what the two are shaped for: `SearchBar` expands into a results surface
+ * of its own, which would cover the very list this field narrows in place. What is
+ * wanted here is the capsule's look and its clear button, both of which the field
+ * carries on its own.
+ *
+ * The sort control is a floating menu at its own button — the library's
+ * `OverlayIconDropdownMenu` (§7.1) — because three orders are a question with three
+ * answers, not a page.
  */
 @Composable
 private fun ListToolbar(
@@ -400,83 +460,82 @@ private fun ListToolbar(
     onSortChange: (FileSort) -> Unit,
     text: Strings,
 ) {
-    val sheets = LocalSheetHost.current
-    val anchor = rememberMenuAnchor()
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 6.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PiSearchField(
+        TextField(
             value = query,
             onValueChange = onQueryChange,
-            placeholder = text.files.filterHint,
-            clearContentDescription = text.common.clear,
             modifier = Modifier.weight(1f),
-        )
-        IconButton(
-            onClick = {
-                sheets.showMenu(
-                    key = "files-sort",
-                    anchor = anchor,
-                    alignEnd = true,
-                ) {
-                    SortMenu(sort = sort, text = text, onSortChange = onSortChange)
+            label = text.files.filterHint,
+            useLabelAsPlaceholder = true,
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = MiuixIcons.Search,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurfaceSecondary,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            },
+            trailingIcon = {
+                // Drawn only when there is something to clear: an always-present cross
+                // is a target that does nothing on an empty field.
+                if (query.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .clip(CircleShape)
+                            .clickable { onQueryChange("") },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Close,
+                            contentDescription = text.common.clear,
+                            tint = MiuixTheme.colorScheme.onSurfaceSecondary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             },
-            modifier = Modifier.menuAnchor(anchor),
+        )
+        OverlayIconDropdownMenu(
+            entry = DropdownEntry(
+                items = listOf(
+                    DropdownItem(
+                        text = text.files.sortName,
+                        selected = sort == FileSort.Name,
+                        onClick = { onSortChange(FileSort.Name) },
+                    ),
+                    DropdownItem(
+                        text = text.files.sortModified,
+                        selected = sort == FileSort.Modified,
+                        onClick = { onSortChange(FileSort.Modified) },
+                    ),
+                    DropdownItem(
+                        text = text.files.sortSize,
+                        selected = sort == FileSort.Size,
+                        onClick = { onSortChange(FileSort.Size) },
+                    ),
+                ),
+            ),
         ) {
-            Icon(Icons.Filled.Sort, contentDescription = text.files.sort)
+            Icon(MiuixIcons.Sort, contentDescription = text.files.sort)
         }
     }
-}
-
-/** The three orders, as a menu at the sort button. */
-@Composable
-private fun SortMenu(
-    sort: FileSort,
-    text: Strings,
-    onSortChange: (FileSort) -> Unit,
-) {
-    val host = LocalSheetHost.current
-    // Dismissed first, then applied: the layer keeps drawing for the length of its
-    // exit, and a row that ran after the menu was gone would be a tap on the page
-    // behind it (`SessionsScreen`'s `sheetAction` is the same gate).
-    fun choose(order: FileSort): () -> Unit = {
-        if (host.isOpen) {
-            host.dismiss()
-            onSortChange(order)
-        }
-    }
-
-    PiMenuRow(
-        label = text.files.sortName,
-        selected = sort == FileSort.Name,
-        onClick = choose(FileSort.Name),
-    )
-    PiMenuRow(
-        label = text.files.sortModified,
-        selected = sort == FileSort.Modified,
-        onClick = choose(FileSort.Modified),
-    )
-    PiMenuRow(
-        label = text.files.sortSize,
-        selected = sort == FileSort.Size,
-        onClick = choose(FileSort.Size),
-    )
 }
 
 /**
- * The listing itself: a table of rows, with no frame around it.
+ * The listing itself: a column of row cards.
  *
- * `wrapContentHeight` is not applied here and does not need to be: the rows are
- * lazy, so the list reports the height of what it laid out when the content fits and
- * fills only when there is something to scroll to. The page's body is a `Column` whose
- * last child takes the rest of the window, which is what a table wants — a column of
- * rows that ends where the page ends, rather than a card that ends where the last row
- * does.
+ * The rows are lazy, so the listing reports the height of what it laid out when the
+ * content fits and fills when there is something to scroll to. The page's body is a
+ * `Column` whose last child takes the rest of the window, which is what a listing
+ * wants — a column of rows that ends where the page ends.
  */
 @Composable
 private fun DirectoryTable(
@@ -484,47 +543,36 @@ private fun DirectoryTable(
     text: Strings,
     onOpen: (FileEntry) -> Unit,
     onCopyPath: (FileEntry) -> Unit,
+    onOpenWith: (FileEntry) -> Unit,
 ) {
-    val sheets = LocalSheetHost.current
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // The navigation bar's height as content padding rather than as a band of
-        // empty page: the last row scrolls past it, and at rest it is the gap that
-        // keeps the last row off the bar (`PiPageBottom`).
-        contentPadding = PaddingValues(bottom = PiPageBottom),
+        // The gap above the navigation bar as content padding rather than as a band of
+        // empty page: the last row scrolls past it, and at rest it is the space that
+        // keeps the last row off the bar.
+        contentPadding = PaddingValues(bottom = PAGE_BOTTOM),
+        // The seam between two row cards: 2dp, because two objects need to be told
+        // apart by their outlines rather than by a hairline drawn inside one wall.
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        itemsIndexed(rows, key = { _, entry -> entry.file.absolutePath }) { _, entry ->
+        items(rows, key = { entry -> entry.file.absolutePath }) { entry ->
             FileRow(
                 entry = entry,
                 text = text,
                 onOpen = { onOpen(entry) },
-                onActions = { anchor ->
-                    sheets.showMenu(
-                        key = "file-actions:${entry.file.absolutePath}",
-                        anchor = anchor,
-                        alignEnd = true,
-                    ) {
-                        FileActionsMenu(
-                            entry = entry,
-                            text = text,
-                            onCopyPath = { onCopyPath(entry) },
-                        )
-                    }
-                },
+                onCopyPath = { onCopyPath(entry) },
+                onOpenWith = { onOpenWith(entry) },
             )
         }
     }
 }
 
 /**
- * One row of the table: a glyph tile, the name, the kind and date under it, and the
+ * One row of the listing: a glyph tile, the name, the kind and date under it, and the
  * size at the trailing edge.
  *
  * The trailing column is the *number* the row is about — bytes for a file, how many
  * entries for a folder — and it is monospace so a column of them has one right edge.
- * It is deliberately not a `PiRow`: a settings row names a control and puts a value or
- * a chevron at its end, and this one is a line of a table.
  *
  * A hold opens the row's actions; the tap is the row's own — a folder opens, a file
  * previews. Nothing in the row is a second tap target, which is why there is no
@@ -535,92 +583,198 @@ private fun FileRow(
     entry: FileEntry,
     text: Strings,
     onOpen: () -> Unit,
-    onActions: (MenuAnchor) -> Unit,
+    onCopyPath: () -> Unit,
+    onOpenWith: () -> Unit,
 ) {
-    val anchor = rememberMenuAnchor()
-    val tone = toneOf(entry)
+    // The menu is the row's own state: it is anchored on this card, it dies with the
+    // row, and a row that scrolls out of the list with its menu open takes the menu
+    // with it (a screen-level "which row is open" would survive the scroll and reopen
+    // on the way back).
+    var actionsUp by remember(entry.file) { mutableStateOf(false) }
+    val (tileColor, glyphColor) = tileToneOf(entry)
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 1.dp)
-            // Clipped to the row's radius before the ripple, so the press outline is
-            // a rounded rectangle inside the page rather than a full-bleed band.
-            .clip(PiShapes.row)
-            .menuAnchor(anchor)
-            .combinedClickable(
-                onLongClickLabel = text.files.actions,
-                onLongClick = { onActions(anchor) },
-                onClick = onOpen,
-            )
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // A tile rather than a bare glyph: at 40dp in a tinted container the kind of
-        // a row is readable before its name is, which is the whole reason a file
-        // manager spends a column on it.
-        Surface(
-            color = tone.container(MaterialTheme.colorScheme),
-            shape = PiShapes.small,
-            modifier = Modifier.size(40.dp),
+    Box {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                // The hold announces itself: `Card` installs the long click but not a
+                // label for it, and a screen reader has to be told what the gesture is
+                // for — the row's actions, said out loud.
+                .semantics {
+                    onLongClick(label = text.files.actions) {
+                        actionsUp = true
+                        true
+                    }
+                },
+            insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            pressFeedbackType = PressFeedbackType.Sink,
+            showIndication = true,
+            onClick = onOpen,
+            onLongPress = { actionsUp = true },
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = glyphOf(entry),
-                    contentDescription = null,
-                    tint = tone.onContainer(MaterialTheme.colorScheme),
-                    modifier = Modifier.size(20.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // A tile rather than a bare glyph: at 40dp in a tinted container the
+                // kind of a row is readable before its name is, which is the whole
+                // reason a file manager spends a column on it. The silhouette is the
+                // library's squircle, so the tile is cut from the same shape as the
+                // card behind it.
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .squircleSurface(color = tileColor, cornerRadius = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = glyphOf(entry),
+                        contentDescription = null,
+                        tint = glyphColor,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = entry.name,
+                        style = MiuixTheme.textStyles.main,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        // Two lines: a file name is how a row is told apart from its
+                        // neighbour, and a one-line cap ellipsised the suffix that does
+                        // the telling (`report-2024` vs `report-2025`).
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = metaOf(entry, text),
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+
+                // The size column. A folder's number is its children, a file's is its
+                // bytes, and a link gets neither: `length()` on a link is the target's
+                // path length on some filesystems and zero on others, which is a
+                // number that means nothing either way.
+                val size = when {
+                    entry.isLink -> null
+                    entry.isDirectory -> entry.children?.let { text.files.items(it) }
+                    else -> humanSize(entry.size)
+                }
+                Text(
+                    text = size.orEmpty(),
+                    style = MiuixTheme.textStyles.body2,
+                    fontFamily = FontFamily.Monospace,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    // End-aligned inside a fixed column: measured on the emulator, a
+                    // left-aligned one put `1 项` and `0 项` at the column's start, so
+                    // the numbers were ragged on the right and the column read as text
+                    // with a gap after it rather than as a column.
+                    textAlign = TextAlign.End,
+                    modifier = Modifier
+                        .width(SIZE_COLUMN)
+                        .semantics { if (size != null) contentDescription = size },
                 )
             }
         }
 
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = entry.name,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                // Two lines: a file name is how a row is told apart from its
-                // neighbour, and a one-line cap ellipsised the suffix that does the
-                // telling (`report-2024` vs `report-2025`).
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = metaOf(entry, text),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-
-        // The size column. A folder's number is its children, a file's is its bytes,
-        // and a link gets neither: `length()` on a link is the target's path length on
-        // some filesystems and zero on others, which is a number that means nothing
-        // either way.
-        val size = when {
-            entry.isLink -> null
-            entry.isDirectory -> entry.children?.let { text.files.items(it) }
-            else -> humanSize(entry.size)
-        }
-        Text(
-            text = size.orEmpty(),
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            // End-aligned inside a fixed column: measured on the emulator, a
-            // left-aligned one put `1 项` and `0 项` at the column's start, so the
-            // numbers were ragged on the right and the column read as text with a gap
-            // after it rather than as a column.
-            textAlign = TextAlign.End,
-            modifier = Modifier
-                .width(SIZE_COLUMN)
-                .semantics { if (size != null) contentDescription = size },
+        // What can be done to this one row, as a floating menu at the row that was
+        // held — two short actions on one file do not cover the list to ask their
+        // question (§7.1). It hangs off the row's trailing edge, where a row's actions
+        // live. The gate inside each item is what keeps a second tap — aimed at the
+        // page behind a menu that is already leaving — from copying twice.
+        OverlayDropdownPopup(
+            entry = DropdownEntry(
+                items = buildList {
+                    add(
+                        DropdownItem(
+                            text = text.files.copyPath,
+                            icon = { modifier ->
+                                Icon(
+                                    imageVector = MiuixIcons.Copy,
+                                    contentDescription = null,
+                                    modifier = modifier,
+                                )
+                            },
+                            onClick = {
+                                if (actionsUp) {
+                                    actionsUp = false
+                                    onCopyPath()
+                                }
+                            },
+                        ),
+                    )
+                    if (!entry.isDirectory) {
+                        // A file additionally offers **Open with**, which the preview
+                        // carries too: the reader who has found the file in the listing
+                        // should not have to open a preview to hand it to another app.
+                        add(
+                            DropdownItem(
+                                text = text.files.openWith,
+                                icon = { modifier ->
+                                    Icon(
+                                        imageVector = MiuixIcons.Forward,
+                                        contentDescription = null,
+                                        modifier = modifier,
+                                    )
+                                },
+                                onClick = {
+                                    if (actionsUp) {
+                                        actionsUp = false
+                                        onOpenWith()
+                                    }
+                                },
+                            ),
+                        )
+                    }
+                },
+            ),
+            show = actionsUp,
+            onDismiss = { actionsUp = false },
+            onDismissFinished = {},
+            maxHeight = null,
+            dropdownColors = DropdownDefaults.dropdownColors(),
+            renderInRootScaffold = true,
         )
+    }
+}
+
+/** The empty state: a heading and the sentence that says what is missing. */
+@Composable
+private fun FilesNote(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp, vertical = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = title,
+                style = MiuixTheme.textStyles.headline1,
+                color = MiuixTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = body,
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -645,84 +799,56 @@ private fun metaOf(entry: FileEntry, text: Strings): String {
 }
 
 /**
- * What can be done to one row, without opening it.
- *
- * A floating menu at the row that was held, on the layer's anchored half — two short
- * actions on one file do not cover the list to ask their question (§7.1). A file
- * additionally offers **Open with**, which the preview sheet also carries: the reader
- * who has found the file in the listing should not have to open a preview to hand it
- * to another app.
- */
-@Composable
-private fun FileActionsMenu(
-    entry: FileEntry,
-    text: Strings,
-    onCopyPath: () -> Unit,
-) {
-    val host = LocalSheetHost.current
-    val toasts = LocalToastHost.current
-    val context = LocalContext.current
-
-    fun run(action: () -> Unit): () -> Unit = {
-        if (host.isOpen) {
-            host.dismiss()
-            action()
-        }
-    }
-
-    PiMenuRow(
-        label = text.files.copyPath,
-        leading = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
-        onClick = run(onCopyPath),
-    )
-    if (!entry.isDirectory) {
-        PiMenuRow(
-            label = text.files.openWith,
-            leading = { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null) },
-            onClick = run {
-                if (!openExternally(context, entry.file)) toasts.show(text.files.openFailed)
-            },
-        )
-    }
-}
-
-/**
  * A row's glyph, by what the file is rather than only whether it is a directory.
  *
  * A listing where every file wears the same sheet-of-paper mark asks the reader to
- * read the *name* to tell anything apart; seven kinds — code, image, archive, video,
- * audio, sheet, document — cover what a phone user steps into this tab to find, and
- * everything else keeps the paper. The extension's first letter is not a glyph: a row
- * of one-letter marks reads as a bespoke alphabet nobody agreed on.
+ * read the *name* to tell anything apart; the six kinds — code and text, image,
+ * archive, video, audio, sheet — cover what a phone user steps into this tab to find,
+ * and everything else keeps the paper. Every mark is the library's own, and each is
+ * the closest the set comes to its kind: `Notes` is a page of lines and stands for
+ * code, `GridView` is a table of cells and stands for a sheet, `Backup` is a stack and
+ * stands for an archive, `Play` and `Music` say video and sound. A document and a
+ * plain file share the paper because the set has exactly one page mark between them —
+ * the row's second line is what tells a `pdf` from a file with no extension at all.
+ *
+ * The extension's first letter is not a glyph either: a row of one-letter marks reads
+ * as a bespoke alphabet nobody agreed on.
  */
 private fun glyphOf(entry: FileEntry): ImageVector {
-    if (entry.isLink) return Icons.Filled.Link
-    if (entry.isDirectory) return Icons.Filled.Folder
+    if (entry.isLink) return MiuixIcons.Link
+    if (entry.isDirectory) return MiuixIcons.Folder
     return when (entry.file.extension.lowercase(Locale.ROOT)) {
-        in CODE_SUFFIXES -> Icons.Filled.Code
-        in IMAGE_SUFFIXES -> Icons.Filled.Image
-        in ARCHIVE_SUFFIXES -> Icons.Filled.Archive
-        in VIDEO_SUFFIXES -> Icons.Filled.VideoFile
-        in AUDIO_SUFFIXES -> Icons.Filled.AudioFile
-        in SHEET_SUFFIXES -> Icons.Filled.TableChart
-        in DOCUMENT_SUFFIXES -> Icons.Filled.PictureAsPdf
-        else -> Icons.Filled.Description
+        in CODE_SUFFIXES -> MiuixIcons.Notes
+        in IMAGE_SUFFIXES -> MiuixIcons.Image
+        in ARCHIVE_SUFFIXES -> MiuixIcons.Backup
+        in VIDEO_SUFFIXES -> MiuixIcons.Play
+        in AUDIO_SUFFIXES -> MiuixIcons.Music
+        in SHEET_SUFFIXES -> MiuixIcons.GridView
+        else -> MiuixIcons.File
     }
 }
 
 /**
- * The tile's colour, by kind.
+ * The tile's colours, by kind.
  *
  * A folder is the page's navigation and takes the accent's container; a picture or a
  * video takes the live tone so a long listing can be scanned by colour before it is
  * read. Everything else stays neutral — six tones on one page is a palette, and this
  * is a list.
  */
-private fun toneOf(entry: FileEntry): PiTone = when {
-    entry.isDirectory -> PiTone.Accent
-    entry.file.extension.lowercase(Locale.ROOT) in IMAGE_SUFFIXES ||
-        entry.file.extension.lowercase(Locale.ROOT) in VIDEO_SUFFIXES -> PiTone.Live
-    else -> PiTone.Neutral
+@Composable
+private fun tileToneOf(entry: FileEntry): Pair<Color, Color> {
+    val suffix = entry.file.extension.lowercase(Locale.ROOT)
+    return when {
+        entry.isDirectory -> MiuixTheme.colorScheme.primaryContainer to
+            MiuixTheme.colorScheme.onPrimaryContainer
+
+        suffix in IMAGE_SUFFIXES || suffix in VIDEO_SUFFIXES ->
+            PiTone.liveContainer() to PiTone.live()
+
+        else -> MiuixTheme.colorScheme.surfaceContainerHigh to
+            MiuixTheme.colorScheme.onSurfaceContainerHigh
+    }
 }
 
 /** Written by a programmer, or by a tool a programmer runs, or about one. */
@@ -743,13 +869,28 @@ private val AUDIO_SUFFIXES = setOf("mp3", "m4a", "wav", "ogg", "flac", "opus", "
 
 private val SHEET_SUFFIXES = setOf("csv", "tsv", "xls", "xlsx", "ods")
 
-private val DOCUMENT_SUFFIXES = setOf("pdf", "doc", "docx", "odt", "ppt", "pptx", "epub")
-
 /**
  * The width of the size column.
  *
- * Wide enough for `999.9 MB` in the app's monospace at the default text size, and
- * fixed rather than wrap-to-content so every row's number ends on the same x — which
- * is the only thing that makes a column of sizes scannable.
+ * Fixed rather than wrap-to-content so every row's number ends on the same x — which
+ * is the only thing that makes a column of sizes scannable — and wide enough for the
+ * longest string the column can hold, in the interface's monospace at the body size.
+ *
+ * That string is ten characters: `10240.0 MB` for a file over ten gibibytes (the size
+ * formatter has no unit above MB) and `1234 items` for a folder with four digits of
+ * children. The monospace advance is 0.6 em, so ten characters at 14sp need 84dp; 88
+ * leaves room for the glyph rounding and for a locale whose count reads one glyph
+ * longer (`12345 項目`). The column this replaced was 76dp against a 12sp cell —
+ * which was 10.5 characters of room, and the two sizes below that look identical
+ * differ by exactly that: at 76dp the tenth character is ellipsised and the unit is
+ * the first thing lost, so `10240.0 M…` said nothing about the unit at all.
  */
-private val SIZE_COLUMN = 76.dp
+private val SIZE_COLUMN = 88.dp
+
+/**
+ * The gap under the last row.
+ *
+ * The page's own furniture, not the bar's height: the bar is the root scaffold's, and
+ * this is the space that keeps a row from being read against its edge.
+ */
+private val PAGE_BOTTOM = 16.dp

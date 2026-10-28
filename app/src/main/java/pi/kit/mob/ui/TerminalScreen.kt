@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,18 +20,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,12 +32,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -62,18 +53,27 @@ import com.termux.view.TerminalViewClient
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.locales.strings
-import pi.kit.mob.ui.components.LocalSheetHost
-import pi.kit.mob.ui.components.PiMenuRow
-import pi.kit.mob.ui.components.menuAnchor
-import pi.kit.mob.ui.components.rememberMenuAnchor
-import pi.kit.mob.ui.components.showMenu
-import pi.kit.mob.ui.design.PiButton
-import pi.kit.mob.ui.design.PiButtonKind
-import pi.kit.mob.ui.design.PiButtonSize
-import pi.kit.mob.ui.design.PiNotice
-import pi.kit.mob.ui.design.PiScaffold
-import pi.kit.mob.ui.design.PiShapes
-import pi.kit.mob.ui.design.PiTone
+import pi.kit.mob.ui.kit.PiMenuRow
+import pi.kit.mob.ui.kit.PiPage
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.basic.RadioButton
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Layers
+import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowListPopup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -102,10 +102,17 @@ private const val MAX_TEXT_SIZE_SP = 40
  * The rectangle in the middle is the vendored `TerminalView`, painted from the
  * terminal's own sixteen colours; nothing on this page restyles it, and nothing
  * may — a terminal that borrowed the app's palette stops being the thing whose
- * output the reader is trusting. So the page is the *chrome*: a bar that says
- * which shell this is, a row that reports what the shells are doing, and the key
- * bar. All of it composes `pi.kit.mob.ui.design` and invents no colour, radius or
- * control of its own (ARCHITECTURE §13).
+ * output the reader is trusting. So the page is the *chrome*: a Miuix page bar
+ * that says which shell this is, a card that reports a shell that has ended, and
+ * the key bar. All of it is Miuix — a [PiPage] with Miuix's own small top bar,
+ * Miuix buttons for the keys, Miuix's window list popup for the roster — and it
+ * invents no colour, radius or control of its own (ARCHITECTURE §13).
+ *
+ * The welcome banner is the shell's too, not the page's:
+ * [PiAgentSession.refreshTerminalBanner] writes it in the interface language and a
+ * shell reads it at start-up, so a language change reaches the *next* shell — a
+ * running shell's scrollback is the shell's own, and repainting it would be editing
+ * output the reader may already be reading.
  */
 @Composable
 fun TerminalScreen(session: PiAgentSession) {
@@ -139,8 +146,6 @@ fun TerminalScreen(session: PiAgentSession) {
         }
     }
 
-    val sheets = LocalSheetHost.current
-
     var ctrlOn by remember { mutableStateOf(false) }
     var altOn by remember { mutableStateOf(false) }
     // Whether new output is allowed to pull the view back to the bottom.
@@ -151,6 +156,11 @@ fun TerminalScreen(session: PiAgentSession) {
     // that only exists once a view has been attached would come back wrong — or
     // not at all — after a rotation. Toggling applies it to whatever view is live.
     var autoScroll by rememberSaveable { mutableStateOf(true) }
+    // The roster popup's own open state. It lives here rather than in the popup
+    // because the popup is drawn by the window while the button that raises it is
+    // in the page's bar — and a page that is disposed while the popup closes must
+    // not leave a window behind.
+    var sessionsMenuOpen by remember { mutableStateOf(false) }
     // Termux lets the on-screen modifier keys combine with the soft keyboard, so
     // TerminalView asks the client for their state on every key event.
     val holders = remember { TerminalHolders() }
@@ -178,7 +188,7 @@ fun TerminalScreen(session: PiAgentSession) {
     val keys = rememberKeySize(t, LocalDensity.current.fontScale)
     val keysHeight = barHeight(keys)
 
-    PiScaffold(
+    PiPage(
         // Which shell this is, and what the page is. The subtitle *is* the roster
         // count once there is more than one shell: the line is there either way, so
         // the count costs no height, where a pill reporting it above the terminal
@@ -187,8 +197,8 @@ fun TerminalScreen(session: PiAgentSession) {
         // what this page is rather than a count.
         //
         // A shell's *failure* is still not here: a header's subtitle is a plain
-        // string, so a shell that ended could neither carry the danger tone nor
-        // offer the one thing that fixes it — `ShellStateRow` over the terminal does
+        // string, so a shell that ended could neither carry the error tone nor
+        // offer the one thing that fixes it — [ShellStateRow] over the terminal does
         // both.
         title = selected?.displayTitle ?: t.header.terminal,
         subtitle = if (running > 1) {
@@ -199,20 +209,27 @@ fun TerminalScreen(session: PiAgentSession) {
         // The header's height is the terminal's, and it is the shell that fixes it:
         // the PTY is sized from the rectangle under the header, so a strip that grew
         // to two lines and shrank again would re-measure the terminal on every
-        // scroll. That is what the fixed header gives this page for free (§9.2) —
-        // a *flexible* bar of either size would still have moved the rectangle while
-        // its own height animated.
+        // scroll. Miuix's small top bar is what this page wants for that (§9.2): it
+        // is pinned — its height is `max(52dp, title + subtitle + 8dp)` and scroll
+        // cannot move any of it — where a large bar that collapsed would have moved
+        // the rectangle while its own height animated.
+        //
+        // The subtitle is the one term in that sum this page fills in, so it is the
+        // one thing that could move the rectangle: it is measured against the room
+        // left beside four action icons, and its English idle sentence is the long
+        // value here — the count is shorter than the idle line in English and
+        // Chinese, and fits in Japanese. A second line there costs the terminal a
+        // row once, for the bar being what it is, and never per frame.
         actions = {
-            val sessionsMenuAnchor = rememberMenuAnchor()
             IconButton(onClick = { selected?.write("clear\n") }) {
                 Icon(
-                    Icons.Filled.Refresh,
+                    imageVector = MiuixIcons.Refresh,
                     contentDescription = t.terminal.clear,
                 )
             }
             IconButton(onClick = { manager.create() }) {
                 Icon(
-                    Icons.Filled.Add,
+                    imageVector = MiuixIcons.Add,
                     contentDescription = t.terminal.newTerminal,
                 )
             }
@@ -221,37 +238,57 @@ fun TerminalScreen(session: PiAgentSession) {
                 enabled = selected != null,
             ) {
                 Icon(
-                    Icons.Filled.Close,
+                    imageVector = MiuixIcons.Close,
                     contentDescription = t.terminal.closeTerminal,
                 )
             }
+            // The roster's switch. Miuix's icon set has no terminal glyph, so the
+            // button shows the thing it opens — a stack of sessions — and the
+            // content description says what tapping it does. It is an `IconButton`
+            // rather than Miuix's own `WindowIconDropdownMenu` because that
+            // component's items are one line of text and no trailing action, and a
+            // shell has to be closable from the list without being switched to
+            // first (see [TerminalSessionMenu]).
             IconButton(
-                onClick = {
-                    // The session list is the same kind of question as the
-                    // language row or the model chip — pick one of these — so it
-                    // is asked with the same control: a floating menu at this
-                    // button, on the layer's anchored half. It was a
-                    // `DropdownMenu` (a 280dp context menu with a tick glyph,
-                    // and the one control that took window focus away from the
-                    // terminal's own input) and then a bottom sheet, which
-                    // covered the terminal to ask which terminal to show (§7.1).
-                    sheets.showMenu(
-                        key = "terminal-sessions",
-                        anchor = sessionsMenuAnchor,
-                    ) {
-                        TerminalSessionMenu(text = t, manager = manager)
-                    }
-                },
-                modifier = Modifier.menuAnchor(sessionsMenuAnchor),
+                onClick = { sessionsMenuOpen = true },
+                // Held down while its popup is open, which is the state Miuix's own
+                // popup buttons show: the bar says which button the panel belongs to
+                // even while the panel dims it.
+                holdDownState = sessionsMenuOpen,
             ) {
                 Icon(
-                    Icons.Filled.Terminal,
+                    imageVector = MiuixIcons.Layers,
                     contentDescription = t.terminal.switchTerminal,
                 )
             }
+            // The popup is anchored to the parent layout of this call — the app
+            // bar's action row — and aligned to its end, so the menu hangs under
+            // the action group with its right edge at the screen's margin. Drawn at
+            // window level, so it needs no scaffold host and cannot be clipped by
+            // the page it was raised from.
+            WindowListPopup(
+                show = sessionsMenuOpen,
+                alignment = PopupPositionProvider.Align.End,
+                onDismissRequest = { sessionsMenuOpen = false },
+            ) {
+                ListPopupColumn {
+                    TerminalSessionMenu(
+                        text = t,
+                        manager = manager,
+                        onPicked = { sessionsMenuOpen = false },
+                    )
+                }
+            }
         },
-    ) { body ->
-        Column(body) {
+    ) { padding ->
+        // The scaffold's padding is the bar's height and the insets the page is
+        // actually under: the root already took the navigation bar away, so the
+        // column ends where the page does and the terminal is measured from there.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
             ShellStateRow(
                 text = t,
                 selected = selected,
@@ -411,19 +448,27 @@ private fun ScreenRepaintAnchor(
 }
 
 /**
- * The session picker: one row per shell, the live one ticked, a ✕ that closes a
+ * The session picker: one row per shell with the live one ticked, a ✕ that closes a
  * shell without leaving the menu, and the roster's one page-level action.
  *
- * A floating menu at the header's switch button, on the layer's anchored half —
- * the same control the language row and the composer's model chip use. It was a
- * `DropdownMenu` and then a bottom sheet, and the sheet was wrong for this one:
- * the question is "which terminal", asked from a toolbar button over the
- * terminal itself, and a panel from the bottom edge covered the thing being
- * switched to (§7.1). Nothing here draws a second kind of menu; the rows are
- * `PiMenuRow`, which is the anchored half's own.
+ * A Miuix window list popup raised from the bar's stack button — the library's own
+ * anchored floating menu, and the shape the previous menu already had. It was a
+ * `DropdownMenu` and then a bottom sheet, and the sheet was wrong for this one: the
+ * question is "which terminal", asked from a toolbar button over the terminal
+ * itself, and a panel from the bottom edge covered the thing being switched to
+ * (§7.1). The popup is anchored by its call site's parent, which is why the call
+ * sits in the action row rather than inside the button.
+ *
+ * The rows are the kit's [PiMenuRow], not Miuix's `RadioButtonPreference`: a
+ * `BasicComponent` with end actions cannot be measured inside a `ListPopupColumn` in
+ * Miuix 0.9.4 (`PiMenuRow`'s KDoc has the arithmetic, and this roster is where the
+ * crash was found), and one menu row for every popup in the app is what keeps this
+ * list and the chat's model list from drifting apart. The tick the preference would
+ * have drawn is passed as the row's start slot, so the live shell is marked by the
+ * same glyph the app's other single-choice lists use.
  *
  * The selection is derived here rather than taken from the `selected` local in
- * [TerminalScreen]: this body was built when the menu opened, and only the reads
+ * [TerminalScreen]: this body was built when the popup opened, and only the reads
  * *inside* it follow live state — so a row closed here would otherwise leave the
  * tick on the shell that is already gone.
  */
@@ -431,64 +476,63 @@ private fun ScreenRepaintAnchor(
 private fun TerminalSessionMenu(
     text: pi.kit.mob.locales.Strings,
     manager: TerminalSessionManager,
+    onPicked: () -> Unit,
 ) {
     val sessions by manager.sessions.collectAsState()
     val selectedId by manager.selectedId
-    val host = LocalSheetHost.current
     val current = sessions.firstOrNull { it.id == selectedId } ?: sessions.firstOrNull()
 
+    // No "is the menu still open" gate: the popup draws a full-window layer that
+    // absorbs a tap while it animates out, so a tap aimed at the page underneath a
+    // leaving menu cannot be eaten by one of its rows.
     sessions.forEach { entry ->
         PiMenuRow(
-            label = entry.displayTitle,
-            subtitle = if (entry.running) {
+            title = entry.displayTitle,
+            summary = if (entry.running) {
                 null
             } else {
                 text.terminal.exited(entry.exitStatus)
             },
-            selected = entry.id == current?.id,
-            onClick = {
-                // Gated on the menu still being open: the panel is drawn until
-                // it is off screen, and a tap aimed at the page underneath a
-                // leaving menu must not be eaten by a row of the menu that is
-                // leaving.
-                if (host.isOpen) {
-                    host.dismiss()
-                    manager.select(entry.id)
-                }
+            startAction = {
+                RadioButton(selected = entry.id == current?.id, onClick = null)
             },
             trailing = {
                 // The menu stays open: closing the shells is a thing a user may
                 // be doing to several of them at once.
                 //
                 // Tapping this does not also switch to the row it is in,
-                // because the button's own pointer input consumes the
-                // down first — which is what keeps a close from
-                // selecting the shell it has just closed.
+                // because the button's own pointer input consumes the down
+                // first — which is what keeps a close from selecting the shell
+                // it has just closed.
                 IconButton(
                     onClick = { manager.close(entry.id) },
                     modifier = Modifier.size(28.dp),
                 ) {
                     Icon(
-                        Icons.Filled.Close,
+                        imageVector = MiuixIcons.Close,
                         contentDescription = text.terminal
                             .closeSession(entry.displayTitle),
                     )
                 }
+            },
+            onClick = {
+                onPicked()
+                manager.select(entry.id)
             },
         )
     }
 
     // The roster's one page-level action, as a row of its own — a menu has no
     // action strip below it, and the one thing that acts on every shell reads as
-    // the last entry of the list it empties. Danger, because it is destructive.
+    // the last entry of the list it empties. It is the same row as the shells above
+    // it with the error role for a title, which is the one cue that says this entry
+    // is not a choice.
     PiMenuRow(
-        label = text.terminal.closeAllTerminals,
-        danger = true,
+        title = text.terminal.closeAllTerminals,
+        titleColor = MiuixTheme.colorScheme.error,
         onClick = {
-            if (host.isOpen) {
-                host.dismiss()
-                manager.closeAll()
-            }
+            onPicked()
+            manager.closeAll()
         },
     )
 }
@@ -497,14 +541,18 @@ private fun TerminalSessionMenu(
  * A shell that has ended, over the terminal — and nothing at all while the shells
  * are fine.
  *
- * A shell that exited is a [PiNotice] on the danger tone, in the app's own words,
- * with the one remedy that applies to it, because the terminal itself cannot say it
- * and the picker is behind a tap. It is the only thing this row draws: the *count*
- * of running shells is the header's subtitle now (`TerminalScreen`), where the line
- * it replaced already existed — a pill reporting the count grew the strip above the
- * terminal by its own height and took it away again on the next close, and the PTY
- * is sized from the rectangle under that strip. The count cost a `TERM` resize
- * every time a shell was created or closed; it costs nothing as a subtitle.
+ * A shell that exited is a Miuix card on the error container, in the app's own
+ * words, with the one remedy that applies to it, because the terminal itself cannot
+ * say it and the picker is behind a tap. It is the only thing this row draws: the
+ * *count* of running shells is the header's subtitle now (`TerminalScreen`), where
+ * the line it replaced already existed — a pill reporting the count grew the strip
+ * above the terminal by its own height and took it away again on the next close,
+ * and the PTY is sized from the rectangle under that strip. The count cost a `TERM`
+ * resize every time a shell was created or closed; it costs nothing as a subtitle.
+ *
+ * Miuix's icon set has no warning triangle, so the mark is its `Info` glyph in the
+ * container's own foreground: the sentence beside it is what says a shell ended and
+ * what its code was, and a second alarm glyph would be saying it twice.
  *
  * Nothing is drawn while the page's one shell is alive, and that is the point: this
  * is chrome around a rectangle the reader came to read. The terminal still changes
@@ -521,31 +569,49 @@ private fun ShellStateRow(
 ) {
     val ended = selected?.takeIf { !it.running } ?: return
 
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        colors = CardDefaults.defaultColors(
+            color = MiuixTheme.colorScheme.errorContainer,
+            contentColor = MiuixTheme.colorScheme.onErrorContainer,
+        ),
+        insideMargin = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        PiNotice(
-            text = text.terminal.exited(ended.exitStatus),
-            tone = PiTone.Danger,
-            icon = Icons.Filled.Warning,
-            action = {
-                PiButton(
-                    text = text.terminal.newTerminal,
-                    kind = PiButtonKind.Tonal,
-                    size = PiButtonSize.ExtraSmall,
-                    onClick = onNewTerminal,
-                )
-            },
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = MiuixIcons.Info,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MiuixTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                text = text.terminal.exited(ended.exitStatus),
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f),
+            )
+            // A compact text button, not the bar's full 40dp one: this row is a
+            // line of chrome above a terminal, and every dp it spends is a line of
+            // output it costs while it is on screen.
+            TextButton(
+                text = text.terminal.newTerminal,
+                onClick = onNewTerminal,
+                minWidth = 0.dp,
+                minHeight = 30.dp,
+                insideMargin = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                textStyle = MiuixTheme.textStyles.footnote1,
+                colors = ButtonDefaults.textButtonColors(
+                    textColor = MiuixTheme.colorScheme.onErrorContainer,
+                ),
+            )
+        }
     }
 }
-
-/** The sheet's list stops growing here, as a share of the height the sheet may take. */
-private const val SHEET_LIST_FRACTION = 0.6f
 
 /**
  * The bar's height, derived from the keys in it.
@@ -567,13 +633,13 @@ private fun barHeight(size: KeySize): Dp =
     size.height * 2 + KEY_GAP + GROUP_PADDING * 2 + KEY_BAR_PADDING * 2
 
 /** One chip's height floor, and the gap between chips in both directions. */
-// 24dp with `labelMedium`. The bar's keys sat at the composer's 34dp so the two
+// 24dp with the label style. The bar's keys sat at the composer's 34dp so the two
 // tappable pill families matched, and at that size they read as oversized against
 // the terminal's own text; a second pass took them further down — the type as well
-// as the padding — because `labelLarge`'s line box alone kept the chips near 28dp
-// however tight the padding got. A floor rather than the height: `labelMedium` is
-// still scaled by the system font size, so the chip is the larger of this and its
-// own label's line box.
+// as the padding — because the label's line box alone kept the chips near 28dp
+// however tight the padding got. A floor rather than the height: the type is still
+// scaled by the system font size, so the chip is the larger of this and its own
+// label's line box.
 private val KEY_HEIGHT = 24.dp
 private val KEY_GAP = 5.dp
 
@@ -581,10 +647,9 @@ private val KEY_GAP = 5.dp
  * The padding inside the bar's one group's track.
  *
  * A group is what makes the bar readable at a glance — every key in the strip sits on
- * one raised track — and the track is the shape vocabulary's answer for it:
- * `PiShapes.card`, the radius the app draws every dense container with, one step of
- * the surface ramp below the bar, with the keys themselves on `surface` so a key
- * reads as raised out of its group.
+ * one raised track — and the track is Miuix's own card: `surfaceContainer`, the one
+ * step of the library's surface ramp that a group of controls sits on, with the keys
+ * themselves back on `surface` so a key reads as raised out of its group.
  *
  * There used to be a second constant beside this one — the gap *between* two groups,
  * more than three times the gap between two keys — and both went with the second
@@ -638,11 +703,13 @@ private val ARROW_LEFT = ArrowKey("\u001b[D", "\u2190")
  * that grows with the key, so the horizontal inset is solved against the height
  * rather than written down (see [rememberKeySize]).
  *
- * Measured on the emulator at font scale 1.0: the widest label is `PGUP`/`PGDN`
- * (four monospace characters, 77px) and the result is about 44dp, so every key in the
- * bar is the same smaller rectangle — the arrows and `滚动` included — rather than
- * the 50dp/34dp figures an earlier revision drew, which were oversized for the
- * terminal's chrome.
+ * The measurement is taken in the same type the keys are drawn in — Miuix's
+ * `footnote2` in the monospace face — so the number is the chips' real width rather
+ * than a proportional face's estimate of it. The figures this bar was first tuned
+ * against (the widest label `PGUP`/`PGDN` at 77px, every key about 44dp wide) were
+ * taken from a proportional label style, and the shape they settled on is the one
+ * that survived: a uniform key, smaller than the 50dp/34dp figures an earlier
+ * revision drew, which read as oversized for the terminal's chrome.
  *
  * ## The one cost, and its ceiling
  *
@@ -672,7 +739,14 @@ private fun rememberKeySize(
     text: pi.kit.mob.locales.Strings,
     fontScale: Float,
 ): KeySize {
-    val style = MaterialTheme.typography.labelMedium
+    // The keys' own type, family included: a measurement in a different face is a
+    // measurement of a different bar (see [KeySize]). Built from the style set the
+    // theme handed down rather than on every recomposition, so the `remember`s
+    // below are keyed on something that only changes with the theme.
+    val typography = MiuixTheme.textStyles
+    val style = remember(typography) {
+        typography.footnote2.copy(fontFamily = FontFamily.Monospace)
+    }
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val labels = remember(text) {
@@ -846,7 +920,7 @@ private const val NEWLINE_SEQUENCE = "\u0016\n"
  * is a control most people meet for the first time here.
  *
  * A word is the answer to both. It reads as one of the bar's keys because it *is*
- * one — same size, same monospace label, same styling as `滚动`'s neighbours — and
+ * one — same size, same monospace label, same Miuix button as its neighbours — and
  * the word is short enough to fit one key without shrinking the type, which is what
  * a longer label would have forced on the whole bar.
  *
@@ -863,43 +937,21 @@ private fun ScrollToggle(
     size: KeySize,
     onClick: () -> Unit,
 ) {
-    Surface(
-        shape = PiShapes.pill,
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier
-            .size(size.width, size.height)
-            // The clip goes *before* `clickable`, and that ordering is the fix for
-            // the reported ripple that spilled out of the corners. Material3's
-            // `Surface` puts its own `clip(shape)` *after* whatever modifier it was
-            // handed, and an indication draws where its node sits in the chain — so
-            // a `clickable` applied to the bare chain paints a rectangle over the
-            // rounded shape underneath it. Same rule, and same wording, as
-            // `ToolCard`'s header row in `chat/Transcript.kt`.
-            .clip(PiShapes.pill)
-            .clickable(
-                // The full phrase, not the two-glyph label: the visible word names
-                // the thing, and the spoken one has to say what tapping it does.
-                onClickLabel = hint,
-                onClick = onClick,
-            ),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
-                color = if (following) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
-                maxLines = 1,
-                // The same rule as the bar's other chips: an ellipsis if the label
-                // ever outgrows the ceiling, never a word cut in half.
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    KeyButton(
+        label = label,
+        size = size,
+        // The key's tint is the whole state: the fill, the word and the size are the
+        // same in both positions, so nothing about the bar moves when it is tapped.
+        labelColor = if (following) {
+            MiuixTheme.colorScheme.primary
+        } else {
+            MiuixTheme.colorScheme.error
+        },
+        onClick = onClick,
+        // The full phrase, not the two-glyph label: the visible word names the
+        // thing, and the spoken one has to say what tapping it does.
+        spokenLabel = hint,
+    )
 }
 
 /**
@@ -953,8 +1005,8 @@ private val EXTRA_KEYS: List<ExtraKey> = listOf(
  * One run of keys, on its own track.
  *
  * The track is what makes a group legible: the keys of a group sit on one container
- * — [PiShapes.card], the app's dense container radius, on one step of the surface
- * ramp above the bar, with the keys themselves on `surface` — so a group reads as one
+ * — Miuix's card, `surfaceContainer`, one step of the library's surface ramp up from
+ * the bar, with the keys themselves back on `surface` — so a group reads as one
  * object and a key reads as raised out of it. That is the same relationship a
  * settings group has to its rows, which is why it needs no new vocabulary.
  *
@@ -963,11 +1015,11 @@ private val EXTRA_KEYS: List<ExtraKey> = listOf(
  */
 @Composable
 private fun KeyGroup(content: @Composable () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = PiShapes.card,
+    Card(
+        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+        insideMargin = PaddingValues(GROUP_PADDING),
     ) {
-        Box(Modifier.padding(GROUP_PADDING), contentAlignment = Alignment.Center) {
+        Box(contentAlignment = Alignment.Center) {
             content()
         }
     }
@@ -976,10 +1028,12 @@ private fun KeyGroup(content: @Composable () -> Unit) {
 /**
  * The extra-keys bar: the arrow cluster and the keys beside it, in one group.
  *
- * Every key is the same size ([rememberKeySize]) and every key is fully round
- * ([PiShapes.pill]). The uniform size is what makes the pad line up and keeps a label
- * from being clipped by a neighbour's width, and it is the one property of this bar
- * that four earlier revisions each got wrong in a different way (ARCHITECTURE §7.4).
+ * Every key is the same size ([rememberKeySize]) and every key is fully round — the
+ * Miuix button's corner radius is the key's own half-height, so "fully round" is half
+ * of the shorter side rather than a number written here. The uniform size is what
+ * makes the pad line up and keeps a label from being clipped by a neighbour's width,
+ * and it is the one property of this bar that four earlier revisions each got wrong
+ * in a different way (ARCHITECTURE §7.4).
  *
  * ## Why the arrows are still a cluster and not four more keys in the row
  *
@@ -994,11 +1048,11 @@ private fun KeyGroup(content: @Composable () -> Unit) {
  *
  * The bar used to be two tracks — the arrow cluster in one frame, the modifiers and
  * every other key in a second, 16dp apart — and the second frame is gone. Both
- * frames were drawn on `surfaceContainerHigh`, so what the reader saw was one strip
- * with a seam down it: the same three surfaces at two different insets, which reads
- * as a rendering mistake rather than as two sets of keys. There is exactly one thing
- * this bar is, and it is one pad of keys; the frames that said otherwise were the
- * only part of the bar that was not the keys themselves.
+ * frames were drawn on the same container colour, so what the reader saw was one
+ * strip with a seam down it: the same three surfaces at two different insets, which
+ * reads as a rendering mistake rather than as two sets of keys. There is exactly one
+ * thing this bar is, and it is one pad of keys; the frames that said otherwise were
+ * the only part of the bar that was not the keys themselves.
  *
  * The strip is still one `LazyRow` with a single item, so the group is measured
  * unbounded along the axis and scrolls sideways when it is wider than the screen —
@@ -1017,18 +1071,18 @@ private fun ExtraKeysRow(
     onToggleAutoScroll: () -> Unit,
     onSend: (String) -> Unit,
 ) {
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(barHeight(size)),
-        // `surfaceContainer` is the colour the tab strip and the root behind it are
-        // painted in (`PiKitRoot`), and this strip is the page's bottom edge — the
-        // extra keys sit directly above the tab strip, so anything else drew a band
-        // of its own between the terminal and the bar. It was
-        // `surfaceContainerHighest`, a step *paler* than the bar in the light scheme,
-        // which is a seam at the exact place the page is meant to end. The keys stay
-        // raised out of it: `KeyGroup` puts each group on `surfaceContainerHigh`.
-        color = MaterialTheme.colorScheme.surfaceContainer,
+            .height(barHeight(size))
+            // The page's own surface — the colour Miuix's navigation bar and the
+            // page behind it are painted in — and this strip is the page's bottom
+            // edge, so anything else drew a band of its own between the terminal and
+            // the tab strip. It was a container colour a step *paler* than that in
+            // the light scheme, which is a seam at the exact place the page is meant
+            // to end. The keys stay raised out of it: [KeyGroup] puts each group on
+            // `surfaceContainer`.
+            .background(MiuixTheme.colorScheme.surface),
     ) {
         LazyRow(
             modifier = Modifier
@@ -1110,10 +1164,12 @@ private const val EXTRA_KEYS_PER_ROW = 6
  * key is a key whatever it says, and the single glyph keys and the four-letter ones
  * line up because they are the same rectangle.
  *
- * The shape is the app's action voice — [PiShapes.pill] — and it is the token rather
- * than a radius written here, because two things have to agree on it: the shape the
- * `Surface` paints and the clip that bounds the key's ripple. One value for both is
- * what keeps a pressed key's ripple inside its own edges.
+ * A Miuix [Button] rather than a bare clickable box, because the library's button is
+ * what carries the tap: the press indication, the button role for a screen reader,
+ * and the squircle corner (whose radius is the key's half-height, so the two things
+ * that have to agree on the shape — the fill and the touch area — are one value).
+ * The active key is the theme's primary, which is the only thing that changes when a
+ * modifier latches.
  */
 @Composable
 private fun ExtraKeyChip(
@@ -1122,38 +1178,84 @@ private fun ExtraKeyChip(
     size: KeySize,
     onClick: () -> Unit,
 ) {
-    Surface(
-        shape = PiShapes.pill,
+    KeyButton(
+        label = label,
+        size = size,
         color = if (active) {
-            MaterialTheme.colorScheme.primary
+            MiuixTheme.colorScheme.primary
         } else {
-            MaterialTheme.colorScheme.surface
+            MiuixTheme.colorScheme.surface
         },
-        modifier = Modifier
-            .size(size.width, size.height)
-            // Before `clickable`, not after: the ripple is drawn by the clickable's
-            // node, and a clip that comes later in the chain cannot bound it. See
-            // `ScrollToggle` for the measured report.
-            .clip(PiShapes.pill)
-            .clickable(onClick = onClick),
+        labelColor = if (active) {
+            MiuixTheme.colorScheme.onPrimary
+        } else {
+            MiuixTheme.colorScheme.onSurfaceVariantSummary
+        },
+        onClick = onClick,
+    )
+}
+
+/**
+ * The bar's key: one shape, one size, one label style.
+ *
+ * Written once because the scroll toggle and the lettered keys have to be
+ * indistinguishable but for their word and tint — that is the whole argument in
+ * [ScrollToggle] — and two composables that draw the same key would drift apart.
+ *
+ * [color] is the fill, and it is passed rather than derived: the toggle changes only
+ * its tint, and the latched modifiers keep a fill of their own, so the one thing that
+ * differs between them is a parameter.
+ *
+ * [spokenLabel] replaces the visible word for a screen reader, which is what a short
+ * label on a stateful control needs: "滚动" names the thing, and the spoken sentence
+ * has to say what tapping it does. It is null for the lettered keys, whose label is
+ * already the whole truth.
+ */
+@Composable
+private fun KeyButton(
+    label: String,
+    size: KeySize,
+    color: Color = MiuixTheme.colorScheme.surface,
+    labelColor: Color,
+    onClick: () -> Unit,
+    spokenLabel: String? = null,
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.size(size.width, size.height),
+        // Half of the key's own height, which is what makes a wide key a pill and a
+        // short one a circle; a fixed dp would be one shape at font scale 1.0 and
+        // another at 1.8.
+        cornerRadius = size.height / 2,
+        // The key's size is its modifier, not a floor: Miuix's button minimums are
+        // for a word on a page, and a 58dp key would not fit eleven to a bar.
+        minWidth = 0.dp,
+        minHeight = 0.dp,
+        colors = ButtonDefaults.buttonColors(color = color, contentColor = labelColor),
+        insideMargin = PaddingValues(0.dp),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
-                color = if (active) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1,
-                // A label past the ceiling is marked as truncated rather than cut
-                // mid-glyph: `TextOverflow.Clip` is the default, and it is what drew
-                // `スクロール` as `スク` with nothing to say the word was longer.
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.footnote2,
+            // The bar is a terminal's chrome and its labels are sequences, so the
+            // face is the terminal's own; the measurement in [rememberKeySize] uses
+            // the same style so the two agree on how wide a key has to be.
+            fontFamily = FontFamily.Monospace,
+            color = labelColor,
+            maxLines = 1,
+            // A label past the ceiling is marked as truncated rather than cut
+            // mid-glyph: `TextOverflow.Clip` is the default, and it is what drew
+            // `スクロール` as `スク` with nothing to say the word was longer.
+            overflow = TextOverflow.Ellipsis,
+            modifier = if (spokenLabel == null) {
+                Modifier
+            } else {
+                // Replaces the visible word rather than adding to it, so the control
+                // is read as the sentence a reader needs once, not as a word followed
+                // by a sentence about it.
+                Modifier.clearAndSetSemantics { contentDescription = spokenLabel }
+            },
+        )
     }
 }
 

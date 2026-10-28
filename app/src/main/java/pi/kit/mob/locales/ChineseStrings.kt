@@ -120,17 +120,6 @@ internal object ChineseStrings : Strings {
         override val cameraDenied = "没有相机权限，无法拍照。可在系统设置里为本应用打开权限。"
         override val cameraUnavailable = "这台设备上没有可用的相机应用。"
 
-        override fun thinkingLevelDescription(id: String) = when (id) {
-            "off" -> "直接回答，不做思考"
-            "minimal" -> "Pi 允许的最短思考"
-            "low" -> "回答快，思考少"
-            "medium" -> "速度与深度的默认平衡"
-            "high" -> "回答前思考更久"
-            "xhigh" -> "思考充分，更慢也更贵"
-            "max" -> "不限制思考长度"
-            else -> ""
-        }
-
         override val contextDetails = "上下文"
         override val contextEmpty = "尚未发送内容"
         override fun cacheHit(percent: Int) = "缓存命中 $percent%"
@@ -192,7 +181,6 @@ internal object ChineseStrings : Strings {
         override val deleteSelected = "删除所选"
         override val cancelSelection = "取消选择"
         override val recent = "最近"
-        override val back = "返回"
         override val emptyHeading = "还没有保存的对话"
         override val empty = "Pi 回复之后，对话才会写入磁盘。"
         override fun nothingMatches(query: String) = "没有匹配「$query」的对话。"
@@ -868,7 +856,7 @@ internal object ChineseStrings : Strings {
                 "并包含 turndown、@mozilla/readability、defuddle、linkedom、unpdf、undici、" +
                 "p-limit 和 typebox",
             "为 Agent 内置的命令行工具：ripgrep（MIT/Unlicense）与 fd（MIT/Apache-2.0）",
-            "界面：Jetpack Compose 与 Material 3（Apache-2.0）、Kotlin 与 " +
+            "界面：Jetpack Compose 与 Miuix（Apache-2.0）、Kotlin 与 " +
                 "kotlinx.serialization（Apache-2.0）、Okio（Apache-2.0）",
             "公式排版：JLaTeXMath，即 Android 移植版 jlatexmath-android" +
                 "（GPL-2.0，上游为 GPL-2.0 附链接例外）",
