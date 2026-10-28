@@ -4181,7 +4181,7 @@ private fun AttachMenu(
     }
 
     ListPopupColumn {
-        BasicComponent(
+        PiMenuRow(
             title = text.chat.attachCamera,
             summary = text.chat.attachCameraHint,
             startAction = {
@@ -4189,7 +4189,7 @@ private fun AttachMenu(
             },
             onClick = { pick("camera") },
         )
-        BasicComponent(
+        PiMenuRow(
             title = text.chat.attachImage,
             summary = text.chat.attachImageHint,
             startAction = {
@@ -4197,7 +4197,7 @@ private fun AttachMenu(
             },
             onClick = { pick("image") },
         )
-        BasicComponent(
+        PiMenuRow(
             title = text.chat.attachFile,
             summary = text.chat.attachFileHint,
             startAction = {

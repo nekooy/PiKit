@@ -268,15 +268,23 @@ figure out to 21 of its 24 units where Miuix's `Add` keeps its ink inside 14. It
 **17dp** in `ChatScreen.kt`, and the vector is untouched — scaling a borrowed glyph at the call
 site is a layout decision; editing its geometry is the mistake the bullet above is about.
 
-**Never put a `BasicComponent` with `endActions` inside a `ListPopupColumn`.** Miuix 0.9.4
-measures a popup column's children with an unbounded width to size itself, and
+**Never put a `BasicComponent` with `startAction` or `endActions` inside a `ListPopupColumn`.**
+Miuix 0.9.4 measures a popup column's children with an unbounded width to size itself, and
 `BasicComponent` answers an intrinsic query by measuring with that width: its end-action budget
 `(available - 8dp) * 6 / 10` overflows `Int` at `Constraints.Infinity` and hands
 `Constraints.copy` a negative `maxWidth` — `IllegalArgumentException: maxWidth must be >= than
-minWidth`, reproduced on the terminal's session roster. A `BasicComponent` *without* end
-actions survives the same measurement, which is why the command and attachment menus do not
-crash. `ui/kit/PiMenuRow` is the row to use when a popup row needs a trailing mark;
-ARCHITECTURE §13 has the arithmetic and the reason the row is hand-built.
+minWidth`, reproduced on the composer's `+` menu, whose three rows carry leading marks, and
+before that on the terminal's session roster. A `BasicComponent` *without* either slot survives
+the same measurement, which is why the command menu did not crash before it was converted.
+`ui/kit/PiMenuRow` is the row to use in a popup, marks and all; ARCHITECTURE §13 has the
+arithmetic and the reason the row is hand-built.
+
+**A Miuix window is driven by `show`, not by whether it is composed.** `WindowDialog`
+and `WindowBottomSheet` animate out through that flag: raising one inside
+`if (x != null)` removes it from the hierarchy with its content already gone, so the exit
+plays over an empty panel and `onDismissFinished` never fires — and a remembered field
+inside it carries one answer into the next question. `PiDialogHost` takes a required
+`show`; the caller keeps the last value so the window can draw while it leaves.
 
 **A page's subtitle is `PiPage`'s, not `SmallTopAppBar`'s.** The library renders its own
 `subtitle` with no line limit, so a sentence wider than the space beside the action icons wraps
