@@ -41,6 +41,12 @@ okio = "3.18.2"
 # metrics were correct and 21.7 ms per formula — the measurement is in
 # ARCHITECTURE §12.2. See the comment in `app/build.gradle.kts` for what that bought.
 jlatexmath = "0.2.0"
+# Miuix — the interface. `compose-miuix-ui/miuix` is a Compose Multiplatform
+# component library drawing the MIUI/HyperOS idiom: its own theme engine (a seed
+# colour in, a whole palette out), preference rows, dialogs, sheets, snackbars and
+# navigation. The `-android` artifacts are the ones its guide names for a
+# Compose-only Android project; the multiplatform coordinates select the same code.
+miuix = "0.9.4"
 junit = "4.13.2"
 
 [libraries]
@@ -60,6 +66,11 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
 jlatexmath = { group = "ru.noties", name = "jlatexmath-android", version.ref = "jlatexmath" }
+miuix-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-ui-android", version.ref = "miuix" }
+miuix-preference = { group = "top.yukonga.miuix.kmp", name = "miuix-preference-android", version.ref = "miuix" }
+miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons-android", version.ref = "miuix" }
+miuix-nav = { group = "top.yukonga.miuix.kmp", name = "miuix-nav-android", version.ref = "miuix" }
+miuix-squircle = { group = "top.yukonga.miuix.kmp", name = "miuix-squircle-android", version.ref = "miuix" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

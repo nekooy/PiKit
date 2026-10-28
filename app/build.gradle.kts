@@ -309,6 +309,18 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
 
+    // The interface. Every screen is drawn from Miuix rather than from material3:
+    // the theme engine, the preference rows the settings pages are built from, the
+    // icons, and the navigation runtime behind the settings stack. Miuix is a
+    // Compose Multiplatform library whose Android artifacts target the same
+    // androidx.compose 1.12 this build already resolves, and its Kotlin metadata is
+    // 2.4.20 against this project's 2.4.21.
+    implementation(libs.miuix.ui)
+    implementation(libs.miuix.preference)
+    implementation(libs.miuix.icons)
+    implementation(libs.miuix.nav)
+    implementation(libs.miuix.squircle)
+
     // Formula typesetting. JLaTeXMath carries the OpenType math metrics the platform's
     // text API does not expose, and it lays a formula out in **422 µs** where the KaTeX
     // metrics library this replaced took **21.7 ms** — measured on the same emulator at

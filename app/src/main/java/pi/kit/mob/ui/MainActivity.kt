@@ -17,6 +17,7 @@ import pi.kit.mob.data.applyLauncherIcon
 import pi.kit.mob.pi.PiAgentService
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.design.PiKitTheme
+import pi.kit.mob.ui.kit.PiKitMiuixTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -56,38 +57,40 @@ class MainActivity : ComponentActivity() {
             // The dynamic flag rides along: on Android 12 and up the palette then
             // comes from the wallpaper, and below that `PiKitTheme` falls back to
             // the accent rather than losing the choice.
-            PiKitTheme(darkTheme = darkTheme, accent = settings.themeColor, dynamic = settings.themeDynamic) {
-                // The text size, applied as one multiplier on the composition's own
-                // density rather than by overriding each type style at each of the
-                // seven steps.
-                //
-                // Read here, above every screen and above the sheet layer, so it reaches
-                // the transcript, the terminal banner and the dialogs alike — Compose's
-                // `Dialog` runs in the parent composition and inherits its locals, so a
-                // dialog opened from a page drawn at this scale is scaled with it.
-                //
-                // It multiplies the *platform's* fontScale rather than replacing it: a
-                // user who has already set 1.3 in Android's display settings keeps their
-                // preference and gets this step on top of it. `density` itself is passed
-                // through untouched — it is dp, and the row above this one measured its
-                // paddings in it.
-                ScaledType(scale = settings.fontSize.scale) {
-                    // The foreground service is what keeps a long turn alive while the
-                    // user is in another app, so it starts as soon as there is a frame
-                    // to start it from.
+            PiKitMiuixTheme(settings = settings) {
+                PiKitTheme(darkTheme = darkTheme, accent = settings.themeColor, dynamic = settings.themeDynamic) {
+                    // The text size, applied as one multiplier on the composition's own
+                    // density rather than by overriding each type style at each of the
+                    // seven steps.
                     //
-                    // The permission prompts are deliberately **not** asked for here.
-                    // They used to be, from this same first composition, and the
-                    // notification request was cancelled by the system 251 ms after it
-                    // opened — the splash was still exiting, the window was being
-                    // replaced and this service was starting. `PiKitRoot` now owns both
-                    // prompts and raises them once the runtime is ready; the block there
-                    // has the measurement.
-                    LaunchedEffect(Unit) {
-                        PiAgentService.start(this@MainActivity)
-                    }
+                    // Read here, above every screen and above the sheet layer, so it reaches
+                    // the transcript, the terminal banner and the dialogs alike — Compose's
+                    // `Dialog` runs in the parent composition and inherits its locals, so a
+                    // dialog opened from a page drawn at this scale is scaled with it.
+                    //
+                    // It multiplies the *platform's* fontScale rather than replacing it: a
+                    // user who has already set 1.3 in Android's display settings keeps their
+                    // preference and gets this step on top of it. `density` itself is passed
+                    // through untouched — it is dp, and the row above this one measured its
+                    // paddings in it.
+                    ScaledType(scale = settings.fontSize.scale) {
+                        // The foreground service is what keeps a long turn alive while the
+                        // user is in another app, so it starts as soon as there is a frame
+                        // to start it from.
+                        //
+                        // The permission prompts are deliberately **not** asked for here.
+                        // They used to be, from this same first composition, and the
+                        // notification request was cancelled by the system 251 ms after it
+                        // opened — the splash was still exiting, the window was being
+                        // replaced and this service was starting. `PiKitRoot` now owns both
+                        // prompts and raises them once the runtime is ready; the block there
+                        // has the measurement.
+                        LaunchedEffect(Unit) {
+                            PiAgentService.start(this@MainActivity)
+                        }
 
-                    PiKitRoot(session = session)
+                        PiKitRoot(session = session)
+                    }
                 }
             }
         }
