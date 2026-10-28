@@ -132,39 +132,59 @@ internal data class Crumb(val label: String, val target: File)
 /**
  * The trail from [home] to [current], first segment first.
  *
- * The first segment is always `~` — it is a path sigil rather than a word, so it is
- * not in the catalogs — and the last is the folder being shown. A [current] that is
- * not inside [home] is drawn as one segment holding its absolute path rather than as
- * a trail that walks up through the app's private directories: the page is rooted at
- * `$HOME`, and nothing it can reach is outside it.
+ * The first segment is `~` while the reader is inside [home] — it is a path sigil
+ * rather than a word, so it is not in the catalogs — and the last is the folder being
+ * shown.
+ *
+ * A [current] that is **not** inside [home] is drawn as the absolute trail from the
+ * filesystem's root, with the root itself labelled `/`. That case exists because the
+ * up button does not stop at `$HOME` any more: `$HOME` is `<filesDir>/home`, its parent
+ * is the app's private data directory, and the reader can walk out of the page's root
+ * and back down again. Drawing that as one segment holding an absolute path — which is
+ * what this did while the walk *was* gated at `$HOME` — would leave the location bar
+ * with a single unscrollable crumb for every directory above the root, so the bar
+ * would stop being a way back.
+ *
+ * The duplicated `data` in `/data/data/<pkg>` is not a bug in this function: those are
+ * two directories, and the trail is the path.
  */
 internal fun crumbs(home: File, current: File): List<Crumb> {
     if (current == home) return listOf(Crumb("~", home))
-    if (!current.absolutePath.startsWith(home.absolutePath + File.separator)) {
-        return listOf(Crumb(current.absolutePath, current))
+    if (current.absolutePath.startsWith(home.absolutePath + File.separator)) {
+        val chain = generateSequence(current) { it.parentFile }
+            .takeWhile { it != home }
+            .toList()
+            .asReversed()
+        return listOf(Crumb("~", home)) + chain.map { Crumb(it.name, it) }
     }
-    val chain = generateSequence(current) { it.parentFile }
-        .takeWhile { it != home }
+    // Outside `$HOME`, including above it. The trail starts at the filesystem's root,
+    // which is the one directory with no name of its own.
+    return generateSequence(current) { it.parentFile }
         .toList()
         .asReversed()
-    return listOf(Crumb("~", home)) + chain.map { Crumb(it.name, it) }
+        .mapIndexed { index, file -> Crumb(if (index == 0) "/" else file.name, file) }
 }
 
 /**
- * How many directories below [root] this one is.
+ * How deep in the filesystem this directory is, counted in components.
  *
- * The direction of the page slide is the sign of the difference between two of these.
- * Counting the platform's separator rather than a hard-coded `/`, because the unit
- * tests run on Windows: with `'/'` every directory answered zero there, which is the
- * one answer that makes the slide direction constant. Counting separators rather than
- * comparing path lengths, because the two agree on every path that can be reached — a
+ * The direction of the page slide is the sign of the difference between two of these: a
+ * child has one more component than its parent, whatever the parent is.
+ *
+ * It counts **from the filesystem's root** rather than from `$HOME`, and that is the
+ * fix: the page's walk is no longer gated at `$HOME`, so a pair of paths *above* the
+ * home directory — `/data/data/<pkg>/files` and `/data/data/<pkg>` — are both at
+ * distance zero from it, which made every move up there read as a move *down* and
+ * slid the listing the wrong way. Counting separators in the absolute path is the
+ * measure that has a direction everywhere.
+ *
+ * The platform's separator rather than a hard-coded `/`, because the unit tests run on
+ * Windows: with `'/'` every directory answers zero there. Separators rather than
+ * comparing path lengths, because the two agree on every path a walk can reach — a
  * child's path is its parent's plus one component — and only one of them is the
  * reason.
  */
-internal fun File.depthUnder(root: File): Int {
-    val prefix = root.absolutePath.trimEnd(File.separatorChar)
-    return absolutePath.removePrefix(prefix).count { it == File.separatorChar }
-}
+internal fun File.pathDepth(): Int = absolutePath.count { it == File.separatorChar }
 
 /**
  * A byte count in the one form a listing shows.

@@ -50,6 +50,7 @@ import com.termux.view.TerminalViewClient
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.locales.strings
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import top.yukonga.miuix.kmp.basic.Button
@@ -177,6 +178,12 @@ fun TerminalScreen(session: PiAgentSession) {
     val keysHeight = barHeight(keys)
 
     PiPage(
+        // The four tab roots left-align their titles and subtitles. The bar's right
+        // side is where three or four action icons live, and the library centres a
+        // title between the navigation icon and those actions — so a root with four
+        // actions has its title pushed off centre by their width. See `PiPage`'s
+        // *Why a root can be left-aligned*.
+        alignStart = true,
         // Which shell this is, and what the page is. The subtitle *is* the roster
         // count once there is more than one shell: the line is there either way, so
         // the count costs no height, where a pill reporting it above the terminal
@@ -234,22 +241,16 @@ fun TerminalScreen(session: PiAgentSession) {
                     contentDescription = t.terminal.newTerminal,
                 )
             }
-            IconButton(
-                onClick = { selected?.let { manager.close(it.id) } },
-                enabled = selected != null,
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Close,
-                    contentDescription = t.terminal.closeTerminal,
-                    // The same disabled ink as the clear button beside it: one rule
-                    // for both, or the pair disagree about what "no shell" looks like.
-                    tint = if (selected != null) {
-                        LocalContentColor.current
-                    } else {
-                        MiuixTheme.colorScheme.disabledOnSurface
-                    },
-                )
-            }
+            // There is deliberately **no close button here.**
+            //
+            // Closing a shell is the one destructive thing this page can do, and as the
+            // third icon in this action row it sat one thumb-width from "clear" and
+            // "new" — the three were 40dp apart — so the wrong tap cost a whole
+            // session's scrollback. The close control lives in the roster instead
+            // ([TerminalSessionMenu]'s trailing cross), where every row already names
+            // the shell it is about and the action cannot be ambiguous; the roster's
+            // "close all" row is there for the same reason.
+            //
             // The roster's switch. Miuix's icon set has no terminal glyph, so the
             // button shows the thing it opens — a stack of sessions — and the
             // content description says what tapping it does. It is an `IconButton`
@@ -582,6 +583,7 @@ private fun ShellStateRow(
     val ended = selected?.takeIf { !it.running } ?: return
 
     Card(
+        cornerRadius = PiCorner.radius,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = 6.dp),
@@ -611,6 +613,7 @@ private fun ShellStateRow(
             // line of chrome above a terminal, and every dp it spends is a line of
             // output it costs while it is on screen.
             TextButton(
+                cornerRadius = PiCorner.radius,
                 text = text.terminal.newTerminal,
                 onClick = onNewTerminal,
                 minWidth = 0.dp,
@@ -1028,6 +1031,7 @@ private val EXTRA_KEYS: List<ExtraKey> = listOf(
 @Composable
 private fun KeyGroup(content: @Composable () -> Unit) {
     Card(
+        cornerRadius = PiCorner.radius,
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
         insideMargin = PaddingValues(GROUP_PADDING),
     ) {

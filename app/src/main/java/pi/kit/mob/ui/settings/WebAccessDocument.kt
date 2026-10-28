@@ -25,6 +25,9 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebSearchStore
 import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -109,6 +112,7 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore, session: PiAgentSess
     // rows, and there is exactly one thing here — Miuix's `Card`, drawn where the page's
     // other sections draw theirs.
     Card(
+        cornerRadius = PiCorner.radius,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
@@ -121,6 +125,7 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore, session: PiAgentSess
         // survive autocorrect. Everything else about it is what that helper draws —
         // Miuix's own field, the monospace face, and no container of its own.
         TextField(
+            cornerRadius = PiCorner.radius,
             value = value.orEmpty(),
             onValueChange = { next -> draft = next },
             enabled = value != null,
@@ -134,6 +139,9 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore, session: PiAgentSess
                 autoCorrectEnabled = false,
             ),
             maxLines = Int.MAX_VALUE,
+            // No focus ring, and the caret stated instead: see `piFieldColors`.
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),

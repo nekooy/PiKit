@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import pi.kit.mob.ui.kit.PiCorner
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.SnackbarHost
@@ -78,20 +79,75 @@ fun PiConfirm(
         summary = text,
         onDismissRequest = onDismissRequest,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        PiDialogAnswers(
+            dismiss = dismiss,
+            onDismiss = onDismiss,
+            confirm = confirm,
+            onConfirm = onConfirm,
+            destructive = destructive,
+        )
+    }
+}
+
+/**
+ * The answer row every dialog in the app draws.
+ *
+ * ## One shape, stated once
+ *
+ * This is the app's only dialog-button row, and it is the shape the *rebuild the
+ * runtime* question established: two `TextButton`s of equal weight, 12dp apart, in the
+ * library's own filled pair — so both answers are one width and one height, and the
+ * destructive one is told apart by its label's colour rather than by being the only
+ * button with a fill.
+ *
+ * The dialogs that were written before that question were not all the same. Three of
+ * them passed `flatDialogAction()` — a transparent container — on the argument that a
+ * dialog already holds a card of that same near-white and a filled answer beside it
+ * reads as a second panel; the effect was that the app's confirmations had two different
+ * weights depending on which page raised them, and the flat ones looked disabled next to
+ * the filled ones on the page behind. A dialog's answers are the *only* controls on its
+ * own surface, so they are the one place a fill is unambiguous.
+ *
+ * [confirm] is null for a dialog with a single answer — an acknowledgement has nothing
+ * to be told apart from — and the dismiss answer then takes the whole row rather than
+ * half of it with a gap beside it.
+ */
+@Composable
+fun PiDialogAnswers(
+    dismiss: String,
+    onDismiss: () -> Unit,
+    confirm: String? = null,
+    onConfirm: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    destructive: Boolean = false,
+    /**
+     * Whether the confirm answer can be used yet.
+     *
+     * A dialog whose question needs an answer — a rename with no name in the field — has
+     * nothing to confirm, and the library's disabled fill is what says so. The dismiss
+     * answer stays live in every case: a question that cannot be answered has to be
+     * escapable.
+     */
+    confirmEnabled: Boolean = true,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(
+            cornerRadius = PiCorner.radius,
+            text = dismiss,
+            onClick = onDismiss,
+            modifier = Modifier.weight(1f),
+        )
+        if (confirm != null && onConfirm != null) {
             TextButton(
-                text = dismiss,
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(
+                cornerRadius = PiCorner.radius,
                 text = confirm,
                 onClick = onConfirm,
                 modifier = Modifier.weight(1f),
+                enabled = confirmEnabled,
                 colors = if (destructive) {
                     ButtonDefaults.textButtonColors(
                         textColor = MiuixTheme.colorScheme.error,

@@ -47,20 +47,26 @@
  * updates in place as the listing slides, which is what the platform's document UI
  * does too.
  *
- * ## Back walks up the filesystem, and stops at the page's root
+ * ## Back walks up the filesystem, to its root
  *
  * The tab is a root, so it draws no back arrow in its bar (`PiPage`'s arrow belongs
  * to a pushed page) — the location bar and the up button are its visible navigation,
  * and the back gesture follows them.
  *
- * The walk stops at `$HOME`, not at the filesystem's root. `$HOME` is
- * `<filesDir>/home`, so its parent *exists* — it is the app's private data, the
- * directory that holds the runtime, the session files and the terminal's home. Both
- * the gesture and the up button therefore gate on being somewhere other than `$HOME`
- * rather than on a parent being present: gating on `parentFile != null` let one tap
- * from the page's own root walk above the home directory into the app's private data,
- * which is not what this page is a view of. [`crumbs`] has the matching rule for a path
- * that is not under `$HOME` at all.
+ * The walk ends at the filesystem's root, not at `$HOME`. It used to stop at `$HOME`:
+ * the home directory's parent is the app's private data directory, and the argument for
+ * refusing that step was that this page is a view of the agent's home rather than of the
+ * whole filesystem. The argument does not survive the listing it produces — `$HOME`
+ * holds `~/.pi` and the agent's workspace, and a reader who has just been shown
+ * `~/.pi` cannot be told that the directory containing it is not their business. The
+ * gate is therefore `parentFile != null`: the walk goes up until there is nothing
+ * above it, and the Home button and the `~` crumb are the way back to the page's own
+ * root, which is where a page that wants to be rooted can be rooted without lying
+ * about the tree.
+ *
+ * [`crumbs`] has the matching rule for a path that is not under `$HOME`: it draws the
+ * absolute trail from `/`, because one unscrollable crumb per directory above the root
+ * would leave the location bar with no way back down.
  */
 package pi.kit.mob.ui
 
@@ -119,16 +125,19 @@ import pi.kit.mob.ui.files.FileSort
 import pi.kit.mob.ui.files.IMAGE_SUFFIXES
 import pi.kit.mob.ui.files.arrange
 import pi.kit.mob.ui.files.crumbs
-import pi.kit.mob.ui.files.depthUnder
+import pi.kit.mob.ui.files.pathDepth
 import pi.kit.mob.ui.files.fileKind
 import pi.kit.mob.ui.files.humanSize
 import pi.kit.mob.ui.files.openExternally
 import pi.kit.mob.ui.files.readDirectory
 import pi.kit.mob.ui.files.stampFor
 import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbItem
 import top.yukonga.miuix.kmp.basic.Card
@@ -164,6 +173,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import java.io.File
 import java.util.Locale
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 /**
  * The tab.
@@ -201,7 +211,11 @@ fun FilesScreen(session: PiAgentSession) {
     var previewUp by remember { mutableStateOf(false) }
 
     fun navigate(to: File) {
-        forward = to.depthUnder(home) > current.depthUnder(home)
+        // The slide's direction is the sign of the depth difference, counted from the
+        // filesystem's root rather than from `$HOME`: a move above the home directory
+        // is still a move, and counting from `$HOME` made every one of them read as a
+        // move down.
+        forward = to.pathDepth() > current.pathDepth()
         current = to
         // A filter is a statement about the folder it was typed in. Carrying it into
         // the next folder opens a listing that is silently hiding rows.
@@ -234,14 +248,23 @@ fun FilesScreen(session: PiAgentSession) {
         if (!openExternally(context, entry.file)) toasts?.show(text.files.openFailed)
     }
 
-    // The tab root draws no bar arrow; the gesture follows the up button instead, and
-    // is released at `$HOME` so it leaves the tab as it always did — not one step
-    // further, which is where the home directory's own parent sits (see the header).
-    BackHandler(enabled = current != home) {
+    // The tab root draws no bar arrow; the gesture follows the up button instead. Both
+    // walk until there is nowhere left to go — the filesystem's root — rather than
+    // stopping at `$HOME`. The page's own root is still one tap away, on the Home
+    // button and the `~` segment of the location bar, so the reader can leave and come
+    // back; refusing the step *up* only meant a directory above the home directory was
+    // unreachable from a listing that had just shown its contents.
+    BackHandler(enabled = current.parentFile != null) {
         current.parentFile?.let(::navigate)
     }
 
     PiPage(
+        // The four tab roots left-align their titles and subtitles. The bar's right
+        // side is where three or four action icons live, and the library centres a
+        // title between the navigation icon and those actions — so a root with four
+        // actions has its title pushed off centre by their width. See `PiPage`'s
+        // *Why a root can be left-aligned*.
+        alignStart = true,
         // The folder's own name, not the tab's: on a file manager the title is the
         // place you are standing in, and "Files" over a folder called `workspace` is
         // the one fact the page already knows better.
@@ -260,11 +283,13 @@ fun FilesScreen(session: PiAgentSession) {
                 Icon(MiuixIcons.Home, contentDescription = text.files.home)
             }
             IconButton(
-                // Up one level *within* the page: at `$HOME` the button is off, even
-                // though `$HOME` has a parent (`<filesDir>`) — that parent is the
-                // app's private data, not a place this page shows.
+                // Up one level, until the filesystem's root — see the header. `$HOME`'s
+                // parent is the app's private data directory, and walking into it is
+                // the point: the runtime, the session files and the terminal's own
+                // home all live there, and a listing that showed `~/.pi` while
+                // refusing to show the directory above it was hiding its own subject.
                 onClick = { current.parentFile?.let(::navigate) },
-                enabled = current != home,
+                enabled = current.parentFile != null,
             ) {
                 // The arrow of Miuix's own basic set, turned through a right angle at
                 // the call site: "up one level" is a direction this library never
@@ -283,16 +308,30 @@ fun FilesScreen(session: PiAgentSession) {
                 .fillMaxSize()
                 .padding(body),
         ) {
-            LocationBar(
-                trail = crumbs(home, current),
-                onOpen = ::navigate,
-            )
+            // The toolbar is **above** the location bar, and that order is the point.
+            //
+            // A file manager's own layout puts the path first, on the argument that the
+            // path is the page's subject. It is — but it is also the thing the reader
+            // already knows, because they tapped a folder to get here and the header
+            // above says its name. The filter is the control they came to *use*, and it
+            // was sitting under the breadcrumb, under the page's title, under its
+            // subtitle and under the header bar itself: measured on the emulator, its
+            // top edge landed 190dp into the content rectangle, which is a control a
+            // thumb has to reach for rather than a toolbar at the top of the page.
+            //
+            // The breadcrumb loses nothing by moving down: it stays directly above the
+            // rows it describes, which is where a path is most useful — "the folder
+            // whose contents you are looking at".
             ListToolbar(
                 query = query,
                 onQueryChange = { query = it },
                 sort = sort,
                 onSortChange = { sort = it },
                 text = text,
+            )
+            LocationBar(
+                trail = crumbs(home, current),
+                onOpen = ::navigate,
             )
 
             // Only the listing travels; the two strips above it are the page's own
@@ -478,12 +517,17 @@ private fun ListToolbar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         TextField(
+            cornerRadius = PiCorner.radius,
             value = query,
             onValueChange = onQueryChange,
             modifier = Modifier.weight(1f),
             label = text.files.filterHint,
             useLabelAsPlaceholder = true,
             singleLine = true,
+            // No focus ring: see `piFieldColors`. The field already reads as focused
+            // because its label has floated and its caret is in it.
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Search,
@@ -546,14 +590,31 @@ private fun DirectoryTable(
     onOpenWith: (FileEntry) -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        // The elastic effect is the *kit's* overscroll modifier, not the one
+        // `LazyColumn` installs for itself.
+        //
+        // That is the fix for "a folder with three files does not bounce the way one
+        // with thirty does", and the cause is in Compose rather than here: `Scrollable`
+        // gates its overscroll effect on
+        // `canScrollForward || canScrollBackward || effect.isInProgress`, so a list whose
+        // content fits the viewport dispatches nothing to the effect and a drag at either
+        // end is simply swallowed. `Modifier.overScrollVertical()` is a nested-scroll
+        // connection above the list instead: it receives whatever the list could not
+        // consume — which for a short list is the whole drag — and translates the content
+        // by its damped distance. The two do not double up: while the list *can* scroll,
+        // its own effect consumes the remainder, so this node is handed zero.
+        modifier = Modifier
+            .fillMaxSize()
+            .overScrollVertical(),
         // The gap above the navigation bar as content padding rather than as a band of
         // empty page: the last row scrolls past it, and at rest it is the space that
         // keeps the last row off the bar.
         contentPadding = PaddingValues(bottom = PAGE_BOTTOM),
-        // The seam between two row cards: 2dp, because two objects need to be told
-        // apart by their outlines rather than by a hairline drawn inside one wall.
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        // The seam between two row cards, at the kit's row gap — the same number the
+        // conversation history states, because the two lists are read one after the
+        // other and were spaced by the same too-tight figure. 2dp is tighter than the
+        // gap inside a row, so two rows read as one panel with a line through it.
+        verticalArrangement = Arrangement.spacedBy(PiCorner.rowGap),
     ) {
         items(rows, key = { entry -> entry.file.absolutePath }) { entry ->
             FileRow(
@@ -595,6 +656,7 @@ private fun FileRow(
 
     Box {
         Card(
+            cornerRadius = PiCorner.radius,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)

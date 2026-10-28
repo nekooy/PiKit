@@ -58,6 +58,8 @@ import kotlinx.coroutines.launch
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.chat.MONO_LINE_HEIGHT
 import pi.kit.mob.ui.components.CopyButton
+import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiTone
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -291,18 +293,22 @@ internal data class InlineStyle(
 /**
  * The answer's own inline colours: a code span filled against the surface it is drawn in.
  *
- * `secondaryContainer` is Miuix's *inset* fill — the role its own text field draws its
- * resting well in — and it is deliberately not a `primary`-tinted fill: a chip that
- * borrowed the accent would make every identifier in a sentence look like a control.
- * `surfaceContainerHigh` was the Material3 step this used to be, and the substitution is
- * forced rather than chosen: in Miuix's dark scheme `surfaceContainerHigh` is the same
- * value as the card it would sit on (`#242424`), so a chip so coloured would be invisible
- * there. `secondaryContainer` is a step away from the card in both modes.
+ * The fill is `PiTone.inset()` — a wash of the surface's own ink, not one of Miuix's
+ * container roles — because the same renderer draws on three different backgrounds and
+ * no single role can be a step away from all of them. `secondaryContainer` was the last
+ * attempt: it is a fixed #F0F0F0, so on the answer card's white it read as a well, on
+ * the manual's #F7F7F7 page as a 7-point smudge, and in the dark scheme
+ * `surfaceContainerHigh` (the role before it) *is* the card's own #242424 and the fill
+ * disappeared outright. A 10% wash is the same relative step everywhere, in both
+ * schemes; `PiTone.inset`'s KDoc has the arithmetic.
+ *
+ * It is deliberately not a `primary`-tinted fill: a chip that borrowed the accent would
+ * make every identifier in a sentence look like a control.
  */
 @Composable
 internal fun inlineStyle(): InlineStyle = InlineStyle(
     linkColor = MiuixTheme.colorScheme.primary,
-    codeBackground = MiuixTheme.colorScheme.secondaryContainer,
+    codeBackground = PiTone.inset(),
 )
 
 /**
@@ -697,14 +703,19 @@ internal fun clipEntryFor(text: String): ClipEntry =
 /**
  * A fenced code block: a label, a copy button, and the text in a well of its own.
  *
- * The well is Miuix's [Card] — the library's own 16dp radius, the same step the rows and
- * the table below use — filled with `secondaryContainer`, which is the inset tone the
- * inline chip uses too and the role Miuix's own text field draws its well in. A code
- * block is an information surface, and the shape guidance is explicit that
- * information-dense surfaces stay square-ish: a large radius on one eats the first and
- * last character of every line. A `Card` also *clips* what it holds, which the hand-
- * ordered `background(shape)` it replaces did not: a line scrolled to its end painted
- * past the rounded corner.
+ * The well is Miuix's [Card] at the kit's own corner ([PiCorner.radius]), filled with
+ * `PiTone.inset()` — the wash the inline chip uses too. The shape guidance says
+ * information-dense surfaces stay square-ish, and that is honoured by the *padding*
+ * rather than by the corner: the block's text is inset 12dp horizontally, which is
+ * more than the corner's own bite, so the radius never reaches a glyph. It is the kit's
+ * corner and not the library's default for the same reason every other surface is —
+ * one radius in the app rather than two. A `Card` also *clips* what it holds, which the
+ * hand-ordered `background(shape)` it replaces did not: a line scrolled to its end
+ * painted past the rounded corner.
+ *
+ * The fill is a wash rather than a palette role for the reason `PiTone.inset()`'s KDoc
+ * gives: the same block is drawn on the answer card, on the manual's page and on the
+ * reader's own tinted prompt, and a fixed role is a different step away from each.
  *
  * The text is monospace at [MONO_LINE_HEIGHT], the one line box every monospace block
  * in the app is drawn at — the tool output panel included — on Miuix's `body2`, the size
@@ -743,8 +754,9 @@ private fun CodeBlock(block: MdBlock.Code) {
             )
         }
         Card(
+            cornerRadius = PiCorner.radius,
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer),
+            colors = CardDefaults.defaultColors(color = PiTone.inset()),
         ) {
             Column(
                 Modifier
@@ -992,8 +1004,11 @@ private fun TableRow(
                     Modifier.width(widths.fold(0.dp) { sum, width -> sum + width })
                 },
             )
+            // The same wash the inline chip and the code well use: a table header is
+            // an inset on the surface it is drawn on, and a fixed role was a different
+            // step away from the answer card than from the manual page (§13).
             .background(
-                if (header) MiuixTheme.colorScheme.secondaryContainer else Color.Unspecified,
+                if (header) PiTone.inset() else Color.Unspecified,
             ),
     ) {
         for (column in 0 until columns) {

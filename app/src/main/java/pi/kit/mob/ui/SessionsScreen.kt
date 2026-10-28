@@ -42,7 +42,11 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -198,6 +202,12 @@ fun SessionsScreen(
     }
 
     PiPage(
+        // The four tab roots left-align their titles and subtitles. The bar's right
+        // side is where three or four action icons live, and the library centres a
+        // title between the navigation icon and those actions — so a root with four
+        // actions has its title pushed off centre by their width. See `PiPage`'s
+        // *Why a root can be left-aligned*.
+        alignStart = true,
         title = text.sessions.title,
         subtitle = when {
             selecting -> text.sessions.selected(selected.size)
@@ -287,6 +297,7 @@ fun SessionsScreen(
             // for the same reason it is not used on the Files page: its expanded state
             // is a results surface, and this field narrows the list in place.
             TextField(
+                cornerRadius = PiCorner.radius,
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier
@@ -295,6 +306,9 @@ fun SessionsScreen(
                 label = text.sessions.searchHint,
                 useLabelAsPlaceholder = true,
                 singleLine = true,
+                // No focus ring: see `piFieldColors`.
+                colors = piFieldColors(),
+                cursorBrush = piFieldCursor(),
                 leadingIcon = {
                     Icon(
                         imageVector = MiuixIcons.Search,
@@ -495,9 +509,12 @@ private fun ConversationList(
         // A gap above the navigation bar, so the last conversation is not read
         // against the bar's own edge.
         contentPadding = PaddingValues(bottom = LIST_BOTTOM),
-        // The seam between two row cards, the same 2dp the Files listing uses: a row
-        // is one object with one outline.
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        // The seam between two row cards, at the kit's row gap: a row is one object
+        // with one outline, and the 2dp this used to use — shared with the Files
+        // listing — was tighter than the gap *inside* a row, so two rows read as one
+        // panel with a line drawn through it. `PiCorner.rowGap` is the one number both
+        // lists state, so the two lists are spaced alike.
+        verticalArrangement = Arrangement.spacedBy(PiCorner.rowGap),
     ) {
         if (pinnedVisible.isNotEmpty()) {
             item(key = "heading-pinned") {
@@ -593,6 +610,7 @@ private fun ConversationRow(
 
     Box {
         Card(
+            cornerRadius = PiCorner.radius,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
@@ -626,12 +644,6 @@ private fun ConversationRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (selecting) {
-                    Checkbox(
-                        state = ToggleableState(checked),
-                        onClick = { onToggleChecked() },
-                    )
-                }
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = item.title.ifBlank { text.sessions.emptyTitle },
@@ -674,6 +686,20 @@ private fun ConversationRow(
                                 },
                         )
                     }
+                }
+                // The selection box is the row's *trailing* control, not its leading
+                // one. On the leading edge it is the first thing in the reading
+                // direction: it displaces every title by its own width the moment
+                // selection begins, which re-flows the whole list under the reader's
+                // finger, and it puts a control where the eye starts a line rather than
+                // where the hand ends one. The right edge is where a list's per-row
+                // control belongs on this platform, and it is also where this row's
+                // press-and-hold menu was anchored before selection mode replaced it.
+                if (selecting) {
+                    Checkbox(
+                        state = ToggleableState(checked),
+                        onClick = { onToggleChecked() },
+                    )
                 }
             }
         }
@@ -845,32 +871,31 @@ private fun RenameDialog(
         onDismissRequest = onDismiss,
     ) {
         TextField(
+            cornerRadius = PiCorner.radius,
             value = value,
             onValueChange = { value = it },
             modifier = Modifier.fillMaxWidth(),
             label = text.sessions.renameLabel,
             useLabelAsPlaceholder = true,
             singleLine = true,
+            // No focus ring, and the caret stated instead: see `piFieldColors`.
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                text = text.sessions.cancel,
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(
-                text = text.sessions.rename,
-                onClick = { onConfirm(value) },
-                modifier = Modifier.weight(1f),
-                enabled = value.isNotBlank(),
-            )
-        }
+        // The app's one dialog-button row — see `PiDialogAnswers`. This pair was
+        // already the right *shape* and was the model for it; it is the shared
+        // composable now so the two cannot drift.
+        PiDialogAnswers(
+            dismiss = text.sessions.cancel,
+            onDismiss = onDismiss,
+            confirm = text.sessions.rename,
+            onConfirm = { onConfirm(value) },
+            // Nothing to rename to while the field is empty: the confirm is disabled
+            // rather than refusing the tap, which is the one state the library's
+            // disabled fill exists for.
+            confirmEnabled = value.isNotBlank(),
+            modifier = Modifier.padding(top = 12.dp),
+        )
     }
 }
 
@@ -972,32 +997,20 @@ private fun DeleteConfirm(
                 }
             }
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                text = text.sessions.cancel,
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(
-                text = text.sessions.delete,
-                onClick = onConfirm,
-                modifier = Modifier.weight(1f),
-                // Red, like every other confirmation that cannot be taken back: the
-                // session file is deleted outright. This is the colour `PiConfirm`'s
-                // `destructive` draws; this dialog builds its own button, so it asks
-                // for it directly. See [InterruptTurnDialog] below for the same
-                // treatment of a different irreversible move.
-                colors = ButtonDefaults.textButtonColors(
-                    textColor = MiuixTheme.colorScheme.error,
-                ),
-            )
-        }
+        // The app's one dialog-button row, with the delete answer in the error colour
+        // — the same `destructive` flag `PiConfirm` takes. This dialog is built here
+        // rather than from `PiConfirm` because its body is a *list* of what is about to
+        // go, which `PiConfirm`'s one sentence cannot hold; the answers are still the
+        // shared row, so the two dialogs cannot disagree about what a confirmation looks
+        // like.
+        PiDialogAnswers(
+            dismiss = text.sessions.cancel,
+            onDismiss = onDismiss,
+            confirm = text.sessions.delete,
+            onConfirm = onConfirm,
+            destructive = true,
+            modifier = Modifier.padding(top = 12.dp),
+        )
     }
 }
 

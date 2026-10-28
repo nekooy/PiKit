@@ -238,10 +238,19 @@ variable does not.
 
 ## Shapes, motion, icons
 
-**Shapes are the library's.** Cards, fields and menus are squircles; buttons are
-capsules. The two voices the previous design language described — dense surfaces
-against round actions — survive as the same distinction in Miuix, but the app no
-longer owns a radius, and nested-corner arithmetic is the library's business.
+**One corner above the library's.** The library's own radius is 16dp on every card,
+field and button, and the app draws one step larger: `PiCorner.radius` (20dp) is
+passed at every `Card`, `Button`, `TextButton` and `TextField` call site, so the
+whole interface is cut with the same corner and no surface is one radius while its
+neighbour is another. It is a single number and not a scale on purpose: a second
+step would need a rule for which surface is which, and there is no such rule to
+state. Three deliberate exceptions keep the library's own figure — the terminal key
+bar's keys (half of each key's height, so a wide key is a pill), a tool output's copy
+button and the code block's `CornerRadius(min(radius, height/2))`, which are round by
+their own geometry — and the two 40dp composer discs (send and stop) state
+`cornerRadius = 20.dp` explicitly so the shape does not depend on the button staying
+40dp. There is no theme-level shape local in Miuix 0.9.4 to hang this on, which is
+why it is per-call-site.
 
 **Motion is the library's**, except for the one page-level move a page has to spell
 out (the settings stack's forward/back slide, the files page's folder transition, the
@@ -271,10 +280,16 @@ the shared vocabulary does not:
   per turn is right, because a turn is a subject: a prompt card on the reader's own
   colour at the end edge, an answer card holding that turn's reasoning, tool calls and
   reply. Tool calls are dense rows inside it, a live turn carries `PiTone.live()`, and
-  the composer is the page's bottom band — a `surfaceContainer` strip holding the four
-  chips, the `TextField` and the action row — so the transcript keeps the rest of the
-  height. A conversation with nothing in it draws the Pi mark and the page's hint
-  instead of a blank area, because the blank is the first thing the app ever shows.
+  the composer is the page's bottom band on `surface` — the same grey the tab strip is
+  painted in, so the foot of the page meets the navigation bar at no seam. Inside the
+  band the field is a raised white frame (`surfaceContainer` at the kit's corner)
+  holding the text **and the three controls**: command list, attach, and the send
+  button — a filled disc in the accent while it can send. The four setting chips above
+  the frame (thinking, model, context, cache) are values drawn in normal ink, and the
+  two report chips open dropdown menus at the chips rather than a bottom sheet, for the
+  reason §7.1 gives: a menu that answers one question belongs at the control that asks
+  it. A conversation with nothing in it draws the Pi mark and the page's hint instead
+  of a blank area, because the blank is the first thing the app ever shows.
 - **Terminal** — a black rectangle with its own sixteen colours, so the chrome stays
   out of the way: a `PiPage` bar with the shell's name and the session roster, and a
   key bar of Miuix buttons on a `surfaceContainer` track. The keys are the same glyph
@@ -287,7 +302,13 @@ the shared vocabulary does not:
   audio, sheet, document — because a listing where every file wears the same sheet of
   paper asks the reader to read names to tell anything apart. The preview is a sheet
   that draws a picture instead of calling it binary, and carries **Copy path** beside
-  **Open with**. This page chose cards where the previous interface deliberately had
+  **Open with**. The toolbar (filter and sort) sits **above** the location trail — the
+  control the page is used through leads, and the trail stays directly above the rows
+  it describes. The walk is not gated at `$HOME`: the up button and the back gesture go
+  to the filesystem's root, because the listing above the home directory is the same
+  kind of content and a gate that showed `~/.pi` while refusing its parent was hiding
+  its own subject — and above the root the trail is drawn as the absolute path from
+  `/`. This page chose cards where the previous interface deliberately had
   none: the Miuix card's press feedback is the row's touch affordance, and a table of
   unframed rows had none.
 - **History** — a list of conversations is a list of *questions the reader asked*, so
@@ -334,6 +355,26 @@ the transcript's meta row and a tool card's output still use the same control.
   be re-read.
 - **The formula line box** — the box, the ascent/descent measurement and the
   typesetter are the app's; only their ink and text style come from the theme.
-- **The window-level dialog phrasing** (`PiConfirm` in the kit, `SettingsAlert` on the
-  settings pages) and the snackbar host, because Miuix ships the window and not this
-  app's two-answer question.
+- **The quotation wash.** A code span, a fenced block and an inline chip are filled
+  with `PiTone.inset()` — 10% of `onSurface` over whatever surface they are drawn on —
+  rather than with a palette role, because the same renderer draws on three different
+  backgrounds (the answer card, the manual page, the reader's own prompt card) and no
+  single role is a step away from all of them. `secondaryContainer` was the last
+  attempt: a fixed #F0F0F0 read as a well on white and as a smudge on the #F7F7F7
+  manual, and in the dark scheme `surfaceContainerHigh` *is* the card's own #242424.
+  A wash of the surface's own ink is the same relative step everywhere, which is what
+  "the same depth" has to mean here.
+- **The window-level dialog phrasing** (`PiConfirm` and `PiDialogAnswers` in the kit,
+  `SettingsAlert` on the settings pages) and the snackbar host, because Miuix ships the
+  window and not this app's two-answer question. `PiDialogAnswers` is the one
+  dialog-button row in the app — two filled `TextButton`s of equal weight, the
+  destructive one told apart by its label's colour — and every dialog in the app draws
+  its answers through it; the transparent-container variant some dialogs used to pass
+  was the reason the same control had two weights depending on which page raised it.
+- **The focus ring is off.** Miuix's `TextField` animates a 2dp border in
+  `colors.borderColor` — `primary` by default — when it takes the focus, and on a page
+  whose fields are the only blue rectangles that ring is the loudest thing on screen.
+  `piFieldColors()` states the border as the field's own fill so the ring animates from
+  the fill to the fill, and `piFieldCursor()` states the caret, because the library
+  derives the caret's brush from the border's colour: without the pair, hiding the ring
+  hides the caret with it. Every field in the app passes both.

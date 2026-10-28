@@ -135,26 +135,35 @@ class FileListingTest {
     }
 
     @Test
-    fun `a path outside home is one segment rather than a walk through private directories`() {
+    fun `a path outside home is the absolute trail from the root`() {
         val home = temporary.newFolder("home2")
         val outside = temporary.newFolder("elsewhere")
 
         val trail = crumbs(home, outside)
 
-        assertEquals(1, trail.size)
-        assertEquals(outside.absolutePath, trail.single().label)
+        // The root, then every component of the path: one crumb per level, so each is
+        // a way back down. A single crumb holding the absolute path was what this did
+        // while the walk was gated at `$HOME`; above the home directory the location
+        // bar would have had nothing tappable in it.
+        assertEquals("/", trail.first().label)
+        assertEquals(outside, trail.last().target)
+        assertEquals(outside.name, trail.last().label)
+        assertEquals(outside.pathDepth() + 1, trail.size)
     }
 
     @Test
-    fun `depth counts components below the root`() {
+    fun `depth counts components from the filesystem root`() {
         val home = temporary.newFolder("depth")
         val one = File(home, "one").apply { mkdir() }
         val two = File(one, "two").apply { mkdir() }
 
-        assertEquals(0, home.depthUnder(home))
-        assertEquals(1, one.depthUnder(home))
-        assertEquals(2, two.depthUnder(home))
-        assertTrue(two.depthUnder(home) > one.depthUnder(home))
+        // One component per separator in the absolute path, so a child is always one
+        // deeper than its parent — including above `$HOME`, which is what makes the
+        // page's slide direction correct when the reader walks out of it.
+        assertEquals(home.pathDepth() + 1, one.pathDepth())
+        assertEquals(one.pathDepth() + 1, two.pathDepth())
+        assertTrue(two.pathDepth() > one.pathDepth())
+        assertTrue(one.pathDepth() > home.pathDepth())
     }
 
     @Test

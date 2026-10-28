@@ -136,10 +136,14 @@ import pi.kit.mob.ui.components.CopyButtonInkInset
 import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
+import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -147,6 +151,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
@@ -729,21 +734,19 @@ internal fun ChatScreen(
         onDismiss = { confirmNewSession = false },
     )
 
-    // The composer's two report sheets and the prompt's extras, in Miuix's own
-    // window sheets. They are drawn here rather than inside the band that opens
-    // them: a sheet is a window of its own, and one composed inside the composer
-    // would be measured against the band's bounds instead of the screen's.
+    // The two report sheets and the prompt's extras, in Miuix's own window sheets.
+    // They are drawn here rather than inside the band that opens them: a sheet is a
+    // window of its own, and one composed inside the composer would be measured
+    // against the band's bounds instead of the screen's.
+    //
+    // The context report is **not** one of them any more. It was a bottom sheet of
+    // fourteen two-line rows — a page-sized panel for a question the reader asks by
+    // glancing at a number — while every other menu on this page is a dropdown at its
+    // own chip. It is a dropdown now, for the reason §7.1 gives: a menu that answers
+    // one question belongs at the control that asks it.
     //
     // The extras sheet is closed by `showPromptExtras` rather than by clearing the
     // value, so the panel still has its own content for the length of its exit.
-    PiSheet(
-        show = openSheet == ComposerSheet.Context,
-        title = text.chat.contextDetails,
-        onDismiss = ::closeSheet,
-    ) {
-        ContextSheet(session = session, text = text)
-    }
-
     PiSheet(
         show = openSheet == ComposerSheet.Shell,
         title = null,
@@ -924,6 +927,12 @@ private fun ChatPage(
     }
 
     PiPage(
+        // The four tab roots left-align their titles and subtitles. The bar's right
+        // side is where three or four action icons live, and the library centres a
+        // title between the navigation icon and those actions — so a root with four
+        // actions has its title pushed off centre by their width. See `PiPage`'s
+        // *Why a root can be left-aligned*.
+        alignStart = true,
         title = conversationTitle(state),
         subtitle = agentSubtitle(agent, text),
         actions = {
@@ -2219,7 +2228,7 @@ private fun TranscriptCardView(
                         )
                     }
                     Card(
-                        cornerRadius = CardDefaults.CornerRadius,
+                        cornerRadius = PiCorner.radius,
                         insideMargin = PROMPT_CARD_PADDING,
                         colors = CardDefaults.defaultColors(
                             color = MiuixTheme.colorScheme.secondaryContainer,
@@ -2262,8 +2271,8 @@ private fun TranscriptCardView(
                 )
             }
             Card(
+                cornerRadius = PiCorner.radius,
                 modifier = Modifier.fillMaxWidth(),
-                cornerRadius = CardDefaults.CornerRadius,
                 insideMargin = PaddingValues(ANSWER_CARD_INSET),
                 // The answer's card is the palette's standard surface step — one step
                 // off the page behind it — because it is *the page's* content rather
@@ -2606,7 +2615,12 @@ private fun PromptExtrasChip(
             ),
         shape = RoundedCornerShape(percent = 50),
         color = MiuixTheme.colorScheme.secondaryContainerVariant,
-        contentColor = MiuixTheme.colorScheme.onSecondaryContainerVariant,
+        // Normal ink, not the variant's own. `onSecondaryContainerVariant` is #A8A8A8
+        // — a *disabled* grey in this palette (it is what `disabledOnSecondaryVariant`
+        // is built from) — so a chip carrying the number of things this prompt will be
+        // sent with read as a control that was turned off. It is a value, so it is drawn
+        // in the ink every other value in the composer is drawn in.
+        contentColor = MiuixTheme.colorScheme.onSurface,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -3113,15 +3127,23 @@ private fun Composer(
     // has to put away the selection toolbar the first one made possible.
     var fieldFocused by remember { mutableStateOf(false) }
 
-    // The band: full bleed, in the page's column, on the same `surfaceContainer` the
-    // tab strip and the root behind it are painted in, so the foot of the page is one
-    // band of chrome from the transcript to the navigation bar rather than a box
-    // floating over the list with a seam above the bar. There is no shadow and no
-    // hairline: the fill is a step away from the page's own `surface`, which is the
-    // boundary — a drawn line here would compete with the transcript's own dividers
-    // (§7.1 has the measurement that settled that).
+    // The band: full bleed, in the page's column, on **`surface`** — the colour the tab
+    // strip and the root scaffold behind it are painted in, so the foot of the page is
+    // one continuous surface from the transcript's end to the navigation bar and the two
+    // meet at no seam at all.
+    //
+    // It used to be `surfaceContainer` (white) on a `surface` page, which made the band a
+    // raised white box under a grey one: two different greys meeting at a horizontal line
+    // that ran the width of the screen, with the tab strip below it back on the page's
+    // own grey. That is the seam — and the reason the field inside the band no longer
+    // needs a fill of its own to be seen: the band is the page, and the composer's frame
+    // is the one raised object on it.
+    //
+    // There is no shadow and no hairline: the composer's own white frame against this
+    // grey *is* the boundary, and a drawn line here would compete with the transcript's
+    // own dividers (§7.1 has the measurement that settled that).
     Surface(
-        color = MiuixTheme.colorScheme.surfaceContainer,
+        color = MiuixTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.fillMaxWidth()) {
@@ -3172,8 +3194,11 @@ private fun Composer(
             val chipState = rememberLazyListState()
             // The band's own colour, read in composition: `MiuixTheme.colorScheme` is
             // a composable read and a `DrawScope` is not one, and the fade has to end
-            // on exactly the colour behind the row or it is a visible rectangle.
-            val bandColor = MiuixTheme.colorScheme.surfaceContainer
+            // on exactly the colour behind the row or it is a visible rectangle. It is
+            // the *band's* colour, so it moved with the band from `surfaceContainer` to
+            // `surface` — a fade left on the old value would have been a white wash over
+            // a grey strip.
+            val bandColor = MiuixTheme.colorScheme.surface
             LazyRow(
                 state = chipState,
                 modifier = Modifier
@@ -3226,6 +3251,7 @@ private fun Composer(
                         onClick = { onOpenSheet(ComposerSheet.Thinking) },
                     ) {
                         WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
                             show = openSheet == ComposerSheet.Thinking,
                             onDismissRequest = onCloseSheet,
                         ) {
@@ -3271,6 +3297,7 @@ private fun Composer(
                         onClick = { onOpenSheet(ComposerSheet.Model) },
                     ) {
                         WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
                             show = openSheet == ComposerSheet.Model,
                             // Two dozen models in one menu: bounded, so the panel
                             // stays a menu rather than covering the conversation it
@@ -3292,7 +3319,18 @@ private fun Composer(
                         glyph = MiuixIcons.Layers,
                         label = contextPercentLabel(state, text),
                         onClick = { onOpenSheet(ComposerSheet.Context) },
-                    )
+                    ) {
+                        WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
+                            show = openSheet == ComposerSheet.Context,
+                            // Fourteen facts: bounded so the panel stays a menu rather
+                            // than covering the conversation it reports on.
+                            maxHeight = MENU_MAX_HEIGHT,
+                            onDismissRequest = onCloseSheet,
+                        ) {
+                            ContextMenu(session = session, text = text)
+                        }
+                    }
                 }
                 // Always shown, so the row has the same shape whether or not the
                 // provider caches anything. It was hidden while nothing had been
@@ -3303,8 +3341,20 @@ private fun Composer(
                     ControlChip(
                         glyph = MiuixIcons.Stopwatch,
                         label = text.chat.cacheHit(cacheHitPercent(state)),
+                        // The same menu as the context chip beside it, and the same
+                        // one name in [ComposerSheet]: the two chips are two readings
+                        // of one report, so opening either asks the same question.
                         onClick = { onOpenSheet(ComposerSheet.Context) },
-                    )
+                    ) {
+                        WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
+                            show = openSheet == ComposerSheet.Context,
+                            maxHeight = MENU_MAX_HEIGHT,
+                            onDismissRequest = onCloseSheet,
+                        ) {
+                            ContextMenu(session = session, text = text)
+                        }
+                    }
                 }
             }
 
@@ -3350,58 +3400,100 @@ private fun Composer(
             // gesture, and `waitForUpOrCancellation` ends it on the lift. `clickable` is
             // the other candidate and is wrong for a different reason: it would give the
             // field a click semantics node, and this is a region, not a button.
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
+            // The field's **frame**: one container holding the text and the three
+            // controls, at the kit's corner radius and in the library's raised role.
+            //
+            // The controls were moved out of this frame and into a row *under* it, on
+            // the argument that a control below the field sits between the text and the
+            // keyboard. That argument was right about the *keyboard* and wrong about the
+            // frame: the field lost its box, the row read as page furniture rather than
+            // as part of the composer, and the send control ended up as far from the
+            // text it sends as the bar is wide. They are back inside, which is also
+            // where the original composer had them — and the frame is what makes them
+            // read as belonging to the text rather than floating under it.
+            //
+            // `surfaceContainer` (white) against the band's `surface` (#F7F7F7) is the
+            // same step the answer cards take against the page, so the composer and the
+            // transcript are one vocabulary: a raised white object on a grey field. The
+            // band itself is now the tab strip's own colour rather than a step above it
+            // (§7.1), so the foot of the page is one surface from the transcript to the
+            // navigation bar and the two no longer meet at a seam.
+            Surface(
+                color = MiuixTheme.colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(PiCorner.radius),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .onFocusChanged { fieldFocused = it.isFocused }
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            // Watched, never consumed — the event still travels on to the
-                            // field, which is what places the caret and raises the
-                            // keyboard.
-                            val down = awaitFirstDown(
-                                requireUnconsumed = false,
-                                pass = PointerEventPass.Initial,
-                            )
-                            val hadFocus = fieldFocused
-                            // One gesture, one scope: the down is read on the Initial
-                            // pass (before the field's own detector), and the gesture
-                            // ends here on its lift. `down.pressed` is the value it had
-                            // at the down event and never changes, so a loop on it never
-                            // ends — the handler this replaced did exactly that, which
-                            // left the clear below unreachable.
-                            val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                            // A *tap*, not a long press. A long press is the gesture that
-                            // raises the selection, and dismissing the field on its lift
-                            // closed the toolbar the same press had just opened — text
-                            // selection in the composer would stop working the moment
-                            // this handler started working. A gesture shorter than the
-                            // long-press timeout is a tap; anything else is left alone.
-                            val tapped = up != null &&
-                                up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
-                            if (hadFocus && tapped) fieldFocus.clearFocus()
-                        }
-                    },
-                enabled = inputEnabled,
-                // One short line: the hint that explained the `!` convention wrapped
-                // to two lines in the field and looked like a rendering fault.
-                label = placeholder,
-                useLabelAsPlaceholder = true,
-                maxLines = COMPOSER_MAX_LINES,
-                insideMargin = COMPOSER_FIELD_INSET,
-                textStyle = MiuixTheme.textStyles.body1,
-                cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 12.dp),
             ) {
+                Column(Modifier.fillMaxWidth()) {
+                    TextField(
+                        cornerRadius = PiCorner.radius,
+                        value = value,
+                        onValueChange = onValueChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // The frame supplies the page gutter; this is the text's own
+                            // inset inside it, so the caret starts where the glyphs of a
+                            // chip above do rather than on the frame's wall.
+                            .padding(horizontal = 2.dp)
+                            .onFocusChanged { fieldFocused = it.isFocused }
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    // Watched, never consumed — the event still travels on to the
+                                    // field, which is what places the caret and raises the
+                                    // keyboard.
+                                    val down = awaitFirstDown(
+                                        requireUnconsumed = false,
+                                        pass = PointerEventPass.Initial,
+                                    )
+                                    val hadFocus = fieldFocused
+                                    // One gesture, one scope: the down is read on the Initial
+                                    // pass (before the field's own detector), and the gesture
+                                    // ends here on its lift. `down.pressed` is the value it had
+                                    // at the down event and never changes, so a loop on it never
+                                    // ends — the handler this replaced did exactly that, which
+                                    // left the clear below unreachable.
+                                    val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                                    // A *tap*, not a long press. A long press is the gesture that
+                                    // raises the selection, and dismissing the field on its lift
+                                    // closed the toolbar the same press had just opened — text
+                                    // selection in the composer would stop working the moment
+                                    // this handler started working. A gesture shorter than the
+                                    // long-press timeout is a tap; anything else is left alone.
+                                    val tapped = up != null &&
+                                        up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
+                                    if (hadFocus && tapped) fieldFocus.clearFocus()
+                                }
+                            },
+                        enabled = inputEnabled,
+                        // One short line: the hint that explained the `!` convention wrapped
+                        // to two lines in the field and looked like a rendering fault.
+                        label = placeholder,
+                        useLabelAsPlaceholder = true,
+                        maxLines = COMPOSER_MAX_LINES,
+                        insideMargin = COMPOSER_FIELD_INSET,
+                        textStyle = MiuixTheme.textStyles.body1,
+                        // The frame *is* the box: the field paints nothing and its focus
+                        // ring animates to nothing, so the only outline on screen is the
+                        // frame's own fill. `piFieldColors(background = Transparent)`
+                        // states both halves at once — the ring's colour *is* the
+                        // background's in this library.
+                        colors = piFieldColors(background = Color.Transparent),
+                        cursorBrush = piFieldCursor(),
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // The controls' row is the frame's own last line, so its
+                            // inset is the frame's: 6dp at the sides keeps the two
+                            // outer buttons off the rounded corner, and 4 below keeps
+                            // them off the bottom wall. The field above carries no
+                            // bottom padding of its own, which is why this row reads as
+                            // attached to the text rather than stacked under it.
+                            .padding(start = 6.dp, end = 6.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                 // The command list, at the field's *left* corner, mirrored by the
                 // send button at its right, and sharing the `+`'s own style —
                 // three plain icon buttons on one line, with the space between the
@@ -3446,6 +3538,7 @@ private fun Composer(
                         )
                     }
                     WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
                         show = openSheet == ComposerSheet.Commands,
                         maxHeight = MENU_MAX_HEIGHT,
                         onDismissRequest = onCloseSheet,
@@ -3474,6 +3567,7 @@ private fun Composer(
                         )
                     }
                     WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
                         show = openSheet == ComposerSheet.Attach,
                         onDismissRequest = onCloseSheet,
                     ) {
@@ -3486,15 +3580,25 @@ private fun Composer(
                     }
                 }
                 Spacer(Modifier.width(4.dp))
-                // The page's one action, and the only fully round control on it:
-                // Miuix's icon button is a 40dp pill by default, which is exactly the
-                // shape this control is saying. The stop state is the same control with
-                // the same shape and the error pair — the reader is looking for one
-                // button there, not two.
+                // The page's one action, and the only fully round control on it: a
+                // filled disc carrying the send glyph, or — while an answer streams —
+                // the same disc in the error pair carrying a pause mark. The reader is
+                // looking for one button in that corner, not two.
+                //
+                // **Round, not a pill.** `IconButton`'s own `CornerRadius` is 40dp on a
+                // 40dp button, so the shape *is* a circle when the two are equal; what
+                // made the send control read as a rounded square rather than as the
+                // page's action was that it was drawn with the *page's* container as its
+                // background while armed — the accent only appeared once there was text,
+                // and the disabled fill was the same grey as the `+` beside it. It is
+                // stated explicitly here (`CircleShape`) so the shape does not depend on
+                // two constants staying equal, and the accent is what the control wears
+                // whenever it is armed.
                 if (isStreaming) {
                     IconButton(
                         onClick = onStop,
                         modifier = Modifier.size(40.dp),
+                        cornerRadius = 20.dp,
                         backgroundColor = MiuixTheme.colorScheme.errorContainer,
                     ) {
                         Icon(
@@ -3510,6 +3614,13 @@ private fun Composer(
                         onClick = onSend,
                         enabled = armed,
                         modifier = Modifier.size(40.dp),
+                        // Half of 40, which is the circle `CircleShape` would draw: the
+                        // library's button takes a radius rather than a shape, so the
+                        // one place the app needs a disc states the number that makes
+                        // one. `IconButtonDefaults.CornerRadius` is already 40dp, which
+                        // on a 40dp button is *also* a disc — the explicit value is what
+                        // stops the shape depending on the button's size staying 40.
+                        cornerRadius = 20.dp,
                         backgroundColor = if (armed) {
                             MiuixTheme.colorScheme.primary
                         } else {
@@ -3526,6 +3637,8 @@ private fun Composer(
                                 MiuixTheme.colorScheme.disabledOnSurface
                             },
                         )
+                    }
+                }
                     }
                 }
             }
@@ -3826,7 +3939,19 @@ private fun ControlChipBase(
                 .clickable(onClick = onClick),
             shape = RoundedCornerShape(percent = 50),
             color = MiuixTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+            // The chip's label is *normal* ink, not the muted one the library gives a
+            // container-high surface. `onSurfaceContainerHigh` is #A2A2A2 — a summary's
+            // grey, chosen for text that explains a row — and these are not
+            // explanations: each one is the current value of a setting the next message
+            // will be sent with (`Medium`, `deepseek-v4`, `上下文 12%`). Read as the
+            // value rather than as a caption, it has to be the same ink as the sentence
+            // in the field below it, which is `onSurface`.
+            //
+            // Measured against the #E8E8E8 fill it is drawn on, #A2A2A2 is a 2.5:1
+            // contrast — below the 3:1 floor for anything a reader has to read — while
+            // `onSurface` is 12.6:1. That is the whole of the change: the chips were not
+            // "a strange colour", they were grey on grey.
+            contentColor = MiuixTheme.colorScheme.onSurface,
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = CHIP_INSET),
@@ -3938,6 +4063,26 @@ private fun ThinkingMenu(
  * Reading it from the click handler's closure was the bug — the chip was rebuilt from
  * the current store while the menu still ticked the model from the previous
  * composition, and the two disagreed.
+ *
+ * ## The rows are the library's dropdown rows
+ *
+ * This menu was the last one in the app still drawing its own row: a [PiMenuRow] with a
+ * hand-placed `MiuixIcons.Ok` in its trailing slot, which is a *different glyph at a
+ * different size* from the tick the thinking-level menu draws. Two menus over the same
+ * conversation therefore marked their current answer two different ways, and the
+ * thinking menu's mark is the library's own — `MiuixIcons.Basic.Check` at
+ * `DropdownDefaults.CheckIconSize`, tinted `primary`, on a row whose title is also
+ * `primary` when it is the selected one.
+ *
+ * `DropdownImpl` is that row, and it is usable here: it is not a `BasicComponent`, so
+ * the `Constraints.Infinity` intrinsic-measure overflow that [PiMenuRow]'s KDoc
+ * records does not apply to it, and it takes a leading [DropdownItem.icon] and a
+ * [DropdownItem.summary] for the two things this menu wants to say beyond the id.
+ *
+ * The model list is a *choice*, so every row is a radio: the selected one is `primary`
+ * with the tick, the rest are plain. The provider is the summary under the id, and a
+ * profile's own name joins it when two profiles share one provider — the pair the
+ * settings sheet grouped and captioned by.
  */
 @Composable
 private fun ModelMenu(
@@ -3958,75 +4103,107 @@ private fun ModelMenu(
     // the screen and shows nothing. One disabled row says why there is nothing to pick
     // — the settings page is where a profile is added, and this page cannot open it.
     val hasModels = profiles.any { it.selectableModels.isNotEmpty() }
+    // The flat list the rows index into, so `optionSize` and `index` are the menu's
+    // own coordinates rather than one profile's. Built once per composition because
+    // the library's first/last padding is derived from them.
+    val rows = profiles.flatMap { profile ->
+        val heading = providerLabel(profile, text)
+        val hint = modelRowHint(profile, text)
+        val summary = listOfNotNull(heading, hint).joinToString(" · ")
+        profile.selectableModels.map { model ->
+            ModelRow(
+                model = model,
+                summary = summary,
+                enabled = profile.providerEntry != null,
+                selected = modelOptionId(profile.id, model) == selectedId,
+                onPick = { session.selectProfile(profile, model) },
+            )
+        }
+    }
 
     ListPopupColumn {
         if (!hasModels) {
-            PiMenuRow(
-                title = text.chat.noModel,
-                onClick = {},
+            DropdownImpl(
+                text = text.chat.noModel,
+                optionSize = 1,
+                isSelected = false,
+                index = 0,
                 enabled = false,
+                onSelectedIndexChange = {},
             )
+            return@ListPopupColumn
         }
-        profiles.forEach { profile ->
-            val heading = providerLabel(profile, text)
-            val hint = modelRowHint(profile, text)
-            profile.selectableModels.forEach { model ->
-                val selected = modelOptionId(profile.id, model) == selectedId
-                PiMenuRow(
-                    title = model,
-                    // The provider is the line under the model, and the profile's own
-                    // name when two profiles share one provider — the same pair the
-                    // sheet picker grouped and captioned by.
-                    summary = listOfNotNull(heading, hint).joinToString(" · "),
-                    // A provider this build does not know cannot be sent to pi at
-                    // all, so its rows are shown but not offered.
-                    enabled = profile.providerEntry != null,
-                    // The model in use is one of a set, so the row says "selected"
-                    // to a screen reader instead of "button".
-                    selected = selected,
-                    trailing = {
-                        if (selected) {
-                            Icon(
-                                imageVector = MiuixIcons.Ok,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MiuixTheme.colorScheme.primary,
-                            )
-                        }
-                    },
-                    onClick = {
-                        if (show && profile.providerEntry != null) {
-                            onDismiss()
-                            session.selectProfile(profile, model)
-                        }
-                    },
-                )
-            }
+        rows.forEachIndexed { index, row ->
+            DropdownImpl(
+                item = DropdownItem(
+                    text = row.model,
+                    enabled = row.enabled,
+                    selected = row.selected,
+                    summary = row.summary,
+                ),
+                optionSize = rows.size,
+                // The tick is drawn by the library from `isSelected`; passing the
+                // item's own flag here would be the same value read twice.
+                isSelected = row.selected,
+                index = index,
+                onSelectedIndexChange = {
+                    // The gate every menu row in this page carries: the panel is drawn
+                    // for the length of its exit, so a second tap aimed at the page
+                    // behind a menu that is already leaving must not pick a model.
+                    if (show && row.enabled) {
+                        onDismiss()
+                        row.onPick()
+                    }
+                },
+            )
         }
     }
 }
 
+/** One row of [ModelMenu], before it is a `DropdownItem`. */
+private class ModelRow(
+    val model: String,
+    val summary: String,
+    val enabled: Boolean,
+    val selected: Boolean,
+    val onPick: () -> Unit,
+)
+
 /**
- * The conversation's numbers, in full.
+ * The conversation's numbers, in full, as a **dropdown** at the chip that shows one of
+ * them.
  *
- * The chip that opens this shows one percentage; everything else a user can want
- * to know about the session — what it cost, how much of it was cache, which file
- * it is being written to — has no room on a 26dp chip and no business in a
- * header. It lives one tap away, read-only.
+ * It was a bottom sheet: fourteen two-line rows in a panel that rose from the bottom
+ * edge, for a question the reader asks by glancing at a number. Every other menu on
+ * this page is a dropdown at its own control (§7.1), and this one is a menu of values
+ * rather than a page — so it is the same `ListPopupColumn` the model and thinking
+ * menus use, and its rows are the library's own dropdown rows.
  *
- * The numbers are read from the session's own flow *here*, inside the sheet,
- * rather than passed in from the page: a turn keeps running while this is open,
- * and a sheet that showed the totals as they were on the frame the chip was
- * tapped would be a snapshot pretending to be a meter.
+ * ## Read-only rows are dropdown rows with no tick
  *
- * One label per row rather than the two-column table this started as: the label
- * column has to be a fixed width (112dp was measured), which leaves 210dp for the
- * value, and a session file name needs 480px. Stacked, the value gets the sheet's
- * full width and a second line — which is why each row is a Miuix [BasicComponent]
- * with the label over the value instead of the library's title-beside-value shape.
+ * A `DropdownImpl` is a *choice* row: it reports a radio-button role and draws a tick
+ * when `isSelected`. Neither is true here — nothing in this menu can be picked — and
+ * the honest version of "a list of labelled values" in this library is the same row
+ * with `isSelected = false` and `enabled = false`, which is what makes the row grey
+ * and reports it as unavailable to a screen reader rather than as a radio that cannot
+ * be moved. That is also what `DropdownImpl`'s own `disabledOnSecondaryVariant` ink is
+ * for, and it is the one state where a menu row is plainly not a control.
+ *
+ * ## One label per row rather than a two-column table
+ *
+ * The table this started as needed a fixed label column (112dp was measured), which
+ * leaves 210dp for a value, and a session file name needs 480px. Stacked — the
+ * label as the title and the value as the summary — the value gets the menu's full
+ * width and a second line, which is the same shape a settings row has and therefore
+ * needs no explanation.
+ *
+ * The numbers are read from the session's own flow *here*, inside the menu, rather
+ * than passed in from the page: a turn keeps running while this is open, and a menu
+ * that showed the totals as they were on the frame the chip was tapped would be a
+ * snapshot pretending to be a meter.
  */
 @Composable
-private fun ContextSheet(session: PiAgentSession, text: Strings) {
+private fun ContextMenu(session: PiAgentSession, text: Strings) {
     val state by session.conversation.collectAsState()
     val saved by session.settingsStore.settings.collectAsState()
     val thinking = thinkingLevelOf(state, saved)
@@ -4035,37 +4212,24 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
     val window = state.model?.contextWindow ?: 0
     val model = state.model
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            // Inside the scroll, for the reason [sheetBottomInset] records.
-            .padding(bottom = sheetBottomInset()),
-    ) {
-        SheetFact(
-            label = text.chat.detailModel,
-            value = when {
-                model == null -> text.chat.loadingModel
-                !model.isUsable -> text.chat.noModel
-                else -> model.id.ifBlank { model.name }
-            },
-        )
-        SheetFact(
-            label = text.chat.detailProvider,
+    val rows = buildList {
+        add(text.chat.detailModel to when {
+            model == null -> text.chat.loadingModel
+            !model.isUsable -> text.chat.noModel
+            else -> model.id.ifBlank { model.name }
+        })
+        add(text.chat.detailProvider to when {
             // `model == null` is the agent still starting; `provider == "unknown"` is
             // pi's own word for "no profile is configured". Both have a translated
             // sentence rather than pi's identifier, which a reader who has not
             // configured anything reads as a fault.
-            value = when {
-                model == null -> text.chat.loadingModel
-                model.provider == "unknown" -> text.chat.noModel
-                else -> model.provider.ifBlank { text.settings.none }
-            },
-        )
-        SheetFact(label = text.chat.thinkingLabel, value = thinking)
-        SheetFact(
-            label = text.chat.detailContext,
-            value = if (window > 0 && context.total > 0) {
+            model == null -> text.chat.loadingModel
+            model.provider == "unknown" -> text.chat.noModel
+            else -> model.provider.ifBlank { text.settings.none }
+        })
+        add(text.chat.thinkingLabel to thinking)
+        add(
+            text.chat.detailContext to if (window > 0 && context.total > 0) {
                 text.chat.contextOfWindow(
                     percent = (context.total * 100 / window).toInt(),
                     windowK = window / 1000,
@@ -4074,55 +4238,46 @@ private fun ContextSheet(session: PiAgentSession, text: Strings) {
                 text.chat.contextEmpty
             },
         )
-        SheetFact(label = text.chat.detailUsed, value = text.chat.tokens(context.total))
-        SheetFact(label = text.chat.detailInput, value = text.chat.tokens(context.input))
-        SheetFact(label = text.chat.detailOutput, value = text.chat.tokens(context.output))
-        SheetFact(label = text.chat.detailCacheRead, value = text.chat.tokens(context.cacheRead))
-        SheetFact(label = text.chat.detailCacheWrite, value = text.chat.tokens(context.cacheWrite))
+        add(text.chat.detailUsed to text.chat.tokens(context.total))
+        add(text.chat.detailInput to text.chat.tokens(context.input))
+        add(text.chat.detailOutput to text.chat.tokens(context.output))
+        add(text.chat.detailCacheRead to text.chat.tokens(context.cacheRead))
+        add(text.chat.detailCacheWrite to text.chat.tokens(context.cacheWrite))
         if (context.reasoning > 0) {
-            SheetFact(label = text.chat.detailReasoning, value = text.chat.tokens(context.reasoning))
+            add(text.chat.detailReasoning to text.chat.tokens(context.reasoning))
         }
-        SheetFact(label = text.chat.cacheHitLabel, value = text.chat.cacheHit(cacheHitPercent(state)))
-        SheetFact(
-            label = text.chat.detailCost,
-            // `Locale.ROOT` for the digits: the default locale writes a comma decimal in
-            // half of Europe, which turns "$0,0123" into a number whose separator is also
-            // its digit-group separator. The currency is the provider's own, USD.
-            value = if (usage.total.costUsd > 0) {
-                String.format(Locale.ROOT, "$%.4f", usage.total.costUsd)
-            } else {
-                null
-            },
-        )
-        SheetFact(label = text.chat.detailTotal, value = text.chat.tokens(usage.total.total))
-        SheetFact(label = text.chat.detailTurns, value = text.chat.turnCount(state.turns.size))
-        // The file's *name*: the sheet is 360dp wide and the container path is
-        // 48 characters before the name. Which conversation this is, is the
+        add(text.chat.cacheHitLabel to text.chat.cacheHit(cacheHitPercent(state)))
+        // `Locale.ROOT` for the digits: the default locale writes a comma decimal in
+        // half of Europe, which turns "$0,0123" into a number whose separator is also
+        // its digit-group separator. The currency is the provider's own, USD. Omitted
+        // while nothing has been spent, rather than drawn as "$0.0000" — a cost row
+        // that always says zero is a row that never says anything.
+        if (usage.total.costUsd > 0) {
+            add(text.chat.detailCost to String.format(Locale.ROOT, "$%.4f", usage.total.costUsd))
+        }
+        add(text.chat.detailTotal to text.chat.tokens(usage.total.total))
+        add(text.chat.detailTurns to text.chat.turnCount(state.turns.size))
+        // The file's *name*: the menu is 288dp wide at its widest and the container
+        // path is 48 characters before the name. Which conversation this is, is the
         // question; where it lives on disk is not.
-        SheetFact(
-            label = text.chat.detailSession,
-            value = state.sessionFile?.let { java.io.File(it).name },
-        )
+        state.sessionFile?.let { add(text.chat.detailSession to java.io.File(it).name) }
     }
-}
 
-/**
- * One read-only fact of the context report: Miuix's own row, its title over its summary.
- *
- * The label is the **title** and the value the **summary** — the library's hierarchy
- * rather than this file's. A settings row puts the setting's name in the title and its
- * value under it, and a fact in a report is the same shape; a hand-built column inside
- * `BasicComponent` was the same two lines drawn twice, with a KDoc that claimed the
- * component stacked them the other way (it does not).
- *
- * A null value is a row with a title and no summary, which is how a cost that is not
- * known yet stays a row rather than a blank. The session file name that used to be set
- * in monospace is a summary like any other: the component owns the type in a row, and a
- * second body style for one value is not a distinction this report needs.
- */
-@Composable
-private fun SheetFact(label: String, value: String?) {
-    BasicComponent(title = label, summary = value)
+    ListPopupColumn {
+        rows.forEachIndexed { index, (label, value) ->
+            DropdownImpl(
+                item = DropdownItem(text = label, summary = value),
+                optionSize = rows.size,
+                isSelected = false,
+                // Not a control: see this function's KDoc. The library draws a
+                // disabled row in the scheme's disabled ink and reports it as
+                // unavailable, which is exactly what a read-only fact is.
+                enabled = false,
+                index = index,
+                onSelectedIndexChange = {},
+            )
+        }
+    }
 }
 
 /**
@@ -4156,12 +4311,15 @@ private fun SheetFact(label: String, value: String?) {
  *   the one place a field is the right answer, because the whole point of `!` is
  *   that the reader has a shell line in mind.
  *
- * Each row is a [PiMenuRow] — a two-line row with the id over its description —
- * rather than a `DropdownImpl`: the ids share no mutually exclusive choice, and the
- * description under each one is half of what the row says. It is `PiMenuRow` and not
- * a `BasicComponent` because the library cannot measure one inside a
- * `ListPopupColumn` once it has a start or end slot (see that file's header), and
- * the attach menu beside this one proved it on a phone.
+ * Each row is the library's dropdown row — [DropdownImpl] — with the id as its title
+ * and its description as its summary. It was a [PiMenuRow], and the argument for that
+ * was that the ids share no mutually exclusive choice; what that produced was a menu
+ * whose rows were a *different shape* from the thinking-level menu's one chip to the
+ * left. `DropdownImpl` draws an unselected row identically (title, summary, the
+ * library's 20dp sides), and it does not require the row to be a choice: `isSelected`
+ * is simply false and no tick is drawn. `PiMenuRow` remains for the rows that carry a
+ * leading mark or a trailing control — the terminal's roster and the attach menu
+ * below — because those are the ones the library's dropdown row cannot hold.
  *
  * ## Why `agentCommands()` is still on the session
  *
@@ -4188,17 +4346,28 @@ private fun CommandMenu(
         }
     }
 
+    val rows = BUILT_IN_COMMANDS
     ListPopupColumn {
-        PiMenuRow(
-            title = SHELL_SIGIL,
-            summary = text.chat.shellCommandHint,
-            onClick = { pick(onShell) },
+        DropdownImpl(
+            text = SHELL_SIGIL,
+            optionSize = rows.size + 1,
+            isSelected = false,
+            index = 0,
+            onSelectedIndexChange = { pick(onShell) },
         )
-        BUILT_IN_COMMANDS.forEach { command ->
-            PiMenuRow(
-                title = command.id,
-                summary = command.description(text),
-                onClick = { pick { onRun(command) } },
+        rows.forEachIndexed { index, command ->
+            DropdownImpl(
+                item = DropdownItem(
+                    text = command.id,
+                    summary = command.description(text),
+                ),
+                optionSize = rows.size + 1,
+                // A command list has no current answer, so no row is ticked — the
+                // difference between this menu and the model one is the whole reason
+                // the library's row takes `isSelected` rather than deriving it.
+                isSelected = false,
+                index = index + 1,
+                onSelectedIndexChange = { pick { onRun(command) } },
             )
         }
     }
@@ -4219,6 +4388,12 @@ private fun CommandMenu(
  * other two hand the job to the system picker, and a photo of a whiteboard is not
  * something the picker can offer at all. The report "拍照应该放在图片上面" is
  * that the row worth opening the control for should not be the third one.
+ *
+ * The mark is passed as the [DropdownItem]'s own `icon`, so these rows are the same
+ * row as the model menu's with a leading cell filled in — `DropdownImpl` draws the
+ * cell at `IconMinSize` (26dp) and pads it 12dp from the title. This is the one menu
+ * in the composer that still has a leading mark at all, which is why it is the one
+ * that kept a `DropdownItem` rather than the `text`-only overload.
  */
 @Composable
 private fun AttachMenu(
@@ -4234,33 +4409,37 @@ private fun AttachMenu(
         }
     }
 
+    val rows = listOf(
+        AttachRow(text.chat.attachCamera, text.chat.attachCameraHint, MiuixIcons.Scan, "camera"),
+        AttachRow(text.chat.attachImage, text.chat.attachImageHint, MiuixIcons.Photos, "image"),
+        AttachRow(text.chat.attachFile, text.chat.attachFileHint, MiuixIcons.File, "file"),
+    )
     ListPopupColumn {
-        PiMenuRow(
-            title = text.chat.attachCamera,
-            summary = text.chat.attachCameraHint,
-            startAction = {
-                Icon(imageVector = MiuixIcons.Scan, contentDescription = null)
-            },
-            onClick = { pick("camera") },
-        )
-        PiMenuRow(
-            title = text.chat.attachImage,
-            summary = text.chat.attachImageHint,
-            startAction = {
-                Icon(imageVector = MiuixIcons.Photos, contentDescription = null)
-            },
-            onClick = { pick("image") },
-        )
-        PiMenuRow(
-            title = text.chat.attachFile,
-            summary = text.chat.attachFileHint,
-            startAction = {
-                Icon(imageVector = MiuixIcons.File, contentDescription = null)
-            },
-            onClick = { pick("file") },
-        )
+        rows.forEachIndexed { index, row ->
+            DropdownImpl(
+                item = DropdownItem(
+                    text = row.title,
+                    summary = row.summary,
+                    icon = { modifier -> Icon(row.glyph, contentDescription = null, modifier = modifier) },
+                ),
+                optionSize = rows.size,
+                // Three kinds of attachment are not a set with a current answer: a
+                // message can carry all three, so no row is ever ticked.
+                isSelected = false,
+                index = index,
+                onSelectedIndexChange = { pick(row.kind) },
+            )
+        }
     }
 }
+
+/** One row of [AttachMenu]. */
+private class AttachRow(
+    val title: String,
+    val summary: String,
+    val glyph: ImageVector,
+    val kind: String,
+)
 
 
 /**
@@ -4481,6 +4660,7 @@ private fun ShellCommandSheet(
             modifier = Modifier.padding(start = SHEET_GUTTER, end = SHEET_GUTTER, bottom = 8.dp),
         )
         TextField(
+            cornerRadius = PiCorner.radius,
             value = line,
             onValueChange = { line = it },
             modifier = Modifier
@@ -4496,6 +4676,7 @@ private fun ShellCommandSheet(
             ),
         )
         Button(
+            cornerRadius = PiCorner.radius,
             onClick = { onRun(line.trim()) },
             // Refused while the line is blank: `bash` with an empty command is a
             // shell error the user would be reading for a reason they caused.

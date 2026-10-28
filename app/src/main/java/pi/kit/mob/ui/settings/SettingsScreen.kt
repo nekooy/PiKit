@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -45,8 +46,10 @@ import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.StorageSelfTest
+import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
+import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
@@ -411,7 +414,9 @@ private fun RootPage(
     // The tab root is a page like every other page: it has Miuix's top bar, and the bar
     // is where the tab's name lives. `onBack` is null, which is what makes the system
     // back gesture leave the app from here rather than doing nothing.
-    PiPage(title = text.settings.title) { padding ->
+    // The settings root left-aligns its title for the reason the other three tab
+    // roots do — see `PiPage`'s *Why a root can be left-aligned*.
+    PiPage(title = text.settings.title, alignStart = true) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -569,16 +574,21 @@ private fun RootPage(
  * Miuix's own "one of these", and it says which one is chosen without a second
  * glyph being drawn for the question.
  *
- * ## The answers are flat, which is a deliberate override of the library's default
+ * ## The rows are full-bleed, and the answers are the app's own pair
  *
- * `TextButton` draws a `secondaryVariant` container of its own — at the default
- * palette that is the same near-white as the card above it, so the two answers and the
- * list of languages merged into one tall grey block, and the pair read as two filled
- * pills under a panel rather than as the question's two words. The app's dialogs are
- * text actions on the dialog's own surface (`PiConfirm`), so these two pass a
- * transparent container and keep the neutral label colour: same component, same
- * side-by-side weights, no fill. If the kit's pair is ever given a transparent container
- * too, these two lines become redundant and can go.
+ * The three languages are one full-width list: Miuix's `Card` is *not* used, because a
+ * card is a surface inset from the dialog's own edge and a row's press feedback is
+ * drawn inside whatever bounds it has — so the tap highlight stopped 24dp short of the
+ * dialog on each side and read as a highlight of the row rather than of the choice. The
+ * rows are `RadioButtonPreference`s directly on the dialog's surface, which is where
+ * their indication reaches the dialog's own rounded corner.
+ *
+ * The two answers are [PiDialogAnswers], the app's one dialog-button shape — the same
+ * two filled halves the *rebuild the runtime* question draws. This dialog used to pass
+ * a transparent container, on the argument that `TextButton`'s `secondaryVariant` fill is
+ * the same near-white as the card above it and the three blocks merged. That card is
+ * gone with the full-bleed list, so the argument went with it — and the flat pair was
+ * the last dialog in the app whose answers did not match every other one's.
  */
 @Composable
 private fun LanguageDialog(
@@ -596,39 +606,43 @@ private fun LanguageDialog(
     WindowDialog(
         show = show,
         title = text.settings.language,
+        // No horizontal inset for the *content*, so the list spans the dialog: the
+        // title and the answer row are centred and already have their own margins from
+        // the library, and a row's press indication is clipped to the bounds it is
+        // given — see this function's KDoc.
+        insideMargin = DpSize(0.dp, DialogDefaults.insideMargin.height),
         onDismissRequest = onDismiss,
     ) {
         Column(Modifier.fillMaxWidth()) {
-            Card {
-                Lang.entries.forEach { entry ->
-                    RadioButtonPreference(
-                        title = entry.label,
-                        selected = entry == chosen,
-                        onClick = { chosen = entry },
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    text = text.common.cancel,
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                    colors = flatDialogAction(),
-                )
-                TextButton(
-                    text = text.common.confirm,
-                    onClick = { onPick(chosen) },
-                    modifier = Modifier.weight(1f),
-                    colors = flatDialogAction(),
+            Lang.entries.forEach { entry ->
+                RadioButtonPreference(
+                    title = entry.label,
+                    selected = entry == chosen,
+                    onClick = { chosen = entry },
                 )
             }
+            PiDialogAnswers(
+                dismiss = text.common.cancel,
+                onDismiss = onDismiss,
+                confirm = text.common.confirm,
+                onConfirm = { onPick(chosen) },
+                // The answers keep the dialog's own gutter even though the list above
+                // them does not: a button's fill has to stop short of the panel's edge,
+                // where a row's highlight has to reach it.
+                modifier = Modifier.padding(horizontal = DIALOG_ANSWER_GUTTER, vertical = 12.dp),
+            )
         }
     }
 }
+
+/**
+ * The answers' gutter inside a dialog whose content is full-bleed.
+ *
+ * `DialogDefaults.insideMargin`'s own width, so a dialog that removes the content inset
+ * to let its list reach the edges puts the same number back on the buttons — the two are
+ * one measurement and stating it as a named constant is what says so.
+ */
+private val DIALOG_ANSWER_GUTTER = 24.dp
 
 internal fun agentDescription(agent: AgentStatus, text: Strings): String = when (agent) {
     AgentStatus.Running -> text.settings.running

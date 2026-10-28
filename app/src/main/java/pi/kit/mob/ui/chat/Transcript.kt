@@ -560,7 +560,11 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
                                 lineHeight = MONO_LINE_HEIGHT,
                             ),
                             fontFamily = FontFamily.Monospace,
-                            color = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+                            // Normal ink: this is the command that ran, which is the
+                            // one line of a tool call the reader came to read. The
+                            // #A2A2A2 the panel used to use put it *below* the 3:1
+                            // floor on the panel's own fill.
+                            color = MiuixTheme.colorScheme.onSurface,
                         )
                     }
                     if (item.output.isNotBlank()) {
@@ -597,7 +601,10 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
                                     lineHeight = MONO_LINE_HEIGHT,
                                 ),
                                 fontFamily = FontFamily.Monospace,
-                                color = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+                                // The tool's output is the answer the call produced,
+                                // not a caption on it: normal ink, for the reason the
+                                // summary above states.
+                                color = MiuixTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -862,7 +869,10 @@ internal fun ReasoningBlock(thinking: String) {
             style = MiuixTheme.textStyles.footnote1.copy(
                 lineHeight = MONO_LINE_HEIGHT,
             ),
-            color = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+            // The reasoning's own body, in normal ink: it is the model's thinking, which
+            // is content, and the panel it sits in is already the quietest surface on the
+            // page. The summary grey it used to use made it a caption on itself.
+            color = MiuixTheme.colorScheme.onSurface,
         )
     }
 }
@@ -1068,7 +1078,12 @@ internal enum class ChatTone {
 
     @Composable
     fun onContainer(): Color = when (this) {
-        Neutral -> MiuixTheme.colorScheme.onSurfaceContainerHigh
+        // Normal ink. `onSurfaceContainerHigh` is #A2A2A2 in the light scheme — the
+        // summary grey, for text that explains something — and a neutral pill carries a
+        // *state* ("已退出", "读取中"), which is a thing the reader is meant to read
+        // rather than to skip. It was also the pill's own fill's near neighbour: the
+        // container is #E8E8E8 and the ink #A2A2A2, a 2.5:1 pair.
+        Neutral -> MiuixTheme.colorScheme.onSurface
         Accent -> MiuixTheme.colorScheme.onPrimaryContainer
         // The pair of [container]'s `tertiaryContainer` — `PiTone.live()` is the kit's
         // name for that ink, and the two are one pair: a live pill drawn with the
@@ -1079,7 +1094,11 @@ internal enum class ChatTone {
 
     @Composable
     fun ink(): Color = when (this) {
-        Neutral -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+        // `onSurface`, for the reason [onContainer] gives: a neutral label is a value
+        // rather than an explanation. `onSurfaceVariantSummary` is 60% black, which on
+        // the answer card's white is legible and on the reader's own tinted prompt card
+        // is not.
+        Neutral -> MiuixTheme.colorScheme.onSurface
         Accent -> MiuixTheme.colorScheme.primary
         Live -> PiTone.live()
         Danger -> PiTone.error()

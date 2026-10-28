@@ -75,13 +75,18 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
+import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -95,7 +100,7 @@ import top.yukonga.miuix.kmp.basic.SmallTitleDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TextButtonColors
+import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
@@ -264,8 +269,40 @@ fun SettingsParagraph(
  * starts its label on the same column a row starts its title — inside a `Card` inset by
  * 12dp both land at 28dp from the page edge, and inside a sheet (24dp) both land at 40.
  * This used to add a 12dp gutter on top, which put every field 12dp to the right of the
- * rows it sat among. There is no parameter for it any more: the two places a field is
- * drawn do not actually disagree.
+ * rows it sat among, and it was removed for that reason.
+ *
+ * **What came back is a different thing, and it is about the outline rather than the
+ * text.** An edge-to-edge field ran its *box* to within 12dp of the window, so the two
+ * side walls of a full-width group's field were 24dp apart with the card's fill in
+ * between and nothing else — measured, the widest control on the page and the closest
+ * to its edge, which read as a field that had been stretched rather than placed. The
+ * box is therefore inset by [FIELD_INSET] and the inside margin is reduced by exactly
+ * the same amount, so the *label* stays on the group's column while the *outline*
+ * stops 18dp from the window. The pair is the point: either half alone moves the text.
+ */
+private val FIELD_INSET = 6.dp
+
+/**
+ * A settings field: Miuix's own, with its supporting line under it.
+ *
+ * The field carries 4dp above and below and [FIELD_INSET] on each side, so a run of
+ * fields sits inside the group rather than edge to edge and two stacked fields stay 8dp
+ * apart (their own outlines separate them, and a hairline beside a field would be a
+ * boundary too many). [supporting] is the sentence under the box: Miuix's `TextField`
+ * has a floating label and no supporting slot, and that sentence is help for *this*
+ * field, so it stays with it.
+ *
+ * [placeholder] is drawn under the box while the field is empty, beside [supporting]
+ * rather than instead of it: a call site that passes both wants the sentence about the
+ * field *and* an example of what goes in it, and the version that drew one or the other
+ * silently dropped every example the model form passes.
+ *
+ * [password] exists because an API key must not be drawn in the clear; everything else
+ * about the two fields is the same, which is why this is a parameter rather than a
+ * second field at each call site.
+ *
+ * The focus ring is off here and everywhere else a field is drawn — `piFieldColors`
+ * is the pair that does it, and its KDoc says why the ring cannot simply be hidden.
  */
 @Composable
 fun SettingsTextField(
@@ -284,6 +321,7 @@ fun SettingsTextField(
 ) {
     Column(modifier.fillMaxWidth()) {
         TextField(
+            cornerRadius = PiCorner.radius,
             value = value,
             onValueChange = onValueChange,
             label = label,
@@ -300,8 +338,27 @@ fun SettingsTextField(
                 password -> PasswordVisualTransformation()
                 else -> VisualTransformation.None
             },
+            // The library's focus ring is off, and its caret is stated instead — see
+            // `piFieldColors`'s KDoc for why the two are one decision.
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
+            // The box is pulled in from the card's edge and its text is pulled back
+            // out by the same amount, so the *label* keeps the column every other row
+            // in the group starts on while the *outline* stops short of the card's own
+            // edge. Both halves are needed: an inset without the compensating inside
+            // margin moves the text off the column, which is the mistake this wrapper's
+            // KDoc records from the last time it had a gutter of its own.
+            //
+            // The group's rows begin 28dp from the page edge — `PiSection`'s 12dp card
+            // inset plus the library's 16dp inside margin — and so does this label at
+            // 6 + 10.
+            insideMargin = DpSize(
+                TextFieldDefaults.InsideMargin.width - FIELD_INSET,
+                TextFieldDefaults.InsideMargin.height,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = FIELD_INSET)
                 .padding(vertical = 4.dp),
         )
         // Both lines, when both are given: `supporting` explains the field and
@@ -326,23 +383,6 @@ fun SettingsTextField(
 }
 
 /**
- * A dialog answer with no container of its own.
- *
- * `TextButton`'s default colour pair paints the button's *surface* (`secondaryVariant`),
- * which on a dialog is a second panel behind each word — and in a dialog that already
- * holds a card of that same near-white, the answers and the card merge into one block of
- * fill. A dialog's answers are words on the dialog, which is the idiom the app's other
- * dialogs use, so the container is transparent and the label keeps the library's neutral
- * colour. `PiConfirm(destructive = true)` is the same idea for a label that has to read
- * as the dangerous one: it keeps the container and colours the text instead.
- */
-@Composable
-internal fun flatDialogAction(): TextButtonColors = ButtonDefaults.textButtonColors(
-    color = Color.Transparent,
-    disabledColor = Color.Transparent,
-)
-
-/**
  * A message with one acknowledgement, and an optional body of lines under it.
  *
  * The settings pages' shape for an *event* that came back wrong — announced, then
@@ -356,6 +396,13 @@ internal fun flatDialogAction(): TextButtonColors = ButtonDefaults.textButtonCol
  *
  * [lines] is the installer's own output, one line per file a walk could not rewrite:
  * there is no ceiling on that count, so it is bounded too.
+ *
+ * The acknowledgement is [PiDialogAnswers]' single-answer form, which is the app's one
+ * dialog-button shape. It used to pass a transparent container on the argument that a
+ * filled answer beside the dialog's own card reads as a second panel; what that produced
+ * was an acknowledgement that looked disabled next to the filled answers on the page
+ * behind it, and two different weights for the same control depending on which page
+ * raised the dialog.
  */
 @Composable
 fun SettingsAlert(
@@ -391,6 +438,7 @@ fun SettingsAlert(
                 // library's corner radius and `surfaceContainer` its panel role, and a
                 // second pair of each beside them read as a different kind of surface.
                 Card(
+                    cornerRadius = PiCorner.radius,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -417,11 +465,9 @@ fun SettingsAlert(
                     }
                 }
             }
-            TextButton(
-                text = confirm,
-                onClick = onConfirm,
-                modifier = Modifier.fillMaxWidth(),
-                colors = flatDialogAction(),
+            PiDialogAnswers(
+                dismiss = confirm,
+                onDismiss = onConfirm,
             )
         }
     }
@@ -649,6 +695,7 @@ fun SettingsAction(
     enabled: Boolean = true,
 ) {
     TextButton(
+        cornerRadius = PiCorner.radius,
         text = text,
         onClick = onClick,
         modifier = modifier,
@@ -741,7 +788,7 @@ fun SettingsPickerSheet(
                 )
             }
             if (shown.isNotEmpty()) {
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth(), cornerRadius = PiCorner.radius) {
                     // The list scrolls *inside* the card, so the card's own rounded clip is
                     // what the rows are cut by: a scroll modifier on the card itself would
                     // put the viewport outside the surface, and the corners would scroll
@@ -818,6 +865,7 @@ fun SettingsButton(
     primary: Boolean = false,
 ) {
     Button(
+        cornerRadius = PiCorner.radius,
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,

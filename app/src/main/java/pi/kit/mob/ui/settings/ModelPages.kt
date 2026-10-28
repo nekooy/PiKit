@@ -42,6 +42,7 @@ import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.modelDefinitionFacts
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiGroupAction
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
@@ -1603,7 +1604,7 @@ private fun ModelNumberBody(
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(bottom = 6.dp),
         )
-        Card(Modifier.fillMaxWidth()) {
+        Card(Modifier.fillMaxWidth(), cornerRadius = PiCorner.radius) {
             SettingsTextField(
                 value = draft,
                 onValueChange = { draft = tokenDigits(it) },

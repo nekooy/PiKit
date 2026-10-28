@@ -85,6 +85,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.clipEntryFor
 import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiCorner
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -196,6 +197,7 @@ internal fun FilePreviewSheet(entry: FileEntry) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(
+                cornerRadius = PiCorner.radius,
                 text = text.files.copyPath,
                 onClick = {
                     scope.launch {
@@ -206,6 +208,7 @@ internal fun FilePreviewSheet(entry: FileEntry) {
                 modifier = Modifier.weight(1f),
             )
             Button(
+                cornerRadius = PiCorner.radius,
                 onClick = {
                     // See `openExternally`: the failure is a toast rather than a
                     // silent no-op, because the button visibly did nothing.

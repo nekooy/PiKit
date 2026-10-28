@@ -34,9 +34,12 @@ import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Text
@@ -434,6 +437,7 @@ private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
         )
 
         TextField(
+            cornerRadius = PiCorner.radius,
             value = draft,
             onValueChange = {
                 draft = it
@@ -451,6 +455,9 @@ private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
                 autoCorrectEnabled = false,
             ),
             maxLines = Int.MAX_VALUE,
+            // No focus ring, and the caret stated instead: see `piFieldColors`.
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),

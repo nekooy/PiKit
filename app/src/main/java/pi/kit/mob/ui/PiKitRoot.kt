@@ -81,6 +81,8 @@ import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.RuntimeStatus
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiToastHost
 import pi.kit.mob.ui.kit.PiToastHostLayer
 import pi.kit.mob.ui.kit.PiToastProvider
@@ -483,10 +485,12 @@ private fun RootContent(
                     .heightIn(max = DIALOG_BODY_MAX_HEIGHT)
                     .verticalScroll(rememberScrollState()),
             )
-            TextButton(
-                text = text.common.ok,
-                onClick = dismiss,
-                modifier = Modifier.fillMaxWidth(),
+            // The app's one dialog-button row, in its single-answer form: an
+            // acknowledgement has nothing to be told apart from, so the one answer
+            // takes the whole row rather than half of it with a gap beside it.
+            PiDialogAnswers(
+                dismiss = text.common.ok,
+                onDismiss = dismiss,
             )
         }
     }
@@ -806,6 +810,7 @@ private fun SetupFailure(
         )
         Spacer(Modifier.height(20.dp))
         TextButton(
+            cornerRadius = PiCorner.radius,
             text = actionLabel,
             onClick = onAction,
             modifier = Modifier.fillMaxWidth(),

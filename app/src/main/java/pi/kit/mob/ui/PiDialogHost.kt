@@ -18,6 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.strings
+import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiDialogAnswers
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -154,7 +158,7 @@ fun PiDialogHost(
                     // A card around them because the dialog's own background is the
                     // page's: Miuix's rows carry no surface of their own, and a set
                     // of answers reads as one group the way a settings page's do.
-                    options.isNotEmpty() -> Card(modifier = Modifier.fillMaxWidth()) {
+                    options.isNotEmpty() -> Card(modifier = Modifier.fillMaxWidth(), cornerRadius = PiCorner.radius) {
                         options.forEach { option ->
                             RadioButtonPreference(
                                 title = option,
@@ -167,6 +171,7 @@ fun PiDialogHost(
                     confirmOnly -> Unit
 
                     else -> TextField(
+                        cornerRadius = PiCorner.radius,
                         state = field,
                         label = placeholder.orEmpty(),
                         // The placeholder is the field's label until something is
@@ -175,39 +180,37 @@ fun PiDialogHost(
                         // text to a dialog that is one question.
                         useLabelAsPlaceholder = true,
                         lineLimits = TextFieldLineLimits.SingleLine,
+                        // No focus ring, and the caret stated instead — a dialog has
+                        // one field in it, so the accent border was drawing the
+                        // reader's attention to the only thing on the panel they could
+                        // already only be typing into.
+                        colors = piFieldColors(),
+                        cursorBrush = piFieldCursor(),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // A dialog keeps its dismiss even when the question has options:
-                // a question with a destructive answer has to have both answers.
-                TextButton(
-                    text = text.common.cancel,
-                    onClick = onCancel,
-                    modifier = Modifier.weight(1f),
-                )
-                // One confirm at most: an options question is answered by picking,
-                // so the row is the cancel alone in that case.
-                if (options.isEmpty()) {
-                    TextButton(
-                        text = if (confirmOnly) text.common.confirm else text.common.ok,
-                        onClick = {
-                            if (confirmOnly) {
-                                onConfirmed(true)
-                            } else {
-                                onValue(field.text.toString())
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
+            // The app's one dialog-button row. A dialog keeps its dismiss even when
+            // the question has options — a question with a destructive answer has to
+            // have both answers — and an options question has no confirm at all, since
+            // it is answered by picking.
+            PiDialogAnswers(
+                dismiss = text.common.cancel,
+                onDismiss = onCancel,
+                confirm = if (options.isEmpty()) {
+                    if (confirmOnly) text.common.confirm else text.common.ok
+                } else {
+                    null
+                },
+                onConfirm = {
+                    if (confirmOnly) {
+                        onConfirmed(true)
+                    } else {
+                        onValue(field.text.toString())
+                    }
+                },
+            )
         }
     }
 }

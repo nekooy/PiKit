@@ -242,7 +242,12 @@ internal object ChineseStrings : Strings {
     override val files = object : Strings.Files {
         override val home = "主目录"
         override val parent = "上一级目录"
-        override val openWith = "用其它应用打开"
+        // Four characters rather than seven. This label is one of the two side-by-side
+        // buttons at the foot of the preview panel, and 用其它应用打开 wrapped to two
+        // lines in half a panel's width — which doubled that button's height and left
+        // the pair ragged. 打开方式 is four characters like 复制路径 beside it, so both
+        // labels are one line and the panel's foot is one straight edge.
+        override val openWith = "打开方式"
         override val notAFile = "不是普通文件"
         override val empty = "这个文件夹是空的"
         override val emptyBody = "可能是空的，也可能是这个应用无权读取。"

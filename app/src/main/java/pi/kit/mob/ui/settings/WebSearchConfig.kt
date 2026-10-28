@@ -34,8 +34,11 @@ import pi.kit.mob.pi.WebSearchStore
 import pi.kit.mob.pi.WEB_SEARCH_OWNED_PATHS
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -440,6 +443,7 @@ private fun WebSearchValueSheet(
         // field. Everything else is what that helper draws — Miuix's field, no container
         // of its own, and a supporting line under it in the summary ink.
         TextField(
+            cornerRadius = PiCorner.radius,
             value = draft,
             onValueChange = { next ->
                 draft = next
@@ -454,6 +458,9 @@ private fun WebSearchValueSheet(
                 keyboardType = KeyboardType.Ascii,
                 autoCorrectEnabled = false,
             ),
+            // No focus ring, and the caret stated instead: see `piFieldColors`.
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
             modifier = Modifier.fillMaxWidth(),
         )
         Text(

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import pi.kit.mob.ui.kit.PiCorner
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -33,6 +34,7 @@ fun PiSection(
             SmallTitle(text = title)
         }
         Card(
+            cornerRadius = PiCorner.radius,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
@@ -57,6 +59,7 @@ fun PiGroupAction(
     enabled: Boolean = true,
 ) {
     TextButton(
+        cornerRadius = PiCorner.radius,
         text = text,
         onClick = onClick,
         modifier = modifier
