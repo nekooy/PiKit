@@ -193,6 +193,51 @@ class ConversationReducerTest {
         assertNull(switched.availableThinkingLevelsFor)
     }
 
+    /**
+     * The switch the app made is shown as made on the frame the user tapped it, and
+     * pi's own report closes or overrules it.
+     *
+     * `set_model`'s confirming `get_state` is a round trip away — 320 ms on the
+     * emulator, over a second on a busy phone — and between the tap and that reply the
+     * chip kept the previous model's name and clamped against its levels. Writing the
+     * request into the state is what lets the display answer immediately; `get_state`
+     * naming the same model confirms it and naming anything else (a `/model` typed in
+     * the composer, a restart that raced the switch) drops it.
+     */
+    @Test
+    fun `a requested model stands until get_state confirms or overrules it`() {
+        val onFlash = fold(
+            """{"id":"1","type":"response","command":"get_state","success":true,"data":{"model":{"id":"deepseek-flash","name":"deepseek-flash","provider":"deepseek","api":"openai-completions","contextWindow":1000000,"input":["text"]},"thinkingLevel":"high","sessionId":"x"}}""",
+        )
+
+        // The app's own switch, written before any reply to it exists.
+        val requested = onFlash.copy(requestedModel = "deepseek-v4-pro")
+        assertEquals("deepseek-v4-pro", requested.requestedModel)
+
+        // The confirmation names the requested model: pi is running it, so the
+        // request has served its purpose. It is kept rather than cleared — the state
+        // it names is the model the display wants anyway, and keeping it costs one
+        // redundant string — which is why the assertion is on the pair agreeing.
+        val confirmed = ConversationReducer.reduce(
+            requested,
+            PiRecordParser.parse(
+                """{"id":"2","type":"response","command":"get_state","success":true,"data":{"model":{"id":"deepseek-v4-pro","name":"deepseek-v4-pro","provider":"deepseek","api":"openai-completions","contextWindow":1000000,"input":["text"]},"thinkingLevel":"high","sessionId":"x"}}""",
+            ),
+        )
+        assertEquals("deepseek-v4-pro", confirmed.requestedModel)
+        assertEquals("deepseek-v4-pro", confirmed.model?.id)
+
+        // pi reports something else — its report wins and the request is dropped.
+        val overruled = ConversationReducer.reduce(
+            requested,
+            PiRecordParser.parse(
+                """{"id":"3","type":"response","command":"get_state","success":true,"data":{"model":{"id":"deepseek-flash","name":"deepseek-flash","provider":"deepseek","api":"openai-completions","contextWindow":1000000,"input":["text"]},"thinkingLevel":"high","sessionId":"x"}}""",
+            ),
+        )
+        assertNull("an overruled request is dropped", overruled.requestedModel)
+        assertEquals("deepseek-flash", overruled.model?.id)
+    }
+
     @Test
     fun `agent_end does not mark the agent idle but agent_settled does`() {
         val afterStart = fold("""{"type":"agent_start"}""")

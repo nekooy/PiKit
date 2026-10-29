@@ -1602,17 +1602,24 @@ private fun levelsFor(
 /**
  * The model id a thinking question is about: the model the next message goes with.
  *
- * pi's own report wins **when the levels agree with it**, because pi is the authority on
- * what is running — a `/model` typed into the composer moves the model without moving
- * the profile. When they do not agree, the profile's choice is the answer: that is the
- * model the app has just told pi to switch to, and it is also the only id there is on
- * the frame the app opens, before `get_state` has said anything.
+ * The app's own pending request wins first: `requestedModel` is written on the frame
+ * the user taps a model in the picker, and pi's confirming `get_state` — 320 ms on the
+ * emulator, over a second on a busy phone — is still in flight. Without this the chip
+ * kept the previous model's name and clamped against its levels for that whole window.
+ *
+ * pi's own report then wins **when the levels agree with it**, because pi is the
+ * authority on what is running — a `/model` typed into the composer moves the model
+ * without moving the profile, and it also clears the pending request. When they do not
+ * agree, the profile's choice is the answer: that is the model the app has just told
+ * pi to switch to, and it is also the only id there is on the frame the app opens,
+ * before `get_state` has said anything.
  */
 private fun modelInUse(
     state: ConversationState,
     saved: PiSettings,
     active: ModelProfile?,
 ): String? {
+    state.requestedModel?.takeIf { it.isNotBlank() }?.let { return it }
     val live = state.model?.id?.takeIf { it.isNotBlank() }
     if (live != null && live == state.availableThinkingLevelsFor) return live
     return active?.modelId?.takeIf { it.isNotBlank() }

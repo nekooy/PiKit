@@ -1509,6 +1509,12 @@ class PiAgentSession private constructor(context: Context) {
     fun selectProfile(profile: ModelProfile, model: String) {
         val committed = settingsStore.profiles.upsert(profile.copy(modelId = model))
         settingsStore.profiles.setActive(committed.id)
+        // The switch is shown as made on the frame the user tapped it: the profile is
+        // committed synchronously above, and pi's confirming `get_state` is a round
+        // trip away — 320 ms on the emulator, well over a second on a busy phone —
+        // during which the chip otherwise kept the previous model's name and levels.
+        // The reducer drops this again when the state names another model.
+        _conversation.update { it.copy(requestedModel = model.takeIf { it.isNotBlank() }) }
         val provider = committed.providerEntry
         if (provider == null || model.isBlank()) {
             // Nothing pi could be told: an incomplete profile only makes sense as
@@ -1715,6 +1721,15 @@ class PiAgentSession private constructor(context: Context) {
      */
     fun scheduleRestart() {
         settingsRestartJob?.cancel()
+        // The switch is shown as made now, not when the restart finishes: the store
+        // above is already committed, and the process it needs — 1.5 s of debounce,
+        // then spawn and handshake — is several seconds during which the conversation
+        // state survives with the previous model in it. Same shape as `selectProfile`'s
+        // own write (see it): the reducer drops this when the state names another model,
+        // and a restart over a setting that is not a model rewrites the same id that is
+        // already running.
+        val requested = settingsStore.profiles.snapshots.value.activeProfile?.modelId?.takeIf { it.isNotBlank() }
+        _conversation.update { it.copy(requestedModel = requested) }
         settingsRestartJob = scope.launch {
             delay(SETTINGS_RESTART_DEBOUNCE_MS)
             // A settings save is not a reason to kill the turn that is streaming.

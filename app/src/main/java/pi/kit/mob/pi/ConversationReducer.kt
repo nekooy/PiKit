@@ -210,6 +210,25 @@ data class ConversationState(
     /** Absolute path of the live session's JSONL file, as pi reports it. */
     val sessionFile: String? = null,
     val model: ModelInfo? = null,
+    /**
+     * The model the app has just asked pi to switch to, and pi has not confirmed yet.
+     *
+     * `set_model` is committed here on the frame the user taps it — the profile store
+     * is written synchronously in `selectProfile` — while pi's confirmation arrives
+     * with the next `get_state`, which on a real phone measured 320 ms on the emulator
+     * and well over a second when the device is busy: between the tap and that reply
+     * the chip kept the previous model's name and clamped against its levels. Naming
+     * the requested model lets the display treat the switch as done on the frame the
+     * user made it.
+     *
+     * Written by the session's `selectProfile` and settled by [applySessionState]:
+     * a `get_state` that names it leaves it standing (the pair now agree, and the
+     * display reads the same model from either), one that names anything else — a
+     * `/model` typed into the composer or a restart that raced the switch — drops
+     * it, because what pi is running is the answer. Set only by the app's own
+     * switch: pi moving the model by itself never goes through here.
+     */
+    val requestedModel: String? = null,
     val thinkingLevel: String? = null,
     /**
      * The thinking levels the current model supports, as pi reports them.
@@ -593,8 +612,17 @@ object ConversationReducer {
                     ?.any { it.jsonPrimitive.contentOrNull == "image" } == true,
             )
         }
+        val modelId = model?.id?.takeIf { it.isNotBlank() }
         return state.copy(
             model = model ?: state.model,
+            // The switch is confirmed or overruled by pi's own report: naming the
+            // requested model leaves it standing — the pair agree and the display
+            // reads the same model from either — while naming anything else (a
+            // `/model` typed into the composer, a restart that raced it) drops the
+            // request, because what pi is running is the answer.
+            requestedModel = modelId?.let { id ->
+                state.requestedModel?.takeIf { requested -> requested == id }
+            },
             // A level list answered for another model is not an answer. `get_state` is
             // the first of the two replies a model switch causes, and pi's levels for
             // the new model only arrive with the second — so the list is dropped here
