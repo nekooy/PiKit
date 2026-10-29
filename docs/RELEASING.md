@@ -12,8 +12,8 @@ and the release job runs every test and checker `tools/build-apks.py` runs.
 `gradle.properties`:
 
 ```properties
-pikit.versionName=0.5.3
-pikit.versionCode=11
+pikit.versionName=0.6.0
+pikit.versionCode=12
 ```
 
 - **`versionName`** is what the user sees — **Settings → About PiKit**, the in-app
