@@ -47,7 +47,7 @@ concurrency:
 
 env:
   # Must track `ndkVersion` in terminal-emulator/build.gradle.kts.
-  NDK_VERSION: "29.0.14033849"
+  NDK_VERSION: "29.0.14206865"
   # One spelling for the build-tools the workflow installs and the apksigner it
   # then runs out of them. `ci.yml` carries the same pair.
   BUILD_TOOLS_VERSION: "37.0.0"

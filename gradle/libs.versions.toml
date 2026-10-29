@@ -1,7 +1,7 @@
 [versions]
-# AGP 9.x, and the pairing with Gradle is not free: AGP 9.4.1 refuses to apply on
+# AGP 9.x, and the pairing with Gradle is not free: AGP 9.5.0 refuses to apply on
 # anything below Gradle 9.6.0 ("Minimum supported Gradle version is 9.6.0"), and the
-# wrapper is kept at or above that floor — 9.8.1 at the last bump, which is also
+# wrapper is kept at or above that floor — 9.8.2 at the last bump, which is also
 # Gradle's current release.
 #
 # AGP 9 and not 8.13 because `compileSdk` 37 is an AAR floor: every AndroidX
@@ -19,7 +19,7 @@
 # `gradle.properties`: built-in Kotlin, the new DSL, and defaulting a module's
 # `targetSdk` to its `compileSdk`. The last is the dangerous one — 28 is a ceiling
 # for this app, not a conservative choice (§1).
-agp = "9.4.1"
+agp = "9.5.0"
 kotlin = "2.4.21"
 coreKtx = "1.19.1"
 annotation = "1.11.0"
@@ -27,7 +27,7 @@ lifecycle = "2.11.0"
 activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 coroutines = "1.11.0"
-serialization = "1.11.0"
+serialization = "1.12.0"
 okio = "3.18.2"
 # JLaTeXMath's Android port: the typesetter, and the OpenType metrics it carries as
 # its own font files. It replaced `io.github.huarangmeng:latex-*`, whose KaTeX

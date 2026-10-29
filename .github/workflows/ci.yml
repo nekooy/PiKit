@@ -19,7 +19,7 @@
 # suites, and the tools that check what Gradle cannot see.
 #
 # The two things the tests need on the machine are named in docs/BUILDING.md:
-# JDK 17–23, and the NDK version `terminal-emulator/build.gradle.kts` pins.
+# JDK 17–26, and the NDK version `terminal-emulator/build.gradle.kts` pins.
 name: CI
 
 on:
@@ -37,7 +37,7 @@ permissions:
 env:
   # Must track `ndkVersion` in terminal-emulator/build.gradle.kts; that file is the
   # authority and this is a copy of it, so it is updated in the same change.
-  NDK_VERSION: "29.0.14033849"
+  NDK_VERSION: "29.0.14206865"
   # The same pair `release.yml` carries. One spelling per version across the two
   # workflows: the release one installs these build-tools and then runs `apksigner`
   # out of them, and it used to name the version twice — once here and once in the

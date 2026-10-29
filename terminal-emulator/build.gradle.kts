@@ -15,7 +15,7 @@ plugins {
 android {
     namespace = "com.termux.emulator"
     compileSdk = providers.gradleProperty("pikit.compileSdk").get().toInt()
-    ndkVersion = "29.0.14033849"
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         minSdk = providers.gradleProperty("pikit.minSdk").get().toInt()
