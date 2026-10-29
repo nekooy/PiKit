@@ -415,26 +415,33 @@ enum class ThemeMode(val code: String) {
  * who has already set 1.3 in Android's display settings keeps their preference and
  * gets the step on top of it.
  *
- * ## The seven, and why the default is the fourth
+ * ## The seven, and why the default is the second
  *
- * [M] is `1.0` and is the default, which is what makes the row's value read as a
- * percentage of "what the app always was". The range is deliberately narrow —
- * 0.80 to 1.30 — because the layout is a phone's: the measured limits in §9.2 were
- * taken at font scale 1.8 and they are where a row's label starts being clipped,
- * not where it looks best. A step below 0.8 stops being readable at 12sp, which is
- * already the smallest style the app draws.
+ * [M] keeps its meaning — `1.0`, the app's own sizes — which is what makes the row's
+ * value read as a percentage of "what the app always was", and [XS] is what a fresh
+ * install has, so that row reads 90% until it is touched. That is one step down from
+ * the middle, and the reading that settled it is the library's own type: Miuix's
+ * `paragraph` is 17sp, and a fresh install at 100% read large next to the apps a
+ * phone is held beside, while 0.90 draws the same prose at 15.3sp. One step rather
+ * than further, because the reader keeps five larger steps and one smaller, and
+ * because the range's floor is untouched — 0.80 is still 12sp captions at 9.6sp.
+ *
+ * The range is deliberately narrow — 0.80 to 1.30 — because the layout is a phone's:
+ * the measured limits in §9.2 were taken at font scale 1.8 and they are where a
+ * row's label starts being clipped, not where it looks best. A step below 0.8 stops
+ * being readable at 12sp, which is already the smallest style the app draws.
  */
 enum class FontSize(val code: String, val scale: Float) {
     /** 0.80 — 12sp captions at 9.6sp. The floor of what stays legible. */
     XXS("xxs", 0.80f),
 
-    /** 0.90 */
+    /** 0.90 — 15.3sp for the library's 17sp `paragraph`. The default. */
     XS("xs", 0.90f),
 
     /** 0.95 */
     S("s", 0.95f),
 
-    /** 1.00 — the app's own sizes, and the default. */
+    /** 1.00 — the app's own sizes, and what the row's percentage counts from. */
     M("m", 1.00f),
 
     /** 1.10 */
@@ -451,8 +458,8 @@ enum class FontSize(val code: String, val scale: Float) {
     val percent: Int get() = (scale * 100f).roundToInt()
 
     companion object {
-        /** The fourth of seven, and what an install that never touched the row has. */
-        val DEFAULT = M
+        /** The second of seven, and what an install that never touched the row has. */
+        val DEFAULT = XS
 
         fun fromCode(code: String?): FontSize =
             entries.firstOrNull { it.code == code } ?: DEFAULT
@@ -723,7 +730,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
-            fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
+            fontSize = fontStep(),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
@@ -845,6 +852,40 @@ class SettingsStore(context: Context) {
         return resolved
     }
 
+    /**
+     * The stored text size, with the one-time rebase off the old default.
+     *
+     * Moving [FontSize.DEFAULT] alone would reach a fresh install and nobody else:
+     * [update] writes *every* key on every change, so an install that had altered
+     * any setting already carries an explicit `font_size`, and on a phone that was
+     * using the app while 100% was the default that value is `m` — which says "the
+     * value this app shipped as the default" rather than "a size I chose". The two
+     * are indistinguishable in the file, so the first read after this build takes a
+     * stored `m` as the old default and writes the new one back, and
+     * [KEY_FONT_SIZE_REBASED] records that it happened: from then on the stored step
+     * is the reader's own, and moving the slider back to 100% keeps it.
+     *
+     * Both readers of the key come through here. At construction it is the only
+     * read; under [reload] it is the same rule meeting a restore, and a restore
+     * applies the archive key by key, so it cannot take the flag away — a backup
+     * written by this build carries the flag and its steps are taken as they are,
+     * while one written before it carries no flag but arrives after this process
+     * has already set one, so it too keeps the step it restored.
+     */
+    private fun fontStep(): FontSize {
+        val stored = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null))
+        if (prefs.contains(KEY_FONT_SIZE_REBASED)) return stored
+        val rebased = if (stored == FontSize.M) FontSize.DEFAULT else stored
+        // Written back rather than only returned: `reload` reads the key again, and
+        // a file that still says `m` while the snapshot says 90% would undo the
+        // rebase on the next restore.
+        prefs.edit()
+            .putString(KEY_FONT_SIZE, rebased.code)
+            .putBoolean(KEY_FONT_SIZE_REBASED, true)
+            .apply()
+        return rebased
+    }
+
     /** The thinking level stored in preferences, or the default when none is. */
     private fun thinkingLevel(): String =
         prefs.getString(KEY_THINKING, DEFAULT_THINKING_LEVEL).orEmpty().ifBlank { DEFAULT_THINKING_LEVEL }
@@ -874,7 +915,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
-            fontSize = FontSize.fromCode(prefs.getString(KEY_FONT_SIZE, null)),
+            fontSize = fontStep(),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
@@ -984,8 +1025,18 @@ class SettingsStore(context: Context) {
         /** [ThemeMode.code]; absent means [ThemeMode.DEFAULT]. */
         private const val KEY_THEME = "theme_mode"
 
-        /** [FontSize.code]; absent means [FontSize.DEFAULT] — the fourth of seven. */
+        /** [FontSize.code]; absent means [FontSize.DEFAULT] — the second of seven. */
         private const val KEY_FONT_SIZE = "font_size"
+
+        /**
+         * Whether a stored [KEY_FONT_SIZE] has been rebased off the old default.
+         *
+         * `m` used to be the default *and* the step the slider writes, so a stored
+         * `m` cannot say which of the two it is; this flag is what lets the
+         * correction happen once instead of on every read. [FontSize] has the
+         * reasoning, and `fontStep` is the one thing that reads it.
+         */
+        private const val KEY_FONT_SIZE_REBASED = "font_size_rebased"
 
         /** [LauncherIcon.code]; absent means [LauncherIcon.DEFAULT]. */
         private const val KEY_LAUNCHER_ICON = "launcher_icon"

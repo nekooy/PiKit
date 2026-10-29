@@ -76,6 +76,43 @@ class SettingsStoreTest {
         assertEquals(wanted, store.settings.value)
     }
 
+    @Test
+    fun `a fresh install has the smaller default text size`() {
+        assertEquals(FontSize.XS, newStore().read().fontSize)
+    }
+
+    @Test
+    fun `the old default text size is rebased once, and a chosen one after that`() {
+        val preferences = FakeSharedPreferences()
+        // What every install that ever changed a setting carries: `update()` writes
+        // every key, so 100% is in the file whether or not the slider was touched.
+        preferences.edit().putString("font_size", "m").apply()
+        val files = tempDir()
+
+        val rebased = SettingsStore(FakeContext(preferences, files))
+
+        assertEquals("the old default becomes the new one", FontSize.XS, rebased.read().fontSize)
+        assertEquals("and the step is written back", "xs", preferences.getString("font_size", null))
+
+        // The flag is what makes it once: a reader who moves the slider back to 100%
+        // keeps it, because the next store reads a step the reader chose.
+        preferences.edit().putString("font_size", "m").apply()
+        val chosen = SettingsStore(FakeContext(preferences, files))
+
+        assertEquals(FontSize.M, chosen.read().fontSize)
+    }
+
+    @Test
+    fun `a stored text size that is not the old default is left alone`() {
+        val preferences = FakeSharedPreferences()
+        preferences.edit().putString("font_size", "l").apply()
+
+        val store = SettingsStore(FakeContext(preferences, tempDir()))
+
+        assertEquals(FontSize.L, store.read().fontSize)
+        assertEquals("l", preferences.getString("font_size", null))
+    }
+
     private fun newStore(): SettingsStore =
         SettingsStore(FakeContext(FakeSharedPreferences(), tempDir()))
 
