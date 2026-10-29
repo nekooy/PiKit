@@ -783,6 +783,7 @@ internal object EnglishStrings : Strings {
             "searxng" -> "Your own instance; set its address in the file below"
             "keenable" -> "Keenable's public search; no key needed, and is never chosen automatically"
             "degoog" -> "Metasearch, self-hostable; no key needed, and is never chosen automatically"
+            "ninerouter" -> "Self-hosted 9router; address and optional key, never chosen automatically"
             // The search runs through a model.
             "openai" -> "Runs through OpenAI's hosted web search"
             "gemini" -> "Runs through a Gemini model"
@@ -821,7 +822,10 @@ internal object EnglishStrings : Strings {
             "zai" -> "Z.ai web_search_prime MCP; needs a key and an endpoint (global or China)"
             "ceramic" -> "Ceramic keyword search; needs a key, and is never chosen automatically"
             "deepseek" -> "DeepSeek's own search API; needs a key, and is never chosen automatically"
-            "linkup" -> "Linkup search; needs a key, and `auto` may route to it"
+            "linkup" -> "Linkup search; needs a key, and is never chosen automatically"
+            "cloudflare" -> "Cloudflare search; needs a key and an account id, never chosen automatically"
+            "searchapi" -> "Google via searchapi.io; needs a key, never chosen automatically"
+            "tabstack" -> "Tabstack Research; one cited answer, needs a key, never chosen automatically"
             else -> ""
         }
 

@@ -540,10 +540,11 @@ class WebSearchStoreTest {
     fun `the provider list is the extension's own, with no duplicates`() {
         val providers = WebSearchSettings.SEARCH_PROVIDERS
 
-        // The number the bundled 0.44.0 resolves to (0.43.0 added Linkup). It is
-        // pinned because the page presents this list as "all of them", which is
-        // only true while it is.
-        assertEquals(39, providers.size)
+        // The number the bundled 0.46.0 resolves to (0.43.0 added Linkup; 0.46.0
+        // added 9router, Cloudflare, SearchApi and Tabstack). It is pinned because
+        // the page presents this list as "all of them", which is only true while it
+        // is.
+        assertEquals(43, providers.size)
         assertEquals("no provider is listed twice", providers.size, providers.toSet().size)
         assertEquals(
             "the two selectors are not providers",
@@ -553,11 +554,14 @@ class WebSearchStoreTest {
         // The ones the old eleven-row list was missing, which is the whole report.
         listOf("kagi", "serper", "serpapi", "xcrawl", "brightdata", "valyu", "bocha")
             .forEach { id -> assertTrue("$id is offered", id in providers) }
+        // 0.46.0's four, each explicit-only in the extension's own list.
+        listOf("ninerouter", "cloudflare", "searchapi", "tabstack")
+            .forEach { id -> assertTrue("$id is offered", id in providers) }
     }
 
     @Test
     fun `every provider has a description in every language`() {
-        // A picker of thirty-eight rows whose second line is blank for a language looks
+        // A picker of forty-three rows whose second line is blank for a language looks
         // like a rendering fault rather than like missing text, and the fallback in
         // `providerDescription` is the empty string.
         Lang.entries.forEach { lang ->

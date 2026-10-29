@@ -7,8 +7,8 @@ package pi.kit.mob.locales
  * ## Why this is here and not in the three catalogs
  *
  * `Strings` is for interface text: a short label per control, completed by the
- * compiler. This is *prose about another program's configuration* — around a
- * hundred and thirty keys, each with a shape, an example and a sentence — and it is
+ * compiler. This is *prose about another program's configuration* — a hundred and
+ * forty-eight keys, each with a shape, an example and a sentence — and it is
  * written the way
  * `TerminalBanner.kt` and `ManualText*.kt` are, as one parallel structure whose
  * three languages sit beside each other. Prose is the documented exception to the
@@ -27,18 +27,31 @@ package pi.kit.mob.locales
  *
  * ## The facts, and where they come from
  *
- * Every row is the extension **0.42.0** — the version the runtime image vendors
+ * Every row is the extension **0.46.0** — the version the runtime image vendors
  * (`tools/image-versions.json`'s `web_access`, recorded in the image's
  * `build-metadata.json`) — read from its own source rather than from its README. The
- * keys were checked against 0.31.0's modules one by one when the pin moved: 0.35.0
+ * keys were checked against 0.46.0's modules one by one when the pin moved: 0.35.0
  * adds `youApiKey`, `zaiApiKey` and `zaiEndpoint` for its two new explicit-only
  * search providers (You.com and Z.ai's web_search_prime MCP); 0.41.0 adds ten more
  * — `keenableApiKey`, `ceramicApiKey` and the four `degoog*` keys for its three
  * explicit-only providers (Keenable, degoog and Ceramic), plus `firecrawlPdfMaxPages`,
  * `pdf.endpointUrl`, `fetchContent.redirects` and `fetchContent.userAgent`; 0.42.0
  * adds two — `deepseekApiKey` for its new explicit-only provider, and
- * `toolExposure`. Neither move removes a key, so the rows below grow rather than get
- * rewritten. Baizhi MCP
+ * `toolExposure`; 0.43.0 adds `linkupApiKey` and `linkupDepth` for Linkup; 0.44.0
+ * adds no row of its own — it extends the per-provider gateway URL to the rest of
+ * the providers (`<provider>BaseUrl`, and `<PROVIDER>_BASE_URL` in the environment,
+ * which wins over the file; Ollama's and DeepSeek's carry the `PI_` prefix because
+ * the plain names already belong to their own clients), whose concrete examples are
+ * the `endpoint` rows below, and gives `toolActivation` a fourth value, `none`,
+ * which needs `toolExposure: "deferred"`; 0.45.0 adds four — `allowHttpBaseUrls`,
+ * `queryRewriteModel`, `searchRouting.timeoutMs` and `searchRouting.offTopicModel` —
+ * and widens `searchRouting.fallbackOn` with `empty`, `domain-miss` and `off-topic`
+ * and `fetch.allowedModes` with `extract`; 0.46.0 adds twelve —
+ * `ninerouterBaseUrl`, `ninerouterApiKey`, `ninerouterProvider`,
+ * `cloudflareAccountId`, `cloudflareGatewayId`, `cloudflareSearchProvider`,
+ * `searchapiApiKey`, `searchapiBaseUrl`, `tabstackApiKey`, `tabstackBaseUrl`,
+ * `tabstackResearchMode` and `fetchContent.curl`. None of these moves removes a
+ * key, so the rows below grow rather than get rewritten. Baizhi MCP
  * remains a *provider* the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`) rather
  * than a document key; its lazy `web_enable` tool is tool surface, not config.
  *
@@ -181,15 +194,52 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     p(
         "searchRouting.fallbackOn", "string[]", "[\"transient\", \"quota\"]",
         "Which failures move on to the next candidate: `transient`, `quota`, `network`, " +
-            "`invalid-response`, `unsupported`.",
-        "哪些失败继续尝试下一个候选：transient、quota、network、invalid-response、unsupported。",
-        "次へ進む失敗の種類：transient、quota、network、invalid-response、unsupported。",
+            "`invalid-response`, `unsupported`, `empty` (no results and no answer), " +
+            "`domain-miss` (no result on a requested domain) or `off-topic`, which needs " +
+            "`searchRouting.offTopicModel` below.",
+        "哪些失败继续尝试下一个候选：transient、quota、network、invalid-response、unsupported、" +
+            "empty（无结果也无答案）、domain-miss（没有来自指定域名的结果），" +
+            "或 off-topic（需要下面的 `searchRouting.offTopicModel`）。",
+        "次へ進む失敗の種類：transient、quota、network、invalid-response、unsupported、" +
+            "empty（結果も回答もなし）、domain-miss（指定ドメインの結果なし）、" +
+            "off-topic（下の `searchRouting.offTopicModel` が必要）。",
+    ),
+    p(
+        "searchRouting.timeoutMs", "number", "60000",
+        "The whole routed search's budget, in milliseconds, from 1 to 600000. The " +
+            "checks that decide whether a candidate is set up are inside it too.",
+        "整条路由搜索的总预算（毫秒，1–600000），判断候选是否可用的检查也算在内。",
+        "ルーティング検索全体の予算（ミリ秒、1〜600000）。候補が利用できるかの確認も含みます。",
+    ),
+    p(
+        "searchRouting.offTopicModel", "string", "\"cloudflare-workers-ai/@cf/cloudflare/clef\"",
+        "The classifier that judges an answer off-topic; only the three classifier " +
+            "references the extension accepts are valid. Required once `fallbackOn` " +
+            "lists `off-topic`, because that fallback needs it.",
+        "判定答案是否离题的分类模型，只能取扩展接受的那三个分类模型引用。" +
+            "`fallbackOn` 里写上 off-topic 时必须设置，否则整份配置会被拒绝。",
+        "回答が的外れかを判定する分類モデルで、拡張が受け付ける 3 つの参照のみ。" +
+            "`fallbackOn` に off-topic を書くなら必須で、そのフォールバックがこれを使います。",
     ),
     p(
         "summaryModel", "string", "\"anthropic/claude-haiku-4-5\"",
-        "The model that writes summaries. A `:high` suffix sets its thinking level.",
-        "写摘要的模型。可以加 `:high` 之类的思考等级后缀。",
-        "要約を書くモデル。`:high` などの思考レベルを付けられます。",
+        "The model that writes summaries. A `:high` suffix sets its thinking level, and " +
+            "`current` or `current:<level>` is this session's own model.",
+        "写摘要的模型。可以加 `:high` 之类的思考等级后缀；`current` 或 `current:<思考等级>` " +
+            "表示当前会话的模型。",
+        "要約を書くモデル。`:high` などの思考レベルを付けられ、`current` または " +
+            "`current:<レベル>` はこのセッションのモデルです。",
+    ),
+    p(
+        "queryRewriteModel", "string", "\"current\"",
+        "The model that rewrites a search query. `current` or `current:<level>` is " +
+            "this session's own model, `provider/model-id[:<level>]` names another. " +
+            "Set, it is the only model tried; unset keeps the built-in list.",
+        "改写搜索查询的模型。`current` 或 `current:<思考等级>` 表示当前会话的模型，" +
+            "`provider/model-id[:<思考等级>]` 指定别的模型。设置后只试它一个，不写则用内置列表。",
+        "検索クエリを書き換えるモデル。`current` または `current:<レベル>` はこのセッションの" +
+            "モデル、`provider/model-id[:<レベル>]` は別のモデルです。設定するとそれだけを試し、" +
+            "未設定なら組み込みの一覧を使います。",
     ),
     p(
         "summaryGenerationDeadlineMs", "number", "30000",
@@ -238,13 +288,18 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     ),
     p(
         "fetch.allowedModes", "string[]", "[\"readable\", \"raw\"]",
-        "The modes the tool offers. Anything outside `readable`, `raw` and `answer` is " +
-            "rejected, as is an empty list or a repeated entry — the document is checked " +
-            "at load, and a mistake here disables `fetch_content` rather than one mode.",
-        "该工具提供的模式。除 `readable`、`raw`、`answer` 之外的值会被拒绝，空数组或重复项也会。" +
-            "读取时即校验：这里写错会让整个 `fetch_content` 不可用，而不只是某个模式。",
-        "ツールが提供するモード。`readable`・`raw`・`answer` 以外、空配列、重複は拒否されます。" +
-            "読み込み時に検証されるため、誤ると特定のモードではなく `fetch_content` 全体が使えなくなります。",
+        "The modes the tool offers: `readable`, `raw`, `answer`, and the opt-in " +
+            "`extract`, which sends the page to Cloudflare and cannot be the default " +
+            "mode. Anything outside them is rejected, as is an empty list or a repeated " +
+            "entry — the document is checked at load, and a mistake here disables " +
+            "`fetch_content` rather than one mode.",
+        "该工具提供的模式：readable、raw、answer，以及需要显式启用的 extract" +
+            "（会把页面正文发给 Cloudflare，不能作为默认模式）。除这些之外的值会被拒绝，" +
+            "空数组或重复项也会。读取时即校验：这里写错会让整个 `fetch_content` 不可用，而不只是某个模式。",
+        "ツールが提供するモード：`readable`・`raw`・`answer`、そして明示的に有効化する `extract`" +
+            "（ページ本文を Cloudflare へ送るため、既定モードにはできません）。これら以外、空配列、" +
+            "重複は拒否されます。読み込み時に検証されるため、誤ると特定のモードではなく " +
+            "`fetch_content` 全体が使えなくなります。",
     ),
     p(
         "fetchRouting.providers", "string[]", "[\"http\", \"firecrawl\", \"jina\"]",
@@ -290,6 +345,19 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "抓取页面时发送的 User-Agent，用于拒绝默认 UA 的站点。仅限可打印 ASCII；不写则用默认值。",
         "ページ取得で送る User-Agent。既定値を拒否するサイト向け。印字可能 ASCII のみ、" +
             "未指定なら既定値です。",
+    ),
+    p(
+        "fetchContent.curl", "string | string[]", "[\"curl-impersonate\", \"--impersonate\", \"chrome146\"]",
+        "Run this command instead of Node's fetch for page fetches, for sites that " +
+            "answer Node with 403 — `curl-impersonate` connects the way Chrome does. A " +
+            "command name or an array of the command and its leading arguments; with it " +
+            "the default User-Agent is left out, so the command's own browser one is sent.",
+        "抓取页面时改用这条命令，而不是 Node 的 fetch，用于拒绝 Node 的站点：" +
+            "`curl-impersonate` 会像 Chrome 一样建立连接。可以只写命令名，也可以写成命令加前置参数的数组；" +
+            "使用后不再发送默认 User-Agent，改用命令自带的浏览器 UA。",
+        "ページ取得で Node の fetch の代わりにこのコマンドを使います。Node を 403 で断るサイト向けで、" +
+            "`curl-impersonate` は Chrome と同じように接続します。コマンド名だけ、またはコマンドと" +
+            "前置引数の配列。使用中は既定の User-Agent を送らず、コマンド自身のブラウザー UA を使います。",
     ),
     p(
         "maxInlineContentChars", "number", "30000",
@@ -451,11 +519,16 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "toolActivation", "string", "\"auto\"",
         "`auto` keeps the tools off the first request when the model accepts tools " +
             "added mid-conversation; `dynamic` always starts with the `web_enable` " +
-            "tool; `eager` registers every tool up front.",
+            "tool; `eager` registers every tool up front; `none` removes the loader too, " +
+            "so only `codemode` or `tool_search` reaches the tools, and it needs " +
+            "`toolExposure: \"deferred\"`.",
         "auto：模型支持中途加入工具时，首次请求不带这些工具；dynamic：总是先给 web_enable；" +
-            "eager：一开始就注册全部工具。",
+            "eager：一开始就注册全部工具；none：连 web_enable 也不再注册，只能由 " +
+            "`codemode` 或 `tool_search` 触达，且必须配合 `toolExposure: \"deferred\"`。",
         "auto はモデルが途中追加を受け付ける場合に初回リクエストから外します。dynamic は常に " +
-            "`web_enable` から始め、eager は全ツールを最初から登録します。",
+            "`web_enable` から始め、eager は全ツールを最初から登録します。none は `web_enable` も" +
+            "登録せず、`codemode` か `tool_search` からのみ到達でき、" +
+            "`toolExposure: \"deferred\"` が必要です。",
     ),
     p(
         "toolExposure", "string", "\"direct\"",
@@ -570,6 +643,19 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "Trust the configured proxy's own address checks instead of repeating them.",
         "信任代理自身的地址检查，不再重复检查。",
         "プロキシ側のアドレス検査を信頼し、こちらでは繰り返しません。",
+    ),
+    p(
+        "allowHttpBaseUrls", "boolean", "true",
+        "Allow a provider gateway URL (`<provider>BaseUrl`) to be plain `http://` on any " +
+            "host, not only on this machine. Off by default, because HTTP sends that " +
+            "provider's API key unencrypted; `PI_WEB_ACCESS_ALLOW_HTTP_BASE_URLS` wins " +
+            "over the file.",
+        "允许供应商网关地址（`<provider>BaseUrl`）在任何主机上使用明文 http://，而不限于本机。" +
+            "默认关闭：HTTP 会把该服务的 API Key 明文发出。环境变量 " +
+            "`PI_WEB_ACCESS_ALLOW_HTTP_BASE_URLS` 优先于文件。",
+        "プロバイダーのゲートウェイ URL（`<provider>BaseUrl`）を、このマシン以外でも平文 " +
+            "`http://` で使えるようにします。既定はオフです。HTTP はそのサービスの API キーを" +
+            "暗号化せずに送るためで、`PI_WEB_ACCESS_ALLOW_HTTP_BASE_URLS` がファイルより優先されます。",
     ),
     p(
         "authFetch.example.com", "object", "{\"hosts\": [\"example.com\"]}",
@@ -722,14 +808,18 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         " の API キー。DeepSeek 独自の検索 API 用です。検索ごとに課金されるため、" +
             "`auto` と `all` からは選ばれません。",
     ),
-    // 0.43.0: Linkup, keyed and part of `auto`'s rotation; `linkupDepth` is its
-    // one knob.
+    // 0.43.0: Linkup, keyed and explicit-only — a search spends account credits;
+    // `linkupDepth` is its one knob.
     key("linkupApiKey", "Linkup", "LINKUP_API_KEY"),
     p(
-        "linkupDepth", "\"fast\" | \"deep\"", "\"fast\"",
-        "`deep` reads more sources per query and costs more per search.",
-        "搜索深度：deep 每次查询读更多来源，费用也更高。",
-        "検索の深さ。deep は 1 回のクエリでより多くのソースを読み、費用も上がります。",
+        "linkupDepth", "\"flash\" | \"fast\" | \"standard\" | \"deep\"", "\"fast\"",
+        "`flash`, `fast` (the default), `standard` or `deep`. An unknown value is " +
+            "refused rather than replaced. `deep` reads more sources per query and costs " +
+            "more per search.",
+        "flash、fast（默认）、standard 或 deep；无法识别的值会被拒绝，而不是被替换。" +
+            "deep 每次查询读更多来源，费用也更高。",
+        "`flash`・`fast`（既定）・`standard`・`deep` のいずれか。不明な値は置き換えられず" +
+            "拒否されます。`deep` は 1 回のクエリでより多くのソースを読み、費用も上がります。",
     ),
     endpoint("degoogBaseUrl", "degoog", "https://degoog.org"),
     key(
@@ -816,5 +906,75 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
         "发给该实例的额外请求头，只会发给你自己的服务器。用于反向代理之后或需要令牌的实例。",
         "そのインスタンスへ送る追加ヘッダー。自分のサーバーにのみ送信されます。" +
             "リバースプロキシ配下やトークン必須のインスタンス向け。",
+    ),
+    // 0.46.0: four more explicit-only providers, none of them in the picker's
+    // automatic chain. 9router is a router you run yourself, so its base URL is the
+    // one required setting and its key is optional; Cloudflare Web Search runs in a
+    // Cloudflare account, through an AI Gateway, on Ceramic, Exa or Linkup
+    // (`cloudflareApiKey` is above); SearchApi is Google through searchapi.io;
+    // Tabstack Research answers with one cited report.
+    p(
+        "ninerouterBaseUrl", "string", "\"https://router.example.com/v1\"",
+        "Your 9router's address, required for that provider because it has no public " +
+            "host. `NINEROUTER_BASE_URL` wins over the file, and `/search` is appended.",
+        "自建 9router 的地址，选该服务时必填，因为它没有公开主机名。" +
+            "环境变量 `NINEROUTER_BASE_URL` 优先于文件，请求路径在其后加 `/search`。",
+        "自前の 9router のアドレス。公開ホストがないため、このプロバイダーでは必須です。" +
+            "`NINEROUTER_BASE_URL` がファイルより優先され、後ろに `/search` が付きます。",
+    ),
+    key(
+        "ninerouterApiKey", "9router", "NINEROUTER_API_KEY",
+        "key, optional — a router you run yourself may run without auth.",
+        " 的 API Key，可选：自建的 9router 可以不开鉴权。",
+        " の API キー（任意）。自前の 9router は認証なしでも動きます。",
+    ),
+    p(
+        "ninerouterProvider", "string", "\"serper\"",
+        "Which search backend inside the router handles the query — `serper` when " +
+            "unset. `NINEROUTER_SEARCH_PROVIDER` wins over the file.",
+        "路由内部用哪个搜索后端处理查询，默认 serper；" +
+            "环境变量 `NINEROUTER_SEARCH_PROVIDER` 优先于文件。",
+        "ルーター内部でどの検索バックエンドが処理するか。未設定なら serper で、" +
+            "`NINEROUTER_SEARCH_PROVIDER` がファイルより優先されます。",
+    ),
+    p(
+        "cloudflareAccountId", "string", "\"0123456789abcdef0123456789abcdef\"",
+        "The Cloudflare account the search runs in — it is part of the request path, so " +
+            "`cloudflareApiKey` above is not enough on its own. `CLOUDFLARE_ACCOUNT_ID` " +
+            "wins over the file.",
+        "搜索所在的 Cloudflare 账号：它出现在请求路径里，所以只有上面的 `cloudflareApiKey` 不够。" +
+            "环境变量 `CLOUDFLARE_ACCOUNT_ID` 优先于文件。",
+        "検索を実行する Cloudflare のアカウント。リクエストのパスに入るため、上の " +
+            "`cloudflareApiKey` だけでは足りません。`CLOUDFLARE_ACCOUNT_ID` がファイルより優先されます。",
+    ),
+    p(
+        "cloudflareGatewayId", "string", "\"default\"",
+        "The AI Gateway the request goes through — `default` when unset. " +
+            "`CLOUDFLARE_GATEWAY_ID` wins over the file.",
+        "请求经过的 AI Gateway，默认 default；环境变量 `CLOUDFLARE_GATEWAY_ID` 优先于文件。",
+        "リクエストが通る AI Gateway。未設定なら default で、" +
+            "`CLOUDFLARE_GATEWAY_ID` がファイルより優先されます。",
+    ),
+    p(
+        "cloudflareSearchProvider", "string", "\"ceramic\"",
+        "Which search runs behind that gateway: `ceramic` (the default), `exa` or " +
+            "`linkup`. `CLOUDFLARE_SEARCH_PROVIDER` wins over the file.",
+        "该网关背后跑哪家搜索：ceramic（默认）、exa 或 linkup；" +
+            "环境变量 `CLOUDFLARE_SEARCH_PROVIDER` 优先于文件。",
+        "そのゲートウェイの背後で動く検索：`ceramic`（既定）、`exa`、`linkup`。" +
+            "`CLOUDFLARE_SEARCH_PROVIDER` がファイルより優先されます。",
+    ),
+    key("searchapiApiKey", "SearchApi", "SEARCHAPI_API_KEY", "key, for Google results through searchapi.io."),
+    endpoint("searchapiBaseUrl", "SearchApi", "https://searchapi.example.com"),
+    key("tabstackApiKey", "Tabstack", "TABSTACK_API_KEY"),
+    endpoint("tabstackBaseUrl", "Tabstack", "https://tabstack.example.com"),
+    p(
+        "tabstackResearchMode", "string", "\"fast\"",
+        "`fast` (the default) or `balanced`, which iterates and may take minutes. " +
+            "Research answers with one cited report instead of a list of links.",
+        "fast（默认）或 balanced：后者会多轮检索，可能要几分钟。" +
+            "研究模式返回一份带引用的报告，而不是链接列表。",
+        "`fast`（既定）または `balanced`。後者は反復するため数分かかることがあります。" +
+            "リサーチはリンク一覧ではなく、引用付きのレポート 1 本を返します。",
     ),
 )

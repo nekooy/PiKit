@@ -717,6 +717,7 @@ internal object ChineseStrings : Strings {
             "searxng" -> "自建实例，地址写在下面的配置文件里"
             "keenable" -> "Keenable 公开搜索，无需 Key；不会被自动选中"
             "degoog" -> "元搜索，无需 Key，可指向自建实例；不会被自动选中"
+            "ninerouter" -> "自建 9router；需要地址，Key 可选，不会被自动选中"
             // 借用已有模型的联网能力
             "openai" -> "走 OpenAI 的联网搜索"
             "gemini" -> "走 Gemini 模型的联网搜索"
@@ -752,7 +753,10 @@ internal object ChineseStrings : Strings {
             "zai" -> "Z.ai web_search_prime MCP；需要 Key 和端点（国际或中国）"
             "ceramic" -> "Ceramic 关键词搜索；需要 Key，且不会被自动选中"
             "deepseek" -> "DeepSeek 自己的搜索接口；需要 Key，且不会被自动选中"
-            "linkup" -> "Linkup 搜索；需要 Key，自动模式可用"
+            "linkup" -> "Linkup 搜索；需要 Key，且不会被自动选中"
+            "cloudflare" -> "Cloudflare 搜索；需要 Key 和账户 ID，不会被自动选中"
+            "searchapi" -> "SearchApi 的 Google 结果；需要 Key，不会被自动选中"
+            "tabstack" -> "Tabstack 研究；返回带引用的答案，需要 Key，不会被自动选中"
             else -> ""
         }
 

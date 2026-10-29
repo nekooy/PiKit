@@ -742,6 +742,7 @@ internal object JapaneseStrings : Strings {
             "searxng" -> "自前のインスタンス。アドレスは下の設定ファイルに書きます"
             "keenable" -> "Keenable の公開検索。キー不要で、自動選択はされません"
             "degoog" -> "メタ検索。キー不要で自前ホストも可、自動選択はされません"
+            "ninerouter" -> "自前の 9router。アドレスが必要で、キーは任意。自動選択はされません"
             // 既存モデルの検索機能を使う
             "openai" -> "OpenAI のホスト型ウェブ検索を使います"
             "gemini" -> "Gemini モデル経由で検索します"
@@ -777,7 +778,10 @@ internal object JapaneseStrings : Strings {
             "zai" -> "Z.ai web_search_prime MCP。キーとエンドポイント（グローバルまたは中国）が必要です"
             "ceramic" -> "Ceramic のキーワード検索。キーが必要で、自動選択はされません"
             "deepseek" -> "DeepSeek 独自の検索 API。キーが必要で、自動選択はされません"
-            "linkup" -> "Linkup 検索。キーが必要で、auto から選ばれることがあります"
+            "linkup" -> "Linkup 検索。キーが必要で、自動選択はされません"
+            "cloudflare" -> "Cloudflare のウェブ検索。キーとアカウント ID が必要で、自動選択はされません"
+            "searchapi" -> "SearchApi 経由の Google 結果。キーが必要で、自動選択はされません"
+            "tabstack" -> "Tabstack のリサーチ。引用付きの回答を返し、キーが必要で、自動選択はされません"
             else -> ""
         }
 

@@ -171,8 +171,8 @@ data class WebSearchSettings(
          * run the search through a model, then the rest alphabetically enough to be
          * findable.
          *
-         * **This is the extension 0.44.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
-         * from its `gemini-search.ts`, and it is 39 entries rather than the eleven
+         * **This is the extension 0.46.0's own `RESOLVED_SEARCH_PROVIDERS`**, read
+         * from its `gemini-search.ts`, and it is 43 entries rather than the eleven
          * the page used to offer. The eleven were not "the supported ones": they were
          * the ones somebody had heard of, so a user whose provider was `kagi` or
          * `serper` could not select it at all and the picker looked complete.
@@ -196,6 +196,10 @@ data class WebSearchSettings(
             // and a degoog metasearch instance answer with no key at all.
             "keenable",
             "degoog",
+            // Added by 0.46.0, explicit-only like the pair above: 9router is a router
+            // you run yourself, so it needs `ninerouterBaseUrl` rather than a key — the
+            // key is optional, for a router that asks for one.
+            "ninerouter",
             // Search runs through a model you already have a key for.
             "openai",
             "gemini",
@@ -244,9 +248,17 @@ data class WebSearchSettings(
             // reason as Ceramic — it bills every search — and it is keyed like the
             // rest, so it sits at the end with them rather than among the keyless.
             "deepseek",
-            // Added by 0.43.0: Linkup, keyed (`LINKUP_API_KEY`) and in `auto`'s own
-            // rotation, unlike the explicit-only pair above it.
+            // Added by 0.43.0: Linkup, keyed (`LINKUP_API_KEY`) and explicit-only for
+            // the same reason as DeepSeek — a search spends account credits, and
+            // `auto`'s chain does not include it.
             "linkup",
+            // Added by 0.46.0: Cloudflare Web Search (over an AI Gateway, on Ceramic,
+            // Exa or Linkup), Google through SearchApi, and Tabstack Research's one
+            // cited answer. All three are keyed and explicit-only; `auto` never routes
+            // to them.
+            "cloudflare",
+            "searchapi",
+            "tabstack",
         )
 
         /** `maxInlineContentChars` as the extension documents it. */

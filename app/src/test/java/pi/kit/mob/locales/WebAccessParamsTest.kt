@@ -157,6 +157,29 @@ class WebAccessParamsTest {
             // Read since 0.33.0, and documented late — the 0.41.0 sweep missed it
             // because it is not a `*ApiKey` and does not start a section.
             "toolActivation",
+            // 0.43.0: Linkup.
+            "linkupApiKey",
+            "linkupDepth",
+            // 0.45.0: the URL policy switch, the query rewriter's own model, and the
+            // two routing knobs that arrived with the three new failure kinds.
+            "allowHttpBaseUrls",
+            "queryRewriteModel",
+            "searchRouting.timeoutMs",
+            "searchRouting.offTopicModel",
+            // 0.46.0: four more explicit-only providers, and the page fetch that runs
+            // a curl command instead of Node's fetch.
+            "ninerouterBaseUrl",
+            "ninerouterApiKey",
+            "ninerouterProvider",
+            "cloudflareAccountId",
+            "cloudflareGatewayId",
+            "cloudflareSearchProvider",
+            "searchapiApiKey",
+            "searchapiBaseUrl",
+            "tabstackApiKey",
+            "tabstackBaseUrl",
+            "tabstackResearchMode",
+            "fetchContent.curl",
         ).forEach { path ->
             assertTrue("$path is documented", path in paths)
         }
