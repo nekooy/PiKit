@@ -53,7 +53,6 @@ internal object JapaneseStrings : Strings {
         override val stop = "停止"
         override val sessions = "会話履歴"
         override val newSession = "新しい会話"
-        override val compact = "コンテキストを圧縮"
         override val compacting = "コンテキストを圧縮中…"
         override val showReasoning = "思考過程を表示"
         override val hideReasoning = "思考過程を隠す"
@@ -789,7 +788,7 @@ internal object JapaneseStrings : Strings {
                 "各サービスにはそれぞれキーが必要です。下の設定ファイルを参照してください。"
 
         override val searchConfig = "設定項目"
-        override val searchConfigAdd = "設定項目を追加"
+        override val searchConfigAdd = "設定項目またはキーを追加"
         override val searchConfigAddBody = "キーを選び値を入力"
         override val searchConfigPickTitle = "拡張が読む項目"
         override val searchConfigPickSearch = "項目を絞り込む"

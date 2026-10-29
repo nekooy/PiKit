@@ -28,8 +28,8 @@ is made of; its window dialogs,
 sheets, snackbars, icons and navigation are the furniture. What is left for this app
 is *no colour decision at all* — the palette is the library's, both schemes of it —
 and a small set of compositions the library does not have: the page frame, the
-section, the popup row, the window-level dialog phrasing, the snackbar host, and the
-content rendering (Markdown, formulas, the terminal).
+section, the popup row, the avatar circle, the window-level dialog phrasing, the
+snackbar host, and the content rendering (Markdown, formulas, the terminal).
 
 **A wrapper approach was rejected.** Keeping the `Pi*` API and re-implementing its
 internals with Miuix would have compiled the same screens with less churn, but it
@@ -175,7 +175,14 @@ Two row rules are behaviour rather than taste:
   `BasicComponent` *without* either slot is safe. `ui/kit/PiMenuRow` is the row for a
   popup, marks and all, and it takes the library's own popup-mode metrics —
   `body1`/`body2`, 20dp at the sides — so a menu of these sits beside a menu of
-  `DropdownImpl`s without a seam.
+  `DropdownImpl`s without a seam. It draws three kinds of row, and the difference is
+  the semantics rather than the shape: a **choice** (the chosen member's title in the
+  accent, which is the ink `DropdownImpl` gives its ticked row, so the terminal's
+  roster and the composer's model list say "this one" the same way), an **action**,
+  and a **fact** — a row with no tap at all, drawn in normal ink because the library's
+  disabled ink makes true numbers read as unavailable choices. The context report is
+  the one menu of facts: a page of readings drawn in the colour of a disabled control
+  reads as readings that are not available.
 
 ## Dialogs, sheets and the one message
 
@@ -283,9 +290,13 @@ the shared vocabulary does not:
   the composer is the page's bottom band on `surface` — the same grey the tab strip is
   painted in, so the foot of the page meets the navigation bar at no seam. Inside the
   band the field is a raised white frame (`surfaceContainer` at the kit's corner)
-  holding the text **and the three controls**: command list, attach, and the send
-  button — a filled disc in the accent while it can send. The four setting chips above
-  the frame (thinking, model, context, cache) are values drawn in normal ink, and the
+  holding the text **and the three controls**, in the order a thumb meets them: the
+  command list and the attach control at the field's left corner, the context
+  reading and the send button at its right — a filled disc in the accent while it
+  can send. Grouping the two controls that *add something to the message* at the
+  field's left is the correction: they are one kind of thing, and the corner a thumb
+  rests on is where they belong. The
+  four setting chips above the frame (thinking, model, context, cache) are values drawn in normal ink, and the
   two report chips open dropdown menus at the chips rather than a bottom sheet, for the
   reason §7.1 gives: a menu that answers one question belongs at the control that asks
   it. A conversation with nothing in it draws the Pi mark and the page's hint instead

@@ -42,18 +42,33 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * row is what lets a menu of these sit beside a menu of `DropdownImpl`s without a
  * seam — the two are used in the same app, sometimes in the same screen.
  *
- * ## Selecting, not merely clicking
+ * ## Three kinds of row, and the one parameter that tells them apart
  *
- * [selected] is what a row that is *one of a set* passes — the terminal roster, a
- * model list — and it turns the row into a `selectable` with the radio-button role,
- * so a screen reader says "selected" instead of "button" and the row's own mark is
- * then decoration. A row that *acts* (a command, "close all shells") leaves it null
- * and is a plain button.
+ * A menu row is a **choice**, an **action**, or a **fact**, and the three are read
+ * differently:
+ *
+ * - a choice ([selected] is true or false) is `selectable` with the radio-button
+ *   role, so a screen reader says "selected" instead of "button", and its title is
+ *   drawn in the accent when it is the chosen member — the same ink `DropdownImpl`
+ *   gives its selected row, which is what keeps the terminal's session list and the
+ *   composer's model list reading as one control. The report that made this a rule
+ *   was "终端页列表文字为什么没随打钩变色": the tick was blue and the title was not.
+ * - an action ([onClick] set, no [selected]) is a plain button;
+ * - a fact ([onClick] null) is neither, and is drawn in normal ink: it is a row of
+ *   *readings* (the context report), and the library's disabled ink made a page of
+ *   true numbers look like a page of unavailable choices. Nothing consumes a tap, so
+ *   the row is not a control and does not pretend to be one.
  */
 @Composable
 fun PiMenuRow(
     title: String,
-    onClick: () -> Unit,
+    /**
+     * What a tap does, or null for a row that only states something.
+     *
+     * A read-only row is still not a `Text`: it keeps the row's height, insets and
+     * typography, because it is drawn beside rows that are controls.
+     */
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     summary: String? = null,
     enabled: Boolean = true,
@@ -82,16 +97,17 @@ fun PiMenuRow(
 ) {
     // A set's row is `selectable` and a command's is `clickable`; the two differ in
     // the role they report and in whether the node carries a checked state, which is
-    // the whole of what a screen reader hears.
-    val interaction = if (selected != null) {
-        Modifier.selectable(
+    // the whole of what a screen reader hears. A fact carries no gesture at all.
+    val interaction = when {
+        onClick == null -> Modifier
+        selected != null -> Modifier.selectable(
             selected = selected,
             enabled = enabled,
             role = Role.RadioButton,
             onClick = onClick,
         )
-    } else {
-        Modifier.clickable(
+
+        else -> Modifier.clickable(
             enabled = enabled,
             role = Role.Button,
             onClick = onClick,
@@ -114,10 +130,10 @@ fun PiMenuRow(
                 text = title,
                 fontSize = MiuixTheme.textStyles.body1.fontSize,
                 fontWeight = FontWeight.Medium,
-                color = if (enabled) {
-                    titleColor
-                } else {
-                    MiuixTheme.colorScheme.disabledOnSurface
+                color = when {
+                    !enabled -> MiuixTheme.colorScheme.disabledOnSurface
+                    selected == true -> MiuixTheme.colorScheme.primary
+                    else -> titleColor
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

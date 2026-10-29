@@ -60,7 +60,6 @@ internal object ChineseStrings : Strings {
         override val stop = "停止"
         override val sessions = "历史对话"
         override val newSession = "新对话"
-        override val compact = "压缩上下文"
         override val compacting = "正在压缩上下文…"
         override val showReasoning = "展开思考"
         override val hideReasoning = "收起思考"
@@ -764,7 +763,7 @@ internal object ChineseStrings : Strings {
                 "每个服务仍需对应的 Key，见下面的配置文件。"
 
         override val searchConfig = "配置项"
-        override val searchConfigAdd = "添加配置项"
+        override val searchConfigAdd = "添加配置项或 Key"
         override val searchConfigAddBody = "选一项键名并填入值"
         override val searchConfigPickTitle = "扩展可读的配置项"
         override val searchConfigPickSearch = "筛选配置项"

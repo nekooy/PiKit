@@ -20,7 +20,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -33,6 +32,8 @@ import pi.kit.mob.data.ThemeMode
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.ui.kit.AvatarSpeaker
+import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
@@ -40,8 +41,6 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -177,12 +176,11 @@ internal fun PersonalizationPage(
                 ArrowPreference(
                     title = text.settings.aiAvatar,
                     endActions = {
-                        SettingsAvatar(
+                        PiAvatar(
+                            speaker = AvatarSpeaker.AGENT,
                             color = settings.aiAvatarColor.seed,
                             label = settings.aiAvatarLabel.ifBlank { null },
                             imagePath = settings.aiAvatarImage.ifBlank { null },
-                            // The agent's blank is the app's own Pi mark.
-                            mark = true,
                         )
                     },
                     onClick = {
@@ -193,12 +191,12 @@ internal fun PersonalizationPage(
                 ArrowPreference(
                     title = text.settings.userAvatar,
                     endActions = {
-                        SettingsAvatar(
+                        PiAvatar(
+                            speaker = AvatarSpeaker.READER,
                             color = settings.userAvatarColor.seed,
                             // Blank draws the silhouette — the reader's default mark.
                             label = settings.userAvatarLabel.ifBlank { null },
                             imagePath = settings.userAvatarImage.ifBlank { null },
-                            icon = MiuixIcons.Contacts,
                         )
                     },
                     onClick = {
@@ -234,8 +232,7 @@ internal fun PersonalizationPage(
                 slot = AvatarSlot.Ai,
                 label = settings.aiAvatarLabel,
                 imagePath = settings.aiAvatarImage,
-                mark = true,
-                fallbackIcon = null,
+                speaker = AvatarSpeaker.AGENT,
                 color = settings.aiAvatarColor,
                 onChangeLabel = { value ->
                     session.settingsStore.update { it.copy(aiAvatarLabel = value) }
@@ -253,8 +250,7 @@ internal fun PersonalizationPage(
                 slot = AvatarSlot.User,
                 label = settings.userAvatarLabel,
                 imagePath = settings.userAvatarImage,
-                mark = false,
-                fallbackIcon = MiuixIcons.Contacts,
+                speaker = AvatarSpeaker.READER,
                 color = settings.userAvatarColor,
                 onChangeLabel = { value ->
                     session.settingsStore.update { it.copy(userAvatarLabel = value) }
@@ -315,7 +311,8 @@ private fun FontSizeRow(
         title = text.settings.fontSize,
         summary = text.settings.fontSizeSubtitle,
         // The step as a percentage of the app's own sizes, which is the one number a
-        // reader can check against nothing at all: `100%` is what a fresh install has.
+        // reader can check against nothing at all: `100%` is the app's own sizes, and
+        // a fresh install starts one step below them (`FontSize.DEFAULT`).
         valueText = "${shown.percent}%",
         valueRange = 0f..steps.lastIndex.toFloat(),
         // Miuix (like the slider it wraps) counts the ticks *between* the ends, so
@@ -357,8 +354,7 @@ private fun AvatarSheet(
     slot: AvatarSlot,
     label: String,
     imagePath: String,
-    mark: Boolean,
-    fallbackIcon: ImageVector?,
+    speaker: AvatarSpeaker,
     color: AvatarColor,
     onChangeLabel: (String) -> Unit,
     onChangeImage: (String) -> Unit,
@@ -390,12 +386,11 @@ private fun AvatarSheet(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
-            SettingsAvatar(
+            PiAvatar(
+                speaker = speaker,
                 color = color.seed,
                 label = label.ifBlank { null },
                 imagePath = imagePath.ifBlank { null },
-                icon = fallbackIcon,
-                mark = mark,
                 size = AVATAR_PREVIEW_SIZE,
                 labelStyle = MiuixTheme.textStyles.title1,
             )

@@ -33,8 +33,6 @@
  */
 package pi.kit.mob.ui.settings
 
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,20 +55,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -78,11 +68,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import pi.kit.mob.R
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiSection
@@ -96,7 +82,6 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTitleDefaults
@@ -531,133 +516,6 @@ fun SettingsSwatch(
                 .background(color),
         )
     }
-}
-
-/**
- * One speaker's mark: a picture, a word, a silhouette, or the app's own mark.
- *
- * The four fallbacks are ordered by what the user actually chose, which is why a
- * picture wins over a label and a label over a glyph: a label is up to three characters
- * the user typed for this circle, and it says which speaker this is more precisely than
- * any icon can. [ink] is decided by the background's luminance — white on a dark swatch,
- * black on a light one — because the eight avatar colours range from a deep red to an
- * amber and a fixed ink is unreadable at one end.
- *
- * ## Why the picture is decoded here rather than loaded
- *
- * PiKit has no image-loading dependency, and this is the one picture in the app: a
- * `BitmapFactory` decode off the main thread is smaller than the dependency would be,
- * and it reads the same file the reader picked rather than a cache with its own
- * eviction to reason about. It is **downscaled on the way in** — the file is whatever
- * the user picked, and a 12-megapixel photo is 48 MB as an `ARGB_8888` bitmap drawn
- * into a 40dp circle — so `inSampleSize` is solved from the header's own bounds until
- * the longest side is near [AVATAR_DECODE_PX]. A path that no longer resolves decodes
- * to null and costs the picture and nothing else.
- */
-@Composable
-fun SettingsAvatar(
-    color: Color,
-    modifier: Modifier = Modifier,
-    label: String? = null,
-    icon: ImageVector? = null,
-    imagePath: String? = null,
-    mark: Boolean = false,
-    size: Dp = 28.dp,
-    /** Null scales the label to [size]; the 96dp preview passes `title1` instead. */
-    labelStyle: TextStyle? = null,
-) {
-    val ink = if (color.luminance() > 0.5f) Color.Black else Color.White
-    val picture = rememberAvatarBitmap(imagePath)
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(color),
-        contentAlignment = Alignment.Center,
-    ) {
-        when {
-            picture != null -> Image(
-                bitmap = picture,
-                contentDescription = null,
-                // Crop rather than fit: a portrait photo in a circle should fill it,
-                // and the middle of the picture is what survives the crop.
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-
-            label != null -> Text(
-                text = label,
-                // Scaled to the circle rather than fixed: `body2` is 14sp, which is
-                // more than half of the 28dp row avatar, so the three-character label
-                // the field allows was already wider than the disc it sits in. The
-                // editor passes `title1` for its 96dp preview; a call site that passes
-                // nothing gets the row size.
-                style = if (labelStyle == null) {
-                    MiuixTheme.textStyles.body2.copy(fontSize = (size.value * 0.38f).sp)
-                } else {
-                    labelStyle
-                },
-                color = ink,
-                maxLines = 1,
-                // Elided rather than clipped: the label is capped at three characters
-                // but a large font scale still overflows, and a glyph cut in half reads
-                // as a rendering fault where an ellipsis reads as "there is more".
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            icon != null -> Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = ink,
-                modifier = Modifier.size(size * AVATAR_GLYPH_SHARE),
-            )
-
-            mark -> Icon(
-                painter = painterResource(R.drawable.ic_pi_mark),
-                contentDescription = null,
-                tint = ink,
-                modifier = Modifier.size(size * AVATAR_MARK_SHARE),
-            )
-        }
-    }
-}
-
-/**
- * How much of the circle a mark takes.
- *
- * Two numbers rather than one, and the pair is a measurement rather than taste: an icon
- * set's box is not its ink. A silhouette glyph draws between 4 and 20 of its 24 units, so
- * at 62% of the circle its ink is 41% of the diameter, while `ic_pi_mark.xml`'s viewport
- * **is** the glyph's bounding box — the same 62% drew an ink twice the silhouette's, and
- * the agent's avatar read as a logo with a ring of colour around it. 0.46 puts the
- * mark's ink at the silhouette's.
- */
-private const val AVATAR_GLYPH_SHARE = 0.62f
-private const val AVATAR_MARK_SHARE = 0.46f
-
-/** The longest side a decoded avatar is allowed to be, in pixels: 40dp at 3x. */
-private const val AVATAR_DECODE_PX = 160
-
-@Composable
-private fun rememberAvatarBitmap(path: String?): ImageBitmap? {
-    if (path.isNullOrBlank()) return null
-    return produceState<ImageBitmap?>(initialValue = null, path) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(path, bounds)
-                var sample = 1
-                while (
-                    bounds.outWidth / (sample * 2) >= AVATAR_DECODE_PX &&
-                    bounds.outHeight / (sample * 2) >= AVATAR_DECODE_PX
-                ) {
-                    sample *= 2
-                }
-                val options = BitmapFactory.Options().apply { inSampleSize = sample }
-                BitmapFactory.decodeFile(path, options)?.asImageBitmap()
-            }.getOrNull()
-        }
-    }.value
 }
 
 /**

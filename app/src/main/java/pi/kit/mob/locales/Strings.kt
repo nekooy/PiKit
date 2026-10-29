@@ -152,7 +152,6 @@ interface Strings {
         val stop: String
         val sessions: String
         val newSession: String
-        val compact: String
         val compacting: String
         val showReasoning: String
         val hideReasoning: String
@@ -547,7 +546,15 @@ interface Strings {
         val switchTerminal: String
         fun exited(code: Int?): String
 
-        /** The ✕ beside a row of the session picker; `label` names that session. */
+        /**
+         * The delete beside a row of the session picker; `label` names that session.
+         *
+         * The action closes the shell *and* drops it from the roster — the session
+         * is gone rather than hidden — which is why the mark is a delete rather than
+         * the ✕ the row used to draw. The wording did not change with it: what the
+         * control does to the shell is still to close it, and every language already
+         * says that.
+         */
         fun closeSession(label: String): String
 
         /** The action row under the session picker: closes every session. */
@@ -1618,7 +1625,19 @@ interface Strings {
          */
         val searchConfig: String
 
-        /** The button that opens the option picker. */
+        /**
+         * The button that opens the option picker; its title names the *key* as well
+         * as the option.
+         *
+         * The word is the one this section already uses everywhere else: the caption
+         * under the title is "pick a key and give it a value", the picker lists the
+         * extension's keys, and the row it appends to the list is a key with a value.
+         * A title that named only the option described what the row does to the
+         * configuration while the control it opens asks which key — so a reader who
+         * knows the key they want (that is the name the extension's own documentation
+         * gives them) had to open the button to find out whether it was the one that
+         * sets it.
+         */
         val searchConfigAdd: String
 
         /**

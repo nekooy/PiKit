@@ -52,7 +52,6 @@ internal object EnglishStrings : Strings {
         override val stop = "Stop"
         override val sessions = "Conversations"
         override val newSession = "New conversation"
-        override val compact = "Compact context"
         override val compacting = "Compacting context…"
         override val showReasoning = "Show reasoning"
         override val hideReasoning = "Hide reasoning"
@@ -833,7 +832,7 @@ internal object EnglishStrings : Strings {
                 "A provider still needs its key — see the file below."
 
         override val searchConfig = "Configuration"
-        override val searchConfigAdd = "Add an option"
+        override val searchConfigAdd = "Add an option or key"
         override val searchConfigAddBody = "Pick a key and give it a value"
         override val searchConfigPickTitle = "Options the extension reads"
         override val searchConfigPickSearch = "Filter options"

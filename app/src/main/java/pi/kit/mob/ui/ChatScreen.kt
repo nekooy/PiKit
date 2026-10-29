@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -86,11 +87,11 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -138,6 +139,8 @@ import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.components.CopyButtonInkInset
 import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
+import pi.kit.mob.ui.kit.AvatarSpeaker
+import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
@@ -167,10 +170,8 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Info
-import top.yukonga.miuix.kmp.icon.extended.Merge
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Recent
@@ -873,12 +874,14 @@ private fun ChatPage(
         } else {
             ChatAvatars(
                 // Blank is the mark, not a word: the agent's fallback is the app's own
-                // Pi logo, drawn by `ChatAvatar`'s `mark` flag.
+                // Pi mark, drawn by `PiAvatar` for `AvatarSpeaker.AGENT`.
                 aiLabel = saved.aiAvatarLabel.ifBlank { null },
                 aiImage = saved.aiAvatarImage.ifBlank { null },
                 aiColor = saved.aiAvatarColor.seed,
-                // The reader's blank is the silhouette for the same reason: the two
-                // speakers must not fall back to the same figure.
+                // The reader's blank is the person figure for the same reason: the two
+                // speakers must not fall back to the same figure, and the figure is the
+                // personalization page's — the page that lets the reader replace it is
+                // the one that decides what it is when they have not.
                 userLabel = saved.userAvatarLabel.ifBlank { null },
                 userImage = saved.userAvatarImage.ifBlank { null },
                 userColor = saved.userAvatarColor.seed,
@@ -935,13 +938,12 @@ private fun ChatPage(
         title = conversationTitle(state),
         subtitle = agentSubtitle(agent, text),
         actions = {
-            IconButton(onClick = { session.compact() }) {
-                Icon(
-                    imageVector = MiuixIcons.Merge,
-                    contentDescription = text.chat.compact,
-                    tint = MiuixTheme.colorScheme.onSurface,
-                )
-            }
+            // Two actions, not three. The compress control that used to stand first
+            // here is gone, and the command list is where it went: `⌘` already
+            // carries `/compact`, so the bar offered the same operation twice and
+            // one of the two was an icon on a row of *navigation* that did not open
+            // anything. A one-shot operation on the conversation belongs in the list
+            // of them rather than beside the two that move between conversations.
             IconButton(onClick = onOpenSessions) {
                 Icon(
                     imageVector = MiuixIcons.Recent,
@@ -1471,135 +1473,6 @@ private val EMPTY_MARK_SIZE = 64.dp
 @Composable
 private fun sheetBottomInset(): Dp =
     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-/**
- * One speaker's mark: a circle in the colour the reader chose, holding a label, a
- * picture, or the fallback figure for that speaker.
- *
- * The two fallbacks are deliberately different figures — the agent's is the app's own
- * Pi logo, the reader's is a person — because a null label means "the built-in mark",
- * and two speakers falling back to the same figure is a transcript with one speaker.
- *
- * ## The two shares, and why they differ
- *
- * They were one number (0.62) until the Pi mark was looked at beside the silhouette it
- * shares a slot with: a framework icon's box is not its ink. A person glyph draws
- * between 4 and 20 of its 24 units, so at 62% of the circle its *ink* is
- * 0.62 × 16/24 = **41%** of the diameter; `ic_pi_mark.xml`'s viewport **is** the
- * glyph's bounding box — the path runs 29.9→67.5 in x and 40→77.6 in y of a 37.6-unit
- * viewport — so the same 62% drew an ink twice the silhouette's and the agent's avatar
- * read as a logo with a ring of colour around it rather than as a mark in a circle.
- *
- * [AVATAR_MARK_SHARE] is therefore set to the silhouette's *ink* (0.46 × 34dp = about
- * 16dp of a 34dp circle) rather than to its box. It is still the heavier of the two at
- * equal ink, because the mark is a solid blocky figure where the silhouette is an
- * outline of one, which is what keeps the two speakers tellable apart at a glance.
- */
-@Composable
-private fun ChatAvatar(
-    color: Color,
-    modifier: Modifier = Modifier,
-    label: String? = null,
-    icon: ImageVector? = null,
-    imagePath: String? = null,
-    mark: Boolean = false,
-    size: Dp = 28.dp,
-) {
-    // The ink is decided by the circle's own luminance rather than by the theme: the
-    // colour is the reader's choice and may be any hue at any lightness, so the only
-    // thing that can be known about it is how bright it is.
-    val ink = if (color.luminance() > 0.5f) Color.Black else Color.White
-    val picture = rememberAvatarBitmap(imagePath)
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(color),
-        contentAlignment = Alignment.Center,
-    ) {
-        when {
-            picture != null -> Image(
-                bitmap = picture,
-                contentDescription = null,
-                // Crop rather than fit: a portrait photo in a circle should fill it.
-                // `Alignment.Center` is the crop's own anchor, so the middle of the
-                // picture is what survives.
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-
-            label != null -> Text(
-                text = label,
-                style = MiuixTheme.textStyles.footnote1,
-                color = ink,
-                maxLines = 1,
-            )
-
-            icon != null -> Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = ink,
-                modifier = Modifier.size(size * AVATAR_GLYPH_SHARE),
-            )
-
-            mark -> Icon(
-                painter = painterResource(R.drawable.ic_pi_mark),
-                contentDescription = null,
-                tint = ink,
-                modifier = Modifier.size(size * AVATAR_MARK_SHARE),
-            )
-        }
-    }
-}
-
-private const val AVATAR_GLYPH_SHARE = 0.62f
-private const val AVATAR_MARK_SHARE = 0.46f
-
-/**
- * The custom avatar picture at [path], decoded once and downscaled to avatar size.
- *
- * ## Why not an image loader
- *
- * PiKit has no image-loading dependency, and this is the one picture in the app: a
- * `BitmapFactory` decode off the main thread in a `produceState` is smaller than the
- * dependency would be, and it is the same file the reader picked rather than a cache
- * with its own eviction to reason about.
- *
- * The decode is **downscaled** on the way in. The file is whatever the user picked —
- * a 12-megapixel photo is 48 MB as an `ARGB_8888` bitmap, drawn into a 34dp circle —
- * so `inSampleSize` is solved from the file's own bounds until the longest side is
- * near [AVATAR_DECODE_PX]. The bounds pass reads the header only, which is why it is
- * two `decodeFile` calls rather than one.
- *
- * A path that no longer resolves (the file was deleted, the export was restored
- * without it) decodes to null, and the avatar falls back to the label or the mark
- * exactly as if no picture had been chosen — a broken reference costs the picture and
- * nothing else.
- */
-@Composable
-private fun rememberAvatarBitmap(path: String?): ImageBitmap? {
-    if (path.isNullOrBlank()) return null
-    return produceState<ImageBitmap?>(initialValue = null, path) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(path, bounds)
-                var sample = 1
-                while (
-                    bounds.outWidth / (sample * 2) >= AVATAR_DECODE_PX &&
-                    bounds.outHeight / (sample * 2) >= AVATAR_DECODE_PX
-                ) {
-                    sample *= 2
-                }
-                val options = BitmapFactory.Options().apply { inSampleSize = sample }
-                BitmapFactory.decodeFile(path, options)?.asImageBitmap()
-            }.getOrNull()
-        }
-    }.value
-}
-
-/** The longest side a decoded avatar is allowed to be, in pixels. 34dp at 4x, rounded up. */
-private const val AVATAR_DECODE_PX = 160
 
 /**
  * The thinking level to show, preferring what pi reports over what was saved.
@@ -2137,10 +2010,11 @@ private const val APP_NAME = "PiKit"
  * The two avatars the transcript draws over its cards, or null when they are off.
  *
  * A null label (and no image) is the built-in mark rather than a word: the agent's is
- * the app's own Pi logo and the reader's is the person silhouette, which is why both
- * labels may be null and why the two fallbacks are different figures. The colours are
- * the two `AvatarColor` seeds the personalization page offers, and an image is a file
- * path the settings store holds.
+ * the app's own Pi mark and the reader's is the person figure — [PiAvatar] holds both
+ * and is the one place that decides which is drawn, so this transcript and the
+ * personalization page cannot disagree about the reader's own avatar. The colours are
+ * the two `AvatarColor` seeds that page offers, and an image is a file path the
+ * settings store holds.
  */
 private data class ChatAvatars(
     val aiLabel: String?,
@@ -2241,13 +2115,15 @@ private fun TranscriptCardView(
                 Column(horizontalAlignment = Alignment.End) {
                     // The reader's own mark, over the bubble and on the reader's
                     // side — the two things that say who is speaking without a name
-                    // line. See [ChatAvatar]; a null label draws the silhouette and a
-                    // stored picture replaces both.
+                    // line. See [PiAvatar]: the speaker's figure is decided there and
+                    // nowhere else, so this circle and the personalization page's
+                    // draw the same person, and a stored label or picture replaces it
+                    // in both.
                     avatars?.let { marks ->
-                        ChatAvatar(
+                        PiAvatar(
+                            speaker = AvatarSpeaker.READER,
                             color = marks.userColor,
                             label = marks.userLabel,
-                            icon = MiuixIcons.ContactsCircle,
                             imagePath = marks.userImage,
                             size = AVATAR_SIZE,
                             modifier = Modifier.padding(bottom = AVATAR_GAP),
@@ -2295,14 +2171,14 @@ private fun TranscriptCardView(
             // rather than per row: the card *is* the turn, and the folded steps inside
             // it are the same speaker.
             avatars?.let { marks ->
-                ChatAvatar(
+                // The agent's fallback is the app's own Pi mark ([PiAvatar]), so the
+                // speaker answering is named by the product's logo rather than by two
+                // letters standing in for one.
+                PiAvatar(
+                    speaker = AvatarSpeaker.AGENT,
                     color = marks.aiColor,
                     label = marks.aiLabel,
                     imagePath = marks.aiImage,
-                    // The agent's fallback is the app's own mark, so the speaker
-                    // answering is named by the product's logo rather than by two
-                    // letters standing in for one.
-                    mark = true,
                     size = AVATAR_SIZE,
                     modifier = Modifier.padding(bottom = AVATAR_GAP),
                 )
@@ -3050,6 +2926,32 @@ private const val COMPOSER_MAX_LINES = 8
 private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
 
 /**
+ * The air the composer's frame leaves above an open keyboard: 10dp.
+ *
+ * Enough that the frame's rounded corners are drawn against the page rather than against
+ * the keyboard's edge, and small enough that it does not read as a band of its own — the
+ * composer still sits at the foot of the page, it just floats there. Read where it is
+ * drawn; `Composer` states why that moved.
+ */
+private val COMPOSER_IME_GAP = 10.dp
+
+/**
+ * How far above the navigation bar the keyboard's edge may be before [COMPOSER_IME_GAP] is
+ * fully drawn: four gaps, 40dp.
+ *
+ * The gap has to go from 10dp to nothing as the keyboard leaves, and the platform's inset
+ * animation arrives in steps coarse enough to skip a ramp as narrow as the gap itself.
+ * Measured on the emulator, one close reported `ime` 844 → 282 → 219 → 125 → 94 → 32 → 10 →
+ * 5 → 1 → 0 at 20–30 ms apart, so a ramp over the last 10dp of keyboard was crossed in a
+ * single frame and the frame's last 26 px (10dp at this density) arrived as a step after the
+ * rest of the motion had stopped. Four gaps spreads the same distance over four or five
+ * frames, and the only thing it changes while the keyboard is open is the last 40dp of its
+ * travel, where neither the keyboard nor the frame is being looked at.
+ */
+private val COMPOSER_IME_GAP_RAMP = COMPOSER_IME_GAP * 4
+
+
+/**
  * The composer: the page's bottom band, with the field inside it.
  *
  * ## A band, not a panel
@@ -3078,7 +2980,7 @@ private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
  *  ╭────────────────────────────────────╮
  *  │ Ask Pi…                            │   the field, growing upward
  *  ╰────────────────────────────────────╯
- *   ( ⌘ )                        (◔) (+) (→)   the row a thumb reaches
+ *   ( ⌘ ) (+)                    (◔) (→)      the row a thumb reaches
  * ```
  *
  * The chips are above the field rather than below it: a chip between the
@@ -3095,11 +2997,13 @@ private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
  * of the chips either: it is a fact rather than a control, and it lives in the header.
  * Nor is the *live* tone — live means a turn is running, and nothing in a composer is.
  *
- * The action row is the field's last line: the frame holds the field and the three
- * buttons, so the row a thumb reaches is inside the box the text is typed in. The field
- * grows *upward* out of the row rather than pushing it down the screen. The keyboard
- * gap under the frame is the root's (`LocalImeGap`) — the band continues under it, so
- * the composer floats clear of the keyboard instead of sitting on it.
+ * The action row is the field's last line: the frame holds the field and the row's
+ * four controls, so the row a thumb reaches is inside the box the text is typed in.
+ * They are grouped by what they do rather than by which side had room: the two that put
+ * something into the message at the start edge, the reading and the send at the end.
+ * The field grows *upward* out of the row rather than pushing it down the screen. The keyboard
+ * gap under the frame is the composer's own (`imeGap` below): the band continues under
+ * it, so the composer floats clear of the keyboard instead of sitting on it.
  */
 @Composable
 private fun Composer(
@@ -3166,6 +3070,36 @@ private fun Composer(
     // has to put away the selection toolbar the first one made possible.
     var fieldFocused by remember { mutableStateOf(false) }
 
+    // The air the composer's frame leaves above the keyboard, and the two corrections in
+    // how it is measured.
+    //
+    // The root's `imePadding` ends the page exactly at the keyboard's top edge, so
+    // without a gap the frame — the page's last object — would be drawn against the
+    // keyboard with both of its bottom corners on that edge, and a field that is part of
+    // a keyboard looks like one.
+    //
+    // **Read here, where it is drawn, rather than handed down from the root.** The value
+    // is the same; what differs is the frame that changes it. It used to be computed
+    // above the scaffold and passed down as a composition local, and a local whose value
+    // moves flips its whole content — so the chat page recomposed before the gap did.
+    // Measured with a screen recording of the keyboard closing: the composer slid down
+    // with the keyboard over four frames, held for five (about 80 ms) 26 px — 10dp, this
+    // gap — above its resting place, and then hopped the last step once the page had
+    // recomposed. Read at the divider, the same inset moves the same composable.
+    //
+    // **Scaled by how much keyboard is left, rather than switched at the end.** The gap is
+    // 10dp while the keyboard's edge is well above the page's bottom, and it eases to
+    // nothing over the last [COMPOSER_IME_GAP_RAMP] of the edge's travel, so neither the
+    // open nor the close has a step in it whatever frame the platform reports the inset on.
+    // With no keyboard the ime inset is zero, which is what keeps the band meeting the
+    // navigation bar's own strip with no seam.
+    val density = LocalDensity.current
+    val aboveNavigationBar = (
+        WindowInsets.ime.getBottom(density) - WindowInsets.navigationBars.getBottom(density)
+        ).coerceAtLeast(0)
+    val ramp = with(density) { COMPOSER_IME_GAP_RAMP.roundToPx() }
+    val imeGap = COMPOSER_IME_GAP * (aboveNavigationBar.toFloat() / ramp).coerceIn(0f, 1f)
+
     // The band: full bleed, in the page's column, on **`surface`** — the colour the tab
     // strip and the root scaffold behind it are painted in, so the foot of the page is
     // one continuous surface from the transcript's end to the navigation bar and the two
@@ -3212,8 +3146,8 @@ private fun Composer(
             // be sent with.
             //
             // Three, not four: the context share used to be one of them and is now
-            // the ring at the `+` below, because it is a reading rather than a
-            // choice (see `ContextRing`).
+            // the ring at the other end of the action row, beside the send, because
+            // it is a reading rather than a choice (see `ContextRing`).
             //
             // Horizontally scrollable so three chips whose values can each be long
             // stay on one line: the alternative is squeezing them, which turns the
@@ -3361,7 +3295,7 @@ private fun Composer(
                     ControlChip(
                         glyph = MiuixIcons.Stopwatch,
                         label = text.chat.cacheHit(cacheHitPercent(state)),
-                        // The same menu the context ring beside the `+` opens, and the
+                        // The same menu the context ring beside the send opens, and the
                         // same one name in [ComposerSheet]: the two are two readings of
                         // one report, so opening either asks the same question.
                         onClick = { onOpenSheet(ComposerSheet.Context) },
@@ -3514,11 +3448,30 @@ private fun Composer(
                             .padding(start = 6.dp, end = 6.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                // The command list, at the field's *left* corner, mirrored by the
-                // send button at its right, and sharing the `+`'s own style —
-                // three plain icon buttons on one line, with the space between the
-                // first and the other two held by a weighted spacer so the layout does
-                // not depend on how wide the field's text is.
+                // ## The row's order: what goes in, then what happens to it
+                //
+                // ```
+                //  ( ⌘ ) (+)                              (◔) (→)
+                //  └─────┬─────┘                          └──┬──┘
+                //   put something into the message   what it becomes
+                // ```
+                //
+                // The command list and the `+` are the row's left pair, immediately
+                // after each other: both are controls that put something into the
+                // message, both are the same plain 40dp icon button, and a reader
+                // reaches for either of them while deciding what to say rather than
+                // after saying it. The ring and the send are the other half — one
+                // reading and one action, both *about* the message rather than part
+                // of it — and the weighted spacer between the halves is what keeps
+                // the layout from depending on how wide the field's text is.
+                //
+                // The order before this was ` ⌘ … ◔ + → `: the `+` sat at the far end
+                // beside the send, and the ring stood between it and the command
+                // list. Nothing in that row was wrong on its own, and it could not
+                // say the one thing this row has to say — which two of the four are
+                // the same kind of control — so the two "add" buttons were as far
+                // apart as the row is wide, with the two controls that are not adds
+                // between them.
                 //
                 // It is the same control as the `+` beside it, deliberately. It *was*
                 // a filled circle carrying the `/` character, and that was wrong twice
@@ -3546,12 +3499,13 @@ private fun Composer(
                         Icon(
                             painter = painterResource(R.drawable.ic_commands),
                             contentDescription = text.chat.commands,
-                            // 17dp, against the 23dp of the `+` beside it, and that is a
-                            // property of the glyph rather than of the button: Lucide's
-                            // `command` draws its loops out to 21 of its 24 units, where
-                            // a plus keeps its ink inside 14 — so the same size reads as
-                            // a much bigger mark, which is the report "常用命令图标 太大了".
-                            // Scaled here, at the call site: the vector itself is the
+                            // 17dp, the same box as the `+` beside it, and the size is
+                            // a property of the glyph rather than of the button:
+                            // Lucide's `command` draws its loops out to 21 of its 24
+                            // units where Miuix's `Add` keeps its ink inside 14, so two
+                            // glyphs need two measurements to end up at one drawn size.
+                            // The `+`'s own comment has the arithmetic; this figure is
+                            // stated here, at the call site, because the vector is the
                             // library's and is not edited (see `ic_commands.xml`).
                             modifier = Modifier.size(17.dp),
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -3572,34 +3526,12 @@ private fun Composer(
                         )
                     }
                 }
-                Spacer(Modifier.weight(1f))
-                // The context meter, where the chip in the row above used to be: a
-                // ring at the `+`'s left, at the height of the two buttons beside it.
-                //
-                // A ring rather than a chip because the number is a *share*, and a
-                // share has a shape: `上下文 12%` in a pill was a label competing with
-                // `deepseek-chat` and the level for a row that only fits three of them,
-                // while a ring of the same number says the same thing in 20dp and
-                // leaves the row to the two settings that are genuinely choices. The
-                // value is still one tap away — the ring opens the same dropdown the
-                // cache chip does — and it is still readable at a glance, which is the
-                // whole of what a context meter is for.
-                PopupAnchor {
-                    val percent = contextPercent(state)
-                    ContextRing(
-                        percent = percent,
-                        description = text.chat.contextUsage(percent),
-                        onClick = { onOpenSheet(ComposerSheet.ContextRing) },
-                    )
-                    WindowListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
-                        show = openSheet == ComposerSheet.ContextRing,
-                        maxHeight = MENU_MAX_HEIGHT,
-                        onDismissRequest = onCloseSheet,
-                    ) {
-                        ContextMenu(session = session, text = text)
-                    }
-                }
+                // The `+`, immediately after the command list and in the same plain
+                // dress: the two controls that put something into the message are one
+                // group at the field's left edge, which is the whole of this row's
+                // order (see the diagram over the ⌘). The attach menu is the one of
+                // the two that offers the reader a choice — a capture, a picture, a
+                // document — and the command list is the one that acts on the tap.
                 PopupAnchor {
                     IconButton(
                         onClick = { onOpenSheet(ComposerSheet.Attach) },
@@ -3633,6 +3565,40 @@ private fun Composer(
                             onPick = onPickAttachment,
                             onDismiss = onCloseSheet,
                         )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                // The context meter, where the chip in the row above used to be: a
+                // ring at the send's left, at the height of the buttons beside it.
+                //
+                // A ring rather than a chip because the number is a *share*, and a
+                // share has a shape: `上下文 12%` in a pill was a label competing with
+                // `deepseek-chat` and the level for a row that only fits three of them,
+                // while a ring of the same number says the same thing in 20dp and
+                // leaves the row to the two settings that are genuinely choices. The
+                // value is still one tap away — the ring opens the same dropdown the
+                // cache chip does — and it is still readable at a glance, which is the
+                // whole of what a context meter is for.
+                //
+                // It is the last control before the send rather than a neighbour of
+                // the `+`, because it is the one control in the row that is *about*
+                // the message rather than part of it: a reading sits beside the
+                // action that consumes it, and the two that add something keep the
+                // edge where the writing starts.
+                PopupAnchor {
+                    val percent = contextPercent(state)
+                    ContextRing(
+                        percent = percent,
+                        description = text.chat.contextUsage(percent),
+                        onClick = { onOpenSheet(ComposerSheet.ContextRing) },
+                    )
+                    WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
+                        show = openSheet == ComposerSheet.ContextRing,
+                        maxHeight = MENU_MAX_HEIGHT,
+                        onDismissRequest = onCloseSheet,
+                    ) {
+                        ContextMenu(session = session, text = text)
                     }
                 }
                 Spacer(Modifier.width(4.dp))
@@ -3710,13 +3676,14 @@ private fun Composer(
                 }
             }
 
-            // The air above the keyboard. The band's own fill continues under it —
-            // the root's `imePadding` ends the page exactly at the keyboard's edge, so
-            // this gap is the last 10dp of the page, and the composer's frame floats
-            // clear of the keyboard instead of sitting on it. Zero when no keyboard is
-            // up, which is what keeps the band meeting the navigation bar's own strip
-            // with no seam (see `LocalImeGap`).
-            Spacer(Modifier.height(LocalImeGap.current))
+            // The air above the keyboard. The band's own fill continues under it — the
+            // page is padded by the keyboard (`imePadding` at the root), so this gap is
+            // the last 10dp of the page and the composer's frame floats clear of the
+            // keyboard instead of sitting on it. It shrinks to nothing as the keyboard
+            // arrives and as it leaves, so the band still meets the navigation bar's own
+            // strip with no seam when none is up; `Composer`'s comment above the value
+            // has why it is measured here rather than handed down.
+            Spacer(Modifier.height(imeGap))
         }
     }
 }
@@ -3902,7 +3869,8 @@ private fun contextPercent(state: ConversationState): Int {
 }
 
 /**
- * The context meter: a 20dp ring at the `+`, filled to the share of the window in use.
+ * The context meter: a 20dp ring beside the send, filled to the share of the window
+ * in use.
  *
  * ## Why a ring rather than the chip that was here
  *
@@ -3910,7 +3878,7 @@ private fun contextPercent(state: ConversationState): Int {
  * and it had four of them: the thinking level, the model, the context share and the
  * cache-hit share. The two percentages were the only ones the reader does not *choose*
  * — they are readings — and two of four chips on a row that scrolls is half the row
- * spent on meters. The context one moved here, beside the `+`, where a shape can say
+ * spent on meters. The context one moved here, beside the send, where a shape can say
  * a share without a label: a ring filled a third of the way round is the same number
  * as `上下文 33%` and it costs 20dp.
  *
@@ -4340,17 +4308,21 @@ private class ModelRow(
  * edge, for a question the reader asks by glancing at a number. Every other menu on
  * this page is a dropdown at its own control (§7.1), and this one is a menu of values
  * rather than a page — so it is the same `ListPopupColumn` the model and thinking
- * menus use, and its rows are the library's own dropdown rows.
+ * menus use, at the same row metrics, drawn as the facts it holds rather than as
+ * choices (the section below is the whole of that decision).
  *
- * ## Read-only rows are dropdown rows with no tick
+ * ## Read-only rows are facts, not disabled choices
  *
  * A `DropdownImpl` is a *choice* row: it reports a radio-button role and draws a tick
- * when `isSelected`. Neither is true here — nothing in this menu can be picked — and
- * the honest version of "a list of labelled values" in this library is the same row
- * with `isSelected = false` and `enabled = false`, which is what makes the row grey
- * and reports it as unavailable to a screen reader rather than as a radio that cannot
- * be moved. That is also what `DropdownImpl`'s own `disabledOnSecondaryVariant` ink is
- * for, and it is the one state where a menu row is plainly not a control.
+ * when `isSelected`, and its way of saying "nothing here can be picked" is
+ * `enabled = false` — the scheme's *disabled* ink, plus "unavailable" to a screen
+ * reader. A page of numbers this app has just measured, drawn in that ink, reads as a
+ * page of choices that have been taken away, which is the opposite of what this menu
+ * is: every row states something true about the conversation and none of them is
+ * waiting for permission. The row is [PiMenuRow] with no `onClick` — the kit's
+ * read-only form of the same menu row, at the library's title-over-summary metrics
+ * and in the scheme's normal ink — and a row with no gesture consumes no tap and
+ * reports no role, so it is a reading rather than a control that looks switched off.
  *
  * ## One label per row rather than a two-column table
  *
@@ -4427,18 +4399,9 @@ private fun ContextMenu(session: PiAgentSession, text: Strings) {
     }
 
     ListPopupColumn {
-        rows.forEachIndexed { index, (label, value) ->
-            DropdownImpl(
-                item = DropdownItem(text = label, summary = value),
-                optionSize = rows.size,
-                isSelected = false,
-                // Not a control: see this function's KDoc. The library draws a
-                // disabled row in the scheme's disabled ink and reports it as
-                // unavailable, which is exactly what a read-only fact is.
-                enabled = false,
-                index = index,
-                onSelectedIndexChange = {},
-            )
+        // Every row, in the order it was added, as a fact: see this function's KDoc.
+        rows.forEach { (label, value) ->
+            PiMenuRow(title = label, summary = value)
         }
     }
 }
@@ -4512,7 +4475,14 @@ private fun CommandMenu(
     val rows = BUILT_IN_COMMANDS
     ListPopupColumn {
         DropdownImpl(
-            text = SHELL_SIGIL,
+            // The one row whose label is a sigil rather than a command id, and it
+            // carries a summary like every row under it: `!` states the *shape* of
+            // the line it wants, not what happens when it is tapped, and a menu of
+            // rows that each explain themselves with one sentence leaves the one
+            // punctuation mark in it as the only entry a reader has to already know.
+            // The sentence is the catalog's own — the shell field it opens says the
+            // same thing under its title.
+            item = DropdownItem(text = SHELL_SIGIL, summary = text.chat.shellCommandHint),
             optionSize = rows.size + 1,
             isSelected = false,
             index = 0,

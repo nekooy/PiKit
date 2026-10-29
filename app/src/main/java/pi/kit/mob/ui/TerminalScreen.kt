@@ -66,7 +66,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
-import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Refresh
@@ -247,7 +247,7 @@ fun TerminalScreen(session: PiAgentSession) {
             // third icon in this action row it sat one thumb-width from "clear" and
             // "new" — the three were 40dp apart — so the wrong tap cost a whole
             // session's scrollback. The close control lives in the roster instead
-            // ([TerminalSessionMenu]'s trailing cross), where every row already names
+            // ([TerminalSessionMenu]'s trailing delete), where every row already names
             // the shell it is about and the action cannot be ambiguous; the roster's
             // "close all" row is there for the same reason.
             //
@@ -457,8 +457,9 @@ private fun ScreenRepaintAnchor(
 }
 
 /**
- * The session picker: one row per shell with the live one ticked, a ✕ that closes a
- * shell without leaving the menu, and the roster's one page-level action.
+ * The session picker: one row per shell with the live one ticked and its title in the
+ * accent, a delete that closes a shell without leaving the menu, and the roster's one
+ * page-level action.
  *
  * A Miuix window list popup raised from the bar's stack button — the library's own
  * anchored floating menu, and the shape the previous menu already had. It was a
@@ -473,8 +474,19 @@ private fun ScreenRepaintAnchor(
  * Miuix 0.9.4 (`PiMenuRow`'s KDoc has the arithmetic, and this roster is where the
  * crash was found), and one menu row for every popup in the app is what keeps this
  * list and the chat's model list from drifting apart. The tick the preference would
- * have drawn is passed as the row's start slot, so the live shell is marked by the
- * same glyph the app's other single-choice lists use.
+ * have drawn is passed as the row's start slot, and the title beside it is drawn in
+ * the same accent, because the two are one statement: a single-choice row that ticks
+ * itself in one ink and names itself in another says "chosen" and "ordinary" at once.
+ * `PiMenuRow` colours a `selected` title `primary` for exactly this, which is what
+ * keeps this list and the composer's model menu reading as one control.
+ *
+ * The roster's trailing action ends a shell, and it is drawn as one: `Delete` at 18dp
+ * in the summary ink, inside the same 28dp `IconButton`, rather than the ✕ the row
+ * carried at the library's own size and ink. A shell closed from here is gone from
+ * the roster rather than hidden, and the mark is the one the app already puts on that
+ * (`SessionsScreen`'s selection delete, the profile rows in `ModelPages`); a fine,
+ * muted glyph also leaves the tick and the accent title to say which shell is live
+ * instead of competing with them for the row's one emphasis.
  *
  * The selection is derived here rather than taken from the `selected` local in
  * [TerminalScreen]: this body was built when the popup opened, and only the reads
@@ -504,7 +516,9 @@ private fun TerminalSessionMenu(
             },
             // The shell on screen is one of a set, so the row is selectable rather
             // than merely clickable: the radio mark beside it is then decoration for
-            // the state a screen reader already reports.
+            // the state a screen reader already reports. `selected` is also what
+            // colours the title, so the tick, the title beside it and the "selected" a
+            // screen reader says are one answer rather than three.
             selected = entry.id == current?.id,
             startAction = {
                 RadioButton(selected = entry.id == current?.id, onClick = null)
@@ -517,14 +531,22 @@ private fun TerminalSessionMenu(
                 // because the button's own pointer input consumes the down
                 // first — which is what keeps a close from selecting the shell
                 // it has just closed.
+                //
+                // The mark is `Delete` at 18dp in the summary ink: the action ends a
+                // shell for good, so it wears the glyph the app already puts on that,
+                // and a fine muted mark lets the tick and the accent title carry the
+                // row's state instead of competing with them. The tap box stays
+                // 28dp — the mark shrank, the target did not.
                 IconButton(
                     onClick = { manager.close(entry.id) },
                     modifier = Modifier.size(28.dp),
                 ) {
                     Icon(
-                        imageVector = MiuixIcons.Close,
+                        imageVector = MiuixIcons.Delete,
                         contentDescription = text.terminal
                             .closeSession(entry.displayTitle),
+                        modifier = Modifier.size(18.dp),
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
             },

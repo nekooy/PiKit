@@ -27,9 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -50,7 +48,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -62,7 +59,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -123,31 +119,6 @@ private enum class Destination {
     Files,
     Settings,
 }
-
-/**
- * The air between the chat composer's frame and the keyboard, when one is on screen.
- *
- * 10dp: enough that the frame's rounded corners are drawn against the page rather than
- * against the keyboard's edge, small enough that it does not read as a band of its own
- * — the composer still sits at the foot of the page, it just floats there. The
- * distance is stated once, at the root, because the page's inset is what puts the
- * composer against the keyboard in the first place.
- */
-private val COMPOSER_IME_GAP = 10.dp
-
-/**
- * How much room the composer has to leave above the keyboard, handed down from the
- * root.
- *
- * A composition local rather than a parameter because the reader of it is four
- * composables below the writer and every one between them would only pass it on —
- * `RootContent` → `ChatTab` → `ChatScreen` → `Composer`. Zero when no keyboard is up,
- * which is the same value a destination that has no composer ignores.
- *
- * It cannot be recomputed where it is used: `imePadding` on the root's content
- * consumes the keyboard inset, so every composable under it reads zero.
- */
-internal val LocalImeGap = staticCompositionLocalOf { 0.dp }
 
 @Composable
 fun PiKitRoot(session: PiAgentSession) {
@@ -428,32 +399,6 @@ private fun RootContent(
         session.refreshTerminalBanner()
     }
 
-    // The air the chat composer leaves between its own frame and the keyboard.
-    //
-    // The scaffold's `imePadding` below ends the page exactly at the keyboard's top
-    // edge, so the composer's frame — the last object in the page's column — touched
-    // the keyboard with no gap at all, and both rounded corners of the frame were
-    // drawn against the keyboard's edge. A field that is *part of* a keyboard looks
-    // like one: the reader loses the sense that the composer is a box floating over
-    // the page, which is what it is.
-    //
-    // Read here, above the scaffold, because that is where the insets are still
-    // unconsumed: `imePadding` hands its own inset to its children as zero, so a
-    // composable under it cannot tell whether the keyboard is up. The comparison with
-    // `navigationBars` is what distinguishes the two: with the keyboard down the ime
-    // inset is zero, and with it up the ime inset is the keyboard's height, which is
-    // always more than the gesture strip. The gap is therefore drawn only while a
-    // keyboard is on screen — the band meets the navigation bar exactly as before when
-    // one is not.
-    val density = LocalDensity.current
-    val imeGap = if (
-        WindowInsets.ime.getBottom(density) > WindowInsets.navigationBars.getBottom(density)
-    ) {
-        COMPOSER_IME_GAP
-    } else {
-        0.dp
-    }
-
     Scaffold(
         // The pages own their top inset (every one of them is a `Scaffold`
         // with a top bar of its own), so the root asks for no content insets
@@ -490,31 +435,25 @@ private fun RootContent(
         // The modifiers are on the crossfade itself and there is no wrapper `Box`:
         // the scaffold already paints `surface`, and a `Box` around a single child
         // that paints the same colour again was a third copy of one background.
-        //
-        // The `CompositionLocalProvider` is the keyboard gap above, handed down rather
-        // than passed through four pages that do not care about it: only the chat
-        // composer reads it (see `LocalImeGap`).
-        CompositionLocalProvider(LocalImeGap provides imeGap) {
-            Crossfade(
-                targetState = destination,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .consumeWindowInsets(padding)
-                    .imePadding(),
-                label = "tab",
-            ) { shown ->
-                when (shown) {
-                    Destination.Terminal -> TerminalScreen(session = session)
-                    Destination.Chat -> ChatTab(
-                        session = session,
-                        agent = agent,
-                        composer = composer,
-                    )
+        Crossfade(
+            targetState = destination,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding(),
+            label = "tab",
+        ) { shown ->
+            when (shown) {
+                Destination.Terminal -> TerminalScreen(session = session)
+                Destination.Chat -> ChatTab(
+                    session = session,
+                    agent = agent,
+                    composer = composer,
+                )
 
-                    Destination.Files -> FilesScreen(session = session)
-                    Destination.Settings -> SettingsScreen(session = session)
-                }
+                Destination.Files -> FilesScreen(session = session)
+                Destination.Settings -> SettingsScreen(session = session)
             }
         }
     }
