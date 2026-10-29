@@ -141,10 +141,18 @@ class TerminalSessionManager(
     /**
      * Kills a session and forgets it.
      *
+     * Closing a shell does not choose one. A close that is not about the shell on
+     * screen leaves the selection — and so the page — exactly where it was: the
+     * delete a reader tapped is an action on that row's shell, not a request to
+     * look at it. When the closed shell *was* the one on screen the page moves to
+     * the session that took its row, else to the last one; [TerminalSelection]
+     * holds the order and the reasoning.
+     *
      * Closing the last one immediately opens a replacement rather than being
      * refused: the terminal is a primary tab, and a manager with no session
      * leaves it showing a blank page with nothing to type into. There is no
-     * state a user could want to preserve by having zero shells.
+     * state a user could want to preserve by having zero shells. The replacement
+     * is also the selection, since nothing else is left to show.
      */
     fun close(id: String) {
         val current = _sessions.value
@@ -159,10 +167,14 @@ class TerminalSessionManager(
         // the UI's next recomposition the entry it is holding is already gone,
         // and asking it to choose the successor is how a click lands on a
         // session that no longer exists.
-        val successor = _sessions.value.getOrNull(index)
-            ?: _sessions.value.lastOrNull()
-            ?: create()
-        _selectedId.value = successor.id
+        _selectedId.value = TerminalSelection.afterClose(
+            roster = current.map { it.id },
+            closedIndex = index,
+            selectedId = _selectedId.value,
+            // The roster is already the remaining one, so `create()` labels the
+            // replacement "Terminal 1" and selects it on its own.
+            openReplacement = { create().id },
+        )
     }
 
     /**
@@ -170,9 +182,11 @@ class TerminalSessionManager(
      *
      * One replacement, not zero, for the reason [close] gives: the terminal is a
      * primary tab and a manager with no session leaves it showing a blank page with
-     * nothing to type into. Calling [close] per id would be wrong here — every pass
-     * opens the successor for the session it had just removed, so closing three
-     * shells would spawn four times and leave the last replacement running.
+     * nothing to type into. The replacement is the selection by construction — every
+     * candidate the reader could have been on is gone. Calling [close] per id would
+     * be wrong here — every pass opens the successor for the session it had just
+     * removed, so closing three shells would spawn four times and leave the last
+     * replacement running.
      */
     fun closeAll() {
         val closing = _sessions.value

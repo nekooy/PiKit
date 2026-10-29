@@ -9,6 +9,7 @@ PiAgentSession  (process-wide singleton — the single source of truth)
   ├─ PiProcessLauncher → Process      `node cli.js --mode rpc ...`
   ├─ PiRpcClient                      framing, correlation, stderr, shutdown
   ├─ ConversationReducer              events → ConversationState (pure)
+  ├─ TerminalSessionManager           the terminal tab's shells, and which one shows
   └─ StateFlow<ConversationState>     observed by Compose
 PiAgentService  (foreground service)  keeps the child alive when backgrounded
 ```
@@ -62,6 +63,27 @@ Two lifecycle facts are load-bearing, and both were measured on a device rather 
   tears the service down when a stop the user asked for lands (debounced, because the two restart
   helpers stop and start in one breath), and `startAgent` itself asks for the service on success,
   which is what covers every caller that is not `MainActivity`.
+
+## The terminal's shells are the process's, and a close is not a choice
+
+The terminal tab's sessions are process state for the same reason. A shell created inside
+`TerminalScreen`'s composition dies with it, and the terminal is one of four tabs, so looking
+at another one killed a `pkg upgrade` or a running build; `TerminalSessionManager` holds them
+beside the agent and the page only displays one of them.
+
+Which one it displays is a rule of its own, `TerminalSelection.afterClose` — a pure function
+over the roster's ids, tested on the JVM, because a screenshot cannot tell the two answers
+apart: the page shows one shell either way. The wrong answer showed up only in *which* one.
+Closing a shell from the switcher moved the selection onto the shell that had taken the closed
+row, so with three shells open, ending `Terminal 1` while reading `Terminal 3` left the page on
+`Terminal 2`. A close now moves the page only when the closed shell was the one on screen, and
+then to the session that took its row — the row the reader was looking at — else to the last
+one, because there is nothing below the last row. Closing every shell (`closeAll`) is the same
+invariant taken to the whole list: one replacement, selected, since every candidate is gone.
+
+The roster is never emptied. A close that would leave none opens a replacement and selects it,
+rather than being refused: the terminal is a primary tab, and the one thing worse than a shell
+the reader did not ask for is a blank rectangle with nothing to type into.
 
 ## Where state lives
 
