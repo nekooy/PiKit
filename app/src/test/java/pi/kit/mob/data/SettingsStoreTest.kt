@@ -77,33 +77,53 @@ class SettingsStoreTest {
     }
 
     @Test
-    fun `a fresh install has the smaller default text size`() {
-        assertEquals(FontSize.XS, newStore().read().fontSize)
+    fun `a fresh install reads 100 per cent, at the size the ladder called 95`() {
+        val store = newStore()
+
+        assertEquals(FontSize.M, store.read().fontSize)
+        assertEquals("the row prints the fourth step", 100, FontSize.DEFAULT.percent)
+        // The property the re-base exists for: what the row calls 100% draws what the
+        // ladder's own labels called 95%, so no label had to move.
+        assertEquals(
+            FontSize.S.scale,
+            FontSize.DEFAULT.scale * TEXT_SCALE_BASELINE,
+            1e-6f,
+        )
     }
 
     @Test
-    fun `the old default text size is rebased once, and a chosen one after that`() {
+    fun `the step a retired build rewrote is put back once`() {
         val preferences = FakeSharedPreferences()
-        // What every install that ever changed a setting carries: `update()` writes
-        // every key, so 100% is in the file whether or not the slider was touched.
-        preferences.edit().putString("font_size", "m").apply()
+        // What an install that ran that build carries: the default rewritten to `xs`,
+        // and the mark it left to say it had done so.
+        preferences.edit().putString("font_size", "xs").putBoolean("font_size_rebased", true).apply()
         val files = tempDir()
 
-        val rebased = SettingsStore(FakeContext(preferences, files))
+        val corrected = SettingsStore(FakeContext(preferences, files))
 
-        assertEquals("the old default becomes the new one", FontSize.XS, rebased.read().fontSize)
-        assertEquals("and the step is written back", "xs", preferences.getString("font_size", null))
+        assertEquals("the un-chosen step is undone", FontSize.M, corrected.read().fontSize)
+        assertEquals("and written back", "m", preferences.getString("font_size", null))
+        assertFalse("the mark is gone", preferences.getBoolean("font_size_rebased", false))
 
-        // The flag is what makes it once: a reader who moves the slider back to 100%
-        // keeps it, because the next store reads a step the reader chose.
-        preferences.edit().putString("font_size", "m").apply()
-        val chosen = SettingsStore(FakeContext(preferences, files))
-
-        assertEquals(FontSize.M, chosen.read().fontSize)
+        // And it stays undone: the next read has no mark and a step it must respect.
+        preferences.edit().putString("font_size", "xs").apply()
+        assertEquals(FontSize.XS, SettingsStore(FakeContext(preferences, files)).read().fontSize)
     }
 
     @Test
-    fun `a stored text size that is not the old default is left alone`() {
+    fun `a step chosen on that build is left alone`() {
+        val preferences = FakeSharedPreferences()
+        preferences.edit().putString("font_size", "s").putBoolean("font_size_rebased", true).apply()
+
+        val store = SettingsStore(FakeContext(preferences, tempDir()))
+
+        assertEquals(FontSize.S, store.read().fontSize)
+        assertEquals("s", preferences.getString("font_size", null))
+        assertFalse(preferences.getBoolean("font_size_rebased", false))
+    }
+
+    @Test
+    fun `a stored text size is read as it is`() {
         val preferences = FakeSharedPreferences()
         preferences.edit().putString("font_size", "l").apply()
 

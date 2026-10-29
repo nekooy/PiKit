@@ -129,8 +129,11 @@ ARCHITECTURE §12.1 carries the measurement.
 
 The text-size preference is one multiplier on the composition's `LocalDensity`
 `fontScale` (in `MainActivity`), so every `sp` in the app — every row, the
-transcript, the terminal banner, the dialogs — moves together. The library needs to
-know nothing about it.
+transcript, the terminal banner, the dialogs — moves together. That multiplier is
+the row's step times the ladder's own base (`TEXT_SCALE_BASELINE`, 0.95): the row
+reads 100% where the ladder is drawn as the library wrote it, and 95% draws the
+size this app's text is designed at, which is where the default sits. The library
+needs to know nothing about it.
 
 ## A page is a scaffold, a bar and a one-line subtitle
 

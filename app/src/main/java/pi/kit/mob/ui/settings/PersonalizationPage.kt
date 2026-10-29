@@ -310,9 +310,10 @@ private fun FontSizeRow(
         onValueChange = { draft = it },
         title = text.settings.fontSize,
         summary = text.settings.fontSizeSubtitle,
-        // The step as a percentage of the app's own sizes, which is the one number a
-        // reader can check against nothing at all: `100%` is the app's own sizes, and
-        // a fresh install starts one step below them (`FontSize.DEFAULT`).
+        // The step as a percentage of the ladder's own unit, which is the one number a
+        // reader can check against nothing at all: `100%` is the size the app ships as
+        // its default, and that size is what the ladder used to call 95%
+        // (`TEXT_SCALE_BASELINE`).
         valueText = "${shown.percent}%",
         valueRange = 0f..steps.lastIndex.toFloat(),
         // Miuix (like the slider it wraps) counts the ticks *between* the ends, so

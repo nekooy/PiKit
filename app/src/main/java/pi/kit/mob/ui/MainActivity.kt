@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import pi.kit.mob.data.TEXT_SCALE_BASELINE
 import pi.kit.mob.data.applyLauncherIcon
 import pi.kit.mob.pi.PiAgentService
 import pi.kit.mob.pi.PiAgentSession
@@ -64,7 +65,13 @@ class MainActivity : ComponentActivity() {
                 // preference and gets this step on top of it. `density` itself is passed
                 // through untouched — it is dp, and the row above this one measured its
                 // paddings in it.
-                ScaledType(scale = settings.fontSize.scale) {
+                //
+                // The step is multiplied by the ladder's own base before it is applied:
+                // the row's `100%` is the size the ladder used to call 95%, which is
+                // `TEXT_SCALE_BASELINE`'s whole content, and it is stated in the data
+                // layer because it is a property of the ladder rather than of this
+                // composition.
+                ScaledType(scale = settings.fontSize.scale * TEXT_SCALE_BASELINE) {
                     // The foreground service is what keeps a long turn alive while the
                     // user is in another app, so it starts as soon as there is a frame
                     // to start it from.
