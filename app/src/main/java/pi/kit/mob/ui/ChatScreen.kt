@@ -3187,14 +3187,19 @@ private fun Composer(
     // pays for it. Read in composition — which is what this was, and before that a
     // composition local above the scaffold — every step of the platform's inset report
     // recomposed this whole card: the field, the chip row, four icon buttons and the
-    // send disc, ten-odd times per open or close. Measured on the emulator during one
-    // close: 8–12 frames for the animation, a 44–69 ms median frame and a 150–450 ms
-    // 90th percentile, i.e. the composer arriving in a handful of lurches *after* the
-    // keyboard had already finished — which reads as the band sliding down slowly. A
-    // layout-phase read invalidates the layout and nothing else, so the band is placed
-    // on every frame the platform reports instead of on every frame a recomposition
-    // happens to complete. `imePadding` itself is a layout-phase read for the same
-    // reason.
+    // send disc, ten-odd times per open or close. Recorded on the emulator with that
+    // read still in composition, the band was a full 10dp above its resting place on the
+    // last frame the keyboard was visible and stayed there for the recorder's next
+    // frame — the beat at the end of a close that reads as the input box sliding down
+    // slowly. A layout-phase read invalidates the layout and nothing else, so the band is
+    // placed on every frame the platform reports instead of on every frame a
+    // recomposition happens to complete; the same close then has it within 3dp of its
+    // rest on the frame the keyboard goes and at rest one frame later. `imePadding` is a
+    // layout-phase read at the root for the same reason.
+    //
+    // The emulator is draw-bound (`gfxinfo` reports a 44–69 ms median frame for the whole
+    // animation, before and after), so its frame *times* do not settle a question about
+    // one card's work; the position of the band on each frame does.
     //
     // **Scaled by how much keyboard is left, rather than switched at the end.** The gap is
     // 10dp while the keyboard's edge is well above the page's bottom, and it eases to
