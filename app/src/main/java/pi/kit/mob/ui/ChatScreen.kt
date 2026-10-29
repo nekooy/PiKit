@@ -932,6 +932,22 @@ private fun ChatPage(
         }
     }
 
+    // One scroll position belongs to one conversation.
+    //
+    // The state is hoisted above the tab crossfade (`ChatComposerState`), so the offset
+    // survives a tab switch — which is what it is for. It also survived the *conversation*
+    // changing, and that is not the same thing: a new conversation inherited the previous
+    // one's first visible index, and every question about the list answered from a
+    // position that no longer existed. `canScrollForward` was the visible half — the
+    // jump-to-latest control stayed on screen over an empty conversation and did nothing
+    // when tapped, because it is a *measurement* of a laid-out list and the list was not
+    // there to be measured. Resetting here means the state a conversation is entered with
+    // is the state it has, and the control's own gate (below) covers the one frame before
+    // the new list has been measured.
+    LaunchedEffect(state.sessionFile) {
+        listState.scrollToItem(0)
+    }
+
     PiPage(
         // The four tab roots left-align their titles and subtitles. The bar's right
         // side is where three or four action icons live, and the library centres a
@@ -1186,7 +1202,17 @@ private fun ChatPage(
                 // Reading it here is what a scroll gesture writes to and nothing else
                 // does, so this recomposes only at the two ends of the range rather
                 // than once per frame.
-                if (listState.canScrollForward) {
+                //
+                // **Gated on the list existing**, and that is not a formality.
+                // `canScrollForward` is a reading of the last *measurement* of a
+                // `LazyColumn`, and the transcript does not draw one over an empty
+                // conversation — so the value freezes at whatever the previous
+                // conversation left behind. That is the report "点了新建对话，回到底部的
+                // 按钮不会消失，点击也没反应": an empty conversation inherited a
+                // scrollable position from the long one before it, and the control was
+                // both visible and pointed at a list that was not composed. Nothing is
+                // scrollable about nothing, so there is nothing for the control to be.
+                if (cards.isNotEmpty() && listState.canScrollForward) {
                     IconButton(
                         onClick = {
                             // The flag is raised *before* the follow flips, so the
