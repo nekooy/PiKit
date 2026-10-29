@@ -151,6 +151,7 @@ import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piOverScroll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -1094,6 +1095,15 @@ private fun ChatPage(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    // A conversation shorter than the viewport has no
+                                    // edge of its own to give a drag, and Compose's
+                                    // `ScrollingLogic` gates the overscroll effect on
+                                    // whether the list can scroll — so a one-message
+                                    // conversation swallowed the pull a long one answers.
+                                    // The kit's modifier is a nested-scroll connection
+                                    // above the list, with the reasoning in
+                                    // `PiOverScroll.kt` and §9.1.
+                                    .piOverScroll()
                                     // The transcript is a log the reader is watching fill
                                     // up. Without this every streamed token is a silent
                                     // change; with it the platform announces the row once it
@@ -2667,6 +2677,11 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
     Column(
         Modifier
             .fillMaxWidth()
+            // A sheet body standing in for a page, so it gets the page's elastic end —
+            // and *before* `verticalScroll`, for the reason `PiOverScroll.kt` gives:
+            // a connection placed after the scroller is downstream of it and is
+            // never dispatched to.
+            .piOverScroll()
             .verticalScroll(rememberScrollState())
             // Inside the scroll, not outside it: the inset is scrolled past rather than shown
             // as a band of the panel's own fill under the text.
