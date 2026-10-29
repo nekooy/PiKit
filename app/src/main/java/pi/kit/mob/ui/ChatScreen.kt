@@ -90,6 +90,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalClipboard
@@ -3059,7 +3060,8 @@ private val COMPOSER_IME_GAP_RAMP = COMPOSER_IME_GAP * 4
  * They are grouped by what they do rather than by which side had room: the two that put
  * something into the message at the start edge, the reading and the send at the end.
  * The field grows *upward* out of the row rather than pushing it down the screen. The keyboard
- * gap under the frame is the composer's own (`imeGap` below): the band continues under
+ * gap under the frame is the composer's own (the `Spacer` at the end of the band, read in
+ * the layout phase): the band continues under
  * it, so the composer floats clear of the keyboard instead of sitting on it.
  */
 @Composable
@@ -3139,14 +3141,19 @@ private fun Composer(
     // keyboard with both of its bottom corners on that edge, and a field that is part of
     // a keyboard looks like one.
     //
-    // **Read here, where it is drawn, rather than handed down from the root.** The value
-    // is the same; what differs is the frame that changes it. It used to be computed
-    // above the scaffold and passed down as a composition local, and a local whose value
-    // moves flips its whole content — so the chat page recomposed before the gap did.
-    // Measured with a screen recording of the keyboard closing: the composer slid down
-    // with the keyboard over four frames, held for five (about 80 ms) 26 px — 10dp, this
-    // gap — above its resting place, and then hopped the last step once the page had
-    // recomposed. Read at the divider, the same inset moves the same composable.
+    // **Read at the composer, in the layout phase, and not in composition.** The value
+    // is the same either way; what differs is *which* frame of the keyboard's animation
+    // pays for it. Read in composition — which is what this was, and before that a
+    // composition local above the scaffold — every step of the platform's inset report
+    // recomposed this whole card: the field, the chip row, four icon buttons and the
+    // send disc, ten-odd times per open or close. Measured on the emulator during one
+    // close: 8–12 frames for the animation, a 44–69 ms median frame and a 150–450 ms
+    // 90th percentile, i.e. the composer arriving in a handful of lurches *after* the
+    // keyboard had already finished — which reads as the band sliding down slowly. A
+    // layout-phase read invalidates the layout and nothing else, so the band is placed
+    // on every frame the platform reports instead of on every frame a recomposition
+    // happens to complete. `imePadding` itself is a layout-phase read for the same
+    // reason.
     //
     // **Scaled by how much keyboard is left, rather than switched at the end.** The gap is
     // 10dp while the keyboard's edge is well above the page's bottom, and it eases to
@@ -3155,11 +3162,8 @@ private fun Composer(
     // With no keyboard the ime inset is zero, which is what keeps the band meeting the
     // navigation bar's own strip with no seam.
     val density = LocalDensity.current
-    val aboveNavigationBar = (
-        WindowInsets.ime.getBottom(density) - WindowInsets.navigationBars.getBottom(density)
-        ).coerceAtLeast(0)
-    val ramp = with(density) { COMPOSER_IME_GAP_RAMP.roundToPx() }
-    val imeGap = COMPOSER_IME_GAP * (aboveNavigationBar.toFloat() / ramp).coerceIn(0f, 1f)
+    val ime = WindowInsets.ime
+    val navigationBars = WindowInsets.navigationBars
 
     // The band: full bleed, in the page's column, on **`surface`** — the colour the tab
     // strip and the root scaffold behind it are painted in, so the foot of the page is
@@ -3742,9 +3746,21 @@ private fun Composer(
             // the last 10dp of the page and the composer's frame floats clear of the
             // keyboard instead of sitting on it. It shrinks to nothing as the keyboard
             // arrives and as it leaves, so the band still meets the navigation bar's own
-            // strip with no seam when none is up; `Composer`'s comment above the value
-            // has why it is measured here rather than handed down.
-            Spacer(Modifier.height(imeGap))
+            // strip with no seam when none is up; the arithmetic and the reason it is
+            // read in the layout phase are on `ime` above.
+            Spacer(
+                Modifier
+                    .fillMaxWidth()
+                    .layout { _, constraints ->
+                        val above = (
+                            ime.getBottom(density) - navigationBars.getBottom(density)
+                            ).coerceAtLeast(0)
+                        val ramp = COMPOSER_IME_GAP_RAMP.roundToPx()
+                        val gap = (COMPOSER_IME_GAP * (above.toFloat() / ramp).coerceIn(0f, 1f))
+                            .roundToPx()
+                        layout(constraints.maxWidth, gap) {}
+                    },
+            )
         }
     }
 }
