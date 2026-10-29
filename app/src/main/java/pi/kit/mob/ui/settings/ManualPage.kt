@@ -48,6 +48,7 @@ import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.ui.MarkdownText
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Surface
@@ -132,6 +133,9 @@ internal fun AboutPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end: About PiKit is three cards, and the last of
+                // them names the tools' presence row by row. See `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {
@@ -444,6 +448,11 @@ internal fun ManualPage(onBack: () -> Unit) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    // The manual is this page's body — the contents row above it is the
+                    // page's furniture — so the document takes the page's elastic end.
+                    // A short manual and a long one have to end the same way; see
+                    // `piOverScroll`.
+                    .piOverScroll()
                     .verticalScroll(scroll),
             ) {
                 if (document.intro.isNotBlank()) {

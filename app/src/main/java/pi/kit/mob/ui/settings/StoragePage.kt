@@ -33,6 +33,7 @@ import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
@@ -208,6 +209,10 @@ fun StoragePage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end: before the grant this page is two short
+                // sections, and the drag at their ends used to be swallowed. See
+                // `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {

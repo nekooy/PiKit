@@ -40,6 +40,7 @@ import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Text
@@ -138,6 +139,9 @@ internal fun AgentPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end, from the kit: three sections fit a phone and
+                // five do not, and both sizes have to answer a drag. See `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {
@@ -268,7 +272,11 @@ internal fun AgentPage(
                 // rather than a lazy list, because these are paragraphs rather than
                 // rows and a lazy list here would be measured against a bounded height
                 // for no benefit.
+                //
+                // The sheet body is where the page would be, so it takes the page's
+                // elastic end — on the four-point phone these notes still fit.
                 .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
+                .piOverScroll()
                 .verticalScroll(rememberScrollState()),
         ) {
             ContextPoint(1, text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
@@ -427,6 +435,11 @@ private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
             // would be *clipped* — the buttons and the bottom of the document
             // unreachable — so it scrolls instead, and it does not scroll at all while
             // everything fits.
+            //
+            // This is the instructions sheet's body, so it takes the page's elastic end
+            // as well; `piOverScroll` is before the scroll rather than after it for the
+            // reason its KDoc gives.
+            .piOverScroll()
             .verticalScroll(rememberScrollState()),
     ) {
         Text(

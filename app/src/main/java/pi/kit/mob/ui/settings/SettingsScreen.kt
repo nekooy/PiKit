@@ -49,6 +49,7 @@ import pi.kit.mob.pi.StorageSelfTest
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.Card
@@ -421,6 +422,10 @@ private fun RootPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end: the root is short on a first run and full
+                // after it, and it has to answer a drag the same way at both sizes.
+                // See `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {

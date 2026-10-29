@@ -37,6 +37,7 @@ import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -113,6 +114,9 @@ internal fun PersonalizationPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end: two sections fit a phone outright, and a page
+                // that fits is the one Compose's own effect skips. See `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {

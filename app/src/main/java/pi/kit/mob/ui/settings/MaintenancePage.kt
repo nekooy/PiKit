@@ -25,6 +25,7 @@ import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
 
 /**
@@ -140,6 +141,8 @@ internal fun MaintenancePage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end. See `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {

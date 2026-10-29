@@ -44,6 +44,7 @@ import pi.kit.mob.ui.kit.PiGroupAction
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
@@ -145,6 +146,10 @@ internal fun ModelPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The profiles page's elastic end: one saved profile is a short page,
+                // and it is the one every reader sees on their first run. See
+                // `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {
@@ -843,6 +848,10 @@ internal fun ModelEditPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The form's elastic end, from the kit: creating a profile is four rows
+                // before a key is typed, and editing one is the same page filled in.
+                // See `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {

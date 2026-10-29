@@ -86,6 +86,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.clipEntryFor
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -252,6 +253,9 @@ private fun PreviewBody(body: String?, maxHeight: Dp) {
         Modifier
             .fillMaxWidth()
             .heightIn(max = maxHeight)
+            // The sheet body stands in for the page the file would open in, and a
+            // three-line file has to give the drag at the ends of it. See `piOverScroll`.
+            .piOverScroll()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {

@@ -47,6 +47,7 @@ import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -505,7 +506,10 @@ private fun ConversationList(
     val otherVisible = visible.filterNot { it.pinned }
 
     LazyColumn(
-        modifier = modifier,
+        // The history page's body, so it takes the page's elastic end: the list is
+        // short after the first conversation and long after a month of them, and the
+        // first case is the one Compose's own effect skips. See `piOverScroll`.
+        modifier = modifier.piOverScroll(),
         // A gap above the navigation bar, so the last conversation is not read
         // against the bar's own edge.
         contentPadding = PaddingValues(bottom = LIST_BOTTOM),

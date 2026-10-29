@@ -21,6 +21,7 @@ import pi.kit.mob.pi.WebSearchSettings
 import pi.kit.mob.pi.WebSearchStore
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 
@@ -127,6 +128,10 @@ internal fun SearchPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end — and this page has a one-note state, the
+                // extension not being bundled, which must still answer a drag. See
+                // `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {

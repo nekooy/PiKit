@@ -31,6 +31,7 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -155,6 +156,10 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The page's elastic end: this page is two cards and three buttons on
+                // a fresh install, and it has to answer a drag regardless. See
+                // `piOverScroll`.
+                .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {

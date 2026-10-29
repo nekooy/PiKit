@@ -139,6 +139,7 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbItem
 import top.yukonga.miuix.kmp.basic.Card
@@ -174,7 +175,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import java.io.File
 import java.util.Locale
-import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 /**
  * The tab.
@@ -597,22 +597,13 @@ private fun DirectoryTable(
     onOpenWith: (FileEntry) -> Unit,
 ) {
     LazyColumn(
-        // The elastic effect is the *kit's* overscroll modifier, not the one
-        // `LazyColumn` installs for itself.
-        //
-        // That is the fix for "a folder with three files does not bounce the way one
-        // with thirty does", and the cause is in Compose rather than here: `Scrollable`
-        // gates its overscroll effect on
-        // `canScrollForward || canScrollBackward || effect.isInProgress`, so a list whose
-        // content fits the viewport dispatches nothing to the effect and a drag at either
-        // end is simply swallowed. `Modifier.overScrollVertical()` is a nested-scroll
-        // connection above the list instead: it receives whatever the list could not
-        // consume — which for a short list is the whole drag — and translates the content
-        // by its damped distance. The two do not double up: while the list *can* scroll,
-        // its own effect consumes the remainder, so this node is handed zero.
+        // The page's elastic end, from the kit rather than from the list: `LazyColumn`
+        // installs an effect of its own, and Compose does not dispatch to it when there
+        // is nothing to scroll to — which is the whole of a three-file directory.
+        // `piOverScroll` is the one definition of the fix and its KDoc is the proof.
         modifier = Modifier
             .fillMaxSize()
-            .overScrollVertical(),
+            .piOverScroll(),
         // The gap above the navigation bar as content padding rather than as a band of
         // empty page: the last row scrolls past it, and at rest it is the space that
         // keeps the last row off the bar.
