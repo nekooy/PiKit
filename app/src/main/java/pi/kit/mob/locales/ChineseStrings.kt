@@ -52,7 +52,7 @@ internal object ChineseStrings : Strings {
             "提示：点 ⌘ 可以查看 Agent 的命令并插入",
             "提示：长按任意文字即可复制",
             "提示：点顶部的历史图标可以回到之前的对话",
-            "提示：点上下文按钮可以查看窗口占用、花费和会话文件",
+            "提示：点输入框右下角的圆环可以查看窗口占用、花费和会话文件",
         )
         override val loadingConversation = "正在打开对话…"
         override val placeholderAttachment = "给这些图片补充说明…"
@@ -119,7 +119,6 @@ internal object ChineseStrings : Strings {
         override val cameraDenied = "没有相机权限，无法拍照。可在系统设置里为本应用打开权限。"
         override val cameraUnavailable = "这台设备上没有可用的相机应用。"
 
-        override val contextDetails = "上下文"
         override val contextEmpty = "尚未发送内容"
         override fun cacheHit(percent: Int) = "缓存命中 $percent%"
         override val cacheHitLabel = "提示缓存命中率"
@@ -824,6 +823,7 @@ internal object ChineseStrings : Strings {
     override val manual = object : Strings.Manual {
         override val title = "使用手册"
         override val subtitle = "从零开始了解这个应用"
+        override val contents = "目录"
     }
 
     override val notes = object : Strings.Notes {

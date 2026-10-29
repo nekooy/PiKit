@@ -99,11 +99,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
@@ -115,6 +115,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import pi.kit.mob.R
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
@@ -291,14 +292,20 @@ fun FilesScreen(session: PiAgentSession) {
                 onClick = { current.parentFile?.let(::navigate) },
                 enabled = current.parentFile != null,
             ) {
-                // The arrow of Miuix's own basic set, turned through a right angle at
-                // the call site: "up one level" is a direction this library never
-                // names, and borrowing the back chevron for it would draw the
-                // platform's *back* on a page whose back is the up.
+                // A drawn arrow, not the library's `ArrowRight` turned through a right
+                // angle — which is what this was, and it read as a *send* control: the
+                // basic set's arrow is a filled triangle on a short shaft, and rotated
+                // up it is the figure a phone's share sheet puts on "send", not the one
+                // a file manager puts on "the folder above". `ic_arrow_up.xml` is a
+                // single stroke (2 of 24) with a long shaft and an open head — the
+                // arrow every desktop file manager draws for this row, at the weight
+                // the other marks on the bar are drawn in.
                 Icon(
-                    imageVector = MiuixIcons.Basic.ArrowRight,
+                    painter = painterResource(R.drawable.ic_arrow_up),
                     contentDescription = text.files.parent,
-                    modifier = Modifier.rotate(-90f),
+                    // 22dp of box for 14 units of ink: about 13dp of drawn arrow, the
+                    // size of the `Home` glyph beside it on the same bar.
+                    modifier = Modifier.size(22.dp),
                 )
             }
         },
@@ -941,8 +948,14 @@ private fun tileToneOf(entry: FileEntry): Pair<Color, Color> {
         suffix in IMAGE_SUFFIXES || suffix in VIDEO_SUFFIXES ->
             PiTone.liveContainer() to PiTone.live()
 
-        else -> MiuixTheme.colorScheme.surfaceContainerHigh to
-            MiuixTheme.colorScheme.onSurfaceContainerHigh
+        // The wash every quiet tile in the app is drawn in, rather than the high
+        // surface step this used to be: a row is a `surfaceContainer` card, and the
+        // dark scheme gives `surfaceContainerHigh` that same #242424 — so the neutral
+        // tiles had no background at all there while the folder tiles beside them kept
+        // theirs. The ink is the summary role, which is also a fix: `onSurfaceContainerHigh`
+        // is #A2A2A2 on the light tile, a 2.5:1 pair, and a file-type glyph is read at a
+        // glance.
+        else -> PiTone.inset() to MiuixTheme.colorScheme.onSurfaceVariantSummary
     }
 }
 

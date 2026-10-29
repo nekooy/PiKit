@@ -47,7 +47,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -95,6 +97,7 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTitleDefaults
 import top.yukonga.miuix.kmp.basic.Text
@@ -276,11 +279,27 @@ fun SettingsParagraph(
  * side walls of a full-width group's field were 24dp apart with the card's fill in
  * between and nothing else — measured, the widest control on the page and the closest
  * to its edge, which read as a field that had been stretched rather than placed. The
- * box is therefore inset by [FIELD_INSET] and the inside margin is reduced by exactly
- * the same amount, so the *label* stays on the group's column while the *outline*
- * stops 18dp from the window. The pair is the point: either half alone moves the text.
+ * box is therefore inset by [FIELD_INSET], which puts each wall 24dp from the window
+ * and leaves the card's fill visible on both sides of it.
+ *
+ * [FIELD_INSET] is 12dp and the inside margin is reduced by it only down to
+ * [FIELD_MIN_INSIDE]: the label therefore starts 20dp inside the card rather than the
+ * 16dp a row's title starts at, which is the supporting line's own column below the
+ * box. That 4dp is the price of the clearance, and it is the right way round — a field
+ * whose *outline* is 4dp off the page's column is a control placed on a page, while a
+ * field whose *text* is 4dp from its own wall is a box with a word crammed into it. The
+ * first attempt at this only moved the outline (6dp of inset, the inside margin reduced
+ * by the same amount) and the report came back that the boxes still ran to the edge.
  */
-private val FIELD_INSET = 6.dp
+private val FIELD_INSET = 12.dp
+
+/**
+ * The floor under the field's inside margin, so [FIELD_INSET] never squeezes the text.
+ *
+ * 8dp: half the library's own 16dp. Below that the label starts to look like it is
+ * resting on the wall, which is the reason the library states 16 in the first place.
+ */
+private val FIELD_MIN_INSIDE = 8.dp
 
 /**
  * A settings field: Miuix's own, with its supporting line under it.
@@ -342,18 +361,14 @@ fun SettingsTextField(
             // `piFieldColors`'s KDoc for why the two are one decision.
             colors = piFieldColors(),
             cursorBrush = piFieldCursor(),
-            // The box is pulled in from the card's edge and its text is pulled back
-            // out by the same amount, so the *label* keeps the column every other row
-            // in the group starts on while the *outline* stops short of the card's own
-            // edge. Both halves are needed: an inset without the compensating inside
-            // margin moves the text off the column, which is the mistake this wrapper's
-            // KDoc records from the last time it had a gutter of its own.
-            //
-            // The group's rows begin 28dp from the page edge — `PiSection`'s 12dp card
-            // inset plus the library's 16dp inside margin — and so does this label at
-            // 6 + 10.
+            // The box is pulled in from the card's edge, and its inside margin is
+            // reduced by as much of that as it can spare: the *outline* stops 12dp
+            // inside the card, while the *label* stays at 8dp from that outline and
+            // lands on the supporting line's column (20dp inside the card, against the
+            // rows' 16 — see [FIELD_INSET] for why that 4dp is the right trade).
             insideMargin = DpSize(
-                TextFieldDefaults.InsideMargin.width - FIELD_INSET,
+                (TextFieldDefaults.InsideMargin.width - FIELD_INSET)
+                    .coerceAtLeast(FIELD_MIN_INSIDE),
                 TextFieldDefaults.InsideMargin.height,
             ),
             modifier = Modifier
@@ -855,6 +870,12 @@ private val PICKER_LIST_MAX = 420.dp
  * The inside margin is the library's own 16/13; it is delegated rather than restated
  * because a filled button's padding is the button's shape, unlike [SettingsAction]'s,
  * which sits inside a row and has to leave the row's width for its own label.
+ *
+ * [busy] draws a spinner *inside* the button, before its label, for the one action on
+ * the model form that waits on the network. The button's width is the row's half, so
+ * the mark costs the label nothing and the two buttons beside each other do not move
+ * when a run starts — which is what the text-swapping this replaces did ("fetch" became
+ * "fetching…" and pushed its neighbour sideways).
  */
 @Composable
 fun SettingsButton(
@@ -863,6 +884,7 @@ fun SettingsButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     primary: Boolean = false,
+    busy: Boolean = false,
 ) {
     Button(
         cornerRadius = PiCorner.radius,
@@ -875,7 +897,29 @@ fun SettingsButton(
             ButtonDefaults.buttonColors()
         },
     ) {
+        if (busy) {
+            CircularProgressIndicator(
+                size = BUTTON_SPINNER_SIZE,
+                colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                    // The label's own ink: white on the filled primary, the surface ink
+                    // on the secondary fill, and the *disabled* pair when the button is
+                    // refusing taps — which it does for the length of the run.
+                    foregroundColor = when {
+                        !enabled && primary -> MiuixTheme.colorScheme.disabledOnPrimaryButton
+                        !enabled -> MiuixTheme.colorScheme.disabledOnSecondaryVariant
+                        primary -> MiuixTheme.colorScheme.onPrimary
+                        else -> MiuixTheme.colorScheme.onSurface
+                    },
+                    backgroundColor = Color.Transparent,
+                ),
+            )
+            Spacer(Modifier.width(BUTTON_SPINNER_GAP))
+        }
         Text(text = text, style = MiuixTheme.textStyles.button)
     }
 }
+
+/** The spinner inside a busy [SettingsButton], and the gap between it and the label. */
+private val BUTTON_SPINNER_SIZE = 16.dp
+private val BUTTON_SPINNER_GAP = 8.dp
 

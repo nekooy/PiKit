@@ -312,15 +312,17 @@ private fun Categories(
  *
  * ## The details, each of which was a drift
  *
- *  - **16dp, which is where a row's text starts.** A row inside a group begins at the
- *    card's 12dp inset plus `BasicComponentDefaults.InsideMargin`'s 16dp, so its title
- *    is 28dp from the page edge; a `TextButton` carries a 12dp inside margin of its own,
- *    so a 16dp gutter puts this label on the same 28dp column. The literal 12dp this
- *    used to be started the label 4dp left of every row above it.
- *  - **They start at the leading edge, not the trailing one.** The row was
- *    `Spacer(weight)` then the buttons, which pushed them to the right; the pages'
- *    other standalone actions read as a column that starts where the page's content
- *    starts.
+ *  - **12dp, the page's card gutter.** An action that is the only object on its line is
+ *    a *row of the page* rather than a button floating in it, so it spans the width the
+ *    cards span: the same 12dp sides `PiSection` uses. The literal 16dp this was is the
+ *    column a *label* inside a card starts on, which is the wrong column for a control
+ *    that has no card around it — the model page's "add a profile" row sits at 12.
+ *  - **One button fills the row; two split it.** The export is one action and it is the
+ *    page's widest control; the import's confirm and cancel are a pair and each takes
+ *    half. The version before this drew both shapes as buttons sized to their words,
+ *    which left the export hugging the left edge with two thirds of the row empty
+ *    beside it — the report that these rows "should be a row-wide button, like the one
+ *    at the foot of the model page".
  *  - **`working` is a spinner and its word.** The indeterminate bar it replaces was a
  *    second way to say the same thing.
  *  - **The dismiss and its label travel together.** A run can dismiss its result only
@@ -342,16 +344,25 @@ internal fun RunActions(
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SettingsAction(text = label, onClick = onAction, enabled = enabled)
+            SettingsAction(
+                text = label,
+                onClick = onAction,
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+            )
             if (onDismiss != null && dismissLabel != null) {
-                SettingsAction(text = dismissLabel, onClick = onDismiss)
+                SettingsAction(
+                    text = dismissLabel,
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
         if (working != null) {

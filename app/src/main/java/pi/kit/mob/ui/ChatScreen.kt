@@ -9,6 +9,7 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -82,7 +83,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -165,17 +168,13 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Info
-import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Merge
 import top.yukonga.miuix.kmp.icon.extended.Ok
-import top.yukonga.miuix.kmp.icon.extended.Pause
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Scan
-import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowListPopup
@@ -281,7 +280,7 @@ private const val THUMBNAIL_EDGE = 160
  * composer owned privately would be a second answer to "which one is open" — the
  * question the app's one sheet host used to answer for every screen.
  */
-private enum class ComposerSheet { Thinking, Model, Context, Commands, Attach, Shell }
+private enum class ComposerSheet { Thinking, Model, Context, ContextRing, Commands, Attach, Shell }
 
 /**
  * How long the history list takes to slide over the conversation.
@@ -1219,11 +1218,21 @@ private fun ChatPage(
                         backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
                     ) {
                         Icon(
-                            imageVector = MiuixIcons.ExpandMore,
+                            // An arrow, not the chevron the disclosure controls use:
+                            // this button scrolls the list, it does not open anything,
+                            // and the two figures sat within a screen of each other on
+                            // the same page. See `ic_arrow_down.xml`.
+                            painter = painterResource(R.drawable.ic_arrow_down),
                             contentDescription = text.chat.jumpToLatest,
                             // 20dp, matching the send/stop glyphs in the composer.
                             modifier = Modifier.size(20.dp),
-                            tint = MiuixTheme.colorScheme.onSecondaryContainer,
+                            // Normal ink rather than `onSecondaryContainer`: the disc's
+                            // own content colour is #A9A9A9 on #F0F0F0 in the light
+                            // scheme and #7C7C7C on #434343 in the dark one — a glyph
+                            // drawn below the 3:1 floor on both, which is what made the
+                            // control look disabled while it was the only way back to
+                            // the end of the conversation.
+                            tint = MiuixTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -1656,18 +1665,35 @@ private fun providerLabel(profile: ModelProfile, text: Strings): String =
         ?: profile.provider.ifBlank { text.settings.noProfileProvider }
 
 /**
- * The line under a model in the picker.
+ * The line under a model in the picker: `name/provider`, and the key's state under it.
  *
- * One thing only, and the more useful one when there are two: a profile with no
- * key cannot answer at all, and saying so on the row is what stops the user
- * picking a model that will fail; a named profile is shown otherwise, because two
- * profiles may share a provider — the same account on two endpoints, or two
- * accounts — and the name is the only thing that tells those rows apart.
+ * ## Why a slash, and why the key moved to its own line
+ *
+ * The line used to join three facts with a middot — `provider · name · key` — which
+ * reads as a *run-on*: nothing on it says which part is the endpoint and which is the
+ * configuration's own name, and at 13sp a middot is indistinguishable from the space
+ * around it. `name/provider` is the shape the same pair is written in on the model
+ * settings page, so the two surfaces agree about how a configuration is named, and
+ * reading one teaches the other.
+ *
+ * The key's state is the one fact on this line that is a *warning* rather than a
+ * name, and a warning at the end of a run-on sentence is the part a reader skips.
+ * `DropdownImpl`'s summary is a plain `Text`, so a newline is all it takes to give it
+ * a line of its own.
+ *
+ * The wrapping is why the state is stated as "no key" rather than "key saved": a row
+ * whose summary is one line for most profiles and two for one of them is a row that
+ * changes height exactly when the reader is looking for the reason it fails.
  */
-private fun modelRowHint(profile: ModelProfile, text: Strings): String? = when {
-    profile.apiKey.isBlank() -> text.settings.noKey
-    profile.name.isNotBlank() -> profile.name
-    else -> null
+private fun modelRowSummary(profile: ModelProfile, text: Strings): String {
+    val provider = providerLabel(profile, text)
+    val name = profile.name.takeIf { it.isNotBlank() }
+    val heading = if (name != null) "$name/$provider" else provider
+    return if (profile.apiKey.isBlank()) {
+        "$heading\n${text.settings.noKey}"
+    } else {
+        heading
+    }
 }
 
 /** The picker's option id for one model of one profile. Never parsed; only compared. */
@@ -2230,9 +2256,20 @@ private fun TranscriptCardView(
                     Card(
                         cornerRadius = PiCorner.radius,
                         insideMargin = PROMPT_CARD_PADDING,
+                        // The reader's own half of the conversation, in the accent's
+                        // hue — `PiTone.prompt()` is that wash and states why a wash
+                        // rather than one of the palette's blue containers: the bubble
+                        // has to keep the *same ink* as the answer beside it, so the
+                        // background cannot be a role that wants a white knockout.
+                        //
+                        // The ink is stated too, rather than inherited: the card used to
+                        // hand out `onSecondaryContainer`, which is #A9A9A9 in the light
+                        // scheme — a summary grey on the message the reader wrote
+                        // themselves. Their words are the one thing on this page that
+                        // must never be muted, so both halves are explicit.
                         colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.secondaryContainer,
-                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                            color = PiTone.prompt(),
+                            contentColor = MiuixTheme.colorScheme.onSurface,
                         ),
                     ) {
                         TranscriptCardRow(
@@ -2588,12 +2625,13 @@ private fun PromptBody(
  * This is the one control inside a prompt: tapping it opens the paths and the image
  * notes in a sheet, so it is an action and it takes the fully round shape — the
  * page's shape for an action, the same one the composer's send button wears. Its
- * fill is the palette's own *variant* of the container it sits on: the prompt card is
- * `secondaryContainer`, and drawing the chip in the card's own colour would be a
- * control the reader has to be told about. The height is 28dp — the transcript's own
- * pill, the size the tool card's status uses — so the row of machinery above a prompt
- * cannot change the card's height; and it is a minimum, because the app's text-size
- * setting draws the label larger and a fixed height would clip it.
+ * fill is `PiTone.inset()`, the wash every quotation on this page is drawn in: the
+ * prompt card is the accent's own wash now, so the chip has to be a *step* from
+ * whatever that card turns out to be rather than a palette role chosen against the
+ * grey it used to be. The height is 28dp — the transcript's own pill, the size the
+ * tool card's status uses — so the row of machinery above a prompt cannot change the
+ * card's height; and it is a minimum, because the app's text-size setting draws the
+ * label larger and a fixed height would clip it.
  */
 @Composable
 private fun PromptExtrasChip(
@@ -2614,7 +2652,7 @@ private fun PromptExtrasChip(
                 onClick = onClick,
             ),
         shape = RoundedCornerShape(percent = 50),
-        color = MiuixTheme.colorScheme.secondaryContainerVariant,
+        color = PiTone.inset(),
         // Normal ink, not the variant's own. `onSecondaryContainerVariant` is #A8A8A8
         // — a *disabled* grey in this palette (it is what `disabledOnSecondaryVariant`
         // is built from) — so a chip carrying the number of things this prompt will be
@@ -3028,7 +3066,7 @@ private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
  * placeholder carried by the library's label slot, its focused border the palette's
  * `primary`.
  *
- * Nothing about the *contents* changed. The four chips stay where they were, and they
+ * Nothing about the *contents* changed. The chips stay where they were, and they
  * still read as the settings the next message goes with rather than as part of the
  * message, because a chip between the field and the keyboard sits in the busiest strip
  * on a phone screen.
@@ -3036,31 +3074,32 @@ private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
  * ## The three rows, and one control
  *
  * ```
- *  (🧠 中) (🤖 packy…) (⤓ 上下文…) (⚡ 缓存…)   the settings this message goes with
+ *  (🧠 中) (🤖 deepseek-v4) (⚡ 缓存…)        the settings this message goes with
  *  ╭────────────────────────────────────╮
  *  │ Ask Pi…                            │   the field, growing upward
  *  ╰────────────────────────────────────╯
- *   ( ⌘ )                              (+) (→)   the row a thumb reaches
+ *   ( ⌘ )                        (◔) (+) (→)   the row a thumb reaches
  * ```
  *
- * The four controls are above the field rather than below it: a chip between the
+ * The chips are above the field rather than below it: a chip between the
  * field and the keyboard sits in the busiest strip on a phone screen and reads as
  * part of the message being written, where a chip above the field reads as the
  * setting the next message will be sent with. They are [ControlChip]s — a pill on the
  * palette's high surface step, drawn with a Miuix `Surface` so the press feedback and
  * the clip are the library's — and each one composes its own [WindowListPopup], which
  * is what anchors the menu to the chip that opened it. They scroll horizontally once
- * there are four of them, so a long profile name cannot squeeze the last one off
- * screen.
+ * they do not fit, so a long profile name cannot squeeze the last one off screen.
  *
- * The agent's **state** is not one of them: it is a fact rather than a control, and
- * it lives in the header. Nor is the *live* tone — live means a turn is running, and
- * nothing in a composer is.
+ * The `◔` in the action row is the context meter, and it is there because it is a
+ * *reading* rather than a choice: see [ContextRing]. The agent's **state** is not one
+ * of the chips either: it is a fact rather than a control, and it lives in the header.
+ * Nor is the *live* tone — live means a turn is running, and nothing in a composer is.
  *
- * The action row is under the field: Miuix's field owns its whole box, so there is no
- * last line of it to sit on, and a row under it is where a thumb already is when the
- * keyboard is up — the field grows *upward* out of the row rather than pushing it
- * down the screen.
+ * The action row is the field's last line: the frame holds the field and the three
+ * buttons, so the row a thumb reaches is inside the box the text is typed in. The field
+ * grows *upward* out of the row rather than pushing it down the screen. The keyboard
+ * gap under the frame is the root's (`LocalImeGap`) — the band continues under it, so
+ * the composer floats clear of the keyboard instead of sitting on it.
  */
 @Composable
 private fun Composer(
@@ -3163,7 +3202,7 @@ private fun Composer(
                 }
             }
 
-            // The four controls, on a line of their own above the field.
+            // The three controls, on a line of their own above the field.
             //
             // Above, not below, and that ordering is the whole point of the
             // layout: a chip below the field sits between the thing you are
@@ -3172,7 +3211,11 @@ private fun Composer(
             // it they read as what they are — the settings the next message will
             // be sent with.
             //
-            // Horizontally scrollable so four chips whose values can each be long
+            // Three, not four: the context share used to be one of them and is now
+            // the ring at the `+` below, because it is a reading rather than a
+            // choice (see `ContextRing`).
+            //
+            // Horizontally scrollable so three chips whose values can each be long
             // stay on one line: the alternative is squeezing them, which turns the
             // last one into `缓存命…`. A `LazyRow` rather than a `Row` with
             // `horizontalScroll`, because a plain scrollable `Row` under a
@@ -3184,7 +3227,7 @@ private fun Composer(
             // first chip stands where the field below it starts.
             //
             // The fades are what say "there is more". Content padding alone was not
-            // enough: on a phone the fourth chip is cut at the screen edge with nothing
+            // enough: on a phone a long chip is cut at the screen edge with nothing
             // between it and the edge to say the row continues, and a half-visible pill
             // at a hard edge reads as a layout fault rather than as a scroll. Each fade
             // is drawn in the band's own colour, and the draw pass reads the row's own
@@ -3316,34 +3359,11 @@ private fun Composer(
                 }
                 item {
                     ControlChip(
-                        glyph = MiuixIcons.Layers,
-                        label = contextPercentLabel(state, text),
-                        onClick = { onOpenSheet(ComposerSheet.Context) },
-                    ) {
-                        WindowListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
-                            show = openSheet == ComposerSheet.Context,
-                            // Fourteen facts: bounded so the panel stays a menu rather
-                            // than covering the conversation it reports on.
-                            maxHeight = MENU_MAX_HEIGHT,
-                            onDismissRequest = onCloseSheet,
-                        ) {
-                            ContextMenu(session = session, text = text)
-                        }
-                    }
-                }
-                // Always shown, so the row has the same shape whether or not the
-                // provider caches anything. It was hidden while nothing had been
-                // cached, which meant the control people asked for appeared and
-                // disappeared as the conversation went on; a `0%` is the honest
-                // reading and it is what makes the number's *movement* visible.
-                item {
-                    ControlChip(
                         glyph = MiuixIcons.Stopwatch,
                         label = text.chat.cacheHit(cacheHitPercent(state)),
-                        // The same menu as the context chip beside it, and the same
-                        // one name in [ComposerSheet]: the two chips are two readings
-                        // of one report, so opening either asks the same question.
+                        // The same menu the context ring beside the `+` opens, and the
+                        // same one name in [ComposerSheet]: the two are two readings of
+                        // one report, so opening either asks the same question.
                         onClick = { onOpenSheet(ComposerSheet.Context) },
                     ) {
                         WindowListPopup(
@@ -3553,6 +3573,33 @@ private fun Composer(
                     }
                 }
                 Spacer(Modifier.weight(1f))
+                // The context meter, where the chip in the row above used to be: a
+                // ring at the `+`'s left, at the height of the two buttons beside it.
+                //
+                // A ring rather than a chip because the number is a *share*, and a
+                // share has a shape: `上下文 12%` in a pill was a label competing with
+                // `deepseek-chat` and the level for a row that only fits three of them,
+                // while a ring of the same number says the same thing in 20dp and
+                // leaves the row to the two settings that are genuinely choices. The
+                // value is still one tap away — the ring opens the same dropdown the
+                // cache chip does — and it is still readable at a glance, which is the
+                // whole of what a context meter is for.
+                PopupAnchor {
+                    val percent = contextPercent(state)
+                    ContextRing(
+                        percent = percent,
+                        description = text.chat.contextUsage(percent),
+                        onClick = { onOpenSheet(ComposerSheet.ContextRing) },
+                    )
+                    WindowListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
+                        show = openSheet == ComposerSheet.ContextRing,
+                        maxHeight = MENU_MAX_HEIGHT,
+                        onDismissRequest = onCloseSheet,
+                    ) {
+                        ContextMenu(session = session, text = text)
+                    }
+                }
                 PopupAnchor {
                     IconButton(
                         onClick = { onOpenSheet(ComposerSheet.Attach) },
@@ -3562,7 +3609,16 @@ private fun Composer(
                         Icon(
                             imageVector = MiuixIcons.Add,
                             contentDescription = text.chat.attachTitle,
-                            modifier = Modifier.size(23.dp),
+                            // 17dp, the same as the command mark beside it — and the
+                            // figure is *not* the one this used to state. Miuix's `Add`
+                            // draws its ink out to 84% of its box (measured: the paths
+                            // span 95→1062 of the 1152-unit viewport), so at the 23dp
+                            // this button used the plus was 19dp of ink against the
+                            // `⌘`'s 14dp — the two marks beside each other on one row
+                            // were a third apart in size. At 17dp the plus is 14.3dp of
+                            // ink and the command is 14.1: equal, which is what "co-
+                            // ordinated" means for two glyphs of different weights.
+                            modifier = Modifier.size(17.dp),
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
@@ -3581,31 +3637,44 @@ private fun Composer(
                 }
                 Spacer(Modifier.width(4.dp))
                 // The page's one action, and the only fully round control on it: a
-                // filled disc carrying the send glyph, or — while an answer streams —
-                // the same disc in the error pair carrying a pause mark. The reader is
-                // looking for one button in that corner, not two.
+                // filled disc carrying an arrow up, or — while an answer streams — a
+                // red disc carrying a square. The reader is looking for one button in
+                // that corner, not two, and the pair is the one every chat app draws:
+                // an arrow sends, a square stops.
                 //
-                // **Round, not a pill.** `IconButton`'s own `CornerRadius` is 40dp on a
-                // 40dp button, so the shape *is* a circle when the two are equal; what
-                // made the send control read as a rounded square rather than as the
-                // page's action was that it was drawn with the *page's* container as its
-                // background while armed — the accent only appeared once there was text,
-                // and the disabled fill was the same grey as the `+` beside it. It is
-                // stated explicitly here (`CircleShape`) so the shape does not depend on
-                // two constants staying equal, and the accent is what the control wears
-                // whenever it is armed.
+                // **Round, not a pill.** the shape is a circle by construction: the
+                // library's button takes a radius rather than a shape, so 20dp on a
+                // 40dp button *is* a disc, and stating it here stops the shape depending
+                // on two constants staying equal.
+                //
+                // ## What the two discs are filled with, and why it changed
+                //
+                // The idle send disc used to be `surfaceContainerHigh` on the composer's
+                // `surfaceContainer` frame — two roles that are the *same colour* in the
+                // dark scheme (#242424), so the disc disappeared there and the arrow
+                // floated in the corner on its own. `PiTone.inset()` is the fill that is
+                // a step away from whatever it sits on in both schemes (#E6E6E6 on the
+                // white frame, #3D3D3D on the dark one), which is the rule the tool
+                // panels follow. The stop disc has the mirror problem: it was
+                // `errorContainer`, which in the light scheme is #FDF6F4 — a disc the
+                // colour of paper — and in the dark one #2E0603 against a #242424 frame.
+                // It is the error role itself now with a white square on it, which is
+                // what a stop button is in every app that has one.
                 if (isStreaming) {
                     IconButton(
                         onClick = onStop,
                         modifier = Modifier.size(40.dp),
                         cornerRadius = 20.dp,
-                        backgroundColor = MiuixTheme.colorScheme.errorContainer,
+                        backgroundColor = PiTone.error(),
                     ) {
                         Icon(
-                            imageVector = MiuixIcons.Pause,
+                            painter = painterResource(R.drawable.ic_stop),
                             contentDescription = text.chat.stop,
-                            modifier = Modifier.size(20.dp),
-                            tint = MiuixTheme.colorScheme.onErrorContainer,
+                            // 24dp of box for the 12 units of ink the square is: about a
+                            // third of the disc, the proportion Material's own stop
+                            // button uses.
+                            modifier = Modifier.size(24.dp),
+                            tint = MiuixTheme.colorScheme.onError,
                         )
                     }
                 } else {
@@ -3614,23 +3683,21 @@ private fun Composer(
                         onClick = onSend,
                         enabled = armed,
                         modifier = Modifier.size(40.dp),
-                        // Half of 40, which is the circle `CircleShape` would draw: the
-                        // library's button takes a radius rather than a shape, so the
-                        // one place the app needs a disc states the number that makes
-                        // one. `IconButtonDefaults.CornerRadius` is already 40dp, which
-                        // on a 40dp button is *also* a disc — the explicit value is what
-                        // stops the shape depending on the button's size staying 40.
                         cornerRadius = 20.dp,
                         backgroundColor = if (armed) {
                             MiuixTheme.colorScheme.primary
                         } else {
-                            MiuixTheme.colorScheme.surfaceContainerHigh
+                            PiTone.inset()
                         },
                     ) {
                         Icon(
-                            imageVector = MiuixIcons.Send,
+                            painter = painterResource(R.drawable.ic_arrow_up),
                             contentDescription = text.chat.send,
-                            modifier = Modifier.size(20.dp),
+                            // 22dp: the arrow's ink is 14 of its 24 units, so the drawn
+                            // mark is about 13dp on a 40dp disc — the proportion of the
+                            // arrow in the reference implementations, and the same
+                            // drawn size as the 20dp chevron it replaces.
+                            modifier = Modifier.size(22.dp),
                             tint = if (armed) {
                                 MiuixTheme.colorScheme.onPrimary
                             } else {
@@ -3642,6 +3709,14 @@ private fun Composer(
                     }
                 }
             }
+
+            // The air above the keyboard. The band's own fill continues under it —
+            // the root's `imePadding` ends the page exactly at the keyboard's edge, so
+            // this gap is the last 10dp of the page, and the composer's frame floats
+            // clear of the keyboard instead of sitting on it. Zero when no keyboard is
+            // up, which is what keeps the band meeting the navigation bar's own strip
+            // with no seam (see `LocalImeGap`).
+            Spacer(Modifier.height(LocalImeGap.current))
         }
     }
 }
@@ -3813,19 +3888,108 @@ private val REASONING_ANSWER_GAP = 5.dp
 private val TRANSCRIPT_TAIL_SPACE = 26.dp
 
 /**
- * How full the context window is.
+ * How full the context window is, as the number the ring draws and its tooltip states.
  *
  * A percentage only. Integer division, so 99.6% does not read as "full" a message
- * early, and an unknown window reports as 0% rather than hiding: the chip is
- * always there, so it may as well be the same shape before and after the model
- * reports its size. The raw counts are one tap away, in the sheet.
+ * early, and an unknown window reports as 0% rather than hiding: the ring is always
+ * there, so it may as well be the same shape before and after the model reports its
+ * size. The raw counts are one tap away, in the menu.
  */
-private fun contextPercentLabel(state: ConversationState, text: Strings): String {
+private fun contextPercent(state: ConversationState): Int {
     val window = state.model?.contextWindow ?: 0
     val used = state.usage.context.total
-    val percent = if (window > 0) (used * 100 / window).toInt() else 0
-    return text.chat.contextUsage(percent)
+    return if (window > 0) (used * 100 / window).toInt().coerceIn(0, 100) else 0
 }
+
+/**
+ * The context meter: a 20dp ring at the `+`, filled to the share of the window in use.
+ *
+ * ## Why a ring rather than the chip that was here
+ *
+ * The chip row above the field is `LazyRow` of the settings a message is sent with,
+ * and it had four of them: the thinking level, the model, the context share and the
+ * cache-hit share. The two percentages were the only ones the reader does not *choose*
+ * — they are readings — and two of four chips on a row that scrolls is half the row
+ * spent on meters. The context one moved here, beside the `+`, where a shape can say
+ * a share without a label: a ring filled a third of the way round is the same number
+ * as `上下文 33%` and it costs 20dp.
+ *
+ * ## What the drawing says
+ *
+ * The track is `outline` — the palette's own hairline role — and the fill is `primary`,
+ * so the ring is drawn from the scheme rather than from a colour of its own. The fill
+ * turns to the error role at [RING_TENSE_PERCENT]: a window about to overflow is the
+ * one state of this meter that a reader has to act on, and the accent turning red is
+ * how every meter in the platform says it. The track is drawn either way, so the ring
+ * is never absent, only empty.
+ *
+ * The touch target is 36dp around the 20dp ring — the row's other two controls are
+ * 40dp buttons, and a 20dp target beside them would be a control a thumb misses. The
+ * label the ring has no room for is its accessibility name instead, and the menu it
+ * opens is where the same number is written out in words.
+ */
+@Composable
+private fun ContextRing(
+    percent: Int,
+    description: String,
+    onClick: () -> Unit,
+) {
+    val track = MiuixTheme.colorScheme.outline
+    val fill = if (percent >= RING_TENSE_PERCENT) {
+        PiTone.error()
+    } else {
+        MiuixTheme.colorScheme.primary
+    }
+    Box(
+        modifier = Modifier
+            .size(RING_TOUCH)
+            .clip(CircleShape)
+            .clickable(onClickLabel = description, onClick = onClick)
+            // The ring draws no text, so the sentence the chip in the row above used to
+            // carry is its accessibility name instead — the share in words, which is
+            // also the tooltip the menu spells out in rows.
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(RING_SIZE)) {
+            val stroke = RING_STROKE.toPx()
+            val side = size.minDimension - stroke
+            val topLeft = Offset(stroke / 2f, stroke / 2f)
+            val arcSize = Size(side, side)
+            drawArc(
+                color = track,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = stroke),
+            )
+            if (percent > 0) {
+                drawArc(
+                    color = fill,
+                    startAngle = RING_START_ANGLE,
+                    sweepAngle = 360f * percent / 100f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+            }
+        }
+    }
+}
+
+/** The ring's box, the ring inside it, the line it is drawn with and where it starts. */
+private val RING_TOUCH = 36.dp
+private val RING_SIZE = 20.dp
+private val RING_STROKE = 2.5.dp
+
+/** Twelve o'clock, which is where a meter starts and where a reader looks for its end. */
+private const val RING_START_ANGLE = -90f
+
+/** The share at which the meter stops being a reading and starts being a warning. */
+private const val RING_TENSE_PERCENT = 90
 
 /**
  * What share of the last request's input came back from the provider's cache.
@@ -3854,7 +4018,7 @@ private fun cacheHitPercent(state: ConversationState): Int {
 }
 
 /**
- * One of the composer's four small controls: a pill that opens a menu or a sheet.
+ * One of the composer's small controls: a pill that opens a menu or a sheet.
  *
  * ## Why this is a Surface and not a component of its own
  *
@@ -3866,13 +4030,14 @@ private fun cacheHitPercent(state: ConversationState): Int {
  * That is a luminance test at the call site to answer a question the palette should
  * answer.
  *
- * Miuix's palette already answers it: the band is `surfaceContainer`, so one step up
- * is `surfaceContainerHigh` — visible in both schemes without asking the colour
- * anything. The pill is a Miuix [Surface] at a full round, so the clip, the fill and
- * the press feedback are the library's, and its height is 32dp — the composer's own
- * control height, which is a size larger than the transcript's 28dp pills on purpose:
- * a tool row is read at a glance, while these four are the settings the next message
- * goes with. It is a minimum, so the label grows with the reader's text size.
+ * Miuix's palette already answers it: the band is `surface`, and `surfaceContainerHigh`
+ * is a step above it in both schemes (#E8E8E8 on the light band's #F7F7F7, #242424 on
+ * the dark one's black) — visible without asking the colour anything. The pill is a
+ * Miuix [Surface] at a full round, so the clip, the fill and the press feedback are the
+ * library's, and its height is 32dp — the composer's own control height, which is a
+ * size larger than the transcript's 28dp pills on purpose: a tool row is read at a
+ * glance, while these three are the settings the next message goes with. It is a
+ * minimum, so the label grows with the reader's text size.
  *
  * ## Why the chip has no separate accessibility name
  *
@@ -4080,9 +4245,9 @@ private fun ThinkingMenu(
  * [DropdownItem.summary] for the two things this menu wants to say beyond the id.
  *
  * The model list is a *choice*, so every row is a radio: the selected one is `primary`
- * with the tick, the rest are plain. The provider is the summary under the id, and a
- * profile's own name joins it when two profiles share one provider — the pair the
- * settings sheet grouped and captioned by.
+ * with the tick, the rest are plain. The summary under the id is `name/provider`, with
+ * a profile's key state on a line of its own — see [modelRowSummary], which is also
+ * where the slash and the second line are argued for.
  */
 @Composable
 private fun ModelMenu(
@@ -4107,9 +4272,7 @@ private fun ModelMenu(
     // own coordinates rather than one profile's. Built once per composition because
     // the library's first/last padding is derived from them.
     val rows = profiles.flatMap { profile ->
-        val heading = providerLabel(profile, text)
-        val hint = modelRowHint(profile, text)
-        val summary = listOfNotNull(heading, hint).joinToString(" · ")
+        val summary = modelRowSummary(profile, text)
         profile.selectableModels.map { model ->
             ModelRow(
                 model = model,

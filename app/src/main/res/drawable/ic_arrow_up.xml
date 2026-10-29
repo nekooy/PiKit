@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The send mark, and the files page's "up one level": Lucide's `arrow-up`.
+
+    ## Why an arrow rather than a paper plane
+
+    The composer's send control used to carry the library's own `Send`, which is a paper
+    plane — a *postal* figure, drawn at the weight of an illustration rather than of a
+    control. The chat apps this page is read beside (ChatGPT, Claude, Gemini) all send
+    with an arrow, and the arrow is also the only figure that has no second meaning on
+    a phone: a plane says "share" in most Android surfaces, while an arrow up beside a
+    text field says "send what I typed" everywhere.
+
+    The same glyph is drawn a second time on the files page, where it means "open the
+    parent directory". One vector, two call sites, and the call site decides the size —
+    the rule for a borrowed glyph (see ARCHITECTURE §12.3).
+
+    ## Provenance
+
+    Lucide's own single-stroke figure, on its 24-unit grid, stroke 2 of 24 with round
+    caps — the same weight `ic_check.xml` and `ic_copy.xml` are drawn at, so the three
+    marks are one family:
+
+        M12 19V5 m5 12 7-7 7 7
+
+    Source: https://github.com/lucide-icons/lucide (ISC).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:pathData="M12 19 L12 5 M5 12 L12 5 L19 12"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

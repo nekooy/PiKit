@@ -4,22 +4,38 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import pi.kit.mob.BuildConfig
 import pi.kit.mob.data.UpdateCheck
@@ -34,7 +50,10 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * What PiKit is, what it ships, and where those pieces live.
@@ -355,13 +374,34 @@ private const val TAG = "PiKit"
  * page. It is centred rather than left-aligned so that a wide window puts the extra on
  * both sides instead of leaving one long gap.
  *
+ * ## The contents bar, and why it is pinned
+ *
+ * The manual is ten chapters and about seven screens of prose, and the only way to reach
+ * a chapter used to be to scroll until it arrived. The bar above the document is a
+ * horizontal run of chips — one per `##` heading, read from the prose itself so all
+ * three languages get their own without a second list to keep in step — and a tap
+ * scrolls the document to that heading.
+ *
+ * Pinned rather than the first thing in the scroll: a table of contents that scrolls
+ * away is only useful once, which is the state the page was in before it had one. It
+ * costs about 60dp of the page forever, and the manual is read in short sittings —
+ * "what was the settings row called" — which is exactly the reading a chapter index is
+ * for.
+ *
+ * The scroll *target* is measured rather than estimated: each chapter's own
+ * `MarkdownText` reports its position inside the scrolling column through
+ * `onGloballyPositioned`, so a heading's offset is the layout's own answer and survives
+ * a font-size change or a window resize.
+ *
  * ## It stays a plain scrolling `Column`
  *
  * `MarkdownText` renders a plain `Column` and must keep doing so — a `LazyColumn`
  * inside a vertically scrollable parent is measured against an infinite height and
  * throws `IllegalStateException: Vertically scrollable component was measured with an
  * infinity maximum height constraints`, which is a crash this page has already been
- * the source of twice. So the scrolling is the page's, and it is a `Column`.
+ * the source of twice. So the scrolling is the page's, and it is a `Column`; the
+ * document is split into one `MarkdownText` per chapter, which is still a `Column` each
+ * and still no lazy list.
  */
 @Composable
 internal fun ManualPage(onBack: () -> Unit) {
@@ -371,6 +411,14 @@ internal fun ManualPage(onBack: () -> Unit) {
     // composition local cannot be read inside its calculation.
     val language = LocalLanguage.current
     val body = remember(language) { manualFor(language) }
+    // Split once per language: the chapters are the prose's own `##` headings.
+    val document = remember(body) { parseManual(body) }
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    // Where each chapter starts inside the scrolling column, in pixels. Recorded by the
+    // layout rather than computed from the text, so a font-size change or a different
+    // window width moves the targets with the prose.
+    val starts = remember(document) { mutableStateMapOf<Int, Int>() }
 
     PiPage(
         // A document rather than a list of rows: the subtitle is the manual's own, and
@@ -382,21 +430,159 @@ internal fun ManualPage(onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
+                .padding(padding),
         ) {
-            MarkdownText(
-                text = body,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .widthIn(max = MANUAL_MEASURE)
-                    // The bottom inset is the page's own gap above the navigation bar:
-                    // a manual's last line set against the bar reads as a page that was
-                    // cut rather than as one that ended.
-                    .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
+            ManualContents(
+                label = text.manual.contents,
+                titles = document.chapters.map { it.title },
+                onJump = { index ->
+                    val y = starts[index] ?: return@ManualContents
+                    scope.launch { scroll.animateScrollTo(y.coerceIn(0, scroll.maxValue)) }
+                },
             )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scroll),
+            ) {
+                if (document.intro.isNotBlank()) {
+                    ManualProse(document.intro)
+                }
+                document.chapters.forEachIndexed { index, chapter ->
+                    MarkdownText(
+                        text = chapter.body,
+                        modifier = Modifier
+                            // Before the measure and the padding: the recorded position
+                            // is then the top of the chapter *including* its own spacing,
+                            // which is where a scroll should put it.
+                            .onGloballyPositioned { coordinates ->
+                                starts[index] = coordinates.positionInParent().y.roundToInt()
+                            }
+                            .align(Alignment.CenterHorizontally)
+                            .widthIn(max = MANUAL_MEASURE)
+                            .padding(start = 20.dp, end = 20.dp),
+                    )
+                }
+                // The bottom inset is the page's own gap above the navigation bar: a
+                // manual's last line set against the bar reads as a page that was cut
+                // rather than as one that ended. It is a spacer rather than the last
+                // chapter's padding because the last chapter ends the prose.
+                Spacer(Modifier.height(MANUAL_FOOT_SPACE))
+            }
         }
     }
+}
+
+/** The measure and the page's own bottom margin. */
+@Composable
+private fun ManualProse(text: String) {
+    MarkdownText(
+        text = text,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .widthIn(max = MANUAL_MEASURE),
+    )
+}
+
+/**
+ * The chapter index: a label and a run of chips, one per `##` heading, pinned above the
+ * document.
+ *
+ * The row scrolls horizontally rather than wrapping: ten chapter titles would be three
+ * lines of chips, and a pinned block three lines tall is a frame around the document
+ * rather than a way into it. Each chip is the heading's own text, so the index and the
+ * document cannot disagree about what a chapter is called.
+ */
+@Composable
+private fun ManualContents(
+    label: String,
+    titles: List<String>,
+    onJump: (Int) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // The page's own surface, so the document passes *under* the bar rather
+            // than showing through it.
+            .background(MiuixTheme.colorScheme.surface)
+            .padding(top = 4.dp, bottom = 6.dp),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            itemsIndexed(titles) { index, title ->
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .clickable(onClickLabel = title) { onJump(index) },
+                    shape = RoundedCornerShape(percent = 50),
+                    // The composer's chip fill, for the same reason it is there: the bar is
+                    // the page's `surface`, and this is the palette's step above it in both
+                    // schemes (#E8E8E8 on #F7F7F7, #242424 on black). A wash would have
+                    // been the other candidate and is too faint on the dark band.
+                    color = MiuixTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MiuixTheme.colorScheme.onSurface,
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MiuixTheme.textStyles.footnote2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One `##` chapter: its heading, and the prose under it. */
+private class ManualChapter(val title: String, val body: String)
+
+/** The manual as its intro and its numbered chapters. */
+private class ManualDocument(val intro: String, val chapters: List<ManualChapter>)
+
+/**
+ * Splits the manual's Markdown at its `##` headings.
+ *
+ * The headings are the document's own chapter markers — every language's manual is
+ * written with ten of them, `## 1. …` through `## 10. …` — so this reads the prose
+ * rather than a parallel list of chapters: a heading added to one catalog appears in
+ * that language's index, and a language's index can never name a chapter its prose does
+ * not have. The level-one `# PiKit` title and the paragraphs under it are the intro.
+ */
+private fun parseManual(body: String): ManualDocument {
+    val intro = StringBuilder()
+    val chapters = mutableListOf<ManualChapter>()
+    var title: String? = null
+    var current = StringBuilder()
+
+    fun flush() {
+        val heading = title ?: return
+        chapters += ManualChapter(heading, current.toString())
+        current = StringBuilder()
+    }
+
+    body.lineSequence().forEach { line ->
+        if (line.startsWith("## ")) {
+            flush()
+            title = line.removePrefix("## ").trim()
+            current.append(line).append('\n')
+        } else {
+            (if (title == null) intro else current).append(line).append('\n')
+        }
+    }
+    flush()
+    return ManualDocument(intro.toString(), chapters)
 }
 
 /**
@@ -406,3 +592,6 @@ internal fun ManualPage(onBack: () -> Unit) {
  * page's own width is the measure and nothing here changes anything.
  */
 private val MANUAL_MEASURE = 560.dp
+
+/** The air under the manual's last line, above the page's own bottom inset. */
+private val MANUAL_FOOT_SPACE = 24.dp

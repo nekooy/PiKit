@@ -364,6 +364,23 @@ the transcript's meta row and a tool card's output still use the same control.
   manual, and in the dark scheme `surfaceContainerHigh` *is* the card's own #242424.
   A wash of the surface's own ink is the same relative step everywhere, which is what
   "the same depth" has to mean here.
+- **Everything drawn inside a card obeys the same rule, and the dark ramp is why.** The
+  tool output panel, the reasoning panel, a status pill, the idle send disc, a file-type
+  tile and the reader's own bubble all used to name a step of the surface ramp
+  (`surfaceContainerHigh`, `surfaceContainerHighest`). Miuix's dark scheme gives
+  `surface` black, `surfaceContainer` and `surfaceContainerHigh` **both** #242424 and
+  `surfaceContainerHighest` #2D2D2D: each of those panels was a step in the light scheme
+  and no step — or a two-point one — in the dark one, so a tool's output ran into the card
+  behind it, a status pill's fill vanished and the send disc disappeared into the
+  composer's own frame. What replaced them is one sentence: *a fill inside a container is
+  a step from its content colour, not a role from the ramp* — `PiTone.inset()`, the
+  surface's own ink at 10%, for a well, and `PiTone.prompt()`, the accent mixed into the
+  card colour (16% on white, 34% on the dark card), for the reader's own message. The
+  first is contrast rather than colour, so it is the same relative step on every surface
+  the app draws, in both schemes; the second is a *mix* rather than a translucent wash
+  for a measured reason — 14% of the accent over the dark page, which is black, is
+  #061122, and a bubble that dark is not blue until it is beside something blacker. Both
+  keep `onSurface` legible, which is the property the prompt bubble needed most.
 - **The window-level dialog phrasing** (`PiConfirm` and `PiDialogAnswers` in the kit,
   `SettingsAlert` on the settings pages) and the snackbar host, because Miuix ships the
   window and not this app's two-answer question. `PiDialogAnswers` is the one

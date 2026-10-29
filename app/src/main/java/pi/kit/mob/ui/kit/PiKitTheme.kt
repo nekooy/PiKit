@@ -8,6 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -146,7 +148,71 @@ object PiTone {
      */
     @Composable
     fun inset(): Color = MiuixTheme.colorScheme.onSurface.copy(alpha = INSET_ALPHA)
+
+    /**
+     * The fill behind the reader's own message: the accent, mixed into the card colour.
+     *
+     * ## Why an accent mix rather than a container role
+     *
+     * The prompt bubble is the one object on the transcript that is not a card in the
+     * palette's sense: it is the reader's half of the conversation, and the reader's
+     * half is read as *blue* in every chat app the page is read beside. The palette's
+     * blue containers are `primaryContainer` (#5D9BFF light, #338FE4 dark) and
+     * `tertiaryContainer` (#EAF2FF, #2B3B54) — the first is a filled control that
+     * wants a white knockout ink, and the prompt must keep the same ink as the answer
+     * beside it; the second is so pale in the light scheme that it is nearly the page.
+     *
+     * So the fill is composed: the palette's `surfaceContainer` (the colour an answer
+     * card is) with `primary` mixed into it, at a share chosen from how much the base
+     * can absorb — [PROMPT_SHARE_LIGHT] on white, [PROMPT_SHARE_DARK] on the dark
+     * scheme's #242424. That lands at #DEEBFF and #25416C: one pale blue, one navy,
+     * both unmistakably the accent's hue and both legible in `onSurface` (15:1 and
+     * 7.4:1).
+     *
+     * ## Why not a translucent wash
+     *
+     * It was `primary.copy(alpha = 0.14f)` — the same mechanism as [inset] — and it is
+     * transparent over *the page*, which is `surface`: #F7F7F7 in the light scheme and
+     * **black** in the dark one. 14% of #277AF7 over black is #061122, a shade that is
+     * not blue at all until it is beside something blacker; the bubble disappeared into
+     * the page it was drawn on. A fill has to be relative to its *content* colour rather
+     * than to the darkest surface the palette has, and the base is therefore the card —
+     * the colour the reader compares it with.
+     */
+    @Composable
+    fun prompt(): Color {
+        val base = MiuixTheme.colorScheme.surfaceContainer
+        val share = if (base.luminance() < DARK_BASE_LUMINANCE) {
+            PROMPT_SHARE_DARK
+        } else {
+            PROMPT_SHARE_LIGHT
+        }
+        return lerp(base, MiuixTheme.colorScheme.primary, share)
+    }
 }
+
+/**
+ * How much of the accent the reader's own message is mixed into the card colour.
+ *
+ * The two shares are one idea rather than two settings: the same *visual* weight of blue
+ * on a white base and on a near-black one. 16% of #3482FF into white is #DEEBFF — plainly
+ * blue, still pale enough that the answer beside it stays the brighter card; 34% of
+ * #277AF7 into #242424 is #25416C — a navy that reads as the reader's half at a glance
+ * without becoming the brightest thing on a black page.
+ */
+private const val PROMPT_SHARE_LIGHT = 0.16f
+private const val PROMPT_SHARE_DARK = 0.34f
+
+/**
+ * Where a base counts as dark, for the two shares above.
+ *
+ * 0.2 is between the light scheme's white card (1.0) and its #F7F7F7 page (0.93) on one
+ * side, and the dark scheme's #242424 card (0.017) on the other — no base the palette
+ * offers is near the boundary, so this is a test of *which scheme* rather than a taste
+ * threshold. It is not the luminance comparison the chip's KDoc rejects: that one asked
+ * how far apart two roles were, this one asks how much accent a base can absorb.
+ */
+private const val DARK_BASE_LUMINANCE = 0.2f
 
 /**
  * How much of the surface's own ink a quotation's fill is washed with.

@@ -26,9 +26,7 @@ import pi.kit.mob.data.CustomApi
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
 import pi.kit.mob.data.PiProvider
-import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.normalizeApiBaseUrl
-import pi.kit.mob.data.rememberedThinkingLevels
 import pi.kit.mob.locales.DiscoveryProblem
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -38,7 +36,6 @@ import pi.kit.mob.pi.ModelDiscoveryClient
 import pi.kit.mob.pi.ModelSource
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.anyProviderModelFacts
-import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.modelDefinitionFacts
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
@@ -106,10 +103,6 @@ internal fun ModelPage(
     // a `remember`ed copy refreshed by hand after each action here, which meant
     // any change made *elsewhere* was invisible until the page was re-entered.
     val config by store.snapshots.collectAsState()
-    // The level each row reports is a saved fact rather than a field on this page, so
-    // it is collected here: a level changed from the composer's chip moves these lines
-    // while the page is open.
-    val preferences by session.settingsStore.settings.collectAsState()
     val profiles = config.profiles
     val activeId = config.activeProfileId
     val text = strings
@@ -139,10 +132,9 @@ internal fun ModelPage(
     }
 
     // What the thinking row used to show lived here — the live levels, the
-    // remembered ones and the clamped preference. The row is gone: the composer's
-    // chip is the one control for the setting. `thinkingLevelsFor` and
-    // `clampThinkingLevel` are still what that sheet and the chip's label use, and
-    // `thinkingLevelFor` below reads the saved pair for a row's line.
+    // remembered ones and the clamped preference. The row is gone, and so is the level
+    // on a profile's line: the composer's chip is the one control for the setting, and
+    // a row here answers "which configuration", not "at what level".
 
     PiPage(
         title = text.settings.profilesTitle,
@@ -171,11 +163,7 @@ internal fun ModelPage(
                         // one glyph per meaning rather than a tick beside a button.
                         RadioButtonPreference(
                             title = profile.displayName,
-                            summary = subtitleFor(
-                                profile,
-                                text,
-                                thinkingLevelFor(preferences, profile.modelId),
-                            ),
+                            summary = subtitleFor(profile, text),
                             selected = profile.id == activeId,
                             endActions = {
                                 IconButton(onClick = { onEdit(profile.id) }) {
@@ -256,41 +244,36 @@ internal fun ModelPage(
 }
 
 /**
- * A row's own line: the provider, the model, the level that model runs at, and whether
- * a key is saved.
+ * A row's own line: the model and the provider it is reached through, with whether a
+ * key is saved on the line under them.
  *
- * The level is added by the redesign and the other three were the line before it, in
- * the same order — a configuration is a provider and a key, so which provider and
- * whether the key is there are the two facts that tell one row from another when two
- * are configured for the same model.
+ * ## Why a slash, and why the key moved down
+ *
+ * The line used to be four facts joined by middots — `provider · model · level · key` —
+ * and that is a sentence to be parsed rather than two values to be compared: at 13sp a
+ * middot is the same width as the space around it, so the boundary between two facts
+ * was invisible. `model/provider` is a path shape, which is what the pair *is* (a model
+ * reached through one endpoint), and it is the same shape the composer's model menu
+ * uses under each id — so the two surfaces agree about how a configuration is named.
+ *
+ * The thinking level is gone from this line. It is a *setting* rather than a name, one
+ * value for the whole app, clamped per model and reported by pi at launch — and the
+ * row it was on is the list where the reader comes to choose *which configuration*, not
+ * to read a preference that all of them share. It is one tap away on the Agent page,
+ * where the same value is the row that owns it.
+ *
+ * The key's state stays, because it is the one fact here that can make the row fail,
+ * and it gets a line of its own: a warning at the end of a run-on line is the part a
+ * reader skips.
  */
-private fun subtitleFor(profile: ModelProfile, text: Strings, level: String?): String {
+private fun subtitleFor(profile: ModelProfile, text: Strings): String {
     val provider = profile.providerEntry?.label
         ?: profile.provider.ifBlank { text.settings.noProfileProvider }
     val model = profile.modelId.ifBlank { text.settings.noModelChosen }
     val key = if (profile.apiKey.isBlank()) text.settings.noKey else text.settings.keySaved
-    return listOfNotNull(provider, model, level, key).joinToString(" · ")
+    return "$model/$provider\n$key"
 }
 
-/**
- * The level [modelId] would run at, or null when nothing is known about it.
- *
- * `clampThinkingLevel` against the levels pi last reported **for that id**
- * (`rememberedThinkingLevels`), which is the pair the composer's chip shows, and for the
- * same reason: pi walks a level the model does not have *forwards*, so asking a DeepSeek
- * model for `medium` leaves `high`. Showing the raw preference beside a model would
- * therefore be showing a level that model never runs at. No memory of that id means
- * nothing to clamp against, and the saved preference is what the row shows until pi has
- * answered for it once.
- */
-private fun thinkingLevelFor(preferences: PiSettings, modelId: String): String? =
-    modelId.takeIf { it.isNotBlank() }
-        ?.let {
-            clampThinkingLevel(
-                preferences.thinkingLevel,
-                preferences.rememberedThinkingLevels(it),
-            )
-        }
 
 
 
@@ -331,9 +314,6 @@ internal fun ModelEditPage(
     // sheets, which are windows of their own: their state is a boolean in this composable
     // rather than an entry in a host, and the sheet body reads the choice it was given.
     val toasts = LocalPiToast.current
-    // The saved preference, read for the thinking level each model row reports. It is not
-    // a field of this form: the composer's chip is the one control for it.
-    val preferences by session.settingsStore.settings.collectAsState()
 
     val existing = remember(profileId) { store.profiles.firstOrNull { it.id == profileId } }
 
@@ -969,11 +949,12 @@ internal fun ModelEditPage(
                 models.forEach { model ->
                     RadioButtonPreference(
                         title = model,
-                        summary = modelSubtitle(
-                            provider?.label,
-                            null,
-                            thinkingLevelFor(preferences, model),
-                        ),
+                        // The endpoint, and nothing else. The thinking level used to be
+                        // here, clamped per model — a fact about the *app's* preference
+                        // rather than about this configuration, and a second copy of a
+                        // value the Agent page owns. See `subtitleFor` for the same
+                        // removal on the list behind this form.
+                        summary = provider?.label,
                         selected = model == activeModel,
                         endActions = {
                             // `Close`, the glyph the search page's key rows use for the same
@@ -1029,6 +1010,7 @@ internal fun ModelEditPage(
                             prefill = if (isCustomEndpoint) prefillFrom(customIdFacts[id]) else null,
                         )
                     },
+                    modifier = Modifier.weight(1f),
                     enabled = draft.isNotBlank() && provider != null,
                     primary = true,
                 )
@@ -1078,15 +1060,14 @@ internal fun ModelEditPage(
                             }
                         }
                     },
+                    modifier = Modifier.weight(1f),
                     enabled = !fetching && provider != null,
+                    // The label stays put while the call runs, and so does the button's
+                    // width: the spinner is drawn inside it (`SettingsButton`'s `busy`).
+                    // Swapping "获取模型列表" for "获取中…" used to resize the button and
+                    // shift the one beside it, and an outside spinner shifted both again.
+                    busy = fetching,
                 )
-                // The label stays put while the call runs: swapping "获取模型列表" for
-                // "获取中…" resized the button and shifted the one beside it. The spinner is
-                // the mark that carries the busy state, and the word beside it is the sheet
-                // it opened.
-                if (fetching) {
-                    SettingsWorking(modifier = Modifier.padding(start = 4.dp))
-                }
             }
 
             // Its own section, and one *card* of rows per model: the model's name, the image
@@ -1259,26 +1240,29 @@ internal fun ModelEditPage(
                 }
             }
 
-            // Cancel and Save sit together on the trailing edge — the primary last — rather
-            // than split across the row, which put the secondary action on the far left where
-            // the eye does not look for a pair. Ask the same question the back arrow does,
-            // because Cancel is the same action: this button has always meant "leave without
-            // saving".
+            // Cancel and Save split the row, in the order a form puts them: the
+            // secondary on the left, the primary last. They used to be sized to their
+            // words on the trailing edge, which made "save" a control the width of its
+            // own word on the page's most consequential form; a pair of row-wide halves
+            // is the shape the rest of the settings pages' footers take, so the gesture
+            // is the same wherever a form ends.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
                     .padding(top = 12.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SettingsButton(
                     text = text.settings.cancel,
                     onClick = ::requestLeave,
+                    modifier = Modifier.weight(1f),
                 )
                 SettingsButton(
                     text = text.settings.save,
                     onClick = { if (save()) leave() },
+                    modifier = Modifier.weight(1f),
                     primary = true,
                 )
             }
@@ -1505,22 +1489,6 @@ internal fun ModelEditPage(
     )
 }
 
-/**
- * A row's line: the provider, the model when the row's own title is not it, and the level
- * that model runs at.
- *
- * The separators are the app's own — every dense line in the settings is a run of facts
- * joined this way — and the blanks are dropped rather than joined empty, because a model
- * id a profile has not chosen yet would otherwise draw two separators in a row.
- */
-private fun modelSubtitle(provider: String?, modelId: String?, level: String?): String =
-    listOfNotNull(
-        provider?.takeIf { it.isNotBlank() },
-        modelId?.takeIf { it.isNotBlank() },
-        level?.takeIf { it.isNotBlank() },
-    ).joinToString(" · ")
-
-
 
 /** The digits of [raw], and at most [MAX_TOKEN_DIGITS] of them: all a token count may be. */
 private fun tokenDigits(raw: String): String = raw.filter { it.isDigit() }.take(MAX_TOKEN_DIGITS)
@@ -1617,7 +1585,8 @@ private fun ModelNumberBody(
             )
         }
         // No dismiss beside the save: the scrim, the back gesture and a downward drag
-        // already close a sheet.
+        // already close a sheet. The one action fills the row — a sheet whose foot is a
+        // single button is a row like any other, and the sheet's own gutter is 12dp.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1631,6 +1600,7 @@ private fun ModelNumberBody(
                     // "no number in the entry" rather than into a zero.
                     onSave(draft.toLongOrNull())
                 },
+                modifier = Modifier.weight(1f),
                 primary = true,
             )
         }

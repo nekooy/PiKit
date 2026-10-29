@@ -483,14 +483,14 @@ private fun WebSearchValueSheet(
             )
         }
 
-        // The sheet's one real action, on the trailing edge. No dismiss beside it: a
-        // sheet is closed by the scrim, the back gesture or a downward drag, and a
-        // cancel here would be a fourth way to do the same thing.
+        // The sheet's one real action, and it fills the row: an action that is alone on
+        // its line is a row-wide control here as it is on the pages behind the sheet.
+        // No dismiss beside it — a sheet is closed by the scrim, the back gesture or a
+        // downward drag, and a cancel here would be a fourth way to do the same thing.
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spacer(Modifier.weight(1f))
             SettingsAction(
                 text = text.settings.searchConfigValueAdd,
                 onClick = {
@@ -502,6 +502,7 @@ private fun WebSearchValueSheet(
                         onAdd(parsed)
                     }
                 },
+                modifier = Modifier.weight(1f),
             )
         }
     }

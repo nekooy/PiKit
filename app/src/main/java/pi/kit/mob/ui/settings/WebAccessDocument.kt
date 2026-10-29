@@ -155,17 +155,15 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore, session: PiAgentSess
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // 8 above, and the card's own 12 at the sides: the same inset the sheet
-                // footers use, and the pair collected at the trailing edge like every
-                // other action row in the app. It was 4t/12b with Save on the left, which
-                // reversed the muscle memory the rest of the settings had just taught —
-                // and the leading spacer is what keeps a third action beside the pair
-                // rather than stranding the first one on the left.
+                // 8 above, and the card's own 12 at the sides. The pair splits the row —
+                // Revert, then Save — which is the footer shape every form in the app
+                // now takes; it used to be sized to its words on the trailing edge, and a
+                // pair of halves is both easier to hit and the same gesture wherever a
+                // form ends.
                 .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spacer(Modifier.weight(1f))
             SettingsAction(
                 text = text.settings.searchConfigRevert,
                 enabled = value != null && !saving,
@@ -174,6 +172,7 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore, session: PiAgentSess
                         draft = store.documentText()
                     }
                 },
+                modifier = Modifier.weight(1f),
             )
             SettingsAction(
                 text = text.settings.searchConfigSave,
@@ -216,6 +215,7 @@ internal fun WebSearchDocumentEditor(store: WebSearchStore, session: PiAgentSess
                 // JSON object is answered by the write's own result, which is where
                 // the reason can be told from a disk failure.
                 enabled = value != null && !saving,
+                modifier = Modifier.weight(1f),
             )
         }
     }

@@ -44,7 +44,7 @@ internal object EnglishStrings : Strings {
             "Tip: tap ⌘ to see the agent's commands and insert one.",
             "Tip: long-press any text to copy it.",
             "Tip: the history icon in the header reopens a past conversation.",
-            "Tip: the Context button shows window use, cost and the session file.",
+            "Tip: the ring at the field's corner shows window use, cost and the session file.",
         )
         override val loadingConversation = "Opening the conversation…"
         override val placeholderAttachment = "Add a message for these images…"
@@ -114,7 +114,6 @@ internal object EnglishStrings : Strings {
                 "You can turn it on for this app in the system settings."
         override val cameraUnavailable = "No camera app on this device can take a photo."
 
-        override val contextDetails = "Context"
         override val contextEmpty = "Nothing sent yet"
         override fun cacheHit(percent: Int) = "Cache hit $percent%"
         override val cacheHitLabel = "Prompt cache hit rate"
@@ -904,6 +903,7 @@ internal object EnglishStrings : Strings {
     override val manual = object : Strings.Manual {
         override val title = "User manual"
         override val subtitle = "How this app works, start to finish"
+        override val contents = "Contents"
     }
 
     override val notes = object : Strings.Notes {

@@ -610,11 +610,13 @@ private fun MarkdownQuote(block: MdBlock.Quote, style: InlineStyle) {
 private fun ScrollableFormula(content: @Composable () -> Unit) {
     val state = rememberScrollState()
     // The fade has to be the colour *behind* the formula, because it hides the ink it
-    // fades out. `surfaceContainer` is that colour at both call sites in Miuix's scheme:
-    // the answer's card is drawn with it, and the page behind the manual is `background`,
-    // which the library gives the same value (`#FFFFFF` light, `#242424` dark). The
-    // Material3 version of this line had to pick one of the two and be slightly wrong on
-    // the other page.
+    // fades out. `surfaceContainer` is that colour: a formula is drawn inside a card —
+    // the answer's, a tool's panel, a prompt's — and every card the transcript draws is
+    // `surfaceContainer`. The manual page's own background used to be the library's
+    // `background` (#FFFFFF / #242424), which equals this role; the page paints
+    // `surface` now, so a formula set directly on the *page* would fade to the card's
+    // colour rather than the page's. None is: the manual's prose carries no math, and
+    // every formula in this app sits in a card.
     val fade = MiuixTheme.colorScheme.surfaceContainer
     val thumb = MiuixTheme.colorScheme.onSurfaceContainerVariant
     Box(

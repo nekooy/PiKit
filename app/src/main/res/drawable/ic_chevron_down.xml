@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The disclosure mark: Lucide's `chevron-down`.
+
+    Three controls on the transcript open something — a turn's fold band, a tool call's
+    output, a message's reasoning — and all three take this one glyph, turned 180° when
+    open (`DisclosureChevron`). It was the library's `ExpandMore`, which is a *filled*
+    caret: at 16dp beside 13sp labels it read as a heavier object than the text it
+    belonged to, and a filled triangle is the figure a spinner or a play button uses,
+    not the figure a disclosure uses. A 2-of-24 stroke at the weight of `ic_check.xml`
+    sits beside the labels instead of over them.
+
+    Provenance: Lucide (ISC), 24-unit grid, stroke 2 of 24, round caps:
+
+        m6 9 6 6 6-6
+
+    Source: https://github.com/lucide-icons/lucide
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:pathData="M6 9 L12 15 L18 9"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

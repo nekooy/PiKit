@@ -62,7 +62,6 @@ import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -543,12 +542,17 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
 
             // The panel is the only filled surface a tool call has, so it says "this
             // is the thing you opened" without decorating every closed row in the
-            // turn. It is one step past the card it sits in — the card is
-            // `surfaceContainer`, so an inset inside it is `…High` — and at the dense
-            // row radius, which is the same step and the same shape as the reasoning
-            // panel beside it: two expanded blocks in one turn are one shape.
+            // turn.
+            //
+            // `PiTone.inset()` rather than the palette's high surface step, which is
+            // what this was: in the dark scheme `surfaceContainerHigh` *is*
+            // `surfaceContainer` (#242424 both), so the panel had no fill of its own
+            // there — the output of a tool call ran straight into the card behind it
+            // and the only boundary left was the divider. The wash is a step in both
+            // schemes (#E6E6E6 on the white card, #3D3D3D on the dark one) because it
+            // is a contrast rather than a colour; see `PiTone.inset`'s KDoc.
             Surface(
-                color = MiuixTheme.colorScheme.surfaceContainerHigh,
+                color = PiTone.inset(),
                 shape = ROW_SHAPE,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -696,6 +700,13 @@ internal fun Modifier.disclosureClickable(
  * on the control in another. A reader does not need to be told these are the same
  * gesture; they should not have to work it out either.
  *
+ * The glyph is Lucide's `chevron-down` (`ic_chevron_down.xml`) rather than the
+ * library's `ExpandMore`, and the difference is what the row *looks* like: the
+ * library's is a filled caret, which at 16dp beside a 13sp label reads as a heavier
+ * object than the label it belongs to, and a filled triangle is the figure a spinner
+ * or a play control uses. The stroke is 2 of 24 — the weight of `ic_check.xml`, which
+ * this page already draws beside text.
+ *
  * The label belongs to the *control*, not to the arrow: a screen reader reaching a
  * tappable row should hear what the row does, and an arrow inside it is decoration.
  * Each caller passes its own through `onClickLabel`.
@@ -719,7 +730,7 @@ internal fun DisclosureChevron(
         label = "disclosure-chevron",
     )
     Icon(
-        imageVector = MiuixIcons.ExpandMore,
+        painter = painterResource(R.drawable.ic_chevron_down),
         contentDescription = null,
         modifier = modifier
             .size(CHEVRON_SIZE)
@@ -844,19 +855,20 @@ internal fun ReasoningToggle(
  * viewport: enough to read the shape of the thinking, short enough that the answer is
  * always on screen under it, and scrollable in place when it is not.
  *
- * ## Why the fill is a step *past* its container
+ * ## Why the fill is the quotation wash
  *
- * The block is drawn inside the answer's card, which is `surfaceContainer`, so its
- * own fill is `surfaceContainerHigh`: an inset reads one step away from the surface
- * it sits on in both schemes, and at three steps it would read as a different panel
- * rather than as a step — the mistake the palette's own note warns about. Same shape
- * as the tool output panel beside it, [ROW_SHAPE], because the two are the same
- * thing: an information-dense inset inside a turn.
+ * The block is drawn inside the answer's card, and its fill is `PiTone.inset()` — the
+ * same step the tool output panel and every code block take. It used to be
+ * `surfaceContainerHigh`, "one step past the card's `surfaceContainer`", which is a
+ * step in the light scheme and *no* step at all in the dark one, where the palette
+ * gives both roles #242424; there the reasoning floated with no panel around it.
+ * Same shape as the tool output panel beside it, [ROW_SHAPE], because the two are the
+ * same thing: an information-dense inset inside a turn.
  */
 @Composable
 internal fun ReasoningBlock(thinking: String) {
     Surface(
-        color = MiuixTheme.colorScheme.surfaceContainerHigh,
+        color = PiTone.inset(),
         shape = ROW_SHAPE,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -1058,7 +1070,7 @@ internal fun TurnSummaryRow(
  * emphasis, a thing that is running, and a thing that failed. The kit names the two
  * that a Miuix palette has no single role for ([PiTone.live] and [PiTone.error], drawn
  * from the tertiary and error pairs); the other two are the palette's own `primary` and
- * its high surface step. A call site picks a meaning and the roles follow, which is
+ * its quotation wash. A call site picks a meaning and the roles follow, which is
  * what stops this page's "warning" from being another page's "information".
  */
 internal enum class ChatTone {
@@ -1070,7 +1082,12 @@ internal enum class ChatTone {
 
     @Composable
     fun container(): Color = when (this) {
-        Neutral -> MiuixTheme.colorScheme.surfaceContainerHigh
+        // The wash, not `surfaceContainerHigh`: a status pill is drawn *on* the answer
+        // card, and in the dark scheme the high surface step is the card's own #242424
+        // — the pill the tool's name sits in had no fill of its own there, so the name
+        // read as bare text with a tick after it. `inset()` is a step on whatever it is
+        // drawn over, which is the property a pill needs.
+        Neutral -> PiTone.inset()
         Accent -> MiuixTheme.colorScheme.primaryContainer
         Live -> PiTone.liveContainer()
         Danger -> PiTone.errorContainer()

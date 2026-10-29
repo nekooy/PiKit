@@ -362,9 +362,6 @@ interface Strings {
         val cameraDenied: String
         val cameraUnavailable: String
 
-        /** The percent chip's own name, and the title of what it opens. */
-        val contextDetails: String
-
         /**
          * How much of the last request's input the provider served from its prompt
          * cache — the number that says whether the conversation is being re-billed
@@ -1741,6 +1738,15 @@ interface Strings {
     interface Manual {
         val title: String
         val subtitle: String
+
+        /**
+         * The label over the chapter chips at the top of the manual.
+         *
+         * The chapters themselves are read from the prose's own `##` headings, so a
+         * manual in any language gets its own table of contents without a second list
+         * to keep in step. This is the one word that is *not* in the prose.
+         */
+        val contents: String
     }
 
     /** Long prose blocks that belong to the About page. */

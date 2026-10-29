@@ -486,18 +486,20 @@ private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // Both sit together on the trailing edge — Restore, Save — rather than
-                // split across the row, with room under them so the sheet's last control
-                // is not against the panel edge. There is no Cancel: the scrim, the back
+                // The pair splits the row — Restore, then Save — with room under them so
+                // the sheet's last control is not against the panel edge. It used to be
+                // sized to its words on the trailing edge; a sheet's footer is the same
+                // shape as a form's, so the two buttons are halves here as they are on
+                // every page that ends in a pair. There is no Cancel: the scrim, the back
                 // gesture and a downward drag all leave the sheet without saving.
                 .padding(top = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
-            Spacer(Modifier.weight(1f))
             SettingsAction(
                 text = text.settings.agentContextRestore,
                 onClick = { confirmRestore = true },
+                modifier = Modifier.weight(1f),
             )
             SettingsAction(
                 text = text.settings.agentContextSave,
@@ -513,6 +515,7 @@ private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
                     saved = written
                     if (written) session.scheduleRestart()
                 },
+                modifier = Modifier.weight(1f),
             )
         }
     }

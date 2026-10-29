@@ -45,7 +45,7 @@ internal object JapaneseStrings : Strings {
             "ヒント：⌘ でエージェントのコマンド一覧を開けます。",
             "ヒント：テキストを長押しするとコピーできます。",
             "ヒント：ヘッダーの履歴アイコンから過去の会話に戻れます。",
-            "ヒント：コンテキストのボタンで使用量とコストを確認できます。",
+            "ヒント：入力欄の右下のリングで使用量とコストを確認できます。",
         )
         override val loadingConversation = "会話を開いています…"
         override val placeholderAttachment = "この画像についての指示を入力…"
@@ -115,7 +115,6 @@ internal object JapaneseStrings : Strings {
             "カメラの権限がないため撮影できません。システム設定でこのアプリに権限を与えてください。"
         override val cameraUnavailable = "この端末には撮影できるカメラアプリがありません。"
 
-        override val contextDetails = "コンテキスト"
         override val contextEmpty = "まだ送信していません"
         override fun cacheHit(percent: Int) = "キャッシュ命中 $percent%"
         override val cacheHitLabel = "プロンプトキャッシュ命中率"
@@ -852,6 +851,7 @@ internal object JapaneseStrings : Strings {
     override val manual = object : Strings.Manual {
         override val title = "ユーザーマニュアル"
         override val subtitle = "このアプリの使い方を最初から"
+        override val contents = "目次"
     }
 
     override val notes = object : Strings.Notes {

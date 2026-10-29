@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The stop mark: a filled rounded square.
+
+    The send control becomes this one while an answer streams, and the pair is the
+    arrangement every chat app uses — an arrow to send, a square to stop. The library's
+    `Pause` (two bars) is the *media* figure: it means "pause playback", which a chat
+    answer is not, and beside an arrow it read as a second, unrelated control.
+
+    ## Geometry
+
+    A square from 6 to 18 units of the 24-unit grid with 2-unit corners, filled. That is
+    the same figure the platforms' own stop buttons draw (Material's `stop` is the sharp
+    version of it), and the corner radius matches the composer frame's rounding at the
+    size the button draws it — 12 of 24 units of ink in a 40dp disc, about a third of
+    the disc, which is the proportion the reference implementations use.
+
+    It is a *primitive* rather than a borrowed glyph: a square is geometry, not a
+    drawing, and there is no icon set's version of it to copy. See ARCHITECTURE §12.3 for
+    the rule this sits inside — the concern there is a figure that has to be *drawn*,
+    and nothing here is drawn.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:pathData="M8 6 L16 6 A2 2 0 0 1 18 8 L18 16 A2 2 0 0 1 16 18 L8 18 A2 2 0 0 1 6 16 L6 8 A2 2 0 0 1 8 6 Z"
+        android:fillColor="#FF000000" />
+</vector>
