@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,10 +59,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
@@ -435,13 +439,28 @@ private fun RootContent(
         // The modifiers are on the crossfade itself and there is no wrapper `Box`:
         // the scaffold already paints `surface`, and a `Box` around a single child
         // that paints the same colour again was a third copy of one background.
+        //
+        // The keyboard padding is `imePaddingFloor`, not `imePadding`: the platform's
+        // inset animation ends in steps too fine to see — a close measured on the
+        // emulator reported `ime` … 125 → 94 → 32 → 10 → 5 → 1 → 0 px — and accepting
+        // every step has the page crawling over its last few frames, which is the
+        // beat the reader called "the input box slides down slowly". Below one step
+        // of the ramp the page's own travel is sub-pixel; the floor lands it instead,
+        // and the keyboard's remaining sliver is covered by the page for those
+        // frames. ChatScreen's composer gap uses the same trick over its last 10dp.
+        // `consumeWindowInsets(padding)` above only speaks to `windowInsetsPadding`-
+        // shaped modifiers, so the bar's height is subtracted here by hand — it is
+        // what `imePadding` would have consumed.
+        val density = LocalDensity.current
+        val ime = WindowInsets.ime
+        val barBottomPx = with(density) { padding.calculateBottomPadding().roundToPx() }
         Crossfade(
             targetState = destination,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .consumeWindowInsets(padding)
-                .imePadding(),
+                .imePaddingFloor(density, ime, barBottomPx),
             label = "tab",
         ) { shown ->
             when (shown) {
@@ -882,3 +901,64 @@ private val SETUP_MARK_FIELD = Color(0xFF151A22)
 private val SETUP_PRIMARY = Color(0xFFF2F4F8)
 private val SETUP_SECONDARY = Color(0xFF9AA3B2)
 private val SETUP_TERTIARY = Color(0xFF69717F)
+
+/**
+ * The keyboard inset as bottom padding, with a floor under the tail of its close.
+ *
+ * `imePadding` accepts every step the platform reports, and the close's tail is a
+ * staircase of steps too fine to see — a close on the emulator measured
+ * `ime` … 125 → 94 → 32 → 10 → 5 → 1 → 0 px at 20–30 ms apart. The page follows every
+ * one of them, so its last few frames move it 1–10 px at a time while nothing else on
+ * screen moves: the crawl the reader described as "the input box slides down slowly"
+ * after the keyboard itself is gone. Below [IME_PADDING_FLOOR] the remaining inset is
+ * shorter than the composer's own gap ramp, the page's travel for that step is
+ * sub-pixel, and the keyboard's leftover sliver — a few pixels of its background
+ * rising past the page's bottom — is behind the page, not beside it. So the page
+ * lands instead of crawling, one step earlier than the inset reports zero.
+ *
+ * A layout-phase read like `imePadding` itself (ChatScreen's composer gap gives the
+ * reasoning for that in full): the value moves per frame either way, and a
+ * composition-phase read would rebuild every page for each step of the animation.
+ */
+private fun Modifier.imePaddingFloor(
+    density: Density,
+    ime: WindowInsets,
+    consumedBelow: Int,
+): Modifier = layout { measurable, constraints ->
+    val bottom = (ime.getBottom(density) - consumedBelow).coerceAtLeast(0)
+    val floored = if (bottom in 1 until IME_PADDING_FLOOR.roundToPx()) 0 else bottom
+    // Two constraints-modifier traps, both hit while the activity's window was
+    // animating out: an *unbounded* incoming height cannot have the inset
+    // subtracted from it — the sentinel `Constraints.Infinity` is not a number, and
+    // `infinity - inset` packs back into a value that corrupts the neighbouring
+    // fields (`IllegalArgumentException: maxWidth must be >= than minWidth`) — and
+    // `copy` clamps minWidth to the new maxHeight before maxWidth, so a height
+    // reduction must zero the minimum itself to stay legal. The floor only matters
+    // below 12dp, where an unbounded measure pass is not drawing anything the
+    // reader can see anyway.
+    val applied = if (constraints.hasBoundedHeight) {
+        floored.coerceAtMost(constraints.maxHeight)
+    } else {
+        0
+    }
+    val inner = if (applied > 0) {
+        constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - applied)
+    } else {
+        constraints
+    }
+    val placeable = measurable.measure(inner)
+    // The reported height is the child's **plus** the padding — the strip the child
+    // no longer occupies — never the child's minus it.
+    layout(placeable.width, placeable.height + applied) {
+        placeable.placeRelative(0, 0)
+    }
+}
+
+/**
+ * The inset height below which the page lands rather than follows the keyboard out.
+ *
+ * Two steps of the measured staircase (32 px is one; 10, 5 and 1 follow it) plus the
+ * gap ramp's own last step: anything this short is over in two frames on the emulator
+ * and invisible on a device, while following it is the crawl.
+ */
+private val IME_PADDING_FLOOR = 12.dp
