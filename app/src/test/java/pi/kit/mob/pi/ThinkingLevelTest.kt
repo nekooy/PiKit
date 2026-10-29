@@ -72,14 +72,118 @@ class ThinkingLevelTest {
         // then moving — without rewriting the preference, which is what used to
         // happen and which is how a non-reasoning model turned thinking off for good.
         val remembered = deepseekFlash
-        assertEquals(deepseekFlash, thinkingLevelsFor(emptyList(), remembered))
-        assertEquals("high", clampThinkingLevel("medium", thinkingLevelsFor(emptyList(), remembered)))
+        assertEquals(deepseekFlash, levels(remembered = remembered))
+        assertEquals("high", clampThinkingLevel("medium", levels(remembered = remembered)))
         // pi's answer for the model that is running always wins over the memory.
-        assertEquals(deepseekPro, thinkingLevelsFor(deepseekPro, remembered))
+        assertEquals(deepseekFlash, levels(live = deepseekFlash, liveFor = "deepseek-flash"))
         // And with neither, the preference is shown unclamped.
-        assertTrue(thinkingLevelsFor(emptyList(), emptyList()).isEmpty())
-        assertEquals("medium", clampThinkingLevel("medium", thinkingLevelsFor(emptyList(), emptyList())))
+        assertTrue(levels().isEmpty())
+        assertEquals("medium", clampThinkingLevel("medium", levels()))
     }
+
+    @Test
+    fun `the levels offered for a model are its catalogue entry's`() {
+        // The other half of "switching the model leaves the previous model's menu up
+        // for a second": the list is a property of one model's `thinkingLevelMap`, and
+        // the file that states it is already on disk, so the picker does not have to
+        // wait for the two RPC replies a switch causes.
+        assertEquals(
+            deepseekFlash,
+            levels(modelId = "deepseek-v4-pro", catalogued = deepseekFlash),
+        )
+        // A live answer for *another* model is not an answer, and counting it as one is
+        // the bug: after `set_model`, pi's list is still the previous model's until its
+        // second reply lands.
+        assertEquals(
+            deepseekPro,
+            levels(
+                live = deepseekFlash,
+                liveFor = "deepseek-flash",
+                modelId = "deepseek-v4-pro",
+                remembered = deepseekPro,
+            ),
+        )
+        // A live answer for *this* model outranks both caches.
+        assertEquals(
+            deepseekPro,
+            levels(
+                live = deepseekPro,
+                liveFor = "deepseek-v4-pro",
+                modelId = "deepseek-v4-pro",
+                remembered = deepseekFlash,
+                catalogued = deepseekFlash,
+            ),
+        )
+        // Neither a live answer nor a memory nor a catalogue entry: nothing is known and
+        // the caller falls back to pi's seven, which is what the app offered before any
+        // of this existed.
+        assertTrue(levels(modelId = "a-model-nobody-lists").isEmpty())
+    }
+
+    @Test
+    fun `the catalogue's thinkingLevelMap is read the way pi reads it`() {
+        // pi's rule, on the maps the bundled catalogue actually ships. The two expected
+        // answers are the two the RPC was measured giving (§7.2's table).
+        assertEquals(
+            listOf("off", "low", "high", "max"),
+            supportedThinkingLevels(
+                reasoning = true,
+                thinkingLevelMap = mapOf(
+                    "minimal" to null,
+                    "low" to "low",
+                    "medium" to null,
+                    "high" to "high",
+                    "max" to "max",
+                ),
+            ),
+        )
+        // The fallback model (`deepseek-v4-pro`): `minimal`, `low` and `medium` are all
+        // refused, and `max` is named — three levels. Captured from the bundled
+        // `deepseek.json`, so a pi update that changes a map lands here rather than on a
+        // chip that offers a level the phone cannot use.
+        assertEquals(
+            listOf("off", "high", "max"),
+            supportedThinkingLevels(
+                reasoning = true,
+                thinkingLevelMap = mapOf(
+                    "minimal" to null,
+                    "low" to null,
+                    "medium" to null,
+                    "high" to "high",
+                    "max" to "max",
+                ),
+            ),
+        )
+        // `xhigh` and `max` are opt-in, and every other level is opt-*out*: a map that
+        // does not mention `low` still has `low`. That asymmetry is pi's rule, not a
+        // reading of it, and it is why a map is never treated as a whitelist.
+        assertEquals(
+            listOf("off", "minimal", "low", "medium", "high"),
+            supportedThinkingLevels(true, emptyMap()),
+        )
+        assertEquals(
+            listOf("off", "minimal", "low", "medium", "high", "max"),
+            supportedThinkingLevels(true, mapOf("max" to "max")),
+        )
+        // A model with no reasoning support answers with one level, whatever its map
+        // claims — the case that used to turn thinking off for every model.
+        assertEquals(
+            listOf("off"),
+            supportedThinkingLevels(false, mapOf("high" to "high", "max" to "max")),
+        )
+    }
+
+    /**
+     * [thinkingLevelsFor] with the defaults a picker has on a first frame, so each test
+     * below states only the source it is about.
+     */
+    private fun levels(
+        live: List<String> = emptyList(),
+        liveFor: String? = null,
+        modelId: String? = "deepseek-flash",
+        remembered: List<String> = emptyList(),
+        catalogued: List<String> = emptyList(),
+    ): List<String> = thinkingLevelsFor(live, liveFor, modelId, remembered, catalogued)
 
     @Test
     fun `the remembered levels are only used for the model they were measured on`() {
@@ -113,7 +217,7 @@ class ThinkingLevelTest {
         // over: pi's seven, which is what pi itself answers when it has no model.
         val none = saved.rememberedThinkingLevels("something-else")
         assertTrue(none.isEmpty())
-        assertTrue(thinkingLevelsFor(emptyList(), none).isEmpty())
+        assertTrue(levels(modelId = "something-else", remembered = none).isEmpty())
     }
 
 }

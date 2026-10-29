@@ -1130,3 +1130,41 @@ internal fun anyProviderModelFacts(store: File): Map<String, JsonObject> {
     }
     return merged
 }
+
+/**
+ * Every model's thinking levels as pi's catalogue on disk states them, keyed by id.
+ *
+ * This is the *third* source `thinkingLevelsFor` consults, and the only one that needs
+ * nothing running: `get_available_thinking_levels` is a round trip to a node process,
+ * while these facts are already in the file the launch path refreshes for every built-in
+ * provider (§7.2). The gap it closes is the one a reader sees: switch the model on the
+ * composer and the picker used to offer the *previous* model's levels — pi's seven when
+ * the first answer of the run had been about a model with more of them — until two round
+ * trips had landed. With the catalogue read ahead of time the new model's own list is on
+ * the frame the switch lands on.
+ *
+ * An entry with neither a `reasoning` flag nor a `thinkingLevelMap` is **silent** about
+ * levels, and silence is left as silence rather than read as "no reasoning": the caller's
+ * fallback to pi's seven is a better answer than a one-row menu this function invented.
+ * An entry that names a map but no flag is a reasoning model — a model pi gives a
+ * `thinkingLevelMap` is one it thinks with — and one that says `reasoning: false` answers
+ * `["off"]`, which is pi's own answer for it rather than a gap here. Nothing is remembered
+ * for an id the store does not hold.
+ */
+internal fun readCatalogueThinkingLevels(store: File): Map<String, List<String>> {
+    val levels = LinkedHashMap<String, List<String>>()
+    for ((id, facts) in anyProviderModelFacts(store)) {
+        val reasoning = (facts["reasoning"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+        val map = facts["thinkingLevelMap"] as? JsonObject
+        if (reasoning == null && map == null) continue
+        levels[id] = supportedThinkingLevels(
+            reasoning = reasoning ?: true,
+            thinkingLevelMap = map?.mapValues { (_, value) ->
+                // A JSON `null` is the catalogue saying "this model cannot do it", which
+                // is not the same as the key being absent — see `supportedThinkingLevels`.
+                (value as? JsonPrimitive)?.contentOrNull
+            },
+        )
+    }
+    return levels
+}

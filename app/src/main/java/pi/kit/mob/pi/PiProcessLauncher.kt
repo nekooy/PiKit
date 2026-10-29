@@ -141,27 +141,82 @@ fun clampThinkingLevel(level: String, available: List<String>): String {
 }
 
 /**
- * The levels to offer and to clamp against: pi's answer for the model that is
- * running, or the last answer it gave **for that same model**.
+ * The levels the model itself leaves on the menu — pi's `getSupportedThinkingLevels`
+ * on plain data.
  *
- * The memory is a cache of pi's answer, and it is per model: the levels are a
- * property of the model's own `thinkingLevelMap`, so `deepseek-v4-pro`'s three and
- * `deepseek-flash`'s four are not interchangeable. Which is why the caller must pass
- * a list that has already been checked against the model in use
- * ([pi.kit.mob.data.PiSettings.rememberedThinkingLevels]) rather than the raw stored
- * one — remembering levels without remembering the model they were about is how a
- * picker comes to show the previous model's menu for the second between a switch and
- * pi's answer.
+ * ## Why the app computes this at all
  *
- * What the memory buys is that the chip does not jump — the saved preference is
- * `medium`, the model offers `high` and `max`, and without a remembered list the chip
- * reads `medium` until `get_state` lands and then moves. It is *not* there to change
- * what is sent: the preference reaches `--thinking` untouched and pi clamps it, which
- * is the whole reason [clampThinkingLevel] exists as a display rule rather than a
- * rewrite of the setting.
+ * pi answers it over RPC (`get_available_thinking_levels`), and that answer is the
+ * authority. This exists for the one case the RPC cannot cover: *before* it arrives
+ * — most visibly on the frame after the model is switched, where pi is still
+ * reporting the previous model's levels. The facts needed to answer it earlier are
+ * already on disk in pi's own catalogue (§7.2), so the menu does not have to wait the
+ * two round trips for an answer the catalogue has been carrying all along.
+ *
+ * ## The rule, stated the way pi states it
+ *
+ * `EXTENDED_THINKING_LEVELS — off, minimal, low, medium, high, xhigh, max — filtered
+ * through the model's `thinkingLevelMap`:
+ *
+ *  - a model with `reasoning: false` supports exactly `["off"]`, whatever its map says;
+ *  - a level the map spells `null` is not supported;
+ *  - `xhigh` and `max` are supported only when the map *names* them, because they are
+ *    the two a provider has to opt into; every other level is supported unless the map
+ *    refuses it.
+ *
+ * [thinkingLevelMap] is that map as a plain Kotlin map, so this file stays JSON-free: a
+ * key that is *absent* and a key whose value is null mean different things above, and a
+ * `Map<String, String?>` can say both. Measured against the bundled catalogue: DeepSeek's
+ * `{minimal: null, low, medium: null, high, max}` gives `[off, low, high, max]`, and the
+ * fallback model's `{minimal, low: null, medium: null, high, max}` gives `[off, high,
+ * max]` — the two answers the app was built against (§7.2's table).
  */
-fun thinkingLevelsFor(live: List<String>, remembered: List<String>): List<String> =
-    live.filter { it.isNotBlank() }.ifEmpty { remembered.filter { it.isNotBlank() } }
+fun supportedThinkingLevels(
+    reasoning: Boolean,
+    thinkingLevelMap: Map<String, String?>?,
+): List<String> {
+    if (!reasoning) return listOf("off")
+    return PiLaunchOptions.THINKING_LEVELS.filter { level ->
+        when {
+            thinkingLevelMap?.containsKey(level) != true -> level != "xhigh" && level != "max"
+            thinkingLevelMap[level] == null -> false
+            else -> true
+        }
+    }
+}
+
+/**
+ * The levels to offer and to clamp against, for one model.
+ *
+ * Three sources, cheapest first, and each is a statement about **one model**:
+ *
+ *  1. **[live]** — pi's live answer, but only when [liveFor] says it was an answer for
+ *     [modelId]. Without that key the list is the *previous* model's for as long as pi
+ *     takes to answer for the new one, and a picker built from it offers levels the
+ *     model in front of the reader does not have (§7.2).
+ *  2. **[remembered]** — the last answer pi gave for this same model, kept in
+ *     `PiSettings.availableThinkingLevels` and already keyed by the caller.
+ *  3. **[catalogued]** — the model's own entry in pi's catalogue on disk
+ *     (`thinkingLevelMap`), which is what makes the switch immediate rather than two
+ *     round trips behind: the file is already there, so the reader sees `deepseek-flash`'s
+ *     four levels on the frame the model changes.
+ *
+ * Empty means "nothing knows this model", and the caller falls back to pi's seven — the
+ * same answer the app gave before it had any of these sources.
+ */
+fun thinkingLevelsFor(
+    live: List<String>,
+    /** The model [live] was pi's answer for; null when pi has not answered yet. */
+    liveFor: String?,
+    /** The model the caller is asking about — the one the next message goes with. */
+    modelId: String?,
+    remembered: List<String>,
+    catalogued: List<String>,
+): List<String> {
+    val clean = { levels: List<String> -> levels.filter { it.isNotBlank() } }
+    if (live.isNotEmpty() && liveFor != null && liveFor == modelId) return clean(live)
+    return clean(remembered).ifEmpty { clean(catalogued) }
+}
 
 /**
  * Spawns the agent process inside the bundled Termux runtime.

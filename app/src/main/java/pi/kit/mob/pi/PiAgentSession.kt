@@ -122,6 +122,24 @@ class PiAgentSession private constructor(context: Context) {
     private val _conversation = MutableStateFlow(ConversationState())
     val conversation: StateFlow<ConversationState> = _conversation.asStateFlow()
 
+    private val _catalogueThinkingLevels = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+
+    /**
+     * The thinking levels each catalogued model declares, keyed by model id.
+     *
+     * pi's live answer (`get_available_thinking_levels`) is the authority for the model
+     * that is running, and it stays first in `thinkingLevelsFor`. This is the *file*
+     * the same facts are in, read ahead of the process: pi's store on disk carries every
+     * built-in provider's catalogue (§7.2), so the composer can offer a model's own
+     * levels on the frame the reader switches to it instead of two round trips later.
+     *
+     * Empty until [reloadCatalogueThinkingLevels] has read the store — on the launch
+     * path and after a refresh — which reads as "nothing is known about this model" and
+     * falls back to pi's seven, exactly as the app did before it had this.
+     */
+    val catalogueThinkingLevels: StateFlow<Map<String, List<String>>> =
+        _catalogueThinkingLevels.asStateFlow()
+
     private var client: PiRpcClient? = null
     private var recordJob: Job? = null
 
@@ -357,6 +375,11 @@ class PiAgentSession private constructor(context: Context) {
         stopRequested = false
         if (!ensureEnvironment()) return false
 
+        // The catalogue's thinking levels, before the process that would answer them:
+        // the composer's picker reads this while pi is still starting, and a model
+        // switch must not wait for a handshake to know what the new model can do.
+        scope.launch { reloadCatalogueThinkingLevels() }
+
         val cliEntry = PiInstallation.cliEntry(env)
         if (cliEntry == null) {
             _agent.value = AgentStatus.Failed(
@@ -587,6 +610,22 @@ class PiAgentSession private constructor(context: Context) {
         catalogueRefreshDue(now, cataloguePrefs.getLong(KEY_CATALOGUE_DUE_AT, 0L))
 
     /**
+     * Re-reads [catalogueThinkingLevels] out of pi's store on disk.
+     *
+     * Called on the launch path and after every catalogue refresh, which are the only
+     * two moments the file can move: the store is written by `pi update --models` and by
+     * nothing else. A read that finds an empty store — a fresh install before the first
+     * refresh — leaves the published map alone rather than clearing what a previous read
+     * found, because "the file is empty now" is not a fact about any model.
+     */
+    private suspend fun reloadCatalogueThinkingLevels() {
+        val levels = withContext(Dispatchers.IO) {
+            readCatalogueThinkingLevels(File(env.piConfigDir, CATALOGUE_STORE_NAME))
+        }
+        if (levels.isNotEmpty()) _catalogueThinkingLevels.value = levels
+    }
+
+    /**
      * Runs the catalogue refresh, whatever the deadline says, and reports what it found.
      *
      * The one entry point for both callers: the launch path
@@ -644,6 +683,10 @@ class PiAgentSession private constructor(context: Context) {
                 )
                 .apply()
             if (!succeeded) return false
+            // What the composer reads ahead of pi is this file, so it is re-read on
+            // every successful refresh — including the one whose revision did not move,
+            // which on a first run is the read that fills it.
+            reloadCatalogueThinkingLevels()
             // The file is rewritten by every refresh; the catalogue is not. See the
             // note above: comparing the file made this a restart loop.
             if (store.catalogueContent() == before) return false

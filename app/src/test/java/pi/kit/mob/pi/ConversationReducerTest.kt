@@ -159,6 +159,40 @@ class ConversationReducerTest {
         assertTrue(state.availableThinkingLevels.isEmpty())
     }
 
+    /**
+     * The levels are recorded with the model they were answered *for*, and dropped when
+     * the model moves.
+     *
+     * A model switch is two replies — `get_state`, then the levels — so between them a
+     * keyless list is the previous model's menu. The picker offered pi's seven over a
+     * model that has four in exactly that window; the fix is that the list a switch
+     * invalidates stops being an answer at the moment `get_state` names a new model.
+     */
+    @Test
+    fun `the thinking levels are keyed by the model they were answered for`() {
+        val onFlash = fold(
+            """{"id":"1","type":"response","command":"get_state","success":true,"data":{"model":{"id":"deepseek-flash","name":"deepseek-flash","provider":"deepseek","api":"openai-completions","contextWindow":1000000,"input":["text"]},"thinkingLevel":"high","sessionId":"x"}}""",
+        )
+        val withLevels = ConversationReducer.reduce(
+            onFlash,
+            PiRecordParser.parse(
+                """{"id":"2","type":"response","command":"get_available_thinking_levels","success":true,"data":{"levels":["off","low","high","max"]}}""",
+            ),
+        )
+        assertEquals("deepseek-flash", withLevels.availableThinkingLevelsFor)
+        assertEquals(listOf("off", "low", "high", "max"), withLevels.availableThinkingLevels)
+
+        // The first reply of a switch: a different model, and no list for it yet.
+        val switched = ConversationReducer.reduce(
+            withLevels,
+            PiRecordParser.parse(
+                """{"id":"3","type":"response","command":"get_state","success":true,"data":{"model":{"id":"deepseek-v4-pro","name":"deepseek-v4-pro","provider":"deepseek","api":"openai-completions","contextWindow":1000000,"input":["text"]},"thinkingLevel":"high","sessionId":"x"}}""",
+            ),
+        )
+        assertTrue("the previous model's menu is not this model's", switched.availableThinkingLevels.isEmpty())
+        assertNull(switched.availableThinkingLevelsFor)
+    }
+
     @Test
     fun `agent_end does not mark the agent idle but agent_settled does`() {
         val afterStart = fold("""{"type":"agent_start"}""")

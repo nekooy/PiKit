@@ -1518,16 +1518,70 @@ private fun sheetBottomInset(): Dp =
  * high" exactly, and it is a lookup against the wrong key rather than a missing one:
  * [PiSettings.modelId] is the profile's model, i.e. the model the agent was
  * *launched with*, so it is the right key on the very first frame.
+ *
+ * ## Why the live level is clamped as well
+ *
+ * pi's `get_state` and pi's level list are two replies, and a model switch produces
+ * both: between them the *live level* is still the previous model's while the levels
+ * belong to the new one — or, before [ConversationState.availableThinkingLevelsFor]
+ * existed, the other way round. Clamping is idempotent for a level pi really is on
+ * (pi clamps too), so the only case it changes is the stale one, where it shows what pi
+ * is about to report anyway. §7.2 has the report this answers.
  */
-private fun thinkingLevelOf(state: ConversationState, saved: PiSettings): String =
-    state.thinkingLevel?.takeIf { it.isNotBlank() }
-        ?: clampThinkingLevel(
-        saved.thinkingLevel,
-        thinkingLevelsFor(
-            state.availableThinkingLevels,
-            saved.rememberedThinkingLevels(state.model?.id ?: saved.modelId),
-        ),
+private fun thinkingLevelOf(
+    state: ConversationState,
+    saved: PiSettings,
+    active: ModelProfile?,
+    catalogued: Map<String, List<String>>,
+): String = clampThinkingLevel(
+    state.thinkingLevel?.takeIf { it.isNotBlank() } ?: saved.thinkingLevel,
+    levelsFor(state, saved, active, catalogued),
+)
+
+/**
+ * The thinking levels to offer for the model the next message will be sent with.
+ *
+ * The model is [modelInUse]'s answer, and the list is [thinkingLevelsFor]'s: pi's live
+ * answer when it is an answer for *that* model, the list remembered for it, and pi's
+ * catalogue on disk — which is what makes a model switch show the new model's levels on
+ * the frame the switch lands rather than two round trips later.
+ */
+private fun levelsFor(
+    state: ConversationState,
+    saved: PiSettings,
+    active: ModelProfile?,
+    catalogued: Map<String, List<String>>,
+): List<String> {
+    val modelId = modelInUse(state, saved, active)
+    return thinkingLevelsFor(
+        live = state.availableThinkingLevels,
+        liveFor = state.availableThinkingLevelsFor,
+        modelId = modelId,
+        remembered = saved.rememberedThinkingLevels(modelId),
+        catalogued = modelId?.let { catalogued[it] }.orEmpty(),
     )
+}
+
+/**
+ * The model id a thinking question is about: the model the next message goes with.
+ *
+ * pi's own report wins **when the levels agree with it**, because pi is the authority on
+ * what is running — a `/model` typed into the composer moves the model without moving
+ * the profile. When they do not agree, the profile's choice is the answer: that is the
+ * model the app has just told pi to switch to, and it is also the only id there is on
+ * the frame the app opens, before `get_state` has said anything.
+ */
+private fun modelInUse(
+    state: ConversationState,
+    saved: PiSettings,
+    active: ModelProfile?,
+): String? {
+    val live = state.model?.id?.takeIf { it.isNotBlank() }
+    if (live != null && live == state.availableThinkingLevelsFor) return live
+    return active?.modelId?.takeIf { it.isNotBlank() }
+        ?: live
+        ?: saved.modelId.takeIf { it.isNotBlank() }
+}
 
 /**
  * A profile's provider, as the heading it groups its models under.
@@ -3045,6 +3099,10 @@ private fun Composer(
     // chip never has to wait for pi to answer `get_state`.
     val saved by session.settingsStore.settings.collectAsState()
 
+    // What pi's catalogue on disk says each model's levels are, so a model switch shows
+    // the new model's own list before pi has answered for it — see [levelsFor].
+    val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
+
     // Derived from the agent's actual state rather than from `enabled`. A
     // disabled field used to say "Starting the agent…" whatever the reason, so a
     // stopped agent produced a header reading 已停止 above a composer reading
@@ -3227,7 +3285,7 @@ private fun Composer(
                         // own text — measured from the code, 37dp of glyph and padding
                         // became ~89dp with "Medium". The same value the menu ticks
                         // and the settings row shows.
-                        label = thinkingLevelOf(state, saved),
+                        label = thinkingLevelOf(state, saved, config.activeProfile, catalogueLevels),
                         onClick = { onOpenSheet(ComposerSheet.Thinking) },
                     ) {
                         WindowListPopup(
@@ -4151,15 +4209,17 @@ private fun ThinkingMenu(
 ) {
     val live by session.conversation.collectAsState()
     val saved by session.settingsStore.settings.collectAsState()
-    // Live levels once the agent has answered for the model that is running, the
-    // remembered ones otherwise — see `thinkingLevelsFor`, and `thinkingLevelOf` for
-    // why the saved model id is the fallback key. The menu cannot offer a level the
-    // model does not have.
-    val available = thinkingLevelsFor(
-        live.availableThinkingLevels,
-        saved.rememberedThinkingLevels(live.model?.id ?: saved.modelId),
-    )
-    val current = thinkingLevelOf(live, saved)
+    // The profile is what says which model the *next* message goes with, and the
+    // catalogue on disk is what says which levels that model has — see [levelsFor].
+    // Together they are why the menu is right on the frame a model switch lands rather
+    // than two round trips later.
+    val config by session.settingsStore.profiles.snapshots.collectAsState()
+    val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
+    // pi's live answer when it is an answer for this model, then the list remembered for
+    // it, then its own catalogue entry. The menu cannot offer a level the model does not
+    // have.
+    val available = levelsFor(live, saved, config.activeProfile, catalogueLevels)
+    val current = thinkingLevelOf(live, saved, config.activeProfile, catalogueLevels)
     val options = available.takeIf { it.isNotEmpty() } ?: PiLaunchOptions.THINKING_LEVELS
     ListPopupColumn {
         options.forEachIndexed { index, level ->
@@ -4344,7 +4404,9 @@ private class ModelRow(
 private fun ContextMenu(session: PiAgentSession, text: Strings) {
     val state by session.conversation.collectAsState()
     val saved by session.settingsStore.settings.collectAsState()
-    val thinking = thinkingLevelOf(state, saved)
+    val config by session.settingsStore.profiles.snapshots.collectAsState()
+    val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
+    val thinking = thinkingLevelOf(state, saved, config.activeProfile, catalogueLevels)
     val usage = state.usage
     val context = usage.context
     val window = state.model?.contextWindow ?: 0

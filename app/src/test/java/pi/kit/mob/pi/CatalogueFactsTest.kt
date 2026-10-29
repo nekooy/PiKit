@@ -191,6 +191,42 @@ class CatalogueFactsTest {
     }
 
     @Test
+    fun `every model's thinking levels are read out of the store`() {
+        // The composer's picker asks this while pi is still starting, and on the frame a
+        // model switch lands: the levels are a property of the model's own
+        // `thinkingLevelMap`, and they are already on disk, so the menu does not have to
+        // wait for the two RPC replies a switch causes (§7.2).
+        val document = """
+            {
+              "deepseek": {
+                "models": [
+                  {"id": "deepseek-flash", "reasoning": true,
+                   "thinkingLevelMap": {"minimal": null, "low": "low", "medium": null,
+                                        "high": "high", "max": "max"}},
+                  {"id": "deepseek-chat", "reasoning": false},
+                  {"id": "deepseek-v4-pro", "reasoning": true,
+                   "thinkingLevelMap": {"minimal": null, "low": null, "medium": null,
+                                        "high": "high", "max": "max"}},
+                  {"id": "deepseek-silent"}
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val levels = readCatalogueThinkingLevels(store(document))
+
+        assertEquals(listOf("off", "low", "high", "max"), levels["deepseek-flash"])
+        // A model with no reasoning support answers with one level, which is pi's own
+        // answer for it rather than a gap here.
+        assertEquals(listOf("off"), levels["deepseek-chat"])
+        // The map's three refusals and one named opt-in: pi's three-level answer for it.
+        assertEquals(listOf("off", "high", "max"), levels["deepseek-v4-pro"])
+        // An entry that says nothing about levels is left out, so the picker's own
+        // fallback to pi's seven still applies to it: silence is not "no reasoning".
+        assertNull(levels["deepseek-silent"])
+    }
+
+    @Test
     fun `a store that is missing, blank or not an object answers nothing`() {
         // Each of these leaves the process as the only recourse, which is the behaviour
         // before there was a store to read at all. None of them may throw: this runs on the

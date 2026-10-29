@@ -222,6 +222,17 @@ data class ConversationState(
      * tapped level and the level pi ends up on the same word.
      */
     val availableThinkingLevels: List<String> = emptyList(),
+    /**
+     * The model id [availableThinkingLevels] was pi's answer **for**.
+     *
+     * The list is a fact about one model, and pi answers it in a second round trip
+     * after `get_state` — so between switching the model and that answer arriving, a
+     * list with no key is the *previous* model's menu. It is cleared with the list when
+     * `get_state` names a different model, and the UI treats a list whose key is not the
+     * model in use as no answer at all (`thinkingLevelsFor`). ARCHITECTURE §7.2 has the
+     * report this replaces: the picker offered pi's seven over a model that has four.
+     */
+    val availableThinkingLevelsFor: String? = null,
     val usage: UsageTotals = UsageTotals(),
     /**
      * Whether a conversation is being opened and its transcript has not arrived yet.
@@ -554,7 +565,17 @@ object ConversationReducer {
                     .orEmpty()
                     .mapNotNull { it.jsonPrimitive.contentOrNull }
                     .filter { it.isNotBlank() }
-                if (levels.isEmpty()) state else state.copy(availableThinkingLevels = levels)
+                // Recorded with the model it is about: a list without a key reads as the
+                // previous model's menu once the model has moved (see
+                // [ConversationState.availableThinkingLevelsFor]).
+                if (levels.isEmpty()) {
+                    state
+                } else {
+                    state.copy(
+                        availableThinkingLevels = levels,
+                        availableThinkingLevelsFor = state.model?.id?.takeIf { it.isNotBlank() },
+                    )
+                }
             }
 
             else -> state
@@ -574,6 +595,20 @@ object ConversationReducer {
         }
         return state.copy(
             model = model ?: state.model,
+            // A level list answered for another model is not an answer. `get_state` is
+            // the first of the two replies a model switch causes, and pi's levels for
+            // the new model only arrive with the second — so the list is dropped here
+            // rather than left standing as the previous model's menu.
+            availableThinkingLevels = if (model != null && model.id != state.model?.id) {
+                emptyList()
+            } else {
+                state.availableThinkingLevels
+            },
+            availableThinkingLevelsFor = if (model != null && model.id != state.model?.id) {
+                null
+            } else {
+                state.availableThinkingLevelsFor
+            },
             sessionId = data.str("sessionId") ?: state.sessionId,
             sessionName = data.str("sessionName") ?: state.sessionName,
             sessionFile = data.str("sessionFile") ?: state.sessionFile,
