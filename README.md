@@ -14,10 +14,10 @@ first launch — no repository to reach, no package to fetch. The only connectio
 needed is one that can reach the model provider.
 
 <p align="center">
-  <img src="docs/assets/preview-0.6.0.webp" width="90%" alt="PiKit's Miuix interface — the Chat, Terminal, Files and Settings tabs">
+  <img src="docs/assets/preview-0.6.0.webp" width="90%" alt="PiKit 0.6.0 — the Chat, Terminal, Files and Settings tabs">
 </p>
 
-<p align="center"><sub>PiKit's interface, drawn with Miuix</sub></p>
+<p align="center"><sub>PiKit 0.6.0 interface preview</sub></p>
 
 ## Features
 

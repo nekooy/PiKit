@@ -153,9 +153,13 @@ nothing generates the file, so this is the whole recipe:
    to right with no gap, saved as WebP at quality 88 — 1920 wide for four panels, which is what
    the previous strips are.
 6. **Reference it**: both READMEs (they are mirrors), and the asset rows in
-   [README.md](README.md) — the new strip takes the row that was the current preview, and the
-   file it replaces moves to a record row. The caption under the image describes what the reader
-   is looking at rather than the version; the version lives in the file name.
+   [README.md](README.md) — the new strip takes the row that was the current preview, and
+   the file it replaces moves to a record row. The caption under the image is the version:
+   `PiKit <version> interface preview`（简中 `PiKit <version> 界面预览`）, matching the
+   file name and the alt text. It read "what the reader is looking at" for one release
+   (`PiKit's interface, drawn with Miuix`), which aged the moment the interface stopped
+   changing — a caption about the drawing style says nothing about *which* build the
+   pixels show, and the version-stamped file name was already carrying that fact.
 
 ## Traps that cost an afternoon
 
