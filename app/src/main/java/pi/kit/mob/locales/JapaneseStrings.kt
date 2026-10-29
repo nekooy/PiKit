@@ -42,7 +42,7 @@ internal object JapaneseStrings : Strings {
         override val tips = listOf(
             "ヒント：行頭に ! を付けるとそのままシェルで実行されます。",
             "ヒント：+ で画像やファイルを添付できます。",
-            "ヒント：⌘ でエージェントのコマンド一覧を開けます。",
+            "ヒント：⌘ で PiKit 自身が実行するコマンドの一覧を開けます。",
             "ヒント：テキストを長押しするとコピーできます。",
             "ヒント：ヘッダーの履歴アイコンから過去の会話に戻れます。",
             "ヒント：入力欄の右下のリングで使用量とコストを確認できます。",
@@ -280,7 +280,7 @@ internal object JapaneseStrings : Strings {
         override val language = "言語"
         override val languageSubtitle = "インターフェースの表示言語"
         override val personalization = "パーソナライズ"
-        override val personalizationSubtitle = "テーマ・起動・アイコン"
+        override val personalizationSubtitle = "起動・文字サイズ・テーマ・アイコン・アバター"
         override val personalizationConversation = "会話"
         override val personalizationAppearance = "外観"
         override val openNewOnLaunch = "起動時に新しい会話を開く"

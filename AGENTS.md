@@ -9,7 +9,7 @@ the index of every document. This file is the practical part.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 500 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 504 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -297,7 +297,7 @@ being read". Do not bypass it with `SmallTopAppBar(subtitle = …)`.
 menu.** The copy button took four rounds — six *containers*, then six glyphs from other icon sets,
 then five more sets — before an SVG pasted into the conversation (`ic_copy.xml`) worked;
 `ic_check.xml` is Lucide's check at about the weight of its walls, and `CopyButton.kt` is the one
-composable both copy buttons use. ARCHITECTURE §12.3 has the four rounds.
+composable all three copy buttons use. ARCHITECTURE §12.3 has the four rounds.
 
 **A launcher icon is a manifest resource, so offering a choice of one is offering a choice of entry
 point.** The manifest declares one `activity-alias` per icon over `MainActivity` — today
@@ -527,9 +527,7 @@ prompt, which billed the idle gap to a turn that had already finished.
   `build-apks.py` recognises the failure (an APK larger than its own entries) and
   retries that variant once with `--no-build-cache`; if it happens twice, delete
   `~/.gradle/caches/build-cache-1`.
-- **The history is one commit, and it is the whole application.** There is no
-  earlier revision to compare against: the first commit carries every design decision
-  at once, so `git log` answers "when did this appear" with 0.1.0 and nothing else.
-  What explains why something is the way it is, is still the comments and
-  `docs/architecture/` — and `git blame` on a line is only useful from the second
-  commit onwards.
+- **The history starts at 0.1.0, which is the whole application as it then stood.**
+  There is nothing before it to compare against, so `git log` and `git blame` answer
+  "when did this appear" from that commit onwards. What explains *why* something is
+  the way it is, is still the comments and `docs/architecture/`.

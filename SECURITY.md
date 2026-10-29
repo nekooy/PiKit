@@ -11,7 +11,8 @@ builder:
 
 | Component | Where it comes from |
 | --- | --- |
-| `pi` and the bundled extension | [earendil-works/pi](https://github.com/earendil-works/pi) |
+| `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) |
+| The bundled `pi-web-access` extension | [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access) |
 | Termux packages, the bootstrap | [termux/termux-packages](https://github.com/termux/termux-packages) |
 | The vendored terminal emulator | [termux/termux-app](https://github.com/termux/termux-app) |
 

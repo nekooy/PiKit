@@ -130,10 +130,10 @@ ARCHITECTURE §12.1 carries the measurement.
 The text-size preference is one multiplier on the composition's `LocalDensity`
 `fontScale` (in `MainActivity`), so every `sp` in the app — every row, the
 transcript, the terminal banner, the dialogs — moves together. That multiplier is
-the row's step times the ladder's own base (`TEXT_SCALE_BASELINE`, 0.95): the row
-reads 100% where the ladder is drawn as the library wrote it, and 95% draws the
-size this app's text is designed at, which is where the default sits. The library
-needs to know nothing about it.
+the row's step times the ladder's own base (`TEXT_SCALE_BASELINE`, 0.95), so the
+row's 100% — the default — draws 0.95 of the library's sizes: the size this app's
+text is designed at, and the size the ladder used to call 95%. The library needs to
+know nothing about it.
 
 ## A page is a scaffold, a bar and a one-line subtitle
 
@@ -293,17 +293,17 @@ the shared vocabulary does not:
   the composer is the page's bottom band on `surface` — the same grey the tab strip is
   painted in, so the foot of the page meets the navigation bar at no seam. Inside the
   band the field is a raised white frame (`surfaceContainer` at the kit's corner)
-  holding the text **and the three controls**, in the order a thumb meets them: the
+  holding the text **and the four controls**, in the order a thumb meets them: the
   command list and the attach control at the field's left corner, the context
   reading and the send button at its right — a filled disc in the accent while it
   can send. Grouping the two controls that *add something to the message* at the
   field's left is the correction: they are one kind of thing, and the corner a thumb
-  rests on is where they belong. The
-  four setting chips above the frame (thinking, model, context, cache) are values drawn in normal ink, and the
-  two report chips open dropdown menus at the chips rather than a bottom sheet, for the
-  reason §7.1 gives: a menu that answers one question belongs at the control that asks
-  it. A conversation with nothing in it draws the Pi mark and the page's hint instead
-  of a blank area, because the blank is the first thing the app ever shows.
+  rests on is where they belong. The three setting chips above the frame (thinking,
+  model, cache) are values drawn in normal ink, and each opens its dropdown menu at
+  the control rather than as a bottom sheet, for the reason §7.1 gives: a menu that
+  answers one question belongs at the control that asks it. A conversation with
+  nothing in it draws the Pi mark and the page's hint instead of a blank area,
+  because the blank is the first thing the app ever shows.
 - **Terminal** — a black rectangle with its own sixteen colours, so the chrome stays
   out of the way: a `PiPage` bar with the shell's name and the session roster, and a
   key bar of Miuix buttons on a `surfaceContainer` track. The keys are the same glyph

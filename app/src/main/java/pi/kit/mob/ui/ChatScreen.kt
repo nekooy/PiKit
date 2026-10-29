@@ -805,9 +805,12 @@ internal fun ChatScreen(
  * The **agent's mark** used to stand in the header's action row, drawn by a component
  * of the old design system that nothing else used; it is gone, because to the reader
  * it was a placeholder before the compress button with nothing to say that the
- * subtitle does not already say in words. What remains is the three actions, ordered compress, history,
- * new: left to right as "do something to this conversation, look at the others, start
- * another", which is also the order of how much each disturbs what is on screen.
+ * subtitle does not already say in words. The compress button followed it: what it
+ * did is `/compact` on the command list now that the list is a page rather than a
+ * menu, and a header whose second action is one row of another screen's list is a
+ * header with one action. What remains is two — history, then new — left to right as
+ * "look at the others, start another", which is also the order of how much each
+ * disturbs what is on screen.
  *
  * ## The composer sits under the transcript
  *

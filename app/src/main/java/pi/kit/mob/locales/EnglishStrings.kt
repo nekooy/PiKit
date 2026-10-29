@@ -41,7 +41,7 @@ internal object EnglishStrings : Strings {
         override val tips = listOf(
             "Tip: start a line with ! to run it as a shell command.",
             "Tip: tap + to attach an image or a file.",
-            "Tip: tap ⌘ to see the agent's commands and insert one.",
+            "Tip: tap ⌘ for the commands PiKit runs itself.",
             "Tip: long-press any text to copy it.",
             "Tip: the history icon in the header reopens a past conversation.",
             "Tip: the ring at the field's corner shows window use, cost and the session file.",
@@ -296,7 +296,7 @@ internal object EnglishStrings : Strings {
         override val language = "Language"
         override val languageSubtitle = "The language of the interface"
         override val personalization = "Personalization"
-        override val personalizationSubtitle = "Theme, launch and icon"
+        override val personalizationSubtitle = "Launch, text size, theme, icon and avatars"
         override val personalizationConversation = "Conversation"
         override val personalizationAppearance = "Appearance"
         override val openNewOnLaunch = "Open a new conversation on launch"

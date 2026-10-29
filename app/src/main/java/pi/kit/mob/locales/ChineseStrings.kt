@@ -49,7 +49,7 @@ internal object ChineseStrings : Strings {
         override val tips = listOf(
             "提示：以 ! 开头可以直接执行命令，例如 !ls",
             "提示：点 + 可以给消息附上图片或文件",
-            "提示：点 ⌘ 可以查看 Agent 的命令并插入",
+            "提示：点 ⌘ 可以查看 PiKit 自己执行的指令",
             "提示：长按任意文字即可复制",
             "提示：点顶部的历史图标可以回到之前的对话",
             "提示：点输入框右下角的圆环可以查看窗口占用、花费和会话文件",
@@ -287,7 +287,7 @@ internal object ChineseStrings : Strings {
         override val language = "语言"
         override val languageSubtitle = "界面显示语言"
         override val personalization = "个性化"
-        override val personalizationSubtitle = "启动行为、界面主题与应用图标"
+        override val personalizationSubtitle = "启动行为、字体大小、主题、图标与头像"
         override val personalizationConversation = "对话"
         override val personalizationAppearance = "外观"
         override val openNewOnLaunch = "冷启动时打开新对话"

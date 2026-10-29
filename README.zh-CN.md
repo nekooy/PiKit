@@ -12,7 +12,7 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 `pi` 命令行都打包在 APK 里，首次启动解包即用，无需软件源或额外下载——唯一要连的是模型供应商。
 
 <p align="center">
-  <img src="docs/assets/preview-miuix.webp" width="90%" alt="PiKit 的 Miuix 界面——对话、终端、文件、设置四个标签页">
+  <img src="docs/assets/preview-0.6.0.webp" width="90%" alt="PiKit 的 Miuix 界面——对话、终端、文件、设置四个标签页">
 </p>
 
 <p align="center"><sub>PiKit 的界面，由 Miuix 绘制</sub></p>
@@ -25,7 +25,7 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
   思考等级、模型、上下文占用和缓存命中是输入框上方的一排按钮，两个开关都不重启 Agent 就生效。
 - **终端和文件管理器。** 切换标签页也不中断的 PTY 会话、手机键盘没有的按键，以及 `$HOME` 的只读
   文件管理器：可点的路径、筛选和三种排序、每行的大小或项目数、图片预览和复制路径。
-- **按 pi 的规则对待供应商。** pi 自己的密钥表认识的 32 家，外加一个自定义端点；模型的上下文窗口、
+- **按 pi 的规则对待供应商。** pi 自己的密钥表认识的 34 家，外加一个自定义端点；模型的上下文窗口、
   输出上限、思考等级和图片支持都读自 pi 的目录。
 - **存储规范且安全。** 存储授权默认为空，按文件夹逐个开启；删除只在应用数据内生效；运行时里的
   **安全守卫**是一个 pi 扩展，拒绝 `$HOME/workspace` 之外的递归删除，也拒绝改写 pi 自己的文件。
@@ -57,7 +57,7 @@ Android 8.0+，`arm64-v8a` 或 `x86_64`。JDK 17–23、带 NDK r29 的 Android 
 python tools/build-apks.py    # checks, tests, then all four APKs
 ```
 
-运行时镜像是生成物而不是提交物（每个 ABI 约 100 MB 的归档，解包后约 285 MB），所以那条命令
+运行时镜像是生成物而不是提交物（每个 ABI 约 110 MB 的归档，解包后约 300 MB），所以那条命令
 会在途中组装缺失或过期的镜像。
 
 ## 文档

@@ -106,10 +106,10 @@ a prompt. In the **Terminal** tab:
 Type into the box at the bottom and press the
 round arrow. While the model answers it becomes
 a red stop button. The header holds the
-conversation's name, the agent's state and three
-icons: history, new conversation, compress. The
-name is the first thing you wrote, or **PiKit**
-while the conversation is still empty.
+conversation's name, the agent's state and two
+icons: history and new conversation. The name is
+the first thing you wrote, or **PiKit** while
+the conversation is still empty.
 
 The chips above the input are everything you
 change while talking:
@@ -118,10 +118,9 @@ change while talking:
 | --- | --- |
 | Thinking level | How hard the model reasons. Immediate. |
 | Model | Which model answers. Immediate. |
-| Context | Window use. Tap for the numbers. |
 | Cache | Share served by the prompt cache. |
 
-The thinking slider offers the levels the chosen
+The thinking menu offers the levels the chosen
 model has, because pi moves a level the model
 lacks up to the next one it does. The names are
 pi's own — `off`, `minimal`, `low`, `medium`,
@@ -129,22 +128,25 @@ pi's own — `off`, `minimal`, `low`, `medium`,
 `pi --list-models` in the terminal use the same
 word for the same level.
 
-The `/` button lists the agent's commands,
-PiKit's own `/new`, `/compact` and `/stop`
-included; a command from pi's list is typed into
-the box, so you can add arguments first. The `+`
-button attaches an image or a file: images over
-4 MB are refused, and the model has to accept
+The row under the input starts with `⌘` and `+`.
+`⌘` lists the commands PiKit runs itself:
+`/new`, `/compact`, `/stop`, `/clone`,
+`/export`, `/model`, `/clear`. A row runs as you
+tap it, and the `!` row opens a field for a
+shell line. `+` opens the attach menu, camera
+first, then a picture or a file: images over 4
+MB are refused, and the model has to accept
 images. Whether it does is under **Settings →
-Model & provider → Model parameters** — the
+Model & provider → Model parameters**, the
 catalogue's own answer, which you can override.
 
-Tapping **Context** opens the session's details:
-model and provider, window use, token counts,
-cache hit rate, cost, turns and the file it is
-written to. Near 100% the agent has to drop
-earlier parts of the conversation — that is what
-compress is for.
+The ring beside the send shows how full the
+context window is; tapping it opens the
+session's details: model and provider, token
+counts, cache hit rate, cost, turns and the file
+it is written to. Near 100% the agent has to
+drop earlier parts of the conversation — that is
+what `/compact` in the `⌘` list is for.
 
 The transcript:
 
@@ -182,13 +184,12 @@ instead of running it.
 Packages from `pkg` or `apt` are relocated as
 they are installed, so nothing needs doing. If
 something installed another way still refuses to
-start, press the button once: **Settings →
-Maintenance & repair → Installed packages →
-Check and repair**. The heavier option on the
-same page, **Rebuild the environment**, unpacks
-the runtime again — packages you added with
-`pkg` are recorded first and put back
-afterwards.
+start, press once: **Settings → Maintenance &
+repair → Installed packages → Package relocation
+→ Repair**. The heavier option on the same page,
+**Rebuild the environment**, unpacks the runtime
+again — packages you added with `pkg` are
+recorded first and put back afterwards.
 
 A `pi` you start here answers with the same
 model: PiKit writes your provider, model and key
@@ -200,14 +201,15 @@ chat page agree.
 The Files tab browses the agent's home
 directory, read-only: it exists so you can see
 what the agent changed without a second app. The
-bar under the title is the path; tap a segment
-to go back up. The field filters the folder you
-are in, and the button beside it orders it by
-name, modified time or size. A row's right-hand
-number is a file's size or a folder's entry
-count; hold a row for **Copy path** and **Open
-with**. Tap a file to preview it — pictures are
-drawn, text up to 64 KB, binary as binary.
+field under the title filters the folder you are
+in, and the button beside it orders it by name,
+modified time or size. The bar under them is the
+path; tap a segment to go back up. A row's
+right-hand number is a file's size or a folder's
+entry count; hold a row for **Copy path** — a
+file also offers **Open with**. Tap a file to
+preview it — pictures are drawn, text up to 64
+KB, binary as binary.
 
 ## 6. What the agent can see
 
@@ -273,11 +275,11 @@ web-access master switch, what a search returns,
 which provider is asked first, how much page
 text reaches the model, the fetch timeout, and a
 proxy. Everything else the extension reads is
-one row below them: **Add an option** opens the
-extension's own list, every entry with the
-sentence that says what it does, and what you
-type is written to the file in the shape that
-option expects. A provider's API key and a
+one row below them: **Add an option or key**
+opens the extension's own list, every entry with
+the sentence that says what it does, and what
+you type is written to the file in the shape
+that option expects. A provider's API key and a
 self-hosted SearXNG address are added there.
 What you have added is listed with its value,
 and the ✕ beside it removes it.
@@ -299,27 +301,28 @@ of it.
 | --- | --- |
 | Model & provider | Provider, key, models |
 | Search settings | Web search: how, where, limits, keys |
-| Personalization | New conversation on launch; light or dark; home-screen icon |
+| Personalization | New conversation on launch; text size; theme; home-screen icon; avatars |
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
 | Shared storage | Which folders the agent may reach |
-| Agent process | Start, stop, restart, working directory, AGENTS.md, keep-alive |
+| Agent process | Restart, working directory, AGENTS.md, keep alive |
 | Backup & restore | What to pack into one file, and putting it back |
 | Maintenance & repair | Model list, packages, relocation, rebuild, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |
 
-**Light or dark** (under Personalization) is the
-only colour choice the app offers: the palette
-itself is Miuix's, the component library the
-interface is drawn with, so both schemes come
-with it. **Keep-alive** (on the Agent process
-page) is the battery-optimisation exemption:
-with the screen off or the app in the
-background, Android may reclaim the agent
-process and cut a turn short, and the exemption
-is what lets the foreground service and its wake
-lock hold the turn. It costs a little battery
-and the app stays resident.
+**Theme** (under Personalization) is the only
+colour choice the app offers — follow the
+system, light or dark — and the palette itself
+is Miuix's, the component library the interface
+is drawn with, so both schemes come with it.
+**Keep alive** (on the Agent process page) is
+the battery-optimisation exemption: with the
+screen off or the app in the background, Android
+may reclaim the agent process and cut a turn
+short, and the exemption is what lets the
+foreground service and its wake lock hold the
+turn. It costs a little battery and the app
+stays resident.
 
 ## 9. Backup and restore
 
@@ -380,9 +383,9 @@ reports for this key; with a custom endpoint,
 check the URL too.
 
 **A package does not run** — `command not
-found`, or a library error. See **Check and
-repair** in section 4; if it still fails, the
-package is broken for Android.
+found`, or a library error. See **Package
+relocation** in section 4; if it still fails,
+the package is broken for Android.
 
 **Where is my data?** Under the app's private
 files directory, in `home`, `usr` and

@@ -7,7 +7,7 @@ runtime image has to exist at all is in
 
 ## Prerequisites
 
-- **JDK 17 to 26** (built and tested with JDK 21). The wrapper is Gradle 9.8.1, and a
+- **JDK 17 to 26** (built and tested with JDK 21). The wrapper is Gradle 9.8.2, and a
   Gradle release cannot run on a JVM newer than the one it knows about — a too-new
   Java fails before the build script is even read, which is why the error arrives as
   an IDE dialog rather than as a task failure. Android Studio keeps its own choice
@@ -28,7 +28,8 @@ runtime image has to exist at all is in
   every variant's merged manifest is worth re-checking after a build-system change.
 - **Python 3.10+** with the `zstandard` module (`python -m pip install zstandard`).
   Only the runtime image builder needs it.
-- **Node.js and npm**, only for vendoring the pi agent into that image.
+- **Node.js**, which runs the agent's delete-guard checker on every test pass, and
+  **npm**, only for vendoring the pi agent into that image.
 
 `build-apks.py` names the ones it can see for itself before it starts: the JDK, the
 SDK, the NDK (by the version `terminal-emulator/build.gradle.kts` pins, resolved
@@ -57,8 +58,9 @@ That is the whole build. It checks the prerequisites first (and names what is
 missing rather than failing inside Gradle), assembles the runtime images whose APK
 assets do not have them *or whose sources have changed since they were assembled*
 (below), runs the unit suites and the tools that check what Gradle cannot see — the
-images, the relocator against real `.deb` files, the manual's reflow, the terminal
-banners, the agent's delete guard, the README icon — and then builds
+images, the vendored documentation, the relocator against real `.deb` files, the
+revision stamps, the manual's reflow, the terminal banners, the provider table, the
+agent's delete guard, the README icon — and then builds
 **`arm64`/`x64` × `debug`/`release`** in **one Gradle invocation**, so the four
 variant pipelines share one configuration phase and run in parallel. A failure
 still names the variant it happened to (`verifyApkPackaging<Flavour><BuildType>`).
@@ -143,10 +145,10 @@ reason — a build/device mismatch is reported, not papered over.
 
 ## Why the images are a separate step
 
-They are not committed. Each is around 285 MB of binaries assembled from upstream
-sources — measured: a 90 MB bootstrap plus the 196 MB of overlay files that are not
-already in it — and they are reproducible from `tools/build-runtime-image.py` plus a
-network connection, so committing them would only ever add a merge conflict. The
+They are not committed. Each is around 300 MB of binaries assembled from upstream
+sources — measured: a 91 MB bootstrap plus the 209 MB of overlay and content files
+that are not already in it — and they are reproducible from `tools/build-runtime-image.py`
+plus a network connection, so committing them would only ever add a merge conflict. The
 app cannot be built without them: `BootstrapInstaller.plan()` fails with an
 explicit message if `assets/runtime/<abi>/` is empty.
 
@@ -292,7 +294,7 @@ clickable nodes with their tap centres.
 Two emulator facts worth knowing. A Play-Store system image's DNS comes and goes —
 `ping api.deepseek.com` and `github.com` both resolve, and a later request fails — and
 it has no `adb root`, which is why `tools/dns-pin.cjs` exists for testing. And
-`adb shell pm clear pi.kit.mob` costs a fresh ~285 MB unpack on the next launch, where
+`adb shell pm clear pi.kit.mob` costs a fresh ~300 MB unpack on the next launch, where
 `adb shell am force-stop pi.kit.mob` restarts the app without that cost.
 
 ### Driving a device from Git Bash

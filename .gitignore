@@ -16,7 +16,7 @@ __pycache__/
 # Intermediate and cached inputs for the runtime image builder
 .runtime-build/
 
-# Generated runtime images. These are ~285 MB per ABI of binaries assembled by
+# Generated runtime images. These are ~300 MB per ABI of binaries assembled by
 # tools/build-runtime-image.py from upstream sources; they are deliberately not
 # committed. Run that script before building the app.
 app/src/*/assets/runtime/

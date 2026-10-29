@@ -5,16 +5,15 @@ workflow. Everything else is a check that the workflow does for you.
 
 **The push itself starts nothing.** Both workflows are dispatch-only (AGENTS.md): what
 they cannot check for themselves is the hand-run checklist under *Before you dispatch*,
-and the release job runs every test and checker `tools/build-apks.py` runs before it
-packages anything.
+and the release job runs every test and checker `tools/build-apks.py` runs.
 
 ## The version lives in one place
 
 `gradle.properties`:
 
 ```properties
-pikit.versionName=0.1.0
-pikit.versionCode=1
+pikit.versionName=0.5.3
+pikit.versionCode=11
 ```
 
 - **`versionName`** is what the user sees — **Settings → About PiKit**, the in-app
@@ -51,7 +50,8 @@ workflow refuses a version whose tag exists.
 
 Release builds fall back to the **debug** key while no keystore is configured —
 installable, but impossible to upgrade. This repository therefore keeps one in
-`.release/`, ignored by `.gitignore`, holding five files:
+`.release/`, ignored by `.gitignore` — the keystore, the four files that carry or
+check it, and one `notes-<version>.md` per release:
 
 | File | What it is |
 | --- | --- |
@@ -60,6 +60,7 @@ installable, but impossible to upgrade. This repository therefore keeps one in
 | `password.txt` | The store password on its own line, for a script: PKCS12 uses one for the store and the key |
 | `github-secrets.md` | The four `gh secret set` commands, **with the password in them** |
 | `fingerprint.txt` | The certificate's SHA-256, for checking a published APK against it |
+| `notes-<version>.md` | That release's body, applied with `gh release edit` — one per release (*The notes*, below) |
 
 `password.txt` sits next to the keystore it opens: a key and its password in one directory
 are, together, the secret. The file is there so a build script does not have to parse prose,
@@ -158,7 +159,7 @@ warm. The run is serialised against itself (`concurrency: release-…`, never ca
 two dispatches racing to create the same tag is the failure that guard exists for.
 
 **Publishing is its own job on purpose.** `gh release create` was refused
-(`HTTP 403: Resource not accessible by integration`) inside the twenty-step build job, and works
+(`HTTP 403: Resource not accessible by integration`) inside the twenty-two-step build job, and works
 from a job of its own, which needs only `contents: write` and can be re-run alone ("Re-run failed
 jobs") without rebuilding anything.
 
@@ -203,8 +204,8 @@ the same `v<versionName>` tag to be seen. `pikit.repository` is where the app is
 repository to ask.
 
 **A private repository makes that check useless, and silently so**: an unauthenticated
-request for one answers `404`, which the row reports as "no release has been published
-yet". The app sends no token and never will — a token in an APK is a token anyone can
+request for one answers `404`, which the row reports as "No releases yet". The app sends
+no token and never will — a token in an APK is a token anyone can
 read — so the update check works exactly when the repository is public.
 
 The one input is **allow debug signing**, and it exists so that a debug-signed
@@ -217,15 +218,16 @@ users, never for a version people will install and keep.
 - [ ] **The sweep is done: everything in `MAINTAINING.md`'s *Periodically* table that has
       a newer upstream is upgraded in this release's own change, before the version
       bump.** Gradle, AGP, Kotlin and its Compose compiler plugin, AndroidX and the BOM
-      first; then `pi`, the extension and the bootstrap in `tools/image-versions.json`;
-      then `npm audit --omit=dev` in both vendored trees; then a full
+      first; then `pi` and the extension in `tools/image-versions.json`, and the
+      bootstrap's tag and package set in `tools/build-runtime-image.py`; then
+      `npm audit --omit=dev` in both vendored trees; then a full
       `python tools/build-apks.py`. Minors and patches in one batch, a major on its own
       against a full build, and a bootstrap bump as the device pass its row describes.
       A release that moved the pins after the dispatch has shipped the previous ones.
 - [ ] **The device half of the sweep is walked too**, because `build-apks.py` cannot see
       it: `Settings → Maintenance & repair` reports the packages row (a non-zero
       `N 个有可用更新` means `pkg upgrade` in the Terminal tab before the release goes
-      out), and the model list's *Refresh now* is what shows a just-released model.
+      out), and the model list's *Refresh* is what shows a just-released model.
 - [ ] `versionName`/`versionCode` bumped in `gradle.properties`, in the commit
       being released — and `git status` clean, because the workflow releases the
       commit it checks out.

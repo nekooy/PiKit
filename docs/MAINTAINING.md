@@ -56,7 +56,7 @@ same state from inside the installed build, and walking it before a release is w
 catches the two things the repository cannot: the packages row's `N 个有可用更新` (the
 device's dpkg status against the image's shipped set — `pkg upgrade` in the Terminal tab
 is the fix, and the count coming back to zero is the pass), and the model list, whose
-`Refresh now` is the only way to see a just-released model before the release ships. The
+`Refresh` is the only way to see a just-released model before the release ships. The
 relocation row and the storage check are the two runs whose failure is a device fact
 rather than a build one; *The device pass* below has the rest. The page deliberately has
 no control that updates pi: pi moves only with a PiKit release (ARCHITECTURE §2, §9.3),
@@ -117,9 +117,10 @@ storage, real network and the ARM translation trap. Both are described in
 ## The README preview strip
 
 Four phone screenshots — Chat, Terminal, Files, Settings — butted together with no frames and
-no captions, saved as `docs/assets/preview-<version>.webp`. The strip it replaces keeps its own
-version rather than being overwritten (`preview-0.2.0.webp`), and nothing generates the file, so
-this is the whole recipe:
+no captions, saved as `docs/assets/preview-<version>.webp`. The file is named for the version
+whose interface it shows, so replacing one adds a file rather than overwriting it: the strip
+before it keeps its own name as a record (`preview-0.5.0.webp`, `preview-0.2.0.webp`), and
+nothing generates the file, so this is the whole recipe:
 
 1. **Capture four full-bleed screenshots** at 1080x2400, one per tab, on the interface language
    the strip is written for (简体中文 for the one the README ships). Tap by the bounds
@@ -151,9 +152,10 @@ this is the whole recipe:
 5. **Compose**: each screenshot scaled to 480px wide (Pillow, `Image.LANCZOS`) and pasted left
    to right with no gap, saved as WebP at quality 88 — 1920 wide for four panels, which is what
    the previous strips are.
-6. **Reference it**: both READMEs (they are mirrors), the asset row in
-   [README.md](README.md), and the caption under the image, which names the version the strip
-   shows.
+6. **Reference it**: both READMEs (they are mirrors), and the asset rows in
+   [README.md](README.md) — the new strip takes the row that was the current preview, and the
+   file it replaces moves to a record row. The caption under the image describes what the reader
+   is looking at rather than the version; the version lives in the file name.
 
 ## Traps that cost an afternoon
 
@@ -176,7 +178,7 @@ your time*, which is the list a change is written against.
   delete list is the cheap change; adding one to a keep list silently deletes everything
   the list forgot.
 - **`adb shell pm clear pi.kit.mob`** deletes the unpacked runtime, which costs a
-  fresh ~285 MB unpack on the next launch. `am force-stop` is the cheap restart.
+  fresh ~300 MB unpack on the next launch. `am force-stop` is the cheap restart.
 
 ## The repository's own surface: the description and the topics
 

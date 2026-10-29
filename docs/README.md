@@ -15,7 +15,7 @@ Every document in this repository, and the rule for adding one.
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass, the README preview strip — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
 | [assets/icon.svg](assets/icon.svg) | The launcher icon, as the README shows it — **generated** | Never by hand |
-| [assets/preview-miuix.webp](assets/preview-miuix.webp) | The four tabs as the README shows them — a screenshot of the running app, compressed and not generated | When the interface it shows changes |
+| [assets/preview-0.6.0.webp](assets/preview-0.6.0.webp) | The four tabs as the README shows them — a screenshot of the running app, compressed and not generated | When the interface it shows changes |
 | [assets/preview-0.5.0.webp](assets/preview-0.5.0.webp) | The same strip as it looked before the Miuix rewrite, kept rather than overwritten | Never — it is a record, not the preview |
 | [assets/preview-0.2.0.webp](assets/preview-0.2.0.webp) | The same strip as it looked in 0.2.0, kept rather than overwritten | Never — it is a record, not the preview |
 | [../AGENTS.md](../AGENTS.md) | Commands, hard constraints and commit conventions for a change to this repository | Before writing code |
@@ -52,7 +52,7 @@ nothing parses them: the repository **description** is the tagline and has to ma
 both `<strong>` lines, a feature bullet that names a technology is grounded in a pin
 (`Miuix` is true because of `miuix 0.9.4` and the `MiuixTheme` the app is wrapped in),
 and the preview strip shows the interface the README describes — the current strip is
-`preview-miuix.webp`, and the versioned ones below it are records of what it looked like
+`preview-0.6.0.webp`, and the versioned ones below it are records of what it looked like
 before, never the current preview.
 `LICENSING.md` and the in-app credits name Miuix in the licence table, because there
 it is an artifact's name rather than a design argument.

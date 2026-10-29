@@ -14,7 +14,7 @@ first launch — no repository to reach, no package to fetch. The only connectio
 needed is one that can reach the model provider.
 
 <p align="center">
-  <img src="docs/assets/preview-miuix.webp" width="90%" alt="PiKit's Miuix interface — the Chat, Terminal, Files and Settings tabs">
+  <img src="docs/assets/preview-0.6.0.webp" width="90%" alt="PiKit's Miuix interface — the Chat, Terminal, Files and Settings tabs">
 </p>
 
 <p align="center"><sub>PiKit's interface, drawn with Miuix</sub></p>
@@ -31,7 +31,7 @@ needed is one that can reach the model provider.
 - **A terminal and a file manager.** PTY sessions that survive a tab switch, the keys a
   phone keyboard lacks, and a read-only file manager over `$HOME`: a tappable path, a
   filter and three orders, a size or entry count per row, image previews and copy-path.
-- **Providers on pi's terms.** The 32 providers pi's own key table knows, plus a custom
+- **Providers on pi's terms.** The 34 providers pi's own key table knows, plus a custom
   endpoint; a model's context window, output limit, thinking levels and image support
   come from pi's catalogue.
 - **Storage is scoped and safe.** The grant starts empty and is opened one folder at a
@@ -68,8 +68,8 @@ whole story.
 python tools/build-apks.py    # checks, tests, then all four APKs
 ```
 
-The runtime images are generated rather than committed (~100 MB of archives per ABI,
-~285 MB unpacked), so that command assembles a missing or stale one on the way.
+The runtime images are generated rather than committed (~110 MB of archives per ABI,
+~300 MB unpacked), so that command assembles a missing or stale one on the way.
 
 ## Documentation
 
