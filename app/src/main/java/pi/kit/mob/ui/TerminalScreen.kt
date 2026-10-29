@@ -70,9 +70,9 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowListPopup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -272,10 +272,12 @@ fun TerminalScreen(session: PiAgentSession) {
             }
             // The popup is anchored to the parent layout of this call — the app
             // bar's action row — and aligned to its end, so the menu hangs under
-            // the action group with its right edge at the screen's margin. Drawn at
-            // window level, so it needs no scaffold host and cannot be clipped by
-            // the page it was raised from.
-            WindowListPopup(
+            // the action group with its right edge at the screen's margin. It is the
+            // overlay popup rather than the window one for the reason §7.1 gives: a
+            // window is a second window, so it can outlive the page that raised it and
+            // it takes the focus with it — which on this page would close the keyboard
+            // the moment the roster is opened to switch shells.
+            OverlayListPopup(
                 show = sessionsMenuOpen,
                 alignment = PopupPositionProvider.Align.End,
                 onDismissRequest = { sessionsMenuOpen = false },

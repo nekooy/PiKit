@@ -177,8 +177,8 @@ import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowListPopup
 
 /**
  * What a picked file is until it is actually sent.
@@ -314,7 +314,7 @@ internal fun ChatScreen(
     // Which of the composer's menus or sheets is open, and the prompt-extras sheet.
     //
     // One state per *kind* rather than a `SheetHost` at the root, because Miuix's
-    // menus are anchored to the composable that asks for them: a `WindowListPopup`
+    // menus are anchored to the composable that asks for them: an `OverlayListPopup`
     // opens at its own parent's bounds, so the model menu has to be composed at the
     // model chip even when the `/model` command row opened it. The state is read by
     // the chip and by the renderer, which is what lets one open land on the other's
@@ -3045,7 +3045,7 @@ private val COMPOSER_IME_GAP_RAMP = COMPOSER_IME_GAP * 4
  * part of the message being written, where a chip above the field reads as the
  * setting the next message will be sent with. They are [ControlChip]s — a pill on the
  * palette's high surface step, drawn with a Miuix `Surface` so the press feedback and
- * the clip are the library's — and each one composes its own [WindowListPopup], which
+ * the clip are the library's — and each one composes its own [OverlayListPopup], which
  * is what anchors the menu to the chip that opened it. They scroll horizontally once
  * they do not fit, so a long profile name cannot squeeze the last one off screen.
  *
@@ -3288,7 +3288,7 @@ private fun Composer(
                         label = thinkingLevelOf(state, saved, config.activeProfile, catalogueLevels),
                         onClick = { onOpenSheet(ComposerSheet.Thinking) },
                     ) {
-                        WindowListPopup(
+                        OverlayListPopup(
                         popupPositionProvider = aboveAnchorPositionProvider(),
                             show = openSheet == ComposerSheet.Thinking,
                             onDismissRequest = onCloseSheet,
@@ -3334,7 +3334,7 @@ private fun Composer(
                             ?: text.chat.loadingModel,
                         onClick = { onOpenSheet(ComposerSheet.Model) },
                     ) {
-                        WindowListPopup(
+                        OverlayListPopup(
                         popupPositionProvider = aboveAnchorPositionProvider(),
                             show = openSheet == ComposerSheet.Model,
                             // Two dozen models in one menu: bounded, so the panel
@@ -3361,7 +3361,7 @@ private fun Composer(
                         // one report, so opening either asks the same question.
                         onClick = { onOpenSheet(ComposerSheet.Context) },
                     ) {
-                        WindowListPopup(
+                        OverlayListPopup(
                         popupPositionProvider = aboveAnchorPositionProvider(),
                             show = openSheet == ComposerSheet.Context,
                             maxHeight = MENU_MAX_HEIGHT,
@@ -3572,7 +3572,7 @@ private fun Composer(
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
-                    WindowListPopup(
+                    OverlayListPopup(
                         popupPositionProvider = aboveAnchorPositionProvider(),
                         show = openSheet == ComposerSheet.Commands,
                         maxHeight = MENU_MAX_HEIGHT,
@@ -3615,7 +3615,7 @@ private fun Composer(
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
-                    WindowListPopup(
+                    OverlayListPopup(
                         popupPositionProvider = aboveAnchorPositionProvider(),
                         show = openSheet == ComposerSheet.Attach,
                         onDismissRequest = onCloseSheet,
@@ -3653,7 +3653,7 @@ private fun Composer(
                         description = text.chat.contextUsage(percent),
                         onClick = { onOpenSheet(ComposerSheet.ContextRing) },
                     )
-                    WindowListPopup(
+                    OverlayListPopup(
                         popupPositionProvider = aboveAnchorPositionProvider(),
                         show = openSheet == ComposerSheet.ContextRing,
                         maxHeight = MENU_MAX_HEIGHT,
@@ -4078,9 +4078,21 @@ private fun cacheHitPercent(state: ConversationState): Int {
  * is.
  *
  * [menu] is the popup the chip opens, composed *here* rather than at the page: Miuix
- * anchors a [WindowListPopup] to its own parent's bounds, so the popup has to be a
+ * anchors an [OverlayListPopup] to its own parent's bounds, so the popup has to be a
  * sibling of the pill for the menu to open where the finger tapped — and that is also
  * what lets the `/model` command row open the model menu at the model chip.
+ *
+ * ## Why the overlay popup and not Miuix's window one
+ *
+ * `WindowListPopup` is a `Dialog`: a focusable window over a focused text field takes
+ * the IME's connection with it, so tapping any chip on this page used to close the
+ * keyboard — and it stayed closed after the menu was dismissed, which put the reader a
+ * tap away from the sentence they were in the middle of. `OverlayListPopup` is the same
+ * panel drawn in the root `Scaffold`'s popup host (`MiuixPopupUtils`), so there is no
+ * second window, nothing to take the focus, and the keyboard stays up. The anchor
+ * arithmetic is identical, because the library positions both from the parent's bounds
+ * in the window. §7.1 has the measurement that settled the sheet half of the same
+ * question.
  */
 @Composable
 private fun ControlChip(
@@ -4180,7 +4192,7 @@ private val CHIP_INSET = 10.dp
 private val CHIP_GLYPH = 14.dp
 
 /**
- * A box whose only job is to be the bounds a [WindowListPopup] opens against.
+ * A box whose only job is to be the bounds an [OverlayListPopup] opens against.
  *
  * Miuix's popups are positioned from their *parent's* bounds in the window, so a
  * popup that has to open at a 40dp icon button must be composed as that button's
@@ -4295,7 +4307,7 @@ private fun ModelMenu(
         ?.let { modelOptionId(it.id, it.modelId) }
 
     // A menu with no rows is not an empty menu: the popup still measures 200dp wide
-    // and `WindowListPopup` still dims the page, so the chip becomes a tap that dims
+    // and `OverlayListPopup` still dims the page, so the chip becomes a tap that dims
     // the screen and shows nothing. One disabled row says why there is nothing to pick
     // — the settings page is where a profile is added, and this page cannot open it.
     val hasModels = profiles.any { it.selectableModels.isNotEmpty() }
