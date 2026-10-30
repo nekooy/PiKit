@@ -146,4 +146,50 @@ class ProfileProviderEntryTest {
         assertEquals(384000L, model["maxTokens"]!!.jsonPrimitive.content.toLong())
         assertTrue(model.containsKey("cost"))
     }
+
+    // ------------------------------------------- when the refresh has to run for this
+
+    private val owner = pi.kit.mob.data.ModelProfile(
+        id = "a",
+        provider = "deepseek",
+        apiKey = "sk-a",
+        modelId = "deepseek-flash",
+    )
+    private val second = owner.copy(id = "b", apiKey = "sk-b")
+
+    @Test
+    fun `a duplicate profile asks for the refresh when the store cannot describe it`() {
+        // This is the device state the launch fix was made for: the store's refresh had
+        // been failing, so nothing could be copied and the entry was never written. The
+        // refresh that would fix it is inside its own retry window, whose deadline the
+        // failure itself wrote — so the launch has to ask for it by need.
+        assertTrue(
+            "no facts at all is a reason",
+            needsCatalogueFacts(listOf(owner, second)) { emptyMap() },
+        )
+        assertTrue(
+            "facts for other models are not facts about this profile's",
+            needsCatalogueFacts(listOf(owner, second)) { mapOf("deepseek-v4-pro" to fact()) },
+        )
+        assertFalse(
+            "the profile's own model is described, so nothing is missing",
+            needsCatalogueFacts(listOf(owner, second)) { mapOf("deepseek-flash" to fact()) },
+        )
+    }
+
+    @Test
+    fun `a provider's first profile and a relay ask for nothing`() {
+        val relay = pi.kit.mob.data.ModelProfile(
+            id = "r",
+            provider = "pikit-custom",
+            apiKey = "sk-r",
+            modelId = "m",
+            baseUrl = "https://relay.example/v1",
+        )
+
+        // The first profile is pi's own id and the relay is built from the profile: neither
+        // entry needs a catalogue, so neither may drag a refresh out of its window.
+        assertFalse(needsCatalogueFacts(listOf(owner)) { emptyMap() })
+        assertFalse(needsCatalogueFacts(listOf(relay)) { emptyMap() })
+    }
 }

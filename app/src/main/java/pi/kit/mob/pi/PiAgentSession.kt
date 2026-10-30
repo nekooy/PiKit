@@ -639,8 +639,24 @@ class PiAgentSession private constructor(context: Context) {
      * @param workingDir the directory pi is run from, which `update` inherits.
      */
     private suspend fun refreshCatalogueIfStale(workingDir: File) {
-        if (!catalogueRefreshDue(System.currentTimeMillis())) return
+        val due = catalogueRefreshDue(System.currentTimeMillis())
+        // A profile whose `models.json` entry cannot be built without catalogue facts is a
+        // reason to refresh *now*, even inside the retry window: the refresh is what makes
+        // that entry possible, and the failures that empty a store are the ones that wrote
+        // the window. See [needsCatalogueFacts].
+        if (!due && !savedProfilesNeedCatalogueFacts()) return
         refreshCatalogueNow(workingDir)
+    }
+
+    /** [needsCatalogueFacts] against the store on disk. */
+    private fun savedProfilesNeedCatalogueFacts(): Boolean {
+        val profiles = settingsStore.profiles.profiles
+        if (profiles.isEmpty()) return false
+        val store = File(env.piConfigDir, CATALOGUE_STORE_NAME)
+        val cache = HashMap<String, Map<String, JsonObject>>()
+        return needsCatalogueFacts(profiles) { providerId ->
+            cache.getOrPut(providerId) { storeModelFacts(store, providerId) }
+        }
     }
 
     /** Whether the launch path would refresh the catalogue at [now]. */
@@ -3318,6 +3334,35 @@ internal fun catalogueBasis(env: TermuxEnv, provider: PiProvider?): String {
  * device: a deadline of zero is "never refreshed", which is due.
  */
 internal fun catalogueRefreshDue(now: Long, dueAt: Long): Boolean = now >= dueAt
+
+/**
+ * Whether a saved profile needs catalogue facts that the store on disk does not have.
+ *
+ * A **second profile of a built-in provider** is registered under an id of this app's own,
+ * and the entry under it is built from `models-store.json` — see
+ * [builtInProviderObject]. A store that cannot describe its provider leaves nothing to
+ * copy, so the entry is not written and that profile has to be launched through pi's own
+ * id until the refresh has filled the store in (§7.2). The refresh's own deadline
+ * ([catalogueRefreshDue]) can postpone exactly the run that would fix it — a failure buys
+ * half an hour of quiet, and the failures that leave an empty store are precisely the ones
+ * that happened — so the launch path asks this and runs the refresh regardless of the
+ * clock.
+ *
+ * A relay is never in this position: its entry is built from the profile itself. A
+ * provider's *first* profile needs no entry at all.
+ */
+internal fun needsCatalogueFacts(
+    profiles: List<ModelProfile>,
+    /** The store's facts for a provider, by model id — [storeModelFacts] on disk. */
+    facts: (String) -> Map<String, kotlinx.serialization.json.JsonObject>,
+): Boolean = profiles.any { profile ->
+    val provider = profile.providerEntry ?: return@any false
+    if (provider in PiProvider.needsBaseUrl) return@any false
+    if (ProfileAddressing.runtimeProviderId(profile, profiles) == provider.id) return@any false
+    val known = facts(provider.id)
+    val models = profile.selectableModels.map { it.trim() }.filter { it.isNotEmpty() }
+    models.isEmpty() || models.none { it in known }
+}
 
 /**
  * The catalogue an agent start would resolve from, as a string that can be compared.
