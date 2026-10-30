@@ -148,6 +148,16 @@ class PiAgentSession private constructor(context: Context) {
     private var recordJob: Job? = null
 
     /**
+     * The provider ids the `models.json` this process was launched from defines.
+     *
+     * Written once per launch, before the file is written, and read by [selectProfile]:
+     * a profile whose id is not here has no entry pi could resolve, so `set_model` to it
+     * would be answered from whichever id *is* registered — the wrong credential — and
+     * the switch has to be a relaunch instead. See [ProfileAddressing.launchProviderId].
+     */
+    private var registeredProviderIds: Set<String> = emptySet()
+
+    /**
      * True between a deliberate [stopAgent] and the next [startAgent].
      *
      * An unexpected exit schedules one automatic restart; a stop the user asked
@@ -408,13 +418,19 @@ class PiAgentSession private constructor(context: Context) {
         // above and below are safe from any thread.
         val (settings, workingDir, modelsJsonFailure) = withContext(Dispatchers.IO) {
             val settings = settingsStore.read()
+            val profileSnapshot = settingsStore.profiles.snapshots.value
+            // The ids the file will define, and therefore the only ones a launch may name.
+            // See [ProfileAddressing.launchProviderId] for why a launch must not name one
+            // that is missing.
+            val entries = profileProviderEntries(profileSnapshot)
+            registeredProviderIds = entries.keys
             // Same lifecycle as `models.json`: rewritten on every launch, because
             // these files live in `$HOME` while the profile lives in the app's
             // config, and a user who edits one by hand would otherwise have no way
             // back. A write that had to land and did not stops the launch here —
             // see [writeModelsJson]'s return contract for why the alternative is
             // an `Unknown provider` exit or a `401` that reads as a bad key.
-            val modelsJsonFailure = writeModelsJson(settings)
+            val modelsJsonFailure = writeModelsJson(settings, profileSnapshot, entries)
             writePiDefaults(settings)
             // The bundled extension's own default is `workflow: "summary-review"`,
             // which opens its result curator in a browser; there is no browser here,
@@ -459,7 +475,11 @@ class PiAgentSession private constructor(context: Context) {
                         // profile's credential: the launch is the only moment either
                         // can be handed to pi, and pi decides what is usable from them.
                         providerId = settingsStore.profiles.activeProfile?.let { active ->
-                            ProfileAddressing.runtimeProviderId(active, settingsStore.profiles.profiles)
+                            ProfileAddressing.launchProviderId(
+                                active,
+                                settingsStore.profiles.profiles,
+                                registeredProviderIds,
+                            )
                         },
                         credentials = ProfileAddressing.providerEnvironment(
                             settingsStore.profiles.snapshots.value,
@@ -689,7 +709,18 @@ class PiAgentSession private constructor(context: Context) {
                         // is where the model they cannot select lives. The profile's own
                         // key still wins for the provider it names — see
                         // `catalogueRefreshEnvironment` and [PiLaunchOptions.extraEnv].
-                        extraEnv = catalogueRefreshEnvironment(),
+                        //
+                        // The saved profiles' variables go on top, and they are not
+                        // optional: `models.json` now names `$PIKIT_KEY_…` for every
+                        // profile it registers, and pi resolves a provider's credential
+                        // while refreshing — an unresolvable one aborts the whole refresh
+                        // (`Could not refresh model catalogs: deepseek: Failed to resolve
+                        // API key … PIKIT_KEY_…`), which is how a launch path that could
+                        // not read the catalogue started building entries with no facts.
+                        extraEnv = catalogueRefreshEnvironment() +
+                            ProfileAddressing.providerEnvironment(
+                                settingsStore.profiles.snapshots.value,
+                            ),
                     )
                 }.getOrNull()
             }
@@ -1539,12 +1570,15 @@ class PiAgentSession private constructor(context: Context) {
         // The reducer drops this again when the state names another model.
         _conversation.update { it.copy(requestedModel = model.takeIf { it.isNotBlank() }) }
         val provider = committed.providerEntry
+        val profiles = settingsStore.profiles.profiles
         // The id pi knows this profile by, which is not the provider's id for a profile
         // sharing one — see [ProfileAddressing.runtimeProviderId]. This is the name the
         // `models.json` entry was written under, so it is the name `set_model` matches.
-        val providerId = ProfileAddressing.runtimeProviderId(
+        val runtimeId = ProfileAddressing.runtimeProviderId(committed, profiles)
+        val providerId = ProfileAddressing.launchProviderId(
             committed,
-            settingsStore.profiles.profiles,
+            profiles,
+            registeredProviderIds,
         )
         if (provider == null || model.isBlank()) {
             // Nothing pi could be told: an incomplete profile only makes sense as
@@ -1553,6 +1587,17 @@ class PiAgentSession private constructor(context: Context) {
             return
         }
         runCommand {
+            // The profile's own id has no entry in the file this process was launched
+            // from, so there is nothing for `set_model` to match: pi would either answer
+            // `Model not found` or — with the profile's provider also registered under
+            // pi's own id — switch this conversation onto *the other profile's*
+            // credential. A relaunch is the honest answer: `--api-key` carries this
+            // profile's key and the launch is what makes the id real (or falls back to
+            // the provider's, which pi ships).
+            if (runtimeId != providerId) {
+                scheduleRestart()
+                return@runCommand
+            }
             // No live process to tell. This is the state a launch failure leaves
             // behind — `client` is null and the agent is `Failed` — and it used to
             // return here and do nothing at all, which is the report that picking
@@ -2032,7 +2077,10 @@ class PiAgentSession private constructor(context: Context) {
         // reads those.
         withContext(Dispatchers.IO) {
             val settings = settingsStore.read()
-            writeModelsJson(settings)
+            val restored = settingsStore.profiles.snapshots.value
+            val entries = profileProviderEntries(restored)
+            registeredProviderIds = entries.keys
+            writeModelsJson(settings, restored, entries)
             writePiDefaults(settings)
         }
     }
@@ -2096,16 +2144,18 @@ class PiAgentSession private constructor(context: Context) {
      *   [hasModelsJsonEntries] for a built-in. A withdrawal that could not run leaves a
      *   stale entry behind, which is a mess and not a reason to refuse to start.
      */
-    private fun writeModelsJson(settings: PiSettings): Throwable? {
+    private fun writeModelsJson(
+        settings: PiSettings,
+        snapshot: PiConfigSnapshot,
+        /**
+         * The entries every saved profile needs, by the id it is launched as — computed
+         * once by the launch so that what the file defines and what the launch may name
+         * are the same answer ([ProfileAddressing.launchProviderId]).
+         */
+        entries: Map<String, JsonObject>,
+    ): Throwable? {
         val target = File(env.home, CustomEndpoint.MODELS_FILE_RELATIVE)
-        val snapshot = settingsStore.profiles.snapshots.value
         val profile = snapshot.activeProfile
-
-        // The entries every *saved* profile needs, not only the active one: pi reads this
-        // file once at startup and decides from it which providers exist, so a profile
-        // registered here is switchable over `set_model`, and one that is not can only be
-        // reached by relaunching the agent. See [ProfileAddressing].
-        val entries = profileProviderEntries(snapshot)
 
         // Read before the body so the failure path can consult it: a registration
         // that had to land and did not is a launch failure, a withdrawal that could
@@ -2247,6 +2297,13 @@ class PiAgentSession private constructor(context: Context) {
         val factsByProvider = HashMap<String, Map<String, JsonObject>>()
         for (profile in profiles) {
             val provider = profile.providerEntry ?: continue
+            // A profile with no key cannot authenticate, and an entry that names a
+            // variable nothing resolves is worse than no entry: `pi update --models`
+            // aborts the *whole* refresh on the first provider whose credential does not
+            // resolve, which would leave every other provider's catalogue stale. That
+            // failure and its cause were measured — `Could not refresh model catalogs:
+            // deepseek: Failed to resolve API key … PIKIT_KEY_…`.
+            if (profile.apiKey.isBlank()) continue
             val runtimeId = ProfileAddressing.runtimeProviderId(profile, profiles)
             val entry = if (provider in PiProvider.needsBaseUrl) {
                 CustomEndpoint.providerObject(

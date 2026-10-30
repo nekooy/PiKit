@@ -9,7 +9,7 @@ the index of every document. This file is the practical part.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 528 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 533 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -517,6 +517,14 @@ prompt, which billed the idle gap to a turn that had already finished.
   still passed for the launched profile as pi's first-precedence credential, and the
   terminal's login shell is handed the same map plus `PI_CODING_AGENT_SESSION_DIR`, so
   a hand-run `pi` sees the same profiles and the same conversations.
+- **A `pikit-` id is named only when `models.json` defines it, and every variable an
+  entry references must resolve.** `ProfileAddressing.launchProviderId` falls back to
+  pi's own provider id when a profile's entry could not be built — launching an id
+  nothing defines is `Unknown provider …` plus `process.exit(1)`, measured on a device
+  as a chat page that could not start. The catalogue refresh carries the same
+  `PIKIT_KEY_*` map, because pi resolves provider credentials while refreshing and one
+  unresolvable variable aborts the whole run. `--api-key` is passed only beside `--model`,
+  which pi requires.
 - **The emulator's DNS comes and goes.** Measured on the Medium_Phone AVD
   (Play-Store `user` build): `ping api.deepseek.com` and `ping github.com` both
   resolve, and a `pi` run by hand reached the provider and got a real `401` back —

@@ -70,6 +70,33 @@ object ProfileAddressing {
     }
 
     /**
+     * The provider id a **launch** should name, given which ids `models.json` actually
+     * defines.
+     *
+     * [runtimeProviderId] is the intended address, and it is only usable while the entry
+     * under it was written. An entry cannot always be written — a second profile of a
+     * built-in provider needs the catalogue's facts, and a store that has never been
+     * refreshed has none — and launching an id nothing defines is `Unknown provider
+     * "pikit-…"` followed by `process.exit(1)`: a chat page that cannot start at all,
+     * which is what a launch with `--provider pikit-ba076308` did.
+     *
+     * So the launch falls back to pi's own id for that provider, which pi ships: the app
+     * runs, the profile's own key reaches pi as `--api-key`, and switching to that
+     * profile costs the relaunch it used to. A caller must **not** use the fallback for
+     * `set_model`: with this profile unregistered, pi would answer from the id that *is*
+     * registered, which is the other profile's credential — see `selectProfile`.
+     */
+    fun launchProviderId(
+        profile: ModelProfile,
+        profiles: List<ModelProfile>,
+        registered: Set<String>,
+    ): String {
+        val runtime = runtimeProviderId(profile, profiles)
+        if (runtime in registered) return runtime
+        return profile.providerEntry?.id ?: profile.provider
+    }
+
+    /**
      * The environment every launch carries: each profile's key under its own variable,
      * and the owning profile's key under the provider's own variable as well.
      *

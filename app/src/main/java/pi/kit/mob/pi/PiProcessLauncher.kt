@@ -478,7 +478,14 @@ object PiProcessLauncher {
         // processes. Without it the launched provider would depend on one mechanism
         // working, and the alternative — asking the user to run `pi /login` — is not
         // something a phone UI can offer.
-        options.apiKeyEnvVar?.let { variable ->
+        // Only with a model on the command line. pi answers `--api-key requires a model to
+        // be specified via --model, --provider/--model, or --models` and exits when the
+        // flag has nothing to attach to, so a profile whose model has not been chosen yet
+        // is a launch that cannot start at all — the state a new profile is in between the
+        // provider being picked and the model list arriving. The environment still carries
+        // the key ([PiLaunchOptions.extraEnv]), so pi's own default model authenticates.
+        val namedModel = options.modelId?.isNotBlank() == true
+        options.apiKeyEnvVar?.takeIf { namedModel }?.let { variable ->
             options.apiKey?.takeIf { it.isNotBlank() }?.let { key ->
                 // Refuse a reference rather than a secret: a value that is exactly
                 // `$NAME` is a configuration mistake, and sending it produces a 401

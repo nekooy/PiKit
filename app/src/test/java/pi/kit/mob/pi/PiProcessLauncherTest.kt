@@ -58,6 +58,23 @@ class PiProcessLauncherTest {
     }
 
     @Test
+    fun `omits the flag when no model was named`() {
+        // `--api-key` with nothing to attach it to is an exit, not a warning: pi answers
+        // `--api-key requires a model to be specified via --model, --provider/--model, or
+        // --models` and stops. A profile saved with a provider but no model yet is
+        // therefore a launch that cannot start — the state a new profile is in between
+        // the provider being chosen and the model list arriving.
+        for (model in listOf(null, "", "   ")) {
+            val command = PiProcessLauncher.buildCommand(options(modelId = model))
+            assertTrue(
+                "no model on the command line means no --api-key",
+                command.none { it == "--api-key" },
+            )
+            assertTrue("and the key itself is not in argv", command.none { it.startsWith("sk-") })
+        }
+    }
+
+    @Test
     fun `omits the flag entirely when there is no key`() {
         for (blank in listOf(null, "", "   ")) {
             val command = PiProcessLauncher.buildCommand(options(apiKey = blank))

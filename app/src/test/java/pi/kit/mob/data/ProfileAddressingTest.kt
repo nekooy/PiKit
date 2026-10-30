@@ -79,6 +79,58 @@ class ProfileAddressingTest {
         assertEquals("some-new-provider", ProfileAddressing.runtimeProviderId(unknown, listOf(unknown)))
     }
 
+    // -------------------------------------------------- the id a launch may name
+
+    @Test
+    fun `a launch names the profile's own id only when the file defines it`() {
+        val first = profile("a", PiProvider.DEEPSEEK)
+        val second = profile("b", PiProvider.DEEPSEEK)
+        val profiles = listOf(first, second)
+
+        assertEquals(
+            ProfileAddressing.PREFIX + "b",
+            ProfileAddressing.launchProviderId(second, profiles, setOf(ProfileAddressing.PREFIX + "b")),
+        )
+    }
+
+    @Test
+    fun `an id the file does not define falls back to the provider pi ships`() {
+        val first = profile("a", PiProvider.DEEPSEEK)
+        val second = profile("b", PiProvider.DEEPSEEK)
+        val profiles = listOf(first, second)
+
+        // Measured on a device: a second DeepSeek profile whose entry could not be built
+        // was launched as `--provider pikit-ba076308`, and pi answered
+        // `Unknown provider "pikit-ba076308"` and exited — a chat page that cannot start
+        // and cannot be fixed by tapping Retry. pi's own id at least runs, with the
+        // profile's key as `--api-key`.
+        assertEquals("deepseek", ProfileAddressing.launchProviderId(second, profiles, emptySet()))
+    }
+
+    @Test
+    fun `the profile that owns a provider's id never needs an entry`() {
+        val first = profile("a", PiProvider.DEEPSEEK)
+        val second = profile("b", PiProvider.DEEPSEEK)
+
+        assertEquals(
+            "deepseek",
+            ProfileAddressing.launchProviderId(first, listOf(first, second), emptySet()),
+        )
+    }
+
+    @Test
+    fun `a relay without an entry falls back to the id it was stored under`() {
+        val relay = profile("r", PiProvider.CUSTOM, baseUrl = "https://r.example")
+
+        // There is no pi-shipped provider behind a relay, so the fallback cannot rescue
+        // one whose entry is missing: the launch fails exactly as it did before per-profile
+        // ids existed. What must not happen is a *different* unknown id.
+        assertEquals(
+            PiProvider.CUSTOM.id,
+            ProfileAddressing.launchProviderId(relay, listOf(relay), emptySet()),
+        )
+    }
+
     // -------------------------------------------------------- the environment
 
     @Test
