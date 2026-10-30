@@ -6,10 +6,13 @@ import android.util.Log
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
+import pi.kit.mob.data.PiConfigSnapshot
 import pi.kit.mob.data.PiProvider
 import pi.kit.mob.data.PiSettings
+import pi.kit.mob.data.ProfileAddressing
 import pi.kit.mob.data.SettingsStore
-import pi.kit.mob.data.apiKeyEnvironment
+import pi.kit.mob.data.apiName
+import pi.kit.mob.data.baseUrlName
 import pi.kit.mob.data.catalogueRefreshEnvironment
 import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.env.BootstrapInstaller
@@ -47,6 +50,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -194,7 +198,12 @@ class PiAgentSession private constructor(context: Context) {
      * `pkg upgrade`, a build — has to outlive the tab.
      */
     val terminalSessions: TerminalSessionManager by lazy {
-        TerminalSessionManager(appContext, env) { apiKeyEnvironment(settingsStore.read()) }
+        TerminalSessionManager(appContext, env) {
+            // Every saved profile's credential, not only the active one. A shell is the
+            // other way into the same pi: the file it reads is the one this app writes,
+            // and the variables its entries name are the ones here.
+            ProfileAddressing.providerEnvironment(settingsStore.profiles.snapshots.value)
+        }
     }
 
     // ----------------------------------------------------------- environment
@@ -446,6 +455,15 @@ class PiAgentSession private constructor(context: Context) {
                         cliEntry = cliEntry.absolutePath,
                         workingDir = workingDir.absolutePath,
                         sessionDir = sessionDir.absolutePath,
+                        // The id this profile is registered under, and every saved
+                        // profile's credential: the launch is the only moment either
+                        // can be handed to pi, and pi decides what is usable from them.
+                        providerId = settingsStore.profiles.activeProfile?.let { active ->
+                            ProfileAddressing.runtimeProviderId(active, settingsStore.profiles.profiles)
+                        },
+                        credentials = ProfileAddressing.providerEnvironment(
+                            settingsStore.profiles.snapshots.value,
+                        ),
                     ),
                 )
             }
@@ -660,6 +678,11 @@ class PiAgentSession private constructor(context: Context) {
                             // agent launch and a `pi` that writes a session somewhere
                             // unexpected is worse than one that writes it here.
                             sessionDir = sessionDir.absolutePath,
+                            // `update --models` reads neither: its argv is built by
+                            // `buildCatalogueCommand`, and the credential it needs comes
+                            // from `extraEnv` below.
+                            providerId = null,
+                            credentials = emptyMap(),
                         ),
                         // Every built-in provider, not only the profile's: the point of
                         // this scan is the providers the user is *not* currently on, which
@@ -1516,6 +1539,13 @@ class PiAgentSession private constructor(context: Context) {
         // The reducer drops this again when the state names another model.
         _conversation.update { it.copy(requestedModel = model.takeIf { it.isNotBlank() }) }
         val provider = committed.providerEntry
+        // The id pi knows this profile by, which is not the provider's id for a profile
+        // sharing one — see [ProfileAddressing.runtimeProviderId]. This is the name the
+        // `models.json` entry was written under, so it is the name `set_model` matches.
+        val providerId = ProfileAddressing.runtimeProviderId(
+            committed,
+            settingsStore.profiles.profiles,
+        )
         if (provider == null || model.isBlank()) {
             // Nothing pi could be told: an incomplete profile only makes sense as
             // a launch-time configuration, so relaunch with it.
@@ -1536,7 +1566,7 @@ class PiAgentSession private constructor(context: Context) {
             }
             val applied = runCatching {
                 live.requestOrThrow("set_model") {
-                    PiCommand.setModel(it, provider.id, model)
+                    PiCommand.setModel(it, providerId, model)
                 }
             }.isSuccess
             if (applied) refreshState() else scheduleRestart()
@@ -2025,19 +2055,21 @@ class PiAgentSession private constructor(context: Context) {
      * (`docs/models.md`), so nothing here may replace it or delete it. Three things
      * are written and nothing else is touched:
      *
-     *  - the custom endpoint's provider entry, when one is in use — and only that
-     *    key is withdrawn when one is not, because `pikit-custom` is PiKit's own
-     *    reserved provider id. Its `models` array is built from the profile's per-model
-     *    settings, because pi has no catalogue for the provider and the entries are the
-     *    only thing that describes its models at all;
+     *  - **one whole provider entry per saved profile** that pi cannot otherwise name —
+     *    a custom endpoint, and a second profile of a built-in provider
+     *    ([profileProviderEntries]). Every profile, not only the active one: pi reads
+     *    this file once, at startup, and a profile that is not in it is a model
+     *    `set_model` answers `Model not found` for, which is the relaunch the picker
+     *    used to pay;
      *  - one `models` entry per model id pi's catalogue does **not** contain, for the ids
      *    the user filled settings in for. The entry names the model pi would have
      *    resolved the id to (`buildFallbackModel`'s copy of the provider's default, read
      *    out of `get_state`), so the settings change what the user asked to change and
      *    nothing else;
-     *  - the withdrawal of everything earlier builds of this app wrote: the same entries
-     *    once they are no longer wanted, and the `modelOverrides.input` declarations the
-     *    build before this one wrote for every id the user had declared.
+     *  - the withdrawal of everything earlier builds of this app wrote: every `pikit-` id
+     *    that is no longer wanted (including the single shared `pikit-custom` endpoint a
+     *    build before this one used), and the `modelOverrides.input` declarations the
+     *    build before that wrote for every id the user had declared.
      *
      * Nothing is written for a model pi's own catalogue contains. That is the rule rather
      * than an omission: `models` is the only mechanism that reaches an id pi does not
@@ -2059,14 +2091,21 @@ class PiAgentSession private constructor(context: Context) {
      *
      * @return null when the file is in the state the profile needs — written,
      *   already matching, or deliberately untouched — and the failure otherwise.
-     *   Only a *required* registration reports one: [CustomEndpoint.PROVIDER_ID]
-     *   for a custom endpoint, or a non-empty [hasModelsJsonEntries] for a
-     *   built-in. A withdrawal that could not run leaves a stale entry behind,
-     *   which is a mess and not a reason to refuse to start.
+     *   Only a *required* registration reports one: the active profile is a custom
+     *   endpoint, some saved profile needs a whole entry, or a non-empty
+     *   [hasModelsJsonEntries] for a built-in. A withdrawal that could not run leaves a
+     *   stale entry behind, which is a mess and not a reason to refuse to start.
      */
     private fun writeModelsJson(settings: PiSettings): Throwable? {
         val target = File(env.home, CustomEndpoint.MODELS_FILE_RELATIVE)
-        val profile = settingsStore.profiles.activeProfile
+        val snapshot = settingsStore.profiles.snapshots.value
+        val profile = snapshot.activeProfile
+
+        // The entries every *saved* profile needs, not only the active one: pi reads this
+        // file once at startup and decides from it which providers exist, so a profile
+        // registered here is switchable over `set_model`, and one that is not can only be
+        // reached by relaunching the agent. See [ProfileAddressing].
+        val entries = profileProviderEntries(snapshot)
 
         // Read before the body so the failure path can consult it: a registration
         // that had to land and did not is a launch failure, a withdrawal that could
@@ -2086,7 +2125,7 @@ class PiAgentSession private constructor(context: Context) {
                 emptySet()
             },
         )
-        val required = customInUse || hasModelsJsonEntries(definitions)
+        val required = customInUse || entries.isNotEmpty() || hasModelsJsonEntries(definitions)
 
         return runCatching {
             // Nothing of PiKit's to say and no file of the user's to say it in: the
@@ -2107,7 +2146,9 @@ class PiAgentSession private constructor(context: Context) {
             // numbers never created the file, the override was never written, and
             // pi requested the official address and answered `401` for a key that
             // was correct for the relay.
-            if (!target.isFile && !customInUse && !hasModelsJsonEntries(definitions)) {
+            if (!target.isFile && !customInUse && entries.isEmpty() &&
+                !hasModelsJsonEntries(definitions)
+            ) {
                 return null
             }
 
@@ -2134,25 +2175,13 @@ class PiAgentSession private constructor(context: Context) {
                 JsonObject(emptyMap())
             }
 
-            val custom = if (customInUse) {
-                CustomEndpoint.providerObject(
-                    baseUrl = settings.baseUrl,
-                    // Every model the active profile offers, so pi's `set_model` can
-                    // switch between them without a restart; the active one leads
-                    // the list, and a profile that somehow has none still registers
-                    // the model it would launch with.
-                    modelIds = profile?.selectableModels.orEmpty().ifEmpty { listOf(settings.modelId) },
-                    settings = profile?.modelSettings.orEmpty(),
-                    api = profile?.api.orEmpty(),
-                )
-            } else {
-                null
-            }
-
+            // Every saved profile's whole entry, written under the id it is launched
+            // with. `definitions` is the other half: the *active* built-in provider's
+            // model list, which merges into pi's own entry for that provider rather
+            // than replacing it (see [modelDefinitions]).
             val document = modelsJsonWith(
                 existing = existing,
-                customProviderId = CustomEndpoint.PROVIDER_ID,
-                customProvider = custom,
+                entries = entries,
                 definitions = definitions,
             )
             val encoded = Json.encodeToString(JsonObject.serializer(), document)
@@ -2188,6 +2217,67 @@ class PiAgentSession private constructor(context: Context) {
     }
 
     /**
+     * The `models.json` entry every **saved** profile needs, by the id it is launched as.
+     *
+     * Two kinds of entry are built here, and the difference is what pi already knows:
+     *
+     *  * a **custom endpoint** gets its whole provider object, endpoint and protocol and
+     *    every model of the profile ([CustomEndpoint.providerObject]) — pi has no
+     *    catalogue entry for a relay, so the entry is the only thing that can say what
+     *    the endpoint is;
+     *  * a **built-in provider reached by a second profile** gets the same shape filled
+     *    from pi's own catalogue store (`models-store.json`, which the launch path
+     *    refreshes for every built-in provider): the host, the protocol and every field
+     *    of every model, `compat` included, because that is what a second provider id
+     *    otherwise loses — DeepSeek's reasoning format is a `compat` field, not an
+     *    assumption of the `openai-completions` client.
+     *
+     * The **first** profile of a built-in provider gets no entry at all: pi's own id
+     * already names it, its catalogue already describes it, and its key reaches it
+     * through the provider's own environment variable ([ProfileAddressing]).
+     *
+     * An entry that cannot be built — no endpoint anywhere, a store that has never been
+     * refreshed — is left out rather than invented. That profile then costs a relaunch
+     * the first time it is picked, which is the behaviour this change removes for every
+     * profile it can describe.
+     */
+    private fun profileProviderEntries(snapshot: PiConfigSnapshot): Map<String, JsonObject> {
+        val profiles = snapshot.profiles
+        val entries = LinkedHashMap<String, JsonObject>()
+        val factsByProvider = HashMap<String, Map<String, JsonObject>>()
+        for (profile in profiles) {
+            val provider = profile.providerEntry ?: continue
+            val runtimeId = ProfileAddressing.runtimeProviderId(profile, profiles)
+            val entry = if (provider in PiProvider.needsBaseUrl) {
+                CustomEndpoint.providerObject(
+                    baseUrl = profile.baseUrl,
+                    // Every model the profile offers: `set_model` can only reach a model
+                    // that is in the entry, so a profile registered with one model is a
+                    // profile that can only be switched *to* by relaunching.
+                    modelIds = profile.selectableModels.ifEmpty { listOf(profile.modelId) },
+                    settings = profile.modelSettings,
+                    api = profile.api,
+                    apiKey = ProfileAddressing.apiKeyReference(profile.id),
+                )
+            } else if (runtimeId != provider.id) {
+                builtInProviderObject(
+                    profile = profile,
+                    modelFacts = factsByProvider.getOrPut(provider.id) {
+                        storeModelFacts(
+                            File(env.piConfigDir, CATALOGUE_STORE_NAME),
+                            provider.id,
+                        )
+                    },
+                )
+            } else {
+                null
+            }
+            if (entry != null) entries[runtimeId] = entry
+        }
+        return entries
+    }
+
+    /**
      * Merges PiKit's tool list, the active profile's defaults and the bundled
      * web-access package into pi's own settings file.
      *
@@ -2212,11 +2302,15 @@ class PiAgentSession private constructor(context: Context) {
             } else {
                 JsonObject(emptyMap())
             }
+            val defaultProvider = settingsStore.profiles.activeProfile?.let { active ->
+                ProfileAddressing.runtimeProviderId(active, settingsStore.profiles.profiles)
+            }
             val document = settingsWithPiDefaults(
                 existing = existing,
                 tools = PiLaunchOptions.DEFAULT_TOOLS,
                 settings = settings,
                 bundledExtension = env.webAccessExtension,
+                defaultProvider = defaultProvider,
             )
             val encoded = Json.encodeToString(JsonObject.serializer(), document)
             // Rewritten only when it differs, so an unchanged file keeps its
@@ -2227,7 +2321,7 @@ class PiAgentSession private constructor(context: Context) {
                 Log.i(
                     TAG,
                     "wrote $TOOL_DEFAULTS_FILE_RELATIVE defaultTools=${PiLaunchOptions.DEFAULT_TOOLS} " +
-                        "defaultProvider=${settings.provider?.id.orEmpty()}",
+                        "defaultProvider=${defaultProvider.orEmpty()}",
                 )
             }
         }.onFailure { Log.w(TAG, "could not write $TOOL_DEFAULTS_FILE_RELATIVE", it) }
@@ -2440,6 +2534,13 @@ internal fun settingsWithPiDefaults(
     tools: List<String>,
     settings: PiSettings,
     bundledExtension: BundledExtension? = null,
+    /**
+     * The provider id the **launch** would use ([ProfileAddressing.runtimeProviderId]),
+     * which is not the provider's own id for a relay or for a second profile of one
+     * provider. A `pi` typed in the terminal reads this key and resolves it against
+     * `models.json`, where the id that exists is this one.
+     */
+    defaultProvider: String? = settings.provider?.id,
 ): JsonObject {
     var merged = settingsWithDefaultTools(existing, tools)
 
@@ -2467,8 +2568,8 @@ internal fun settingsWithPiDefaults(
     }
 
     if (!settings.isConfigured) return merged
-    val provider = settings.provider ?: return merged
-    merged = JsonObject(merged + ("defaultProvider" to JsonPrimitive(provider.id)))
+    val provider = defaultProvider?.takeIf { it.isNotBlank() } ?: return merged
+    merged = JsonObject(merged + ("defaultProvider" to JsonPrimitive(provider)))
     merged = JsonObject(merged + ("defaultModel" to JsonPrimitive(settings.modelId)))
     if (settings.thinkingLevel.isNotBlank()) {
         merged = JsonObject(merged + ("defaultThinkingLevel" to JsonPrimitive(settings.thinkingLevel)))
@@ -2548,12 +2649,20 @@ internal fun hasModelsJsonEntries(definitions: Map<String, ModelDefinitions>): B
  */
 internal fun modelsJsonWith(
     existing: JsonObject,
-    customProviderId: String,
-    customProvider: JsonObject?,
+    /**
+     * Every provider entry this app owns, by the id the profile is launched as — see
+     * [ProfileAddressing.runtimeProviderId]. A `pikit-` id that is not in here is
+     * withdrawn.
+     *
+     * One entry per **saved** profile, not one per active profile, and that is the whole
+     * point of the parameter: pi reads this file once, at startup, and a profile that is
+     * not in it is a model `set_model` answers `Model not found` for.
+     */
+    entries: Map<String, JsonObject> = emptyMap(),
     /**
      * Per provider, PiKit's own `models` entries: the ids a catalogue check vouched for,
      * and every id the app has ever written one for. Empty for a provider the app has
-     * nothing to say about — a custom endpoint's entries live in [customProvider] itself.
+     * nothing to say about — a profile registered whole lives in [entries] instead.
      * See [modelDefinitions].
      */
     definitions: Map<String, ModelDefinitions> = emptyMap(),
@@ -2561,13 +2670,14 @@ internal fun modelsJsonWith(
     val providers = LinkedHashMap<String, JsonElement>()
     (existing["providers"] as? JsonObject)?.forEach { (id, entry) -> providers[id] = entry }
 
-    // Only PiKit's own provider id is ever withdrawn. A user's provider, and any
-    // key inside one, is not this app's to remove.
-    if (customProvider != null) {
-        providers[customProviderId] = customProvider
-    } else {
-        providers.remove(customProviderId)
+    // Only PiKit's own ids are ever withdrawn, and a `pikit-` id that is not wanted any
+    // more is exactly the case this is for: the single `pikit-custom` endpoint an older
+    // build wrote, and every profile the user has since deleted. A user's provider, and
+    // any key inside one, is not this app's to remove.
+    for (id in providers.keys.toList()) {
+        if (id.startsWith(ProfileAddressing.PREFIX) && id !in entries) providers.remove(id)
     }
+    entries.forEach { (id, entry) -> providers[id] = entry }
 
     for ((providerId, definition) in definitions) {
         val current = providers[providerId] as? JsonObject
@@ -2822,6 +2932,58 @@ internal fun modelDefinitions(
         ),
     )
 }
+
+/**
+ * A whole provider entry for a built-in provider that a **second** profile names.
+ *
+ * The first profile of a provider keeps pi's own id, which is what gives it pi's
+ * catalogue, its `compat` table and its default endpoint for free. A second profile
+ * cannot share that id — one credential and one `baseUrl` per id — so it is registered
+ * as a provider of this app's own, and the facts have to be written out:
+ *
+ *  * `baseUrl` and `api` are provider-level, and the profile's own endpoint wins when it
+ *    names one (the proxy case);
+ *  * each model's entry is the catalogue's own object for that id, minus the three fields
+ *    that describe the *host* rather than the model (`provider`, `api`, `baseUrl`), with
+ *    the profile's three settings laid over it — the same rule [pikitModelDefinition]
+ *    applies to a custom endpoint, and for the same reason: an entry that names nothing
+ *    falls back to pi's hard-coded 128k/16k rather than to the model it shadows.
+ *
+ * A store that has never been refreshed for this provider leaves nothing to copy, and a
+ * profile with no endpoint of its own then has no host to name: null, rather than a
+ * provider invented here. See [PiProcessLauncher]'s vocabulary of failures — a wrong
+ * entry is a `401` that reads as a bad key, which is worse than a relaunch.
+ */
+internal fun builtInProviderObject(
+    profile: ModelProfile,
+    modelFacts: Map<String, JsonObject>,
+): JsonObject? {
+    val models = profile.selectableModels.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    if (models.isEmpty()) return null
+    val known = models.firstNotNullOfOrNull { modelFacts[it] }
+    val baseUrl = normalizeApiBaseUrl(profile.baseUrl).ifBlank { known?.baseUrlName().orEmpty() }
+    val api = known?.apiName().orEmpty()
+    if (baseUrl.isEmpty() || api.isEmpty()) return null
+    return buildJsonObject {
+        put("name", profile.displayName)
+        put("baseUrl", baseUrl)
+        put("api", api)
+        put("apiKey", ProfileAddressing.apiKeyReference(profile.id))
+        put(
+            "models",
+            buildJsonArray {
+                for (id in models) {
+                    val facts = modelFacts[id]?.let(::withoutHostFields) ?: JsonObject(emptyMap())
+                    add(pikitModelDefinition(ModelEntry(id, facts, profile.settingsFor(id))))
+                }
+            },
+        )
+    }
+}
+
+/** A catalogue model object without the fields that describe its host. */
+private fun withoutHostFields(facts: JsonObject): JsonObject =
+    JsonObject(facts.filterKeys { it != "provider" && it != "api" && it != "baseUrl" })
 
 /**
  * PiKit's own `models` entry for one model id pi's catalogue does not contain.
@@ -3211,14 +3373,26 @@ private fun PiSettings.toLaunchOptions(
     cliEntry: String,
     workingDir: String,
     sessionDir: String,
+    /**
+     * The provider id pi knows this profile by ([ProfileAddressing.runtimeProviderId]),
+     * not the provider's own id: a second profile of one provider is registered under an
+     * id of this app's own, and `--provider` has to name the id that exists.
+     */
+    providerId: String?,
+    /** Every saved profile's credential, by variable — see [ProfileAddressing]. */
+    credentials: Map<String, String>,
 ): PiLaunchOptions = PiLaunchOptions(
     nodePath = nodePath,
     cliEntry = cliEntry,
     workingDir = workingDir,
     sessionDir = sessionDir,
-    provider = provider?.id,
+    provider = providerId,
     modelId = modelId.takeIf { it.isNotBlank() },
     thinkingLevel = thinkingLevel,
+    // The placeholders and the credentials of every *other* saved profile. Written
+    // before `apiKeyEnvVar` by the launcher, so this profile's own key still wins for
+    // the variable it names.
+    extraEnv = credentials,
     apiKeyEnvVar = provider?.envVar,
     apiKey = apiKey.takeIf { it.isNotBlank() },
 )

@@ -204,7 +204,20 @@ object ShellEnvironment {
         context: Context,
         env: TermuxEnv,
         credentials: Map<String, String> = emptyMap(),
-    ): Map<String, String> = build(context, env, credentials)
+    ): Map<String, String> = build(
+        context = context,
+        env = env,
+        extra = buildMap {
+            // The directory the agent's own transcripts live in, so a `pi` typed here
+            // `--continue`s the conversation the app is showing and a conversation
+            // started here is in the app's list. The agent is launched with the same
+            // value on its argv, so the two cannot drift; a shell that already exists
+            // keeps the environment it was born with, which is the honest behaviour for
+            // a PTY and the same rule the credential below has.
+            put("PI_CODING_AGENT_SESSION_DIR", env.sessionDir.absolutePath)
+            putAll(credentials)
+        },
+    )
 
     /**
      * Environment for the agent process. Pi is long-lived and non-interactive,

@@ -9,7 +9,7 @@ the index of every document. This file is the practical part.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 515 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 528 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -502,9 +502,21 @@ prompt, which billed the idle gap to a turn that had already finished.
   `NEW_ID`, every archive is "already relocated", and no package installs. Run
   `node tools/pikit-relocate.js --selfcheck` after touching the build (ARCHITECTURE
   §4).
-- **`--api-key` goes on the command line for a custom endpoint**, because pi does
-  not expand `$VARIABLE` in `models.json` for a provider it does not know. The key
-  is therefore in argv, deliberately; ARCHITECTURE §6.1 has the control test.
+- **A saved profile's provider id is `ProfileAddressing.runtimeProviderId`, and the
+  launch, `set_model` and its `models.json` entry must all name that one answer.** pi
+  keys one credential and one `baseUrl` per provider id, so the first profile of a
+  built-in provider keeps pi's own id, a second one becomes `pikit-<profile id>` and a
+  custom endpoint `pikit-custom-<profile id>`. Everything under `pikit-` that is no
+  longer wanted is withdrawn; a provider the user wrote never is. ARCHITECTURE §7.2
+  has the scheme.
+- **Every saved profile is loaded at launch**, because switching models without a
+  relaunch depends on it: each key goes into the launch environment as
+  `PIKIT_KEY_<profile id>` and each `models.json` entry names it as
+  `apiKey: "$PIKIT_KEY_…"` — pi 1.4.0 interpolates that (ARCHITECTURE §6.1 records
+  both measurements, including the older one that contradicted it). `--api-key` is
+  still passed for the launched profile as pi's first-precedence credential, and the
+  terminal's login shell is handed the same map plus `PI_CODING_AGENT_SESSION_DIR`, so
+  a hand-run `pi` sees the same profiles and the same conversations.
 - **The emulator's DNS comes and goes.** Measured on the Medium_Phone AVD
   (Play-Store `user` build): `ping api.deepseek.com` and `ping github.com` both
   resolve, and a `pi` run by hand reached the provider and got a real `401` back —

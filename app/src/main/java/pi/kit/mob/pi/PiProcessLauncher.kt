@@ -461,22 +461,23 @@ object PiProcessLauncher {
             add("--model")
             add(it)
         }
-        // The key goes on the command line as well as into the environment, and
-        // for a custom provider it is the *only* thing that works.
+        // The launched profile's key also goes on the command line: it is pi's
+        // first-precedence credential, and the one that does not depend on the
+        // `models.json` entry having been written and read this launch.
         //
-        // Measured, and it cost a long hunt: pi does **not** resolve the `$VAR`
-        // reference in a `models.json` provider's `apiKey`. A provider registered
-        // that way and given only its environment variable gets `401 无效的令牌`,
-        // while the identical request with `--api-key` succeeds. The built-in
-        // providers do read their environment variable, which is why this was
-        // invisible until a relay was configured — the flag was described in the
-        // comment above, and never actually passed.
+        // The environment is where every *other* saved profile's key lives (see
+        // `ProfileAddressing`), and pi resolves each of them through that profile's own
+        // provider entry. On 1.4.0 the `$NAME` interpolation in a `models.json` `apiKey`
+        // is documented and measured — that is what lets one launch carry every profile.
+        // An earlier release did not resolve it for a provider registered this way, which
+        // is why this flag exists at all and why removing it is not a cleanup:
+        // ARCHITECTURE §6.1 records both measurements.
         //
         // A real cost, accepted deliberately: this does put the key in argv, which
         // is readable through `/proc` by anything that can see this app's
-        // processes. Without it a custom endpoint cannot authenticate at all, and
-        // the alternative — asking the user to run `pi /login` — is not something
-        // a phone UI can offer.
+        // processes. Without it the launched provider would depend on one mechanism
+        // working, and the alternative — asking the user to run `pi /login` — is not
+        // something a phone UI can offer.
         options.apiKeyEnvVar?.let { variable ->
             options.apiKey?.takeIf { it.isNotBlank() }?.let { key ->
                 // Refuse a reference rather than a secret: a value that is exactly

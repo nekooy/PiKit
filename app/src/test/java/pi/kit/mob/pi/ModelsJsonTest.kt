@@ -108,8 +108,7 @@ class ModelsJsonTest {
     fun `a built-in provider keeps every key of the user's document`() {
         val result = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = mapOf("deepseek" to ModelDefinitions()),
         )
 
@@ -136,8 +135,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = withOurs,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = mapOf("deepseek" to ModelDefinitions()),
         )
 
@@ -157,11 +155,49 @@ class ModelsJsonTest {
                 ),
         )
 
-        val result = modelsJsonWith(withOurs, CustomEndpoint.PROVIDER_ID, custom, emptyMap())
+        val result = modelsJsonWith(
+            withOurs,
+            mapOf(CustomEndpoint.PROVIDER_ID to custom),
+            emptyMap(),
+        )
 
         assertEquals(
             "https://relay.example.com/v1",
             result.provider(CustomEndpoint.PROVIDER_ID)["baseUrl"]!!.jsonPrimitive.content,
+        )
+        assertTrue("the user's own provider survives", "my-relay" in result.providers())
+    }
+
+    @Test
+    fun `every saved profile's entry is written and the old shared id is withdrawn`() {
+        val entry = json(
+            """
+            {"baseUrl":"https://relay.example.com/v1","api":"openai-completions",
+             "apiKey":"${'$'}PIKIT_KEY_r","models":[{"id":"m"}]}
+            """.trimIndent(),
+        )
+        val withOld = JsonObject(
+            userDocument + (
+                "providers" to JsonObject(
+                    userDocument.providers() + ("pikit-custom" to json("{}")),
+                )
+                ),
+        )
+
+        val result = modelsJsonWith(
+            existing = withOld,
+            entries = mapOf("pikit-custom-r" to entry, "pikit-b" to entry),
+        )
+
+        // One entry per saved profile is the point: pi reads this file once, and a profile
+        // that is not in it is a model `set_model` cannot switch to without a relaunch.
+        assertTrue("pikit-custom-r" in result.providers())
+        assertTrue("pikit-b" in result.providers())
+        // The single shared id an older build wrote is a `pikit-` id that is no longer
+        // wanted, which is exactly what the withdrawal covers.
+        assertNull(
+            "the shared custom-endpoint id is gone",
+            result.providers()["pikit-custom"],
         )
         assertTrue("the user's own provider survives", "my-relay" in result.providers())
     }
@@ -235,8 +271,7 @@ class ModelsJsonTest {
     fun `an id pi does not catalogue is added as an entry carrying pi's own facts`() {
         val result = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(listOf(entry("vision-v1", ModelSettings(images = true)))),
         )
 
@@ -267,8 +302,7 @@ class ModelsJsonTest {
     fun `the user's two numbers are what the entry says, over pi's own`() {
         val result = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 listOf(
                     entry(
@@ -296,8 +330,7 @@ class ModelsJsonTest {
         // model gets.
         val result = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(listOf(entry("vision-v1"))),
         )
 
@@ -317,8 +350,7 @@ class ModelsJsonTest {
         )
         val result = modelsJsonWith(
             existing = JsonObject(emptyMap()),
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = mapOf(
                 "deepseek" to ModelDefinitions(
                     wanted = listOf(
@@ -339,8 +371,7 @@ class ModelsJsonTest {
         // fallback to inherit anything from and the entry has to be complete.
         val result = modelsJsonWith(
             existing = JsonObject(emptyMap()),
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = mapOf(
                 "pikit-custom" to ModelDefinitions(
                     wanted = listOf(ModelEntry("m", JsonObject(emptyMap()), ModelSettings())),
@@ -395,16 +426,14 @@ class ModelsJsonTest {
         // to match.
         val defined = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(listOf(entry("vision-v1", ModelSettings(images = true)))),
         )
         assertEquals(listOf("deepseek-chat", "vision-v1"), defined.modelIds("deepseek"))
 
         val withdrawn = modelsJsonWith(
             existing = defined,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(wanted = emptyList(), ours = listOf("vision-v1")),
         )
 
@@ -415,8 +444,7 @@ class ModelsJsonTest {
     fun `dropping one model's settings takes that entry out and leaves the other`() {
         val defined = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 listOf(entry("vision-v1", ModelSettings(images = true)), entry("vision-v2")),
             ),
@@ -425,8 +453,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = defined,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             // The record keeps the id the user just emptied, which is how its entry is
             // found again; only `wanted` shrinks.
             definitions = definitions(wanted = listOf(entry("vision-v2")), ours = listOf("vision-v1", "vision-v2")),
@@ -451,8 +478,7 @@ class ModelsJsonTest {
     fun `a catalogued id is declared with an override, which names only what the user said`() {
         val result = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 ours = emptyList(),
@@ -509,8 +535,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = existing,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 ours = emptyList(),
@@ -537,16 +562,14 @@ class ModelsJsonTest {
         // there is how the entry would survive for ever.
         val defined = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(listOf(entry("vision-v1", ModelSettings(images = true)))),
         )
         assertEquals(listOf("deepseek-chat", "vision-v1"), defined.modelIds("deepseek"))
 
         val nowCatalogued = modelsJsonWith(
             existing = defined,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 // What `save()` writes once the answer says the id is catalogued: every
@@ -572,8 +595,7 @@ class ModelsJsonTest {
     fun `an id that leaves the settings loses its override, and one that stays keeps it`() {
         val declared = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 ours = emptyList(),
@@ -587,8 +609,7 @@ class ModelsJsonTest {
 
         val after = modelsJsonWith(
             existing = declared,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 ours = emptyList(),
@@ -883,8 +904,7 @@ class ModelsJsonTest {
         listOf(listOf("vision-v1"), emptyList()).forEach { record ->
             val result = modelsJsonWith(
                 existing = existing,
-                customProviderId = CustomEndpoint.PROVIDER_ID,
-                customProvider = null,
+                entries = emptyMap(),
                 definitions = definitions(wanted = emptyList(), ours = record),
             )
 
@@ -913,8 +933,7 @@ class ModelsJsonTest {
             val existing = json("""{"providers":{"deepseek":{"models":[$entry]}}}""")
             val result = modelsJsonWith(
                 existing = existing,
-                customProviderId = CustomEndpoint.PROVIDER_ID,
-                customProvider = null,
+                entries = emptyMap(),
                 definitions = definitions(wanted = emptyList(), ours = emptyList()),
             )
             assertEquals("entry $index survives", 1, result.modelIds("deepseek").size)
@@ -938,8 +957,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = existing,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(wanted = emptyList(), ours = listOf("theirs")),
         )
 
@@ -969,8 +987,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = existing,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = mapOf("deepseek" to ModelDefinitions()),
         )
 
@@ -1000,8 +1017,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = existing,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = mapOf("deepseek" to ModelDefinitions()),
         )
 
@@ -1019,8 +1035,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = existing,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = mapOf("deepseek" to ModelDefinitions()),
         )
 
@@ -1035,8 +1050,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = existing,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(wanted = emptyList(), ours = listOf("vision-v1")),
         )
 
@@ -1049,8 +1063,7 @@ class ModelsJsonTest {
 
         val result = modelsJsonWith(
             existing = existing,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(listOf(entry("vision-v1"))),
         )
 
@@ -1085,8 +1098,7 @@ class ModelsJsonTest {
     fun `a profile's endpoint override is written onto the built-in provider`() {
         val result = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 baseUrl = "https://proxy.example.com/v1",
@@ -1106,8 +1118,7 @@ class ModelsJsonTest {
     fun `clearing the field withdraws this app's override and leaves a hand-written one`() {
         val ours = modelsJsonWith(
             existing = json("""{"providers":{"deepseek":{"name":"Keep me"}}}"""),
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 baseUrl = "https://proxy.example.com/v1",
@@ -1118,8 +1129,7 @@ class ModelsJsonTest {
 
         val cleared = modelsJsonWith(
             existing = ours,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 baseUrl = "",
@@ -1134,8 +1144,7 @@ class ModelsJsonTest {
 
         val handwritten = modelsJsonWith(
             existing = userDocument,
-            customProviderId = CustomEndpoint.PROVIDER_ID,
-            customProvider = null,
+            entries = emptyMap(),
             definitions = definitions(
                 wanted = emptyList(),
                 baseUrl = "",

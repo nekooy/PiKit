@@ -94,11 +94,14 @@ device** — it is an input of the runtime image, so a new pi arrives with a new
 The button that used to run pi's own `npm install -g` in the live prefix was removed
 after an interrupted run left a tree with no `jiti` in it, which 0.86.x loads the bundled
 TypeScript guard extension through: every agent start then failed with
-`Failed to load extension "…/pi-safety-guard.ts": Cannot find module 'jiti'`. The API key is
-passed through the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for every
-provider Pi already knows, because argv is readable by other processes; for a **custom
-endpoint it has to go on the command line** instead — see §6.1, which records the control
-test that established it.
+`Failed to load extension "…/pi-safety-guard.ts": Cannot find module 'jiti'`. The API key is passed through the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for every
+provider Pi already knows, because argv is readable by other processes; the launch carries
+**every** saved profile's key this way, under `PIKIT_KEY_<profile id>` for the ones registered
+through `models.json` (§7.2). `--provider` names the id that profile is registered under, which
+is pi's own id for the first profile of a built-in provider and an id of this app's own
+otherwise (`ProfileAddressing.runtimeProviderId`). The launched profile's key also goes on the
+command line as `--api-key`, which is pi's first-precedence credential; that flag used to be the
+*only* way a custom endpoint could authenticate, and §6.1 records both measurements.
 
 ### Why the built-in tool list is not `--tools`
 
@@ -130,15 +133,19 @@ own settings empty. That is not a terminal bug — the fix is to keep them, in p
 
 - `$HOME/.pi/agent/settings.json` gains `defaultProvider`, `defaultModel` and
   `defaultThinkingLevel`, merged (never replacing the document) and only when a
-  profile is configured. They are the values the app itself launches pi with, so the
-  two cannot disagree; `defaultTools` and the bundled extension's `packages` entry are
-  written by the same merge, which is also where the exclusion-list reasoning for
-  `models.json` lives (§6.1).
-- The login shell that the Terminal tab spawns gets the active profile's key under the
-  same environment variable the agent uses, so the credential is in scope for whatever
-  the user runs. It is *not* written to pi's `auth.json`: that would put the secret on
-  disk permanently, when it is already in the agent's argv by design (§6.1).
-- Only new shells see a changed key. A session that is already open keeps the
+  profile is configured. They are the values the app itself launches pi with — including
+  the *runtime* provider id, so a relay's `pikit-custom-<profile id>` is a name that
+  exists in `models.json` — so the two cannot disagree; `defaultTools` and the bundled
+  extension's `packages` entry are written by the same merge, which is also where the
+  exclusion-list reasoning for `models.json` lives (§6.1).
+- The login shell that the Terminal tab spawns gets **every** saved profile's key, under
+  the same variables the agent's launch carries, so the credential is in scope for
+  whatever the user runs — and it gets `PI_CODING_AGENT_SESSION_DIR` pointing at the same
+  directory the agent writes its transcripts to, so a `pi` typed there `--continue`s the
+  conversation on screen and the conversations it starts appear in the app's list. Neither
+  is written to pi's `auth.json`: that would put the secret on disk permanently, when the
+  agent's own environment already carries it (§6.1).
+- Only new shells see a changed key or directory. A session that is already open keeps the
   environment it was born with, which is the honest behaviour for a PTY.
 
 ## Why not drive the interactive TUI through a PTY?

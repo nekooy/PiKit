@@ -24,8 +24,9 @@ import kotlin.math.roundToInt
  * Passing credentials through the environment is deliberate: `--api-key` is
  * visible in the process command line to anything that can read `/proc`, and pi
  * additionally rejects it unless a model is also given on the command line.
- * (PiKit passes both — see [PiProcessLauncher] — because a provider registered through
- * `models.json` does not resolve the environment variable at all.)
+ * (PiKit passes both for the launched profile, and puts every *other* saved
+ * profile's key in the environment as `PIKIT_KEY_<profile id>`, which is the variable
+ * each of their `models.json` entries names — see [ProfileAddressing].)
  *
  * ## Which of pi's providers are here, and which are deliberately not
  *
@@ -224,10 +225,23 @@ enum class CustomApi(val id: String) {
  */
 object CustomEndpoint {
 
-    /** The provider name written into `models.json`, and passed to `--provider`. */
+    /**
+     * The id that marks a profile as a **custom endpoint**, stored in
+     * `ModelProfile.provider`.
+     *
+     * Not the id pi is told: every relay is registered under an id of its own
+     * (`ProfileAddressing.runtimeProviderId`), because one shared id is one endpoint and
+     * one credential as far as pi is concerned — the second relay saved would otherwise
+     * overwrite the first.
+     */
     const val PROVIDER_ID = "pikit-custom"
 
-    /** The environment variable the generated `apiKey` references. */
+    /**
+     * The variable a generated `apiKey` names when the caller does not give one.
+     *
+     * Kept for the document this wrote before a profile had an address; the launch path
+     * names `$PIKIT_KEY_<profile id>` instead ([ProfileAddressing.apiKeyReference]).
+     */
     const val API_KEY_ENV = "PIKIT_API_KEY"
 
     /** Where pi looks for it, relative to `$HOME`. */
@@ -262,6 +276,12 @@ object CustomEndpoint {
         modelIds: List<String>,
         settings: Map<String, ModelSettings> = emptyMap(),
         api: String = CustomApi.DEFAULT_ID,
+        /**
+         * What the entry names in `apiKey`: a `$NAME` reference for pi to interpolate,
+         * or [API_KEY_ENV] for the single-endpoint document this wrote before every
+         * profile had an address of its own.
+         */
+        apiKey: String = API_KEY_ENV,
     ): JsonObject? {
         val base = normalizeApiBaseUrl(baseUrl)
         val models = modelIds.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -275,7 +295,7 @@ object CustomEndpoint {
             put("name", "PiKit custom endpoint")
             put("baseUrl", base)
             put("api", api.ifBlank { CustomApi.DEFAULT_ID })
-            put("apiKey", API_KEY_ENV)
+            put("apiKey", apiKey)
             put(
                 "models",
                 buildJsonArray { models.forEach { add(entry(it, settings[it] ?: ModelSettings())) } },
@@ -632,20 +652,6 @@ enum class FontSize(val code: String, val scale: Float) {
             // A relay may sit in front of a gateway that needs no key of its own;
             // every built-in provider does.
             (provider in PiProvider.needsBaseUrl || apiKey.isNotBlank())
-}
-
-/**
- * The active profile's key as the environment variable pi reads for that provider.
- *
- * The same pair the agent process is launched with (`PiProcessLauncher.launch`), so a
- * `pi` the user types in the terminal tab authenticates exactly like the agent does.
- * Android-free on purpose: it is the rule that decides whether a hand-run `pi` can
- * find an *available* model at all, and that is checkable on the JVM.
- */
-fun apiKeyEnvironment(settings: PiSettings): Map<String, String> {
-    val provider = settings.provider ?: return emptyMap()
-    val key = settings.apiKey.trim()
-    return if (key.isEmpty()) emptyMap() else mapOf(provider.envVar to key)
 }
 
 /**
