@@ -1644,8 +1644,42 @@ class PiAgentSession private constructor(context: Context) {
                     PiCommand.setModel(it, providerId, model)
                 }
             }.isSuccess
-            if (applied) refreshState() else scheduleRestart()
+            if (!applied) {
+                scheduleRestart()
+                return@runCommand
+            }
+            // The level the reader chose, mapped onto the model that has just started
+            // answering. pi carries the running level across `set_model` and only clamps
+            // it (measured), so without this the new model inherits whatever the
+            // previous one clamped the level *to* — a level that belongs to a model the
+            // reader has already left. `thinkingLevelOf` derives the same answer from the
+            // same two inputs for the chip, so the process and the chip agree without
+            // either trusting the other's echo.
+            carriedThinkingLevel(model)?.let { level ->
+                runCatching {
+                    live.requestOrThrow("set_thinking_level") {
+                        PiCommand.setThinkingLevel(it, level)
+                    }
+                }
+            }
+            refreshState()
         }
+    }
+
+    /**
+     * The saved level, mapped onto what [modelId] can do — or null when nothing knows
+     * that model's levels yet.
+     *
+     * The catalogue on disk is the source, because it is the only one that answers for a
+     * model that is *not* running: `get_available_thinking_levels` is about the model pi
+     * is on, and the whole point of this is the model pi has just been switched to. A
+     * model the file does not describe — a relay whose own entry carries the map, say —
+     * answers null, and pi's own clamp of the carried level then stands.
+     */
+    private fun carriedThinkingLevel(modelId: String): String? {
+        val levels = catalogueThinkingLevels.value[modelId].orEmpty()
+        if (levels.isEmpty()) return null
+        return clampThinkingLevel(settingsStore.read().thinkingLevel, levels)
     }
 
     fun compact() {

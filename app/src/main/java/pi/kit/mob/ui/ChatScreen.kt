@@ -1515,14 +1515,26 @@ private fun sheetBottomInset(): Dp =
     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
 /**
- * The thinking level to show, preferring what pi reports over what was saved.
+ * The thinking level to show: the reader's own choice, mapped onto the model in use.
  *
- * pi reports the level once it is running, and that is the truthful answer even
- * when it differs from what was saved: pi clamps a level the model does not have
- * (`clampThinkingLevel`, forwards), so what the chip shows and what the model is
- * actually doing are the same thing. Before pi has answered, the saved *preference*
- * is shown, clamped to the levels the model was last seen to support — which is what
- * stops the chip from displaying `medium` for the second it takes pi to say `high`.
+ * pi reports the level it is running (`get_state.thinkingLevel`), and that value is
+ * deliberately **not** an input here. Measured against the pinned 1.4.0, `set_model`
+ * carries the running level across a switch and clamps it to the new model's list — so
+ * what pi reports is one model's answer to a question another model asked, and reading
+ * it let a level that belonged to a different row win over the one the reader had just
+ * chosen. The case that names it: `off` on one profile, `max` chosen on the next, and a
+ * switch to a third came back `off` — the level of the row that had been left, clamped
+ * by whichever model pi happened to be on, rather than the level of the model the
+ * reader had come from.
+ *
+ * The saved value is the only thing that is actually the reader's, so it is the input
+ * and [clampThinkingLevel] is what maps it: `max` on a model whose map is `{off, high}`
+ * shows `high`, which is what "matching" means for that model. A model that can only do
+ * `off` shows `off` while it is in front of the reader and nothing is written back —
+ * making the clamp permanent is the bug the *remembered levels* below replaced, because
+ * using such a model once would then leave `off` on the command line for every model
+ * afterwards (§7.2).
+ *
  * [saved] is passed in rather than read off the store here, so the caller collects it
  * and a level changed elsewhere can move the tick while the sheet is open.
  *
@@ -1556,14 +1568,15 @@ private fun sheetBottomInset(): Dp =
  * [PiSettings.modelId] is the profile's model, i.e. the model the agent was
  * *launched with*, so it is the right key on the very first frame.
  *
- * ## Why the live level is clamped as well
+ * ## Why nothing reads pi's live level
  *
- * pi's `get_state` and pi's level list are two replies, and a model switch produces
- * both: between them the *live level* is still the previous model's while the levels
- * belong to the new one — or, before [ConversationState.availableThinkingLevelsFor]
- * existed, the other way round. Clamping is idempotent for a level pi really is on
- * (pi clamps too), so the only case it changes is the stale one, where it shows what pi
- * is about to report anyway. §7.2 has the report this answers.
+ * That reading was removed, and the reason is the rule above: pi's answer is about one
+ * model, so it can carry a level that belongs to a model the reader is no longer on —
+ * `off` chosen on another row, arriving on this one as if it were this model's. What the
+ * model actually does is kept in step the other way round: the session sends this same
+ * clamped level to pi after every switch (`PiAgentSession.selectProfile`), so the chip
+ * and the process agree without either of them being asked to trust the other. §7.2
+ * records the sequence that settled it.
  */
 private fun thinkingLevelOf(
     state: ConversationState,
@@ -1571,7 +1584,7 @@ private fun thinkingLevelOf(
     active: ModelProfile?,
     catalogued: Map<String, List<String>>,
 ): String = clampThinkingLevel(
-    state.thinkingLevel?.takeIf { it.isNotBlank() } ?: saved.thinkingLevel,
+    saved.thinkingLevel,
     levelsFor(state, saved, active, catalogued),
 )
 
