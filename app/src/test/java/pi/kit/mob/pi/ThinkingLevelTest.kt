@@ -185,6 +185,42 @@ class ThinkingLevelTest {
         catalogued: List<String> = emptyList(),
     ): List<String> = thinkingLevelsFor(live, liveFor, modelId, remembered, catalogued)
 
+    // ------------------------------------- stating a level to a pi that has its own idea
+
+    /** `xiaomi/mimo-v2.6-pro` from pi.dev's catalogue: exactly two levels. */
+    private val mimoPro = listOf("off", "high")
+
+    @Test
+    fun `pi's own per-model level is overridden with the reader's, mapped`() {
+        // pi keeps `modelThinkingLevels` in its `settings.json` and answers a model
+        // switch with **that model's** entry before anything else
+        // (`_getThinkingLevelForModelSwitch`, 1.4.0). So the level to state is the
+        // reader's, clamped — `max` arrives on the two-level model as `high`, and the
+        // `off` recorded for that model in an earlier session is not consulted at all.
+        assertEquals(
+            "the reader's max, mapped onto a model that only has off and high",
+            "high",
+            thinkingLevelToState(saved = "max", available = mimoPro, piLevel = "off"),
+        )
+        assertEquals(
+            "and the same answer on the four-level model",
+            "max",
+            thinkingLevelToState(saved = "max", available = deepseekFlash, piLevel = "off"),
+        )
+    }
+
+    @Test
+    fun `nothing is sent when pi is already on that level`() {
+        // The launch path asks this on every start: a level pi already resolved — from
+        // its own memory or from `--thinking` — is one request saved, and a request that
+        // would change nothing is also the one that would fail loudest for no reason.
+        assertNull(thinkingLevelToState("max", deepseekFlash, piLevel = "max"))
+        assertNull(thinkingLevelToState("max", mimoPro, piLevel = "high"))
+        // Nothing knows this model's levels yet: pi's own clamp is the best answer there
+        // is, so the app says nothing rather than guessing a list.
+        assertNull(thinkingLevelToState("max", emptyList(), piLevel = "off"))
+    }
+
     @Test
     fun `the remembered levels are only used for the model they were measured on`() {
         // The levels are a property of the model's own `thinkingLevelMap`: v4-pro has

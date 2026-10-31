@@ -141,6 +141,35 @@ fun clampThinkingLevel(level: String, available: List<String>): String {
 }
 
 /**
+ * The level the app has to **state** to a running pi, or null when pi already has it.
+ *
+ * pi keeps its own per-model memory: `settings.json` carries
+ * `modelThinkingLevels: { "<provider>/<modelId>": level }`, written every time the level
+ * changes, and `_getThinkingLevelForModelSwitch` (1.4.0) answers with **that model's**
+ * entry whenever it has one — before the default, and before `--thinking` on the launch
+ * path. So a level recorded for a model in an earlier session comes back on every switch
+ * to it and on every launch with it, whatever the reader chose in between; from the
+ * outside that reads as "the thinking level follows that one model".
+ *
+ * The app's answer is to state its own choice at the two moments pi is listening —
+ * after `set_model` and after the launch handshake — and only when the two disagree,
+ * which is what this decision is. [piLevel] is what pi reported for the model now in
+ * front of the reader; a null or matching one needs nothing sent.
+ *
+ * [available] empty means nothing knows this model's levels yet, and pi's own clamp of
+ * the level is then the best answer there is.
+ */
+internal fun thinkingLevelToState(
+    saved: String,
+    available: List<String>,
+    piLevel: String?,
+): String? {
+    if (available.isEmpty()) return null
+    val wanted = clampThinkingLevel(saved, available)
+    return wanted.takeIf { it != piLevel }
+}
+
+/**
  * The levels the model itself leaves on the menu — pi's `getSupportedThinkingLevels`
  * on plain data.
  *

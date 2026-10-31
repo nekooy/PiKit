@@ -550,6 +550,13 @@ class PiAgentSession private constructor(context: Context) {
             // round trip whose reply is every model of every configured provider,
             // costs, windows and thinking maps included.
             refreshThinkingLevels()
+            // The same per-model memory is consulted when pi resolves the *launch*
+            // model, and it outranks `--thinking` there, so a relaunch would otherwise
+            // come back at a level recorded for this model earlier. State the reader's
+            // choice once, now that the process can hear it.
+            _conversation.value.model?.id?.let { model ->
+                stateThinkingLevel(newClient, model, _conversation.value.thinkingLevel)
+            }
             // Off the launch path, and nothing waits on it: this is a network round
             // trip and the launch is a tap. See [refreshCatalogueIfStale].
             scope.launch { refreshCatalogueIfStale(workingDir) }
@@ -1649,37 +1656,57 @@ class PiAgentSession private constructor(context: Context) {
                 return@runCommand
             }
             // The level the reader chose, mapped onto the model that has just started
-            // answering. pi carries the running level across `set_model` and only clamps
-            // it (measured), so without this the new model inherits whatever the
-            // previous one clamped the level *to* — a level that belongs to a model the
-            // reader has already left. `thinkingLevelOf` derives the same answer from the
-            // same two inputs for the chip, so the process and the chip agree without
-            // either trusting the other's echo.
-            carriedThinkingLevel(model)?.let { level ->
-                runCatching {
-                    live.requestOrThrow("set_thinking_level") {
-                        PiCommand.setThinkingLevel(it, level)
-                    }
-                }
-            }
+            // answering. pi answers `set_model` with **that model's own remembered
+            // level** when it has one (`_getThinkingLevelForModelSwitch`, 1.4.0, reading
+            // `settings.json`'s `modelThinkingLevels`), so without this the switch
+            // silently returns to a level recorded for that model in an earlier
+            // session — which is what "the thinking level follows one model" describes.
+            // `thinkingLevelOf` derives the same answer for the chip from the same two
+            // inputs, so the process and the chip agree without either trusting the
+            // other's echo.
+            stateThinkingLevel(live, model, piLevel = null)
             refreshState()
         }
     }
 
     /**
-     * The saved level, mapped onto what [modelId] can do — or null when nothing knows
-     * that model's levels yet.
+     * Tells a running pi which level the model it is on should be using.
      *
-     * The catalogue on disk is the source, because it is the only one that answers for a
-     * model that is *not* running: `get_available_thinking_levels` is about the model pi
-     * is on, and the whole point of this is the model pi has just been switched to. A
-     * model the file does not describe — a relay whose own entry carries the map, say —
-     * answers null, and pi's own clamp of the carried level then stands.
+     * Called at the two moments pi answers a level of its own accord — after `set_model`
+     * and after the launch handshake — because pi's per-model memory (`modelThinkingLevels`
+     * in its `settings.json`) is consulted on both paths and outranks `--thinking` when it
+     * resolves a model. Stating the reader's choice is therefore the only way the two can
+     * agree, and [thinkingLevelToState] is the decision of whether anything needs saying.
+     *
+     * [piLevel] is what pi reported for [modelId]; null means "just switched, so ask it
+     * to take this level" rather than "compare first". A failed request is logged and
+     * ignored: the transcript's own chip already shows the level the reader chose, and a
+     * relaunch is not worth it for a level.
      */
-    private fun carriedThinkingLevel(modelId: String): String? {
-        val levels = catalogueThinkingLevels.value[modelId].orEmpty()
-        if (levels.isEmpty()) return null
-        return clampThinkingLevel(settingsStore.read().thinkingLevel, levels)
+    private suspend fun stateThinkingLevel(live: PiRpcClient, modelId: String, piLevel: String?) {
+        val levels = levelsKnownFor(modelId)
+        val level = thinkingLevelToState(
+            saved = settingsStore.read().thinkingLevel,
+            available = levels,
+            piLevel = piLevel,
+        ) ?: return
+        runCatching {
+            live.requestOrThrow("set_thinking_level") { PiCommand.setThinkingLevel(it, level) }
+        }.onFailure { Log.w(TAG, "could not state the thinking level $level for $modelId", it) }
+    }
+
+    /**
+     * What [modelId] can do, from the two sources that answer for a model pi may not be
+     * on: this process's last answer, when it was an answer for that model, and pi's
+     * catalogue on disk (which covers a model the switch has *just* moved to, before pi
+     * has answered for it). Empty means nothing knows, and pi's own clamp then stands.
+     */
+    private fun levelsKnownFor(modelId: String): List<String> {
+        val state = _conversation.value
+        val live = state.availableThinkingLevels
+            .takeIf { state.availableThinkingLevelsFor == modelId }
+            .orEmpty()
+        return live.ifEmpty { catalogueThinkingLevels.value[modelId].orEmpty() }
     }
 
     fun compact() {
