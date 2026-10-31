@@ -224,11 +224,12 @@ object ShellEnvironment {
      *    update check and the model catalogue, which the user asked to have back —
      *    so the promise the licence text makes ("no telemetry") is kept by this
      *    variable instead of by the blanket offline flag.
-     *  - `PIKIT_WORKSPACE` — the directory a recursive delete may target; see
-     *    [PiProcessLauncher]'s counterpart in `tools/pi-safety-guard.ts`.
+     *  - `PIKIT_WORKSPACE` — the writable root the permission extension judges every
+     *    write against; see [PiProcessLauncher]'s counterpart in
+     *    `tools/pikit-permissions.ts` (§14).
      *
-     * @param workspace the agent's working directory. Also what the guard treats as
-     *   the workspace, so it must be the same value the process is spawned in.
+     * @param workspace the agent's working directory, and therefore the root a write
+     *   may land in — it must be the same value the process is spawned in.
      */
     fun forPiAgent(
         context: Context,

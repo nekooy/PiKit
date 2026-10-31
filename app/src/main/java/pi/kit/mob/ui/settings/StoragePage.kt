@@ -101,7 +101,7 @@ import java.io.File
  * command that names shared storage outside this list. That guard is the
  * enforcement, because it is the only place the agent's actions pass through —
  * Android grants "all files access" to the process and the agent runs as this app,
- * so no filesystem-level switch could be honest about it. `pi-safety-guard.ts`
+ * so no filesystem-level switch could be honest about it. `pikit-permissions.ts`
  * carries the details, and the page's copy says "PiKit refuses", not "Android
  * hides", for the same reason.
  *

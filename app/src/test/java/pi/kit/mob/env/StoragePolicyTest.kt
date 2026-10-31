@@ -152,7 +152,7 @@ class StoragePolicyTest {
 
     @Test
     fun `the link farm is published as name=target pairs, one per line`() {
-        // The format is a contract with `linkList` in `tools/pi-safety-guard.ts`,
+        // The format is a contract with `environmentFrom` in `tools/pikit-permissions.ts`,
         // which is what turns `~/storage/shared/Download/a.txt` into
         // `/sdcard/Download/a.txt`. A separator the parser does not expect is a
         // policy that silently stops being enforced — and it was enforced by nothing

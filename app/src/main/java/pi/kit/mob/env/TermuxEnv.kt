@@ -97,10 +97,11 @@ class TermuxEnv private constructor(context: Context) {
      * dotfile, every pi config and every session transcript in the agent's own
      * project tree: a model told to "clean up the build output" was one path
      * mistake away from `$HOME/.pi/agent`, and a recursive delete of the working
-     * directory meant the whole environment. The workspace is a subdirectory so
-     * the two are different things by construction, and the guard (see
-     * `tools/pi-safety-guard.ts`) allows a recursive delete inside it and nowhere
-     * else under `$HOME`.
+     * directory meant the whole environment. The workspace is a subdirectory so the
+     * two are different things by construction, and the permission tiers (§14) allow
+     * a write inside it and nowhere else under `$HOME`. The app creates it on install;
+     * the reader may start a conversation in another workspace, which is why the
+     * directory pi runs in is published as `PIKIT_WORKSPACE` rather than assumed.
      */
     val workspace: File = File(home, WORKSPACE_DIR_NAME)
 

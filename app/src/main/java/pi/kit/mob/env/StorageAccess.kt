@@ -43,14 +43,16 @@ import java.io.File
  *     `deleteRecursively()` on anything that was not a symlink, which is the call
  *     that could follow a link into shared storage.
  *
- * On top of that, the agent runs with a `tool_call` guard that refuses recursive
- * deletes outside `$HOME`, and that also refuses a command naming shared storage
- * outside the granted folders — see `tools/pi-safety-guard.ts` and
- * [spellingsOf]. Three independent layers, because each one alone has a hole: the
- * policy decides what is *offered* (`~/storage`), the guard decides what the model
- * is *allowed to name*, and [SafeDelete] decides what this *app* can do. None of
- * them is a wall Android enforces: "all files access" is granted to the process,
- * the agent runs as this app, and no unprivileged app can run it as anyone else.
+ * On top of that, the agent runs with a `tool_call` policy that refuses a *write*
+ * outside its workspace and the folders the user granted — the three tiers of
+ * `tools/pikit-permissions.ts` (§14), fed the granted folders through
+ * [allowedSpellings] and the link farm through [storageLinksValue]. Three
+ * independent layers, because each one alone has a hole: the policy decides what is
+ * *offered* (`~/storage`), the tiers decide what the model is *allowed to write*,
+ * and [SafeDelete] decides what this *app* can do. None of them is a wall Android
+ * enforces: "all files access" is granted to the process, the agent runs as this
+ * app, and no unprivileged app can run it as anyone else. Reads are free in every
+ * tier, which is the one thing the guard this replaced did differently.
  */
 object StorageAccess {
 
@@ -381,9 +383,11 @@ object StorageAccess {
      * and it contains none of the grant's paths: `~/storage/shared/Download/a.txt` is
      * `/sdcard/Download/a.txt`. Without this the folder switches were defeated by
      * their own convenience links — `cat ~/storage/shared/Download/a.txt` was allowed
-     * with nothing granted while `cat /sdcard/Download/a.txt` was refused. The
-     * parser on the other side is `linkList` in `tools/pi-safety-guard.ts`, and
-     * `StoragePolicyTest` pins this format against it.
+     * with nothing granted while `cat /sdcard/Download/a.txt` was refused. That was
+     * the old guard's measurement; the tiers draw the line at writes, and the farm is
+     * what lets a write through `~/storage/downloads` be judged as the `/sdcard` path
+     * it is. The parser on the other side is `environmentFrom` in `tools/pikit-permissions.ts`, and `StoragePolicyTest` pins this format against
+     * it.
      */
     internal fun storageLinksValue(plan: Map<String, String>): String =
         plan.entries.joinToString("\n") { (name, target) -> "$name=$target" }
