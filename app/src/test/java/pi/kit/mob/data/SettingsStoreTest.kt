@@ -61,10 +61,10 @@ class SettingsStoreTest {
             launcherIcon = LauncherIcon.DARK,
             permissionMode = PermissionMode.FULL_ACCESS,
             showAvatars = false,
-            aiAvatarLabel = "Pi",
+            aiAvatarName = "Pi",
             aiAvatarImage = "avatar.png",
             aiAvatarColor = AvatarColor.RED,
-            userAvatarLabel = "Me",
+            userAvatarName = "Me",
             userAvatarImage = "",
             userAvatarColor = AvatarColor.PURPLE,
         )

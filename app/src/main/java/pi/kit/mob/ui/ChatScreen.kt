@@ -67,6 +67,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -346,8 +347,8 @@ private const val SWIPE_COMMIT = 1f / 3f
  * was measured and below every quick one, and the floor under it is what stops a twitch
  * on the first frame from opening a page the reader had not started to pull.
  */
-private const val SWIPE_FLICK = 0.05f
-private const val SWIPE_FLICK_FLOOR = 0.06f
+private const val SWIPE_FLICK = 0.025f
+private const val SWIPE_FLICK_FLOOR = 0.04f
 
 @Composable
 internal fun ChatScreen(
@@ -771,16 +772,25 @@ internal fun ChatScreen(
         // directory, and doing that behind every conversation would be a cost paid on
         // every chat frame for a page the reader is not looking at.
         if (historyReachable) {
-            SessionsScreen(
-                session = session,
-                onBack = { settlePage(0f) },
-                onOpened = { settlePage(0f) },
-            )
+            // The list arrives from the trailing edge as the conversation is pushed
+            // off to the leading one: a *forward* move, which is what opening a
+            // second level is, and it is the direction a leftward drag implies.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .offset { IntOffset(((1f - pagePos) * pageWidth).roundToInt(), 0) },
+            ) {
+                SessionsScreen(
+                    session = session,
+                    onBack = { settlePage(0f) },
+                    onOpened = { settlePage(0f) },
+                )
+            }
         }
         Box(
             Modifier
                 .fillMaxSize()
-                .offset { IntOffset((pagePos * pageWidth).roundToInt(), 0) }
+                .offset { IntOffset((-pagePos * pageWidth).roundToInt(), 0) }
                 .pointerInput(pageWidth) {
                     if (pageWidth <= 0) return@pointerInput
                     detectHorizontalDragGestures(
@@ -792,7 +802,9 @@ internal fun ChatScreen(
                         onHorizontalDrag = { change, delta ->
                             change.consume()
                             lastDelta = delta
-                            pagePos = (pagePos + delta / pageWidth).coerceIn(0f, 1f)
+                            // Leftward is negative in Compose's coordinates, and a
+                            // leftward drag is what opens the list.
+                            pagePos = (pagePos - delta / pageWidth).coerceIn(0f, 1f)
                         },
                         onDragEnd = { settlePage(commitTarget()) },
                         onDragCancel = { settlePage(commitTarget()) },
@@ -1113,10 +1125,10 @@ private fun ChatPage(
     val saved by session.settingsStore.settings.collectAsState()
     val avatars = remember(
         saved.showAvatars,
-        saved.aiAvatarLabel,
+        saved.aiAvatarName,
         saved.aiAvatarImage,
         saved.aiAvatarColor,
-        saved.userAvatarLabel,
+        saved.userAvatarName,
         saved.userAvatarImage,
         saved.userAvatarColor,
     ) {
@@ -1126,14 +1138,14 @@ private fun ChatPage(
             ChatAvatars(
                 // Blank is the mark, not a word: the agent's fallback is the app's own
                 // Pi mark, drawn by `PiAvatar` for `AvatarSpeaker.AGENT`.
-                aiLabel = saved.aiAvatarLabel.ifBlank { null },
+                aiName = saved.aiAvatarName.ifBlank { null },
                 aiImage = saved.aiAvatarImage.ifBlank { null },
                 aiColor = saved.aiAvatarColor.seed,
                 // The reader's blank is the person figure for the same reason: the two
                 // speakers must not fall back to the same figure, and the figure is the
                 // personalization page's — the page that lets the reader replace it is
                 // the one that decides what it is when they have not.
-                userLabel = saved.userAvatarLabel.ifBlank { null },
+                userName = saved.userAvatarName.ifBlank { null },
                 userImage = saved.userAvatarImage.ifBlank { null },
                 userColor = saved.userAvatarColor.seed,
             )
@@ -2366,10 +2378,10 @@ private const val APP_NAME = "PiKit"
  * settings store holds.
  */
 private data class ChatAvatars(
-    val aiLabel: String?,
+    val aiName: String?,
     val aiImage: String?,
     val aiColor: Color,
-    val userLabel: String?,
+    val userName: String?,
     val userImage: String?,
     val userColor: Color,
 )
@@ -2388,6 +2400,25 @@ private data class ChatAvatars(
  * The 8dp gap is the inside-module gap — it belongs to the card's own top edge, not
  * to the transcript's `rowGap`, which is the space between two turns.
  */
+/**
+ * A speaker's name, beside their mark.
+ *
+ * One style for both sides: it is a caption on the conversation rather than part of it,
+ * which is why it is the footnote face and the muted ink. Blank never reaches here — a
+ * reader who chose no name passes null, and the row is then just the mark.
+ */
+@Composable
+private fun SpeakerName(name: String) {
+    Text(
+        text = name,
+        style = MiuixTheme.textStyles.footnote2,
+        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.widthIn(max = 140.dp),
+    )
+}
+
 private val AVATAR_SIZE = 34.dp
 private val AVATAR_GAP = 8.dp
 
@@ -2469,14 +2500,22 @@ private fun TranscriptCardView(
                     // draw the same person, and a stored label or picture replaces it
                     // in both.
                     avatars?.let { marks ->
-                        PiAvatar(
-                            speaker = AvatarSpeaker.READER,
-                            color = marks.userColor,
-                            label = marks.userLabel,
-                            imagePath = marks.userImage,
-                            size = AVATAR_SIZE,
+                        // The reader's name sits to the *left* of their mark, because the
+                        // mark is on the trailing edge: mark-then-name on this side would
+                        // put the name against the screen's edge.
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.padding(bottom = AVATAR_GAP),
-                        )
+                        ) {
+                            marks.userName?.let { SpeakerName(it) }
+                            PiAvatar(
+                                speaker = AvatarSpeaker.READER,
+                                color = marks.userColor,
+                                imagePath = marks.userImage,
+                                size = AVATAR_SIZE,
+                            )
+                        }
                     }
                     Card(
                         cornerRadius = PiCorner.radius,
@@ -2523,14 +2562,21 @@ private fun TranscriptCardView(
                 // The agent's fallback is the app's own Pi mark ([PiAvatar]), so the
                 // speaker answering is named by the product's logo rather than by two
                 // letters standing in for one.
-                PiAvatar(
-                    speaker = AvatarSpeaker.AGENT,
-                    color = marks.aiColor,
-                    label = marks.aiLabel,
-                    imagePath = marks.aiImage,
-                    size = AVATAR_SIZE,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(bottom = AVATAR_GAP),
-                )
+                ) {
+                    PiAvatar(
+                        speaker = AvatarSpeaker.AGENT,
+                        color = marks.aiColor,
+                        imagePath = marks.aiImage,
+                        size = AVATAR_SIZE,
+                    )
+                    // The agent's name to the *right* of its mark: the mark opens the
+                    // answer at the start edge, so the word follows it into the page.
+                    marks.aiName?.let { SpeakerName(it) }
+                }
             }
             Card(
                 cornerRadius = PiCorner.radius,
@@ -3623,7 +3669,15 @@ private fun Composer(
                         label = workspaceLabel,
                         onClick = { onOpenSheet(ComposerSheet.Workspace) },
                     ) {
-                        OverlayListPopup(
+                        // Keyed on the list's size: the popup's content is its own
+                        // composition, and a workspace that arrived while the popup was
+                        // closed did not reach it — measured on the history page adopting
+                        // a `pi` that had been run by hand, where the settings dialog
+                        // listed the folder and this menu did not. A new key is a new
+                        // composition, which is the cheapest honest fix for a slot the
+                        // library does not re-read.
+                        key(workspaces.size) {
+                            OverlayListPopup(
                             popupPositionProvider = aboveAnchorPositionProvider(),
                             show = openSheet == ComposerSheet.Workspace,
                             maxHeight = MENU_MAX_HEIGHT,
@@ -3640,6 +3694,7 @@ private fun Composer(
                                 onAdd = onOpenWorkspacePicker,
                                 onDismiss = onCloseSheet,
                             )
+                            }
                         }
                     }
                 }

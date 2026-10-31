@@ -11,8 +11,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import pi.kit.mob.data.TEXT_SCALE_BASELINE
 import pi.kit.mob.data.applyLauncherIcon
+import pi.kit.mob.env.AgentContext
 import pi.kit.mob.pi.PiAgentService
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.PiKitMiuixTheme
@@ -43,6 +46,24 @@ class MainActivity : ComponentActivity() {
             // waiting for the image to unpack.
             LaunchedEffect(settings.launcherIcon) {
                 applyLauncherIcon(this@MainActivity, settings.launcherIcon)
+            }
+
+            // The agent's instructions are two documents composed into the one file pi
+            // reads, and the composition has to happen on every launch rather than only
+            // when the runtime is installed: an app-only upgrade carries a new default
+            // text, a reader may have edited either half, and the installer does not run
+            // at all when the image is already there. `install` is idempotent — it writes
+            // a half only when that half is missing or its generation is behind.
+            LaunchedEffect(Unit) {
+                withContext(Dispatchers.IO) {
+                    AgentContext.install(session.env)
+                    // One scan at launch, for the same reason and with a second payoff:
+                    // it is what adopts a workspace that arrived from outside this app
+                    // (a `pi` run by hand in the terminal writes its session with its own
+                    // `cwd`), and it is what makes the history page's list ready before
+                    // the page is opened rather than a second later.
+                    runCatching { session.listSessions() }
+                }
             }
 
             // The theme owns the palette, the type scale and the system bars. A

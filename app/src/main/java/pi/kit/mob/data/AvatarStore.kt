@@ -49,32 +49,22 @@ object AvatarStore {
         File(directory(filesDir), "${slot.id}.png")
 
     /**
-     * Decodes [uri], scales it and stores it as [slot]'s picture.
+     * The picked picture, decoded and bounded, for the crop step.
      *
-     * @return the stored file's absolute path, or null when the pick could not be
-     * read as an image at all — a wrong file type, a provider that refused, or no
-     * memory for the decode. The caller reports the null rather than leaving the
-     * reader with a circle that silently did not change.
-     *
-     * The decode is bounded twice: `inSampleSize` from the source's own bounds so a
-     * large photo is never fully unpacked, and a final scale to [AVATAR_STORED_PX]
-     * on the longest side so exactly one size of file is ever written.
+     * Separate from [store] because it happens *before* the reader has chosen what part
+     * of the picture to keep: this one is only ever a preview, so it is bounded to a
+     * little more than the square it is drawn in rather than to the stored size.
      */
-    suspend fun store(
-        context: Context,
-        filesDir: File,
-        slot: AvatarSlot,
-        uri: Uri,
-    ): String? = withContext(Dispatchers.IO) {
-        val bitmap = runCatching {
+    suspend fun decodeForCrop(context: Context, uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
+        runCatching {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, bounds)
             }
             var sample = 1
             while (
-                bounds.outWidth / (sample * 2) >= AVATAR_STORED_PX &&
-                bounds.outHeight / (sample * 2) >= AVATAR_STORED_PX
+                bounds.outWidth / (sample * 2) >= CROP_SOURCE_PX &&
+                bounds.outHeight / (sample * 2) >= CROP_SOURCE_PX
             ) {
                 sample *= 2
             }
@@ -82,20 +72,25 @@ object AvatarStore {
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
             }
-        }.getOrNull() ?: return@withContext null
-
-        runCatching {
-            val scaled = scaleToFit(bitmap, AVATAR_STORED_PX)
-            val target = file(filesDir, slot)
-            target.parentFile?.mkdirs()
-            target.outputStream().use { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            // The source and the intermediate both go; the scaled one is only kept
-            // when it is a different object from the source.
-            if (scaled !== bitmap) bitmap.recycle()
-            scaled.recycle()
-            target.absolutePath
         }.getOrNull()
     }
+
+    /**
+     * Writes the square the reader cropped, as the slot's picture.
+     *
+     * The crop is already square, so the only work is the size: one file, one format and
+     * one dimension, exactly as [store] does it, because everything downstream — the
+     * circle, the backup, the decode on the next launch — expects that.
+     */
+    fun storeSquare(filesDir: File, slot: AvatarSlot, square: Bitmap): String? = runCatching {
+        val scaled = scaleToFit(square, AVATAR_STORED_PX)
+        val target = file(filesDir, slot)
+        target.parentFile?.mkdirs()
+        target.outputStream().use { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        if (scaled !== square) square.recycle()
+        scaled.recycle()
+        target.absolutePath
+    }.getOrNull()
 
     /**
      * Removes [slot]'s stored picture.
@@ -135,4 +130,12 @@ object AvatarStore {
      * is a few tens of kilobytes rather than megabytes.
      */
     private const val AVATAR_STORED_PX = 512
+
+    /**
+     * The longest side the *crop preview* is decoded at.
+     *
+     * Twice the stored size, because the reader zooms in before choosing: at the preview
+     * size a zoomed crop would come from interpolated pixels rather than from the source.
+     */
+    private const val CROP_SOURCE_PX = 1024
 }

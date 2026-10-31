@@ -297,6 +297,10 @@ internal object JapaneseStrings : Strings {
         override val keysMessageSend = "端末に送る"
         override val keysKeyboardShow = "キーボードを表示"
         override val keysKeyboardHide = "キーボードを隠す"
+        override val paste = "C-V"
+        override val cut = "C-X"
+        override val keysHardwareOn = "外付けキーボード使用中。タップで入力メソッドに戻します"
+        override val keysHardwareOff = "入力メソッド使用中。タップで外付けキーボードに渡します"
     }
 
     override val files = object : Strings.Files {
@@ -361,8 +365,11 @@ internal object JapaneseStrings : Strings {
         override val showAvatarsSubtitle = "各メッセージの上にアバターを表示します"
         override val aiAvatar = "エージェントのアバター"
         override val userAvatar = "自分のアバター"
-        override val avatarLabel = "文字"
-        override val avatarLabelHint = "空欄なら既定のマーク"
+        override val avatarName = "名前"
+        override val avatarNameHint = "アバターの横に表示します。空欄なら表示しません"
+        override val avatarCropTitle = "アバターを切り抜く"
+        override val avatarCropHint = "ドラッグとピンチで調整。四角が実際の見え方です"
+        override val avatarCropUse = "この範囲を使う"
         override val avatarColor = "色"
         override val avatarPicture = "画像"
         override val avatarPicturePick = "画像を選ぶ"
@@ -421,6 +428,11 @@ internal object JapaneseStrings : Strings {
             "現在のセッションです。ツール呼び出しと結果も含めて毎回のメッセージと一緒に送られ、" +
                 "セッションファイルに書き込まれます。"
         override val agentContextInstructions = "グローバル AGENTS.md"
+        override val agentContextAuthorTitle = "既定の指示"
+        override val agentContextAuthorSubtitle = "PiKit が用意し、編集できます。PiKit が更新すると置き換わります"
+        override val agentContextUserTitle = "自分の指示"
+        override val agentContextUserSubtitle = "最初は空で、あなただけのもの。PiKit は書き換えません"
+        override val agentContextUserEmpty = "まだ空です。開いて書いてください"
         override val agentContextInstructionsEditable = "編集可"
         override val agentContextSave = "保存"
         override val agentContextSaved = "保存しました"

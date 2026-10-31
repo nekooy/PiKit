@@ -118,6 +118,17 @@ and puts a directory the list no longer offers into a group of its own rather th
 its conversations: a project the reader deleted is still a project whose conversations they may
 want to read. Sessions whose file records no directory at all are one last group.
 
+**A workspace that arrived from outside the app is adopted.** The `cwd` header is also how a
+directory gets *into* the list without the picker: a reader who runs `pi` by hand in the terminal
+— or any pi that starts in a directory of its own — writes a session whose first line names that
+folder, and the history page then grouped it under a workspace the composer's menu had never
+heard of. The same conversation in two places disagreeing about where it lives. `listSessions`
+now adopts every distinct `cwd` that still exists and is not already in the list, added exactly
+the way the picker adds one so the order, the dedupe and the deleted-default fallback all behave
+the same; a directory that has since been deleted is skipped, because it cannot be launched in.
+The scan also runs once at launch, which is what makes the menu complete before the history page
+has ever been opened — and what makes the history page's list ready on its first frame.
+
 **What a backup carries.** Every workspace, as `workspaces/<its path relative to $HOME>/…`
 beside the built-in one's `workspace/` — an entry name a restore can decode back on an install
 that has never heard of that folder, which is exactly the state a restore starts in. The added

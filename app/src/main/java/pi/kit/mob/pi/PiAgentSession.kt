@@ -1172,11 +1172,38 @@ class PiAgentSession private constructor(context: Context) {
                 pinned = file.name in pinned,
                 workspace = meta.workspace,
             )
-        }.also {
+        }.also { summaries ->
             // A conversation deleted while the app was running would otherwise be
             // cached for the life of the process.
             sessionMetaCache.keys.retainAll(files.mapTo(HashSet()) { file -> file.absolutePath })
+            adoptWorkspaces(summaries)
         }.sortedWith(compareByDescending<SessionSummary> { it.pinned }.thenByDescending { it.modifiedAt })
+    }
+
+    /**
+     * Workspaces that arrived from somewhere other than this app's picker.
+     *
+     * A reader who runs `pi` by hand in the terminal — or any pi session that starts in a
+     * directory of its own — writes a session file whose header records that directory, so
+     * the history page groups it under a workspace the composer's menu had never heard of:
+     * the group was there and the chip list was not, which is the same conversation in two
+     * places disagreeing about where it lives.
+     *
+     * So a scan adopts them. Every distinct `cwd` that still exists, is not already in the
+     * list, and is not the one the app is already showing becomes an ordinary workspace —
+     * added exactly the way the picker adds one, so the order, the dedupe and the fallback
+     * for a deleted default all behave the same. A directory that has since been deleted is
+     * skipped: it cannot be launched in, and adding it would put a row in the menu that
+     * does nothing.
+     */
+    private fun adoptWorkspaces(summaries: List<SessionSummary>) {
+        val existing = WorkspaceStore.list(appContext, env).mapTo(HashSet()) { it.path }
+        summaries.asSequence()
+            .map { it.workspace.orEmpty().trim() }
+            .filter { it.startsWith("/") && it !in existing }
+            .distinct()
+            .filter { java.io.File(it).isDirectory }
+            .forEach { path -> WorkspaceStore.add(appContext, env, path) }
     }
 
     /**

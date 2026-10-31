@@ -699,6 +699,11 @@ interface Strings {
         val pageUp: String
         val pageDown: String
         val interrupt: String
+        /** `Ctrl+V` — pi and readline both read it as paste. */
+        val paste: String
+
+        /** `Ctrl+X` — readline's prefix and a shell's cut. */
+        val cut: String
         val eof: String
 
         /**
@@ -736,6 +741,16 @@ interface Strings {
         /** The keyboard button, spoken: the bar's glyphs carry no words of their own. */
         val keysKeyboardShow: String
         val keysKeyboardHide: String
+
+        /**
+         * The hardware-keys switch, in both positions.
+         *
+         * Two sentences rather than one label and a state: what the button *does* differs
+         * by where it is, and a reader who reads only the description has to know which
+         * input path a tap gives them.
+         */
+        val keysHardwareOn: String
+        val keysHardwareOff: String
     }
 
     /**
@@ -905,8 +920,20 @@ interface Strings {
         val userAvatar: String
 
         /** In the avatar sheet: the label field's title and its blank-means-default hint. */
-        val avatarLabel: String
-        val avatarLabelHint: String
+        /**
+         * The name beside an avatar, not a letter inside it.
+         *
+         * A blank one means "no name", which is a state the reader may choose; the
+         * description says so, because an empty field that silently draws nothing is
+         * the kind of control a reader keeps retyping into.
+         */
+        val avatarName: String
+        val avatarNameHint: String
+
+        /** The square crop the picture goes through before it is stored. */
+        val avatarCropTitle: String
+        val avatarCropHint: String
+        val avatarCropUse: String
 
         /** In the avatar sheet: the row of colour swatches under the label. */
         val avatarColor: String
@@ -991,6 +1018,23 @@ interface Strings {
          * recognised it.
          */
         val agentContextInstructions: String
+
+        /**
+         * The app's own instructions, which the reader may edit.
+         *
+         * The document is maintained by PiKit: a build that carries a newer generation
+         * replaces it, and anything the reader wrote in it is the price of that — which
+         * is why there is a second document beside it for what must never be touched.
+         */
+        val agentContextAuthorTitle: String
+        val agentContextAuthorSubtitle: String
+
+        /** The reader's own instructions: created empty, never replaced by the app. */
+        val agentContextUserTitle: String
+        val agentContextUserSubtitle: String
+
+        /** The subtitle of the user's document while it is still blank. */
+        val agentContextUserEmpty: String
         val agentContextInstructionsEditable: String
 
         val agentContextSave: String

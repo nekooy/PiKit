@@ -45,12 +45,22 @@ object AgentContext {
     const val FILE_NAME = "AGENTS.md"
 
     /**
+     * The two documents the file pi reads is composed from.
+     *
+     * `AGENTS.md` is the only name pi looks for, so a second document cannot be a second
+     * file it reads — it has to be *merged*. These are the two halves: the app's own
+     * prompts, which PiKit maintains, and the reader's, which PiKit never touches.
+     */
+    const val AUTHOR_FILE_NAME = "AGENTS.author.md"
+    const val USER_FILE_NAME = "AGENTS.user.md"
+
+    /**
      * The generation of [default], in the first line of the file.
      *
      * Bumped whenever the default text changes in a way a stale copy would misreport.
      * 1 is the text that named `pikit-safety-guard` and had no marker at all.
      */
-    const val GENERATION = 2
+    const val GENERATION = 3
 
     /** The marker's prefix, so a reader can tell our own defaults from the user's words. */
     private const val MARKER = "<!-- pikit-default:"
@@ -65,19 +75,76 @@ object AgentContext {
      */
     private const val RETIRED_MARK = "pikit-safety-guard"
 
-    /** The file itself — the same path [install] writes and the settings page edits. */
+    /** The composed document — the one pi reads. Written by [compose], never edited. */
     fun file(env: TermuxEnv): File = File(env.piConfigDir, FILE_NAME)
 
+    /** The app's own prompts: edited on the settings page, refreshed by generation. */
+    fun authorFile(env: TermuxEnv): File = File(env.piConfigDir, AUTHOR_FILE_NAME)
+
+    /** The reader's own instructions: created once, empty, and never written again. */
+    fun userFile(env: TermuxEnv): File = File(env.piConfigDir, USER_FILE_NAME)
+
     /**
-     * Writes PiKit's own instructions if nothing is there yet, and leaves an existing
-     * file exactly as it is — unless it is an unedited default from an older generation.
-     * See this object's header for why.
+     * Writes the two halves if they are missing, refreshes the app's half when this build
+     * carries a newer generation, and composes the document pi reads.
+     *
+     * The reader's half is created empty and left alone for ever: it is theirs. The app's
+     * half is replaced when its marker is behind (see [isStaleDefault]) and kept
+     * otherwise — which is what "我改了默认提示词，你没改我的 text 就别动它" means in one
+     * rule: the generation says whether the *app's* text moved, not whether the reader
+     * edited it.
      */
     fun install(env: TermuxEnv) {
-        val file = file(env)
-        if (file.isFile && !isStaleDefault(file.readText())) return
-        file.parentFile?.mkdirs()
-        file.writeText(default(env))
+        val author = authorFile(env)
+        author.parentFile?.mkdirs()
+        val current = if (author.isFile) author.readText() else null
+        // A file from before the split has no author half: the old `AGENTS.md` is the
+        // reader's now, and is kept as the user half rather than thrown away.
+        val legacy = file(env)
+        if (current == null && legacy.isFile) {
+            val old = legacy.readText()
+            if (isStaleDefault(old)) {
+                // PiKit's own earlier text: replaced, and the reader's half starts empty
+                // rather than inheriting a default they did not write.
+                author.writeText(default(env))
+            } else {
+                // Someone's own document, written when there was one file. It becomes
+                // their half; the app's half is written fresh.
+                val user = userFile(env)
+                if (!user.isFile) user.writeText(old)
+                author.writeText(default(env))
+            }
+        } else if (current == null || isStaleDefault(current)) {
+            author.writeText(default(env))
+        }
+        val user = userFile(env)
+        if (!user.isFile) user.writeText("")
+        compose(env)
+    }
+
+    /**
+     * Rewrites the document pi reads from the two halves.
+     *
+     * Called after every install and after either half is edited, because pi reads the
+     * file once at startup: a document composed on the next launch would leave the
+     * running agent — and the one a reader just edited for — reading yesterday's rules.
+     */
+    fun compose(env: TermuxEnv) {
+        val author = runCatching { authorFile(env).readText() }.getOrDefault(default(env))
+        val user = runCatching { userFile(env).readText() }.getOrDefault("")
+        val body = buildString {
+            append(author.trimEnd())
+            append('\n')
+            if (user.isNotBlank()) {
+                append('\n')
+                append("<!-- The reader's own instructions, kept here by PiKit. -->")
+                append('\n')
+                append('\n')
+                append(user.trimEnd())
+                append('\n')
+            }
+        }
+        file(env).writeText(body)
     }
 
     /**

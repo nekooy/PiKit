@@ -313,6 +313,10 @@ internal object EnglishStrings : Strings {
         override val keysMessageSend = "Send to terminal"
         override val keysKeyboardShow = "Show the keyboard"
         override val keysKeyboardHide = "Hide the keyboard"
+        override val paste = "C-V"
+        override val cut = "C-X"
+        override val keysHardwareOn = "A hardware keyboard has the input; tap to use the IME"
+        override val keysHardwareOff = "The IME has the input; tap to hand it to a hardware keyboard"
     }
 
     override val files = object : Strings.Files {
@@ -378,8 +382,11 @@ internal object EnglishStrings : Strings {
         override val showAvatarsSubtitle = "An avatar over each message"
         override val aiAvatar = "Agent avatar"
         override val userAvatar = "Your avatar"
-        override val avatarLabel = "Label"
-        override val avatarLabelHint = "Blank is the default mark"
+        override val avatarName = "Name"
+        override val avatarNameHint = "Shown beside the avatar; leave it empty to show none"
+        override val avatarCropTitle = "Crop the avatar"
+        override val avatarCropHint = "Drag and pinch: the square is what will be kept"
+        override val avatarCropUse = "Use this part"
         override val avatarColor = "Colour"
         override val avatarPicture = "Picture"
         override val avatarPicturePick = "Choose a picture"
@@ -439,6 +446,11 @@ internal object EnglishStrings : Strings {
             "This session, tool calls and results included, sent with every message and " +
                 "written to the session file."
         override val agentContextInstructions = "Global AGENTS.md"
+        override val agentContextAuthorTitle = "Default instructions"
+        override val agentContextAuthorSubtitle = "Written by PiKit, editable; a newer PiKit default replaces it"
+        override val agentContextUserTitle = "My own instructions"
+        override val agentContextUserSubtitle = "Empty to begin with, and only yours; PiKit never rewrites it"
+        override val agentContextUserEmpty = "Still empty — open it and write"
         override val agentContextInstructionsEditable = "Editable"
         override val agentContextSave = "Save"
         override val agentContextSaved = "Saved"

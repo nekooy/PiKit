@@ -130,19 +130,35 @@ What this chapter keeps is the part of the old design that is still true:
 ## The document beside the machine
 
 `$HOME/.pi/agent/AGENTS.md` is the other half of the agent's context — pi reads it
-automatically at startup — and the installer writes it **only when it is missing**. That
-is the opposite of `models.json` and `settings.json`, which the launcher rewrites on every
-start, and the difference is what the file *is*: those are projections of what the app
-knows, where a hand edit is a change the app cannot see and would otherwise have no way
-back from, while this is a document. It is editable from **Settings → Agent process**,
-which also offers the default text back, and an update that silently replaced it would
-throw away the sentences a user added about their own project.
+automatically at startup — and it is **composed from two documents**, because it is the only
+name pi looks for and two files cannot be two answers to one question:
 
-There is one exception, and it is a migration rather than a policy: a file that is still
-the *previous* default — the one whose text described the single `pikit-safety-guard`
-extension that the tiers replaced — is rewritten once, because that text states rules this
-app no longer has. `AgentContext` carries a generation marker so the same story can be
-told again without guessing at the prose, and anything a reader has edited is left alone.
+- `AGENTS.author.md` is PiKit's own text: what the environment is, where the workspace is,
+  which tier is enforced, what the phone's storage looks like. It is editable — a reader may
+  disagree about a sentence — and it carries a **generation marker** on its first line. A build
+  whose `AgentContext.GENERATION` is higher replaces it; an equal generation leaves it exactly
+  as the reader left it. That is the whole rule, and it is what makes "edit it if you like, but
+  I will overwrite it when I change the default" a sentence the code can keep.
+- `AGENTS.user.md` is the reader's, created **empty** and never written by the app after that.
+  It is where the sentences about one's own projects belong, and the promise is that no
+  upgrade touches it.
+
+`AGENTS.md` itself is written by `AgentContext.compose` — the author's half, then the reader's
+under a comment that names it — and it is rewritten on every launch, after either half is
+edited, and on install. Composing at launch rather than only at install is a migration
+requirement as much as a convenience: the installer does not run at all when the runtime is
+already there, so an app-only upgrade that carried a new default would otherwise never reach
+the file.
+
+The two-halves split is a change of shape, so the migration has three cases and all three were
+exercised on the device: no `AGENTS.md` at all (both halves written fresh), an `AGENTS.md` that
+is a *previous default* (the marker says so, the author's half is replaced, the reader's half
+starts empty), and an `AGENTS.md` the reader wrote before the split (it becomes the reader's
+half verbatim, and the author's half is written beside it).
+
+Settings → Agent process has one row per half. The author's row offers the default back; the
+reader's does not, because "restore the default" for a document whose promise is that the app
+never rewrites it could only mean "throw my text away".
 
 ## What still decides what the agent may write
 

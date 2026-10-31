@@ -296,6 +296,10 @@ internal object ChineseStrings : Strings {
         override val keysMessageSend = "发送到终端"
         override val keysKeyboardShow = "弹出键盘"
         override val keysKeyboardHide = "收起键盘"
+        override val paste = "C-V"
+        override val cut = "C-X"
+        override val keysHardwareOn = "外接键盘接管中，点一下改用输入法"
+        override val keysHardwareOff = "输入法接管中，点一下交给外接键盘"
     }
 
     override val files = object : Strings.Files {
@@ -364,8 +368,11 @@ internal object ChineseStrings : Strings {
         override val showAvatarsSubtitle = "在每条消息上方显示头像"
         override val aiAvatar = "Agent 头像"
         override val userAvatar = "你的头像"
-        override val avatarLabel = "文字"
-        override val avatarLabelHint = "留空使用默认标记"
+        override val avatarName = "名字"
+        override val avatarNameHint = "显示在头像旁边；留空就不显示"
+        override val avatarCropTitle = "裁剪头像"
+        override val avatarCropHint = "拖动、双指缩放，方框里就是最终效果"
+        override val avatarCropUse = "用这一块"
         override val avatarColor = "颜色"
         override val avatarPicture = "图片"
         override val avatarPicturePick = "选择图片"
@@ -419,6 +426,11 @@ internal object ChineseStrings : Strings {
         override val agentContextHistoryBody =
             "当前这段会话，包括工具调用与结果，随每条消息一起发送，并写入会话文件。"
         override val agentContextInstructions = "全局 AGENTS.md"
+        override val agentContextAuthorTitle = "默认提示词"
+        override val agentContextAuthorSubtitle = "PiKit 提供，可以改；PiKit 更新默认内容时会覆盖它"
+        override val agentContextUserTitle = "我自己的指令"
+        override val agentContextUserSubtitle = "一开始是空的，只属于你；PiKit 永远不会改它"
+        override val agentContextUserEmpty = "还是空的，点进去写"
         override val agentContextInstructionsEditable = "可编辑"
         override val agentContextSave = "保存"
         override val agentContextSaved = "已保存"

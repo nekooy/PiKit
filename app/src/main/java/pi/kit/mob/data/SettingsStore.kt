@@ -618,8 +618,13 @@ enum class FontSize(val code: String, val scale: Float) {
      * The agent's avatar: a short label, a picture, and the colour of its circle.
      *
      * Three things, and the order they are tried in is in `PiAvatar`: the picture
-     * wins, then the label, and a blank pair means the app's own Pi mark. So a fresh
-     * install shows the logo without this field having to hold anything.
+     * wins, then the speaker's own figure — the app's Pi mark for the agent, a person
+     * for the reader — so a fresh install shows the logo without this field having to
+     * hold anything.
+     *
+     * [aiAvatarName] is **not** drawn inside the disc: it is the name shown beside the
+     * avatar in the transcript, which is why it can be longer than a letter and why a
+     * blank one means "no name" rather than "the mark".
      *
      * [aiAvatarImage] is an absolute path to a file this app owns — the one
      * `AvatarStore` writes when the reader picks a picture — not a content URI.
@@ -628,15 +633,16 @@ enum class FontSize(val code: String, val scale: Float) {
      * copy in `files/avatars/` is what survives, and it is what a backup carries
      * (the archive's `SETTINGS` category includes that directory).
      */
-    val aiAvatarLabel: String = "",
+    val aiAvatarName: String = "",
     val aiAvatarImage: String = "",
     val aiAvatarColor: AvatarColor = AvatarColor.INDIGO,
     /**
-     * The reader's avatar, the same three. A blank label and no picture is the person
-     * silhouette rather than the agent's mark, so the two speakers never fall back to
-     * the same figure.
+     * The reader's avatar, the same three. No picture is the person silhouette rather
+     * than the agent's mark, so the two speakers never fall back to the same figure, and
+     * [userAvatarName] is drawn to the *left* of it in the transcript — the reader's own
+     * side.
      */
-    val userAvatarLabel: String = "",
+    val userAvatarName: String = "",
     val userAvatarImage: String = "",
     val userAvatarColor: AvatarColor = AvatarColor.TEAL,
 ) {
@@ -767,10 +773,10 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             permissionMode = PermissionMode.fromCode(prefs.getString(KEY_PERMISSION, null)),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
-            aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
+            aiAvatarName = prefs.getString(KEY_AI_AVATAR_NAME, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
             aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
-            userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
+            userAvatarName = prefs.getString(KEY_USER_AVATAR_NAME, "").orEmpty(),
             userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
             userAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         ),
@@ -848,10 +854,10 @@ class SettingsStore(context: Context) {
             .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
                         .putBoolean(KEY_SHOW_AVATARS, next.showAvatars)
-            .putString(KEY_AI_AVATAR_LABEL, next.aiAvatarLabel)
+            .putString(KEY_AI_AVATAR_NAME, next.aiAvatarName)
             .putString(KEY_AI_AVATAR_IMAGE, next.aiAvatarImage)
             .putString(KEY_AI_AVATAR_COLOR, next.aiAvatarColor.code)
-            .putString(KEY_USER_AVATAR_LABEL, next.userAvatarLabel)
+            .putString(KEY_USER_AVATAR_NAME, next.userAvatarName)
             .putString(KEY_USER_AVATAR_IMAGE, next.userAvatarImage)
             .putString(KEY_USER_AVATAR_COLOR, next.userAvatarColor.code)
             .apply()
@@ -873,10 +879,10 @@ class SettingsStore(context: Context) {
             launcherIcon = next.launcherIcon,
             permissionMode = next.permissionMode,
             showAvatars = next.showAvatars,
-            aiAvatarLabel = next.aiAvatarLabel,
+            aiAvatarName = next.aiAvatarName,
             aiAvatarImage = next.aiAvatarImage,
             aiAvatarColor = next.aiAvatarColor,
-            userAvatarLabel = next.userAvatarLabel,
+            userAvatarName = next.userAvatarName,
             userAvatarImage = next.userAvatarImage,
             userAvatarColor = next.userAvatarColor,
         )
@@ -948,10 +954,10 @@ class SettingsStore(context: Context) {
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             permissionMode = PermissionMode.fromCode(prefs.getString(KEY_PERMISSION, null)),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
-            aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
+            aiAvatarName = prefs.getString(KEY_AI_AVATAR_NAME, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
             aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
-            userAvatarLabel = prefs.getString(KEY_USER_AVATAR_LABEL, "").orEmpty(),
+            userAvatarName = prefs.getString(KEY_USER_AVATAR_NAME, "").orEmpty(),
             userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
             userAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
         )
@@ -974,10 +980,10 @@ class SettingsStore(context: Context) {
         launcherIcon: LauncherIcon = current.get().launcherIcon,
         permissionMode: PermissionMode = current.get().permissionMode,
         showAvatars: Boolean = current.get().showAvatars,
-        aiAvatarLabel: String = current.get().aiAvatarLabel,
+        aiAvatarName: String = current.get().aiAvatarName,
         aiAvatarImage: String = current.get().aiAvatarImage,
         aiAvatarColor: AvatarColor = current.get().aiAvatarColor,
-        userAvatarLabel: String = current.get().userAvatarLabel,
+        userAvatarName: String = current.get().userAvatarName,
         userAvatarImage: String = current.get().userAvatarImage,
         userAvatarColor: AvatarColor = current.get().userAvatarColor,
     ): PiSettings {
@@ -998,10 +1004,10 @@ class SettingsStore(context: Context) {
                 launcherIcon = launcherIcon,
                 permissionMode = permissionMode,
                 showAvatars = showAvatars,
-                aiAvatarLabel = aiAvatarLabel,
+                aiAvatarName = aiAvatarName,
                 aiAvatarImage = aiAvatarImage,
                 aiAvatarColor = aiAvatarColor,
-                userAvatarLabel = userAvatarLabel,
+                userAvatarName = userAvatarName,
                 userAvatarImage = userAvatarImage,
                 userAvatarColor = userAvatarColor,
             )
@@ -1103,7 +1109,7 @@ class SettingsStore(context: Context) {
         /** True unless the user switched the tool-call guard off; see [PiSettings]. */
         private const val KEY_PERMISSION = "permission_mode"
 
-        /** The two avatars' own fields; see [PiSettings.aiAvatarLabel]. */
+        /** The two avatars' own fields; see [PiSettings.aiAvatarName]. */
         private const val KEY_AI_AVATAR_IMAGE = "ai_avatar_image"
         private const val KEY_USER_AVATAR_IMAGE = "user_avatar_image"
 
@@ -1111,9 +1117,9 @@ class SettingsStore(context: Context) {
         private const val KEY_SHOW_AVATARS = "show_avatars"
 
         /** The two avatars' labels (blank = the built-in mark) and their colours. */
-        private const val KEY_AI_AVATAR_LABEL = "ai_avatar_label"
+        private const val KEY_AI_AVATAR_NAME = "ai_avatar_name"
         private const val KEY_AI_AVATAR_COLOR = "ai_avatar_color"
-        private const val KEY_USER_AVATAR_LABEL = "user_avatar_label"
+        private const val KEY_USER_AVATAR_NAME = "user_avatar_name"
         private const val KEY_USER_AVATAR_COLOR = "user_avatar_color"
 
         /**

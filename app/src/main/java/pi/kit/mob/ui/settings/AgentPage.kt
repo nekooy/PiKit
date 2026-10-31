@@ -121,9 +121,20 @@ internal fun AgentPage(
     // announce a restart that had not started.
     var restartMoved by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
-    var showInstructions by remember { mutableStateOf(false) }
+    // Which of the two documents the sheet is editing, or null for none. `null` is also
+    // what the sheet keeps drawing with while it animates out — a Miuix window is driven
+    // by `show`, and a value that vanished with the flag would return to the other
+    // document's text on the way out.
+    var editingDocument by remember { mutableStateOf<InstructionsDocument?>(null) }
+    var lastDocument by remember { mutableStateOf(InstructionsDocument.Author) }
+    if (editingDocument != null) lastDocument = editingDocument!!
+    // Read once per visit to the page, for the user row's "still empty" subtitle.
+    val userInstructions = remember(session) {
+        runCatching { AgentContext.userFile(session.env).readText() }.getOrDefault("")
+    }
     val text = strings
     val toasts = LocalPiToast.current
+    // The composed document is not edited here: the two rows below open the halves.
     val instructions = remember(session) { AgentContext.file(session.env) }
     LaunchedEffect(agent) {
         if (!restarting) return@LaunchedEffect
@@ -205,20 +216,36 @@ internal fun AgentPage(
                 // one. A path is a machine string, so it is the row's full-width second
                 // line rather than its trailing value, which a third of a row cannot
                 // show.
+                //
+                // Two rows, because the file pi reads is *composed* from two documents:
+                // the app's own prompts — which a newer PiKit replaces — and the reader's,
+                // which nothing here ever writes. One row for both would make "may I edit
+                // this" and "is my text safe" the same question, and they are opposites.
                 ArrowPreference(
-                    title = text.settings.agentContextInstructions,
-                    summary = instructions.absolutePath,
-                    // "Editable" in the row's own value slot, with the arrow beside it —
-                    // the shape the language row uses. It is a fact about the file, not
-                    // an action of its own, which is why it is a word rather than a
-                    // second control.
+                    title = text.settings.agentContextAuthorTitle,
+                    summary = text.settings.agentContextAuthorSubtitle,
                     endActions = {
                         SettingsValue(
                             text.settings.agentContextInstructionsEditable,
                             emphasised = true,
                         )
                     },
-                    onClick = { showInstructions = true },
+                    onClick = { editingDocument = InstructionsDocument.Author },
+                )
+                ArrowPreference(
+                    title = text.settings.agentContextUserTitle,
+                    summary = if (userInstructions.length == 0) {
+                        text.settings.agentContextUserEmpty
+                    } else {
+                        text.settings.agentContextUserSubtitle
+                    },
+                    endActions = {
+                        SettingsValue(
+                            text.settings.agentContextInstructionsEditable,
+                            emphasised = true,
+                        )
+                    },
+                    onClick = { editingDocument = InstructionsDocument.User },
                 )
             }
 
@@ -304,13 +331,15 @@ internal fun AgentPage(
     }
 
     PiSheet(
-        show = showInstructions,
-        title = text.settings.agentContextInstructions,
-        onDismiss = { showInstructions = false },
+        show = editingDocument != null,
+        title = if (lastDocument == InstructionsDocument.Author) {
+            text.settings.agentContextAuthorTitle
+        } else {
+            text.settings.agentContextUserTitle
+        },
+        onDismiss = { editingDocument = null },
     ) {
-        if (showInstructions) {
-            InstructionsEditor(session = session, text = text)
-        }
+        InstructionsEditor(document = lastDocument, session = session, text = text)
     }
 
     WorkspaceDialog(
@@ -490,11 +519,23 @@ private fun KeepAliveRow(text: Strings) {
  * call rather than a [SettingsTextField]: that wrapper exists for one-line settings
  * values and should not grow a variant for the one document in the app.
  */
+/** Which of the two documents that compose `AGENTS.md` a row opens. */
+private enum class InstructionsDocument { Author, User }
+
 @Composable
-private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
+private fun InstructionsEditor(
+    document: InstructionsDocument,
+    session: PiAgentSession,
+    text: Strings,
+) {
     val toasts = LocalPiToast.current
-    val file = remember(session) { AgentContext.file(session.env) }
-    var draft by remember {
+    val file = remember(session, document) {
+        when (document) {
+            InstructionsDocument.Author -> AgentContext.authorFile(session.env)
+            InstructionsDocument.User -> AgentContext.userFile(session.env)
+        }
+    }
+    var draft by remember(session, document) {
         mutableStateOf(
             runCatching { file.readText() }.getOrElse { AgentContext.default(session.env) },
         )
@@ -585,11 +626,16 @@ private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
-            SettingsAction(
-                text = text.settings.agentContextRestore,
-                onClick = { confirmRestore = true },
-                modifier = Modifier.weight(1f),
-            )
+            // Only the app's own half has a default to restore. A "restore" on the
+            // reader's document could only mean "throw my text away", which is the one
+            // thing that document exists to promise never happens.
+            if (document == InstructionsDocument.Author) {
+                SettingsAction(
+                    text = text.settings.agentContextRestore,
+                    onClick = { confirmRestore = true },
+                    modifier = Modifier.weight(1f),
+                )
+            }
             SettingsAction(
                 text = text.settings.agentContextSave,
                 onClick = {
@@ -599,6 +645,13 @@ private fun InstructionsEditor(session: PiAgentSession, text: Strings) {
                     val written = runCatching {
                         file.parentFile?.mkdirs()
                         file.writeText(draft)
+                        // The composed document is what pi reads, and pi reads it once at
+                        // startup: writing a half without recomposing leaves the running
+                        // agent — and the next launch — on the previous text.
+                        if (document == InstructionsDocument.Author) {
+                            if (draft.isBlank()) file.writeText(AgentContext.default(session.env))
+                        }
+                        AgentContext.compose(session.env)
                     }.isSuccess
                     failed = !written
                     saved = written

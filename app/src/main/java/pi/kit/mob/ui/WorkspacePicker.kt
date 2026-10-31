@@ -1,9 +1,14 @@
 package pi.kit.mob.ui
 
 import android.content.Context
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -14,19 +19,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import java.io.File
 import pi.kit.mob.data.Workspace
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.env.TermuxEnv
 import pi.kit.mob.locales.Strings
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.unit.DpSize
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMenuRow
@@ -34,8 +41,8 @@ import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
-import androidx.compose.ui.platform.LocalFocusManager
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
@@ -43,15 +50,13 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Layers
-import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
-import java.io.File
 
 /**
  * The workspace list a chip, a menu or a dialog draws, rebuilt when the set changes.
@@ -237,33 +242,42 @@ internal fun WorkspacePickerSheet(
                 modifier = Modifier.padding(horizontal = PICKER_GUTTER, vertical = 4.dp),
             )
         }
-        // The three shortcuts are *not* folders: they go somewhere rather than being
-        // somewhere, so they carry a mark and the accent ink while the listing below them
-        // stays plain. Without that they read as three more directories — the first
-        // version of this sheet drew them exactly like the rows they are not.
-        if (path != home) {
-            NavRow(text.chat.workspacePickerHome, MiuixIcons.Home) { go(home) }
-        }
-        if (shared != null && path != shared) {
-            NavRow(text.chat.workspacePickerShared, MiuixIcons.Layers) {
-                if (granted) {
-                    go(shared)
-                } else {
-                    // Without the grant the folder cannot be listed, and a row that
-                    // silently does nothing is what this sheet had before.
-                    onGrant()
+        // The shortcuts are *not* folders: they go somewhere, or make something, rather
+        // than being somewhere. One row of small chips rather than one row each — four
+        // rows of them took half of a sheet whose point is the listing under them, and
+        // the words are kept because a glyph alone did not say which root it meant.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = PICKER_GUTTER, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (path != home) {
+                NavChip(text.chat.workspacePickerHome, MiuixIcons.Home) { go(home) }
+            }
+            if (shared != null && path != shared) {
+                NavChip(text.chat.workspacePickerShared, MiuixIcons.Layers) {
+                    if (granted) {
+                        go(shared)
+                    } else {
+                        // Without the grant the folder cannot be listed, and a row that
+                        // silently does nothing is what this sheet had before.
+                        onGrant()
+                    }
                 }
             }
+            if (path != "/") {
+                NavChip(text.chat.workspacePickerParent, MiuixIcons.Back) {
+                    go(File(path).parent ?: "/")
+                }
+            }
+            NavChip(text.chat.workspacePickerNewFolder, MiuixIcons.Add) {
+                newName = ""
+                creating = true
+            }
         }
-        if (path != "/") {
-            NavRow(text.chat.workspacePickerParent, MiuixIcons.Back) { go(File(path).parent ?: "/") }
-        }
-        NavRow(text.chat.workspacePickerNewFolder, MiuixIcons.Add) {
-            newName = ""
-            creating = true
-        }
-        // The listing's own label, so the two families cannot be confused at a glance.
-        SmallTitle(text = text.chat.workspacePickerFolders, modifier = Modifier.padding(start = PICKER_GUTTER, top = 12.dp))
         if (listing == null) {
             // Unreadable rather than empty: listFiles answers null for a directory this
             // process may not open, which on a phone is almost always the grant missing
@@ -355,26 +369,43 @@ internal fun WorkspacePickerSheet(
 }
 
 /**
- * A row that goes somewhere, drawn in the accent ink with a mark.
+ * A shortcut, as a small pill beside the path rather than a list row of its own.
  *
- * The picker's own row family: `PiMenuRow` is the *listing* — folders to open — and a
- * shortcut that looked like one was read as a folder that happens to be called 主目录.
+ * Four rows of navigation above a listing is a sheet that is half chrome; a row of chips
+ * is one line, and the words stay because a glyph alone did not say which root it meant
+ * (a house is "home", a stack of layers is not obviously "the phone's storage"). It is the
+ * same accent ink the rows used, so the two families stay distinguishable from the folder
+ * listing under them.
  */
 @Composable
-private fun NavRow(label: String, glyph: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    PiMenuRow(
-        title = label,
-        titleColor = MiuixTheme.colorScheme.primary,
-        startAction = {
+private fun NavChip(
+    label: String,
+    glyph: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        cornerRadius = 14.dp,
+        minWidth = 0.dp,
+        minHeight = 0.dp,
+        insideMargin = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+        colors = ButtonDefaults.buttonColors(
+            color = MiuixTheme.colorScheme.primaryContainer,
+            contentColor = MiuixTheme.colorScheme.onPrimaryContainer,
+        ),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Icon(
                 imageVector = glyph,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp),
             )
-        },
-        onClick = onClick,
-    )
+            Text(text = label, style = MiuixTheme.textStyles.footnote2, maxLines = 1)
+        }
+    }
 }
 
 /**
