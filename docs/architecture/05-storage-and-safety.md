@@ -8,31 +8,69 @@ access". The second linked the whole of `/sdcard` into the environment as
 with `--approve` and no permission popups of any kind. An autonomous process with
 recursive-delete capability therefore had every photo, document and backup on the
 device in reach as an ordinary directory inside its home folder. That is a design
-that can remove a phone's files, and it did. Three independent layers replace it.
-They are independent on purpose: each one alone has a hole, and the failure modes
+that can remove a phone's files, and it did.
+
+Two independent guards answer it now, and a third one — the permission tiers — decides what
+a tool call may write. They are independent on purpose: each alone has a hole, and the holes
 are not the same.
 
-## Layer 1 — the grant is scoped, not binary
+- **The app cannot recursively delete outside its own data directory.** `env/SafeDelete.kt`,
+  below.
+- **The agent is judged on every tool call.** `tools/pikit-permissions.ts` and its three
+  tiers; §14 is that chapter.
+- **Nothing is *granted* any more.** The page of folder switches — the middle answer between
+  "none" and "all files access" — was removed once the tiers made it redundant. That is the
+  first section below, because its reasoning is the reason the other two are shaped as they
+  are.
 
-`StorageAccess.Policy` is a set of `Root`s (`shared`, `downloads`, `documents`,
-`pictures`, `dcim`, `music`, `movies`). The default, including for an install that
-upgrades from a build which had no policy at all, is **empty**: `~/storage` is not
-created and the environment cannot see shared storage. The user opts into
-individual trees from Settings → Shared storage, and the broad ones ask for
-confirmation first. An empty policy *removes* the link farm rather than merely
-declining to create it, so revoking takes effect immediately; revoking never
-deletes anything: a link is removed by path and the directory it pointed at is
-untouched.
+## The grant page, and why it is gone
 
-The link names are the lower-case ones `termux-setup-storage` creates
-(`~/storage/dcim`, `~/storage/downloads`), because scripts type them and matching
-upstream matters more than matching the file manager. The *settings row* therefore
-shows the real directory instead — `/sdcard/DCIM`, `/sdcard/Download` — since a page
-that showed only `~/storage/dcim` would never contain the spelling the user
-recognises. `StorageAccess.displayTargetOf` is the one place that decides this, and it
-falls back to the link path when the external directory cannot be read.
+For a while the app carried a Settings page — *Shared storage* — with one switch per folder
+(`shared`, `downloads`, `documents`, `pictures`, `dcim`, `music`, `movies`, plus any folder
+the user added), and the set was enforced in two places: the link farm the environment was
+given, and the list of writable roots the tool-call guard was handed. It was a good page for
+the model the app had then: the guard drew its line at *reads* as well as writes, so a folder
+that was off was a folder the agent could not even look at, and the switches were the only way
+to open one.
 
-## Layer 2 — the app cannot recursively delete outside its own data directory
+The tiers changed the line, and with it the answer:
+
+- **Reads are free in every tier** (§14). A grant that decides what may be *read* has nothing
+  left to decide; only writes are judged.
+- **A write is judged against the workspace the conversation runs in.** That is a directory the
+  reader already chose, on purpose, moments ago, with a chip in the composer. A permission to
+  write to `/sdcard/Dev/app` is therefore expressed by *starting a conversation there* — which
+  is the same gesture, on the same screen, and it needs no second list to be kept in step.
+- So the page's switches decided a set that nothing read, and every folder a reader wanted was
+  a folder they could already reach by making it a workspace. The page was three quarters of
+  the surface of a feature whose remaining quarter is the Android grant itself.
+
+What replaced it, precisely:
+
+- **The workspace picker reaches the phone.** Any folder the process can read may be a
+  workspace, so `/sdcard/Dev/app` is an ordinary project. The picker offers `/sdcard` as a
+  shortcut and asks for Android's "all files access" when a folder there cannot be listed.
+- **`~/storage` is a convenience, not a permission.** While the grant holds, the seven usual
+  folders are linked into the agent's home under the lower-case names
+  `termux-setup-storage` has always used (`~/storage/dcim`, `~/storage/downloads`), because
+  scripts type them and matching upstream matters more than matching the file manager. A write
+  through one of those links is judged by the tier and the workspace like any other path.
+- **Nothing publishes a grant to the agent any more.** `PIKIT_STORAGE_ALLOWED` and
+  `PIKIT_STORAGE_LINKS` are gone from `ShellEnvironment.build`; the only environment variables
+  the tiers read are `PIKIT_WORKSPACE` and `PIKIT_PERMISSION_FILE` (§14).
+
+Two facts about the removed design are worth keeping, because they are measurements rather
+than preferences. **The whole tree subsumed the rest:** with `shared` on, the switches below it
+were disabled and drawn as included — a switch that changes nothing is a lie about what it
+does — and the farm held one link (`shared`) rather than one per granted folder, because
+`/sdcard/Download` was reachable as `~/storage/downloads` under its own grant and as
+`~/storage/shared/Download` through the broad one, and creating both is a duplicated Downloads
+folder. And **a page where every row is an alert is a page where no alert is read**: the
+folder rows once carried a warning each, then only the unrestricted one did, then none, and a
+folder that is off cannot lose anything — which is also why the page raised no standing note
+above its list.
+
+## Layer — the app cannot recursively delete outside its own data directory
 
 `env/SafeDelete.kt` is the only place in the app allowed to remove a directory
 tree, and it refuses unless all of the following hold:
@@ -47,12 +85,12 @@ tree, and it refuses unless all of the following hold:
   walked *through* and the target's contents deleted.
 
 The recursive call sites are the staging tree, the runtime prefix and the
-model-discovery scratch agent directory. (The `~/storage` link farm is not one of
-them: a link has to be removed *as a link*, so `StorageAccess.removeFarm` deletes them
+model-discovery scratch agent directory. (The `~/storage` farm is not one of
+them: a link has to be removed *as a link*, so `StorageAccess.syncFarm` deletes them
 one at a time.) `PrefixPatcher` — which walks a tree and *writes* to every file it
 finds — carries the same boundary check.
 
-## Layer 3 — the agent is refused the calls that destroy data
+## Layer — the agent is refused the calls that destroy data
 
 Pi has no permission system by design, and its documentation says so: *"No
 permission popups. Run in a container, or build your own confirmation flow with
@@ -66,14 +104,14 @@ credential files, commands naming shared storage the user had not granted — wi
 on/off switch. **It is now three permission tiers** (`tools/pikit-permissions.ts`,
 read-only / workspace-write / full-access), chosen in the composer and checked on every
 tool call. §14 is that chapter: the tiers, what each refuses, why the mode is a file
-rather than an environment variable, and what the change cost. What this chapter keeps is
-the part of the old design that is still true:
+rather than an environment variable, and what the change cost.
 
-- The policy is the **only** place the agent's actions pass through, so it is where a
-  storage grant becomes a limit rather than a convenience. The link farm decides what the
-  environment *offers*; the tiers decide what the agent may *write*. Reads are free in
-  every tier, which is the one thing the old extension did that the tiers deliberately do
-  not (§14's *What this cost*).
+What this chapter keeps is the part of the old design that is still true:
+
+- The tier is the **only** place the agent's actions pass through, so it is where a
+  workspace becomes a limit rather than a convenience. Reads are free in every tier, which
+  is the one thing the old guard did that the tiers deliberately do not (§14's *What this
+  cost*).
 - It is a rule, not a sandbox. It matches paths in a command's text, so a path built at
   runtime is not caught; nothing unprivileged can turn that into a wall on Android,
   because "all files access" belongs to the process and the agent runs as this app.
@@ -98,71 +136,19 @@ extension that the tiers replaced — is rewritten once, because that text state
 app no longer has. `AgentContext` carries a generation marker so the same story can be
 told again without guessing at the prose, and anything a reader has edited is left alone.
 
-## The folder switches are a rule, not a wall
+## What still decides what the agent may write
 
-The storage page's switches behave as a dead letter if they are read as "what the agent
-can see": grant "all files access" once and the agent can read `/sdcard` whatever the
-switches say. That is exactly what the platform allows — the grant belongs to the
-*process*, the agent runs as this app, and there is no unprivileged way to run it as
-anyone else (a chroot or a mount namespace needs root; SAF hands out content URIs, not
-paths). So the switch does not claim to stop the filesystem. What it decides is what
-PiKit **offers** (`~/storage/*`, created only for the folders that are on) and what PiKit
-**permits the agent to write**, and the permitting is done by the tiers in §14, because a
-tool call is the only place the agent's actions pass through the app.
-
-`ShellEnvironment.build` publishes the granted folders to every process it spawns, in
-every spelling of each path (`StorageAccess.spellingsOf` — `/sdcard/DCIM`,
-`/storage/emulated/0/DCIM` and `/storage/self/primary/DCIM` are one directory), plus the
-link farm itself (`PIKIT_STORAGE_LINKS`, `name=target` per line, from
-`StorageAccess.linkPlanFor`), and `PiAgentSession.setStoragePolicy` restarts the agent
-when a switch changes, so a cached copy cannot go stale. The extension reads them on every
-tool call.
-
-The link farm is published because it is the one spelling the app *itself* hands the
-agent, and it names no shared-storage path: `~/storage/shared/Download/a.txt` is
-`/sdcard/Download/a.txt`, and a rule that only matched the roots let the whole policy be
-stepped around by the app's own convenience link — measured as
-`cat ~/storage/shared/Download/a.txt` being allowed with nothing granted while
-`cat /sdcard/Download/a.txt` was refused. The tier model's answer to the same measurement
-is different and simpler: the read is allowed in both spellings now, and the *write* is
-what the grant decides.
-
-`ShellEnvironment.build` also publishes the workspace (`PIKIT_WORKSPACE`), the directory
-the agent may write in — see §10 for the list of workspaces and how a conversation picks
-one. The bar is stated in the UI: the page says which folders the agent may write to, and
-that a write naming a folder that is off is refused.
+`ShellEnvironment.build` publishes the workspace (`PIKIT_WORKSPACE`), the directory the
+conversation was started in — see §10 for the list of workspaces and how a conversation
+picks one — and the tier file (`PIKIT_PERMISSION_FILE`). Nothing else about storage reaches
+the agent process. The bar is stated in the UI: the tier chip says what each level allows,
+and a refused write comes back to the agent as a tool error naming the tier.
 
 The old extension's own failure record is worth keeping, because it is what the tiers were
 designed against: measured on the Medium Phone AVD with nothing granted, the agent asked to
 run `cat /sdcard/Download/notes.txt` and came back with *"the pikit-safety-guard intercepted
 the command"*, listing the storage page as the fix. Under the tiers the same call is a
-read and therefore allowed — the policy now draws its line at writes, and the switch's
-job is to decide which writes are permitted rather than which reads are.
-
-Three details of the page itself:
-
-- **Every folder asks before it is switched on.** Only "broad" roots (the whole tree,
-  Documents, Pictures, DCIM) used to warn, but a user was prompted for Pictures and not
-  for Music, which teaches that the prompts are noise. The question is the agent's reach
-  in every case, so it is asked in every case and `Root` no longer carries an `isBroad`
-  flag.
-- **The whole tree subsumes the rest.** While `shared` is on, the switches below it are
-  disabled and drawn as included — a switch that changes nothing is a lie about what it
-  does — and adding a folder is disabled for the same reason. `Policy.isSubsumed` is that
-  condition, and `StorageAccess.linkPlanFor` applies it as well, so the farm holds one
-  link (`shared`) rather than one per granted folder; `/sdcard/Download` is reachable as
-  `~/storage/downloads` under its own grant and as `~/storage/shared/Download` through
-  the broad one, and creating both is a duplicated Download folder. The rule lives in the
-  plan and not in `applyPolicy`'s creation loop, because the plan is also what prunes.
-- **Any folder can be added** (`Policy.custom`, persisted beside the root names): the
-  seven named roots are a shortcut, and "my notes are in `/sdcard/Notes`" was otherwise
-  answerable only by granting all of shared storage. A custom folder goes through the
-  same three paths — the link farm, the extension's writable list and the page's summary
-  — via `linkPlanFor` and `allowedSpellings`, which is why the naming rule has its own test
-  (`StoragePolicyTest`): a link name has to be shell-safe (`My Stuff` → `my-stuff`, runs
-  of punctuation collapsed) and two folders with the same basename both have to get one
-  (`photos`, `photos-2`). The picker is a sheet of our own rows rather than `PickerBody`,
-  because every row of that component dismisses the sheet it is in.
+read and therefore allowed — the policy now draws its line at writes.
 
 ## What cannot be settled from outside, and the self-test that settles it
 
@@ -178,13 +164,13 @@ Two facts about storage are genuinely hard to establish from outside the app:
 
 So the check runs inside the environment, as a child process with the same
 environment the terminal and the agent get: `tools/storage-self-test.sh`, shipped
-in the image and reachable two ways — Settings → Upgrade Pi & repair → **Check
+in the image and reachable two ways — Settings → Maintenance & repair → **Check
 storage**, and `pikit-storage-check` on `PATH`. It reports:
 
 - the running uid and supplementary groups;
 - whether the runtime is intact;
-- the link farm, with a real read **and a write probe** per granted folder, so a
-  read-only grant is reported as read-only;
+- the link farm, with a real read **and a write probe** per link, so a read-only mount is
+  reported as read-only;
 - the delete guard, by building the shape that used to destroy data — a symlink to
   a directory holding a sentinel — removing the links the way the app does, and
   checking the sentinel is still there;
@@ -196,17 +182,17 @@ rather than passing by construction: a naive traversal that follows the link (as
 by-path removal leaves it intact; without it, `rm -rf` on the farm proves nothing,
 because `rm -rf` does not follow symlinks.
 
-**Verified on the Medium Phone emulator**, with `MANAGE_EXTERNAL_STORAGE` granted
-from the Settings row and two folders switched on:
+**Verified on the Medium Phone emulator**, with `MANAGE_EXTERNAL_STORAGE` granted and the
+farm in place:
 
 ```
 storage: permission=granted root=/storage/emulated/0
 reach=[documents:link=true,read=ok(1),write=ok  downloads:link=true,read=ok(1),write=ok]
 ```
 
-and after **Remove all access**: both links gone, `~/storage` empty, and all four
+and after revoking the grant: every link gone, `~/storage` removed, and all four
 seeded files — a document, a download, a downloaded file the agent had written,
-and a camera photo — still present and unchanged. With no folders granted the shipped
+and a camera photo — still present and unchanged. With the grant withheld the shipped
 `pikit-storage-check` reports `9 passed, 0 failed`, which is the state a fresh install is
 in.
 
@@ -271,13 +257,15 @@ What replaced it, in `PiKitRoot`:
   raise the prompt for this legacy-target app when it created its notification channel, so
   the user was never asked.
 - **The storage and keep-alive steps are one-shot by design**: every button of either
-  records the answer, and `Settings → Shared storage` and `Settings → Agent process`
-  are where a user changes their mind later. Both are recorded on the *answer* rather
-  than on the showing, which is why the keep-alive dialog appears once per install —
-  it is in front of the platform's own `RequestIgnoreBatteryOptimizations` box, and
-  there is no result callback for that box (the user may answer it, ignore it, or come
-  back through the recents list), so a state that waited for one would ask again on
-  every launch.
+  records the answer. The storage step is the one that changed when the page went away:
+  it used to close by pointing at **Settings → Shared storage**, and now the place a user
+  changes their mind is the workspace picker — adding a folder on the phone is what raises
+  the system page again. The keep-alive step's later home is still **Settings → Agent
+  process**. Both are recorded on the *answer* rather than on the showing, which is why the
+  keep-alive dialog appears once per install — it is in front of the platform's own
+  `RequestIgnoreBatteryOptimizations` box, and there is no result callback for that box (the
+  user may answer it, ignore it, or come back through the recents list), so a state that
+  waited for one would ask again on every launch.
 
 The keep-alive step is the third one because it is the only one of the three that is
 not about *reaching* something: a missing notification or storage grant fails in front
@@ -298,16 +286,12 @@ clean first launch.
 
 ---
 
-## Why the shared-storage page carries no warning at all
+## What the farm costs, now that it is only a convenience
 
-The page raises no note above the folder list. It used to raise one — "these files are usually
-irreplaceable", in the danger tone — while the policy was **unrestricted**, the one root that
-means *everything on the phone*; before that, every row carried a warning, including Downloads
-and Pictures, and a page where every row is an alert is a page where no alert is read. Both
-were removed for the same reason, and the second one is now redundant twice over: the sentence
-is already the *confirmation dialog's* body (`storageConfirmGrantBody`, which asks before the
-root is switched on), so the standing note repeated a question the reader had just answered
-(`去掉那个红色提醒这些文件通常无法找回`). A folder that is switched off cannot lose anything, so
-its row says where it points instead.
-
----
+Nothing in the write path. The farm is created while the grant holds and removed when it
+does not (`StorageAccess.syncFarm`, called at install, before every launch and from
+`termux-setup-storage`'s broadcast), and its one measurement survives: the links must not be
+duplicated, because `/sdcard/Download` reachable as both `~/storage/downloads` and
+`~/storage/shared/Download` is a duplicate Downloads folder rather than two conveniences.
+`StorageFarmTest` pins the seven names, the targets and that property; the self-test probes
+them for real.

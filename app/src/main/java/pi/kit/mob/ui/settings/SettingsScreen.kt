@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,12 +30,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pi.kit.mob.BuildConfig
-import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.locales.Lang
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -76,9 +71,6 @@ internal sealed interface SettingsPage {
      * this one moves the only copy of the user's data. See `BackupPage`.
      */
     data object Backup : SettingsPage
-
-    /** Which of the user's folders the agent may reach. */
-    data object Storage : SettingsPage
 
     /**
      * Working directory, what the model is given, and the process controls.
@@ -155,7 +147,9 @@ private val SettingsPageSaver: Saver<SettingsPage, String> = Saver(
             encoded == "Advanced" -> SettingsPage.Root
             encoded == "Maintenance" -> SettingsPage.Maintenance
             encoded == "Backup" -> SettingsPage.Backup
-            encoded == "Storage" -> SettingsPage.Storage
+            // The storage page was removed once the permission tiers took over what it
+            // decided (§14); its stored state lands at the root.
+            encoded == "Storage" -> SettingsPage.Root
             // Context is a section of the agent process page now. A state saved by
             // a build that had its own page lands there rather than at the root.
             encoded == "AgentContext" -> SettingsPage.Agent
@@ -175,7 +169,6 @@ private fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Agent -> "Agent"
     SettingsPage.Maintenance -> "Maintenance"
     SettingsPage.Backup -> "Backup"
-    SettingsPage.Storage -> "Storage"
     SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
     SettingsPage.Search -> "Search"
@@ -231,35 +224,10 @@ fun SettingsScreen(session: PiAgentSession) {
         page = destination
     }
 
-    // Re-read when the user comes back from the system's "All files access"
-    // page, and when they return from the storage sub-page: the folder toggles
-    // live only in `session.storagePolicy()`, and a summary snapshotted on the
-    // way in kept saying "none" after the user had already chosen folders.
-    var storageGranted by remember { mutableStateOf(StorageAccess.isGranted()) }
-    var storageSummary by remember { mutableStateOf(session.storagePolicy()) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                val granted = StorageAccess.isGranted()
-                storageGranted = granted
-                storageSummary = session.storagePolicy()
-                // The links are created here rather than only at unpack time:
-                // this is the moment they can first succeed.
-                if (granted) session.syncStorageLinks()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-    // The lifecycle does not fire for a move between settings sub-pages, so the
-    // root re-reads the two facts its storage row prints whenever it is shown.
-    LaunchedEffect(page) {
-        if (page == SettingsPage.Root) {
-            storageGranted = StorageAccess.isGranted()
-            storageSummary = session.storagePolicy()
-        }
-    }
+    // Android's "all files access" is asked for from the workspace picker now, which is
+    // the only place that needs it (§14): a folder on the phone becomes a workspace, and
+    // the grant is what makes it readable. The farm follows the grant, and the agent
+    // re-reads it before every launch.
 
     // The direction is decided by `open` rather than by the transition because the
     // system's back gesture can arrive while a previous slide is still running, and
@@ -292,8 +260,6 @@ fun SettingsScreen(session: PiAgentSession) {
             SettingsPage.Root -> RootPage(
                 session = session,
                 onOpen = ::open,
-                storageGranted = storageGranted,
-                storageSummary = storageSummary,
                 agent = agent,
             )
 
@@ -323,11 +289,6 @@ fun SettingsScreen(session: PiAgentSession) {
             )
 
             SettingsPage.Backup -> BackupPage(
-                session = session,
-                onBack = { open(SettingsPage.Root) },
-            )
-
-            SettingsPage.Storage -> StoragePage(
                 session = session,
                 onBack = { open(SettingsPage.Root) },
             )
@@ -388,8 +349,6 @@ private val SettingsPage.depth: Int
 private fun RootPage(
     session: PiAgentSession,
     onOpen: (SettingsPage) -> Unit,
-    storageGranted: Boolean,
-    storageSummary: StorageAccess.Policy,
     agent: AgentStatus,
 ) {
     // Collected here rather than read off the store inside the rows, so a saved
@@ -481,23 +440,10 @@ private fun RootPage(
             }
 
             PiSection(title = text.settings.advancedSection) {
-                ArrowPreference(
-                    title = text.settings.storageTitle,
-                    summary = text.settings.storageSubtitle,
-                    endActions = {
-                        SettingsValue(
-                            when {
-                                !storageGranted -> text.settings.storageMissing
-                                storageSummary.isEmpty -> text.settings.storageLevelNone
-                                storageSummary.isUnrestricted -> text.settings.storageLevelAll
-                                else -> text.settings.storageLevelSelected
-                            },
-                        )
-                    },
-                    onClick = { onOpen(SettingsPage.Storage) },
-                )
-                // What the agent may reach is the row above; this one is where it
-                // works, what it is told, and the process that carries both.
+                // Where it works, what it is told, and the process that carries both.
+                // The storage row used to lead this section; the workspace row on the
+                // agent page answers the same question now, with one answer instead of
+                // seven switches (§14).
                 ArrowPreference(
                     title = text.settings.agentProcess,
                     summary = agentDescription(agent, text),

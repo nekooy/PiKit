@@ -116,6 +116,7 @@ import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.RefusedWorkspace
 import pi.kit.mob.data.WorkspaceRefusal
 import pi.kit.mob.data.Workspace
+import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.rememberedThinkingLevels
@@ -861,6 +862,17 @@ internal fun ChatScreen(
         WorkspacePickerSheet(
             text = text,
             home = session.env.homePath,
+            // The phone's storage: `/sdcard`, when the device has one. A workspace may
+            // live there — it is an ordinary folder once "all files access" is granted,
+            // and the tier's writable root is the workspace, not the page of switches
+            // that used to stand between them (§14).
+            shared = StorageAccess.sharedRoot()?.absolutePath,
+            existing = rememberWorkspacePaths(context, session.env),
+            granted = StorageAccess.isGranted(),
+            onGrant = {
+                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
+                Unit
+            },
             onAdd = { folder ->
                 val added = WorkspaceStore.add(context, session.env, folder)
                 val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason
@@ -3423,9 +3435,14 @@ private fun Composer(
             )
             val defaultWorkspacePath = saved.defaultWorkspace.ifBlank { session.env.workspacePath }
             val currentWorkspaceEntry = workspaces.firstOrNull { it.path == currentWorkspace }
+            // The default's name while the agent is still resolving where it was launched:
+            // the state flow that carries the workspace is empty for the first frames, and a
+            // chip with a folder glyph and no word is a control that looks broken.
             val workspaceLabel = currentWorkspaceEntry?.label
-                ?: java.io.File(currentWorkspace).name.ifBlank { currentWorkspace }
-            val workspaceIsDefault = currentWorkspace == defaultWorkspacePath
+                ?: java.io.File(currentWorkspace).name.ifBlank {
+                    workspaces.firstOrNull { it.path == defaultWorkspacePath }?.label
+                        ?: java.io.File(defaultWorkspacePath).name
+                }
             val chipState = rememberLazyListState()
             // The band's own colour, read in composition: `MiuixTheme.colorScheme` is
             // a composable read and a `DrawScope` is not one, and the fade has to end
@@ -3476,12 +3493,14 @@ private fun Composer(
                     // The workspace, first in the row and the only chip on this page
                     // that is not about the next message's request: it decides which
                     // folder the agent is standing in, so it is what every other value on
-                    // the row applies *to*. Drawn as the folder's own name, with the
-                    // default marked — the menu under it carries the full path, which is
-                    // the half a reader needs only when two projects share a name.
+                    // the row applies *to*. Drawn as the folder's own name and nothing
+                    // else: `（默认）` is a fact about the *list* — which one a new
+                    // conversation starts in — so it belongs where the list is, in the
+                    // menu and in the settings dialog, and a chip that carried it would be
+                    // saying the same thing on every conversation forever.
                     ControlChip(
                         glyph = MiuixIcons.Folder,
-                        label = text.chat.workspaceChip(workspaceLabel, workspaceIsDefault),
+                        label = workspaceLabel,
                         onClick = { onOpenSheet(ComposerSheet.Workspace) },
                     ) {
                         OverlayListPopup(

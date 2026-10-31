@@ -12,7 +12,7 @@ import java.io.File
  * call `File.deleteRecursively()` directly, which is a call that will happily walk
  * anywhere it is pointed — including, if a path is ever wrong, into the user's own
  * files. (The `~/storage` link farm is not on that list: a link has to be removed
- * *as a link*, so `StorageAccess.removeFarm` deletes them one at a time instead.)
+ * *as a link*, so `StorageAccess.syncFarm` deletes them one at a time instead.)
  *
  * This is the guard that makes that class of bug impossible rather than
  * unlikely. It refuses to run unless all of the following hold:

@@ -415,6 +415,24 @@ interface Strings {
         /** The picker's line for a folder that holds no sub-folder to open. */
         val workspacePickerEmpty: String
 
+        /** The label over the path field the picker can be driven from. */
+        val workspacePickerPath: String
+
+        /** The shortcut back to `$HOME`; shown whenever the browser is somewhere else. */
+        val workspacePickerHome: String
+
+        /** The shortcut to `/sdcard`; absent on a device that has no shared storage. */
+        val workspacePickerShared: String
+
+        /** Opens Android's "all files access" page, when a folder cannot be listed. */
+        val workspacePickerGrant: String
+
+        /** What an unlistable folder says instead of a list. */
+        val workspacePickerUnreadable: String
+
+        /** The badge on a row whose folder is already a workspace. */
+        val workspacePickerAdded: String
+
         /** The row action that takes an added workspace out of the list. */
         val workspaceRemove: String
 
@@ -875,91 +893,11 @@ interface Strings {
         val notFound: String
 
         // Shared storage
-        val storageTitle: String
-        val storageSubtitle: String
-        val storageGrant: String
-        val storageMissing: String
-
-        /**
-         * The one-time prompt shown after the first launch. Android has no runtime
-         * dialog for "all files access", so this explains the situation and takes
-         * the user to the system page.
-         */
         val storageAskTitle: String
         val storageAskBody: String
         val storageAskOpen: String
         val storageAskLater: String
 
-        /** The folder-grant page. */
-        val storagePageTitle: String
-        val storagePageSubtitle: String
-        val storageNoAccessBody: String
-        val storageAccessLevel: String
-        val storageLevelNone: String
-        val storageLevelSelected: String
-        val storageLevelAll: String
-        val storageFolders: String
-
-        /** One folder row: its name, and whether the agent may reach it. */
-        val storageFolderShared: String
-        val storageFolderDownloads: String
-        val storageFolderDocuments: String
-        val storageFolderPictures: String
-        val storageFolderDcim: String
-        val storageFolderMusic: String
-        val storageFolderMovies: String
-
-        /**
-         * The question asked before *any* folder is switched on.
-         *
-         * One pair for every folder rather than a warning attached to the ones that
-         * hold irreplaceable data: a user who is prompted for one switch and not for
-         * the next stops reading the prompts, and the question is about the agent's
-         * reach in either case.
-         */
-        val storageConfirmGrantTitle: String
-        fun storageConfirmGrantBody(name: String): String
-
-        /** Folders the user added themselves, by path. */
-        val storageCustomSection: String
-        val storageCustomAdd: String
-        val storageCustomAddBody: String
-
-        /** Shown instead of [storageCustomAddBody] while the whole tree is granted. */
-        val storageCustomSubsumed: String
-        val storageCustomRemove: String
-
-        /**
-         * The question asked before one folder the user added is taken back.
-         *
-         * The same shape the search page's option list uses, and for the same reason:
-         * the ✕ is a control with no undo, and the request for it was that it not act
-         * on a single tap. Removing a folder only withdraws the link — nothing on the
-         * phone is deleted — so the body says so rather than warning about data loss.
-         */
-        val storageCustomRemoveTitle: String
-        fun storageCustomRemoveBody(path: String): String
-        val storageCustomPickTitle: String
-        val storageCustomPickUse: String
-        val storageCustomPickUp: String
-        val storageRevokeAll: String
-        val storageRevokeAllTitle: String
-
-        /** One-line row caption; [storageRevokeAllBody] is the confirm dialog's text. */
-        val storageRevokeAllSubtitle: String
-
-        val storageRevokeAllBody: String
-        val storageGrantPromptTitle: String
-        val storageGrantPromptBody: String
-        val storageGrantPromptConfirm: String
-
-        // The safety extension's switch used to be its own section here. It is the
-        // three permission tiers now: `pikit-permissions` reads the tier from
-        // `PIKIT_PERMISSION_FILE` on every tool call, and the tier is chosen from
-        // the composer ([Chat.permissionChip]) rather than from a page.
-
-        // Agent context, a section of the agent process page: what the model is
-        // given, as numbered points, and the one part of it the user owns.
         val agentContextSection: String
 
         /** The lead over the numbered points. */

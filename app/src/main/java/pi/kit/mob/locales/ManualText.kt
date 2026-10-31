@@ -67,8 +67,8 @@ Model & provider → Add a profile**.
 
 The first launch unpacks about 285 MB and asks
 once about file access. **Declining is fine**;
-**Settings → Shared storage** brings the offer
-back.
+the picker that adds a workspace asks again the
+first time a folder outside the app is chosen.
 
 ### A relay or a self-hosted endpoint
 
@@ -218,51 +218,51 @@ KB, binary as binary.
 
 By itself the agent sees only its own directory;
 your photos and documents do not exist as far as
-it is concerned. Reaching them takes the Android
-**All files access** permission and a folder
-switched on in **Settings → Shared storage**.
+it is concerned. Reaching them takes Android's
+**All files access** permission, asked once on
+the first launch and again from the picker when
+a workspace outside the app is chosen.
 
-That permission is all or nothing on Android, so
-the folder switches are the real limit on a
-task: a write naming a folder that is off is
-refused before it runs. Only the folders you
-switch on are linked into the agent's home under
-the lower-case names `termux-setup-storage` has
+There are no folder switches any more. What the
+agent may *write* is decided by the tier above
+the input box and by the folder the conversation
+runs in, so `/sdcard/Dev/app` is an ordinary
+project the moment it is a workspace:
+**Workspace write** reads anywhere and writes
+inside it.
+
+While the grant holds, the usual folders are
+also linked into the agent's home under the
+lower-case names `termux-setup-storage` has
 always used, so `/sdcard/DCIM` is
-`~/storage/dcim` inside the environment.
+`~/storage/dcim` inside the environment. The
+links are a convenience, not a permission: a
+write through one is judged by the tier and the
+workspace like any other path.
 
 The limit binds the agent, not the terminal:
 `/sdcard` is the phone's real storage, and a
 shell in the Terminal tab reaches it directly
-whenever the app holds all files access, whether
-or not a folder is granted.
-
-Each folder asks for confirmation first. **All
-of shared storage** covers the rest, **Add a
-folder** grants another one at a time (✕ takes
-it back), and **Remove all access** unlinks
-every folder and deletes nothing.
+whenever the app holds all files access.
 
 Both guards are worth trusting, and both are
-checkable: the agent is refused recursive
-deletes outside its workspace (`~/workspace`),
-and every recursive delete inside PiKit refuses
-paths outside the app's private data. **Settings
-→ Maintenance & repair → Check storage** runs
-both checks for real, in a separate process, one
-line per check.
+checkable: the agent is refused writes outside
+its workspace, and every recursive delete inside
+PiKit refuses paths outside the app's private
+data. **Settings → Maintenance & repair → Check
+storage** runs both checks for real, in a
+separate process, one line per check.
 
 `pikit-permissions` checks every tool call
 against a tier you choose in the composer,
 between `⌘` and `+`. **Read only** refuses
 `write`, `edit` and any `bash` that would change
 a file. **Workspace write**, the default, reads
-anywhere and writes only inside the workspace
-and the folders you granted. **Full access**
-refuses nothing. A refused call comes back to
-the agent as a tool error naming the tier, so it
-says what it meant to change instead of
-retrying.
+anywhere and writes only inside the workspace.
+**Full access** refuses nothing. A refused call
+comes back to the agent as a tool error naming
+the tier, so it says what it meant to change
+instead of retrying.
 
 ## 7. Web search
 
@@ -306,7 +306,6 @@ of it.
 | Personalization | New conversation on launch; text size; theme; home-screen icon; avatars |
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
-| Shared storage | Which folders the agent may write to |
 | Agent process | Restart, default workspace, AGENTS.md, keep alive |
 | Backup & restore | What to pack into one file, and putting it back |
 | Maintenance & repair | Model list, packages, relocation, rebuild, storage check |

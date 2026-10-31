@@ -198,8 +198,10 @@ class TermuxEnv private constructor(context: Context) {
     }
 
     /**
-     * `~/storage` — symlinks into the phone's shared storage, created once the
-     * user grants "all files access". See [StorageAccess].
+     * `~/storage` — links into the phone's shared storage, created while Android's
+     * "all files access" is granted. A convenience for scripts, not a permission: what
+     * the agent may *write* is decided by the tier and the workspace (§14). See
+     * [StorageAccess].
      */
     val storageDir: File = File(home, StorageAccess.STORAGE_DIR_NAME)
 

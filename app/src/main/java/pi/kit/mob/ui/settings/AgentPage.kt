@@ -29,6 +29,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import pi.kit.mob.data.RefusedWorkspace
 import pi.kit.mob.data.WorkspaceRefusal
+import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.env.AgentContext
 import pi.kit.mob.env.BatteryOptimisation
@@ -46,6 +47,7 @@ import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.WorkspaceDialog
+import pi.kit.mob.ui.rememberWorkspacePaths
 import pi.kit.mob.ui.WorkspacePickerSheet
 import pi.kit.mob.ui.rememberWorkspaceList
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -179,17 +181,10 @@ internal fun AgentPage(
                 // which is also why there is no "restart to apply" sentence here.
                 ArrowPreference(
                     title = text.settings.defaultWorkspace,
-                    // The name travels as the *chip* label, `（默认）` included: the
-                    // settings summary and the composer's chip have to name the built-in
-                    // workspace the same way, and the mark is part of its name.
-                    summary = text.settings.defaultWorkspaceSubtitle(
-                        // The *chip* label, `（默认）` included: the summary and the
-                        // composer's chip must name the built-in workspace the same way.
-                        text.chat.workspaceChip(
-                            defaultWorkspaceName,
-                            defaultWorkspacePath == session.env.workspacePath,
-                        ),
-                    ),
+                    // The name alone: this row *is* the default, so `（默认）` would be the
+                    // sentence saying the default is the default. The mark lives in the
+                    // list, which is where a reader compares one workspace to another.
+                    summary = text.settings.defaultWorkspaceSubtitle(defaultWorkspaceName),
                     endActions = { SettingsValue(defaultWorkspaceName) },
                     onClick = { choosingWorkspace = true },
                 )
@@ -346,6 +341,17 @@ internal fun AgentPage(
         WorkspacePickerSheet(
             text = text,
             home = session.env.homePath,
+            // The phone's storage: `/sdcard`, when the device has one. A workspace may
+            // live there — it is an ordinary folder once "all files access" is granted,
+            // and the tier's writable root is the workspace, not the page of switches
+            // that used to stand between them (§14).
+            shared = StorageAccess.sharedRoot()?.absolutePath,
+            existing = rememberWorkspacePaths(context, session.env),
+            granted = StorageAccess.isGranted(),
+            onGrant = {
+                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
+                Unit
+            },
             onAdd = { folder ->
                 val added = WorkspaceStore.add(context, session.env, folder)
                 val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason

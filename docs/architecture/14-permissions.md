@@ -24,7 +24,8 @@ rule:
 - **Its rules were PiKit's invention.** The model has no idea what `pikit-safety-guard`
   means, so every refusal was a surprise, and `AGENTS.md` had to explain the rules in
   prose beside the code — two copies of one policy, which drift (§5 records the same
-  argument for the storage page).
+  argument for the storage page, which that change then removed — a second grant list nothing
+  read was the same drift with one more place to keep in step).
 
 The replacement is three tiers taken from the DeepSeek Harness, the coding agent this app
 is measured against. The names are that harness's own, because the model is trained around
@@ -100,21 +101,18 @@ Three properties follow from the file's location, and each one is a decision:
 
 What it deliberately does **not** do is read the filesystem: like the guard it replaced, it
 matches paths in a command's *text*, so a path built at runtime or hidden in base64 is not
-caught. It is a rule the agent is held to, not a sandbox — the same bar §5 states for the
-storage switches, and the reason the interface says "checks every tool call" rather than
-"prevents".
+caught. It is a rule the agent is held to, not a sandbox — the same bar §5 states for the link
+farm, and the reason the interface says "checks every tool call" rather than "prevents".
 
 ## What this cost, stated plainly
 
-**Reads are free in every tier, so the storage page's switches no longer limit what the
-agent may look at.** The old guard refused a command naming a folder the user had not
-granted; that rule is gone. What the switches still decide is what exists under `~/storage`
-and what is *writable* — `workspace-write` may write in a folder that is on, refuses one
-that is off, and `full-access` ignores the list for writes. The page's sentences were
-rewritten with the change (they promise writes, not access), because a page that described
-the old policy would be the same lie in the other direction. The trade is the one the tier
-model makes: a reader who wants a fence around their photos wants `read-only` or a
-`full-access` install they trust, not a per-folder read rule.
+**Reads are free in every tier, and the folder switches that used to limit them are gone.**
+The old guard refused a command naming a folder the user had not granted; that rule is gone,
+and with it the page of per-folder grants — `workspace-write` writes inside the workspace the
+conversation runs in, which is the folder the reader chose two taps earlier with a chip, and
+`full-access` ignores the list for writes altogether. A folder on the phone becomes writable
+by *being* a workspace (§5). The trade is the one the tier model makes: a reader who wants a
+fence around their photos wants `read-only`, not a per-folder read rule.
 
 **The old extension's file list is gone with it.** Pi's own files are protected by being
 outside the workspace rather than by a list of spellings, which is fewer rules and fewer

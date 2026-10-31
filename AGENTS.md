@@ -342,6 +342,14 @@ tools/build-apks.py` covers it with `tools/test-permissions.mjs` — a rule tabl
 sanity check: every tier's refusal and its allowed counterpart is a case, and an
 `AGENTS.md` sentence that disagrees with one is a bug (§14, `env/AgentContext`).
 
+**Any folder the process can read may be a workspace; the write boundary is the workspace,
+not a list of grants.** A workspace may be on `/sdcard` — once Android's "all files access"
+is granted it is an ordinary folder, and a write inside it is permitted in
+`workspace-write` because that is where the conversation runs. There is no second list of
+granted folders: the storage page that held one is gone (§5), and `~/storage` survives only
+as the convenience farm the shell and pi's scripts type. Two folders are refused, both
+because they are the agent's own state rather than a project: `$HOME` and `$HOME/.pi`.
+
 ## Commits — commit finished work yourself, push only when asked
 
 **Commit when a task is done and verified; push only when the user says so.** The

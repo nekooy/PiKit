@@ -35,10 +35,6 @@ class SessionGroupingTest {
         workspace = workspace,
     )
 
-    /** The chip label the composer uses, so the two screens cannot disagree. */
-    private fun chip(name: String, isDefault: Boolean): String =
-        if (isDefault) "$name（默认）" else name
-
     private val workspaces = listOf(
         Workspace(path = builtIn, label = "workspace", builtIn = true),
         Workspace(path = added, label = "app"),
@@ -47,13 +43,11 @@ class SessionGroupingTest {
     private fun groups(sessions: List<SessionSummary>) = sessionGroups(
         sessions = sessions,
         workspaces = workspaces,
-        defaultPath = builtIn,
         unknownLabel = "No workspace recorded",
-        chip = ::chip,
     )
 
     @Test
-    fun `one group per workspace, named as the composer's chip names it`() {
+    fun `one group per workspace, named without the default mark`() {
         val grouped = groups(
             listOf(
                 summary("$home/a.jsonl", added, modifiedAt = 10),
@@ -62,7 +56,9 @@ class SessionGroupingTest {
             ),
         )
 
-        assertEquals(listOf("app", "workspace（默认）"), grouped.map { it.label })
+        // The folder's own name: `（默认）` marks the list on the composer's chip and the
+        // settings dialog, not a heading that groups conversations by where they ran.
+        assertEquals(listOf("app", "workspace"), grouped.map { it.label })
         assertEquals(listOf(2, 1), grouped.map { it.sessions.size })
     }
 

@@ -298,37 +298,23 @@ class PiAgentSession private constructor(context: Context) {
     }
 
     /**
-     * Brings `~/storage` in line with the storage policy the user chose.
+     * Brings `~/storage` in line with the Android grant.
      *
-     * Called after the environment check and whenever the policy changes, so the
-     * links appear or disappear without a restart. A failure here is not fatal
-     * and is not surfaced as an environment warning: the rest of the runtime
-     * works without shared storage, and the default policy grants none of it.
+     * There is no switch any more (§14): the farm is a convenience that exists while
+     * "all files access" does and is taken away when it is not, which is what a revoked
+     * grant has to mean — a directory of dead paths reads as a broken environment.
+     *
+     * Called before every launch and from `termux-setup-storage`'s broadcast, so a
+     * failure is logged rather than surfaced: the rest of the runtime works without
+     * shared storage, and a workspace on `/sdcard` is what actually needs the grant.
      */
     fun syncStorageLinks(): Boolean {
-        val policy = StorageAccess.readPolicy(appContext)
-        if (policy.isEmpty) {
-            // Revoking has to take effect even when the Android permission is
-            // gone, so the farm is removed before the permission is consulted.
-            StorageAccess.removeFarm(env.storageDir)
-            Log.i(TAG, "shared storage: policy is empty, ~/storage removed")
-            return false
-        }
-        if (!StorageAccess.isGranted()) {
-            Log.i(TAG, "shared storage: policy set but the system permission is missing")
-            return false
-        }
-        val links = StorageAccess.applyPolicy(env, policy)
-            .onFailure { Log.w(TAG, "Could not create the storage symlinks", it) }
-            .isSuccess
-        // Logged rather than assumed: the recorded grant and what the process can
-        // actually do have been seen to disagree, and that is exactly the "can
-        // read but cannot save" report. The reach line is measured from inside
-        // this process, because a shell — even one with the same uid — has a
-        // different SELinux context and cannot stand in for it.
-        Log.i(TAG, "shared storage: symlinks=$links writable=${StorageAccess.canWriteSharedStorage()}")
-        Log.i(TAG, StorageAccess.describeReach(env, policy))
-        return links
+        val granted = StorageAccess.isGranted()
+        val synced = runCatching { StorageAccess.syncFarm(env) }
+            .onFailure { Log.w(TAG, "Could not reconcile the storage symlinks", it) }
+            .getOrDefault(false)
+        Log.i(TAG, "shared storage: granted=$granted farm=$synced")
+        return synced
     }
 
     // ------------------------------------------------------------- workspace
@@ -431,24 +417,6 @@ class PiAgentSession private constructor(context: Context) {
         rememberSessionPath(target.path)
         _conversation.value = ConversationState(loadingSession = true)
         restartAgent()
-    }
-
-    /** The storage policy in force, for the Settings page. */
-    fun storagePolicy(): StorageAccess.Policy = StorageAccess.readPolicy(appContext)
-
-    /**
-     * Applies a new storage policy: persists it, rebuilds the symlink farm, and
-     * tells the agent about the change.
-     *
-     * The agent is restarted rather than left running: its system prompt and its
-     * `AGENTS.md` describe what is reachable, and the guard extension caches the
-     * workspace root at startup, so a running process would keep the old view of
-     * the device.
-     */
-    fun setStoragePolicy(policy: StorageAccess.Policy) {
-        StorageAccess.writePolicy(appContext, policy)
-        syncStorageLinks()
-        if (_agent.value is AgentStatus.Running) scheduleRestart()
     }
 
     /**

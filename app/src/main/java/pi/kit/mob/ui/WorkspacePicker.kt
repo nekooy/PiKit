@@ -4,8 +4,9 @@ import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -13,15 +14,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.data.Workspace
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.env.TermuxEnv
 import pi.kit.mob.locales.Strings
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.DpSize
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMenuRow
@@ -31,12 +36,14 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
+import java.io.File
 
 /**
  * The workspace list a chip, a menu or a dialog draws, rebuilt when the set changes.
@@ -61,33 +68,68 @@ internal fun rememberWorkspaceList(
     }
 }
 
+/**
+ * The absolute paths that are already workspaces.
+ *
+ * The picker's rows carry an `已添加` badge from this, and it is read here rather than
+ * threaded down because the two places that open the picker are different pages and the
+ * store is the one owner of the set.
+ */
+@Composable
+internal fun rememberWorkspacePaths(context: Context, env: TermuxEnv): Set<String> {
+    val revision by WorkspaceStore.revision.collectAsState()
+    return remember(revision, context, env) {
+        WorkspaceStore.list(context, env).map { it.path }.toSet()
+    }
+}
+
 /** A sheet's own side gutter, matching the composer's other sheets. */
 private val PICKER_GUTTER = 16.dp
 
 /**
- * The folder picker: descend from `$HOME`, then add the folder it is showing.
+ * The folder picker: anywhere the app can read, reached by tapping or by typing.
  *
- * A browser rather than a text field, and rooted at `$HOME` rather than at `/`: every
- * workspace is a project directory, project directories live in the agent's home, and a
- * picker that could walk to `/sdcard` or `/data` would offer paths the permission tiers
- * exist to keep the agent out of. `storage` and dot-directories are hidden for the same
- * reason — the first is the user's phone (granted on the storage page, and refused as a
- * workspace by [WorkspaceStore]), and the second holds pi's own configuration.
+ * ## Why it is not rooted at `$HOME` any more
  *
- * The sheet has one action, and it acts on the folder *shown* rather than on a selection:
- * the reader descended to get here, and the path above the button is what will be added.
- * It is shared by the two places a workspace can be added from — the composer's workspace
- * menu and the agent page's default-workspace dialog — because a second picker is a second
- * set of rules about what may be picked.
+ * It was, on the argument that a project directory lives in the agent's home and a picker
+ * that could walk to `/sdcard` would offer paths the permission tiers exist to keep the
+ * agent out of. The tiers removed the second half of that argument — what the agent may
+ * *write* is the workspace it was started in (§14), so a workspace on `/sdcard/Dev` is
+ * simply a project on `/sdcard/Dev`, and the folder switches on the storage page that used
+ * to be the only way to reach one are gone with the page. What is left is "any folder this
+ * process can read", and the picker says so: up from `$HOME` reaches `/`, and the two
+ * shortcuts go to the two roots a reader actually starts from.
+ *
+ * ## Why it is easier to use
+ *
+ * Three things were wrong with a list you could only descend:
+ *
+ *  - **there was no way in except tapping**, so a path copied from a chat message or a
+ *    terminal had to be walked to by hand — the path is a text field now, and `Go` jumps;
+ *  - **`$HOME` was the ceiling**, so a sibling of the workspace, or anything on the phone,
+ *    was unreachable — the parent row goes all the way to `/`;
+ *  - **a folder that was already a workspace looked like any other**, so the honest tap
+ *    produced a refusal — those rows say `已添加` and tapping one selects it.
+ *
+ * The sheet has one action and it acts on the folder *shown* rather than on a selection:
+ * the reader navigated to get here, and the path above the button is what will be added.
  *
  * `home` is passed rather than read from the environment so the caller names the root: the
  * composer already holds the session's `TermuxEnv`, and a picker that resolved its own
  * would be a second answer to "where does the agent live".
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun WorkspacePickerSheet(
     text: Strings,
     home: String,
+    /** `/sdcard`, or null on a device that does not have one. */
+    shared: String?,
+    /** Absolute paths that are already workspaces, so the list can say so. */
+    existing: Set<String>,
+    /** Android's "all files access": without it, `/sdcard` cannot be listed. */
+    granted: Boolean,
+    onGrant: () -> Unit,
     /**
      * Adds [folder], and answers with the sentence to show when it cannot be added.
      *
@@ -99,18 +141,39 @@ internal fun WorkspacePickerSheet(
      */
     onAdd: (String) -> String?,
 ) {
-    var path by remember { mutableStateOf(home) }
+    fun expand(raw: String): String {
+        val value = raw.trim()
+        val base = home.trimEnd('/')
+        return when {
+            value == "~" -> base
+            value.startsWith("~/") -> base + value.removePrefix("~")
+            value == "\$HOME" -> base
+            value.startsWith("\$HOME/") -> base + value.removePrefix("\$HOME")
+            else -> value
+        }.let { if (it.length > 1) it.trimEnd('/') else it }
+    }
+
+    var path by remember { mutableStateOf(expand(home)) }
+    var typed by remember { mutableStateOf(path) }
     var refusal by remember { mutableStateOf<String?>(null) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun go(to: String) {
+        refusal = null
+        path = expand(to)
+        typed = path
+    }
+
     // The store's revision is in the key so the listing is refreshed when a folder is
     // added from this sheet and it stays open (a refusal leaves it open).
     val revision by WorkspaceStore.revision.collectAsState()
-    val directories = remember(path, revision) {
-        runCatching {
-            java.io.File(path).listFiles()
-                ?.filter { it.isDirectory && !it.name.startsWith(".") && it.name != "storage" }
-                ?.sortedBy { it.name.lowercase() }
-                .orEmpty()
-        }.getOrDefault(emptyList())
+    val listing = remember(path, revision) {
+        runCatching { File(path).listFiles() }.getOrNull()
+    }
+    val directories = remember(listing) {
+        listing
+            ?.filter { it.isDirectory && !it.name.startsWith(".") }
+            ?.sortedWith(compareBy({ !it.name.lowercase().startsWith("a") }, { it.name.lowercase() }))
+            .orEmpty()
     }
 
     Column(
@@ -126,16 +189,28 @@ internal fun WorkspacePickerSheet(
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(horizontal = PICKER_GUTTER, vertical = 4.dp),
         )
-        // The folder this sheet is showing. Monospace and one line: it is a path, and a
-        // path's two ends are what identify it.
-        Text(
-            text = path,
-            style = MiuixTheme.textStyles.footnote1,
-            fontFamily = FontFamily.Monospace,
-            color = MiuixTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = PICKER_GUTTER, vertical = 6.dp),
+        // The path is editable: a path copied from a message or the terminal is the
+        // fastest way to a folder, and it was the one thing a browser could not do.
+        TextField(
+            value = typed,
+            onValueChange = { typed = it },
+            label = text.chat.workspacePickerPath,
+            cornerRadius = PiCorner.radius,
+            singleLine = true,
+            textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Go,
+            ),
+            keyboardActions = KeyboardActions(
+                onGo = {
+                    keyboard?.hide()
+                    go(typed)
+                },
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = PICKER_GUTTER, end = PICKER_GUTTER, top = 8.dp),
         )
         // The refusal, where the button that was refused is rather than in a snackbar the
         // sheet covers. Cleared by the next attempt.
@@ -148,15 +223,42 @@ internal fun WorkspacePickerSheet(
             )
         }
         if (path != home) {
+            PiMenuRow(title = text.chat.workspacePickerHome, onClick = { go(home) })
+        }
+        if (shared != null && path != shared) {
             PiMenuRow(
-                title = text.chat.workspacePickerParent,
+                title = text.chat.workspacePickerShared,
                 onClick = {
-                    refusal = null
-                    path = java.io.File(path).parent ?: home
+                    if (granted) {
+                        go(shared)
+                    } else {
+                        // Without the grant the folder cannot be listed, and a row that
+                        // silently does nothing is what this sheet had before.
+                        onGrant()
+                    }
                 },
             )
         }
-        if (directories.isEmpty()) {
+        if (path != "/") {
+            PiMenuRow(
+                title = text.chat.workspacePickerParent,
+                onClick = { go(File(path).parent ?: "/") },
+            )
+        }
+        if (listing == null) {
+            // Unreadable rather than empty: listFiles answers null for a directory this
+            // process may not open, which on a phone is almost always the grant missing
+            // for something under /sdcard.
+            if (!granted) {
+                PiMenuRow(title = text.chat.workspacePickerGrant, onClick = onGrant)
+            }
+            Text(
+                text = text.chat.workspacePickerUnreadable,
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.padding(horizontal = PICKER_GUTTER, vertical = 12.dp),
+            )
+        } else if (directories.isEmpty()) {
             Text(
                 text = text.chat.workspacePickerEmpty,
                 style = MiuixTheme.textStyles.footnote1,
@@ -165,12 +267,18 @@ internal fun WorkspacePickerSheet(
             )
         }
         directories.forEach { directory ->
+            val added = directory.absolutePath in existing
             PiMenuRow(
                 title = directory.name,
-                onClick = {
-                    refusal = null
-                    path = directory.absolutePath
+                // The trailing slot is the badge rather than an arrow: a row that is
+                // already a workspace is still worth opening (it may have children), and
+                // the badge is what stops the reader adding it twice.
+                trailing = if (added) {
+                    { Text(text = text.chat.workspacePickerAdded, style = MiuixTheme.textStyles.footnote1) }
+                } else {
+                    null
                 },
+                onClick = { go(directory.absolutePath) },
             )
         }
         Button(

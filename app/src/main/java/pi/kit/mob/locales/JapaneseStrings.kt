@@ -128,6 +128,12 @@ internal object JapaneseStrings : Strings {
         override val workspacePickerChoose = "このフォルダーを使う"
         override val workspacePickerParent = "親フォルダー"
         override val workspacePickerEmpty = "このフォルダーにサブフォルダーはありません"
+        override val workspacePickerPath = "パス"
+        override val workspacePickerHome = "ホーム"
+        override val workspacePickerShared = "本体のストレージ"
+        override val workspacePickerGrant = "ファイルへのアクセスを許可"
+        override val workspacePickerUnreadable = "このフォルダーを読み取れません。本体のストレージには「すべてのファイルへのアクセス」が必要です。"
+        override val workspacePickerAdded = "追加済み"
         override val workspaceRemove = "ワークスペースを外す"
         override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
             WorkspaceRefusal.BLANK -> "フォルダーのパスを入力してください"
@@ -137,8 +143,8 @@ internal object JapaneseStrings : Strings {
             WorkspaceRefusal.HOME -> "ホームディレクトリ自体はワークスペースにできません"
             WorkspaceRefusal.AGENT_DIR ->
                 "エージェント自身の設定ディレクトリはワークスペースにできません"
-            WorkspaceRefusal.SHARED_STORAGE ->
-                "共有ストレージはワークスペースにできません。設定の共有ストレージで許可してください"
+            WorkspaceRefusal.NOT_READABLE ->
+                "このフォルダーを読み取れません。本体のストレージは先にファイルへのアクセスを許可してください"
             WorkspaceRefusal.DUPLICATE -> "このワークスペースはすでに一覧にあります"
         }
         override fun permissionChip(mode: PermissionMode): String = when (mode) {
@@ -151,7 +157,7 @@ internal object JapaneseStrings : Strings {
                 "閲覧のみ：ファイルを見ることはできますが変更はできず、ファイルを変える" +
                     "コマンドも実行しません"
             PermissionMode.WORKSPACE_WRITE ->
-                "ワークスペースと許可した共有ストレージのフォルダーだけ変更できます"
+                "どこでも読めますが、この会話のワークスペースだけを変更できます"
             PermissionMode.FULL_ACCESS ->
                 "何も止めません。エージェントは権限のあるファイルを変更できます"
         }
@@ -355,10 +361,6 @@ internal object JapaneseStrings : Strings {
         override val stopped = "停止"
         override fun failedWith(message: String) = "失敗 — $message"
         override val notFound = "同梱の実行環境に見つかりません"
-        override val storageTitle = "共有ストレージ"
-        override val storageSubtitle = "書き込めるフォルダー"
-        override val storageGrant = "許可する"
-        override val storageMissing = "未許可"
         override val storageAskTitle = "エージェントにファイルを許可しますか？"
         override val storageAskBody =
             "現在エージェントは自分の専用ディレクトリしか見えず、写真・書類・ダウンロードを" +
@@ -368,54 +370,6 @@ internal object JapaneseStrings : Strings {
                 "オンにしてください。オフのままのフォルダーは読み取りのみで、いつでも取り消せます。"
         override val storageAskOpen = "許可する"
         override val storageAskLater = "あとで"
-
-        override val storagePageTitle = "共有ストレージ"
-        override val storagePageSubtitle = "書き込みはオンのフォルダーのみ"
-        override val storageNoAccessBody =
-            "フォルダーが 1 つもオンになっていません。書き込みはワークスペースの中だけで、" +
-                "端末のファイルは読み取りのみです。"
-        override val storageAccessLevel = "書き込み範囲"
-        override val storageLevelNone = "なし"
-        override val storageLevelSelected = "選択したフォルダー"
-        override val storageLevelAll = "すべてのファイル"
-        override val storageFolders = "フォルダー"
-        override val storageFolderShared = "共有ストレージ全体"
-        override val storageFolderDownloads = "ダウンロード"
-        override val storageFolderDocuments = "ドキュメント"
-        override val storageFolderPictures = "画像"
-        override val storageFolderDcim = "カメラ"
-        override val storageFolderMusic = "音楽"
-        override val storageFolderMovies = "動画"
-        override val storageConfirmGrantTitle = "エージェントに許可しますか？"
-        override fun storageConfirmGrantBody(name: String) =
-            "「$name」には取り返しのつかないファイルが含まれている可能性があります。許可すると" +
-                "読み取りだけでなく削除もできるようになります。本当に必要なときだけオンにしてください。"
-        override val storageCustomSection = "追加したフォルダー"
-        override val storageCustomAdd = "フォルダーを追加"
-        override val storageCustomAddBody = "共有ストレージ内の任意のフォルダーを選べます。"
-        override val storageCustomSubsumed = "共有ストレージ全体がすでに許可されています"
-        override val storageCustomRemove = "削除"
-        override val storageCustomRemoveTitle = "このフォルダーを削除しますか？"
-        override fun storageCustomRemoveBody(path: String) =
-            "エージェントは `$path` にアクセスできなくなります。フォルダーと中のファイルは" +
-                "削除されません。"
-        override val storageCustomPickTitle = "フォルダーを選択"
-        override val storageCustomPickUse = "このフォルダーを使う"
-        override val storageCustomPickUp = "親フォルダー"
-        override val storageRevokeAll = "すべてのアクセスを解除"
-        override val storageRevokeAllSubtitle = "環境のフォルダーリンクをすべて外します"
-        override val storageRevokeAllTitle = "すべてのアクセスを解除しますか？"
-        override val storageRevokeAllBody =
-            "エージェントはホームディレクトリの中で作業を続けます。端末上のファイルは削除されません" +
-                "——環境からのリンクが外れるだけです。"
-        override val storageGrantPromptTitle = "Android の権限が必要です"
-        override val storageGrantPromptBody =
-            "まだ共有ストレージに到達できないため、どのフォルダーもオンにできません。PiKit が" +
-                "「すべてのファイルへのアクセス」を Android に要求します。実際にエージェントが" +
-                "書き込める範囲は、この画面でオンにしたフォルダーが決めます。\n\n" +
-                "この画面では注意してください。ファイルマネージャーやターミナルアプリに許可すると、" +
-                "そのアプリも同じようにあなたのファイルを扱えるようになります。"
-        override val storageGrantPromptConfirm = "設定を開く"
 
         override val agentContextSection = "コンテキスト"
         override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
@@ -436,7 +390,7 @@ internal object JapaneseStrings : Strings {
         override val agentContextRuntimeBody =
             "モデルとプロバイダー、思考レベル、セッション ID とセッションファイルのパス、この" +
                 "会話のワークスペース（PIKIT_WORKSPACE）、権限の段階（PIKIT_PERMISSION_FILE：" +
-                "閲覧のみ・ワークスペース内で読み書き・完全アクセス）、共有ストレージ" +
+                "閲覧のみ・ワークスペース内で読み書き・完全アクセス）" +
                 "（PIKIT_STORAGE_ALLOWED と PIKIT_STORAGE_LINKS）、テレメトリーのスイッチ" +
                 "（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "ツール"
@@ -619,7 +573,7 @@ internal object JapaneseStrings : Strings {
         override val backupImportSection = "インポート"
         override val backupCategorySettings = "基本設定"
         override val backupCategorySettingsSubtitle =
-            "テーマ、言語、デフォルトのワークスペース、権限の段階、共有ストレージの許可など、" +
+            "テーマ、言語、デフォルトのワークスペース、権限の段階など、" +
                 "このアプリが保存する設定の全部"
         override val backupCategoryModels = "モデルとプロバイダー"
         override val backupCategoryModelsSubtitle =

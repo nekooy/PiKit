@@ -12,8 +12,8 @@ import pi.kit.mob.pi.PiAgentSession
  * Both this app and upstream Termux ship the same shell wrapper, and it does not
  * create any links itself — it broadcasts
  * `com.<package>.app.reload_style` with `storage` and expects the app to do the
- * work. Wiring that up means the command works whether the user runs it from the
- * terminal or uses the Settings row, and neither path needs the other explained.
+ * work. Since the storage page is gone (§14) this is the *only* way to ask for the
+ * farm again without a relaunch, which is exactly what the command is for.
  */
 class StorageSetupReceiver : BroadcastReceiver() {
 

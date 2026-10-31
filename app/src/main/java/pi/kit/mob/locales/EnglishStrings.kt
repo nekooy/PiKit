@@ -128,6 +128,12 @@ internal object EnglishStrings : Strings {
         override val workspacePickerChoose = "Use this folder"
         override val workspacePickerParent = "Parent folder"
         override val workspacePickerEmpty = "No folders in this one"
+        override val workspacePickerPath = "Path"
+        override val workspacePickerHome = "Home folder"
+        override val workspacePickerShared = "Phone storage"
+        override val workspacePickerGrant = "Allow file access"
+        override val workspacePickerUnreadable = "This folder cannot be read. Phone storage needs \"all files access\"."
+        override val workspacePickerAdded = "Added"
         override val workspaceRemove = "Remove workspace"
         override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
             WorkspaceRefusal.BLANK -> "Enter a folder path"
@@ -136,8 +142,7 @@ internal object EnglishStrings : Strings {
             WorkspaceRefusal.NOT_A_DIRECTORY -> "That is not a folder"
             WorkspaceRefusal.HOME -> "The home directory itself cannot be a workspace"
             WorkspaceRefusal.AGENT_DIR -> "The agent's own config directory cannot be a workspace"
-            WorkspaceRefusal.SHARED_STORAGE ->
-                "Shared storage cannot be a workspace; grant it on the storage page instead"
+            WorkspaceRefusal.NOT_READABLE -> "This folder cannot be read; phone storage needs file access first"
             WorkspaceRefusal.DUPLICATE -> "That workspace is already in the list"
         }
         override fun permissionChip(mode: PermissionMode): String = when (mode) {
@@ -150,7 +155,7 @@ internal object EnglishStrings : Strings {
                 "Read only: files can be looked at but not changed, and a command that " +
                     "would change them does not run"
             PermissionMode.WORKSPACE_WRITE ->
-                "Only the workspace and the shared-storage folders you granted can be changed"
+                "Reads anywhere; only the workspace this conversation runs in can be changed"
             PermissionMode.FULL_ACCESS ->
                 "Nothing is refused; the agent can change any file it has the right to"
         }
@@ -371,69 +376,16 @@ internal object EnglishStrings : Strings {
         override val stopped = "Stopped"
         override fun failedWith(message: String) = "Failed — $message"
         override val notFound = "Not found in the bundled runtime"
-        override val storageTitle = "Shared storage"
-        override val storageSubtitle = "Folders the agent may write to"
-        override val storageGrant = "Grant"
-        override val storageMissing = "Not granted"
         override val storageAskTitle = "Let the agent reach your files?"
         override val storageAskBody =
             "The agent can only see its own private directory right now, so it cannot read " +
                 "your photos, documents or downloads. To let it work on those, Android has to " +
                 "grant \"All files access\" — it has no dialog for that permission, so it is " +
                 "given on a system page.\n\n" +
-                "After that, open Settings → Phone storage and switch on the folders it may " +
-                "write to. A folder you leave off is one the agent can read but not change, and " +
-                "you can revoke all of it at any time."
+                "After that, a folder on the phone can be picked as a workspace; what the " +
+                "agent may write is then decided by the tier, and you can change it at any time."
         override val storageAskOpen = "Grant access"
         override val storageAskLater = "Not now"
-
-        override val storagePageTitle = "Shared storage"
-        override val storagePageSubtitle = "Only switched-on folders are writable"
-        override val storageNoAccessBody =
-            "No folder is switched on: the agent can write only inside its workspace, and it " +
-                "can read your files without changing them."
-        override val storageAccessLevel = "Write access"
-        override val storageLevelNone = "None"
-        override val storageLevelSelected = "Selected folders"
-        override val storageLevelAll = "All files"
-        override val storageFolders = "Folders"
-        override val storageFolderShared = "All of shared storage"
-        override val storageFolderDownloads = "Downloads"
-        override val storageFolderDocuments = "Documents"
-        override val storageFolderPictures = "Pictures"
-        override val storageFolderDcim = "Camera"
-        override val storageFolderMusic = "Music"
-        override val storageFolderMovies = "Movies"
-        override val storageConfirmGrantTitle = "Give the agent access?"
-        override fun storageConfirmGrantBody(name: String) =
-            "\u201c$name\u201d contains files that are probably not replaceable. Once the agent " +
-                "can see this folder it can also delete from it. Turn it on only if you need it."
-        override val storageCustomSection = "Added folders"
-        override val storageCustomAdd = "Add a folder"
-        override val storageCustomAddBody = "Pick any folder in shared storage."
-        override val storageCustomSubsumed = "All of shared storage is already granted"
-        override val storageCustomRemove = "Remove"
-        override val storageCustomRemoveTitle = "Remove this folder?"
-        override fun storageCustomRemoveBody(path: String) =
-            "The agent will no longer be able to reach `$path`. The folder and its " +
-                "files are not deleted."
-        override val storageCustomPickTitle = "Choose a folder"
-        override val storageCustomPickUse = "Use this folder"
-        override val storageCustomPickUp = "Parent folder"
-        override val storageRevokeAll = "Remove all access"
-        override val storageRevokeAllTitle = "Remove all access?"
-        override val storageRevokeAllSubtitle = "Unlink every folder from the environment"
-        override val storageRevokeAllBody =
-            "The agent will keep working inside its home directory. Nothing on your phone is " +
-                "deleted \u2014 the folders are only unlinked from the environment."
-        override val storageGrantPromptTitle = "Android permission needed"
-        override val storageGrantPromptBody =
-            "Shared storage is not reachable yet, so no folder can be switched on. PiKit has to " +
-                "ask Android for \"All files access\"; the switches here still decide which " +
-                "folders the agent can write to.\n\n" +
-                "Be careful on this page: granting it to a file manager or a terminal app gives " +
-                "that app the same reach over your files."
-        override val storageGrantPromptConfirm = "Open settings"
 
         override val agentContextSection = "Context"
         override val agentContextLead = "With every request, pi sends the model:"
@@ -455,9 +407,8 @@ internal object EnglishStrings : Strings {
         override val agentContextRuntimeBody =
             "The model and provider, the thinking level, the session id and session file path, " +
                 "the workspace this conversation runs in (PIKIT_WORKSPACE), the permission tier " +
-                "(PIKIT_PERMISSION_FILE: read-only, workspace-write or full-access), shared " +
-                "storage (PIKIT_STORAGE_ALLOWED and PIKIT_STORAGE_LINKS), and the telemetry " +
-                "switch (PI_TELEMETRY=0)."
+                "(PIKIT_PERMISSION_FILE: read-only, workspace-write or full-access), and the " +
+                "telemetry switch (PI_TELEMETRY=0)."
         override val agentContextToolsTitle = "Tools"
         override val agentContextToolsBody =
             "pi's own read, bash, edit, write, grep, find and ls, plus web_search, " +

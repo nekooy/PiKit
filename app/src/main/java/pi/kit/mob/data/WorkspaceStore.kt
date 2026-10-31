@@ -56,8 +56,8 @@ enum class WorkspaceRefusal {
     HOME,
     /** Inside `$HOME/.pi` — the agent's own files, which it must not treat as a project. */
     AGENT_DIR,
-    /** Inside `$HOME/storage`, which is the user's phone, not a place to build in. */
-    SHARED_STORAGE,
+    /** The process cannot list it, so pi could not work in it either. */
+    NOT_READABLE,
     DUPLICATE,
 }
 
@@ -82,11 +82,15 @@ enum class WorkspaceRefusal {
  *
  * ## What may not be added
  *
- * `$HOME` itself, anything under `$HOME/.pi`, and anything under `$HOME/storage`. The
- * first two are the agent's own state — a recursive delete of a workspace must never be
- * able to reach `auth.json` — and the third is the user's phone, which the storage page
- * grants folder by folder and which is not a place to build in. [WorkspaceRefusal] is
- * the answer for each.
+ * **Any folder the process can read**, which on a phone means the app's own directory and
+ * — once Android's "all files access" is granted — the phone's shared storage. A workspace
+ * on `/sdcard/Dev/app` is an ordinary workspace: it is the writable root of its
+ * conversations (§14), which is what makes the storage page's folder switches unnecessary
+ * rather than merely redundant. Two exclusions remain, and both are the agent's own state
+ * rather than the reader's: `$HOME` itself and anything under `$HOME/.pi`, because a
+ * recursive delete of a workspace must never be able to reach `auth.json`. A folder the
+ * process cannot list is refused for a different reason — pi would exit in it rather than
+ * work — and that is [WorkspaceRefusal.NOT_READABLE].
  */
 object WorkspaceStore {
 
@@ -210,12 +214,13 @@ object WorkspaceStore {
             return WorkspaceRefusal.HOME
         }
         if (path == "$home/.pi" || path.startsWith("$home/.pi/")) return WorkspaceRefusal.AGENT_DIR
-        if (path == env.storageDir.absolutePath || path.startsWith(env.storageDir.absolutePath + "/")) {
-            return WorkspaceRefusal.SHARED_STORAGE
-        }
         val file = File(path)
         if (!file.exists()) return WorkspaceRefusal.MISSING
         if (!file.isDirectory) return WorkspaceRefusal.NOT_A_DIRECTORY
+        // `listFiles` is the cheap read test: a directory the process may not open answers
+        // null rather than throwing, and pi in such a directory fails before its first
+        // prompt — a workspace the picker offers has to be one the agent can work in.
+        if (file.listFiles() == null) return WorkspaceRefusal.NOT_READABLE
         return null
     }
 

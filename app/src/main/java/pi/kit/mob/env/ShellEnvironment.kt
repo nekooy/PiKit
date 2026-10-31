@@ -32,38 +32,6 @@ object ShellEnvironment {
     const val DNS_PINS_FILE = "dns-pins.txt"
 
     /**
-     * The shared-storage folders the user granted, as extra writable roots.
-     *
-     * `tools/pikit-permissions.ts` refuses a *write* outside the agent's workspace, and
-     * a folder the user switched on is a grant: the storage page's promise was always
-     * "PiKit permits these and refuses the rest", and this is the list that promise
-     * reaches the extension through. Reads are free in every tier, so the old
-     * "which trees exist" half is gone with the rules that needed it.
-     *
-     * Colon-separated in every spelling (see `StorageAccess.spellingsOf`), and the
-     * extension reads it on every tool call, so a folder switched on takes effect on
-     * the next call — though the agent is restarted anyway, because `~/storage` itself
-     * is created and removed by the same change.
-     */
-    const val STORAGE_ALLOWED_VAR = "PIKIT_STORAGE_ALLOWED"
-
-    /**
-     * The `~/storage` link farm, to the agent's permission extension: link name to target.
-     *
-     * Newline-separated `name=target` pairs, because a target is an absolute path
-     * under `/sdcard` and a *custom* folder's name can legally contain a colon. The
-     * extension has to be able to map the path a command actually names —
-     * `~/storage/downloads/a.txt` — onto the shared-storage path the grant is written
-     * in, or the `~/storage` convenience PiKit itself hands the agent would be judged
-     * as `$HOME/storage` (inside nothing writable) while `/sdcard/Download` was
-     * writable.
-     *
-     * Only the links the farm will actually hold are published
-     * ([StorageAccess.linkPlanFor]), so a revoked folder has no name to translate.
-     */
-    const val STORAGE_LINKS_VAR = "PIKIT_STORAGE_LINKS"
-
-    /**
      * The directory the agent was spawned in: its working directory, and the writable
      * root the permission extension judges every write against.
      *
@@ -119,31 +87,12 @@ object ShellEnvironment {
             put("LD_PRELOAD", env.termuxExecLib.absolutePath)
         }
 
-        // Which of the user's folders the agent may reach. The policy is only
-        // meaningful once Android has granted access at all: without that, the app
-        // cannot read the tree either, and telling the guard that folders are
-        // allowed would only produce a refusal from the kernel instead of from us.
-        //
-        // Read here rather than passed in because this function is the one place
-        // every spawned process's environment is built, and a policy that reached
-        // the agent process but not the interactive shell — where a user can run
-        // `pi` by hand — would be two answers to one question.
-        val granted = if (StorageAccess.isGranted()) {
-            StorageAccess.readPolicy(context)
-        } else {
-            StorageAccess.Policy.NONE
-        }
-        put(STORAGE_ALLOWED_VAR, StorageAccess.allowedSpellings(granted).joinToString(":"))
-        // The farm the environment offers, by name: blank when nothing is granted,
-        // which is also when `~/storage` does not exist at all.
-        put(
-            STORAGE_LINKS_VAR,
-            StorageAccess.storageLinksValue(
-                StorageAccess.linkPlanFor(
-                    if (granted.isEmpty) StorageAccess.Policy.NONE else granted,
-                ),
-            ),
-        )
+        // Shared storage is not published any more. The page of folder grants is gone
+        // (§14), and what the agent may write is the workspace it was started in — a
+        // folder on the phone becomes writable by *being* that workspace, not by being
+        // switched on. `~/storage` still exists as a convenience, created by the
+        // installer and before every launch, and nothing has to agree with the
+        // extension about it.
 
         // Which file states the permission tier. Published rather than assumed so the
         // extension has one documented source for it, and so a development build can

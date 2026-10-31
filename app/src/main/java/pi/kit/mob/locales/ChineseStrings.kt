@@ -132,6 +132,12 @@ internal object ChineseStrings : Strings {
         override val workspacePickerChoose = "用这个文件夹"
         override val workspacePickerParent = "上一级目录"
         override val workspacePickerEmpty = "这个文件夹下面没有子文件夹"
+        override val workspacePickerPath = "路径"
+        override val workspacePickerHome = "主目录"
+        override val workspacePickerShared = "手机存储"
+        override val workspacePickerGrant = "授予文件访问权限"
+        override val workspacePickerUnreadable = "读不到这个文件夹。手机存储需要「所有文件访问」权限。"
+        override val workspacePickerAdded = "已添加"
         override val workspaceRemove = "移除工作区"
         override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
             WorkspaceRefusal.BLANK -> "请输入文件夹路径"
@@ -140,7 +146,7 @@ internal object ChineseStrings : Strings {
             WorkspaceRefusal.NOT_A_DIRECTORY -> "这不是文件夹"
             WorkspaceRefusal.HOME -> "不能把主目录本身当作工作区"
             WorkspaceRefusal.AGENT_DIR -> "不能把 Agent 自己的配置目录当作工作区"
-            WorkspaceRefusal.SHARED_STORAGE -> "共享存储不能当作工作区，请改用设置里的共享存储授权"
+            WorkspaceRefusal.NOT_READABLE -> "读不到这个文件夹；手机存储要先授予文件访问权限"
             WorkspaceRefusal.DUPLICATE -> "这个工作区已经在列表里了"
         }
         override fun permissionChip(mode: PermissionMode): String = when (mode) {
@@ -150,7 +156,7 @@ internal object ChineseStrings : Strings {
         }
         override fun permissionSummary(mode: PermissionMode): String = when (mode) {
             PermissionMode.READ_ONLY -> "只读：能查看文件，不能修改，也不执行会改动文件的命令"
-            PermissionMode.WORKSPACE_WRITE -> "只能修改工作区和你授权的共享存储文件夹"
+            PermissionMode.WORKSPACE_WRITE -> "能读任何地方，只能修改这次对话的工作区"
             PermissionMode.FULL_ACCESS -> "不做任何拦截，Agent 可以改动它有权改动的任何文件"
         }
 
@@ -356,63 +362,15 @@ internal object ChineseStrings : Strings {
         override val stopped = "已停止"
         override fun failedWith(message: String) = "失败 — $message"
         override val notFound = "在内置运行环境中未找到"
-        override val storageTitle = "手机存储"
-        override val storageSubtitle = "Agent 能写入的文件夹"
-        override val storageGrant = "去授权"
-        override val storageMissing = "未授权"
         override val storageAskTitle = "让 Agent 访问你的文件？"
         override val storageAskBody =
             "Agent 现在只能看到自己内部的目录，读不到你的照片、文档或下载。" +
                 "如果你希望它能处理这些文件，需要先在系统的「所有文件访问权限」页面授予权限" +
                 "——Android 没有为这项权限提供弹窗，只能这样授予。\n\n" +
-                "授予之后，还要回到「设置 → 手机存储」逐个打开允许写入的文件夹；" +
-                "没有打开的文件夹，Agent 只能读、不能写，也可以随时撤销。"
+                "授予之后，添加工作区时可以直接选手机上的文件夹；能写哪里由权限等级" +
+                "决定，随时可以改。"
         override val storageAskOpen = "去授权"
         override val storageAskLater = "稍后再说"
-
-        override val storagePageTitle = "手机存储"
-        override val storagePageSubtitle = "写入仅限已打开的文件夹"
-        override val storageNoAccessBody =
-            "没有打开任何文件夹：Agent 只能在它的工作区里写文件；手机上的文件能读，" +
-                "不能改。"
-        override val storageAccessLevel = "写入范围"
-        override val storageLevelNone = "无"
-        override val storageLevelSelected = "指定文件夹"
-        override val storageLevelAll = "全部文件"
-        override val storageFolders = "文件夹"
-        override val storageFolderShared = "整个共享存储"
-        override val storageFolderDownloads = "下载"
-        override val storageFolderDocuments = "文档"
-        override val storageFolderPictures = "图片"
-        override val storageFolderDcim = "相机"
-        override val storageFolderMusic = "音乐"
-        override val storageFolderMovies = "视频"
-        override val storageConfirmGrantTitle = "确定开放给 Agent？"
-        override fun storageConfirmGrantBody(name: String) =
-            "「$name」里的文件很可能无法恢复。开放之后 Agent 不但能读取，也能删除。" +
-                "只有确实需要时才打开。"
-        override val storageCustomSection = "自定义文件夹"
-        override val storageCustomAdd = "添加文件夹"
-        override val storageCustomAddBody = "选择共享存储里的任意文件夹。"
-        override val storageCustomSubsumed = "已经开放了全部共享存储"
-        override val storageCustomRemove = "移除"
-        override val storageCustomRemoveTitle = "移除这个文件夹？"
-        override fun storageCustomRemoveBody(path: String) =
-            "Agent 将不能再访问 `$path`。文件夹和里面的文件不会被删除。"
-        override val storageCustomPickTitle = "选择文件夹"
-        override val storageCustomPickUse = "使用这个文件夹"
-        override val storageCustomPickUp = "上一级目录"
-        override val storageRevokeAll = "收回全部权限"
-        override val storageRevokeAllTitle = "收回全部权限？"
-        override val storageRevokeAllSubtitle = "取消环境里的全部文件夹链接"
-        override val storageRevokeAllBody =
-            "Agent 会继续在自己的主目录里工作。手机上的文件不会被删除——只是取消了环境里的链接。"
-        override val storageGrantPromptTitle = "需要 Android 权限"
-        override val storageGrantPromptBody =
-            "目前还访问不到共享存储，所以任何文件夹都打不开。PiKit 需要先向 Android 申请" +
-            "「所有文件访问权限」；真正决定 Agent 能写哪些文件夹的，仍然是你在本页打开的开关。\n\n" +
-            "在这个页面上要小心：把权限授予文件管理器或终端类应用，等于让那个应用也能动你的文件。"
-        override val storageGrantPromptConfirm = "打开设置"
 
         override val agentContextSection = "上下文"
         override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
@@ -430,7 +388,7 @@ internal object ChineseStrings : Strings {
         override val agentContextRuntimeTitle = "运行环境"
         override val agentContextRuntimeBody =
             "模型与供应商、思考等级、会话 ID 与会话文件路径、这个对话的工作区（PIKIT_WORKSPACE）、" +
-                "权限等级（PIKIT_PERMISSION_FILE：仅可查看、工作区内读写或完全访问）、共享存储授权" +
+                "权限等级（PIKIT_PERMISSION_FILE：仅可查看、工作区内读写或完全访问）" +
                 "（PIKIT_STORAGE_ALLOWED 与 PIKIT_STORAGE_LINKS），以及遥测开关（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "工具"
         override val agentContextToolsBody =
@@ -596,7 +554,7 @@ internal object ChineseStrings : Strings {
         override val backupImportSection = "导入"
         override val backupCategorySettings = "基础设置"
         override val backupCategorySettingsSubtitle =
-            "主题、语言、默认工作区、权限等级、共享存储授权，以及本应用保存的其他全部偏好"
+            "主题、语言、默认工作区、权限等级，以及本应用保存的其他全部偏好"
         override val backupCategoryModels = "模型与供应商配置"
         override val backupCategoryModelsSubtitle =
             "每个已保存的配置档案和其中的 Key，以及 pi 读取的 models.json、settings.json、" +

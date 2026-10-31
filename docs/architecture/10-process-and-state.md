@@ -131,16 +131,16 @@ the files. A workspace outside `$HOME` has no relative path to record and is lef
 | Profiles, API keys, conversations, runtime | `<app files>/pikit-config.json`, `pi-sessions/*.jsonl` (written by pi), `usr` |
 | Thinking level, default workspace, permission tier, language, pins | SharedPreferences `pikit_settings`, `pikit_session_pins` |
 | The workspaces the reader added | SharedPreferences `pikit_workspaces`; the directories themselves are under `$HOME` |
-| Which folders the agent may reach | SharedPreferences `pikit_storage` (absent means **none**); whether the first-launch prompt was answered |
+| Whether the first-launch storage prompt was answered | SharedPreferences `pikit_storage`; the grant itself is the platform's (`isExternalStorageManager`) |
 | Whether the battery-optimisation exemption was asked for | SharedPreferences `pikit_power`; the exemption itself is the platform's (`isIgnoringBatteryOptimizations`) |
 | Agent instructions and permission extension | `<app files>/home/.pi/agent/AGENTS.md`, `.../extensions/pikit-permissions.ts` |
 | The permission tier in force | `<app files>/home/.pikit/permission.json` — a file, because the extension reads it per tool call (§14) |
 | The built-in workspace | `<app files>/home/workspace` |
-| Shared storage links | `<app files>/home/storage/*` → `/storage/emulated/0/...`, one per folder switched on |
+| Shared storage links | `<app files>/home/storage/*` → `/storage/emulated/0/...`, the seven usual folders, while the grant holds |
 
 Everything is under the app's private data directory, and uninstalling the app deletes all of it.
-Nothing is written outside it except through the folders switched on under **Settings → Shared
-storage**; the API key's exposure is in [§5](05-storage-and-safety.md).
+The app itself writes nothing outside it; the *agent* may, in a workspace on the phone and in the
+tier the reader chose (§5, §14). The API key's exposure is in [§5](05-storage-and-safety.md).
 
 ## What a backup carries, and why a restore has to re-read
 
@@ -223,8 +223,7 @@ line of text, where losing this halfway is a half-restored device.
 
 **The destination is the system's file picker, not a path.** The archive has to be able to leave the
 app, and the app has no business choosing where it goes; `CreateDocument`/`OpenDocument` is also what
-keeps the whole feature working with **no** storage permission, which matters on a page whose sibling
-rows are about granting exactly that.
+keeps the whole feature working with **no** storage permission at all.
 
 
 ---
