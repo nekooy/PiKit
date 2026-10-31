@@ -178,7 +178,24 @@ class ProfileProviderEntryTest {
     }
 
     @Test
-    fun `a provider's first profile and a relay ask for nothing`() {
+    fun `a provider's first profile asks for the refresh while the store is empty`() {
+        // Its entry needs nothing, but its *levels* do: a provider whose catalogue is not
+        // inside pi's package (`xiaomi`, whose `mimo-v2.6-pro` pi.dev maps to
+        // `{off: off, high: high}`) resolves as a fallback model while the store is empty,
+        // and pi answers `["off"]` for it. That is the report of a level that "only
+        // follows" another model: the level was not the question.
+        assertTrue(
+            "no facts at all is a reason, even with no entry to build",
+            needsCatalogueFacts(listOf(owner)) { emptyMap() },
+        )
+        assertFalse(
+            "the store describes the model, so nothing is missing",
+            needsCatalogueFacts(listOf(owner)) { mapOf("deepseek-flash" to fact()) },
+        )
+    }
+
+    @Test
+    fun `a relay asks for nothing`() {
         val relay = pi.kit.mob.data.ModelProfile(
             id = "r",
             provider = "pikit-custom",
@@ -187,9 +204,52 @@ class ProfileProviderEntryTest {
             baseUrl = "https://relay.example/v1",
         )
 
-        // The first profile is pi's own id and the relay is built from the profile: neither
-        // entry needs a catalogue, so neither may drag a refresh out of its window.
-        assertFalse(needsCatalogueFacts(listOf(owner)) { emptyMap() })
+        // A relay is built from the profile: it needs neither a catalogue entry nor the
+        // levels of an id pi.dev might know.
         assertFalse(needsCatalogueFacts(listOf(relay)) { emptyMap() })
+    }
+
+    // ------------------------------------------------- the entry, out of a real store
+
+    private fun store(vararg models: JsonObject): java.io.File {
+        val file = java.io.File.createTempFile("models-store", ".json")
+        file.deleteOnExit()
+        file.writeText("""{"deepseek": {"models": ${models.joinToString(",", "[", "]")}}}""")
+        return file
+    }
+
+    @Test
+    fun `the entry is built from the store as pi wrote it`() {
+        // The regression this pins: reading the store through `storeModelFacts` gives the
+        // *model* half of each entry, and `api`/`baseUrl` are stripped there because a
+        // relay must keep its own host. Building a provider object from that map left both
+        // blank, `builtInProviderObject` answered null, no `pikit-…` id was ever written,
+        // and every switch to a second profile of a built-in provider fell back to a
+        // relaunch — measured as a profile that restarted on every pick.
+        val models = storeProviderModels(store(fact()), "deepseek")
+
+        val entry = builtInProviderObject(profile(), models)!!
+
+        assertEquals("https://api.deepseek.com", entry["baseUrl"]!!.jsonPrimitive.content)
+        assertEquals("openai-completions", entry["api"]!!.jsonPrimitive.content)
+        // And the per-model strip still happens: the host is stated once, on the provider.
+        val model = entry["models"]!!.jsonArray.single().jsonObject
+        assertFalse("api" in model)
+        assertFalse("baseUrl" in model)
+    }
+
+    @Test
+    fun `the stripped reader and the whole one are not interchangeable`() {
+        val file = store(fact())
+
+        assertFalse(
+            "the model half cannot name a host",
+            "api" in storeModelFacts(file, "deepseek").getValue("deepseek-flash"),
+        )
+        assertEquals(
+            "openai-completions",
+            storeProviderModels(file, "deepseek")
+                .getValue("deepseek-flash")["api"]!!.jsonPrimitive.content,
+        )
     }
 }

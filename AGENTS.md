@@ -9,7 +9,7 @@ the index of every document. This file is the practical part.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 535 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 538 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -524,8 +524,17 @@ prompt, which billed the idle gap to a turn that had already finished.
   as a chat page that could not start. The catalogue refresh carries the same
   `PIKIT_KEY_*` map, because pi resolves provider credentials while refreshing and one
   unresolvable variable aborts the whole run, and the launch forces that refresh when a
-  saved profile's entry needs facts the store lacks (`needsCatalogueFacts`).
-  `--api-key` is passed only beside `--model`, which pi requires.
+  saved profile's entry needs facts the store lacks (`needsCatalogueFacts`) — which
+  covers a provider's **first** profile too, because a provider pi's package does not
+  catalogue (`xiaomi`) resolves through `buildFallbackModel` and answers `["off"]` for
+  every thinking level while the store is empty (pi.dev's catalogue makes it
+  `["off","high"]`). `--api-key` is passed only beside `--model`, which pi requires.
+- **A second profile's entry is built from `storeProviderModels`, not `storeModelFacts`.**
+  The stripped reader is the *model* half of a catalogue entry, which is what a relay
+  inherits; `builtInProviderObject` needs the provider-level `api` and `baseUrl`, which
+  only the whole one carries. Reading the stripped map left both blank and the function
+  answered null, so the entry was never written and that profile restarted on every
+  switch while its provider's first profile switched in place.
 - **The emulator's DNS comes and goes.** Measured on the Medium_Phone AVD
   (Play-Store `user` build): `ping api.deepseek.com` and `ping github.com` both
   resolve, and a `pi` run by hand reached the provider and got a real `401` back —

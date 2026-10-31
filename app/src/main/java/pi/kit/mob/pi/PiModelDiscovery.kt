@@ -1090,14 +1090,52 @@ internal fun cataloguedModelFacts(models: List<JsonObject>): Map<String, JsonObj
  * [CatalogueProbe.facts]. A store that is missing, unreadable or not a JSON object also
  * yields nothing, which leaves the process as the only recourse, exactly as before.
  */
-internal fun storeModelFacts(store: File, providerId: String): Map<String, JsonObject> {
+internal fun storeModelFacts(store: File, providerId: String): Map<String, JsonObject> =
+    cataloguedModelFacts(storeModels(store, providerId))
+
+/**
+ * The same provider's models, read out of pi's store **as pi wrote them** — `api` and
+ * `baseUrl` included — keyed by model id.
+ *
+ * The two readers are not interchangeable, and reading the wrong one is a bug that hides
+ * well: [storeModelFacts] is the *model* half of a catalogue entry, which is what a relay
+ * inherits (a window, a price, a thinking map belong to the id; the endpoint belongs to
+ * the host). A **second profile of a built-in provider** needs the other half too: it is
+ * registered under an id pi has no host for, so `api` and `baseUrl` can only come from
+ * this store, and an entry that names neither is a provider `builtInProviderObject`
+ * refuses to invent (`if (baseUrl.isEmpty() || api.isEmpty()) return null`). Reading the
+ * stripped map there left both blank, the entry was never written, and every switch to
+ * that profile cost a relaunch — the report of a second DeepSeek profile that restarted
+ * on **every** pick while the first one switched in place.
+ *
+ * The per-model strip still has to happen, and `builtInProviderObject` does it: a model
+ * object's `provider`/`api`/`baseUrl` describe the host, which the entry states once.
+ */
+internal fun storeProviderModels(store: File, providerId: String): Map<String, JsonObject> =
+    storeModels(store, providerId).mapNotNull { model ->
+        val id = model["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            ?: return@mapNotNull null
+        id to modelDefinitionFacts(model)
+    }.toMap()
+
+/** The provider ids pi's store describes, in file order. */
+internal fun storeProviders(store: File): List<String> {
     val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
-    if (text.isNullOrBlank()) return emptyMap()
+    if (text.isNullOrBlank()) return emptyList()
     val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
-        ?: return emptyMap()
-    val entry = root[providerId] as? JsonObject ?: return emptyMap()
-    val models = entry["models"] as? JsonArray ?: return emptyMap()
-    return cataloguedModelFacts(models.mapNotNull { it as? JsonObject })
+        ?: return emptyList()
+    return root.keys.toList()
+}
+
+/** The provider's model objects out of pi's store, or none when it describes nothing. */
+private fun storeModels(store: File, providerId: String): List<JsonObject> {
+    val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
+    if (text.isNullOrBlank()) return emptyList()
+    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+        ?: return emptyList()
+    val entry = root[providerId] as? JsonObject ?: return emptyList()
+    val models = entry["models"] as? JsonArray ?: return emptyList()
+    return models.mapNotNull { it as? JsonObject }
 }
 
 /**

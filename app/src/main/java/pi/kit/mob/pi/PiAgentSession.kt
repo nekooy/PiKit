@@ -424,6 +424,20 @@ class PiAgentSession private constructor(context: Context) {
             // that is missing.
             val entries = profileProviderEntries(profileSnapshot)
             registeredProviderIds = entries.keys
+            // The pair that decides whether a model switch is a `set_model` or a
+            // relaunch, in one line: an id models.json defines can be switched to, and a
+            // profile whose entry is missing falls back to pi's own id (see
+            // [ProfileAddressing.launchProviderId]). A report of "switching restarts"
+            // is answered by these two lists rather than by guesswork — the store's, in
+            // particular, is the one nothing else logs, and an empty one is what an
+            // offline phone has.
+            if (Log.isLoggable(TAG, Log.INFO)) {
+                Log.i(
+                    TAG,
+                    "models.json defines ${entries.keys}; store describes " +
+                        storeProviders(File(env.piConfigDir, CATALOGUE_STORE_NAME)),
+                )
+            }
             // Same lifecycle as `models.json`: rewritten on every launch, because
             // these files live in `$HOME` while the profile lives in the app's
             // config, and a user who edits one by hand would otherwise have no way
@@ -2336,7 +2350,10 @@ class PiAgentSession private constructor(context: Context) {
                 builtInProviderObject(
                     profile = profile,
                     modelFacts = factsByProvider.getOrPut(provider.id) {
-                        storeModelFacts(
+                        // The provider's models **as pi wrote them**: a second provider id
+                        // has no host of its own, and `api`/`baseUrl` only exist on this
+                        // side of the store's two readers. See [storeProviderModels].
+                        storeProviderModels(
                             File(env.piConfigDir, CATALOGUE_STORE_NAME),
                             provider.id,
                         )
@@ -3338,18 +3355,31 @@ internal fun catalogueRefreshDue(now: Long, dueAt: Long): Boolean = now >= dueAt
 /**
  * Whether a saved profile needs catalogue facts that the store on disk does not have.
  *
- * A **second profile of a built-in provider** is registered under an id of this app's own,
- * and the entry under it is built from `models-store.json` — see
- * [builtInProviderObject]. A store that cannot describe its provider leaves nothing to
- * copy, so the entry is not written and that profile has to be launched through pi's own
- * id until the refresh has filled the store in (§7.2). The refresh's own deadline
- * ([catalogueRefreshDue]) can postpone exactly the run that would fix it — a failure buys
- * half an hour of quiet, and the failures that leave an empty store are precisely the ones
- * that happened — so the launch path asks this and runs the refresh regardless of the
- * clock.
+ * The store is what pi resolves a model's thinking levels, window and cost from, and the
+ * launch path's refresh is the only thing that fills it. Two things go wrong while it is
+ * empty, and both are a *saved profile* that the store cannot describe:
  *
- * A relay is never in this position: its entry is built from the profile itself. A
- * provider's *first* profile needs no entry at all.
+ *  * a **second profile of a built-in provider** is registered under an id of this app's
+ *    own, and the entry under it is built from the store ([builtInProviderObject]). No
+ *    facts, no entry, and that profile has to be launched through pi's own id — so every
+ *    switch to it costs a relaunch instead of a `set_model`;
+ *  * a **first profile** of a provider whose catalogue is not inside pi's package needs
+ *    the store for the model's *levels*: `mimo-v2.6-pro` under `xiaomi` is not in pi's
+ *    bundle, so with an empty store pi resolves it as a fallback model and answers
+ *    `["off"]` — the picker offers one level, and a reader who set `max` on another model
+ *    sees `off` come back. pi.dev's catalogue gives that id `[off, high]` (measured), and
+ *    the store is the only path from there to here.
+ *
+ * The refresh's own deadline ([catalogueRefreshDue]) can postpone exactly the run that
+ * would fix this — a failure buys half an hour of quiet, and the failures that leave an
+ * empty store are precisely the ones that happened — so the launch path asks this and runs
+ * the refresh regardless of the clock.
+ *
+ * [facts] must read the **store**, not this app's own cache of what pi resolved: a cache
+ * filled from a running pi would answer for the fallback model too, which is the wrong
+ * answer this exists to replace.
+ *
+ * A relay is never in this position: its entry is built from the profile itself.
  */
 internal fun needsCatalogueFacts(
     profiles: List<ModelProfile>,
@@ -3358,10 +3388,8 @@ internal fun needsCatalogueFacts(
 ): Boolean = profiles.any { profile ->
     val provider = profile.providerEntry ?: return@any false
     if (provider in PiProvider.needsBaseUrl) return@any false
-    if (ProfileAddressing.runtimeProviderId(profile, profiles) == provider.id) return@any false
-    val known = facts(provider.id)
     val models = profile.selectableModels.map { it.trim() }.filter { it.isNotEmpty() }
-    models.isEmpty() || models.none { it in known }
+    models.isNotEmpty() && models.none { it in facts(provider.id) }
 }
 
 /**
