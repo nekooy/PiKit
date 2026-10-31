@@ -24,7 +24,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import pi.kit.mob.env.SafetyGuard
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -140,11 +139,6 @@ fun StoragePage(
     // Collected rather than read once: the switch is the store's value, so a change
     // made anywhere reaches the row.
     val settings by session.settingsStore.settings.collectAsState()
-    // The guard is a file under `$PREFIX`; reinstalling the runtime (or a restore)
-    // can put it there while this page is open. Same lifecycle refresh as `granted`
-    // below, so the switch is never offered against a stale install answer.
-    var guardInstalled by remember { mutableStateOf(SafetyGuard.isInstalled(session.env)) }
-
     var policy by remember { mutableStateOf(session.storagePolicy()) }
     var granted by remember { mutableStateOf(StorageAccess.isGranted()) }
     // A folder waiting for the "let the agent reach it?" answer. One dialog for
@@ -158,23 +152,18 @@ fun StoragePage(
     var showGrantPrompt by remember { mutableStateOf(false) }
     // Where the folder picker is looking; null when it is closed.
     var pickerDir by remember { mutableStateOf<File?>(null) }
-    // Turning the guard off, held until the question is answered. One dialog for the
-    // one control here with no undo on this page.
-    var confirmDisableGuard by remember { mutableStateOf(false) }
-
     // "All files access" has no result callback — the only signal that the user
     // came back from the system page is the lifecycle. Re-reading here also
     // rebuilds the farm, because the links can only be created once the grant
-    // exists. The policy and the guard ride along: both can change while the
-    // page is up (a restore, a runtime reinstall), and a row that kept the
-    // answer it was composed with is the "needs a restart" class of bug.
+    // exists. The policy rides along: it can change while the page is up (a restore,
+    // a runtime reinstall), and a row that kept the answer it was composed with is the
+    // "needs a restart" class of bug.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 granted = StorageAccess.isGranted()
                 policy = session.storagePolicy()
-                guardInstalled = SafetyGuard.isInstalled(session.env)
                 if (granted) session.syncStorageLinks()
             }
         }
@@ -335,41 +324,11 @@ fun StoragePage(
                 }
             }
 
-            // Last, and in its own group, because it is the one control on this page
-            // that is not a folder: the switches above decide what the agent may
-            // *reach*, and this one decides whether anything checks what it does with
-            // it. `SafetyGuard` has the whole argument — the enforcement of those
-            // switches runs inside this extension, which is why turning it off is a
-            // question rather than a tap.
-            PiSection(title = text.settings.storageGuardSection) {
-                BasicComponent(
-                    title = text.settings.storageGuardTitle,
-                    summary = if (guardInstalled) {
-                        text.settings.storageGuardSubtitle
-                    } else {
-                        text.settings.storageGuardMissing
-                    },
-                    // Same inert row as the folder switches, for the same reason: turning it
-                    // off is a question, and the finger has to reach the control that asks it.
-                    enabled = guardInstalled,
-                    endActions = {
-                        Switch(
-                            checked = guardInstalled && settings.safetyExtension,
-                            // A runtime image built before the guard existed has nothing to
-                            // switch: a switch that reports a state it cannot change is worse
-                            // than one that is visibly inert and says why.
-                            enabled = guardInstalled,
-                            onCheckedChange = { wanted ->
-                                if (wanted) {
-                                    session.setSafetyExtension(true)
-                                } else {
-                                    confirmDisableGuard = true
-                                }
-                            },
-                        )
-                    },
-                )
-            }
+            // What the tier does with these folders is the composer's permission
+            // control now: `workspace-write` may write in a folder that is on and refuses
+            // one that is off, `full-access` ignores the list for writes, and reads are
+            // free in every tier. There is no switch here for that any more — a page of
+            // folder grants is not where a policy with three answers belongs.
         }
     }
 
@@ -459,20 +418,6 @@ fun StoragePage(
                 .onFailure { Log.w(TAG, "No all-files-access page on this device", it) }
         },
         onDismiss = { showGrantPrompt = false },
-    )
-
-    PiConfirm(
-        show = confirmDisableGuard,
-        title = text.settings.storageGuardOffTitle,
-        text = text.settings.storageGuardOffBody,
-        confirm = text.settings.storageGuardOffConfirm,
-        dismiss = text.common.cancel,
-        destructive = true,
-        onConfirm = {
-            confirmDisableGuard = false
-            session.setSafetyExtension(false)
-        },
-        onDismiss = { confirmDisableGuard = false },
     )
 }
 

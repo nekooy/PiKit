@@ -1,5 +1,8 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.PermissionMode
+import pi.kit.mob.data.WorkspaceRefusal
+
 /**
  * The languages the interface can be shown in.
  *
@@ -242,11 +245,12 @@ interface Strings {
 
         // ---- the composer's control row ----------------------------------
         //
-        // Three chips sit above the field, in this order: how hard the model
-        // should think, which profile answers, and how full the context window
-        // is. Each is a control, not a label, so each needs a name for itself
-        // (what it says when a screen reader reaches it) as well as a value.
-        // The values are short because a chip is one line next to two others.
+        // Four chips sit above the field, in this order: which workspace the
+        // conversation runs in, how hard the model should think, which profile
+        // answers, and how full the context window is. Each is a control, not a
+        // label, so each needs a name for itself (what it says when a screen
+        // reader reaches it) as well as a value. The values are short because a
+        // chip is one line next to three others.
 
         /** The composer's `</>` button: what it opens, and the sheet's title. */
         val commands: String
@@ -368,7 +372,9 @@ interface Strings {
          *
          * A sibling of [contextUsage] rather than part of it: the window tells you
          * when the agent will have to forget something, the cache tells you what
-         * the forgetting costs.
+         * the forgetting costs. The figure leads and the words follow — `41% cache
+         * hit` — because a share is read as a rate before it is read as a noun, and
+         * [cacheHitLabel] is what says rate.
          */
         fun cacheHit(percent: Int): String
 
@@ -377,6 +383,56 @@ interface Strings {
 
         /** Shown while the conversation has not been sent anything yet. */
         val contextEmpty: String
+
+        // ---- the workspace chip and the permission control ------------------
+        //
+        // The two controls the composer gained when the single on/off safety
+        // extension and the free-text working directory went away. The chip row
+        // now starts with the folder this conversation runs in, and the row under
+        // the field carries the tier every tool call is checked against.
+
+        /**
+         * The workspace chip's label: the folder's name, and `（默认）` when it is the default.
+         *
+         * The folder's own name rather than its path, because the chip is one line
+         * among three and the menu behind it is where paths are read. The default
+         * mark is part of the label rather than a badge beside it: this chip is the
+         * only thing on the screen that says which workspace a *new* conversation
+         * starts in, and a mark in the same run of text cannot be mistaken for the
+         * decoration a badge reads as.
+         */
+        fun workspaceChip(name: String, isDefault: Boolean): String
+
+        /** The menu's last row: opens the folder picker. */
+        val addWorkspace: String
+
+        /** The folder picker: its title, one sentence of explanation, and its two actions. */
+        val workspacePickerTitle: String
+        val workspacePickerBody: String
+        val workspacePickerChoose: String
+        val workspacePickerParent: String
+
+        /** The picker's line for a folder that holds no sub-folder to open. */
+        val workspacePickerEmpty: String
+
+        /** The row action that takes an added workspace out of the list. */
+        val workspaceRemove: String
+
+        /**
+         * Why a folder cannot be a workspace — one sentence per reason.
+         *
+         * The reason is [WorkspaceRefusal] rather than a string so that the
+         * sentence is this interface's and not the check's. The built-in one is
+         * not among them: `$HOME/workspace` is created by the app and cannot be
+         * removed, so it has nothing to refuse.
+         */
+        fun workspaceRefusal(reason: WorkspaceRefusal): String
+
+        /** The permission control: the chip's own word per tier. */
+        fun permissionChip(mode: PermissionMode): String
+
+        /** One line under a tier's name in the menu, saying what it allows. */
+        fun permissionSummary(mode: PermissionMode): String
 
         // ---- the conversation-details sheet ------------------------------
 
@@ -462,6 +518,26 @@ interface Strings {
          * pinned group ends.
          */
         val recent: String
+
+        /**
+         * A history group's heading: the workspace's name and how many conversations it holds.
+         *
+         * The name is an argument rather than the word for "workspace": a heading
+         * that said `工作区 · 12` over every group would say the same thing on each
+         * of them, and the one fact a group heading carries is *which* folder its
+         * conversations were started in. The count travels beside it for the same
+         * reason — the list under the heading is what the number counts.
+         */
+        fun groupTitle(name: String, count: Int): String
+
+        /**
+         * The group for conversations whose file recorded no workspace at all.
+         *
+         * Older than the workspaces are: a session file written by a build that had
+         * one working directory carries no workspace field, and the history has to
+         * list those conversations somewhere rather than drop them.
+         */
+        val groupUnknown: String
 
         /**
          * The empty page's heading, with [empty] as the sentence under it.
@@ -690,7 +766,6 @@ interface Strings {
         val none: String
         val manageProfiles: String
         val manageProfilesSubtitle: String
-        val workingDirectory: String
         val updateAndRepair: String
         val updateAndRepairSubtitle: String
         val userManual: String
@@ -878,23 +953,10 @@ interface Strings {
         val storageGrantPromptBody: String
         val storageGrantPromptConfirm: String
 
-        /**
-         * The tool-call guard, which is the enforcement behind every switch above.
-         *
-         * Its own section rather than a folder row, because it decides whether those
-         * switches are *checked* rather than what they allow — see `SafetyGuard`. The
-         * switch is an effectiveness switch: the extension stays installed either
-         * way, and turning it off asks first ([storageGuardOffTitle]).
-         */
-        val storageGuardSection: String
-        val storageGuardTitle: String
-        val storageGuardSubtitle: String
-
-        /** Shown instead of [storageGuardSubtitle] when the image carries no guard. */
-        val storageGuardMissing: String
-        val storageGuardOffTitle: String
-        val storageGuardOffBody: String
-        val storageGuardOffConfirm: String
+        // The safety extension's switch used to be its own section here. It is the
+        // three permission tiers now: `pikit-permissions` reads the tier from
+        // `PIKIT_PERMISSION_FILE` on every tool call, and the tier is chosen from
+        // the composer ([Chat.permissionChip]) rather than from a page.
 
         // Agent context, a section of the agent process page: what the model is
         // given, as numbered points, and the one part of it the user owns.
@@ -1245,14 +1307,40 @@ interface Strings {
         val workspace: String
 
         /**
-         * What the working directory is when it is left blank.
+         * The row that used to be "working directory": which workspace a new
+         * conversation starts in.
          *
-         * `workspace` is the absolute path of `$HOME/workspace` — where the agent is
-         * meant to work, and the only directory a recursive delete may target. It is
-         * deliberately not `$HOME`: the agent's home also holds pi's own
-         * configuration, the saved sessions and the shared-storage links.
+         * A row rather than a text field, because a path typed by hand had to be
+         * an absolute path that existed, and the two were checked only when the
+         * agent was already started in it. A workspace is one of the folders the
+         * app knows about ([Chat.workspaceChip]'s menu), so there is nothing to
+         * refuse.
          */
-        fun workingDirSubtitle(workspace: String): String
+        val defaultWorkspace: String
+
+        /**
+         * Its summary: the workspace's name, whether it is the built-in one, and its path.
+         *
+         * [name] is the workspace's own label — [Chat.workspaceChip]'s answer, which
+         * has already appended the default mark to the built-in workspace — so
+         * "whether it is the built-in one" is not a parameter here: a name that
+         * could arrive with or without a mark in it would make this catalog guess
+         * at something the caller knows.
+         *
+         * [path] is given in full because the reason to show a name at all is that
+         * the path is too long to lead with; a reader who has two folders named
+         * `workspace` needs the path to tell them apart.
+         */
+        /**
+         * Its summary: which workspace a new conversation starts in.
+         *
+         * The name only — no path. The dialog behind this row lists every workspace with
+         * its path under it, and a summary carrying one too wrapped to two lines on a
+         * 360dp screen at the point the row also gives room to its trailing value and
+         * chevron, breaking `~/workspace` between the tilde and the folder.
+         */
+        fun defaultWorkspaceSubtitle(name: String): String
+
         val process: String
         val agentProcess: String
         val restartAgent: String

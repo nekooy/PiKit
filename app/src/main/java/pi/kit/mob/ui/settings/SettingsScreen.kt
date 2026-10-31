@@ -312,7 +312,6 @@ fun SettingsScreen(session: PiAgentSession) {
             SettingsPage.Agent -> AgentPage(
                 session = session,
                 agent = agent,
-                workingDir = settings.workingDir,
                 onBack = { open(SettingsPage.Root) },
             )
 

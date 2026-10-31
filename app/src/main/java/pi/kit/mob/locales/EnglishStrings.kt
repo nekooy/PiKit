@@ -1,5 +1,7 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.PermissionMode
+import pi.kit.mob.data.WorkspaceRefusal
 
 internal object EnglishStrings : Strings {
     override val tabs = object : Strings.Tabs {
@@ -114,8 +116,44 @@ internal object EnglishStrings : Strings {
         override val cameraUnavailable = "No camera app on this device can take a photo."
 
         override val contextEmpty = "Nothing sent yet"
-        override fun cacheHit(percent: Int) = "Cache hit $percent%"
+        override fun cacheHit(percent: Int) = "$percent% cache hit"
         override val cacheHitLabel = "Prompt cache hit rate"
+
+        override fun workspaceChip(name: String, isDefault: Boolean) =
+            if (isDefault) "$name (default)" else name
+        override val addWorkspace = "Add a workspace"
+        override val workspacePickerTitle = "Choose a folder"
+        override val workspacePickerBody =
+            "A workspace is a folder; the one you pick here joins the list."
+        override val workspacePickerChoose = "Use this folder"
+        override val workspacePickerParent = "Parent folder"
+        override val workspacePickerEmpty = "No folders in this one"
+        override val workspaceRemove = "Remove workspace"
+        override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
+            WorkspaceRefusal.BLANK -> "Enter a folder path"
+            WorkspaceRefusal.NOT_ABSOLUTE -> "The path has to be absolute"
+            WorkspaceRefusal.MISSING -> "That folder does not exist"
+            WorkspaceRefusal.NOT_A_DIRECTORY -> "That is not a folder"
+            WorkspaceRefusal.HOME -> "The home directory itself cannot be a workspace"
+            WorkspaceRefusal.AGENT_DIR -> "The agent's own config directory cannot be a workspace"
+            WorkspaceRefusal.SHARED_STORAGE ->
+                "Shared storage cannot be a workspace; grant it on the storage page instead"
+            WorkspaceRefusal.DUPLICATE -> "That workspace is already in the list"
+        }
+        override fun permissionChip(mode: PermissionMode): String = when (mode) {
+            PermissionMode.READ_ONLY -> "Read only"
+            PermissionMode.WORKSPACE_WRITE -> "Workspace write"
+            PermissionMode.FULL_ACCESS -> "Full access"
+        }
+        override fun permissionSummary(mode: PermissionMode): String = when (mode) {
+            PermissionMode.READ_ONLY ->
+                "Read only: files can be looked at but not changed, and a command that " +
+                    "would change them does not run"
+            PermissionMode.WORKSPACE_WRITE ->
+                "Only the workspace and the shared-storage folders you granted can be changed"
+            PermissionMode.FULL_ACCESS ->
+                "Nothing is refused; the agent can change any file it has the right to"
+        }
 
         override val detailModel = "Model"
         override val detailProvider = "Provider"
@@ -174,6 +212,9 @@ internal object EnglishStrings : Strings {
         override val deleteSelected = "Delete selected"
         override val cancelSelection = "Cancel selection"
         override val recent = "Recent"
+
+        override fun groupTitle(name: String, count: Int) = "$name · $count"
+        override val groupUnknown = "No workspace recorded"
         override val emptyHeading = "No saved conversations yet"
         override val empty = "A conversation is written to disk once pi replies."
         override fun nothingMatches(query: String) = "Nothing matches \u201c$query\u201d."
@@ -286,7 +327,6 @@ internal object EnglishStrings : Strings {
         override val none = "None"
         override val manageProfiles = "Model & provider"
         override val manageProfilesSubtitle = "The key and model Pi answers with"
-        override val workingDirectory = "Working directory"
         override val updateAndRepair = "Maintenance & repair"
         override val updateAndRepairSubtitle = "Model list, repair packages"
         override val userManual = "User manual"
@@ -332,7 +372,7 @@ internal object EnglishStrings : Strings {
         override fun failedWith(message: String) = "Failed — $message"
         override val notFound = "Not found in the bundled runtime"
         override val storageTitle = "Shared storage"
-        override val storageSubtitle = "Folders the agent may access"
+        override val storageSubtitle = "Folders the agent may write to"
         override val storageGrant = "Grant"
         override val storageMissing = "Not granted"
         override val storageAskTitle = "Let the agent reach your files?"
@@ -342,17 +382,17 @@ internal object EnglishStrings : Strings {
                 "grant \"All files access\" — it has no dialog for that permission, so it is " +
                 "given on a system page.\n\n" +
                 "After that, open Settings → Phone storage and switch on the folders it may " +
-                "use. A folder you leave off is one PiKit refuses to let the agent name, and you " +
-                "can revoke all of it at any time."
+                "write to. A folder you leave off is one the agent can read but not change, and " +
+                "you can revoke all of it at any time."
         override val storageAskOpen = "Grant access"
         override val storageAskLater = "Not now"
 
         override val storagePageTitle = "Shared storage"
-        override val storagePageSubtitle = "Only switched-on folders"
+        override val storagePageSubtitle = "Only switched-on folders are writable"
         override val storageNoAccessBody =
-            "The agent can read and write only inside its own home directory. Your files are " +
-                "untouched, and it cannot see them at all."
-        override val storageAccessLevel = "Access"
+            "No folder is switched on: the agent can write only inside its workspace, and it " +
+                "can read your files without changing them."
+        override val storageAccessLevel = "Write access"
         override val storageLevelNone = "None"
         override val storageLevelSelected = "Selected folders"
         override val storageLevelAll = "All files"
@@ -389,26 +429,11 @@ internal object EnglishStrings : Strings {
         override val storageGrantPromptTitle = "Android permission needed"
         override val storageGrantPromptBody =
             "Shared storage is not reachable yet, so no folder can be switched on. PiKit has to " +
-                "ask Android for \"All files access\"; the folders you choose here still decide " +
-                "what the agent can actually reach.\n\n" +
+                "ask Android for \"All files access\"; the switches here still decide which " +
+                "folders the agent can write to.\n\n" +
                 "Be careful on this page: granting it to a file manager or a terminal app gives " +
                 "that app the same reach over your files."
         override val storageGrantPromptConfirm = "Open settings"
-
-        override val storageGuardSection = "Safety extension"
-        override val storageGuardTitle = "Safety extension"
-        override val storageGuardSubtitle = "Checks every tool call before it runs"
-        override val storageGuardMissing = "This runtime image carries no safety extension"
-        override val storageGuardOffTitle = "Switch the safety extension off?"
-        override val storageGuardOffBody =
-            "With it off, the agent's tool calls are no longer checked: a recursive delete " +
-                "outside the workspace, a filesystem command, a write to a raw device, and a " +
-                "delete of pi's own credentials or settings all run. A folder you switched off " +
-                "still does not appear in ~/storage, but a command naming its real path is no " +
-                "longer refused.\n\n" +
-                "Nothing is uninstalled and the switch can be turned back on at any time. The " +
-                "agent restarts now so the change takes effect."
-        override val storageGuardOffConfirm = "Switch off"
 
         override val agentContextSection = "Context"
         override val agentContextLead = "With every request, pi sends the model:"
@@ -423,19 +448,21 @@ internal object EnglishStrings : Strings {
             "pi reads AGENTS.md from two places:\n" +
                 "· Global: \$HOME/.pi/agent/AGENTS.md, written by PiKit at install time — the " +
                 "row below, editable here;\n" +
-                "· Workspace: an AGENTS.md a project keeps in the working directory, such as " +
-                "~/workspace/AGENTS.md. pi looks from the working directory upwards, so the " +
-                "closest one is the most specific."
+                "· Workspace: an AGENTS.md a project keeps in its own directory, such as " +
+                "~/workspace/AGENTS.md. pi looks from that directory upwards, so the closest " +
+                "one is the most specific."
         override val agentContextRuntimeTitle = "Runtime"
         override val agentContextRuntimeBody =
             "The model and provider, the thinking level, the session id and session file path, " +
-                "the workspace (PIKIT_WORKSPACE), shared storage (PIKIT_STORAGE_ROOTS and " +
-                "PIKIT_STORAGE_ALLOWED), and the telemetry switch (PI_TELEMETRY=0)."
+                "the workspace this conversation runs in (PIKIT_WORKSPACE), the permission tier " +
+                "(PIKIT_PERMISSION_FILE: read-only, workspace-write or full-access), shared " +
+                "storage (PIKIT_STORAGE_ALLOWED and PIKIT_STORAGE_LINKS), and the telemetry " +
+                "switch (PI_TELEMETRY=0)."
         override val agentContextToolsTitle = "Tools"
         override val agentContextToolsBody =
             "pi's own read, bash, edit, write, grep, find and ls, plus web_search, " +
                 "fetch_content, source_check and get_search_content from the extension PiKit " +
-                "installs, and pikit-safety-guard, which refuses a dangerous call."
+                "installs, and pikit-permissions, which refuses a call the tier does not allow."
         override val agentContextHistoryTitle = "Conversation"
         override val agentContextHistoryBody =
             "This session, tool calls and results included, sent with every message and " +
@@ -594,7 +621,9 @@ internal object EnglishStrings : Strings {
             "Leave one empty to change nothing: the value shown above is what pi uses."
 
         override val workspace = "Workspace"
-        override fun workingDirSubtitle(workspace: String) = "Left blank, the agent works in $workspace"
+        override val defaultWorkspace = "Default workspace"
+        override fun defaultWorkspaceSubtitle(name: String) =
+            "New conversations start in $name"
         override val process = "Process"
         override val agentProcess = "Agent process"
         override val restartAgent = "Restart agent"
@@ -617,8 +646,8 @@ internal object EnglishStrings : Strings {
         override val backupImportSection = "Import"
         override val backupCategorySettings = "Basic settings"
         override val backupCategorySettingsSubtitle =
-            "Theme, language, working directory, the tool-call guard, shared-storage access, " +
-                "and every other preference this app stores"
+            "Theme, language, the default workspace, the permission tier, shared-storage " +
+                "access, and every other preference this app stores"
         override val backupCategoryModels = "Models & providers"
         override val backupCategoryModelsSubtitle =
             "Every saved profile with the key in it, and the files pi reads them from: " +

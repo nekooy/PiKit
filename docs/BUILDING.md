@@ -203,11 +203,12 @@ The builder's work, in order:
    `/data/data/com.termux/files/usr` to the app's own prefix in every file that
    names it.
 4. Fix up the things the rewrite cannot reach — the `bin/dpkg` wrapper, the apt
-   hooks, the executable-bit list, and `tools/pi-safety-guard.ts` staged where the
+   hooks, the executable-bit list, and `tools/pikit-permissions.ts` staged where the
    installer can find it.
 5. Split the content layer out of the overlay and emit three zip archives —
    `bootstrap.zip` and `overlay.zip` (the seed: the dpkg-managed environment) and
-   `content.zip` (pi, the extension, the guard, the relocator) — with one revision
+   `content.zip` (pi, the extension, the permission rules, the relocator) — with one
+   revision
    stamp per layer (`revision.txt`, `content-revision.txt`) and `build-metadata.json`
    (what the image was built from). Each archive carries its own `SYMLINKS.txt`,
    because the zip format cannot represent symlinks, and `content.zip` carries

@@ -85,16 +85,57 @@ The roster is never emptied. A close that would leave none opens a replacement a
 rather than being refused: the terminal is a primary tab, and the one thing worse than a shell
 the reader did not ask for is a blank rectangle with nothing to type into.
 
+## The workspace is the conversation's, not the app's
+
+The agent's working directory used to be one setting on the settings page, and one value for
+the whole app. It is now a *workspace*: a directory, one of a list, chosen per conversation.
+
+**Why the list.** One directory is one project, and a phone is used for several over a week.
+With a single working directory the history read as one undifferentiated stream of
+conversations from different folders, and going back to an old one meant retyping the path it
+belonged to. `WorkspaceStore` holds the list — the built-in `$HOME/workspace`, which cannot be
+removed, plus the folders the reader added — and `pikit_settings`'s `defaultWorkspace` says
+which one a *new* conversation starts in. The composer's first chip picks the conversation's
+own; the agent page's `默认工作区` row picks the default; the history page groups by it.
+
+**Why a relaunch rather than a `cd`.** The workspace is the child process's working directory
+and the base every relative path in a tool call resolves against, and pi reads it once at
+startup. So `PiAgentSession.selectWorkspace` remembers the directory, clears the remembered
+session — the conversation on screen belongs to the directory being left — and restarts the
+agent; `restoreRememberedSession` then opens a fresh session there instead of the old one. The
+same machinery in the other direction is `openSession`: a saved conversation records the
+directory pi was started in (`{"type":"session",…,"cwd":…}`, its **first** line), so tapping a
+history row from another workspace remembers that path and relaunches, and the handshake
+rebinds the new process to the conversation the reader tapped. A pi standing in the wrong tree
+would show the old transcript while every tool call acted somewhere else.
+
+**The `cwd` is the grouping key, not a second table.** `SessionMetadata.read` takes it from
+that header record, which means the history page groups conversations from before this change
+— and conversations a `pi` typed in the terminal wrote — without the app having to remember
+anything of its own. `sessionGroups` (tested in `SessionGroupingTest`) names each group the way
+the composer's chip names that folder, keeps the group holding the newest conversation first,
+and puts a directory the list no longer offers into a group of its own rather than dropping
+its conversations: a project the reader deleted is still a project whose conversations they may
+want to read. Sessions whose file records no directory at all are one last group.
+
+**What a backup carries.** Every workspace, as `workspaces/<its path relative to $HOME>/…`
+beside the built-in one's `workspace/` — an entry name a restore can decode back on an install
+that has never heard of that folder, which is exactly the state a restore starts in. The added
+list itself travels in the settings document (`pikit_workspaces`), so the menu is restored with
+the files. A workspace outside `$HOME` has no relative path to record and is left out.
+
 ## Where state lives
 
 | What | Where |
 | --- | --- |
 | Profiles, API keys, conversations, runtime | `<app files>/pikit-config.json`, `pi-sessions/*.jsonl` (written by pi), `usr` |
-| Thinking level, working directory, language, pins | SharedPreferences `pikit_settings`, `pikit_session_pins` |
+| Thinking level, default workspace, permission tier, language, pins | SharedPreferences `pikit_settings`, `pikit_session_pins` |
+| The workspaces the reader added | SharedPreferences `pikit_workspaces`; the directories themselves are under `$HOME` |
 | Which folders the agent may reach | SharedPreferences `pikit_storage` (absent means **none**); whether the first-launch prompt was answered |
 | Whether the battery-optimisation exemption was asked for | SharedPreferences `pikit_power`; the exemption itself is the platform's (`isIgnoringBatteryOptimizations`) |
-| Agent instructions and guard | `<app files>/home/.pi/agent/AGENTS.md`, `.../extensions/pi-safety-guard.ts` |
-| The agent's workspace | `<app files>/home/workspace` (the default working directory) |
+| Agent instructions and permission extension | `<app files>/home/.pi/agent/AGENTS.md`, `.../extensions/pikit-permissions.ts` |
+| The permission tier in force | `<app files>/home/.pikit/permission.json` — a file, because the extension reads it per tool call (§14) |
+| The built-in workspace | `<app files>/home/workspace` |
 | Shared storage links | `<app files>/home/storage/*` → `/storage/emulated/0/...`, one per folder switched on |
 
 Everything is under the app's private data directory, and uninstalling the app deletes all of it.

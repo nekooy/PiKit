@@ -266,12 +266,6 @@ object StorageAccess {
         return out.toList()
     }
 
-    /** The external root in every spelling, for the guard's `PIKIT_STORAGE_ROOTS`. */
-    fun rootSpellings(): List<String> {
-        val external = runCatching { Environment.getExternalStorageDirectory() }.getOrNull()
-        return spellings(external?.absolutePath ?: PRIMARY_ALIAS, external?.absolutePath)
-    }
-
     /** One granted folder in every spelling, for `PIKIT_STORAGE_ALLOWED`. */
     fun spellingsOf(root: Root): List<String> {
         val path = targetOf(root)?.absolutePath ?: return emptyList()

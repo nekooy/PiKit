@@ -1,5 +1,7 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.PermissionMode
+import pi.kit.mob.data.WorkspaceRefusal
 
 /** Japanese catalog. */
 internal object JapaneseStrings : Strings {
@@ -115,8 +117,44 @@ internal object JapaneseStrings : Strings {
         override val cameraUnavailable = "この端末には撮影できるカメラアプリがありません。"
 
         override val contextEmpty = "まだ送信していません"
-        override fun cacheHit(percent: Int) = "キャッシュ命中 $percent%"
+        override fun cacheHit(percent: Int) = "$percent% キャッシュ命中"
         override val cacheHitLabel = "プロンプトキャッシュ命中率"
+
+        override fun workspaceChip(name: String, isDefault: Boolean) =
+            if (isDefault) "$name（デフォルト）" else name
+        override val addWorkspace = "ワークスペースを追加"
+        override val workspacePickerTitle = "フォルダーを選択"
+        override val workspacePickerBody = "ワークスペースはフォルダーです。選ぶと一覧に加わります。"
+        override val workspacePickerChoose = "このフォルダーを使う"
+        override val workspacePickerParent = "親フォルダー"
+        override val workspacePickerEmpty = "このフォルダーにサブフォルダーはありません"
+        override val workspaceRemove = "ワークスペースを外す"
+        override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
+            WorkspaceRefusal.BLANK -> "フォルダーのパスを入力してください"
+            WorkspaceRefusal.NOT_ABSOLUTE -> "絶対パスで指定してください"
+            WorkspaceRefusal.MISSING -> "このフォルダーは存在しません"
+            WorkspaceRefusal.NOT_A_DIRECTORY -> "これはフォルダーではありません"
+            WorkspaceRefusal.HOME -> "ホームディレクトリ自体はワークスペースにできません"
+            WorkspaceRefusal.AGENT_DIR ->
+                "エージェント自身の設定ディレクトリはワークスペースにできません"
+            WorkspaceRefusal.SHARED_STORAGE ->
+                "共有ストレージはワークスペースにできません。設定の共有ストレージで許可してください"
+            WorkspaceRefusal.DUPLICATE -> "このワークスペースはすでに一覧にあります"
+        }
+        override fun permissionChip(mode: PermissionMode): String = when (mode) {
+            PermissionMode.READ_ONLY -> "閲覧のみ"
+            PermissionMode.WORKSPACE_WRITE -> "ワークスペース内で読み書き"
+            PermissionMode.FULL_ACCESS -> "完全アクセス"
+        }
+        override fun permissionSummary(mode: PermissionMode): String = when (mode) {
+            PermissionMode.READ_ONLY ->
+                "閲覧のみ：ファイルを見ることはできますが変更はできず、ファイルを変える" +
+                    "コマンドも実行しません"
+            PermissionMode.WORKSPACE_WRITE ->
+                "ワークスペースと許可した共有ストレージのフォルダーだけ変更できます"
+            PermissionMode.FULL_ACCESS ->
+                "何も止めません。エージェントは権限のあるファイルを変更できます"
+        }
 
         override val detailModel = "モデル"
         override val detailProvider = "プロバイダー"
@@ -174,6 +212,9 @@ internal object JapaneseStrings : Strings {
         override val deleteSelected = "選択した項目を削除"
         override val cancelSelection = "選択を解除"
         override val recent = "最近"
+
+        override fun groupTitle(name: String, count: Int) = "$name · $count"
+        override val groupUnknown = "ワークスペース未記録"
         override val emptyHeading = "保存された会話はありません"
         override val empty = "Pi が返信すると、会話がディスクに保存されます。"
         override fun nothingMatches(query: String) = "「$query」に一致する会話はありません。"
@@ -270,7 +311,6 @@ internal object JapaneseStrings : Strings {
         override val none = "なし"
         override val manageProfiles = "モデルとプロバイダー"
         override val manageProfilesSubtitle = "Pi が使うキーとモデル"
-        override val workingDirectory = "作業ディレクトリ"
         override val updateAndRepair = "メンテナンスと修復"
         override val updateAndRepairSubtitle = "モデル一覧、パッケージの修復"
         override val userManual = "ユーザーマニュアル"
@@ -316,7 +356,7 @@ internal object JapaneseStrings : Strings {
         override fun failedWith(message: String) = "失敗 — $message"
         override val notFound = "同梱の実行環境に見つかりません"
         override val storageTitle = "共有ストレージ"
-        override val storageSubtitle = "許可するフォルダー"
+        override val storageSubtitle = "書き込めるフォルダー"
         override val storageGrant = "許可する"
         override val storageMissing = "未許可"
         override val storageAskTitle = "エージェントにファイルを許可しますか？"
@@ -324,18 +364,17 @@ internal object JapaneseStrings : Strings {
             "現在エージェントは自分の専用ディレクトリしか見えず、写真・書類・ダウンロードを" +
                 "読めません。これらを扱わせるには Android の「すべてのファイルへのアクセス」が" +
                 "必要ですが、この権限にはダイアログがなく、システム画面で付与します。\n\n" +
-                "付与したあと「設定 → 端末のストレージ」で許可するフォルダーを個別にオンに" +
-                "してください。オフのままのフォルダーを指定したアクセスは PiKit が拒否し、" +
-                "いつでも取り消せます。"
+                "付与したあと「設定 → 端末のストレージ」で書き込みを許可するフォルダーを個別に" +
+                "オンにしてください。オフのままのフォルダーは読み取りのみで、いつでも取り消せます。"
         override val storageAskOpen = "許可する"
         override val storageAskLater = "あとで"
 
         override val storagePageTitle = "共有ストレージ"
-        override val storagePageSubtitle = "オンにしたフォルダーのみ"
+        override val storagePageSubtitle = "書き込みはオンのフォルダーのみ"
         override val storageNoAccessBody =
-            "エージェントは自身のホームディレクトリの中だけで読み書きできます。端末のファイルには" +
-                "一切触れず、参照もできません。"
-        override val storageAccessLevel = "アクセス範囲"
+            "フォルダーが 1 つもオンになっていません。書き込みはワークスペースの中だけで、" +
+                "端末のファイルは読み取りのみです。"
+        override val storageAccessLevel = "書き込み範囲"
         override val storageLevelNone = "なし"
         override val storageLevelSelected = "選択したフォルダー"
         override val storageLevelAll = "すべてのファイル"
@@ -373,24 +412,10 @@ internal object JapaneseStrings : Strings {
         override val storageGrantPromptBody =
             "まだ共有ストレージに到達できないため、どのフォルダーもオンにできません。PiKit が" +
                 "「すべてのファイルへのアクセス」を Android に要求します。実際にエージェントが" +
-                "参照できる範囲は、この画面で選んだフォルダーが決めます。\n\n" +
+                "書き込める範囲は、この画面でオンにしたフォルダーが決めます。\n\n" +
                 "この画面では注意してください。ファイルマネージャーやターミナルアプリに許可すると、" +
                 "そのアプリも同じようにあなたのファイルを扱えるようになります。"
         override val storageGrantPromptConfirm = "設定を開く"
-
-        override val storageGuardSection = "安全拡張"
-        override val storageGuardTitle = "安全拡張"
-        override val storageGuardSubtitle = "ツール実行前に検査し、危険な操作を拒否します"
-        override val storageGuardMissing = "このランタイムイメージには安全拡張が含まれていません"
-        override val storageGuardOffTitle = "安全拡張をオフにしますか？"
-        override val storageGuardOffBody =
-            "オフにすると、エージェントのツール呼び出しは検査されなくなります。ワークスペース外の" +
-                "再帰削除、ファイルシステムのコマンド、生デバイスへの書き込み、pi 自身の認証情報や" +
-                "設定の削除はそのまま実行されます。オフにしたフォルダーは ~/storage に現れませんが、" +
-                "実際のパスを直接書いたコマンドは拒否されなくなります。\n\n" +
-                "アンインストールはされません。いつでもオンに戻せます。変更を反映するため、" +
-                "エージェントを今すぐ再起動します。"
-        override val storageGuardOffConfirm = "オフにする"
 
         override val agentContextSection = "コンテキスト"
         override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
@@ -404,19 +429,21 @@ internal object JapaneseStrings : Strings {
             "pi は AGENTS.md を 2 か所から読みます：\n" +
                 "・グローバル：\$HOME/.pi/agent/AGENTS.md。PiKit がインストール時に書き込む、次の行の" +
                 "ファイルで、ここで編集できます。\n" +
-                "・ワークスペース：プロジェクトが作業ディレクトリに置く AGENTS.md（例：" +
-                "~/workspace/AGENTS.md）。pi は作業ディレクトリから上へたどるので、プロジェクトに" +
+                "・ワークスペース：プロジェクトが自分のディレクトリに置く AGENTS.md（例：" +
+                "~/workspace/AGENTS.md）。pi はそのディレクトリから上へたどるので、プロジェクトに" +
                 "近いものほど具体的です。"
         override val agentContextRuntimeTitle = "実行環境"
         override val agentContextRuntimeBody =
-            "モデルとプロバイダー、思考レベル、セッション ID とセッションファイルのパス、ワーク" +
-                "スペース（PIKIT_WORKSPACE）、共有ストレージ（PIKIT_STORAGE_ROOTS と " +
-                "PIKIT_STORAGE_ALLOWED）、テレメトリーのスイッチ（PI_TELEMETRY=0）。"
+            "モデルとプロバイダー、思考レベル、セッション ID とセッションファイルのパス、この" +
+                "会話のワークスペース（PIKIT_WORKSPACE）、権限の段階（PIKIT_PERMISSION_FILE：" +
+                "閲覧のみ・ワークスペース内で読み書き・完全アクセス）、共有ストレージ" +
+                "（PIKIT_STORAGE_ALLOWED と PIKIT_STORAGE_LINKS）、テレメトリーのスイッチ" +
+                "（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "ツール"
         override val agentContextToolsBody =
             "pi 自身の read、bash、edit、write、grep、find、ls に加えて、PiKit が入れた " +
-                "web_search、fetch_content、source_check、get_search_content、そして危険な呼び出しを" +
-                "拒否する pikit-safety-guard。"
+                "web_search、fetch_content、source_check、get_search_content、そして権限の段階に" +
+                "合わない呼び出しを拒否する pikit-permissions。"
         override val agentContextHistoryTitle = "会話"
         override val agentContextHistoryBody =
             "現在のセッションです。ツール呼び出しと結果も含めて毎回のメッセージと一緒に送られ、" +
@@ -567,7 +594,9 @@ internal object JapaneseStrings : Strings {
         override val modelNumbersNote = "空欄ならこの項目は変更しません。上の値がそのまま使われます。"
 
         override val workspace = "ワークスペース"
-        override fun workingDirSubtitle(workspace: String) = "空欄の場合、エージェントは $workspace で作業します"
+        override val defaultWorkspace = "デフォルトのワークスペース"
+        override fun defaultWorkspaceSubtitle(name: String) =
+            "新しい会話は $name から始まります"
         override val process = "プロセス"
         override val agentProcess = "エージェントのプロセス"
         override val restartAgent = "エージェントを再起動"
@@ -590,7 +619,7 @@ internal object JapaneseStrings : Strings {
         override val backupImportSection = "インポート"
         override val backupCategorySettings = "基本設定"
         override val backupCategorySettingsSubtitle =
-            "テーマ、言語、作業ディレクトリ、ツール呼び出しガード、共有ストレージの許可など、" +
+            "テーマ、言語、デフォルトのワークスペース、権限の段階、共有ストレージの許可など、" +
                 "このアプリが保存する設定の全部"
         override val backupCategoryModels = "モデルとプロバイダー"
         override val backupCategoryModelsSubtitle =

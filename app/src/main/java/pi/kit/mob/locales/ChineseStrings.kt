@@ -1,5 +1,7 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.PermissionMode
+import pi.kit.mob.data.WorkspaceRefusal
 
 /**
  * Simplified Chinese catalog.
@@ -119,8 +121,38 @@ internal object ChineseStrings : Strings {
         override val cameraUnavailable = "这台设备上没有可用的相机应用。"
 
         override val contextEmpty = "尚未发送内容"
-        override fun cacheHit(percent: Int) = "缓存命中 $percent%"
+        override fun cacheHit(percent: Int) = "$percent% 缓存命中"
         override val cacheHitLabel = "提示缓存命中率"
+
+        override fun workspaceChip(name: String, isDefault: Boolean) =
+            if (isDefault) "$name（默认）" else name
+        override val addWorkspace = "添加工作区"
+        override val workspacePickerTitle = "选择文件夹"
+        override val workspacePickerBody = "工作区就是一个文件夹；选中后可以把它加进列表。"
+        override val workspacePickerChoose = "用这个文件夹"
+        override val workspacePickerParent = "上一级目录"
+        override val workspacePickerEmpty = "这个文件夹下面没有子文件夹"
+        override val workspaceRemove = "移除工作区"
+        override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
+            WorkspaceRefusal.BLANK -> "请输入文件夹路径"
+            WorkspaceRefusal.NOT_ABSOLUTE -> "必须是完整路径"
+            WorkspaceRefusal.MISSING -> "这个文件夹不存在"
+            WorkspaceRefusal.NOT_A_DIRECTORY -> "这不是文件夹"
+            WorkspaceRefusal.HOME -> "不能把主目录本身当作工作区"
+            WorkspaceRefusal.AGENT_DIR -> "不能把 Agent 自己的配置目录当作工作区"
+            WorkspaceRefusal.SHARED_STORAGE -> "共享存储不能当作工作区，请改用设置里的共享存储授权"
+            WorkspaceRefusal.DUPLICATE -> "这个工作区已经在列表里了"
+        }
+        override fun permissionChip(mode: PermissionMode): String = when (mode) {
+            PermissionMode.READ_ONLY -> "仅可查看"
+            PermissionMode.WORKSPACE_WRITE -> "工作区内读写"
+            PermissionMode.FULL_ACCESS -> "完全访问"
+        }
+        override fun permissionSummary(mode: PermissionMode): String = when (mode) {
+            PermissionMode.READ_ONLY -> "只读：能查看文件，不能修改，也不执行会改动文件的命令"
+            PermissionMode.WORKSPACE_WRITE -> "只能修改工作区和你授权的共享存储文件夹"
+            PermissionMode.FULL_ACCESS -> "不做任何拦截，Agent 可以改动它有权改动的任何文件"
+        }
 
         override val detailModel = "模型"
         override val detailProvider = "供应商"
@@ -178,6 +210,9 @@ internal object ChineseStrings : Strings {
         override val deleteSelected = "删除所选"
         override val cancelSelection = "取消选择"
         override val recent = "最近"
+
+        override fun groupTitle(name: String, count: Int) = "$name · $count"
+        override val groupUnknown = "未记录工作区"
         override val emptyHeading = "还没有保存的对话"
         override val empty = "Pi 回复之后，对话才会写入磁盘。"
         override fun nothingMatches(query: String) = "没有匹配「$query」的对话。"
@@ -277,7 +312,6 @@ internal object ChineseStrings : Strings {
         override val none = "无"
         override val manageProfiles = "模型与供应商"
         override val manageProfilesSubtitle = "Pi 使用的 Key 与模型"
-        override val workingDirectory = "工作目录"
         override val updateAndRepair = "维护与修复"
         override val updateAndRepairSubtitle = "模型列表、修复软件包"
         override val userManual = "使用手册"
@@ -323,7 +357,7 @@ internal object ChineseStrings : Strings {
         override fun failedWith(message: String) = "失败 — $message"
         override val notFound = "在内置运行环境中未找到"
         override val storageTitle = "手机存储"
-        override val storageSubtitle = "允许 Agent 访问的文件夹"
+        override val storageSubtitle = "Agent 能写入的文件夹"
         override val storageGrant = "去授权"
         override val storageMissing = "未授权"
         override val storageAskTitle = "让 Agent 访问你的文件？"
@@ -331,16 +365,17 @@ internal object ChineseStrings : Strings {
             "Agent 现在只能看到自己内部的目录，读不到你的照片、文档或下载。" +
                 "如果你希望它能处理这些文件，需要先在系统的「所有文件访问权限」页面授予权限" +
                 "——Android 没有为这项权限提供弹窗，只能这样授予。\n\n" +
-                "授予之后，还要回到「设置 → 手机存储」逐个打开允许访问的文件夹；" +
-                "没有打开的文件夹，Agent 的访问命令会被 PiKit 拒绝，也可以随时撤销。"
+                "授予之后，还要回到「设置 → 手机存储」逐个打开允许写入的文件夹；" +
+                "没有打开的文件夹，Agent 只能读、不能写，也可以随时撤销。"
         override val storageAskOpen = "去授权"
         override val storageAskLater = "稍后再说"
 
         override val storagePageTitle = "手机存储"
-        override val storagePageSubtitle = "仅可访问已打开的文件夹"
+        override val storagePageSubtitle = "写入仅限已打开的文件夹"
         override val storageNoAccessBody =
-            "Agent 只能在它自己的主目录里读写。你的文件不会被碰，它也完全看不到。"
-        override val storageAccessLevel = "访问范围"
+            "没有打开任何文件夹：Agent 只能在它的工作区里写文件；手机上的文件能读，" +
+                "不能改。"
+        override val storageAccessLevel = "写入范围"
         override val storageLevelNone = "无"
         override val storageLevelSelected = "指定文件夹"
         override val storageLevelAll = "全部文件"
@@ -375,21 +410,9 @@ internal object ChineseStrings : Strings {
         override val storageGrantPromptTitle = "需要 Android 权限"
         override val storageGrantPromptBody =
             "目前还访问不到共享存储，所以任何文件夹都打不开。PiKit 需要先向 Android 申请" +
-            "「所有文件访问权限」；真正决定 Agent 能看到什么的，仍然是你在本页选择的文件夹。\n\n" +
+            "「所有文件访问权限」；真正决定 Agent 能写哪些文件夹的，仍然是你在本页打开的开关。\n\n" +
             "在这个页面上要小心：把权限授予文件管理器或终端类应用，等于让那个应用也能动你的文件。"
         override val storageGrantPromptConfirm = "打开设置"
-
-        override val storageGuardSection = "安全扩展"
-        override val storageGuardTitle = "安全扩展"
-        override val storageGuardSubtitle = "工具执行前先检查，危险操作直接拒绝"
-        override val storageGuardMissing = "这个运行镜像里没有安全扩展，无法开关"
-        override val storageGuardOffTitle = "关闭安全扩展？"
-        override val storageGuardOffBody =
-            "关闭后 Agent 的工具调用不再被检查：工作区之外的递归删除、创建或修改文件系统、" +
-                "写入原始设备、删除 pi 自己的凭据和设置，都会被直接放行。你关掉的文件夹仍然不会" +
-                "出现在 ~/storage 里，但 Agent 直接写路径就不再被拒绝。\n\n" +
-                "扩展不会被卸载，随时可以再打开；Agent 会立即重启让改动生效。"
-        override val storageGuardOffConfirm = "关闭"
 
         override val agentContextSection = "上下文"
         override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
@@ -402,18 +425,18 @@ internal object ChineseStrings : Strings {
         override val agentContextInstructionsBody =
             "pi 会自动读取 AGENTS.md，有两处：\n" +
                 "· 全局：\$HOME/.pi/agent/AGENTS.md，PiKit 在安装时写入，就是下面这一行，可以编辑；\n" +
-                "· 工作区：项目自己放在工作目录里的 AGENTS.md，例如 ~/workspace/AGENTS.md；pi 从工作" +
-                "目录往上找，越靠近项目的那份越具体。"
+                "· 工作区：项目自己放在它目录里的 AGENTS.md，例如 ~/workspace/AGENTS.md；pi 从工作" +
+                "区往上找，越靠近项目的那份越具体。"
         override val agentContextRuntimeTitle = "运行环境"
         override val agentContextRuntimeBody =
-            "模型与供应商、思考等级、会话 ID 与会话文件路径、工作区（PIKIT_WORKSPACE）、共享存储" +
-                "授权（PIKIT_STORAGE_ROOTS 与 PIKIT_STORAGE_ALLOWED），以及遥测开关" +
-                "（PI_TELEMETRY=0）。"
+            "模型与供应商、思考等级、会话 ID 与会话文件路径、这个对话的工作区（PIKIT_WORKSPACE）、" +
+                "权限等级（PIKIT_PERMISSION_FILE：仅可查看、工作区内读写或完全访问）、共享存储授权" +
+                "（PIKIT_STORAGE_ALLOWED 与 PIKIT_STORAGE_LINKS），以及遥测开关（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "工具"
         override val agentContextToolsBody =
             "pi 自带的 read、bash、edit、write、grep、find、ls，加上 PiKit 装的 web_search、" +
-                "fetch_content、source_check、get_search_content，以及拦截危险调用的 " +
-                "pikit-safety-guard。"
+                "fetch_content、source_check、get_search_content，以及按权限等级拦下工具调用的 " +
+                "pikit-permissions。"
         override val agentContextHistoryTitle = "对话历史"
         override val agentContextHistoryBody =
             "当前这段会话，包括工具调用与结果，随每条消息一起发送，并写入会话文件。"
@@ -549,7 +572,9 @@ internal object ChineseStrings : Strings {
         override val modelNumbersNote = "留空表示不改这一项，按上面显示的数值使用。"
 
         override val workspace = "工作区"
-        override fun workingDirSubtitle(workspace: String) = "留空时，Agent 在 $workspace 中工作"
+        override val defaultWorkspace = "默认工作区"
+        override fun defaultWorkspaceSubtitle(name: String) =
+            "新对话从 $name 开始"
         override val process = "进程"
         override val agentProcess = "Agent 进程"
         override val restartAgent = "重启 Agent"
@@ -571,7 +596,7 @@ internal object ChineseStrings : Strings {
         override val backupImportSection = "导入"
         override val backupCategorySettings = "基础设置"
         override val backupCategorySettingsSubtitle =
-            "主题、语言、工作目录、工具调用守卫、共享存储授权，以及本应用保存的其他全部偏好"
+            "主题、语言、默认工作区、权限等级、共享存储授权，以及本应用保存的其他全部偏好"
         override val backupCategoryModels = "模型与供应商配置"
         override val backupCategoryModelsSubtitle =
             "每个已保存的配置档案和其中的 Key，以及 pi 读取的 models.json、settings.json、" +

@@ -112,6 +112,11 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import pi.kit.mob.R
 import pi.kit.mob.data.ModelProfile
+import pi.kit.mob.data.PermissionMode
+import pi.kit.mob.data.RefusedWorkspace
+import pi.kit.mob.data.WorkspaceRefusal
+import pi.kit.mob.data.Workspace
+import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.rememberedThinkingLevels
 import pi.kit.mob.locales.Strings
@@ -144,12 +149,14 @@ import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.WorkspacePickerSheet
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import kotlinx.coroutines.launch
@@ -173,11 +180,15 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.File
+import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.Show
+import top.yukonga.miuix.kmp.icon.extended.Unlock
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -283,7 +294,18 @@ private const val THUMBNAIL_EDGE = 160
  * composer owned privately would be a second answer to "which one is open" — the
  * question the app's one sheet host used to answer for every screen.
  */
-private enum class ComposerSheet { Thinking, Model, Context, ContextRing, Commands, Attach, Shell }
+private enum class ComposerSheet {
+    Workspace,
+    Thinking,
+    Model,
+    Context,
+    ContextRing,
+    Commands,
+    Attach,
+    Shell,
+    Permission,
+}
+
 
 /**
  * How long the history list takes to slide over the conversation.
@@ -312,6 +334,17 @@ internal fun ChatScreen(
     // history list's rows ask before a switch, and the same dialog: pi's
     // `new_session` aborts the running turn exactly as `switch_session` does.
     var confirmNewSession by remember { mutableStateOf(false) }
+    // A workspace picked while the agent is answering. Switching starts a new
+    // conversation in that folder — the same interruption `newSession` makes, because
+    // the workspace is the child process's working directory and pi reads it once at
+    // startup — so the same question is asked before it happens.
+    var pendingWorkspace by remember { mutableStateOf<String?>(null) }
+    // The folder picker's own truth: opened from the workspace menu's last row.
+    var showWorkspacePicker by remember { mutableStateOf(false) }
+    // The workspace in force, collected rather than read once so the chip follows a
+    // switch made from anywhere — this page, the history list, or the settings page's
+    // default.
+    val currentWorkspace by session.workspace.collectAsState()
 
     // Which of the composer's menus or sheets is open, and the prompt-extras sheet.
     //
@@ -540,6 +573,24 @@ internal fun ChatScreen(
     }
 
     /**
+     * Switches this conversation's workspace, asking first when an answer is running.
+     *
+     * The composer's chip is the control; the switch itself is the session's, because
+     * only it knows the agent has to be relaunched in the new directory — see
+     * `PiAgentSession.selectWorkspace`. The draft and the attachments are kept: they are
+     * the reader's next message, and the workspace is where it will be answered.
+     */
+    fun selectWorkspace(path: String) {
+        if (path == currentWorkspace) return
+        if (session.turnInFlight) {
+            pendingWorkspace = path
+        } else {
+            session.selectWorkspace(path)
+            composer.notice = null
+        }
+    }
+
+    /**
      * Runs one of the command list's rows.
      *
      * The list is what this page implements — see [BUILT_IN_COMMANDS] for why pi's
@@ -666,6 +717,9 @@ internal fun ChatScreen(
                 },
                 onOpenSessions = { showSessions = true },
                 onNewSession = ::newSession,
+                currentWorkspace = currentWorkspace,
+                onSelectWorkspace = ::selectWorkspace,
+                onOpenWorkspacePicker = { showWorkspacePicker = true },
                 onSend = {
                     val prompt = composer.input
                     val images = composer.attachments
@@ -736,6 +790,26 @@ internal fun ChatScreen(
         onDismiss = { confirmNewSession = false },
     )
 
+    // The same question for a workspace switch: pi's working directory is fixed at
+    // launch, so the switch is a relaunch, and a relaunch ends the answer in flight.
+    PiConfirm(
+        show = pendingWorkspace != null,
+        title = text.sessions.switchInterruptTitle,
+        text = text.sessions.switchInterruptBody,
+        confirm = text.sessions.switchInterruptConfirm,
+        dismiss = text.common.cancel,
+        destructive = true,
+        onConfirm = {
+            val target = pendingWorkspace
+            pendingWorkspace = null
+            if (target != null) {
+                session.selectWorkspace(target, interrupt = true)
+                composer.notice = null
+            }
+        },
+        onDismiss = { pendingWorkspace = null },
+    )
+
     // The two report sheets and the prompt's extras, in Miuix's own window sheets.
     // They are drawn here rather than inside the band that opens them: a sheet is a
     // window of its own, and one composed inside the composer would be measured
@@ -775,6 +849,42 @@ internal fun ChatScreen(
         onDismiss = { showPromptExtras = false },
     ) {
         promptExtras?.let { PromptExtrasSheet(extras = it, text = text) }
+    }
+
+    // The folder picker. Its own sheet rather than a row of the workspace menu: a menu
+    // answers "which one", and this asks "where is the one that is not in the list yet".
+    PiSheet(
+        show = showWorkspacePicker,
+        title = text.chat.workspacePickerTitle,
+        onDismiss = { showWorkspacePicker = false },
+    ) {
+        WorkspacePickerSheet(
+            text = text,
+            home = session.env.homePath,
+            onAdd = { folder ->
+                val added = WorkspaceStore.add(context, session.env, folder)
+                val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason
+                val workspace = when {
+                    added.getOrNull() != null -> added.getOrNull()
+                    // Already in the list is not a failure: the folder is a workspace, and
+                    // what the reader asked for is to work in it.
+                    reason == WorkspaceRefusal.DUPLICATE ->
+                        WorkspaceStore.list(context, session.env).firstOrNull { it.path == folder }
+
+                    else -> null
+                }
+                if (workspace != null) {
+                    // Added *and* switched to: a folder the reader just picked is the one
+                    // they want to work in, and making them tap it again in the menu is the
+                    // second half of one decision.
+                    showWorkspacePicker = false
+                    selectWorkspace(workspace.path)
+                    null
+                } else {
+                    reason?.let { text.chat.workspaceRefusal(it) }
+                }
+            },
+        )
     }
 }
 
@@ -856,6 +966,10 @@ private fun ChatPage(
     onShowPromptExtras: (PromptExtras) -> Unit,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
+    /** The workspace this conversation runs in, as an absolute path. */
+    currentWorkspace: String,
+    onSelectWorkspace: (String) -> Unit,
+    onOpenWorkspacePicker: () -> Unit,
     onSend: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -1381,6 +1495,9 @@ private fun ChatPage(
                 onCloseSheet = onCloseSheet,
                 onRunCommand = onRunCommand,
                 onPickAttachment = onPickAttachment,
+                currentWorkspace = currentWorkspace,
+                onSelectWorkspace = onSelectWorkspace,
+                onOpenWorkspacePicker = onOpenWorkspacePicker,
                 onSend = onSend,
                 onStop = {
                     // The queue behind the run is cleared with it (see
@@ -1499,20 +1616,6 @@ private fun ChatEmptyState(title: String, body: String) {
 
 /** How large the mark is on an empty conversation. */
 private val EMPTY_MARK_SIZE = 64.dp
-
-/**
- * The navigation strip's height, for a sheet's own bottom edge.
- *
- * Miuix's bottom sheet is a window of its own with `decorFitsSystemWindows = false`, and its
- * inside margin is 24dp across and **zero** down — the panel's bottom edge *is* the window's,
- * which is the gesture bar. So a sheet's last row would sit under the gesture bar unless the
- * content clears it, and the inset belongs to the content rather than to the panel: on a
- * scrolling body it goes inside the scroll (after `verticalScroll`), so the text travels
- * through it and the panel's own fill still reaches the window's edge.
- */
-@Composable
-private fun sheetBottomInset(): Dp =
-    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
 /**
  * The thinking level to show: the reader's own choice, mapped onto the model in use.
@@ -2705,7 +2808,7 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
             .verticalScroll(rememberScrollState())
             // Inside the scroll, not outside it: the inset is scrolled past rather than shown
             // as a band of the panel's own fill under the text.
-            .padding(bottom = sheetBottomInset()),
+            .padding(bottom = piSheetBottomInset()),
     ) {
         if (extras.filePaths.isNotEmpty()) {
             // `SmallTitle` measures its own text with 28dp on each side, which puts the
@@ -3045,29 +3148,36 @@ private const val COMPOSER_MAX_LINES = 8
 private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
 
 /**
- * The air the composer's frame leaves above an open keyboard: 10dp.
+ * The air the composer's frame leaves below itself: 10dp, and **always** 10dp.
  *
  * Enough that the frame's rounded corners are drawn against the page rather than against
  * the keyboard's edge, and small enough that it does not read as a band of its own — the
- * composer still sits at the foot of the page, it just floats there. Read where it is
- * drawn; `Composer` states why that moved.
+ * composer sits at the foot of the page, it just floats there.
+ *
+ * ## Why it does not move any more
+ *
+ * It used to ramped: 10dp while the keyboard was up and nothing once it was down, eased
+ * over the last 40dp of the keyboard's travel so no step would show. What that produced is
+ * the report *"收起键盘后那一点空白的下滑动画还是不够丝滑和迅速"* — the blank sliding down after
+ * the keyboard was already gone — and the cause is the ramp outliving the keyboard:
+ *
+ *  - The page's own padding is floored (`PiKitRoot.imePaddingFloor`): below 12dp of inset
+ *    the page lands rather than follows the last steps of the platform's staircase. That
+ *    floor exists because a 1px-at-a-time tail reads as a crawl.
+ *  - The ramp was driven by the **raw** inset, so while the page had already landed, the
+ *    gap went on shrinking from its remaining ~8dp to zero over the next three frames. The
+ *    only thing moving on screen was this band of page colour, and it was moving after the
+ *    keyboard had visibly gone: exactly the sliding blank.
+ *
+ * A constant has nothing to interpolate, so nothing can outlive the keyboard: the band's
+ * position is the platform's own inset animation and nothing else, and the last thing the
+ * reader sees is the keyboard itself leaving. The cost is 10dp of page colour between the
+ * field's frame and the navigation strip when no keyboard is up, which is the same 10dp
+ * the frame keeps above the keyboard — it reads as the composer's own margin rather than
+ * as a seam, and the band and the strip are the same `surface` colour, so no line is drawn
+ * where they meet.
  */
 private val COMPOSER_IME_GAP = 10.dp
-
-/**
- * How far above the navigation bar the keyboard's edge may be before [COMPOSER_IME_GAP] is
- * fully drawn: four gaps, 40dp.
- *
- * The gap has to go from 10dp to nothing as the keyboard leaves, and the platform's inset
- * animation arrives in steps coarse enough to skip a ramp as narrow as the gap itself.
- * Measured on the emulator, one close reported `ime` 844 → 282 → 219 → 125 → 94 → 32 → 10 →
- * 5 → 1 → 0 at 20–30 ms apart, so a ramp over the last 10dp of keyboard was crossed in a
- * single frame and the frame's last 26 px (10dp at this density) arrived as a step after the
- * rest of the motion had stopped. Four gaps spreads the same distance over four or five
- * frames, and the only thing it changes while the keyboard is open is the last 40dp of its
- * travel, where neither the keyboard nor the frame is being looked at.
- */
-private val COMPOSER_IME_GAP_RAMP = COMPOSER_IME_GAP * 4
 
 
 /**
@@ -3146,6 +3256,10 @@ private fun Composer(
     onCloseSheet: () -> Unit,
     onRunCommand: (BuiltInCommand) -> Unit,
     onPickAttachment: (String) -> Unit,
+    /** The workspace of this conversation: the chip's label, and the menu's tick. */
+    currentWorkspace: String,
+    onSelectWorkspace: (String) -> Unit,
+    onOpenWorkspacePicker: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -3221,15 +3335,11 @@ private fun Composer(
     // animation, before and after), so its frame *times* do not settle a question about
     // one card's work; the position of the band on each frame does.
     //
-    // **Scaled by how much keyboard is left, rather than switched at the end.** The gap is
-    // 10dp while the keyboard's edge is well above the page's bottom, and it eases to
-    // nothing over the last [COMPOSER_IME_GAP_RAMP] of the edge's travel, so neither the
-    // open nor the close has a step in it whatever frame the platform reports the inset on.
-    // With no keyboard the ime inset is zero, which is what keeps the band meeting the
-    // navigation bar's own strip with no seam.
-    val density = LocalDensity.current
-    val ime = WindowInsets.ime
-    val navigationBars = WindowInsets.navigationBars
+    // The band reads no inset of its own any more: the page above is padded by the
+    // keyboard at the root, and the composer's own foot is a constant 10dp
+    // ([COMPOSER_IME_GAP]). What is left of the old layout-phase reads — `LocalDensity`,
+    // `WindowInsets.ime`, `WindowInsets.navigationBars` — was needed only by the gap that
+    // used to shrink after the keyboard had gone.
 
     // The band: full bleed, in the page's column, on **`surface`** — the colour the tab
     // strip and the root scaffold behind it are painted in, so the foot of the page is
@@ -3267,7 +3377,7 @@ private fun Composer(
                 }
             }
 
-            // The three controls, on a line of their own above the field.
+            // The controls, on a line of their own above the field.
             //
             // Above, not below, and that ordering is the whole point of the
             // layout: a chip below the field sits between the thing you are
@@ -3276,11 +3386,14 @@ private fun Composer(
             // it they read as what they are — the settings the next message will
             // be sent with.
             //
-            // Three, not four: the context share used to be one of them and is now
-            // the ring at the other end of the action row, beside the send, because
-            // it is a reading rather than a choice (see `ContextRing`).
+            // Four of them, and the first is the odd one out: the workspace is where
+            // the agent works, so it is what the three values to its right apply *to*.
+            // The context share used to be one of the four and is now the ring at the
+            // other end of the action row, beside the send, because it is a reading
+            // rather than a choice (see `ContextRing`); the permission tier is the
+            // button in the action row rather than a chip (§14).
             //
-            // Horizontally scrollable so three chips whose values can each be long
+            // Horizontally scrollable so four chips whose values can each be long
             // stay on one line: the alternative is squeezing them, which turns the
             // last one into `缓存命…`. A `LazyRow` rather than a `Row` with
             // `horizontalScroll`, because a plain scrollable `Row` under a
@@ -3299,6 +3412,20 @@ private fun Composer(
             // scroll state, so one appears exactly while there is content behind it.
             // It covers no touch: a `draw` pass takes no pointer events, so the chip
             // under a fade is still tappable where it shows.
+            // What the workspace chip says: the folder's own name — the built-in one is
+            // `workspace` — and whether it is the default. A workspace whose folder the
+            // reader deleted is not in the list, and the chip falls back to the path's
+            // last segment rather than to an empty label.
+            val workspaces = rememberWorkspaceList(
+                context = LocalContext.current,
+                env = session.env,
+                savedDefault = saved.defaultWorkspace,
+            )
+            val defaultWorkspacePath = saved.defaultWorkspace.ifBlank { session.env.workspacePath }
+            val currentWorkspaceEntry = workspaces.firstOrNull { it.path == currentWorkspace }
+            val workspaceLabel = currentWorkspaceEntry?.label
+                ?: java.io.File(currentWorkspace).name.ifBlank { currentWorkspace }
+            val workspaceIsDefault = currentWorkspace == defaultWorkspacePath
             val chipState = rememberLazyListState()
             // The band's own colour, read in composition: `MiuixTheme.colorScheme` is
             // a composable read and a `DrawScope` is not one, and the fade has to end
@@ -3345,6 +3472,38 @@ private fun Composer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                item {
+                    // The workspace, first in the row and the only chip on this page
+                    // that is not about the next message's request: it decides which
+                    // folder the agent is standing in, so it is what every other value on
+                    // the row applies *to*. Drawn as the folder's own name, with the
+                    // default marked — the menu under it carries the full path, which is
+                    // the half a reader needs only when two projects share a name.
+                    ControlChip(
+                        glyph = MiuixIcons.Folder,
+                        label = text.chat.workspaceChip(workspaceLabel, workspaceIsDefault),
+                        onClick = { onOpenSheet(ComposerSheet.Workspace) },
+                    ) {
+                        OverlayListPopup(
+                            popupPositionProvider = aboveAnchorPositionProvider(),
+                            show = openSheet == ComposerSheet.Workspace,
+                            maxHeight = MENU_MAX_HEIGHT,
+                            onDismissRequest = onCloseSheet,
+                        ) {
+                            WorkspaceMenu(
+                                show = openSheet == ComposerSheet.Workspace,
+                                text = text,
+                                workspaces = workspaces,
+                                current = currentWorkspace,
+                                defaultPath = defaultWorkspacePath,
+                                home = session.env.homePath,
+                                onPick = onSelectWorkspace,
+                                onAdd = onOpenWorkspacePicker,
+                                onDismiss = onCloseSheet,
+                            )
+                        }
+                    }
+                }
                 item {
                     ControlChip(
                         glyph = painterResource(R.drawable.ic_thinking),
@@ -3582,19 +3741,21 @@ private fun Composer(
                 // ## The row's order: what goes in, then what happens to it
                 //
                 // ```
-                //  ( ⌘ ) (+)                              (◔) (→)
-                //  └─────┬─────┘                          └──┬──┘
-                //   put something into the message   what it becomes
+                //  ( ⌘ ) (🔒) (+)                          (◔) (→)
+                //  └───────┬───────┘                      └──┬──┘
+                //   put something into the message  what it becomes
+                //     └ the tier in between decides how far the agent may go
                 // ```
                 //
-                // The command list and the `+` are the row's left pair, immediately
-                // after each other: both are controls that put something into the
-                // message, both are the same plain 40dp icon button, and a reader
-                // reaches for either of them while deciding what to say rather than
+                // The command list and the `+` are the row's left pair, and the
+                // permission control sits between them in the same plain 40dp dress:
+                // the two "add" buttons go into the message, and the tier is the rule
+                // the agent is held to while it acts on what was added (§14). A reader
+                // reaches for any of the three while deciding what to say rather than
                 // after saying it. The ring and the send are the other half — one
-                // reading and one action, both *about* the message rather than part
-                // of it — and the weighted spacer between the halves is what keeps
-                // the layout from depending on how wide the field's text is.
+                // reading and one action, both *about* the message rather than part of
+                // it — and the weighted spacer between the halves is what keeps the
+                // layout from depending on how wide the field's text is.
                 //
                 // The order before this was ` ⌘ … ◔ + → `: the `+` sat at the far end
                 // beside the send, and the ring stood between it and the command
@@ -3653,6 +3814,49 @@ private fun Composer(
                             text = text,
                             onRun = onRunCommand,
                             onShell = { onOpenSheet(ComposerSheet.Shell) },
+                            onDismiss = onCloseSheet,
+                        )
+                    }
+                }
+                // The permission tier, between the two controls that put something into
+                // the message and the two that decide what happens to it — between them
+                // literally as well: the list, then this, then the `+`. It is neither of
+                // it is the rule the agent is held to while it acts on what it was given,
+                // and the composer is where the reader is standing when that rule
+                // matters. One 40dp button with the tier's own mark and no label — a
+                // fourth pill here would be a second row of chips inside the field's
+                // frame — and the menu under it names all three tiers and what each
+                // allows. The mark carries the tier in colour as well as in shape:
+                // `unlock` in the accent is the one setting on this row with no refusals
+                // behind it.
+                PopupAnchor {
+                    val mode = saved.permissionMode
+                    IconButton(
+                        onClick = { onOpenSheet(ComposerSheet.Permission) },
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = permissionGlyph(mode),
+                            contentDescription = text.chat.permissionChip(mode),
+                            modifier = Modifier.size(17.dp),
+                            tint = if (mode == PermissionMode.FULL_ACCESS) {
+                                MiuixTheme.colorScheme.primary
+                            } else {
+                                MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            },
+                        )
+                    }
+                    OverlayListPopup(
+                        popupPositionProvider = aboveAnchorPositionProvider(),
+                        show = openSheet == ComposerSheet.Permission,
+                        maxHeight = MENU_MAX_HEIGHT,
+                        onDismissRequest = onCloseSheet,
+                    ) {
+                        PermissionMenu(
+                            show = openSheet == ComposerSheet.Permission,
+                            text = text,
+                            current = mode,
+                            onPick = { session.setPermissionMode(it) },
                             onDismiss = onCloseSheet,
                         )
                     }
@@ -3807,26 +4011,11 @@ private fun Composer(
                 }
             }
 
-            // The air above the keyboard. The band's own fill continues under it — the
-            // page is padded by the keyboard (`imePadding` at the root), so this gap is
-            // the last 10dp of the page and the composer's frame floats clear of the
-            // keyboard instead of sitting on it. It shrinks to nothing as the keyboard
-            // arrives and as it leaves, so the band still meets the navigation bar's own
-            // strip with no seam when none is up; the arithmetic and the reason it is
-            // read in the layout phase are on `ime` above.
-            Spacer(
-                Modifier
-                    .fillMaxWidth()
-                    .layout { _, constraints ->
-                        val above = (
-                            ime.getBottom(density) - navigationBars.getBottom(density)
-                            ).coerceAtLeast(0)
-                        val ramp = COMPOSER_IME_GAP_RAMP.roundToPx()
-                        val gap = (COMPOSER_IME_GAP * (above.toFloat() / ramp).coerceIn(0f, 1f))
-                            .roundToPx()
-                        layout(constraints.maxWidth, gap) {}
-                    },
-            )
+            // The air below the frame, constant: see [COMPOSER_IME_GAP]. It used to be
+            // a layout-phase read of the keyboard's inset, which is why this column's
+            // measurement is worth stating — a value that changed per frame was also a
+            // *second* motion at the end of the keyboard's close, and it is gone with it.
+            Spacer(Modifier.fillMaxWidth().height(COMPOSER_IME_GAP))
         }
     }
 }
@@ -4943,7 +5132,7 @@ private fun ShellCommandSheet(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(bottom = sheetBottomInset()),
+            .padding(bottom = piSheetBottomInset()),
     ) {
         Text(
             text = text.chat.shellCommandHint,
@@ -4978,6 +5167,111 @@ private fun ShellCommandSheet(
                 .padding(start = SHEET_GUTTER, end = SHEET_GUTTER, top = 12.dp),
         ) {
             Text(text = text.common.ok)
+        }
+    }
+}
+
+/**
+ * The tier's own mark.
+ *
+ * Three shapes rather than one shape in three colours: an eye for the tier that can only
+ * look, a lock for the one that can change only inside its workspace, and an open lock for
+ * the one with no refusals — the progression a reader already knows from file permissions,
+ * and only the last of the three changes colour (§7.1 has why the other two stay in the
+ * row's own ink).
+ */
+private fun permissionGlyph(mode: PermissionMode): ImageVector = when (mode) {
+    PermissionMode.READ_ONLY -> MiuixIcons.Show
+    PermissionMode.WORKSPACE_WRITE -> MiuixIcons.Lock
+    PermissionMode.FULL_ACCESS -> MiuixIcons.Unlock
+}
+
+/**
+ * The workspace menu: one row per workspace, then the folder picker.
+ *
+ * The tick marks the conversation's own workspace, which is a *fact* about the row rather
+ * than a saved choice — this menu is what made the current one current. The default is a
+ * suffix on its title instead, because "which one am I in" and "which one a new
+ * conversation starts in" are two answers and only one of them is a tick.
+ */
+@Composable
+private fun WorkspaceMenu(
+    show: Boolean,
+    text: Strings,
+    workspaces: List<Workspace>,
+    current: String,
+    defaultPath: String,
+    home: String,
+    onPick: (String) -> Unit,
+    onAdd: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    fun pick(action: () -> Unit) {
+        if (show) {
+            onDismiss()
+            action()
+        }
+    }
+
+    val count = workspaces.size + 1
+    ListPopupColumn {
+        workspaces.forEachIndexed { index, workspace ->
+            DropdownImpl(
+                item = DropdownItem(
+                    text = text.chat.workspaceChip(workspace.label, workspace.path == defaultPath),
+                    summary = workspace.displayPath(home),
+                ),
+                optionSize = count,
+                isSelected = workspace.path == current,
+                index = index,
+                onSelectedIndexChange = { pick { onPick(workspace.path) } },
+            )
+        }
+        DropdownImpl(
+            item = DropdownItem(text = text.chat.addWorkspace, summary = null),
+            optionSize = count,
+            isSelected = false,
+            index = workspaces.size,
+            onSelectedIndexChange = { pick(onAdd) },
+        )
+    }
+}
+
+/**
+ * The three tiers, with what each one allows under its name.
+ *
+ * A summary per row rather than three words: `read-only`, `workspace-write` and
+ * `full-access` are the names of three *policies*, and a reader who has to guess what the
+ * middle one changes is a reader who leaves the tier on whatever it was.
+ */
+@Composable
+private fun PermissionMenu(
+    show: Boolean,
+    text: Strings,
+    current: PermissionMode,
+    onPick: (PermissionMode) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    fun pick(action: () -> Unit) {
+        if (show) {
+            onDismiss()
+            action()
+        }
+    }
+
+    val modes = PermissionMode.entries
+    ListPopupColumn {
+        modes.forEachIndexed { index, mode ->
+            DropdownImpl(
+                item = DropdownItem(
+                    text = text.chat.permissionChip(mode),
+                    summary = text.chat.permissionSummary(mode),
+                ),
+                optionSize = modes.size,
+                isSelected = mode == current,
+                index = index,
+                onSelectedIndexChange = { pick { onPick(mode) } },
+            )
         }
     }
 }

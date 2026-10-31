@@ -22,10 +22,10 @@ of everything under `docs/`.
 | 2 | [Talking to Pi](architecture/02-talking-to-pi.md) | `--mode rpc` instead of driving the TUI through a PTY, and the exact command line |
 | 3 | [What is baked in](architecture/03-what-is-baked-in.md) | What the runtime image carries, why `rg` and `fd` are not optional, why every version in it — pi's included — is pinned, what the delete list removes from the vendored trees and what it therefore ships, and how its two layers update: the seed once, the app's own components point-replaced |
 | 4 | [`pkg install` without the user noticing](architecture/04-package-relocation.md) | Relocating a package on the tar stream, the two install paths, and the one file the rewrite must not touch |
-| 5 | [Storage, and why the first design could delete a phone](architecture/05-storage-and-safety.md) | The three layers — a scoped grant, a refusing delete, a guard inside the agent — and the self-test |
+| 5 | [Storage, and why the first design could delete a phone](architecture/05-storage-and-safety.md) | The scoped grant, the refusing delete, the self-test, and why the folder switches are a rule rather than a wall |
 | 6.1 | [Custom endpoints](architecture/06.1-custom-endpoints.md) | `models.json` merged and never replaced, the provider list, why the key is in `argv`, and the end-to-end run |
 | 6.2 | [The model page's facts](architecture/06.2-models-and-catalogue.md) | How a model's settings pick between a merging override and a replacing definition, why the catalogue check is a read, and what a custom id's entry holds |
-| 7.1 | [The composer](architecture/07.1-composer.md) | The bottom of the screen: the tab strip, the IME insets, and the controls above the input box |
+| 7.1 | [The composer](architecture/07.1-composer.md) | The bottom of the screen: the tab strip, the IME insets, the workspace and permission controls, and the constant gap the band keeps |
 | 7.2 | [The model and thinking-level switches](architecture/07.2-models-and-thinking.md) | One provider with many models, where the levels come from, and what is saved |
 | 7.3 | [The transcript](architecture/07.3-transcript.md) | One card per turn, following, folding, tool rows, the removed cursor and turn rail, and the page's rhythm |
 | 7.4 | [The terminal's key bar](architecture/07.4-terminal-keys.md) | Uniform keys, an arrow pad, and the word that toggles |
@@ -33,11 +33,12 @@ of everything under `docs/`.
 | 9.1 | [Pages, and which moves are one](architecture/09.1-pages-and-moves.md) | Back behaviour, the flattened settings root, what is a page and what is not, and the elastic end a page's body has even when it fits |
 | 9.2 | [The settings pages, and the furniture of a page](architecture/09.2-settings-pages.md) | The header the band became, dividers, the row that acts, the shape a list and its rows share, forms that ask before leaving, the text-size slider, and the choices that are rows |
 | 9.3 | [The web-access and maintenance pages](architecture/09.3-web-access-and-maintenance.md) | The six keys PiKit owns of the extension's hundred, the document that is not the file, and the three repair runs that are now one shape |
-| 10 | [Process and state ownership](architecture/10-process-and-state.md) | Who owns the agent process, the session, the terminal's shells and the saved state, what a backup carries, and why a restore has to re-read everything |
+| 10 | [Process and state ownership](architecture/10-process-and-state.md) | Who owns the agent process, the session, the workspace, the terminal's shells and the saved state, what a backup carries, and why a restore has to re-read everything |
 | 11 | [Vendored code](architecture/11-vendored-code.md) | The two Termux modules, why only those two, and their licence |
 | 12.1 | [What the model writes](architecture/12.1-markdown-and-math.md) | The Markdown half: what the parser accepts, the inline walk, and the test that could not catch a bug |
 | 12.2 | [Mathematics](architecture/12.2-mathematics.md) | Why the renderer is a library, how a formula's line box is built, and every measurement that chose it |
 | 12.3 | [Tables, display formulas, and the marks](architecture/12.3-display-and-marks.md) | Table layout, display formulas as paragraphs, the glyphs that were chosen, and the colour one action carries |
+| 14 | [Permissions: three tiers](architecture/14-permissions.md) | Read-only, workspace-write and full-access: what each refuses, why the mode is a file read on every tool call, the control in the composer, and what the change cost the storage page |
 | 13 | [The interface, drawn by Miuix](architecture/13-design-language.md) | Miuix as the rule for what a page may look like: why the app's own design system was removed, the seed-to-palette theme, the fourteen text styles, the page and its one-line subtitle, the rows, the window dialogs and sheets, the one snackbar, navigation, and the `ListPopupColumn` and subtitle traps a change has to obey |
 
 ## How to read it

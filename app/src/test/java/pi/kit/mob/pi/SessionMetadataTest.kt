@@ -28,6 +28,48 @@ class SessionMetadataTest {
     private fun search(vararg lines: String) = SessionMetadata.searchText(lines.asSequence())
 
     @Test
+    fun `the header's directory is the workspace the conversation came from`() {
+        val meta = read(header, message("user", textBlock("hello")))
+
+        assertEquals("/home", meta.workspace)
+    }
+
+    @Test
+    fun `a fork's header does not overwrite the conversation's own directory`() {
+        // pi writes another `type:"session"` record when a session is forked, and that one
+        // carries the parent's directory — the wrong answer for the file it lands in.
+        val meta = read(
+            header,
+            message("user", textBlock("hello")),
+            """{"type":"session","version":3,"id":"fork","cwd":"/elsewhere"}""",
+        )
+
+        assertEquals("/home", meta.workspace)
+    }
+
+    @Test
+    fun `the directory alone can be read from the file's first line`() {
+        val file = kotlin.io.path.createTempFile(suffix = ".jsonl").toFile()
+        try {
+            file.writeText(header + "\n" + message("user", textBlock("hello")) + "\n")
+            assertEquals("/home", SessionMetadata.workspaceOf(file))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `a file that is not a session has no directory`() {
+        val file = kotlin.io.path.createTempFile(suffix = ".jsonl").toFile()
+        try {
+            file.writeText(message("user", textBlock("hello")) + "\n")
+            assertNull(SessionMetadata.workspaceOf(file))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun `uses the first user message as the title when unnamed`() {
         val meta = read(
             header,

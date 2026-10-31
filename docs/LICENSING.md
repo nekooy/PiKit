@@ -38,7 +38,7 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
 2. **Make the corresponding source available.** That is *this repository*, including
    the scripts under `tools/` that produce the bundled runtime image
    (`build-runtime-image.py`, `prefix_patch.py`, `pikit-relocate.js`,
-   `pikit-dpkg.sh`, `pi-safety-guard.ts`, `storage-self-test.sh`) — and, because the
+   `pikit-dpkg.sh`, `pikit-permissions.ts`, `storage-self-test.sh`) — and, because the
    image is built from upstream sources rather than committed, the versions the
    image was built from, which `tools/build-runtime-image.py` pins (`BOOTSTRAP_TAG`,
    the `pi` version, the web-access version) and the image's `build-metadata.json`

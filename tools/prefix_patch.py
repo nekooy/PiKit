@@ -105,7 +105,7 @@ NEVER_REWRITE: frozenset[str] = frozenset(
         "bin/pikit-storage-check",
         "etc/apt/apt.conf.d/99pikit-relocate",
         "libexec/pikit/relocate.js",
-        "share/pikit/pi-safety-guard.ts",
+        "share/pikit/pikit-permissions.ts",
         "share/pikit/storage-self-test.sh",
     }
 )

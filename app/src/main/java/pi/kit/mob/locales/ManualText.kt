@@ -111,11 +111,13 @@ icons: history and new conversation. The name is
 the first thing you wrote, or **PiKit** while
 the conversation is still empty.
 
-The chips above the input are everything you
+The composer's controls are everything you
 change while talking:
 
-| Chip | For |
+| Control | For |
 | --- | --- |
+| Workspace | Which folder this conversation runs in |
+| Permission | How far the agent may change files, checked on every call |
 | Thinking level | How hard the model reasons. Immediate. |
 | Model | Which model answers. Immediate. |
 | Cache | Share served by the prompt cache. |
@@ -128,17 +130,18 @@ pi's own — `off`, `minimal`, `low`, `medium`,
 `pi --list-models` in the terminal use the same
 word for the same level.
 
-The row under the input starts with `⌘` and `+`.
-`⌘` lists the commands PiKit runs itself:
-`/new`, `/compact`, `/stop`, `/clone`,
-`/export`, `/model`, `/clear`. A row runs as you
-tap it, and the `!` row opens a field for a
-shell line. `+` opens the attach menu, camera
-first, then a picture or a file: images over 4
-MB are refused, and the model has to accept
-images. Whether it does is under **Settings →
-Model & provider → Model parameters**, the
-catalogue's own answer, which you can override.
+The row under the input holds `⌘`, the
+permission control and `+`, in that order. `⌘`
+lists the commands PiKit runs itself: `/new`,
+`/compact`, `/stop`, `/clone`, `/export`,
+`/model`, `/clear`. A row runs as you tap it,
+and the `!` row opens a field for a shell line.
+`+` opens the attach menu, camera first, then a
+picture or a file: images over 4 MB are refused,
+and the model has to accept images. Whether it
+does is under **Settings → Model & provider →
+Model parameters**, the catalogue's own answer,
+which you can override.
 
 The ring beside the send shows how full the
 context window is; tapping it opens the
@@ -221,7 +224,7 @@ switched on in **Settings → Shared storage**.
 
 That permission is all or nothing on Android, so
 the folder switches are the real limit on a
-task: a command naming a folder that is off is
+task: a write naming a folder that is off is
 refused before it runs. Only the folders you
 switch on are linked into the agent's home under
 the lower-case names `termux-setup-storage` has
@@ -249,18 +252,17 @@ paths outside the app's private data. **Settings
 both checks for real, in a separate process, one
 line per check.
 
-A bundled safety extension checks every `bash`,
-`write` and `edit` call before it runs and
-refuses the destructive ones: a recursive delete
-outside the workspace, a filesystem command, a
-write to a raw device, deleting or overwriting
-pi's own credentials or settings, or naming a
-folder you did not grant. It is on by default,
-and the switch is on **Settings → Shared
-storage**. Turning it off asks for confirmation
-first and uninstalls nothing either way; the
-agent restarts so the change takes effect at
-once.
+`pikit-permissions` checks every tool call
+against a tier you choose in the composer,
+between `⌘` and `+`. **Read only** refuses
+`write`, `edit` and any `bash` that would change
+a file. **Workspace write**, the default, reads
+anywhere and writes only inside the workspace
+and the folders you granted. **Full access**
+refuses nothing. A refused call comes back to
+the agent as a tool error naming the tier, so it
+says what it meant to change instead of
+retrying.
 
 ## 7. Web search
 
@@ -304,8 +306,8 @@ of it.
 | Personalization | New conversation on launch; text size; theme; home-screen icon; avatars |
 | Language | English, 简体中文 or 日本語; immediate |
 | User manual | This page |
-| Shared storage | Which folders the agent may reach |
-| Agent process | Restart, working directory, AGENTS.md, keep alive |
+| Shared storage | Which folders the agent may write to |
+| Agent process | Restart, default workspace, AGENTS.md, keep alive |
 | Backup & restore | What to pack into one file, and putting it back |
 | Maintenance & repair | Model list, packages, relocation, rebuild, storage check |
 | About PiKit | Version, package id, runtime paths, licence, app update check |

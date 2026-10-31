@@ -547,8 +547,15 @@ enum class FontSize(val code: String, val scale: Float) {
      * the picker falls back to pi's seven until pi answers.
      */
     val availableThinkingLevelsFor: String = "",
-    /** Agent working directory; `$HOME` when blank. */
-    val workingDir: String = "",
+    /**
+     * The workspace a *new* conversation starts in, as an absolute path.
+     *
+     * Blank means `$HOME/workspace`, which is the directory every install ships with and
+     * the one [WorkspaceStore.builtIn] names. It replaced a free-text "working directory"
+     * field: the directory is now one of a *list* of workspaces (see [WorkspaceStore]),
+     * the composer picks among them, and this is the one the list calls the default.
+     */
+    val defaultWorkspace: String = "",
     /** Interface language. Persisted here because it is not part of a profile. */
     val language: Lang = Lang.DEFAULT,
     /**
@@ -588,14 +595,16 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val launcherIcon: LauncherIcon = LauncherIcon.DEFAULT,
     /**
-     * Whether PiKit's tool-call guard is in force.
+     * How much the agent may change: [PermissionMode.READ_ONLY], the default
+     * [PermissionMode.WORKSPACE_WRITE], or [PermissionMode.FULL_ACCESS].
      *
-     * An environment fact rather than a preference the app acts on: the value is
-     * published to every process PiKit spawns (`ShellEnvironment`, as
-     * `SafetyGuard.ENV_VAR`) and read once by the extension when pi loads it. On by
-     * default, and the switch that turns it off asks first — see the storage page.
+     * Persisted rather than held in memory so the tier survives a restart, and read by
+     * `env/PermissionPolicy` to write the file the extension judges every tool call by —
+     * see [PermissionMode] for why the mode is a file rather than an environment
+     * variable. The composer's control and this preference are the same value: a change
+     * made there takes effect on the next tool call without restarting the agent.
      */
-    val safetyExtension: Boolean = true,
+    val permissionMode: PermissionMode = PermissionMode.DEFAULT,
     /**
      * Whether the transcript draws an avatar over each message.
      *
@@ -748,7 +757,7 @@ class SettingsStore(context: Context) {
             // Only the values that are not part of a profile come from
             // preferences; the model fields arrive with the active profile.
             thinkingLevel = thinkingLevel(),
-            workingDir = prefs.getString(KEY_WORKDIR, "").orEmpty(),
+            defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
@@ -756,7 +765,7 @@ class SettingsStore(context: Context) {
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
-            safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
+            permissionMode = PermissionMode.fromCode(prefs.getString(KEY_PERMISSION, null)),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
             aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
@@ -831,14 +840,14 @@ class SettingsStore(context: Context) {
             .putString(KEY_THINKING, next.thinkingLevel)
             .putString(KEY_LEVELS, next.availableThinkingLevels.joinToString(","))
             .putString(KEY_LEVELS_FOR, next.availableThinkingLevelsFor)
-            .putString(KEY_WORKDIR, next.workingDir)
+            .putString(KEY_WORKSPACE, next.defaultWorkspace)
+            .putString(KEY_PERMISSION, next.permissionMode.code)
             .putString(KEY_LANGUAGE, next.language.code)
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
             .putString(KEY_THEME, next.themeMode.code)
             .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
-            .putBoolean(KEY_SAFETY, next.safetyExtension)
-            .putBoolean(KEY_SHOW_AVATARS, next.showAvatars)
+                        .putBoolean(KEY_SHOW_AVATARS, next.showAvatars)
             .putString(KEY_AI_AVATAR_LABEL, next.aiAvatarLabel)
             .putString(KEY_AI_AVATAR_IMAGE, next.aiAvatarImage)
             .putString(KEY_AI_AVATAR_COLOR, next.aiAvatarColor.code)
@@ -856,13 +865,13 @@ class SettingsStore(context: Context) {
             thinkingLevel = next.thinkingLevel,
             availableThinkingLevels = next.availableThinkingLevels,
             availableThinkingLevelsFor = next.availableThinkingLevelsFor,
-            workingDir = next.workingDir,
+            defaultWorkspace = next.defaultWorkspace,
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
             fontSize = next.fontSize,
             launcherIcon = next.launcherIcon,
-            safetyExtension = next.safetyExtension,
+            permissionMode = next.permissionMode,
             showAvatars = next.showAvatars,
             aiAvatarLabel = next.aiAvatarLabel,
             aiAvatarImage = next.aiAvatarImage,
@@ -931,13 +940,13 @@ class SettingsStore(context: Context) {
             thinkingLevel = thinkingLevel(),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
-            workingDir = prefs.getString(KEY_WORKDIR, "").orEmpty(),
+            defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
             fontSize = fontStep(),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
-            safetyExtension = prefs.getBoolean(KEY_SAFETY, true),
+            permissionMode = PermissionMode.fromCode(prefs.getString(KEY_PERMISSION, null)),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
             aiAvatarLabel = prefs.getString(KEY_AI_AVATAR_LABEL, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
@@ -957,13 +966,13 @@ class SettingsStore(context: Context) {
         thinkingLevel: String = current.get().thinkingLevel,
         availableThinkingLevels: List<String> = current.get().availableThinkingLevels,
         availableThinkingLevelsFor: String = current.get().availableThinkingLevelsFor,
-        workingDir: String = current.get().workingDir,
+        defaultWorkspace: String = current.get().defaultWorkspace,
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
         fontSize: FontSize = current.get().fontSize,
         launcherIcon: LauncherIcon = current.get().launcherIcon,
-        safetyExtension: Boolean = current.get().safetyExtension,
+        permissionMode: PermissionMode = current.get().permissionMode,
         showAvatars: Boolean = current.get().showAvatars,
         aiAvatarLabel: String = current.get().aiAvatarLabel,
         aiAvatarImage: String = current.get().aiAvatarImage,
@@ -981,13 +990,13 @@ class SettingsStore(context: Context) {
                 thinkingLevel = thinkingLevel,
                 availableThinkingLevels = availableThinkingLevels,
                 availableThinkingLevelsFor = availableThinkingLevelsFor,
-                workingDir = workingDir,
+                defaultWorkspace = defaultWorkspace,
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
                 fontSize = fontSize,
                 launcherIcon = launcherIcon,
-                safetyExtension = safetyExtension,
+                permissionMode = permissionMode,
                 showAvatars = showAvatars,
                 aiAvatarLabel = aiAvatarLabel,
                 aiAvatarImage = aiAvatarImage,
@@ -1003,20 +1012,49 @@ class SettingsStore(context: Context) {
 
     companion object {
         /**
-         * Whether the tool-call guard is in force, read straight from preferences.
+         * The default workspace, read straight from preferences.
          *
          * A companion function rather than a field on a `SettingsStore` instance
-         * because its one caller outside this class is `ShellEnvironment`, which
-         * builds the environment for every process PiKit spawns and must not
-         * construct a store to do it: `SettingsStore`'s constructor reads the profile
-         * file and applies the active profile, which is work with side effects and
-         * nothing to do with the question. The preference name and the key stay here,
-         * so there is still one writer and one place they are spelled.
+         * because its callers — `WorkspaceStore`, which answers the composer's chip on
+         * every frame, and `ShellEnvironment`, which builds the environment for every
+         * process PiKit spawns — must not construct a store to ask: `SettingsStore`'s
+         * constructor reads the profile file and applies the active profile, which is
+         * work with side effects and nothing to do with the question. The preference
+         * name and the key stay here, so there is still one writer and one place they
+         * are spelled.
          */
-        fun safetyExtension(context: Context): Boolean =
+        fun defaultWorkspace(context: Context): String =
             context.applicationContext
                 .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getBoolean(KEY_SAFETY, true)
+                .getString(KEY_WORKSPACE, "").orEmpty()
+
+        /**
+         * Clears the default when it names [path], for `WorkspaceStore.remove`.
+         *
+         * Removing a workspace that is the default has to leave a default behind: the
+         * alternative is a preference pointing at a directory the list no longer offers,
+         * which every reader then resolves by its own fallback rule.
+         */
+        fun clearDefaultWorkspace(context: Context, path: String) {
+            val prefs = context.applicationContext
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            if (prefs.getString(KEY_WORKSPACE, "").orEmpty() != path) return
+            prefs.edit().remove(KEY_WORKSPACE).apply()
+        }
+
+        /**
+         * The permission tier in force, read straight from preferences.
+         *
+         * Same reason as [defaultWorkspace]: `env/PermissionPolicy` writes the file the
+         * agent's extension reads, and it has no business constructing a store (and with
+         * it the profile file) to answer one enum.
+         */
+        fun permissionMode(context: Context): PermissionMode =
+            PermissionMode.fromCode(
+                context.applicationContext
+                    .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .getString(KEY_PERMISSION, null),
+            )
 
         private const val PREFS = "pikit_settings"
 
@@ -1036,7 +1074,7 @@ class SettingsStore(context: Context) {
 
         private const val KEY_LEVELS = "thinking_levels"
         private const val KEY_LEVELS_FOR = "thinking_levels_for"
-        private const val KEY_WORKDIR = "working_dir"
+        private const val KEY_WORKSPACE = "working_dir"
         private const val KEY_LANGUAGE = "language"
 
         /** True unless the user asked for a cold start to continue the last talk. */
@@ -1063,7 +1101,7 @@ class SettingsStore(context: Context) {
         private const val KEY_LAUNCHER_ICON = "launcher_icon"
 
         /** True unless the user switched the tool-call guard off; see [PiSettings]. */
-        private const val KEY_SAFETY = "safety_extension"
+        private const val KEY_PERMISSION = "permission_mode"
 
         /** The two avatars' own fields; see [PiSettings.aiAvatarLabel]. */
         private const val KEY_AI_AVATAR_IMAGE = "ai_avatar_image"

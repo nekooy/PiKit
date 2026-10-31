@@ -1,5 +1,6 @@
 package pi.kit.mob.pi
 
+import java.io.File
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -15,6 +16,17 @@ data class SessionMeta(
     /** Text of the first user message — pi's own fallback label for a session. */
     val firstMessage: String? = null,
     val messageCount: Int = 0,
+    /**
+     * The directory pi was started in, from the file's first record.
+     *
+     * pi writes `{"type":"session","version":1,"id":…,"cwd":"…"}` as line one, which is
+     * the only place a saved conversation records the workspace it belonged to — a fact
+     * the history page groups by and the agent needs in order to reopen the conversation
+     * in the directory its tool calls were written for. Null for a file written by a pi
+     * old enough not to record one, and for a session created by a launch that had not
+     * answered `get_state` yet.
+     */
+    val workspace: String? = null,
 )
 
 /**
@@ -33,18 +45,53 @@ data class SessionMeta(
 object SessionMetadata {
 
     private val SESSION_INFO = Regex("\"type\"\\s*:\\s*\"session_info\"")
+    /**
+     * The header record's own marker: `{"type":"session"` — line one of every file pi
+     * writes, and not the `session_info` record beside it. Compared as text rather than
+     * parsed first because this runs over every line of every session on every list.
+     */
+    private const val SESSION_HEADER_MARK = "{\"type\":\"session\""
     private val MESSAGE = Regex("\"type\"\\s*:\\s*\"message\"")
     private val USER_ROLE = Regex("\"role\"\\s*:\\s*\"user\"")
     private val ASSISTANT_ROLE = Regex("\"role\"\\s*:\\s*\"assistant\"")
     private val WHITESPACE = Regex("\\s+")
 
+    /**
+     * The directory [file] records, read from its first record alone.
+     *
+     * The launch path needs this and nothing else: `pikit_agent_session` remembers which
+     * conversation was open, and a restore has to start pi in the directory *that*
+     * conversation was working in rather than in the default workspace — a pi standing in
+     * the wrong tree shows the old transcript while every tool call acts elsewhere. The
+     * whole file is not read: it is the first line, and a conversation can be megabytes.
+     */
+    fun workspaceOf(file: File): String? = runCatching {
+        if (!file.isFile) return@runCatching null
+        val first = file.bufferedReader().use { it.readLine() } ?: return@runCatching null
+        if (!first.contains(SESSION_HEADER_MARK)) return@runCatching null
+        PiRecordParser.json.parseToJsonElement(first)
+            .jsonObject["cwd"]?.jsonPrimitive?.contentOrNull
+            ?.trim()?.takeIf { it.isNotEmpty() }
+    }.getOrNull()
+
     fun read(lines: Sequence<String>): SessionMeta {
         var name: String? = null
         var firstMessage: String? = null
+        var workspace: String? = null
         var count = 0
 
         for (line in lines) {
             when {
+                // Only the first header counts: pi writes another record of this type
+                // when a session is forked, and that one carries the *parent's*
+                // directory, which is the wrong answer for the file it lands in.
+                workspace == null && line.contains(SESSION_HEADER_MARK) -> {
+                    workspace = runCatching {
+                        PiRecordParser.json.parseToJsonElement(line)
+                            .jsonObject["cwd"]?.jsonPrimitive?.contentOrNull
+                    }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+                }
+
                 SESSION_INFO.containsMatchIn(line) -> {
                     val parsed = runCatching {
                         PiRecordParser.json.parseToJsonElement(line)
@@ -71,7 +118,12 @@ object SessionMetadata {
                 }
             }
         }
-        return SessionMeta(name = name, firstMessage = firstMessage, messageCount = count)
+        return SessionMeta(
+            name = name,
+            firstMessage = firstMessage,
+            messageCount = count,
+            workspace = workspace,
+        )
     }
 
     /**

@@ -56,132 +56,88 @@ finds — carries the same boundary check.
 
 Pi has no permission system by design, and its documentation says so: *"No
 permission popups. Run in a container, or build your own confirmation flow with
-extensions."* On a phone there is no container, so this app installs one:
-`tools/pi-safety-guard.ts`, copied into `$HOME/.pi/agent/extensions` at first run
-and on every runtime update. It subscribes to `tool_call`, which pi fires before
-a tool runs and whose return value blocks the call, and refuses:
+extensions."* On a phone there is no container, so this app installs one: a
+`tool_call` extension, staged into the runtime image and copied into
+`$HOME/.pi/agent/extensions` at first run and on every runtime update.
 
-- a recursive delete (`rm -rf`, `rm -r`, `find -delete`, `find -exec rm`) aimed
-  anywhere outside the agent's workspace `$HOME/workspace` — including `$HOME`
-  itself, `$HOME/tmp`, the `~/storage` links and every storage root;
-- `mkfs`, `fdisk`, `wipefs`, `parted` and friends;
-- `dd of=/dev/block/…` and a redirect onto a raw device;
-- a recursive `chmod`/`chown` on a storage root;
-- `shred` and `wipe`;
-- **a command that names shared storage outside the folders the user switched on**,
-  in the `/sdcard` spellings *and* through the `~/storage` links (§ the folder
-  switches, below);
-- **anything that deletes or rewrites pi's own files** — the guard itself,
-  `auth.json`, `settings.json`, `models.json`, `web-search.json`, `AGENTS.md`, the
-  saved sessions, and the app's `pikit-config.json` — by any of `rm`, `mv`, `>`,
-  `truncate`, `sed -i` or `chmod`, or by a `write`/`edit` tool call naming one (those
-  carry a path and no command text, so the shell rules never see them). A *single-file*
-  `rm` elsewhere is allowed on purpose, so the path is the only thing that tells
-  housekeeping from an agent deleting its own credentials.
+That extension used to be a hand-written list of destructive shapes — recursive deletes
+outside the workspace, `mkfs` and friends, writes to a raw block device, pi's own
+credential files, commands naming shared storage the user had not granted — with one
+on/off switch. **It is now three permission tiers** (`tools/pikit-permissions.ts`,
+read-only / workspace-write / full-access), chosen in the composer and checked on every
+tool call. §14 is that chapter: the tiers, what each refuses, why the mode is a file
+rather than an environment variable, and what the change cost. What this chapter keeps is
+the part of the old design that is still true:
 
-The workspace is the line, drawn deliberately: `$HOME/workspace`, not `$HOME`, so the
-agent's own configuration, its sessions and the shared-storage links are not inside the
-directory it may clear. Inside it a recursive delete is allowed **at any depth** — the
-first version allowed only the first level under `$HOME`, which refused
-`rm -rf ~/myapp/node_modules` while allowing `rm -rf ~/node_modules`.
+- The policy is the **only** place the agent's actions pass through, so it is where a
+  storage grant becomes a limit rather than a convenience. The link farm decides what the
+  environment *offers*; the tiers decide what the agent may *write*. Reads are free in
+  every tier, which is the one thing the old extension did that the tiers deliberately do
+  not (§14's *What this cost*).
+- It is a rule, not a sandbox. It matches paths in a command's text, so a path built at
+  runtime is not caught; nothing unprivileged can turn that into a wall on Android,
+  because "all files access" belongs to the process and the agent runs as this app.
+- `$HOME/.pi/agent/AGENTS.md` states the same rules in prose, so the model has them before
+  it writes a command at all. The two are the same rules written twice on purpose, and
+  neither is allowed to be the only copy.
 
-Two properties of the matching matter. `$HOME` is resolved in its shell spellings —
-`$HOME`, `${HOME}`, `"$HOME"` — *except* inside single quotes, where the shell does not
-expand it; the guard once expanded only `~`, so `rm -rf ~/tmp/x` was refused and
-`rm -rf "$HOME/tmp/x"` was allowed. And a command line is split at the separators **not
-inside quotes**, which is what stopped `git commit -m 'fix; rm -rf /sdcard case'`,
-`grep -rn '&& rm -rf'` and a heredoc *writing* a script from being read as destructive; a
-quoted string handed to a shell (`sh -c '…'`, `eval '…'`, a heredoc fed to `bash`) is
-then inspected as the command it is, and a newline is a separator, so a three-line script
-is read as three commands.
+## The document beside the machine
 
-It is deliberately conservative — it matches a small set of patterns and allows
-what it does not recognise, because a guard that blocks legitimate work gets
-removed, and a removed guard protects nothing. Where it blocks, it explains why, so
-the model reports the refusal rather than retrying blindly. `$HOME/.pi/agent/AGENTS.md`
-states the same rules in prose, so the model has them before it writes a command at
-all; the two are the same rules written twice on purpose, and neither is allowed to be
-the only copy — see the section below for what happens to that file.
+`$HOME/.pi/agent/AGENTS.md` is the other half of the agent's context — pi reads it
+automatically at startup — and the installer writes it **only when it is missing**. That
+is the opposite of `models.json` and `settings.json`, which the launcher rewrites on every
+start, and the difference is what the file *is*: those are projections of what the app
+knows, where a hand edit is a change the app cannot see and would otherwise have no way
+back from, while this is a document. It is editable from **Settings → Agent process**,
+which also offers the default text back, and an update that silently replaced it would
+throw away the sentences a user added about their own project.
 
-## Taking the guard out of force, and the document beside it
-
-The guard has a switch, on the shared-storage page, and it is an **effectiveness** switch rather
-than an uninstall: `PIKIT_SAFETY_GUARD=off`, published by `ShellEnvironment.build` into every
-process PiKit spawns, makes `tools/pi-safety-guard.ts` register nothing at all while the file stays
-exactly where pi loads it from. Three reasons for that shape, and each is a design that was
-rejected:
-
-- **An uninstall is one-way.** The only way to remove the guard before this was to delete the
-  extension by hand in the terminal, and a file deleted by hand never arrives again with an update
-  — so an app-level removal would be the same one-way door with a switch on it.
-- **The environment is already how the policy reaches the guard**, so this is the same mechanism
-  rather than a second one: the extension reads the variable once, when pi loads it, which is also
-  why `PiAgentSession.setSafetyExtension` restarts the agent the way `setStoragePolicy` does.
-- **The default has to be the guard running.** A missing variable is a `pi` started outside PiKit,
-  and `tools/test-safety-guard.mjs` pins that only the exact string `off` disables it — `OFF`,
-  `false` and an empty value all leave it in force.
-
-The row is greyed out and says why when the runtime image carries no guard at all, which is the
-state an image built before the extension existed is in: a switch that reports a state it cannot
-change is worse than one that is visibly inert. Turning it *off* asks first, because the four
-things the guard refuses are the four things the folder switches above it rely on it for.
-
-`$HOME/.pi/agent/AGENTS.md` is the other half of the agent's context — pi reads it automatically at
-startup — and the installer writes it **only when it is missing**. That is the opposite of
-`models.json` and `settings.json`, which the launcher rewrites on every start, and the difference is
-what the file *is*: those are projections of what the app knows, where a hand edit is a change the
-app cannot see and would otherwise have no way back from, while this is a document. It is editable
-from **Settings → Agent process**, which also offers the default text back, and an update that
-silently replaced it would throw away the sentences a user added about their own project. A stale
-default costs a less well-informed agent rather than an unguarded one, because the rules that have
-to hold are enforced by the extension rather than by the file.
+There is one exception, and it is a migration rather than a policy: a file that is still
+the *previous* default — the one whose text described the single `pikit-safety-guard`
+extension that the tiers replaced — is rewritten once, because that text states rules this
+app no longer has. `AgentContext` carries a generation marker so the same story can be
+told again without guessing at the prose, and anything a reader has edited is left alone.
 
 ## The folder switches are a rule, not a wall
 
-The storage page's switches behaved as a dead letter: grant "all files
-access" once and the agent can read `/sdcard` whatever the switches say. That is
-exactly what the platform allows — the grant belongs to the *process*, the agent
-runs as this app, and there is no unprivileged way to run it as anyone else (a
-chroot or a mount namespace needs root; SAF hands out content URIs, not paths). So
-the switch does not claim to stop the filesystem: it decides what PiKit *offers*
-(`~/storage/*`, created only for the folders that are on) and what PiKit
-*permits*, and the permitting is done by the guard above, because a tool call is
-the only place the agent's actions pass through the app.
+The storage page's switches behave as a dead letter if they are read as "what the agent
+can see": grant "all files access" once and the agent can read `/sdcard` whatever the
+switches say. That is exactly what the platform allows — the grant belongs to the
+*process*, the agent runs as this app, and there is no unprivileged way to run it as
+anyone else (a chroot or a mount namespace needs root; SAF hands out content URIs, not
+paths). So the switch does not claim to stop the filesystem. What it decides is what
+PiKit **offers** (`~/storage/*`, created only for the folders that are on) and what PiKit
+**permits the agent to write**, and the permitting is done by the tiers in §14, because a
+tool call is the only place the agent's actions pass through the app.
 
-`ShellEnvironment.build` publishes all three lists to every process it spawns, in every
-spelling of each path (`StorageAccess.spellingsOf` — `/sdcard/DCIM`,
+`ShellEnvironment.build` publishes the granted folders to every process it spawns, in
+every spelling of each path (`StorageAccess.spellingsOf` — `/sdcard/DCIM`,
 `/storage/emulated/0/DCIM` and `/storage/self/primary/DCIM` are one directory), plus the
 link farm itself (`PIKIT_STORAGE_LINKS`, `name=target` per line, from
 `StorageAccess.linkPlanFor`), and `PiAgentSession.setStoragePolicy` restarts the agent
-when a switch changes, so a cached copy cannot go stale. The guard reads them once at
-startup; with no variables at all it polices nothing, which is what keeps it inert when
-someone runs `pi` by hand in the terminal.
+when a switch changes, so a cached copy cannot go stale. The extension reads them on every
+tool call.
 
 The link farm is published because it is the one spelling the app *itself* hands the
 agent, and it names no shared-storage path: `~/storage/shared/Download/a.txt` is
 `/sdcard/Download/a.txt`, and a rule that only matched the roots let the whole policy be
 stepped around by the app's own convenience link — measured as
 `cat ~/storage/shared/Download/a.txt` being allowed with nothing granted while
-`cat /sdcard/Download/a.txt` was refused.
+`cat /sdcard/Download/a.txt` was refused. The tier model's answer to the same measurement
+is different and simpler: the read is allowed in both spellings now, and the *write* is
+what the grant decides.
 
 `ShellEnvironment.build` also publishes the workspace (`PIKIT_WORKSPACE`), the directory
-a recursive delete may target *and* the one a relative target is resolved against,
-because it is where PiKit spawns the agent. A `pi` run by hand in the Terminal tab has no
-such variable and starts in `$HOME`, so the guard resolves relative targets against
-`$HOME` there — otherwise the workspace's rule would allow a delete of
-`$HOME/node_modules`.
+the agent may write in — see §10 for the list of workspaces and how a conversation picks
+one. The bar is stated in the UI: the page says which folders the agent may write to, and
+that a write naming a folder that is off is refused.
 
-The bar is stated in the UI: the page says the agent may reach the folders that are on
-and that PiKit refuses the rest. It is a policy, not a sandbox — the guard matches paths
-in a command's text, so a path built at runtime or hidden in base64 is not caught — and
-`tools/test-safety-guard.mjs` holds 180 cases across four axes — a recursive
-delete outside the workspace, an ordinary command outside it, ordinary work inside it,
-and pi's own files — plus every command that was allowed before this rule existed.
-
-Measured on the Medium_Phone AVD with nothing granted: the agent asked to run
-`cat /sdcard/Download/notes.txt` came back with *"the pikit-safety-guard intercepted
-the command"* and listed the storage page as the fix. With Download switched on, the
-same call returned the file's contents.
+The old extension's own failure record is worth keeping, because it is what the tiers were
+designed against: measured on the Medium Phone AVD with nothing granted, the agent asked to
+run `cat /sdcard/Download/notes.txt` and came back with *"the pikit-safety-guard intercepted
+the command"*, listing the storage page as the fix. Under the tiers the same call is a
+read and therefore allowed — the policy now draws its line at writes, and the switch's
+job is to decide which writes are permitted rather than which reads are.
 
 Three details of the page itself:
 
@@ -201,8 +157,8 @@ Three details of the page itself:
 - **Any folder can be added** (`Policy.custom`, persisted beside the root names): the
   seven named roots are a shortcut, and "my notes are in `/sdcard/Notes`" was otherwise
   answerable only by granting all of shared storage. A custom folder goes through the
-  same three paths — the link farm, the guard's allowed list and the page's summary — via
-  `linkPlanFor` and `allowedSpellings`, which is why the naming rule has its own test
+  same three paths — the link farm, the extension's writable list and the page's summary
+  — via `linkPlanFor` and `allowedSpellings`, which is why the naming rule has its own test
   (`StoragePolicyTest`): a link name has to be shell-safe (`My Stuff` → `my-stuff`, runs
   of punctuation collapsed) and two folders with the same basename both have to get one
   (`photos`, `photos-2`). The picker is a sheet of our own rows rather than `PickerBody`,

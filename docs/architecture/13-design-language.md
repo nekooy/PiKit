@@ -165,9 +165,9 @@ something"; a switch means "this row is the switch".
 Two row rules are behaviour rather than taste:
 
 - **A row that raises a question is inert, and its switch is the control.** The
-  storage grants and the safety guard ask every time they are turned on or off, so
-  the row does not toggle and the finger has to reach the switch. Backup's switches
-  stay row-toggling, because nothing there asks.
+  storage grants ask every time they are turned on or off, so the row does not toggle
+  and the finger has to reach the switch. Backup's switches stay row-toggling, because
+  nothing there asks.
 - **A `BasicComponent` with `startAction` or `endActions` must not go inside a
   `ListPopupColumn`.** Miuix 0.9.4 sizes a popup column from its children's intrinsic
   sizes, and the component's end-action budget overflows `Int` at the unbounded width

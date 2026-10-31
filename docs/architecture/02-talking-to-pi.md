@@ -93,8 +93,8 @@ button on the maintenance page to force it, and **pi itself is never updated on 
 device** — it is an input of the runtime image, so a new pi arrives with a new PiKit.
 The button that used to run pi's own `npm install -g` in the live prefix was removed
 after an interrupted run left a tree with no `jiti` in it, which 0.86.x loads the bundled
-TypeScript guard extension through: every agent start then failed with
-`Failed to load extension "…/pi-safety-guard.ts": Cannot find module 'jiti'`. The API key is passed through the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for every
+TypeScript extension through: every agent start then failed with
+`Failed to load extension "…": Cannot find module 'jiti'`. The API key is passed through the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for every
 provider Pi already knows, because argv is readable by other processes; the launch carries
 **every** saved profile's key this way, under `PIKIT_KEY_<profile id>` for the ones registered
 through `models.json` (§7.2). `--provider` names the id that profile is registered under, which
@@ -120,10 +120,12 @@ this file is pi's own and holds whatever else the user has set. It has the same
 lifecycle as the `models.json` writer: reused when unchanged, and a failure is logged
 and ignored because the agent still starts without `grep`, `find` and `ls`.
 
-A *project* `$HOME/.pi/settings.json` can replace the global `defaultTools`, and the app's
-default working directory is `$HOME/workspace` — the same trust surface `--approve`
-already opens. The check that fails if this regresses is `PiProcessLauncherTest`'s "never
-passes --tools".
+A *project* `$HOME/.pi/settings.json` can replace the global `defaultTools`, and the agent is
+started in a workspace (`$HOME/workspace` unless the reader picked another) — the same trust
+surface `--approve` already opens, which is why a project setting is a decision the reader makes
+by opening that folder rather than one the app makes for them (§14's tiers cannot see a tool a
+project's own extension registers). The check that fails if this regresses is
+`PiProcessLauncherTest`'s "never passes --tools".
 
 ### What a `pi` started by hand gets
 

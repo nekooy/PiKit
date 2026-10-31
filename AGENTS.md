@@ -9,7 +9,7 @@ the index of every document. This file is the practical part.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 538 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 550 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -320,16 +320,27 @@ the parent's `widthIn(max = …)` already leaves the minimum at zero.
 `wrapContentWidth` is not the fix and is a no-op in that position, because the minimum
 arriving there is already zero.
 
-**The agent's workspace is `$HOME/workspace`, not `$HOME`.** It is where pi is spawned
-(`TermuxEnv.workspace`), what `PIKIT_WORKSPACE` publishes, and the one directory
-`tools/pi-safety-guard.ts` allows a recursive delete in. Changing one of those without
-the others is a guard that either refuses the agent's real work or allows a delete of
-`$HOME/.pi`; `tools/test-safety-guard.mjs` is the command that says which. The guard
-also lives inside the runtime image, so an edit to it has to reach the image:
-`python tools/build-apks.py` does that on its own (`IMAGE_INPUTS` — an image older than
-one of the files it is built from is rebuilt, and the content-layer revision digest
-covers the archive that carries the guard), and an APK built without it ships the
-previous guard.
+**A workspace is the directory pi is spawned in, and it is the write boundary.**
+`$HOME/workspace` is the built-in one (`TermuxEnv.workspace`), never `$HOME` itself:
+`$HOME` holds pi's configuration, the saved sessions, the `~/storage` links and every
+workspace, so a path mistake there damages the agent rather than a project. The
+directory is per conversation (`data/WorkspaceStore`, chosen with the composer's first
+chip) and reaches the agent process as `PIKIT_WORKSPACE`, which
+`tools/pikit-permissions.ts` reads as its writable root. The extension also lives inside
+the runtime image, so an edit to it has to reach the image: `python tools/build-apks.py`
+does that on its own (`IMAGE_INPUTS` — an image older than one of the files it is built
+from is rebuilt, and the content-layer revision digest covers the archive that carries
+the extension), and an APK built without it ships the previous policy.
+
+**Three tiers, and the mode is a file.** `read-only`, `workspace-write` (the default) and
+`full-access` are enforced by `tools/pikit-permissions.ts` on every `tool_call`, and the
+tier is read from `$HOME/.pikit/permission.json` **per call** rather than from the
+environment, so a change takes effect without restarting the agent. That one design
+decision is what makes the composer's control usable; do not move it back into
+`ShellEnvironment` (ARCHITECTURE §14 has the reasoning and what it cost). `python
+tools/build-apks.py` covers it with `tools/test-permissions.mjs` — a rule table, not a
+sanity check: every tier's refusal and its allowed counterpart is a case, and an
+`AGENTS.md` sentence that disagrees with one is a bug (§14, `env/AgentContext`).
 
 ## Commits — commit finished work yourself, push only when asked
 
@@ -492,6 +503,10 @@ prompt, which billed the idle gap to a turn that had already finished.
   `dumpsys window` calls it visible and `dumpsys input` calls it `NOT_VISIBLE,
   alpha=0` with a blank `screencap` — and `uiautomator dump` still returns a correct
   tree, so it looks like a broken instrument rather than a broken backend.
+- **A tier's refusal is a sentence the model can act on, not a wall.** The extension
+  matches paths in a command's *text*; a path built at runtime is not caught. Say
+  "checked on every tool call", never "prevented" — the interface and the manual use the
+  same words on purpose.
 - **`pkg install` relocation has two paths** — apt's `DPkg::Pre-Install-Pkgs` hook
   (`pikit-relocate --apt-list`, which reads the archives apt is about to hand to
   dpkg from stdin), plus a `bin/dpkg` wrapper around a renamed `bin/dpkg.real`.

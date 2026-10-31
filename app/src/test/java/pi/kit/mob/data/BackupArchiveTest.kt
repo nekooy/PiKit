@@ -122,6 +122,53 @@ class BackupArchiveTest {
     }
 
     @Test
+    fun `a second workspace travels by its path and comes back without being listed`() {
+        val root = temporary.newFolder("multi")
+        val sourceHome = File(root, "source/files/home")
+        val builtIn = File(sourceHome, "workspace").apply { mkdirs() }
+        val extra = File(sourceHome, "projects/app").apply { mkdirs() }
+        File(builtIn, "main.kt").writeText("fun main() {}\n")
+        File(extra, "app.kt").writeText("fun app() {}\n")
+
+        val sourcePaths = BackupPaths(
+            filesDir = File(root, "source/files"),
+            piConfigDir = File(sourceHome, ".pi/agent").apply { mkdirs() },
+            sessionDir = File(root, "source/files/pi-sessions").apply { mkdirs() },
+            workspace = builtIn,
+            exportDir = File(sourceHome, "export").apply { mkdirs() },
+            home = sourceHome,
+            workspaces = listOf(extra),
+        )
+        val zip = File(root, "out.zip")
+        BackupArchive(FakePreferences(), sourcePaths)
+            .write(zip.outputStream(), setOf(BackupCategory.WORKSPACE), includeApiKeys = true)
+
+        // The entry names the path it came from, relative to `$HOME`: that is the only
+        // spelling a restore on another install could still decode.
+        assertNotNull(entryText(zip, "workspaces/projects/app/app.kt"))
+
+        // A target that has never heard of that workspace — the state a fresh install is
+        // in — still puts the file back where it was.
+        val targetHome = File(root, "target/files/home")
+        val targetBuiltIn = File(targetHome, "workspace").apply { mkdirs() }
+        val targetPaths = BackupPaths(
+            filesDir = File(root, "target/files"),
+            piConfigDir = File(targetHome, ".pi/agent").apply { mkdirs() },
+            sessionDir = File(root, "target/files/pi-sessions").apply { mkdirs() },
+            workspace = targetBuiltIn,
+            exportDir = File(targetHome, "export").apply { mkdirs() },
+            home = targetHome,
+        )
+        val target = BackupArchive(FakePreferences(), targetPaths)
+        val staging = File(root, "staging").apply { mkdirs() }
+        val manifest = target.manifest(zip)!!
+        target.applyAll(staging.apply { target.extract(zip, manifest.included, this) }, manifest.included)
+
+        assertEquals("fun app() {}\n", File(targetHome, "projects/app/app.kt").readText())
+        assertEquals("fun main() {}\n", File(targetBuiltIn, "main.kt").readText())
+    }
+
+    @Test
     fun `every category packs something`() {
         val source = device("source")
 

@@ -2,7 +2,6 @@ package pi.kit.mob.env
 
 import android.content.Context
 import android.os.Build
-import pi.kit.mob.data.SettingsStore
 import java.io.File
 
 /**
@@ -33,34 +32,31 @@ object ShellEnvironment {
     const val DNS_PINS_FILE = "dns-pins.txt"
 
     /**
-     * Shared storage, to the agent's guard: which trees exist and which are granted.
+     * The shared-storage folders the user granted, as extra writable roots.
      *
-     * The guard in `tools/pi-safety-guard.ts` refuses a `bash` call that names a
-     * path inside the first list but outside the second. This is the only place
-     * that policy *can* be enforced: Android grants "all files access" to the
-     * process, the agent runs as this app, and the storage page's switches would
-     * otherwise only decide which `~/storage` links exist — which is a convenience
-     * for the agent, not a limit on it.
+     * `tools/pikit-permissions.ts` refuses a *write* outside the agent's workspace, and
+     * a folder the user switched on is a grant: the storage page's promise was always
+     * "PiKit permits these and refuses the rest", and this is the list that promise
+     * reaches the extension through. Reads are free in every tier, so the old
+     * "which trees exist" half is gone with the rules that needed it.
      *
-     * Both are colon-separated in every spelling (see `StorageAccess.spellingsOf`),
-     * and the agent is restarted whenever the policy changes, so a cached copy
-     * cannot go stale.
+     * Colon-separated in every spelling (see `StorageAccess.spellingsOf`), and the
+     * extension reads it on every tool call, so a folder switched on takes effect on
+     * the next call — though the agent is restarted anyway, because `~/storage` itself
+     * is created and removed by the same change.
      */
-    const val STORAGE_ROOTS_VAR = "PIKIT_STORAGE_ROOTS"
-
     const val STORAGE_ALLOWED_VAR = "PIKIT_STORAGE_ALLOWED"
 
     /**
-     * The `~/storage` link farm, to the agent's guard: link name to target.
+     * The `~/storage` link farm, to the agent's permission extension: link name to target.
      *
      * Newline-separated `name=target` pairs, because a target is an absolute path
-     * under `/sdcard` and a *custom* folder's name can legally contain a colon.
-     * The guard has to be able to map the path a command actually names —
-     * `~/storage/shared/Download/a.txt` — onto the shared-storage path the policy
-     * is written in, or the folder switches are defeated by the one spelling PiKit
-     * itself offers the agent (measured: `cat ~/storage/shared/Download/a.txt` was
-     * allowed with no folder granted, while `cat /sdcard/Download/a.txt` was
-     * refused).
+     * under `/sdcard` and a *custom* folder's name can legally contain a colon. The
+     * extension has to be able to map the path a command actually names —
+     * `~/storage/downloads/a.txt` — onto the shared-storage path the grant is written
+     * in, or the `~/storage` convenience PiKit itself hands the agent would be judged
+     * as `$HOME/storage` (inside nothing writable) while `/sdcard/Download` was
+     * writable.
      *
      * Only the links the farm will actually hold are published
      * ([StorageAccess.linkPlanFor]), so a revoked folder has no name to translate.
@@ -68,13 +64,13 @@ object ShellEnvironment {
     const val STORAGE_LINKS_VAR = "PIKIT_STORAGE_LINKS"
 
     /**
-     * The agent's workspace, to the agent's guard: the one directory under
-     * `$HOME` a recursive delete may target.
+     * The directory the agent was spawned in: its working directory, and the writable
+     * root the permission extension judges every write against.
      *
-     * Published rather than assumed, because the user can point the working
-     * directory anywhere ([pi.kit.mob.data.PiSettings.workingDir]). The guard falls
-     * back to `$HOME/workspace` when this is absent, so a hand-run `pi` still gets
-     * the same rule.
+     * Published rather than assumed, because the reader picks the workspace from the
+     * composer ([pi.kit.mob.data.WorkspaceStore]) and it is not always
+     * `$HOME/workspace`. The extension falls back to `$HOME/workspace` when this is
+     * absent, so a hand-run `pi` still gets the same rule.
      */
     const val WORKSPACE_VAR = "PIKIT_WORKSPACE"
 
@@ -137,7 +133,6 @@ object ShellEnvironment {
         } else {
             StorageAccess.Policy.NONE
         }
-        put(STORAGE_ROOTS_VAR, StorageAccess.rootSpellings().joinToString(":"))
         put(STORAGE_ALLOWED_VAR, StorageAccess.allowedSpellings(granted).joinToString(":"))
         // The farm the environment offers, by name: blank when nothing is granted,
         // which is also when `~/storage` does not exist at all.
@@ -150,15 +145,11 @@ object ShellEnvironment {
             ),
         )
 
-        // Whether the tool-call guard is in force, for the same reason and with the
-        // same reach: the extension reads it once when pi loads, and a `pi` typed in
-        // the terminal has to be guarded — or unguarded — exactly like the agent.
-        // `on` is written rather than omitted so that the switch's state is visible
-        // in `/proc/<pid>/environ` instead of being an absence.
-        put(
-            SafetyGuard.ENV_VAR,
-            if (SettingsStore.safetyExtension(context)) SafetyGuard.ENABLED else SafetyGuard.DISABLED,
-        )
+        // Which file states the permission tier. Published rather than assumed so the
+        // extension has one documented source for it, and so a development build can
+        // point the agent at another file; the extension's own fallback is the same
+        // path, which is what a hand-run `pi` in the terminal tab relies on.
+        put(PermissionPolicy.ENV_VAR, PermissionPolicy.file(env).absolutePath)
 
         // Development hook: pin a hostname to an address inside Node.
         //

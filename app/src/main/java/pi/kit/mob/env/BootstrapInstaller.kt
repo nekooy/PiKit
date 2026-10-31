@@ -145,7 +145,7 @@ internal fun parseContentRoots(text: String): List<String> {
  * It is also two *layers*, and the split is the update model. The seed
  * (`bootstrap.zip`, `overlay.zip`) is the dpkg-managed environment — unpacked
  * once, then evolved by `pkg upgrade`. The content layer (`content.zip`) is
- * what this app owns — pi, the bundled extension, the safety guard, the
+ * what this app owns — pi, the bundled extension, the permission extension, the
  * relocator — and an app update replaces those paths in place ([replaceContent])
  * without touching an installed package or re-extracting anything else.
  *
@@ -250,14 +250,14 @@ class BootstrapInstaller(private val context: Context) {
 
             if (env.isUpToDate(plan.revision)) {
                 // The seed is current, but the content layer may not be: an app
-                // update that moved only pi, the extension or the guard changes
-                // `content.zip` and leaves the environment's bytes untouched.
+                // update that moved only pi, the extension or the permission policy
+                // changes `content.zip` and leaves the environment's bytes untouched.
                 // Replacing those paths in place is seconds and touches no
                 // installed package; see [replaceContent].
                 if (!env.isContentUpToDate(plan.contentRevision)) {
                     onProgress(Progress.Working(0f, "Updating components"))
                     replaceContent(plan)
-                    // After the swap: the safety guard is copied out of the
+                    // After the swap: the permission extension is copied out of the
                     // content layer into `$HOME`, and that copy has to come
                     // from the tree that is now in place.
                     prepareHome()
@@ -443,13 +443,17 @@ class BootstrapInstaller(private val context: Context) {
         chmodPrivate(env.home)
         env.tmpDir.mkdirsOrThrow()
         env.piConfigDir.mkdirsOrThrow()
-        // The agent's working directory, created here rather than at the first
-        // launch: `$HOME` is the agent's home, not its project, and a directory
-        // that exists before pi starts is one the guard can reason about. See
-        // [TermuxEnv.workspace].
+        // The built-in workspace, created here rather than at the first launch:
+        // `$HOME` is the agent's home, not its project, and a directory that exists
+        // before pi starts is one the permission extension can name as a writable
+        // root. See [TermuxEnv.workspace].
         env.workspace.mkdirsOrThrow()
 
-        installSafetyGuard()
+        installPermissionExtension()
+        // The tier the reader last chose, written where the extension reads it. Written
+        // on install as well as on a change so a restored backup (which carries the
+        // preference but not `$HOME`) starts on the tier the user had.
+        PermissionPolicy.publish(context, env)
 
         // Describe the sandbox to the agent. Pi reads AGENTS.md automatically
         // from `$HOME/.pi/agent/AGENTS.md`; being explicit here avoids a class of
@@ -464,8 +468,8 @@ class BootstrapInstaller(private val context: Context) {
     }
 
     /**
-     * Copies the tool-call guard out of the runtime image into pi's global
-     * extension directory.
+     * Copies the permission extension out of the runtime image into pi's global
+     * extension directory, and removes the guard it replaced.
      *
      * The image is replaced wholesale on every runtime update, so the file has
      * to be re-installed each time: this is why it is copied rather than loaded
@@ -473,14 +477,26 @@ class BootstrapInstaller(private val context: Context) {
      * pi reads at startup, and it survives a reinstall because `$HOME` lives
      * outside `$PREFIX`.
      *
-     * A missing staged file is not fatal. It means an image built before this
-     * guard existed, and the app should still start — the agent-side rules in
-     * AGENTS.md are the second line of defence.
+     * The removal is not tidiness. A build before this one installed
+     * `pi-safety-guard.ts` in the same directory, pi loads every module it finds
+     * there, and that guard refuses commands the three tiers allow — so an install
+     * that upgraded would be judged by two policies at once, and the stricter one
+     * would win with no switch anywhere that turns it off. It has to go before the
+     * new file arrives.
+     *
+     * A missing staged file is not fatal. It means an image built before the
+     * extension existed, and the app should still start — the rules in AGENTS.md are
+     * the second line of defence.
      */
-    private fun installSafetyGuard() {
-        val source = File(env.prefix, SAFETY_GUARD_SOURCE)
+    private fun installPermissionExtension() {
+        File(env.piConfigDir, "extensions").let { directory ->
+            File(directory, RETIRED_GUARD_NAME).takeIf { it.isFile }?.let {
+                if (it.delete()) Log.i(TAG, "removed the retired safety guard")
+            }
+        }
+        val source = File(env.prefix, PERMISSION_EXTENSION_SOURCE)
         if (!source.isFile) return
-        val destination = SafetyGuard.file(env)
+        val destination = File(env.piConfigDir, "extensions/$PERMISSION_EXTENSION_NAME")
         runCatching {
             destination.parentFile?.mkdirsOrThrow()
             // Only rewritten when it actually differs, so the file's mtime is a
@@ -518,8 +534,8 @@ class BootstrapInstaller(private val context: Context) {
     // ------------------------------------------------------- content layer
 
     /**
-     * Replaces the content layer — pi, the extension, the guard, the relocator
-     * — in place, and leaves the environment alone.
+     * Replaces the content layer — pi, the extension, the permission extension, the
+     * relocator — in place, and leaves the environment alone.
      *
      * Everything under the roots the archive's own manifest names is deleted
      * and re-created from `content.zip`; nothing else in the prefix is touched,
@@ -1156,8 +1172,14 @@ class BootstrapInstaller(private val context: Context) {
 
         const val SYMLINKS_ENTRY = "SYMLINKS.txt"
 
-        /** Where the image keeps the tool-call guard, relative to `$PREFIX`. */
-        const val SAFETY_GUARD_SOURCE = "share/pikit/pi-safety-guard.ts"
+        /** Where the image keeps the permission extension, relative to `$PREFIX`. */
+        const val PERMISSION_EXTENSION_SOURCE = "share/pikit/pikit-permissions.ts"
+
+        /** The name pi discovers the extension by, inside its `extensions` directory. */
+        const val PERMISSION_EXTENSION_NAME = "pikit-permissions.ts"
+
+        /** The extension this one replaced, deleted on install — see [installPermissionExtension]. */
+        const val RETIRED_GUARD_NAME = "pi-safety-guard.ts"
 
         /** The package's own tool for choosing the `$LD_PRELOAD` library. */
         const val PRELOAD_SETUP_TOOL = "bin/termux-exec-ld-preload-lib"

@@ -20,8 +20,8 @@ It does, in order:
      parser's suite, and the tools that check what Gradle cannot see: the images
      (including that the packed relocator still passes its own `--selfcheck`), the
      relocator against real `.deb` files, the manual's reflow and the terminal
-     banners, and the agent's delete guard. `--skip-tests` bypasses them, which is
-     the only reason that flag exists.
+     banners, and the permission extension's rule table. `--skip-tests` bypasses
+     them, which is the only reason that flag exists.
   4. **The four APKs** — `arm64`/`x64` × `debug`/`release` — **one Gradle
      invocation for all of them**, so they share one configuration phase and the
      four variant pipelines run in parallel (`org.gradle.parallel=true`). A
@@ -114,7 +114,7 @@ IMAGE_FILES = (
 #: This exists because *nothing else in the build knows the relationship*: Gradle sees the
 #: archives as assets, so it repackages when they change but cannot tell that they are out
 #: of date, and `verify-runtime-image.py` checks that an image is self-consistent, not that
-#: it is current. Left alone, an edit to the agent's delete guard, the relocator or the
+#: it is current. Left alone, an edit to the permission extension, the relocator or the
 #: `dpkg` wrapper ships the *previous* one — and the failure is worse than a stale file:
 #: the image's revision stamps do not move either, so a device that already installed the
 #: previous APK keeps its old unpacked runtime *after* installing the new APK.
@@ -134,7 +134,7 @@ IMAGE_INPUTS = (
     # Copied into the overlay, by content, from this repository.
     "tools/pikit-relocate.js",
     "tools/pikit-dpkg.sh",
-    "tools/pi-safety-guard.ts",
+    "tools/pikit-permissions.ts",
     "tools/storage-self-test.sh",
 )
 
@@ -319,7 +319,7 @@ def check_prerequisites() -> list[str]:
         missing.append("java (a JDK 17-26 on PATH, or org.gradle.java.home set)")
 
     if shutil.which("node") is None:
-        missing.append("node (the runtime image builder and the guard tests need it)")
+        missing.append("node (the runtime image builder and the permission extension's tests need it)")
 
     if sys.version_info < (3, 10):
         missing.append(f"python 3.10+ (this is {sys.version.split()[0]})")
@@ -527,9 +527,9 @@ def ensure_images(refresh: bool, rebuilt: list[str]) -> bool:
 
     Out of date is part of "cannot be built without them" rather than a convenience: the
     archives are what Gradle packages, nothing in the build relates them to the files in
-    `tools/` they are made of, and an image built from a previous version of the agent's
-    delete guard is not merely old — its revision does not move either, so a device that
-    already has the previous APK never unpacks the new one. See [IMAGE_INPUTS].
+    `tools/` they are made of, and an image built from a previous version of the
+    permission extension is not merely old — its revision does not move either, so a device
+    that already has the previous APK never unpacks the new one. See [IMAGE_INPUTS].
 
     [rebuilt] collects the flavours this actually built, which is what lets the caller say
     that `--skip-tests` left them unverified — a fact about what happened rather than about
@@ -624,7 +624,11 @@ def run_tests() -> bool:
         # and is the half that notices — `meta` sat missing for one release cycle
         # while the bundle already shipped it.
         ("the provider table", lambda: python_tool("check-provider-table.py")),
-        ("the agent guard", lambda: node_tool("test-safety-guard.mjs")),
+        # The three permission tiers are the only thing between the agent and the
+        # user's files, and the table in `test-permissions.mjs` is what says a
+        # refusal and its full-access escape cannot drift apart. It runs the same
+        # `checkToolCall()` the extension runs, from the file the image ships.
+        ("the permission tiers", lambda: node_tool("test-permissions.mjs")),
         # The README's icon is a second copy of the launcher icon, which is a thing
         # that drifts: nothing about editing the vector would remind anyone that the
         # picture at the top of the README is now wrong. Cheap (it reads two files)

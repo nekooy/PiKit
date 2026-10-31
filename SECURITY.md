@@ -41,11 +41,13 @@ builder:
   fetch in the Terminal tab. The absence of the rest is checkable in the manifest and
   the dependency list.
 - **The bundled runtime is a real Linux userland with network access**, and the
-  agent inside it can run shell commands by design. `tools/pi-safety-guard.ts`
-  refuses the calls that destroy data and `env/SafeDelete.kt` refuses a recursive
-  delete outside the app's own directory — those are conveniences and guard rails,
-  not a container. `docs/ARCHITECTURE.md` §5 says what each layer does and does not
-  cover.
+  agent inside it can run shell commands by design. `tools/pikit-permissions.ts`
+  enforces three tiers on every tool call — `read-only`, `workspace-write` (the
+  default) and `full-access` — and `env/SafeDelete.kt` refuses a recursive delete
+  outside the app's own directory. Those are policy and guard rails, not a container:
+  the extension matches paths in a command's *text*, so a path built at runtime is not
+  caught, and a tier the reader switches to `full-access` refuses nothing.
+  `docs/ARCHITECTURE.md` §14 says what each tier does and does not cover.
 - **Shared storage is off until you grant it**, one folder at a time, and the
   "All files access" grant is the one permission that is not scoped — the app explains
   it once, on first launch, and offers the system page; the folder switches are the

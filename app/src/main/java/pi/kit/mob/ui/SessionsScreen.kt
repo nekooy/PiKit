@@ -24,6 +24,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
@@ -36,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import pi.kit.mob.data.Workspace
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
@@ -180,6 +182,19 @@ fun SessionsScreen(
     // running the previous one's snippets would be highlighted against text that
     // does not contain what is in the field.
     val snippets = if (matchedQuery == query.trim()) matches else emptyMap()
+
+    // The workspaces a conversation can have come from, so a group is headed by the name
+    // the composer's chip shows rather than by a path segment: the list and the chat page
+    // name the same folder the same way, which is what lets a reader recognise the one the
+    // conversation came from.
+    val context = LocalContext.current
+    val settings by session.settingsStore.settings.collectAsState()
+    val workspaces = rememberWorkspaceList(
+        context = context,
+        env = session.env,
+        savedDefault = settings.defaultWorkspace,
+    )
+    val defaultWorkspacePath = settings.defaultWorkspace.ifBlank { session.env.workspacePath }
 
     val visible = remember(summaries, query, snippets) {
         if (query.isBlank()) {
@@ -363,6 +378,8 @@ fun SessionsScreen(
                 else -> ConversationList(
                     visible = visible,
                     text = text,
+                    workspaces = workspaces,
+                    defaultPath = defaultWorkspacePath,
                     selecting = selecting,
                     selected = selected,
                     snippets = snippets,
@@ -379,7 +396,13 @@ fun SessionsScreen(
                             switchTarget = item
                             switchUp = true
                         } else {
-                            session.switchSession(item)
+                            // `openSession` rather than `switchSession`: a conversation
+                            // records the directory it was started in, and one from
+                            // another workspace has to be opened *there* — the agent is
+                            // relaunched in it and rebound to this file. A pi standing in
+                            // this workspace would show the old transcript while every
+                            // tool call acted in the wrong tree.
+                            session.openSession(item)
                             onOpened()
                         }
                     },
@@ -426,7 +449,7 @@ fun SessionsScreen(
         onConfirm = {
             val target = switchTarget ?: return@InterruptTurnDialog
             switchUp = false
-            session.switchSession(target, interrupt = true)
+            session.openSession(target, interrupt = true)
             onOpened()
         },
     )
@@ -492,6 +515,8 @@ fun SessionsScreen(
 private fun ConversationList(
     visible: List<PiAgentSession.SessionSummary>,
     text: Strings,
+    workspaces: List<Workspace>,
+    defaultPath: String,
     selecting: Boolean,
     selected: Set<String>,
     snippets: Map<String, String>,
@@ -504,6 +529,17 @@ private fun ConversationList(
 ) {
     val pinnedVisible = visible.filter { it.pinned }
     val otherVisible = visible.filterNot { it.pinned }
+    // One group per workspace, the most recent group first, and the conversations whose
+    // file recorded no directory last. The pinned shelf stays above all of them: pinning is
+    // a decision about a conversation that crosses workspaces, and burying a pinned row
+    // inside the group it happens to come from is how it stops being findable.
+    val groups = sessionGroups(
+        sessions = otherVisible,
+        workspaces = workspaces,
+        defaultPath = defaultPath,
+        unknownLabel = text.sessions.groupUnknown,
+        chip = text.chat::workspaceChip,
+    )
 
     LazyColumn(
         // The history page's body, so it takes the page's elastic end: the list is
@@ -545,21 +581,92 @@ private fun ConversationList(
                 }
             }
         }
-        items(otherVisible, key = { it.path }) { item ->
-            ConversationRow(
-                item = item,
-                text = text,
-                selecting = selecting,
-                checked = item.path in selected,
-                snippet = snippets[item.path],
-                pinned = false,
-                onToggleChecked = { onToggle(item.path) },
-                onOpen = { onOpen(item) },
-                onRename = { onRename(item) },
-                onTogglePin = { onTogglePin(item) },
-                onDelete = { onDelete(item) },
-            )
+        groups.forEach { group ->
+            item(key = "workspace-" + group.key) {
+                SmallTitle(text = text.sessions.groupTitle(group.label, group.sessions.size))
+            }
+            items(group.sessions, key = { it.path }) { item ->
+                ConversationRow(
+                    item = item,
+                    text = text,
+                    selecting = selecting,
+                    checked = item.path in selected,
+                    snippet = snippets[item.path],
+                    pinned = false,
+                    onToggleChecked = { onToggle(item.path) },
+                    onOpen = { onOpen(item) },
+                    onRename = { onRename(item) },
+                    onTogglePin = { onTogglePin(item) },
+                    onDelete = { onDelete(item) },
+                )
+            }
         }
+    }
+}
+
+/** One workspace's conversations, as a heading draws them. */
+internal data class SessionGroup(
+    /** Stable across a recomposition and unique in the list: the workspace's path. */
+    val key: String,
+    val label: String,
+    val sessions: List<PiAgentSession.SessionSummary>,
+)
+
+/**
+ * The conversations by the workspace they came from, most recently used group first.
+ *
+ * The grouping key is the `cwd` pi recorded in the session file, which is the only place
+ * a saved conversation says where it was started — so this works for a conversation from
+ * before the app had a workspace picker too, and for one started by a `pi` typed in the
+ * terminal.
+ *
+ * A directory that is no longer a workspace still gets a group, labelled by its last path
+ * segment: a conversation from a folder the reader deleted is one they may still want to
+ * read, and hiding it because its workspace left the list would be a history page that
+ * loses conversations. A file with no recorded directory goes to the one group with no
+ * path at all.
+ *
+ * Order: the group holding the most recently modified conversation first. Within a group
+ * the order is the list's own — pinned removed, then by modification time — because the
+ * caller hands them over already sorted.
+ */
+internal fun sessionGroups(
+    sessions: List<PiAgentSession.SessionSummary>,
+    workspaces: List<Workspace>,
+    defaultPath: String,
+    unknownLabel: String,
+    chip: (String, Boolean) -> String,
+): List<SessionGroup> {
+    if (sessions.isEmpty()) return emptyList()
+    val byPath = workspaces.associateBy { it.path }
+    val groups = LinkedHashMap<String, MutableList<PiAgentSession.SessionSummary>>()
+    for (session in sessions) {
+        val path = session.workspace.orEmpty()
+        groups.getOrPut(path) { mutableListOf() }.add(session)
+    }
+    return groups.map { (path, items) ->
+        val workspace = byPath[path]
+        val label = when {
+            path.isBlank() -> unknownLabel
+            // The name the composer's chip gives it, `（默认）` included: the two screens
+            // must not disagree about which folder the default workspace is.
+            workspace != null -> chip(workspace.label, path == defaultPath)
+            else -> java.io.File(path).name.ifBlank { path }
+        }
+        SessionGroup(
+            key = path.ifBlank { "unknown" },
+            label = label,
+            sessions = items,
+        )
+    }.sortedWith(
+        compareByDescending<SessionGroup> { group ->
+            group.sessions.maxOfOrNull { it.modifiedAt } ?: 0L
+        },
+    ).sortedBy { group ->
+        // The group with no recorded directory is last whatever its timestamps: it is the
+        // one group a reader cannot name, and sorting it to the top would push the
+        // workspaces they recognise below a heading that says "somewhere".
+        if (group.key == "unknown") 1 else 0
     }
 }
 

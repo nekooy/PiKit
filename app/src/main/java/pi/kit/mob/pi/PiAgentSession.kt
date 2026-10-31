@@ -6,11 +6,13 @@ import android.util.Log
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
+import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.PiConfigSnapshot
 import pi.kit.mob.data.PiProvider
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.ProfileAddressing
 import pi.kit.mob.data.SettingsStore
+import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.apiName
 import pi.kit.mob.data.baseUrlName
 import pi.kit.mob.data.catalogueRefreshEnvironment
@@ -19,6 +21,7 @@ import pi.kit.mob.env.BootstrapInstaller
 import pi.kit.mob.env.BundledExtension
 import pi.kit.mob.env.BundledImage
 import pi.kit.mob.env.PackageManifest
+import pi.kit.mob.env.PermissionPolicy
 import pi.kit.mob.env.PrefixPatcher
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.env.TermuxEnv
@@ -328,6 +331,108 @@ class PiAgentSession private constructor(context: Context) {
         return links
     }
 
+    // ------------------------------------------------------------- workspace
+
+    /**
+     * The directory the agent works in — the workspace of the conversation on screen.
+     *
+     * Empty until the first launch resolves it, which is also when the app's default
+     * workspace is read: this is one process with one working directory, so a
+     * conversation that lived somewhere else is reopened by relaunching the agent there
+     * rather than by switching a pi that is already standing in the old tree. See
+     * [selectWorkspace] and [openSession].
+     */
+    private val _workspace = MutableStateFlow("")
+
+    /** The workspace in force, as an absolute path. Read by the composer's chip. */
+    val workspace: StateFlow<String> = _workspace.asStateFlow()
+
+    /**
+     * The workspace the next launch uses, resolving the saved default the first time.
+     *
+     * A remembered path that has since been deleted resolves to the built-in workspace
+     * through [WorkspaceStore.default] rather than launching pi in a directory that is
+     * not there — pi would exit with a code the banner cannot explain.
+     */
+    private fun launchWorkspace(): String {
+        val current = _workspace.value
+        if (current.isNotBlank() && File(current).isDirectory) return current
+        val resolved = restoredWorkspace() ?: WorkspaceStore.default(appContext, env).path
+        _workspace.value = resolved
+        return resolved
+    }
+
+    /**
+     * The workspace the conversation being restored belongs to, or null.
+     *
+     * Only when the app is set to come back to the last conversation: a launch that opens a
+     * *new* one starts in the default workspace, which is what that setting means. When it
+     * does restore, the directory is the one the session file records — the same rule
+     * [openSession] applies to a row the reader taps, so a cold start and a reopen cannot
+     * disagree about where a conversation lives.
+     */
+    private fun restoredWorkspace(): String? {
+        if (settingsStore.read().openNewOnLaunch) return null
+        val path = lastRememberedSession() ?: return null
+        val workspace = SessionMetadata.workspaceOf(File(path)) ?: return null
+        return workspace.takeIf { File(it).isDirectory }
+    }
+
+    /**
+     * Switches to [path] for a *new* conversation: the agent is relaunched there.
+     *
+     * A relaunch, not a `cd`: the workspace is the child process's working directory and
+     * the base every relative path in a tool call resolves against, and pi reads it once
+     * at startup. The remembered session is cleared before the restart so the new process
+     * does not reopen the conversation that belongs to the workspace being left — see
+     * [restoreRememberedSession], which would otherwise do exactly that.
+     *
+     * @param interrupt false refuses the switch while an answer is streaming, which is
+     *   the same rule [newSession] follows and the same dialog asks about it.
+     */
+    fun selectWorkspace(path: String, interrupt: Boolean = false) {
+        val wanted = path.trim()
+        if (wanted.isBlank() || wanted == _workspace.value) return
+        if (turnInFlight && !interrupt) return
+        _workspace.value = wanted
+        rememberSessionPath(null)
+        // The page must stop claiming the old conversation while the process is being
+        // replaced: the relaunch's handshake opens a fresh session, and the old turns
+        // were only ever the old process's.
+        _conversation.value = ConversationState()
+        if (_agent.value is AgentStatus.Running) {
+            restartAgent()
+        } else {
+            scope.launch { startAgent() }
+        }
+    }
+
+    /**
+     * Reopens a saved conversation, relaunching the agent if it lived elsewhere.
+     *
+     * The session file records the `cwd` pi was started in (`{"type":"session",…,
+     * "cwd":…}`, its first line), so a conversation from another workspace has to be
+     * opened *there*: switching a pi that is standing in this workspace to a session from
+     * that one would show the old transcript while every tool call acted in the wrong
+     * tree.
+     */
+    fun openSession(target: SessionSummary, interrupt: Boolean = false) {
+        if (turnInFlight && !interrupt) return
+        val elsewhere = target.workspace
+            ?.takeIf { it.isNotBlank() && it != _workspace.value && File(it).isDirectory }
+        if (elsewhere == null) {
+            switchSession(target, interrupt)
+            return
+        }
+        _workspace.value = elsewhere
+        // Remembered before the restart: `restoreRememberedSession` rebinds the fresh
+        // process to this path, which is what makes the relaunch land on the
+        // conversation the reader tapped instead of an empty one.
+        rememberSessionPath(target.path)
+        _conversation.value = ConversationState(loadingSession = true)
+        restartAgent()
+    }
+
     /** The storage policy in force, for the Settings page. */
     fun storagePolicy(): StorageAccess.Policy = StorageAccess.readPolicy(appContext)
 
@@ -347,17 +452,16 @@ class PiAgentSession private constructor(context: Context) {
     }
 
     /**
-     * Puts the tool-call guard in force, or takes it out of force.
+     * Changes the permission tier.
      *
-     * The agent is restarted for the same reason [setStoragePolicy] restarts it: the
-     * flag is read once, from the environment, when pi loads the extension, so a
-     * running process would keep the answer it started with. Nothing is installed or
-     * removed either way — see `SafetyGuard` for why the switch is about the guard
-     * being *in force* rather than present.
+     * No restart, and that is the point of the tier being a file rather than an
+     * environment variable: `tools/pikit-permissions.ts` reads it on every `tool_call`,
+     * so the next thing the agent does is judged by the tier the reader just picked —
+     * mid-conversation, with the turn in flight if there is one. See [PermissionMode].
      */
-    fun setSafetyExtension(enabled: Boolean) {
-        settingsStore.update { it.copy(safetyExtension = enabled) }
-        if (_agent.value is AgentStatus.Running) scheduleRestart()
+    fun setPermissionMode(mode: PermissionMode) {
+        settingsStore.update { it.copy(permissionMode = mode) }
+        PermissionPolicy.write(env, mode)
     }
 
     // ---------------------------------------------------------------- agent
@@ -452,12 +556,18 @@ class PiAgentSession private constructor(context: Context) {
             // on every launch rather than from the settings page, because the page may
             // never be opened and the default has to hold anyway.
             webSearch.ensureDocument()
-            // `$HOME/workspace`, not `$HOME`: see [TermuxEnv.workspace]. A user
-            // who set their own working directory keeps it — the guard is told the
-            // same path through `PIKIT_WORKSPACE`, so "the workspace" and where pi
-            // actually runs can never be two different directories.
-            val workingDir = File(settings.workingDir.ifBlank { env.workspacePath })
+            // `$HOME/workspace`, not `$HOME`: see [TermuxEnv.workspace]. The reader may
+            // have started this conversation in another workspace ([WorkspaceStore]),
+            // and the extension is told the same path through `PIKIT_WORKSPACE`, so "the
+            // workspace" and where pi actually runs can never be two different
+            // directories.
+            val workingDir = File(launchWorkspace())
             workingDir.mkdirs()
+            // The tier the reader last chose, written before the process starts so the
+            // first tool call of the launch is already judged by it: the preference is
+            // authoritative, and a restored backup or an interrupted write could have
+            // left the file behind.
+            PermissionPolicy.write(env, settings.permissionMode)
             sessionDir.mkdirs()
             Triple(settings, workingDir, modelsJsonFailure)
         }
@@ -811,7 +921,9 @@ class PiAgentSession private constructor(context: Context) {
      *   agent is restarted to read it.
      */
     internal suspend fun requestCatalogueRefresh(): Boolean {
-        val workingDir = File(settingsStore.read().workingDir.ifBlank { env.workspacePath })
+        val workingDir = File(
+            workspace.value.ifBlank { WorkspaceStore.default(appContext, env).path },
+        )
         Log.i(TAG, "manual model catalogue refresh requested")
         return refreshCatalogueNow(workingDir)
     }
@@ -1022,6 +1134,12 @@ class PiAgentSession private constructor(context: Context) {
         val messageCount: Int,
         val modifiedAt: Long,
         val pinned: Boolean,
+        /**
+         * The directory pi recorded in the session file, or null for one written before
+         * pi recorded a `cwd`. It is what the history page groups by, and what
+         * [openSession] relaunches the agent into.
+         */
+        val workspace: String? = null,
     ) {
         val fileName: String get() = File(path).name
     }
@@ -1084,6 +1202,7 @@ class PiAgentSession private constructor(context: Context) {
                 messageCount = meta.messageCount,
                 modifiedAt = modifiedAt,
                 pinned = file.name in pinned,
+                workspace = meta.workspace,
             )
         }.also {
             // A conversation deleted while the app was running would otherwise be

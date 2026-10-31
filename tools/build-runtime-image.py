@@ -24,7 +24,7 @@ The three archives are two layers, and the split is the update model:
     Termux way, through `pkg upgrade`; an app update that does not change
     these bytes never re-extracts them.
   * The **content layer** (`content.zip`) is what this app owns: pi, the
-    web-access extension, the safety guard, the relocator and their wrappers
+    web-access extension, the permission extension, the relocator and their wrappers
     ([CONTENT_PATHS]). An app update replaces these paths point-wise in
     place, in seconds, without touching a single installed package.
 
@@ -167,9 +167,9 @@ PI_PACKAGE = "@earendil-works/pi-coding-agent"
 #: This is the *only* way pi moves on a user's device. There is deliberately no
 #: in-app update any more: it ran pi's own `npm install -g` into the live prefix, and
 #: an interrupted run left a tree whose `jiti` was gone — which is what pi 0.86.x
-#: loads the bundled TypeScript guard extension through, so every agent start after it
-#: failed outright (`Failed to load extension "…/pi-safety-guard.ts": Cannot find
-#: module 'jiti'`). A version that ships in the image cannot be half-installed.
+#: loads the bundled TypeScript extension through, so every agent start after it
+#: failed outright (`Failed to load extension "…": Cannot find module 'jiti'`).
+#: A version that ships in the image cannot be half-installed.
 #: ARCHITECTURE §2 has the reasoning.
 IMAGE_VERSIONS = json.loads(
     (REPO_ROOT / "tools" / "image-versions.json").read_text(encoding="utf-8")
@@ -269,7 +269,7 @@ WEB_ACCESS_METADATA = "share/pikit/web-access.json"
 #:
 #: `CONTENT_PATHS` is the update boundary. Everything here is written by this
 #: build rather than by a dpkg package — pi and its dependencies, the bundled
-#: web-access extension, the safety guard, the package relocator and the
+#: web-access extension, the permission extension, the package relocator and the
 #: wrappers that reach them — so an app update may replace exactly these paths
 #: and must not touch anything else in the prefix: what lives beside them is a
 #: registered package's file, and dpkg is the only thing allowed to move those.
@@ -1693,7 +1693,7 @@ def install_relocator(overlay_root: Path) -> None:
         "exec \"$PREFIX/bin/node\" \"$PREFIX/libexec/pikit/relocate.js\" \"$@\"\n".format(APP_ID),
     )
 
-    install_agent_guard(overlay_root)
+    install_permissions_extension(overlay_root)
 
     apt_conf = overlay_root / "etc" / "apt" / "apt.conf.d"
     apt_conf.mkdir(parents=True, exist_ok=True)
@@ -1798,39 +1798,42 @@ def verify_relocator(content_root: Path) -> None:
     log("  relocator self-check: " + completed.stdout.strip())
 
 
-def install_agent_guard(overlay_root: Path) -> None:
+def install_permissions_extension(overlay_root: Path) -> None:
     """
-    Installs the extension that stops the agent from deleting the user's files.
+    Installs the extension that decides what the agent's tool calls may do.
 
     Pi has no permission system by design — "no permission popups", as its own
     documentation puts it — and the app launches it with `--approve`. Combined
     with `MANAGE_EXTERNAL_STORAGE`, that means a `bash` tool call reaches every
     file on the device with nothing in the way.
 
-    This extension subscribes to `tool_call` and refuses the calls that can
-    destroy data outside the environment: a recursive delete aimed outside the
-    workspace, a filesystem format, or a write to a raw block device. It is
-    deliberately conservative — it blocks a pattern, it does not try to
-    understand a shell — and it explains itself to the model, so the agent
-    reports what happened instead of retrying blindly.
+    The extension supplies the three tiers instead: `read-only` refuses every
+    change, `workspace-write` allows writes inside the workspace and the
+    shared-storage folders the user granted, and `full-access` refuses nothing.
+    The tier is read from a file the app rewrites, on every `tool_call`, so the
+    composer's control takes effect on the next call rather than at the next pi
+    restart. The refusal explains itself to the model, so the agent reports what
+    happened instead of retrying blindly.
 
     It is shipped inside `$PREFIX` and copied into `$HOME/.pi/agent/extensions`
     by the on-device installer, which is where pi auto-discovers global
     extensions and which survives a runtime reinstall.
     """
-    source = REPO_ROOT / "tools" / "pi-safety-guard.ts"
+    source = REPO_ROOT / "tools" / "pikit-permissions.ts"
     if not source.is_file():
         raise SystemExit(f"missing {source}; it is part of the build, not generated")
 
-    # The prefix is rewritten in place further down, so stage the file under a
-    # name that needs no relocation: the extension reads $PREFIX from the
-    # environment at runtime. `BootstrapInstaller.prepareHome` copies it into
-    # `$HOME/.pi/agent/extensions`, which is where pi auto-discovers global
-    # extensions and which survives a runtime reinstall.
-    destination = overlay_root / "share" / "pikit" / "pi-safety-guard.ts"
+    # The prefix rewrite has nothing to do to this file — it names this app's own
+    # paths and never the upstream id — but it is listed in
+    # `prefix_patch.NEVER_REWRITE` like every other file the build writes itself,
+    # so the rewrite cannot reach it if that ever stops being true.
+    # `BootstrapInstaller.prepareHome` copies it into `$HOME/.pi/agent/extensions`,
+    # which is where pi auto-discovers global extensions and which survives a
+    # runtime reinstall.
+    destination = overlay_root / "share" / "pikit" / "pikit-permissions.ts"
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
-    log("staged the agent safety guard (share/pikit)")
+    log("staged the permission extension (share/pikit)")
 
     install_storage_self_test(overlay_root)
 

@@ -175,6 +175,23 @@ internal data class BackupPaths(
     val sessionDir: File,
     val workspace: File,
     val exportDir: File,
+    /**
+     * `$HOME`, which is where a workspace lives unless it was added from elsewhere.
+     *
+     * A workspace's entry inside the archive names the path it came from relative to
+     * this directory, so an archive taken on an install with `$HOME/projects/app` in
+     * its list can be restored on one that has never heard of it.
+     */
+    val home: File = filesDir,
+    /**
+     * Workspaces beyond the built-in one, as their directories.
+     *
+     * The built-in `$HOME/workspace` is [workspace] and is always carried. These are the
+     * folders the user added in the composer's workspace menu — without them a backup
+     * would carry the built-in workspace and silently leave every other project on the
+     * phone behind, which is the one failure a backup must not have.
+     */
+    val workspaces: List<File> = emptyList(),
 ) {
     /** `files/pikit-config.json` — the profiles and the keys in them. */
     val configFile: File get() = File(filesDir, CONFIG_FILE_NAME)
@@ -193,12 +210,16 @@ internal data class BackupPaths(
     val avatarDir: File get() = AvatarStore.directory(filesDir)
 
     companion object {
-        fun of(env: TermuxEnv): BackupPaths = BackupPaths(
+        fun of(env: TermuxEnv, workspaces: List<File> = emptyList()): BackupPaths = BackupPaths(
             filesDir = env.filesDir,
             piConfigDir = env.piConfigDir,
             sessionDir = env.sessionDir,
             workspace = env.workspace,
             exportDir = env.exportDir,
+            home = env.home,
+            // The built-in one is `workspace` below; naming it twice would put the same
+            // files in the archive under two entries.
+            workspaces = workspaces.filter { it.absolutePath != env.workspace.absolutePath },
         )
 
         /** The profile file, spelled here rather than a second time at the call site. */
@@ -266,12 +287,38 @@ internal class BackupArchive(
      * into the user's `~/storage` farm, which is a link to the whole phone, and a
      * backup that followed it would be a backup of `/sdcard`.
      */
-    private val trees: List<TreeItem> = listOf(
-        TreeItem(BackupCategory.CONVERSATIONS, "conversations", paths.sessionDir),
-        TreeItem(BackupCategory.WORKSPACE, "workspace", paths.workspace),
-        TreeItem(BackupCategory.HTML_EXPORTS, "html-exports", paths.exportDir),
-        TreeItem(BackupCategory.SETTINGS, "avatars", paths.avatarDir),
-    )
+    private val trees: List<TreeItem> = buildList {
+        add(TreeItem(BackupCategory.CONVERSATIONS, "conversations", paths.sessionDir))
+        add(TreeItem(BackupCategory.WORKSPACE, "workspace", paths.workspace))
+        // Every other workspace, under the one directory whose contents an archive may
+        // name: `$HOME`. A workspace outside it has no relative path to record, and is
+        // left out rather than written under a name a restore could not decode back.
+        for (workspace in paths.workspaces) {
+            val relative = relativeToHome(workspace) ?: continue
+            add(TreeItem(BackupCategory.WORKSPACE, "$EXTRA_WORKSPACES_DIR/$relative", workspace))
+        }
+        add(TreeItem(BackupCategory.HTML_EXPORTS, "html-exports", paths.exportDir))
+        add(TreeItem(BackupCategory.SETTINGS, "avatars", paths.avatarDir))
+    }
+
+    /**
+     * `foo/bar` for a directory under `$HOME`, or null for one somewhere else.
+     *
+     * Separator-normalised, for the reason `walk` states: an entry name inside a zip is
+     * always `/`-separated, and a path built by string arithmetic off `File.path` carries
+     * the platform's own separator — which on this repository's JVM tests is `\`, and on
+     * Android is `/`, so the bug would only ever show on one of the two.
+     */
+    private fun relativeToHome(file: File): String? {
+        val separator = File.separator
+        val home = paths.home.absoluteFile.path.trimEnd(File.separatorChar)
+        val absolute = file.absoluteFile.path
+        if (!absolute.startsWith(home + separator)) return null
+        return absolute.removePrefix(home + separator)
+            .replace(File.separatorChar, '/')
+            .trimEnd('/')
+            .takeIf { it.isNotEmpty() }
+    }
 
     // ------------------------------------------------------------------ write
 
@@ -588,15 +635,30 @@ internal class BackupArchive(
     /** The archive path a category's entries live under, or null for an unrelated entry. */
     private fun categoryOf(name: String): BackupCategory? {
         files.firstOrNull { it.entry == name }?.let { return it.category }
-        return trees.firstOrNull { name.startsWith("${it.entry}/") }?.category
+        trees.firstOrNull { name.startsWith("${it.entry}/") }?.category?.let { return it }
+        // An archive taken on an install that had a workspace this one has not: the entry
+        // is still a workspace's file, and dropping it would restore a backup of a project
+        // that came back empty.
+        if (name.startsWith("$EXTRA_WORKSPACES_DIR/")) return BackupCategory.WORKSPACE
+        return null
     }
 
     private fun destinationOf(name: String): File? {
         files.firstOrNull { it.entry == name }?.let { return it.source }
-        val tree = trees.firstOrNull { name.startsWith("${it.entry}/") } ?: return null
-        val relative = name.removePrefix("${tree.entry}/")
-        if (relative.isEmpty()) return null
-        return File(tree.source, relative)
+        trees.firstOrNull { name.startsWith("${it.entry}/") }?.let { tree ->
+            val relative = name.removePrefix("${tree.entry}/")
+            if (relative.isEmpty()) return null
+            return File(tree.source, relative)
+        }
+        // The same fallback `categoryOf` has, and for the same reason: the entry names the
+        // path it came from relative to `$HOME`, so it can be put back before the folder
+        // is in this install's list — which is exactly the state a restore starts in.
+        if (name.startsWith("$EXTRA_WORKSPACES_DIR/")) {
+            val relative = name.removePrefix("$EXTRA_WORKSPACES_DIR/")
+            if (relative.isEmpty()) return null
+            return File(paths.home, relative.replace('/', File.separatorChar))
+        }
+        return null
     }
 
     private fun preferenceFile(name: String): PreferenceFile? {
@@ -623,7 +685,14 @@ internal class BackupArchive(
     companion object {
         /** The production construction: the app's own preferences, the runtime's paths. */
         fun of(context: Context, env: TermuxEnv): BackupArchive =
-            BackupArchive(ContextPreferences(context), BackupPaths.of(env))
+            BackupArchive(
+                ContextPreferences(context),
+                BackupPaths.of(
+                    env,
+                    workspaces = WorkspaceStore.list(context.applicationContext, env)
+                        .map { File(it.path) },
+                ),
+            )
 
         /** Suggested file name for the picker's "create a document". */
         fun suggestedName(now: Long = System.currentTimeMillis()): String {
@@ -742,9 +811,23 @@ internal class BackupArchive(
          * restored install it names a file from the archive's own `pi-sessions` that
          * may not be there at all.
          */
+        /**
+         * The entry prefix for workspaces beyond the built-in one.
+         *
+         * A workspace's entry is `workspaces/<its path relative to $HOME>/…`, which is
+         * both what the export writes and what a restore decodes — one spelling for the
+         * two directions, so a backup cannot put a project back somewhere it did not come
+         * from.
+         */
+        internal const val EXTRA_WORKSPACES_DIR = "workspaces"
+
         private val PREFERENCE_FILES = listOf(
             PreferenceFile("pikit_settings", BackupCategory.SETTINGS, secretKeys = setOf("api_key")),
             PreferenceFile("pikit_storage", BackupCategory.SETTINGS),
+            // The workspaces the user added, which is what makes them appear in the
+            // composer's menu again after a restore — the directories themselves travel
+            // under [EXTRA_WORKSPACES_DIR].
+            PreferenceFile(WorkspaceStore.PREFS, BackupCategory.SETTINGS),
             PreferenceFile("pikit_session_pins", BackupCategory.CONVERSATIONS),
         )
     }

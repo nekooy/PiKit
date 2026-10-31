@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -13,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -219,6 +223,22 @@ class PiToastHost internal constructor(
         }
     }
 }
+
+/**
+ * The navigation strip's height, for a sheet's own bottom edge.
+ *
+ * Miuix's bottom sheet is a window of its own with `decorFitsSystemWindows = false`, and
+ * its inside margin is 24dp across and **zero** down — the panel's bottom edge *is* the
+ * window's, which is the gesture bar. So a sheet's last row would sit under the gesture
+ * bar unless the content clears it, and the inset belongs to the content rather than to
+ * the panel: on a scrolling body it goes inside the scroll (after `verticalScroll`), so
+ * the text travels through it and the panel's own fill still reaches the window's edge.
+ *
+ * One function rather than the same three lines in every sheet of the app.
+ */
+@Composable
+fun piSheetBottomInset(): Dp =
+    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
 val LocalPiToast = compositionLocalOf<PiToastHost?> { null }
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import pi.kit.mob.data.RefusedWorkspace
+import pi.kit.mob.data.WorkspaceRefusal
+import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.env.AgentContext
 import pi.kit.mob.env.BatteryOptimisation
 import pi.kit.mob.locales.Strings
@@ -41,6 +45,9 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.WorkspaceDialog
+import pi.kit.mob.ui.WorkspacePickerSheet
+import pi.kit.mob.ui.rememberWorkspaceList
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Text
@@ -82,10 +89,24 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal fun AgentPage(
     session: PiAgentSession,
     agent: AgentStatus,
-    workingDir: String,
     onBack: () -> Unit,
 ) {
-    var working by remember(workingDir) { mutableStateOf(workingDir) }
+    // The workspace a new conversation starts in. Collected rather than passed down: the
+    // composer's chip writes the same value, and a page that was handed a snapshot would
+    // keep showing the row's old answer until the page was rebuilt.
+    val saved by session.settingsStore.settings.collectAsState()
+    val context = LocalContext.current
+    var choosingWorkspace by remember { mutableStateOf(false) }
+    var showWorkspacePicker by remember { mutableStateOf(false) }
+    val workspaces = rememberWorkspaceList(
+        context = context,
+        env = session.env,
+        savedDefault = saved.defaultWorkspace,
+    )
+    val defaultWorkspacePath = saved.defaultWorkspace.ifBlank { session.env.workspacePath }
+    val defaultWorkspace = workspaces.firstOrNull { it.path == defaultWorkspacePath }
+    val defaultWorkspaceName = defaultWorkspace?.label
+        ?: java.io.File(defaultWorkspacePath).name.ifBlank { defaultWorkspacePath }
     // The restart is two suspending calls — stop, then start — and pi takes about two
     // seconds to handshake. Without a state of its own the button was inert for that
     // whole window: the row's subtitle said "starting" either way, so a tap that
@@ -146,35 +167,31 @@ internal fun AgentPage(
                 .padding(top = 4.dp, bottom = 12.dp),
         ) {
             PiSection(title = text.settings.workspace) {
-                BasicComponent(
-                    title = text.settings.workingDirectory,
-                    // The default is `$HOME/workspace`, not `$HOME`: the agent's home
-                    // also holds pi's own configuration, the saved sessions and the
-                    // shared-storage links, and the guard refuses a recursive delete
-                    // anywhere outside the workspace. See `TermuxEnv.workspace`.
-                    summary = text.settings.workingDirSubtitle(session.env.workspacePath),
-                )
-                SettingsTextField(
-                    value = working,
-                    onValueChange = { value ->
-                        working = value
-                        session.settingsStore.update { it.copy(workingDir = value) }
-                        // The directory is read when the process is spawned — it is the
-                        // shell's own `cwd` and `PIKIT_WORKSPACE` — so a new one does not
-                        // reach the running agent at all. It used to be a sentence telling
-                        // the reader to restart, and then no sentence at all, which is the
-                        // worse of the two: the field saved and nothing else happened. The
-                        // restart is debounced by the session (1.5 s, and it waits for a
-                        // turn to settle), so a typed path restarts the agent once, after
-                        // the typing stops.
-                        session.scheduleRestart()
-                    },
-                    label = text.settings.workingDirectory,
-                    // The workspace path is the hint rather than a placeholder in the
-                    // sense of a greyed value: Miuix's field floats its label, so the
-                    // example belongs on the supporting line where it is read as an
-                    // example rather than as content.
-                    placeholder = session.env.workspacePath,
+                // The row that used to be a text field for the agent's working directory.
+                // It is a choice now, because the directory is one of a *list* of
+                // workspaces: the composer picks which one a conversation runs in, and
+                // this is the one a new conversation starts from. A typed path could not
+                // say which of two projects a conversation came from, and a workspace
+                // that is not in the list cannot be picked in the composer at all.
+                //
+                // Changing it does not restart the agent: this conversation keeps the
+                // directory it was launched in, and the value applies to the next one —
+                // which is also why there is no "restart to apply" sentence here.
+                ArrowPreference(
+                    title = text.settings.defaultWorkspace,
+                    // The name travels as the *chip* label, `（默认）` included: the
+                    // settings summary and the composer's chip have to name the built-in
+                    // workspace the same way, and the mark is part of its name.
+                    summary = text.settings.defaultWorkspaceSubtitle(
+                        // The *chip* label, `（默认）` included: the summary and the
+                        // composer's chip must name the built-in workspace the same way.
+                        text.chat.workspaceChip(
+                            defaultWorkspaceName,
+                            defaultWorkspacePath == session.env.workspacePath,
+                        ),
+                    ),
+                    endActions = { SettingsValue(defaultWorkspaceName) },
+                    onClick = { choosingWorkspace = true },
                 )
             }
 
@@ -299,6 +316,59 @@ internal fun AgentPage(
         if (showInstructions) {
             InstructionsEditor(session = session, text = text)
         }
+    }
+
+    WorkspaceDialog(
+        show = choosingWorkspace,
+        text = text,
+        workspaces = workspaces,
+        home = session.env.homePath,
+        defaultPath = defaultWorkspacePath,
+        // One window at a time: the picker is opened *after* the question closes, and
+        // its answer comes back through the same row when the folder is added.
+        onAdd = {
+            choosingWorkspace = false
+            showWorkspacePicker = true
+        },
+        onRemove = { path -> WorkspaceStore.remove(context, session.env, path) },
+        onPick = { path ->
+            choosingWorkspace = false
+            session.settingsStore.update { it.copy(defaultWorkspace = path) }
+        },
+        onDismiss = { choosingWorkspace = false },
+    )
+
+    PiSheet(
+        show = showWorkspacePicker,
+        title = text.chat.workspacePickerTitle,
+        onDismiss = { showWorkspacePicker = false },
+    ) {
+        WorkspacePickerSheet(
+            text = text,
+            home = session.env.homePath,
+            onAdd = { folder ->
+                val added = WorkspaceStore.add(context, session.env, folder)
+                val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason
+                val workspace = when {
+                    added.getOrNull() != null -> added.getOrNull()
+                    // Already in the list: the reader picked the folder they want to be
+                    // the default, and it already is a workspace.
+                    reason == WorkspaceRefusal.DUPLICATE ->
+                        WorkspaceStore.list(context, session.env).firstOrNull { it.path == folder }
+
+                    else -> null
+                }
+                if (workspace != null) {
+                    showWorkspacePicker = false
+                    // A folder added from *this* page is the one the reader wants new
+                    // conversations to start in: the row they came from is the default.
+                    session.settingsStore.update { it.copy(defaultWorkspace = workspace.path) }
+                    null
+                } else {
+                    reason?.let { text.chat.workspaceRefusal(it) }
+                }
+            },
+        )
     }
 }
 
