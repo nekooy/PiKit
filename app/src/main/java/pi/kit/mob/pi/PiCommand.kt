@@ -141,6 +141,15 @@ object PiCommand {
 
     fun getSessionStats(id: String): String = build(id, "get_session_stats")
 
+    /**
+     * The last answer, whole, for the clipboard.
+     *
+     * pi answers `{}` when there is nothing to copy yet, so the caller has to read
+     * `text` out of the object rather than assume one — a conversation with no answer
+     * is the normal state of a fresh session, not an error.
+     */
+    fun getLastAssistantText(id: String): String = build(id, "get_last_assistant_text")
+
     fun getMessages(id: String): String = build(id, "get_messages")
 
     /**

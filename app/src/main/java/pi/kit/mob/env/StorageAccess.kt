@@ -51,21 +51,16 @@ object StorageAccess {
     private const val KEY_PROMPTED = "prompted"
 
     /**
-     * The links the farm holds, in the names `termux-setup-storage` creates them.
+     * The farm: **one link**, `shared`, pointing at the whole of the phone's storage.
      *
-     * The names are the lower-case ones upstream uses, because scripts type them and
-     * matching upstream matters more than matching the file manager; the directories are
-     * the real ones under `/sdcard`.
+     * It used to be the seven `termux-setup-storage` creates (`downloads`, `dcim`, …) and
+     * that was redundant the moment `shared` existed: every one of them is a folder inside
+     * it, so `~/storage/downloads` and `~/storage/shared/Download` are two names for one
+     * directory — the duplication the self-test calls "one folder, one name". A reader who
+     * wants the short spelling can `ln -s shared/Download downloads` themselves; the app
+     * stops inventing six names for folders that are already reachable.
      */
-    val LINKS: List<Pair<String, String>> = listOf(
-        "shared" to "",
-        "downloads" to "Download",
-        "documents" to "Documents",
-        "pictures" to "Pictures",
-        "dcim" to "DCIM",
-        "music" to "Music",
-        "movies" to "Movies",
-    )
+    val LINKS: List<Pair<String, String>> = listOf("shared" to "")
 
     /** Whether the app may read the phone's shared storage at all. */
     fun isGranted(): Boolean = runCatching {

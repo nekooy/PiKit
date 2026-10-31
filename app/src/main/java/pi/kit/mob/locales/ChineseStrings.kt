@@ -106,6 +106,18 @@ internal object ChineseStrings : Strings {
         override val commandClone = "复制当前对话为新的一份"
         override val commandExport = "导出 HTML 到 export 目录"
         override val commandClear = "清空输入框草稿"
+        override val commandStats = "这次会话的累计用量与花费"
+        override val commandCopy = "把最后一条回答整段复制下来"
+        override fun statsLine(
+            turns: Long,
+            messages: Long,
+            inputTokens: Long,
+            outputTokens: Long,
+            cached: Long,
+            cost: String,
+        ) = "回答 $turns 条 · 消息 $messages 条 · 输入 $inputTokens / 输出 $outputTokens token，缓存命中 $cached · 花费 $cost"
+        override val answerCopied = "已复制最后一条回答"
+        override val answerCopyEmpty = "还没有可复制的回答"
         override val commandModel = "打开模型选择器"
         override val attachTitle = "添加到消息"
         override val attachImage = "图片"
@@ -138,15 +150,18 @@ internal object ChineseStrings : Strings {
         override val workspacePickerGrant = "授予文件访问权限"
         override val workspacePickerUnreadable = "读不到这个文件夹。手机存储需要「所有文件访问」权限。"
         override val workspacePickerAdded = "已添加"
+        override val workspacePickerFolders = "文件夹"
+        override val workspacePickerNewFolder = "新建文件夹"
+        override val workspacePickerNewFolderTitle = "新建文件夹"
+        override val workspacePickerNewFolderName = "文件夹名称"
+        override val workspacePickerCreate = "创建"
+        override val workspacePickerCreateFailed = "建不了这个文件夹：名字不能用，或者没有写入权限"
         override val workspaceRemove = "移除工作区"
         override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
             WorkspaceRefusal.BLANK -> "请输入文件夹路径"
             WorkspaceRefusal.NOT_ABSOLUTE -> "必须是完整路径"
             WorkspaceRefusal.MISSING -> "这个文件夹不存在"
             WorkspaceRefusal.NOT_A_DIRECTORY -> "这不是文件夹"
-            WorkspaceRefusal.HOME -> "不能把主目录本身当作工作区"
-            WorkspaceRefusal.AGENT_DIR -> "不能把 Agent 自己的配置目录当作工作区"
-            WorkspaceRefusal.NOT_READABLE -> "读不到这个文件夹；手机存储要先授予文件访问权限"
             WorkspaceRefusal.DUPLICATE -> "这个工作区已经在列表里了"
         }
         override fun permissionChip(mode: PermissionMode): String = when (mode) {
@@ -276,6 +291,11 @@ internal object ChineseStrings : Strings {
         override val scrollToggleHint = "自动滚动：暂停后新输出不会把画面拉回底部，方便往上翻看"
         override val scrollShort = "滚动"
         override val newline = "换行"
+        override val keysMessage = "发送文字"
+        override val keysMessageLabel = "要发送到终端的内容"
+        override val keysMessageSend = "发送到终端"
+        override val keysKeyboardShow = "弹出键盘"
+        override val keysKeyboardHide = "收起键盘"
     }
 
     override val files = object : Strings.Files {

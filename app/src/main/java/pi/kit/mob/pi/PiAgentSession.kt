@@ -1801,6 +1801,82 @@ class PiAgentSession private constructor(context: Context) {
     }
 
     /**
+     * The session's own counters, for the composer's `/stats` row.
+     *
+     * `get_session_stats` has been buildable since the RPC layer was written and was
+     * never called by anything: the numbers it answers — turns, tokens in and out, the
+     * cached share, what the conversation has cost — are the ones the context report
+     * shows for *this* request, and this is the running total. It is read on demand
+     * rather than polled, because pi computes it from the session file and nothing on
+     * screen needs it per frame.
+     *
+     * [onResult] runs on the session's scope, so the caller is handed the numbers
+     * rather than a return value: `request` is suspend and this method returns before
+     * pi has answered.
+     */
+    fun sessionStats(onResult: (Result<StatsReport>) -> Unit) {
+        runCommand {
+            val current = client ?: return@runCommand
+            val response = current.request("get_session_stats") { PiCommand.getSessionStats(it) }
+            val data = response.data?.jsonObject
+            if (!response.success || data == null) {
+                onResult(Result.failure(IllegalStateException(response.error ?: "pi did not answer")))
+                return@runCommand
+            }
+            fun number(key: String, from: JsonObject? = data): Long =
+                from?.get(key)?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+            val tokens = data["tokens"]?.let { runCatching { it.jsonObject }.getOrNull() }
+            onResult(
+                Result.success(
+                    StatsReport(
+                        turns = number("assistantMessages"),
+                        messages = number("totalMessages"),
+                        toolCalls = number("toolCalls"),
+                        inputTokens = number("input", tokens),
+                        outputTokens = number("output", tokens),
+                        cacheReadTokens = number("cacheRead", tokens),
+                        cost = data["cost"]?.jsonPrimitive?.contentOrNull ?: "0",
+                    ),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Puts the last answer on the clipboard.
+     *
+     * The copy button under an answer is a whole message; this is the same text for the
+     * reader who is typing in the terminal and wants the paragraph without scrolling
+     * back to it. `data.text` is absent when there is no answer yet — an ordinary state
+     * rather than a failure, which is why the callback gets null instead of an error.
+     */
+    fun copyLastAnswer(onResult: (String?) -> Unit) {
+        runCommand {
+            val current = client ?: return@runCommand
+            val response = current.request("get_last_assistant_text") {
+                PiCommand.getLastAssistantText(it)
+            }
+            val text = response.data?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.takeIf { it.isNotBlank() }
+            onResult(text)
+        }
+    }
+
+    /** What `/stats` reports: the running totals, not this request's. */
+    data class StatsReport(
+        val turns: Long,
+        val messages: Long,
+        val toolCalls: Long,
+        val inputTokens: Long,
+        val outputTokens: Long,
+        val cacheReadTokens: Long,
+        val cost: String,
+    )
+
+    /**
      * Writes the conversation to an HTML file and says where it went.
      *
      * The path is built from the session's own file rather than from a fixed name:

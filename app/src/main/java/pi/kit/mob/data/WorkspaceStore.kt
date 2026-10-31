@@ -52,12 +52,6 @@ enum class WorkspaceRefusal {
     NOT_ABSOLUTE,
     MISSING,
     NOT_A_DIRECTORY,
-    /** `$HOME` itself: pi's own configuration lives there, so it is not a project. */
-    HOME,
-    /** Inside `$HOME/.pi` — the agent's own files, which it must not treat as a project. */
-    AGENT_DIR,
-    /** The process cannot list it, so pi could not work in it either. */
-    NOT_READABLE,
     DUPLICATE,
 }
 
@@ -80,17 +74,23 @@ enum class WorkspaceRefusal {
  * menu and the settings page read it. A default that stops being in the set falls back to
  * the built-in one rather than launching the agent in a directory that is gone.
  *
- * ## What may not be added
+ * ## Nothing is refused
  *
- * **Any folder the process can read**, which on a phone means the app's own directory and
- * — once Android's "all files access" is granted — the phone's shared storage. A workspace
- * on `/sdcard/Dev/app` is an ordinary workspace: it is the writable root of its
- * conversations (§14), which is what makes the storage page's folder switches unnecessary
- * rather than merely redundant. Two exclusions remain, and both are the agent's own state
- * rather than the reader's: `$HOME` itself and anything under `$HOME/.pi`, because a
- * recursive delete of a workspace must never be able to reach `auth.json`. A folder the
- * process cannot list is refused for a different reason — pi would exit in it rather than
- * work — and that is [WorkspaceRefusal.NOT_READABLE].
+ * **Any directory may be a workspace** — the app's own tree, `$HOME`, `$HOME/.pi`, the
+ * phone's shared storage, anything. The list of refusals has been shrunk twice and is now
+ * only what is *not a directory at all* (blank, relative, missing, a file), because the
+ * point of a workspace is that the reader decides where the agent works, and a rule here
+ * is a rule about the reader's own machine rather than about the app.
+ *
+ * The consequence is stated rather than hidden: `$HOME` is where pi keeps its credentials
+ * and every saved session, so a conversation started there lets a `workspace-write` agent
+ * write them (§14). That is the middle tier's promise — "writes inside the workspace" — and
+ * the workspace is the folder the reader chose. Picking `$HOME/.pi` is the same choice made
+ * more sharply.
+ *
+ * Reads were never the question here: they are free in every tier, so a folder the process
+ * cannot list does not need a refusal either — pi fails to start in it, which the banner
+ * says, and the reader picks another.
  */
 object WorkspaceStore {
 
@@ -209,18 +209,11 @@ object WorkspaceStore {
     fun refusal(env: TermuxEnv, path: String): WorkspaceRefusal? {
         if (path.isBlank()) return WorkspaceRefusal.BLANK
         if (!path.startsWith("/")) return WorkspaceRefusal.NOT_ABSOLUTE
-        val home = env.homePath.trimEnd('/')
-        if (path == home || path == env.filesDir.absolutePath.trimEnd('/')) {
-            return WorkspaceRefusal.HOME
-        }
-        if (path == "$home/.pi" || path.startsWith("$home/.pi/")) return WorkspaceRefusal.AGENT_DIR
         val file = File(path)
+        // Existence and "is a directory" are the only two answers left: a workspace is a
+        // directory the reader pointed at, and everything else is theirs to decide.
         if (!file.exists()) return WorkspaceRefusal.MISSING
         if (!file.isDirectory) return WorkspaceRefusal.NOT_A_DIRECTORY
-        // `listFiles` is the cheap read test: a directory the process may not open answers
-        // null rather than throwing, and pi in such a directory fails before its first
-        // prompt — a workspace the picker offers has to be one the agent can work in.
-        if (file.listFiles() == null) return WorkspaceRefusal.NOT_READABLE
         return null
     }
 

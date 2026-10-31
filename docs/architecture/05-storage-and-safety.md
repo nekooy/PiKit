@@ -47,14 +47,22 @@ The tiers changed the line, and with it the answer:
 
 What replaced it, precisely:
 
-- **The workspace picker reaches the phone.** Any folder the process can read may be a
-  workspace, so `/sdcard/Dev/app` is an ordinary project. The picker offers `/sdcard` as a
-  shortcut and asks for Android's "all files access" when a folder there cannot be listed.
-- **`~/storage` is a convenience, not a permission.** While the grant holds, the seven usual
-  folders are linked into the agent's home under the lower-case names
-  `termux-setup-storage` has always used (`~/storage/dcim`, `~/storage/downloads`), because
-  scripts type them and matching upstream matters more than matching the file manager. A write
-  through one of those links is judged by the tier and the workspace like any other path.
+- **The workspace picker reaches the phone.** Any directory may be a workspace — `/sdcard`,
+  the app's own tree, `$HOME`, `$HOME/.pi` — so `/sdcard/Dev/app` is an ordinary project. The
+  picker offers `/sdcard` as a shortcut and asks for Android's "all files access" when a
+  folder there cannot be listed. Nothing is refused: the only answers left in
+  `WorkspaceStore.refusal` are "that is not a directory". A workspace of `$HOME` therefore
+  makes pi's own state writable in the middle tier, which is the tier's promise applied to the
+  folder the reader chose (`$HOME/.pikit/permission.json` still decides the tier itself, so a
+  refusal cannot be edited away from inside the workspace *it* protects — the file is read by
+  the extension in the pi process, and the process may rewrite it).
+- **`~/storage` is a convenience, not a permission.** While the grant holds, one link —
+  `~/storage/shared` — points at the whole of the phone's storage, under the name
+  `termux-setup-storage` uses for the root. It used to be the seven names upstream creates,
+  and six of them are folders *inside* the seventh: `~/storage/downloads` and
+  `~/storage/shared/Download` were two names for one directory, which is the duplication the
+  self-test calls "one folder, one name". A write through the link is judged by the tier and
+  the workspace like any other path.
 - **Nothing publishes a grant to the agent any more.** `PIKIT_STORAGE_ALLOWED` and
   `PIKIT_STORAGE_LINKS` are gone from `ShellEnvironment.build`; the only environment variables
   the tiers read are `PIKIT_WORKSPACE` and `PIKIT_PERMISSION_FILE` (§14).
@@ -293,5 +301,4 @@ does not (`StorageAccess.syncFarm`, called at install, before every launch and f
 `termux-setup-storage`'s broadcast), and its one measurement survives: the links must not be
 duplicated, because `/sdcard/Download` reachable as both `~/storage/downloads` and
 `~/storage/shared/Download` is a duplicate Downloads folder rather than two conveniences.
-`StorageFarmTest` pins the seven names, the targets and that property; the self-test probes
-them for real.
+`StorageFarmTest` pins the one name and the property; the self-test probes it for real.

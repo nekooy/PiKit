@@ -22,33 +22,16 @@ import org.junit.Test
 class StorageFarmTest {
 
     @Test
-    fun `the farm uses the names termux-setup-storage creates`() {
-        val names = StorageAccess.LINKS.map { it.first }
-        assertEquals(
-            listOf("shared", "downloads", "documents", "pictures", "dcim", "music", "movies"),
-            names,
-        )
+    fun `the farm is the one link the whole phone needs`() {
+        // It used to be the seven names `termux-setup-storage` creates. Six of them are
+        // folders *inside* the seventh, so they were two names for one directory — the
+        // duplication the storage self-test checks for — and the app stopped inventing
+        // them. `shared` is the name upstream uses for the root itself.
+        assertEquals(listOf("shared" to ""), StorageAccess.LINKS)
     }
 
     @Test
-    fun `each link points at the directory the phone actually has`() {
-        val targets = StorageAccess.LINKS.toMap()
-        assertEquals("", targets["shared"])
-        assertEquals("Download", targets["downloads"])
-        assertEquals("Documents", targets["documents"])
-        assertEquals("Pictures", targets["pictures"])
-        assertEquals("DCIM", targets["dcim"])
-        assertEquals("Music", targets["music"])
-        assertEquals("Movies", targets["movies"])
-    }
-
-    @Test
-    fun `no two names resolve to one directory`() {
-        // `~/storage/shared` is the whole of /sdcard and `~/storage/downloads` is one
-        // folder inside it; that is one *name* per directory as long as no two entries
-        // point at the same child. The farm used to be able to create both
-        // `downloads` and `shared/Download`, and `termux-setup-storage`'s own output is
-        // what a reader greps when two paths for one folder surprise them.
+    fun `no two names can resolve to one directory`() {
         val children = StorageAccess.LINKS.map { it.second }.filter { it.isNotEmpty() }
         assertEquals(children.size, children.distinct().size)
     }

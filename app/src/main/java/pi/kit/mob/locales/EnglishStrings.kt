@@ -99,6 +99,18 @@ internal object EnglishStrings : Strings {
         override val commandClone = "Duplicate this conversation"
         override val commandExport = "Export to HTML under home/export"
         override val commandClear = "Clear the composer draft"
+        override val commandStats = "Running totals and cost for this session"
+        override val commandCopy = "Copy the last answer, whole"
+        override fun statsLine(
+            turns: Long,
+            messages: Long,
+            inputTokens: Long,
+            outputTokens: Long,
+            cached: Long,
+            cost: String,
+        ) = "$turns answers · $messages messages · $inputTokens in / $outputTokens out tokens, $cached cached · $cost"
+        override val answerCopied = "Copied the last answer"
+        override val answerCopyEmpty = "There is no answer to copy yet"
         override val commandModel = "Open the model picker"
         override val attachTitle = "Add to the message"
         override val attachImage = "Image"
@@ -134,15 +146,18 @@ internal object EnglishStrings : Strings {
         override val workspacePickerGrant = "Allow file access"
         override val workspacePickerUnreadable = "This folder cannot be read. Phone storage needs \"all files access\"."
         override val workspacePickerAdded = "Added"
+        override val workspacePickerFolders = "Folders"
+        override val workspacePickerNewFolder = "New folder"
+        override val workspacePickerNewFolderTitle = "New folder"
+        override val workspacePickerNewFolderName = "Folder name"
+        override val workspacePickerCreate = "Create"
+        override val workspacePickerCreateFailed = "Could not create that folder: the name is unusable or this folder is not writable"
         override val workspaceRemove = "Remove workspace"
         override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
             WorkspaceRefusal.BLANK -> "Enter a folder path"
             WorkspaceRefusal.NOT_ABSOLUTE -> "The path has to be absolute"
             WorkspaceRefusal.MISSING -> "That folder does not exist"
             WorkspaceRefusal.NOT_A_DIRECTORY -> "That is not a folder"
-            WorkspaceRefusal.HOME -> "The home directory itself cannot be a workspace"
-            WorkspaceRefusal.AGENT_DIR -> "The agent's own config directory cannot be a workspace"
-            WorkspaceRefusal.NOT_READABLE -> "This folder cannot be read; phone storage needs file access first"
             WorkspaceRefusal.DUPLICATE -> "That workspace is already in the list"
         }
         override fun permissionChip(mode: PermissionMode): String = when (mode) {
@@ -293,6 +308,11 @@ internal object EnglishStrings : Strings {
          * came back. "Newline" is the same fact in the width the bar has.
          */
         override val newline = "Newline"
+        override val keysMessage = "Send text"
+        override val keysMessageLabel = "Text to type into the terminal"
+        override val keysMessageSend = "Send to terminal"
+        override val keysKeyboardShow = "Show the keyboard"
+        override val keysKeyboardHide = "Hide the keyboard"
     }
 
     override val files = object : Strings.Files {

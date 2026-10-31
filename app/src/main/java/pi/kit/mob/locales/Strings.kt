@@ -303,6 +303,28 @@ interface Strings {
          */
         val commandModel: String
 
+        /**
+         * The `/stats` row: the session's running totals.
+         *
+         * Everything this row prints is a number pi already keeps (`get_session_stats`),
+         * and the point of putting it in the command list is that the same numbers on the
+         * context report are about *the current request* — the totals were reachable only
+         * by starting a `pi` in the terminal.
+         */
+        val commandStats: String
+
+        /** The `/copy` row: the last answer, whole, to the clipboard. */
+        val commandCopy: String
+
+        /** The toast `/stats` raises, one line, formatted from the numbers. */
+        fun statsLine(turns: Long, messages: Long, inputTokens: Long, outputTokens: Long, cached: Long, cost: String): String
+
+        /** The toast `/copy` raises when an answer went to the clipboard. */
+        val answerCopied: String
+
+        /** …and when there is nothing to copy yet. */
+        val answerCopyEmpty: String
+
         /** The `+` sheet title. */
         val attachTitle: String
         val attachImage: String
@@ -432,6 +454,21 @@ interface Strings {
 
         /** The badge on a row whose folder is already a workspace. */
         val workspacePickerAdded: String
+
+        /** The label above the folder listing, under the navigation rows. */
+        val workspacePickerFolders: String
+
+        /** The row that makes a directory inside the one being shown. */
+        val workspacePickerNewFolder: String
+
+        val workspacePickerNewFolderTitle: String
+
+        val workspacePickerNewFolderName: String
+
+        val workspacePickerCreate: String
+
+        /** What a folder that could not be created says. */
+        val workspacePickerCreateFailed: String
 
         /** The row action that takes an added workspace out of the list. */
         val workspaceRemove: String
@@ -686,6 +723,19 @@ interface Strings {
 
         /** The key that sends a bare newline, i.e. Return. */
         val newline: String
+
+        /** The button that opens the send-text sheet: the word for one message. */
+        val keysMessage: String
+
+        /** That sheet's field label — what the text will be typed into the terminal as. */
+        val keysMessageLabel: String
+
+        /** Its one action: send the whole field to the terminal. */
+        val keysMessageSend: String
+
+        /** The keyboard button, spoken: the bar's glyphs carry no words of their own. */
+        val keysKeyboardShow: String
+        val keysKeyboardHide: String
     }
 
     /**

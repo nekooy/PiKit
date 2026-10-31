@@ -1,44 +1,54 @@
 package pi.kit.mob.ui
 
 import android.Manifest
-import android.graphics.BitmapFactory
+import android.content.ClipData
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -52,18 +62,13 @@ import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -74,10 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -89,37 +91,47 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import pi.kit.mob.R
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.PermissionMode
-import pi.kit.mob.data.RefusedWorkspace
-import pi.kit.mob.data.WorkspaceRefusal
-import pi.kit.mob.data.Workspace
-import pi.kit.mob.env.StorageAccess
-import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.PiSettings
+import pi.kit.mob.data.RefusedWorkspace
+import pi.kit.mob.data.Workspace
+import pi.kit.mob.data.WorkspaceRefusal
+import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.rememberedThinkingLevels
+import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
@@ -129,39 +141,38 @@ import pi.kit.mob.pi.ConversationState
 import pi.kit.mob.pi.ImageAttachment
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiLaunchOptions
+import pi.kit.mob.pi.SessionMetadata
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.thinkingLevelsFor
-import pi.kit.mob.pi.SessionMetadata
+import pi.kit.mob.ui.WorkspacePickerSheet
 import pi.kit.mob.ui.chat.ChatStatusPill
 import pi.kit.mob.ui.chat.ChatTone
+import pi.kit.mob.ui.chat.FollowTailController
 import pi.kit.mob.ui.chat.NoticeCard
+import pi.kit.mob.ui.chat.ROW_SHAPE
 import pi.kit.mob.ui.chat.ReasoningBlock
 import pi.kit.mob.ui.chat.ReasoningToggle
-import pi.kit.mob.ui.chat.ROW_SHAPE
 import pi.kit.mob.ui.chat.ToolCallRow
 import pi.kit.mob.ui.chat.TurnSummaryData
 import pi.kit.mob.ui.chat.TurnSummaryRow
-import pi.kit.mob.ui.chat.FollowTailController
-import pi.kit.mob.ui.components.CopyButton
-import pi.kit.mob.ui.components.CopyButtonInkInset
 import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
+import pi.kit.mob.ui.components.CopyButton
+import pi.kit.mob.ui.components.CopyButtonInkInset
 import pi.kit.mob.ui.kit.AvatarSpeaker
+import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
-import pi.kit.mob.ui.WorkspacePickerSheet
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
-import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
@@ -182,15 +193,15 @@ import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Folder
-import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Show
-import top.yukonga.miuix.kmp.icon.extended.Unlock
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
+import top.yukonga.miuix.kmp.icon.extended.Unlock
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -316,6 +327,28 @@ private enum class ComposerSheet {
  */
 private const val PAGE_SLIDE_MILLIS = 220
 
+/**
+ * How far the conversation has to be dragged before letting go opens the history.
+ *
+ * A third of the width rather than a fixed distance: a threshold in dp is a different
+ * gesture on a small phone and a tablet, and what the reader is judging is "have I pulled
+ * this most of the way off". Short of it the page springs back — the drag itself already
+ * showed what letting go would do, which is why the commit does not need to be easier.
+ */
+private const val SWIPE_COMMIT = 1f / 3f
+
+/**
+ * What counts as a flick, and how far a flick has to have moved to open the list.
+ *
+ * A flick is a *speed*, and the only speed available here is the size of the last drag
+ * sample: at 60Hz a thumb crossing the screen in 100ms reports ~150px per frame, where a
+ * slow push reports 5-15. A fifth of the width is comfortably above every slow drag that
+ * was measured and below every quick one, and the floor under it is what stops a twitch
+ * on the first frame from opening a page the reader had not started to pull.
+ */
+private const val SWIPE_FLICK = 0.05f
+private const val SWIPE_FLICK_FLOOR = 0.06f
+
 @Composable
 internal fun ChatScreen(
     session: PiAgentSession,
@@ -326,11 +359,42 @@ internal fun ChatScreen(
     val text = strings
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val toasts = LocalPiToast.current
     // Owned by `RootContent`, above the tab crossfade, so a tab switch does not destroy
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
     val listState = composer.listState
-    var showSessions by remember { mutableStateOf(false) }
+    // How far the conversation has been pushed aside, 0 (itself) to 1 (the list), and the
+    // number the clock icon and the drag both move. `historyReachable` is whether the list
+    // is composed at all: it goes true the moment either gesture starts and false again
+    // once the conversation has settled back into place.
+    var pagePos by remember { mutableFloatStateOf(0f) }
+    var pageWidth by remember { mutableIntStateOf(0) }
+    var historyReachable by remember { mutableStateOf(false) }
+    var pageJob by remember { mutableStateOf<Job?>(null) }
+    // The last frame's drag distance, in pixels. A flick and a slow push of the same
+    // length mean different things, and a gesture that only counts distance makes the
+    // fast one feel stuck: `detectHorizontalDragGestures` reports no velocity, so the
+    // last sample is the velocity it has.
+    var lastDelta by remember { mutableFloatStateOf(0f) }
+    val commitTarget: () -> Float = {
+        val flick = abs(lastDelta) > pageWidth * SWIPE_FLICK
+        if (pagePos > SWIPE_COMMIT || (flick && pagePos > SWIPE_FLICK_FLOOR)) 1f else 0f
+    }
+    // Settles at [target], from wherever the thumb left it. A cancelled job and a fresh
+    // one rather than a queue: a second tap while the first animation runs means the
+    // second answer, not both.
+    val settlePage: (Float) -> Unit = { target ->
+        pageJob?.cancel()
+        pageJob = scope.launch {
+            animate(
+                initialValue = pagePos,
+                targetValue = target,
+                animationSpec = tween(PAGE_SLIDE_MILLIS),
+            ) { value, _ -> pagePos = value }
+            if (target == 0f) historyReachable = false
+        }
+    }
     // A new session asked for while the agent is answering. Same question as the
     // history list's rows ask before a switch, and the same dialog: pi's
     // `new_session` aborts the running turn exactly as `switch_session` does.
@@ -625,6 +689,35 @@ internal fun ChatScreen(
 
             "/clear" -> composer.input = ""
 
+            // Both of these read what pi already knows, and both answer into a toast
+            // rather than the transcript: a number and a "copied" are the kind of answer
+            // that should not become part of the conversation.
+            "/stats" -> session.sessionStats { result ->
+                result.onSuccess { report ->
+                    toasts?.show(
+                        text.chat.statsLine(
+                            turns = report.turns,
+                            messages = report.messages,
+                            inputTokens = report.inputTokens,
+                            outputTokens = report.outputTokens,
+                            cached = report.cacheReadTokens,
+                            cost = report.cost,
+                        ),
+                    )
+                }.onFailure { toasts?.show(it.message ?: text.chat.commandStats) }
+            }
+
+            "/copy" -> session.copyLastAnswer { answer ->
+                if (answer == null) {
+                    toasts?.show(text.chat.answerCopyEmpty)
+                } else {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                        as? android.content.ClipboardManager
+                    clipboard?.setPrimaryClip(ClipData.newPlainText(text.chat.answerCopied, answer))
+                    toasts?.show(text.chat.answerCopied)
+                }
+            }
+
             else -> Unit
         }
     }
@@ -654,34 +747,58 @@ internal fun ChatScreen(
         transcriptRows(state, expandedTurns)
     }
 
-    // The history list is the chat tab's second level, so it moves like one — it
-    // used to replace the conversation between two frames, with no transition at
-    // all, while every Settings sub-page slid. `AnimatedContent` is the whole of the
-    // transition now, and the two pages travel different distances — the one that
-    // arrives the full width, the one that leaves a quarter of it — so their text
-    // never parks on the same pixels mid-slide. Both fade as they travel, which is
-    // what keeps a page from reading as a card dragged over another.
-    AnimatedContent(
-        targetState = showSessions,
-        modifier = Modifier.fillMaxSize(),
-        transitionSpec = {
-            val entering = slideInHorizontally(tween(PAGE_SLIDE_MILLIS)) { width ->
-                if (targetState) width else -width / 4
-            } + fadeIn(tween(PAGE_SLIDE_MILLIS))
-            val leaving = slideOutHorizontally(tween(PAGE_SLIDE_MILLIS)) { width ->
-                if (targetState) -width / 4 else width
-            } + fadeOut(tween(PAGE_SLIDE_MILLIS))
-            entering togetherWith leaving
-        },
-        label = "session-page",
-    ) { shown ->
-        if (shown) {
+    // The history list is the chat tab's second level, and it is reached two ways: the
+    // clock icon, and a rightward drag on the conversation.
+    //
+    // Both drive the *same* number — how far the conversation has been pushed aside,
+    // 0 to 1 — so a drag and a tap cannot animate differently, and a drag released short
+    // of the threshold springs back from where the thumb left it instead of from a
+    // guess. The gesture is the reason the pair is not an `AnimatedContent` any more: a
+    // transition has no notion of "follow the finger", and a drag that waits for a
+    // release before moving anything is the thing this screen was asked not to be.
+    //
+    // It is one page over another rather than two travelling ones, because that is what
+    // a pull is: the conversation slides right and off, and the list is simply behind it.
+    // `offset` rather than `graphicsLayer.translationX`: a graphics layer moves what is
+    // drawn and not what is touched, so the conversation would still be swallowing taps
+    // over the list it has just left.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { pageWidth = it.width },
+    ) {
+        // Composed only while it is being reached for: the list scans the session
+        // directory, and doing that behind every conversation would be a cost paid on
+        // every chat frame for a page the reader is not looking at.
+        if (historyReachable) {
             SessionsScreen(
                 session = session,
-                onBack = { showSessions = false },
-                onOpened = { showSessions = false },
+                onBack = { settlePage(0f) },
+                onOpened = { settlePage(0f) },
             )
-        } else {
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .offset { IntOffset((pagePos * pageWidth).roundToInt(), 0) }
+                .pointerInput(pageWidth) {
+                    if (pageWidth <= 0) return@pointerInput
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            pageJob?.cancel()
+                            historyReachable = true
+                            lastDelta = 0f
+                        },
+                        onHorizontalDrag = { change, delta ->
+                            change.consume()
+                            lastDelta = delta
+                            pagePos = (pagePos + delta / pageWidth).coerceIn(0f, 1f)
+                        },
+                        onDragEnd = { settlePage(commitTarget()) },
+                        onDragCancel = { settlePage(commitTarget()) },
+                    )
+                },
+        ) {
             ChatPage(
                 session = session,
                 agent = agent,
@@ -716,7 +833,10 @@ internal fun ChatScreen(
                     promptExtras = extras
                     showPromptExtras = true
                 },
-                onOpenSessions = { showSessions = true },
+                onOpenSessions = {
+                    historyReachable = true
+                    settlePage(1f)
+                },
                 onNewSession = ::newSession,
                 currentWorkspace = currentWorkspace,
                 onSelectWorkspace = ::selectWorkspace,
@@ -4989,6 +5109,8 @@ private val BUILT_IN_COMMANDS: List<BuiltInCommand> = listOf(
     BuiltInCommand("/export") { it.chat.commandExport },
     BuiltInCommand("/model") { it.chat.commandModel },
     BuiltInCommand("/clear") { it.chat.commandClear },
+    BuiltInCommand("/stats") { it.chat.commandStats },
+    BuiltInCommand("/copy") { it.chat.commandCopy },
 )
 
 /**

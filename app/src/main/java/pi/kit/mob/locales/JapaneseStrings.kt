@@ -99,6 +99,18 @@ internal object JapaneseStrings : Strings {
         override val commandClone = "この会話を複製します"
         override val commandExport = "home/export に HTML 書き出し"
         override val commandClear = "入力欄を空にします"
+        override val commandStats = "このセッションの累計使用量と費用"
+        override val commandCopy = "最後の回答をそのままコピー"
+        override fun statsLine(
+            turns: Long,
+            messages: Long,
+            inputTokens: Long,
+            outputTokens: Long,
+            cached: Long,
+            cost: String,
+        ) = "回答 $turns 件 · メッセージ $messages 件 · 入力 $inputTokens / 出力 $outputTokens トークン、キャッシュ $cached · 費用 $cost"
+        override val answerCopied = "最後の回答をコピーしました"
+        override val answerCopyEmpty = "コピーできる回答がまだありません"
         override val commandModel = "モデル選択を開きます"
         override val attachTitle = "メッセージに追加"
         override val attachImage = "画像"
@@ -134,17 +146,18 @@ internal object JapaneseStrings : Strings {
         override val workspacePickerGrant = "ファイルへのアクセスを許可"
         override val workspacePickerUnreadable = "このフォルダーを読み取れません。本体のストレージには「すべてのファイルへのアクセス」が必要です。"
         override val workspacePickerAdded = "追加済み"
+        override val workspacePickerFolders = "フォルダー"
+        override val workspacePickerNewFolder = "新しいフォルダー"
+        override val workspacePickerNewFolderTitle = "新しいフォルダー"
+        override val workspacePickerNewFolderName = "フォルダー名"
+        override val workspacePickerCreate = "作成"
+        override val workspacePickerCreateFailed = "フォルダーを作成できませんでした。名前が使えないか、このフォルダーに書き込めません"
         override val workspaceRemove = "ワークスペースを外す"
         override fun workspaceRefusal(reason: WorkspaceRefusal): String = when (reason) {
             WorkspaceRefusal.BLANK -> "フォルダーのパスを入力してください"
             WorkspaceRefusal.NOT_ABSOLUTE -> "絶対パスで指定してください"
             WorkspaceRefusal.MISSING -> "このフォルダーは存在しません"
             WorkspaceRefusal.NOT_A_DIRECTORY -> "これはフォルダーではありません"
-            WorkspaceRefusal.HOME -> "ホームディレクトリ自体はワークスペースにできません"
-            WorkspaceRefusal.AGENT_DIR ->
-                "エージェント自身の設定ディレクトリはワークスペースにできません"
-            WorkspaceRefusal.NOT_READABLE ->
-                "このフォルダーを読み取れません。本体のストレージは先にファイルへのアクセスを許可してください"
             WorkspaceRefusal.DUPLICATE -> "このワークスペースはすでに一覧にあります"
         }
         override fun permissionChip(mode: PermissionMode): String = when (mode) {
@@ -279,6 +292,11 @@ internal object JapaneseStrings : Strings {
         override val scrollToggleHint = "自動スクロール：停止中は新しい出力で画面が下に引き戻されません"
         override val scrollShort = "スクロール"
         override val newline = "改行"
+        override val keysMessage = "テキストを送る"
+        override val keysMessageLabel = "端末に入力する内容"
+        override val keysMessageSend = "端末に送る"
+        override val keysKeyboardShow = "キーボードを表示"
+        override val keysKeyboardHide = "キーボードを隠す"
     }
 
     override val files = object : Strings.Files {

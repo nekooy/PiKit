@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -31,9 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -47,12 +51,21 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
-import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -64,21 +77,19 @@ import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.ExpandLess
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
+import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 /** Pinch-to-zoom bounds, in sp. */
 private const val MIN_TEXT_SIZE_SP = 8
@@ -416,6 +427,23 @@ fun TerminalScreen(session: PiAgentSession) {
                     onToggleAlt = { altOn = !altOn },
                     onToggleAutoScroll = { autoScroll = !autoScroll },
                     onSend = { sequence -> selected?.write(sequence) },
+                    // Through the view rather than through Compose: the IME is attached
+                    // to the terminal's own input connection, so `LocalSoftware
+                    // KeyboardController` (which speaks for a Compose text field) would
+                    // ask the window for a keyboard nothing is listening to.
+                    onToggleKeyboard = { show ->
+                        val view = holders.view
+                        val manager = view?.context?.getSystemService(Context.INPUT_METHOD_SERVICE)
+                            as? InputMethodManager
+                        if (view != null) {
+                            if (show) {
+                                view.requestFocus()
+                                manager?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+                            } else {
+                                manager?.hideSoftInputFromWindow(view.windowToken, 0)
+                            }
+                        }
+                    },
                 )
             }
         }
@@ -792,9 +820,7 @@ private fun rememberKeySize(
         buildList {
             add(text.terminal.ctrl)
             add(text.terminal.alt)
-            add(text.terminal.newline)
-            add(text.terminal.scrollShort)
-            EXTRA_KEYS.forEach { add(it.fixedLabel ?: it.labelOf(text)) }
+            addAll(barLabels(text))
             ARROW_GLYPHS.forEach(::add)
         }
     }
@@ -858,116 +884,6 @@ private val MIN_KEY_WIDTH = 24.dp
  */
 private val MAX_KEY_WIDTH = 72.dp
 
-/**
- * The arrow pad: up directly above down, left and right flanking them, with the
- * two non-glyph controls in the corners above.
- *
- * Uniform keys do all the work here. Every cell is [KeySize.width] wide, so `↑` is
- * above `↓` because they are both the middle cell of their row — there is no
- * measurement to keep in step and no way for the two to drift apart, which is what
- * four earlier attempts at this each got wrong in a different way.
- *
- * It is the contents of one [KeyGroup] and the only two-deep item in the bar:
- * [barHeight] is the cluster's own height plus the padding around it.
- */
-@Composable
-private fun ArrowPad(
-    text: pi.kit.mob.locales.Strings,
-    size: KeySize,
-    following: Boolean,
-    onToggleAutoScroll: () -> Unit,
-    onSend: (String) -> Unit,
-) {
-    Column(
-        modifier = Modifier.height(size.height * 2 + KEY_GAP),
-        verticalArrangement = Arrangement.spacedBy(KEY_GAP),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-            ScrollToggle(
-                label = text.terminal.scrollShort,
-                hint = text.terminal.scrollToggleHint,
-                following = following,
-                size = size,
-                onClick = onToggleAutoScroll,
-            )
-            ExtraKeyChip(
-                label = ARROW_UP.glyph,
-                active = false,
-                size = size,
-            ) { onSend(ARROW_UP.sequence) }
-            ExtraKeyChip(
-                label = text.terminal.newline,
-                active = false,
-                size = size,
-            ) { onSend(NEWLINE_SEQUENCE) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-            ExtraKeyChip(label = ARROW_LEFT.glyph, active = false, size = size) {
-                onSend(ARROW_LEFT.sequence)
-            }
-            ExtraKeyChip(label = ARROW_DOWN.glyph, active = false, size = size) {
-                onSend(ARROW_DOWN.sequence)
-            }
-            ExtraKeyChip(label = ARROW_RIGHT.glyph, active = false, size = size) {
-                onSend(ARROW_RIGHT.sequence)
-            }
-        }
-    }
-}
-
-/**
- * What the line-break key sends: `lnext`, then a newline.
- *
- * A bare `\n` is what this used to send, and it does not insert a line break — it
- * *ends the line*. In a canonical-mode terminal the newline character **is** the
- * line delimiter, so the shell read the line and ran it, which is what the reader
- * meant by "the newline key is a carriage return". The key needed a sequence of
- * its own rather than the obvious one.
- *
- * `0x16` is the terminal's `lnext` — the `^V` of `stty -a` — the line
- * discipline's "quote the next character". The newline that follows it is
- * therefore data in the line being typed rather than the end of it, which is
- * exactly what "insert a line break" means:
- *
- *  - at a shell prompt, readline has the terminal in non-canonical mode and
- *    handles `^V` itself as `quoted-insert`; the newline lands in the editing
- *    buffer and the line is not accepted. This is the mechanism that makes a
- *    pasted multi-line command editable rather than a sequence of commands, and
- *    the same one the reader gets here;
- *  - a program reading whole lines — canonical mode — has the quoting done by the
- *    line discipline instead, and receives a newline *inside* the line.
- *
- * Return still runs the line, from the soft keyboard; this key writes the line.
- * The two are deliberately different keys, and the bar's own label for this one
- * says which is which.
- */
-private const val NEWLINE_SEQUENCE = "\u0016\n"
-
-/**
- * The scroll-follow toggle: the word `滚动`, in the pad's top-left cell.
- *
- * ## What it deliberately is not
- *
- * It began as a wide two-line button pinned to the right of the whole bar, showing
- * its state in an icon *and* a word. That was three mistakes in one control: it was
- * the most prominent thing on the bar while being its least-used, its label resized
- * the scrolling area beside it whenever the state changed, and it said the same
- * thing twice.
- *
- * It then became an icon-only square, which was quieter but said nothing at all: a
- * glyph for "jump to the bottom" does not tell a user what tapping it does, and this
- * is a control most people meet for the first time here.
- *
- * A word is the answer to both. It reads as one of the bar's keys because it *is*
- * one — same size, same monospace label, same Miuix button as its neighbours — and
- * the word is short enough to fit one key without shrinking the type, which is what
- * a longer label would have forced on the whole bar.
- *
- * **Nothing about the button changes when it is tapped except its tint**: the theme's
- * primary while following, its error colour while paused. Same size, same word, same
- * shape, so it cannot be misread as a mode it is not and it never moves anything
- * beside it.
- */
 @Composable
 private fun ScrollToggle(
     label: String,
@@ -994,109 +910,65 @@ private fun ScrollToggle(
 }
 
 /**
- * Keys a phone keyboard cannot produce, mirroring Termux's extra keys row.
+ * Every label the bar draws, in the order the rows read it.
  *
- * Escape sequences are sent straight to the session rather than synthesised as
- * key events, because the view's key handling depends on focus and on the client
- * reporting modifier state, which is fragile when the soft keyboard owns input.
- *
- * The label is a lambda so it is read inside the composable and follows the
- * interface language; the sequence is the only part that is fixed.
+ * One list, two consumers: the bar renders these strings and [rememberKeySize] measures
+ * them, so a key cannot be drawn at a size the measurement did not consider. The order is
+ * the rows' own rule — the line-editing keys first, then the session keys and the symbols
+ * — and the arrows are glyphs rather than words, so they are measured from [ARROW_GLYPHS].
  */
-private class ExtraKey(
-    val sequence: String,
-    val labelOf: (pi.kit.mob.locales.Strings) -> String,
-    /** Printable keys and arrows show a glyph, so they pin their own label. */
-    val fixedLabel: String? = null,
+private fun barLabels(text: pi.kit.mob.locales.Strings): List<String> = listOf(
+    text.terminal.tab,
+    text.terminal.escape,
+    text.terminal.interrupt,
+    text.terminal.eof,
+    text.terminal.home,
+    text.terminal.end,
+    text.terminal.ctrl,
+    text.terminal.alt,
+    text.terminal.pageUp,
+    text.terminal.pageDown,
+    text.terminal.scrollShort,
+    "/",
+    "-",
+    "|",
+    "~",
+    "*",
 )
 
 /**
- * The keys that are neither arrows nor modifiers, as one run.
+ * The extra-keys bar: two rows of keys and the two actions that belong to the bar itself.
  *
- * Text entry first — escape, tab, interrupt and EOF — then the navigation keys, then
- * the symbols a shell prompt wants, because that is the order they are reached for
- * in. They are one group and not two rows: everything in the bar scrolls sideways
- * *together*, so a run and the cluster beside it stay on the same axis wherever the
- * strip is scrolled to, and a second row's only job would be to halve how far the
- * strip has to travel.
+ * ## The rule the rows follow
  *
- * The printable keys repeat their own character as their label and reuse the ESC
- * lambda; the lambda is only consulted when there is no fixed label, which keeps a
- * translated name like TAB/HOME from being overwritten by the escape byte.
- */
-private val EXTRA_KEYS: List<ExtraKey> = listOf(
-    ExtraKey("\u001b", { it.terminal.escape }),
-    ExtraKey("\t", { it.terminal.tab }),
-    ExtraKey("\u0003", { it.terminal.interrupt }),
-    ExtraKey("\u0004", { it.terminal.eof }),
-    ExtraKey("\u001b[H", { it.terminal.home }),
-    ExtraKey("\u001b[F", { it.terminal.end }),
-    ExtraKey("\u001b[5~", { it.terminal.pageUp }),
-    ExtraKey("\u001b[6~", { it.terminal.pageDown }),
-    ExtraKey("/", { it.terminal.escape }, "/"),
-    ExtraKey("-", { it.terminal.escape }, "-"),
-    ExtraKey("|", { it.terminal.escape }, "|"),
-    ExtraKey("~", { it.terminal.escape }, "~"),
-    ExtraKey("*", { it.terminal.escape }, "*"),
-)
-
-/**
- * One run of keys, on its own track.
+ * Row one is **what acts on the line you are typing** — the four arrows, `TAB`, `ESC`,
+ * `C-C`, `C-D`, `HOME`, `END` — and row two is **what changes the session rather than the
+ * line** — the two latches `CTRL` and `ALT`, the two paging keys, the scroll-follow toggle
+ * and the five symbols. Within a row the order is by how often a hand reaches for it, which
+ * is why the arrows lead and the symbols trail.
  *
- * The track is what makes a group legible: the keys of a group sit on one container
- * — Miuix's card, `surfaceContainer`, one step of the library's surface ramp up from
- * the bar, with the keys themselves back on `surface` — so a group reads as one
- * object and a key reads as raised out of it. That is the same relationship a
- * settings group has to its rows, which is why it needs no new vocabulary.
+ * That is a *reading* rule rather than a packing rule, and it replaces two earlier ones:
+ * the flat `← ↑ ↓ →` the bar started with (the eye has to count to find "down"), and the
+ * "put the tail under the head" split that made the two rows within one key of each other
+ * and said nothing about what a key was for. A reader looking for `Esc` looks in the
+ * line-editing row; one looking for `PGUP` looks in the other.
  *
- * It wraps its contents, which is what lets the arrow cluster's track be two keys
- * tall while the runs beside it are one, all centred on the bar's axis.
- */
-@Composable
-private fun KeyGroup(content: @Composable () -> Unit) {
-    Card(
-        cornerRadius = PiCorner.radius,
-        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
-        insideMargin = PaddingValues(GROUP_PADDING),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            content()
-        }
-    }
-}
-
-/**
- * The extra-keys bar: the arrow cluster and the keys beside it, in one group.
+ * ## Both rows scroll, and separately
  *
- * Every key is the same size ([rememberKeySize]) and every key is fully round — the
- * Miuix button's corner radius is the key's own half-height, so "fully round" is half
- * of the shorter side rather than a number written here. The uniform size is what
- * makes the pad line up and keeps a label from being clipped by a neighbour's width,
- * and it is the one property of this bar that four earlier revisions each got wrong
- * in a different way (ARCHITECTURE §7.4).
+ * Ten keys of the widest label do not fit a 1080px bar, so each row is a `LazyRow` and
+ * scrolls on its own. Two consequences are deliberate: a row never *wraps* (a key landing
+ * under a row it does not belong to is the thing the rule above exists to prevent), and the
+ * keys never shrink to fit — the width is the widest label's, so nothing is clipped
+ * mid-glyph.
  *
- * ## Why the arrows are still a cluster and not four more keys in the row
+ * ## The two actions at the right
  *
- * A flat `← ↑ ↓ →` is not a d-pad: the eye reads it left to right and has to stop and
- * count to find "down". The four arrows are therefore a two-row cross — `↑` above
- * `↓`, `←` and `→` flanking them — and because every key is the same rectangle the
- * alignment is by construction rather than by two widths agreeing. Flattening it into
- * the row is the design §7.4 measured and rejected, and it is the one thing the
- * grouping here may not do.
- *
- * ## One group, not two
- *
- * The bar used to be two tracks — the arrow cluster in one frame, the modifiers and
- * every other key in a second, 16dp apart — and the second frame is gone. Both
- * frames were drawn on the same container colour, so what the reader saw was one
- * strip with a seam down it: the same three surfaces at two different insets, which
- * reads as a rendering mistake rather than as two sets of keys. There is exactly one
- * thing this bar is, and it is one pad of keys; the frames that said otherwise were
- * the only part of the bar that was not the keys themselves.
- *
- * The strip is still one `LazyRow` with a single item, so the group is measured
- * unbounded along the axis and scrolls sideways when it is wider than the screen —
- * which, at eleven keys and the widest label, it is at every font scale.
+ * They are not keys: they act on the bar and on the keyboard rather than sending a byte.
+ * The **send-text** button opens a field, and what is typed there goes to the terminal as
+ * one piece — the reason this exists is a `git commit -m` message, a multi-line command, or
+ * anything long enough that the terminal's own line editing would make you retype it. The
+ * **keyboard** button raises or lowers the IME, which is otherwise only reachable by
+ * tapping the terminal (raise) or by the back gesture (lower).
  */
 @Composable
 private fun ExtraKeysRow(
@@ -1110,7 +982,15 @@ private fun ExtraKeysRow(
     onToggleAlt: () -> Unit,
     onToggleAutoScroll: () -> Unit,
     onSend: (String) -> Unit,
+    onToggleKeyboard: (Boolean) -> Unit,
 ) {
+    var sending by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+    // Read from the window rather than remembered, so it stays right when the keyboard is
+    // raised by tapping the terminal instead of by this button.
+    val density = LocalDensity.current
+    val keyboardUp = WindowInsets.ime.getBottom(density) > 0
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1118,72 +998,233 @@ private fun ExtraKeysRow(
             // The page's own surface — the colour Miuix's navigation bar and the
             // page behind it are painted in — and this strip is the page's bottom
             // edge, so anything else drew a band of its own between the terminal and
-            // the tab strip. It was a container colour a step *paler* than that in
-            // the light scheme, which is a seam at the exact place the page is meant
-            // to end. The keys stay raised out of it: [KeyGroup] puts each group on
-            // `surfaceContainer`.
+            // the tab strip. The keys stay raised out of it: [KeyGroup] puts each
+            // group on `surfaceContainer`.
             .background(MiuixTheme.colorScheme.surface),
     ) {
-        LazyRow(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = KEY_BAR_PADDING),
             horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            item {
-                KeyGroup {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ArrowPad(
-                            text = text,
-                            size = size,
-                            following = autoScroll,
-                            onToggleAutoScroll = onToggleAutoScroll,
-                            onSend = onSend,
-                        )
-                        // Two rows, and the modifiers at the head of the first one: the
-                        // bar is two keys tall for the arrow pad's sake, so a single row
-                        // of keys in it left half the height empty wherever it did not
-                        // reach — and the row reached past the right edge rather than
-                        // using the space below it. The keys that used to sit to the
-                        // right of CTRL and ALT now wrap under them, which is the report
-                        // "把后面一条按键放在 ctrl 和 alt 下面以充分利用空间".
-                        //
-                        // The pair still reads as a pair: they are first, they latch, and
-                        // their active fill is the one that stays pressed.
-                        Column(verticalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                                ExtraKeyChip(text.terminal.ctrl, active = ctrlOn, size = size) {
-                                    onToggleCtrl()
-                                }
-                                ExtraKeyChip(text.terminal.alt, active = altOn, size = size) {
-                                    onToggleAlt()
-                                }
-                                EXTRA_KEYS.take(EXTRA_KEYS_PER_ROW).forEach { key ->
-                                    ExtraKeyChip(
-                                        label = key.fixedLabel ?: key.labelOf(text),
-                                        active = false,
-                                        size = size,
-                                    ) { onSend(key.sequence) }
-                                }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
-                                EXTRA_KEYS.drop(EXTRA_KEYS_PER_ROW).forEach { key ->
-                                    ExtraKeyChip(
-                                        label = key.fixedLabel ?: key.labelOf(text),
-                                        active = false,
-                                        size = size,
-                                    ) { onSend(key.sequence) }
-                                }
-                            }
+            KeyGroup(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(KEY_GAP),
+                ) {
+                    // Row one: the line being typed.
+                    KeyRow {
+                        SendKey(ARROW_UP, size, onSend)
+                        SendKey(ARROW_DOWN, size, onSend)
+                        SendKey(ARROW_LEFT, size, onSend)
+                        SendKey(ARROW_RIGHT, size, onSend)
+                        TextKey(text.terminal.tab, "\t", size, onSend)
+                        TextKey(text.terminal.escape, "\u001b", size, onSend)
+                        TextKey(text.terminal.interrupt, "\u0003", size, onSend)
+                        TextKey(text.terminal.eof, "\u0004", size, onSend)
+                        TextKey(text.terminal.home, "\u001b[H", size, onSend)
+                        TextKey(text.terminal.end, "\u001b[F", size, onSend)
+                    }
+                    // Row two: the session and the symbols.
+                    KeyRow {
+                        ExtraKeyChip(text.terminal.ctrl, active = ctrlOn, size = size) {
+                            onToggleCtrl()
                         }
+                        ExtraKeyChip(text.terminal.alt, active = altOn, size = size) {
+                            onToggleAlt()
+                        }
+                        TextKey(text.terminal.pageUp, "\u001b[5~", size, onSend)
+                        TextKey(text.terminal.pageDown, "\u001b[6~", size, onSend)
+                        ScrollToggle(
+                            label = text.terminal.scrollShort,
+                            hint = text.terminal.scrollToggleHint,
+                            following = autoScroll,
+                            size = size,
+                            onClick = onToggleAutoScroll,
+                        )
+                        SymbolKey("/", size, onSend)
+                        SymbolKey("-", size, onSend)
+                        SymbolKey("|", size, onSend)
+                        SymbolKey("~", size, onSend)
+                        SymbolKey("*", size, onSend)
                     }
                 }
             }
+            // The bar's own two actions, one per row so the cluster is two keys tall like
+            // the grid beside it.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(KEY_GAP),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                GlyphKey(
+                    glyph = MiuixIcons.Send,
+                    description = text.terminal.keysMessage,
+                    size = size,
+                ) {
+                    draft = ""
+                    sending = true
+                }
+                GlyphKey(
+                    // A chevron rather than a keyboard glyph: the library has none, and
+                    // the direction says what the tap does — up while the keyboard is
+                    // down (raise it), down while it is up (lower it).
+                    glyph = if (keyboardUp) MiuixIcons.ExpandMore else MiuixIcons.ExpandLess,
+                    description = if (keyboardUp) {
+                        text.terminal.keysKeyboardHide
+                    } else {
+                        text.terminal.keysKeyboardShow
+                    },
+                    size = size,
+                ) {
+                    onToggleKeyboard(!keyboardUp)
+                }
+            }
         }
+    }
+
+    // The text that goes in whole. A sheet rather than a dialog: the field is the point,
+    // it wants the height, and the keyboard will be over the bottom of the screen anyway.
+    PiSheet(
+        show = sending,
+        title = text.terminal.keysMessage,
+        onDismiss = { sending = false },
+    ) {
+        TextField(
+            value = draft,
+            onValueChange = { draft = it },
+            label = text.terminal.keysMessageLabel,
+            useLabelAsPlaceholder = true,
+            cornerRadius = PiCorner.radius,
+            textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
+            // Multi-line on purpose: the reason this button exists is text the terminal's
+            // own line editor would make you retype.
+            singleLine = false,
+            minLines = 3,
+            maxLines = 8,
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+        )
+        Button(
+            cornerRadius = PiCorner.radius,
+            onClick = {
+                // The trailing carriage return is what makes it *submitted* rather than
+                // typed into the prompt: without it the shell would sit with the text on
+                // its line waiting for a Return the reader has no key for.
+                onSend(draft + "\r")
+                sending = false
+                draft = ""
+            },
+            enabled = draft.isNotEmpty(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+        ) {
+            Text(text = text.terminal.keysMessageSend)
+        }
+    }
+}
+
+/** One row of the bar's keys: a horizontal scroll of keys, never a wrap. */
+@Composable
+private fun KeyRow(content: @Composable () -> Unit) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KEY_GAP),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) { content() }
+        }
+    }
+}
+
+/** An arrow key: the glyph is the label and the sequence is its own. */
+@Composable
+private fun SendKey(key: ArrowKey, size: KeySize, onSend: (String) -> Unit) {
+    ExtraKeyChip(label = key.glyph, active = false, size = size) { onSend(key.sequence) }
+}
+
+/** A key that sends [sequence] and is labelled by its own word. */
+@Composable
+private fun TextKey(label: String, sequence: String, size: KeySize, onSend: (String) -> Unit) {
+    ExtraKeyChip(label = label, active = false, size = size) { onSend(sequence) }
+}
+
+/** A symbol key: the character is both the label and the byte. */
+@Composable
+private fun SymbolKey(symbol: String, size: KeySize, onSend: (String) -> Unit) {
+    ExtraKeyChip(label = symbol, active = false, size = size) { onSend(symbol) }
+}
+
+/**
+ * One run of keys, on its own track.
+ *
+ * The track is what makes a group legible: the keys of a group sit on one container —
+ * Miuix's card, `surfaceContainer`, one step of the library's surface ramp up from the
+ * bar, with the keys themselves back on `surface` — so a group reads as one object and a
+ * key reads as raised out of it. That is the same relationship a settings group has to its
+ * rows, which is why it needs no new vocabulary.
+ *
+ * It takes a modifier now: the bar's grid is one card that holds two scrolling rows, so it
+ * is the *remaining* width rather than its content's, and `weight` has to reach the card
+ * for the rows inside to have bounds to scroll within.
+ */
+@Composable
+private fun KeyGroup(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = modifier,
+        cornerRadius = PiCorner.radius,
+        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+        insideMargin = PaddingValues(GROUP_PADDING),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            content()
+        }
+    }
+}
+
+/**
+ * A key that carries a glyph rather than a word, for the bar's own two actions.
+ *
+ * The same [Button] the key chips use, with an icon where the label would be, so the
+ * cluster at the right is the same family as the grid beside it rather than a second kind
+ * of control dropped into the bar. Its spoken label is the sentence, because a glyph says
+ * nothing to a screen reader.
+ */
+@Composable
+private fun GlyphKey(
+    glyph: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    size: KeySize,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .size(size.width, size.height)
+            .clearAndSetSemantics { contentDescription = description },
+        cornerRadius = size.height / 2,
+        minWidth = 0.dp,
+        minHeight = 0.dp,
+        colors = ButtonDefaults.buttonColors(
+            color = MiuixTheme.colorScheme.surfaceContainer,
+            contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        ),
+        insideMargin = PaddingValues(0.dp),
+    ) {
+        Icon(
+            imageVector = glyph,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

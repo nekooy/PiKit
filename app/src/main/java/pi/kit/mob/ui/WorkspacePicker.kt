@@ -30,15 +30,23 @@ import androidx.compose.ui.unit.DpSize
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMenuRow
+import pi.kit.mob.ui.kit.piFieldColors
+import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
+import androidx.compose.ui.platform.LocalFocusManager
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Home
+import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -156,9 +164,16 @@ internal fun WorkspacePickerSheet(
     var path by remember { mutableStateOf(expand(home)) }
     var typed by remember { mutableStateOf(path) }
     var refusal by remember { mutableStateOf<String?>(null) }
+    var creating by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
     fun go(to: String) {
         refusal = null
+        // A tap on a row is a tap *away* from the path field: without this the keyboard
+        // stayed up over the list the row had just navigated to, and the field kept a
+        // focus ring that no longer matched what the sheet was showing.
+        focus.clearFocus()
         path = expand(to)
         typed = path
     }
@@ -222,29 +237,33 @@ internal fun WorkspacePickerSheet(
                 modifier = Modifier.padding(horizontal = PICKER_GUTTER, vertical = 4.dp),
             )
         }
+        // The three shortcuts are *not* folders: they go somewhere rather than being
+        // somewhere, so they carry a mark and the accent ink while the listing below them
+        // stays plain. Without that they read as three more directories — the first
+        // version of this sheet drew them exactly like the rows they are not.
         if (path != home) {
-            PiMenuRow(title = text.chat.workspacePickerHome, onClick = { go(home) })
+            NavRow(text.chat.workspacePickerHome, MiuixIcons.Home) { go(home) }
         }
         if (shared != null && path != shared) {
-            PiMenuRow(
-                title = text.chat.workspacePickerShared,
-                onClick = {
-                    if (granted) {
-                        go(shared)
-                    } else {
-                        // Without the grant the folder cannot be listed, and a row that
-                        // silently does nothing is what this sheet had before.
-                        onGrant()
-                    }
-                },
-            )
+            NavRow(text.chat.workspacePickerShared, MiuixIcons.Layers) {
+                if (granted) {
+                    go(shared)
+                } else {
+                    // Without the grant the folder cannot be listed, and a row that
+                    // silently does nothing is what this sheet had before.
+                    onGrant()
+                }
+            }
         }
         if (path != "/") {
-            PiMenuRow(
-                title = text.chat.workspacePickerParent,
-                onClick = { go(File(path).parent ?: "/") },
-            )
+            NavRow(text.chat.workspacePickerParent, MiuixIcons.Back) { go(File(path).parent ?: "/") }
         }
+        NavRow(text.chat.workspacePickerNewFolder, MiuixIcons.Add) {
+            newName = ""
+            creating = true
+        }
+        // The listing's own label, so the two families cannot be confused at a glance.
+        SmallTitle(text = text.chat.workspacePickerFolders, modifier = Modifier.padding(start = PICKER_GUTTER, top = 12.dp))
         if (listing == null) {
             // Unreadable rather than empty: listFiles answers null for a directory this
             // process may not open, which on a phone is almost always the grant missing
@@ -283,7 +302,10 @@ internal fun WorkspacePickerSheet(
         }
         Button(
             cornerRadius = PiCorner.radius,
-            onClick = { refusal = onAdd(path) },
+            onClick = {
+                focus.clearFocus()
+                refusal = onAdd(path)
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = PICKER_GUTTER, end = PICKER_GUTTER, top = 12.dp),
@@ -291,6 +313,68 @@ internal fun WorkspacePickerSheet(
             Text(text = text.chat.workspacePickerChoose)
         }
     }
+
+    // Making a folder, where the folders are. It creates inside the path the sheet is
+    // *showing*, which is the only place it could mean: the reader navigated here.
+    WindowDialog(
+        show = creating,
+        title = text.chat.workspacePickerNewFolderTitle,
+        onDismissRequest = { creating = false },
+    ) {
+        TextField(
+            cornerRadius = PiCorner.radius,
+            value = newName,
+            onValueChange = { newName = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = text.chat.workspacePickerNewFolderName,
+            useLabelAsPlaceholder = true,
+            singleLine = true,
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
+        )
+        PiDialogAnswers(
+            dismiss = text.common.cancel,
+            onDismiss = { creating = false },
+            confirm = text.chat.workspacePickerCreate,
+            onConfirm = {
+                val target = File(path, newName.trim())
+                val made = newName.isNotBlank() &&
+                    runCatching { target.mkdirs() || target.isDirectory }.getOrDefault(false)
+                creating = false
+                if (made) {
+                    go(target.absolutePath)
+                } else {
+                    refusal = text.chat.workspacePickerCreateFailed
+                }
+            },
+            // Nothing to create while the field is empty, or while the name is a path.
+            confirmEnabled = newName.isNotBlank() && !newName.contains('/'),
+            modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+}
+
+/**
+ * A row that goes somewhere, drawn in the accent ink with a mark.
+ *
+ * The picker's own row family: `PiMenuRow` is the *listing* — folders to open — and a
+ * shortcut that looked like one was read as a folder that happens to be called 主目录.
+ */
+@Composable
+private fun NavRow(label: String, glyph: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    PiMenuRow(
+        title = label,
+        titleColor = MiuixTheme.colorScheme.primary,
+        startAction = {
+            Icon(
+                imageVector = glyph,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MiuixTheme.colorScheme.primary,
+            )
+        },
+        onClick = onClick,
+    )
 }
 
 /**

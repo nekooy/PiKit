@@ -14,8 +14,8 @@ package pi.kit.mob.locales
  * 1. **Common commands** — the handful that are non-obvious here.
  * 2. **What this shell can read and write** — the two paths, as two short
  *    paragraphs of ordinary prose: `/sdcard` is the phone's real storage and works
- *    whenever the app holds all-files access, and `~/storage` holds only the folders
- *    granted to it. They were a two-column list with the labels padded into a path
+ *    whenever the app holds all-files access, and `~/storage/shared` is that same
+ *    storage as one link inside the environment. They were a two-column list with the labels padded into a path
  *    column, which is a shape a reader has to decode; a sentence each needs no
  *    decoding, and the blank line between them is what keeps them two answers
  *    rather than one.
@@ -65,7 +65,7 @@ PiKit - Termux environment
   pkg upgrade           upgrade everything
   termux-change-repo    switch mirrors
   termux-setup-storage  link ~/storage
-  ls ~/storage          folders you granted
+  ls ~/storage          the phone's storage
   pi                    the agent's interface
 
 2. What this shell can read and write
@@ -74,8 +74,8 @@ PiKit - Termux environment
 reads and writes it whenever the app holds
 all-files access.
 
-~/storage holds links to the folders you have
-granted.
+~/storage/shared is the whole of the phone
+storage, as one link.
 
 3. Disk space
 
@@ -95,7 +95,7 @@ PiKit - Termux 环境
   pkg upgrade           升级全部
   termux-change-repo    换软件源
   termux-setup-storage  建 ~/storage
-  ls ~/storage          已授权的文件夹
+  ls ~/storage          手机存储
   pi                    Agent 界面
 
 2. 终端能直接读写的手机路径
@@ -103,7 +103,8 @@ PiKit - Termux 环境
 /sdcard 就是手机存储的真实路径；应用拿到「所
 有文件访问权限」后，终端就能直接读写它。
 
-~/storage 里只有你授权的那些文件夹的链接。
+~/storage/shared 一个链接，就是手机存储的全
+部内容。
 
 3. 占用存储的说明
 
@@ -122,7 +123,7 @@ PiKit - Termux 環境
   pkg upgrade           すべて更新
   termux-change-repo    ミラー変更
   termux-setup-storage  ~/storage 作成
-  ls ~/storage          許可したフォルダー
+  ls ~/storage          端末のストレージ
   pi                    エージェント画面
 
 2. シェルが読み書きできる場所
@@ -131,8 +132,8 @@ PiKit - Termux 環境
 が「すべてのファイルへのアクセス」を持って
 いれば、シェルから直接読み書きできます。
 
-~/storage には、許可したフォルダーへのリンク
-だけが入ります。
+~/storage/shared は端末のストレージ全体への
+リンク 1 本です。
 
 3. ストレージの使用について
 

@@ -379,6 +379,7 @@ fun SessionsScreen(
                     visible = visible,
                     text = text,
                     workspaces = workspaces,
+                    defaultPath = defaultWorkspacePath,
                     selecting = selecting,
                     selected = selected,
                     snippets = snippets,
@@ -515,6 +516,7 @@ private fun ConversationList(
     visible: List<PiAgentSession.SessionSummary>,
     text: Strings,
     workspaces: List<Workspace>,
+    defaultPath: String,
     selecting: Boolean,
     selected: Set<String>,
     snippets: Map<String, String>,
@@ -534,7 +536,9 @@ private fun ConversationList(
     val groups = sessionGroups(
         sessions = otherVisible,
         workspaces = workspaces,
+        defaultPath = defaultPath,
         unknownLabel = text.sessions.groupUnknown,
+        chip = text.chat::workspaceChip,
     )
 
     LazyColumn(
@@ -629,7 +633,9 @@ internal data class SessionGroup(
 internal fun sessionGroups(
     sessions: List<PiAgentSession.SessionSummary>,
     workspaces: List<Workspace>,
+    defaultPath: String,
     unknownLabel: String,
+    chip: (String, Boolean) -> String,
 ): List<SessionGroup> {
     if (sessions.isEmpty()) return emptyList()
     val byPath = workspaces.associateBy { it.path }
@@ -642,10 +648,10 @@ internal fun sessionGroups(
         val workspace = byPath[path]
         val label = when {
             path.isBlank() -> unknownLabel
-            // The folder's own name, with no `（默认）`: a heading groups conversations by
-            // where they ran, and which workspace a *new* one would start in is a fact
-            // about the list on the composer's chip, not about these rows.
-            workspace != null -> workspace.label
+            // The name the composer's *menu* gives it, `（默认）` included: the headings
+            // are a list, and a list is where the mark belongs. The chip above the composer
+            // is the one place that says the folder's own name alone.
+            workspace != null -> chip(workspace.label, path == defaultPath)
             else -> java.io.File(path).name.ifBlank { path }
         }
         SessionGroup(

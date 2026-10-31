@@ -10,7 +10,7 @@ import java.io.File
  * pi loads `$HOME/.pi/agent/AGENTS.md` automatically at startup, and PiKit writes it on
  * install: it describes the environment the agent is running in (the prefix, `$HOME`,
  * the workspace), the three permission tiers it may be judged by, which shared-storage
- * folders the user granted, and how to leave the phone tidy. It is part of the *context*
+ * folder it may write in, and how to leave the phone tidy. It is part of the *context*
  * rather than of the machinery — the rules that must hold are enforced on every tool call
  * by `tools/pikit-permissions.ts`, and this file is what tells the model about them before
  * it writes a command at all.
@@ -136,9 +136,13 @@ object AgentContext {
         in its own workspace and picks it in the composer. Every project you create,
         clone or build belongs in the workspace you were started in.
 
-        Do not work in `${'$'}HOME` itself: it holds pi's own configuration
-        (`${'$'}HOME/.pi`), its saved sessions, the `storage` links and the
-        workspaces, and a path mistake there damages the agent rather than a project.
+        Any directory can be a workspace — the app's own tree, `${'$'}HOME`, even the
+        phone's storage under `/sdcard` — so `pwd` is the only thing that says where
+        "inside" is, and a path outside it is a write this tier may refuse even when it
+        looks like part of the same job. `${'$'}HOME` itself is a legal workspace and a
+        poor one: it holds pi's configuration (`${'$'}HOME/.pi`), its saved sessions and
+        the `storage` link, so a `workspace-write` agent started there may write the
+        agent's own state by accident. Say so if you find yourself in it.
 
         ## Permissions — three tiers, enforced on every tool call
 
@@ -149,8 +153,8 @@ object AgentContext {
           any `bash` command that is not a read-only one (`cat`, `ls`, `rg`, `git
           log`, …). Use it to read and explain, and say what you would change.
         - **workspace-write** (the usual setting) — read anywhere, write only inside
-          your workspace and inside the shared-storage folders the reader granted.
-          A write, delete, move or redirect aimed anywhere else is refused.
+          your workspace. A write, delete, move or redirect aimed anywhere else is
+          refused.
         - **full-access** — no refusals at all.
 
         A refusal comes back to you as a tool error naming the tier and the path. Do
@@ -160,18 +164,21 @@ object AgentContext {
         ## Deleting things
 
         Inside the workspace a recursive delete is fine at any depth: `rm -rf build`,
-        `rm -rf ./old`, `find . -name '*.tmp' -delete`. Outside it — `${'$'}HOME`,
-        `${'$'}HOME/tmp`, `~/storage/*`, `/sdcard`, `/data` — it is a write outside
-        the workspace, and `workspace-write` refuses it. Ask the reader instead of
-        improvising.
+        `rm -rf ./old`, `find . -name '*.tmp' -delete`. Outside it — a sibling of the
+        workspace, `${'$'}HOME/tmp`, `/sdcard`, `/data` — it is a write outside the
+        workspace, and `workspace-write` refuses it. Ask the reader instead of
+        improvising; starting a conversation *in* the folder is what makes it writable.
 
         ## Shared storage — the user's own files
 
-        `~/storage/*` points at the user's real phone storage: photos, documents,
-        downloads, backups. Only the folders the reader switched on exist there, and
-        only those are writable. Reading is free; treat the contents as the user's
-        data rather than as scratch space, and never delete or overwrite something
-        there unless that is exactly what you were asked to do.
+        `~/storage/shared` is the whole of the user's phone storage: photos, documents,
+        downloads, backups, and the folders inside it (`Download`, `DCIM`, `Documents`,
+        …). It exists only while the app holds Android's file-access permission, and it
+        is a convenience rather than a second permission: a write inside it is judged by
+        the tier and by `pwd` like any other path, so reading is free and writing needs a
+        workspace that contains the target. Treat the contents as the user's data rather
+        than as scratch space, and never delete or overwrite something there unless that
+        is exactly what you were asked to do.
 
         ## Housekeeping — leave nothing behind
 
