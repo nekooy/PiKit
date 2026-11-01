@@ -1002,7 +1002,7 @@ internal fun ChatScreen(
             // live there — it is an ordinary folder once "all files access" is granted,
             // and the tier's writable root is the workspace, not the page of switches
             // that used to stand between them (§14).
-            shared = StorageAccess.sharedRoot()?.absolutePath,
+            shared = StorageAccess.sharedPath(session.env),
             existing = rememberWorkspacePaths(context, session.env),
             granted = StorageAccess.isGranted(),
             onGrant = {

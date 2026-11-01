@@ -160,6 +160,13 @@ Settings → Agent process has one row per half. The author's row offers the def
 reader's does not, because "restore the default" for a document whose promise is that the app
 never rewrites it could only mean "throw my text away".
 
+**The picker walks to `~/storage/shared`, not to `/sdcard`.** Two names for one directory, and
+the one the reader sees becomes the one a workspace is recorded under, the one a backup names
+and the one `AGENTS.md` mentions — so it is the farm's own spelling, which is also what a
+script types. `StorageAccess.sharedPath` answers the link when the grant has created it and
+falls back to the real root otherwise; the picker then asks for the grant instead of walking
+into a directory that is not there.
+
 **The farm only ever shrinks to what this build creates.** `syncFarm` creates the links in
 `StorageAccess.LINKS` — today one, `shared` — and a link it does not create is *deleted*, because the
 alternative is a farm that grows and never forgets: an install that shipped the seven

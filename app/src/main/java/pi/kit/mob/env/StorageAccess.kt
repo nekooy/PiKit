@@ -83,6 +83,22 @@ object StorageAccess {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    /**
+     * The phone's storage as the *shell* spells it, for navigating to.
+     *
+     * `~/storage/shared` rather than `/storage/emulated/0`, because the farm is what the
+     * environment documents and what a script types: two names for one directory, and the
+     * one the picker shows becomes the one a workspace is recorded under, the one a backup
+     * names and the one `AGENTS.md` mentions. The link is the farm's own, so this is null
+     * when the grant is missing — the picker then asks for the grant instead of walking
+     * the reader into a directory that is not there.
+     */
+    fun sharedPath(env: TermuxEnv): String? {
+        val link = File(File(env.home, STORAGE_DIR_NAME), "shared")
+        if (link.isDirectory) return link.absolutePath
+        return sharedRoot()?.absolutePath
+    }
+
     /** `/sdcard`, or null on a device (or an emulator) that does not have one. */
     fun sharedRoot(): File? = runCatching {
         android.os.Environment.getExternalStorageDirectory()

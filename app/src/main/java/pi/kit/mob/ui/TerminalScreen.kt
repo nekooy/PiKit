@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -1064,31 +1067,54 @@ private fun ExtraKeysRow(
             // and the row is the one place where a key that cannot be hit is worse than a
             // key that is off screen, because the bar exists to save typing. A key is as
             // wide as its label needs and the row scrolls when the labels do not fit.
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    // No clip of its own: the leading edge is the pill's, and the
-                    // trailing edge is where the three actions begin — a key sliding
-                    // under them is cut by the row's own bounds, which is exactly where a
-                    // cut belongs.
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BarKey(
-                    label = text.terminal.scrollShort,
-                    spoken = text.terminal.scrollToggleHint,
-                    // The one key whose *state* is visible: the accent while following,
-                    // the error ink while paused, so it reads as a mode rather than as a
-                    // button.
-                    labelColor = if (autoScroll) TERMINAL_ACCENT else TERMINAL_ERROR,
-                    onClick = onToggleAutoScroll,
+            Box(Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // No clip of its own: the leading edge is the pill's arc, and the
+                        // trailing one is where the actions begin.
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Spacers inside the scrolling content rather than padding on the
+                    // viewport: an inset would scroll the cut with the keys and put a
+                    // straight edge back inside the pill. These scroll away with them, so
+                    // at rest the first key clears the arc and once the row moves it is
+                    // the arc that hides it.
+                    Spacer(Modifier.width(BAR_INNER_PADDING))
+                    BarKey(
+                        label = text.terminal.scrollShort,
+                        spoken = text.terminal.scrollToggleHint,
+                        // The one key whose *state* is visible: the accent while
+                        // following, the error ink while paused, so it reads as a mode
+                        // rather than as a button.
+                        labelColor = if (autoScroll) TERMINAL_ACCENT else TERMINAL_ERROR,
+                        onClick = onToggleAutoScroll,
+                    )
+                    ArrowKey(ARROW_UP, onSend)
+                    ArrowKey(ARROW_DOWN, onSend)
+                    ArrowKey(ARROW_LEFT, onSend)
+                    ArrowKey(ARROW_RIGHT, onSend)
+                    BarKey(label = text.terminal.escape, onClick = { onSend("\u001b") })
+                    Spacer(Modifier.width(BAR_INNER_PADDING))
+                }
+                // A hard edge where the keys run under the actions reads as a clipped key
+                // rather than as "there is more". A bounded box — `height`, not
+                // `fillMaxHeight`: an unbounded child of this Row takes the page's whole
+                // height and stretches the pill with it, which was measured as a bar that
+                // filled the screen.
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(BAR_FADE_WIDTH)
+                        .height(BAR_KEY_HEIGHT)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color.Transparent, BAR_BACKGROUND),
+                            ),
+                        ),
                 )
-                ArrowKey(ARROW_UP, onSend)
-                ArrowKey(ARROW_DOWN, onSend)
-                ArrowKey(ARROW_LEFT, onSend)
-                ArrowKey(ARROW_RIGHT, onSend)
-                BarKey(label = text.terminal.escape, onClick = { onSend("\u001b") })
             }
             BarAction(
                 painter = painterResource(R.drawable.ic_send_text),
@@ -1267,6 +1293,7 @@ private val BAR_KEY_RADIUS = 10.dp
 private val BAR_ACTION_SIZE = 34.dp
 private val BAR_ACTION_GLYPH = 17.dp
 private val BAR_GAP = 4.dp
+private val BAR_FADE_WIDTH = 24.dp
 private val BAR_PADDING = 6.dp
 private val BAR_INNER_PADDING = 5.dp
 private val BAR_SIDE_PADDING = 8.dp
