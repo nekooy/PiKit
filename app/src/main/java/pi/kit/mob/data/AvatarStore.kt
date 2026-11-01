@@ -28,7 +28,10 @@ package pi.kit.mob.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
+import androidx.annotation.RequiresApi
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,44 +54,89 @@ object AvatarStore {
     /**
      * The picked picture, decoded and bounded, for the crop step.
      *
-     * Separate from [store] because it happens *before* the reader has chosen what part
-     * of the picture to keep: this one is only ever a preview, so it is bounded to a
+     * Separate from [storeSquare] because it happens *before* the reader has chosen what
+     * part of the picture to keep: this one is only ever a preview, so it is bounded to a
      * little more than the square it is drawn in rather than to the stored size.
+     *
+     * ## The orientation is the platform's job
+     *
+     * A photo the camera stored upright carries its rotation in an EXIF tag and its
+     * pixels are on their side, and `BitmapFactory` reads the pixels and nothing else — so
+     * the crop window used to open on a portrait lying down, which reads as a broken
+     * picture rather than as a tag the decoder ignored. `ImageDecoder` applies the tag as
+     * it decodes; it is API 28, and [decodeSampled] is what 26 and 27 get.
      */
     suspend fun decodeForCrop(context: Context, uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
         runCatching {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(uri)?.use {
-                BitmapFactory.decodeStream(it, null, bounds)
-            }
-            var sample = 1
-            while (
-                bounds.outWidth / (sample * 2) >= CROP_SOURCE_PX &&
-                bounds.outHeight / (sample * 2) >= CROP_SOURCE_PX
-            ) {
-                sample *= 2
-            }
-            val options = BitmapFactory.Options().apply { inSampleSize = sample }
-            context.contentResolver.openInputStream(uri)?.use {
-                BitmapFactory.decodeStream(it, null, options)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                decodeOriented(context, uri)
+            } else {
+                decodeSampled(context, uri)
             }
         }.getOrNull()
+    }
+
+    /** [decodeForCrop] on API 28 and up: the same sampling, with the EXIF tag applied. */
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun decodeOriented(context: Context, uri: Uri): Bitmap? {
+        val source = ImageDecoder.createSource(context.contentResolver, uri)
+        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            // Software, because the crop step takes a sub-rectangle with
+            // `Bitmap.createBitmap`, which refuses a hardware bitmap. The sample is
+            // solved from the size the decoder reports, which is the size *after* the
+            // orientation, so a rotated photo is bounded by its upright dimensions.
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            decoder.setTargetSampleSize(
+                sampleFor(minOf(info.size.width, info.size.height)),
+            )
+        }
+    }
+
+    /** [decodeForCrop] below API 28, where the EXIF tag is not available this cheaply. */
+    private fun decodeSampled(context: Context, uri: Uri): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, bounds)
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleFor(minOf(bounds.outWidth, bounds.outHeight))
+        }
+        return context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, options)
+        }
+    }
+
+    /**
+     * The power of two that keeps the *shorter* side of a [shortest]-side picture at or
+     * above [CROP_SOURCE_PX].
+     *
+     * The shorter side, because the crop is square: the frame can never show more than
+     * the shorter side, so that is the dimension the zoom spends.
+     */
+    private fun sampleFor(shortest: Int): Int {
+        var sample = 1
+        while (shortest / (sample * 2) >= CROP_SOURCE_PX) sample *= 2
+        return sample
     }
 
     /**
      * Writes the square the reader cropped, as the slot's picture.
      *
      * The crop is already square, so the only work is the size: one file, one format and
-     * one dimension, exactly as [store] does it, because everything downstream — the
-     * circle, the backup, the decode on the next launch — expects that.
+     * one dimension, exactly as the whole picture did it, because everything downstream —
+     * the circle, the backup, the decode on the next launch — expects that.
+     *
+     * The caller keeps ownership of [square]: the crop window is still drawing it while
+     * this runs (it animates out through `show`), and `scaleToFit` hands its argument back
+     * untouched when it already fits, so the only bitmap recycled here is one this
+     * function made.
      */
     fun storeSquare(filesDir: File, slot: AvatarSlot, square: Bitmap): String? = runCatching {
         val scaled = scaleToFit(square, AVATAR_STORED_PX)
         val target = file(filesDir, slot)
         target.parentFile?.mkdirs()
         target.outputStream().use { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        if (scaled !== square) square.recycle()
-        scaled.recycle()
+        if (scaled !== square) scaled.recycle()
         target.absolutePath
     }.getOrNull()
 

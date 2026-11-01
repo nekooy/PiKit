@@ -925,10 +925,16 @@ interface Strings {
         val avatarName: String
         val avatarNameHint: String
 
-        /** The square crop the picture goes through before it is stored. */
+        /**
+         * The crop window the picture goes through before it is stored.
+         *
+         * The hint names both gestures because the window has two ways to zoom — a pinch
+         * and the slider under it — and [avatarCropZoom] is that slider's label.
+         */
         val avatarCropTitle: String
         val avatarCropHint: String
         val avatarCropUse: String
+        val avatarCropZoom: String
 
         /** In the avatar sheet: the row of colour swatches under the label. */
         val avatarColor: String

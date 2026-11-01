@@ -2,42 +2,25 @@ package pi.kit.mob.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -52,8 +35,6 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.PiAvatar
-import pi.kit.mob.ui.kit.PiCorner
-import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
@@ -66,7 +47,6 @@ import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * Cold-start conversation behaviour, the light/dark choice, the text size, the
@@ -395,7 +375,12 @@ private fun AvatarSheet(
     // The picture goes no further until it has been cropped: a photo straight from the
     // camera is not square, and a circle that silently kept the middle of it was the
     // "上传图片似乎不能裁剪" this page used to answer by cropping on the reader's behalf.
+    //
+    // Two values rather than one: the crop window animates out through `show`, so the
+    // picture it is drawing has to outlive the answer that closes it — a null slot would
+    // remove the window from the hierarchy with its content already gone.
     var cropping by remember(slot) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var cropShown by remember(slot) { mutableStateOf<android.graphics.Bitmap?>(null) }
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
@@ -403,7 +388,10 @@ private fun AvatarSheet(
         scope.launch {
             val decoded = AvatarStore.decodeForCrop(context, uri)
             failed = decoded == null
-            if (decoded != null) cropping = decoded
+            if (decoded != null) {
+                cropShown = decoded
+                cropping = decoded
+            }
         }
     }
 
@@ -499,21 +487,28 @@ private fun AvatarSheet(
         }
     }
 
-    // The crop step. Its own window over the sheet, keyed on the decoded picture so a
-    // second pick starts from the new one rather than from the last drag.
-    cropping?.let { picture ->
+    // The crop step: its own window over the sheet, keyed on the decoded picture so a
+    // second pick starts from the new one rather than from the last drag. The bitmap is
+    // recycled only once the window has finished leaving, because it is still being
+    // drawn on the way out.
+    cropShown?.let { picture ->
         AvatarCropDialog(
             picture = picture,
+            show = cropping != null,
             text = text,
-            onDismiss = {
+            onDismiss = { cropping = null },
+            onDismissFinished = {
                 picture.recycle()
-                cropping = null
+                cropShown = null
             },
             onConfirm = { square ->
                 val stored = AvatarStore.storeSquare(filesDir, slot, square)
                 failed = stored == null
-                picture.recycle()
                 cropping = null
+                // The crop is the caller's to release: `createBitmap` hands back the
+                // source itself when the crop is the whole picture, and that one is the
+                // window's — it is recycled once the window has finished leaving.
+                if (square !== picture) square.recycle()
                 // The old picture is replaced only once the new one is on disk: a crop
                 // that could not be written leaves the avatar as it was rather than
                 // blanking it.
@@ -521,128 +516,6 @@ private fun AvatarSheet(
             },
         )
     }
-}
-
-/**
- * The square-crop step between picking a picture and keeping it.
- *
- * ## Why it exists
- *
- * The stored picture is drawn in a circle at 28dp and in an 88dp preview, and every
- * picture the picker hands back is whatever shape the camera or the download was. Until
- * this step existed the app cropped to the centre itself (`ContentScale.Crop`), which
- * quietly threw away everything outside the middle of a portrait photo — the reader could
- * not say *what* part of the picture the circle should show. Now they drag it into place,
- * and what the square shows is what the circle will show.
- *
- * ## The arithmetic
- *
- * The picture is scaled to *cover* the square ([coverScale]), then pushed around by
- * [offset] and grown by [zoom]. The offsets are clamped so a corner can never come inside
- * the square — an empty wedge in a crop preview is a crop that has nothing to keep — and
- * the crop itself maps the square back into the source's pixels by the same two numbers,
- * with no rounding shared between the preview and the result: the preview is a guide, the
- * bitmap is the answer.
- */
-@Composable
-private fun AvatarCropDialog(
-    picture: android.graphics.Bitmap,
-    text: Strings,
-    onDismiss: () -> Unit,
-    onConfirm: (android.graphics.Bitmap) -> Unit,
-) {
-    var zoom by remember(picture) { mutableFloatStateOf(1f) }
-    var offset by remember(picture) { mutableStateOf(Offset.Zero) }
-    var box by remember { mutableIntStateOf(0) }
-    val cover = if (box == 0) {
-        1f
-    } else {
-        maxOf(box.toFloat() / picture.width, box.toFloat() / picture.height)
-    }
-
-    // The drawn size of the picture at the current zoom, and the bound the offset may
-    // reach: the picture has to keep covering the square.
-    fun clamp(candidate: Offset, scale: Float): Offset {
-        if (box == 0) return Offset.Zero
-        val drawnW = picture.width * cover * scale
-        val drawnH = picture.height * cover * scale
-        val maxX = ((drawnW - box) / 2f).coerceAtLeast(0f)
-        val maxY = ((drawnH - box) / 2f).coerceAtLeast(0f)
-        return Offset(
-            candidate.x.coerceIn(-maxX, maxX),
-            candidate.y.coerceIn(-maxY, maxY),
-        )
-    }
-
-    WindowDialog(
-        show = true,
-        title = text.settings.avatarCropTitle,
-        summary = text.settings.avatarCropHint,
-        onDismissRequest = onDismiss,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(PiCorner.radius))
-                .background(MiuixTheme.colorScheme.surfaceContainer)
-                .onSizeChanged { box = it.width }
-                .pointerInput(picture, box) {
-                    detectTransformGestures { _, pan, gestureZoom, _ ->
-                        val next = (zoom * gestureZoom).coerceIn(1f, 4f)
-                        zoom = next
-                        offset = clamp(offset + pan, next)
-                    }
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (box > 0) {
-                val density = LocalDensity.current
-                // The drawn size in pixels is the source size times `cover × zoom`, so at
-                // zoom 1 the picture exactly covers the square in its longer axis.
-                Image(
-                    bitmap = picture.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillBounds,
-                    modifier = Modifier
-                        .size(
-                            width = with(density) { (picture.width * cover * zoom).toDp() },
-                            height = with(density) { (picture.height * cover * zoom).toDp() },
-                        )
-                        .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) },
-                )
-            }
-        }
-        PiDialogAnswers(
-            dismiss = text.common.cancel,
-            onDismiss = onDismiss,
-            confirm = text.settings.avatarCropUse,
-            onConfirm = { onConfirm(crop(picture, box, cover * zoom, offset)) },
-            modifier = Modifier.padding(top = 12.dp),
-        )
-    }
-}
-
-/**
- * The square the preview shows, as a bitmap.
- *
- * [scale] is the source-to-preview factor (`cover × zoom`), so dividing the preview's own
- * distances by it lands in source pixels. Clamped to the picture, because a crop that ran
- * off the edge would throw rather than produce a slightly smaller square.
- */
-private fun crop(
-    picture: android.graphics.Bitmap,
-    box: Int,
-    scale: Float,
-    offset: Offset,
-): android.graphics.Bitmap {
-    val side = if (scale <= 0f) box else (box / scale).toInt().coerceAtLeast(1)
-    val left = ((picture.width - side) / 2f - offset.x / scale).toInt()
-    val top = ((picture.height - side) / 2f - offset.y / scale).toInt()
-    val x = left.coerceIn(0, (picture.width - side).coerceAtLeast(0))
-    val y = top.coerceIn(0, (picture.height - side).coerceAtLeast(0))
-    val safeSide = side.coerceAtMost(minOf(picture.width - x, picture.height - y))
-    return android.graphics.Bitmap.createBitmap(picture, x, y, safeSide, safeSide)
 }
 
 /** The swatch's diameter: eight of them plus four 6dp gaps is 298dp, inside 312dp. */
