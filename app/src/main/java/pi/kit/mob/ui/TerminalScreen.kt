@@ -1058,11 +1058,20 @@ private fun ExtraKeysRow(
                 .fillMaxWidth()
                 .clip(BarShape)
                 .background(BAR_BACKGROUND)
-                // No horizontal padding: the keys have to run to the pill's own edge, so
-                // the *pill's* rounded clip is what hides a half-scrolled key on the
-                // leading side. An inner inset put a straight vertical cut five dp inside
-                // the arc, which is what read as a rendering fault.
-                .padding(vertical = BAR_INNER_PADDING),
+                // No *leading* padding: the keys have to run to the pill's own edge, so
+                // the *pill's* rounded clip is what hides a half-scrolled key there. An
+                // inner inset put a straight vertical cut five dp inside the arc, which is
+                // what read as a rendering fault. The trailing side is the other way
+                // round: the last action is a 34dp circle in a 44dp pill, so a 5dp inset
+                // puts it *concentric* with the pill's end cap — the same 5dp margin the
+                // keys have above and below — and anything smaller lets the arc cut the
+                // circle's right side off, which is what "the keyboard button is flush
+                // against the edge" was.
+                .padding(
+                    top = BAR_INNER_PADDING,
+                    end = BAR_INNER_PADDING,
+                    bottom = BAR_INNER_PADDING,
+                ),
             horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
