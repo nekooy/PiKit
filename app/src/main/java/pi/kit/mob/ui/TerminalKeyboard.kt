@@ -82,6 +82,10 @@ internal fun PcKeyboard(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            // A rounded panel, because everything it sits between is rounded: the bar
+            // below it is a pill and the cards above it have the app's own radius, so a
+            // rectangle with square corners read as a piece of another app.
+            .clip(RoundedCornerShape(KEYBOARD_RADIUS))
             .background(KEYBOARD_BACKGROUND)
             .padding(horizontal = 3.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -215,3 +219,4 @@ private val KEYBOARD_KEY = Color(0xFF4A4A4C)
 private val KEYBOARD_ACTIVE = Color(0xFF8FC1FF)
 private val KEYBOARD_INK = Color(0xFFF2F2F7)
 private val KEYBOARD_KEY_HEIGHT = 34.dp
+private val KEYBOARD_RADIUS = 14.dp

@@ -22,14 +22,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import java.io.File
+import pi.kit.mob.R
 import pi.kit.mob.data.Workspace
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.env.TermuxEnv
@@ -256,10 +259,10 @@ internal fun WorkspacePickerSheet(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (path != home) {
-                NavChip(text.chat.workspacePickerHome, MiuixIcons.Home) { go(home) }
+                NavChip(text.chat.workspacePickerHome, rememberVectorPainter(MiuixIcons.Home)) { go(home) }
             }
             if (shared != null && path != shared) {
-                NavChip(text.chat.workspacePickerShared, MiuixIcons.Phone) {
+                NavChip(text.chat.workspacePickerShared, painterResource(R.drawable.ic_smartphone)) {
                     if (granted) {
                         go(shared)
                     } else {
@@ -270,11 +273,11 @@ internal fun WorkspacePickerSheet(
                 }
             }
             if (path != "/") {
-                NavChip(text.chat.workspacePickerParent, MiuixIcons.Back) {
+                NavChip(text.chat.workspacePickerParent, rememberVectorPainter(MiuixIcons.Back)) {
                     go(File(path).parent ?: "/")
                 }
             }
-            NavChip(text.chat.workspacePickerNewFolder, MiuixIcons.Add) {
+            NavChip(text.chat.workspacePickerNewFolder, rememberVectorPainter(MiuixIcons.Add)) {
                 newName = ""
                 creating = true
             }
@@ -381,7 +384,7 @@ internal fun WorkspacePickerSheet(
 @Composable
 private fun NavChip(
     label: String,
-    glyph: androidx.compose.ui.graphics.vector.ImageVector,
+    glyph: androidx.compose.ui.graphics.painter.Painter,
     onClick: () -> Unit,
 ) {
     Button(
@@ -401,8 +404,9 @@ private fun NavChip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = glyph,
+                painter = glyph,
                 contentDescription = null,
+                tint = MiuixTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(14.dp),
             )
             Text(text = label, style = MiuixTheme.textStyles.footnote2, maxLines = 1)

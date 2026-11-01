@@ -226,10 +226,9 @@ fun TerminalScreen(session: PiAgentSession) {
     // what this page is rather than a count.
     val running = sessions.count { it.running }
 
-    // Measured here rather than inside the bar, because two things have to agree on
-    // it: the bar's own height, and the room the terminal leaves under its last line.
+    // Measured here rather than inside the bar: one key size for every cap in it, from
+    // a `TextMeasurer` pass before the first layout (see `rememberKeySize`).
     val keys = rememberKeySize(t, LocalDensity.current.fontScale)
-    val keysHeight = barHeight(keys)
 
     PiPage(
         // The four tab roots left-align their titles and subtitles. The bar's right
@@ -377,10 +376,12 @@ fun TerminalScreen(session: PiAgentSession) {
                     AndroidView(
                         modifier = Modifier
                             .fillMaxSize()
-                            // Leave room for the extra keys row underneath — the same
-                            // derived height the bar itself is drawn at, so the last
-                            // line of the terminal can never sit under a key.
-                            .padding(bottom = keysHeight)
+                            // No inset for the bar: it is a sibling in the column now,
+                            // and the Box above it is measured in the space that is
+                            // left. That is what makes the keyboard panel *push* the
+                            // terminal up rather than cover its last lines — the view
+                            // is shorter, the renderer has fewer rows, the shell
+                            // scrolls.
                             // Compose's after-layout hook. `updateSize()` is what
                             // creates the emulator the renderer paints from, and
                             // it bails out on a zero-sized view — so it has to run
@@ -459,30 +460,31 @@ fun TerminalScreen(session: PiAgentSession) {
                     )
                 }
 
-                ExtraKeysRow(
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    text = t,
-                    size = keys,
-                    autoScroll = autoScroll,
-                    keyboardPanel = keyboardPanel,
-                    onToggleAutoScroll = { autoScroll = !autoScroll },
-                    onToggleKeyboardPanel = { on ->
-                        keyboardPanel = on
-                        // A panel and an IME that both answer the same tap are two
-                        // keyboards fighting over one cursor, so the panel owning the
-                        // input means the IME is put away — and the terminal stops
-                        // raising it on a tap until the panel is closed.
-                        holders.imeSuppressed = on
-                        if (on) showIme(false)
-                    },
-                    onSend = { sequence -> selected?.write(sequence) },
-                    // Through the view rather than through Compose: the IME is attached
-                    // to the terminal's own input connection, so `LocalSoftware
-                    // KeyboardController` (which speaks for a Compose text field) would
-                    // ask the window for a keyboard nothing is listening to.
-                    onToggleKeyboard = { show -> showIme(show) },
-                )
             }
+
+            ExtraKeysRow(
+                modifier = Modifier.fillMaxWidth(),
+                text = t,
+                size = keys,
+                autoScroll = autoScroll,
+                keyboardPanel = keyboardPanel,
+                onToggleAutoScroll = { autoScroll = !autoScroll },
+                onToggleKeyboardPanel = { on ->
+                    keyboardPanel = on
+                    // A panel and an IME that both answer the same tap are two
+                    // keyboards fighting over one cursor, so the panel owning the
+                    // input means the IME is put away — and the terminal stops
+                    // raising it on a tap until the panel is closed.
+                    holders.imeSuppressed = on
+                    if (on) showIme(false)
+                },
+                onSend = { sequence -> selected?.write(sequence) },
+                // Through the view rather than through Compose: the IME is attached
+                // to the terminal's own input connection, so `LocalSoftware
+                // KeyboardController` (which speaks for a Compose text field) would
+                // ask the window for a keyboard nothing is listening to.
+                onToggleKeyboard = { show -> showIme(show) },
+            )
         }
     }
 
@@ -1061,6 +1063,11 @@ private fun ExtraKeysRow(
             Row(
                 modifier = Modifier
                     .weight(1f)
+                    // The viewport is rounded to match the bar it sits in. A scroll
+                    // container clips to its own bounds, so a half-scrolled key used to
+                    // be cut by a straight vertical line *inside* the pill — which reads
+                    // as a rendering fault rather than as "there is more to the left".
+                    .clip(RoundedCornerShape(BAR_KEY_RADIUS + 10.dp))
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1088,7 +1095,7 @@ private fun ExtraKeysRow(
                 sending = true
             }
             BarAction(
-                painter = painterResource(R.drawable.ic_switch_input),
+                painter = painterResource(R.drawable.ic_laptop),
                 // A *mode*, and the sentence says which one a tap gives: the panel stays
                 // up until it is tapped again, and while it is up the IME is not used.
                 description = if (keyboardPanel) {

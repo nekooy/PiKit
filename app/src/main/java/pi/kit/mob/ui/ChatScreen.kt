@@ -94,6 +94,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -320,38 +322,7 @@ private enum class ComposerSheet {
 }
 
 
-/**
- * How long the history list takes to slide over the conversation.
- *
- * Short enough that the page is usable while it lands, long enough that the two
- * pages are readable as one moving over the other rather than as a cut.
- */
-private const val PAGE_SLIDE_MILLIS = 220
 
-/**
- * How far the conversation has to be dragged before letting go opens the history.
- *
- * A quarter of the width rather than a fixed distance: a threshold in dp is a different
- * gesture on a small phone and a tablet, and what the reader is judging is "have I pulled
- * this far enough". A third was the first value and it read as a gesture that had to be
- * *completed*: a quick flick of a thumb covers about a fifth of a 1080px screen, so the
- * commit landed above what a habitual swipe produces. A quarter is under that, and the
- * flick rule below covers the rest.
- */
-private const val SWIPE_COMMIT = 1f / 4f
-
-/**
- * What counts as a flick, and how far a flick has to have moved to open the list.
- *
- * A flick is a *speed*, and the only speed available here is the size of the last drag
- * sample: at 60Hz a thumb crossing the screen in 100ms reports ~150px per frame, where a
- * slow push reports 5-15. A fortieth of the width (27px on a 1080px screen) is what a short
- * flick reports — the first value, a twentieth, was too high for exactly that, and a 200px
- * swipe taken quickly was the gesture that did not open. The floor under it stops a twitch
- * on the first frame from opening a page the reader had not started to pull.
- */
-private const val SWIPE_FLICK = 0.015f
-private const val SWIPE_FLICK_FLOOR = 0.025f
 
 @Composable
 internal fun ChatScreen(
@@ -368,49 +339,55 @@ internal fun ChatScreen(
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
     val listState = composer.listState
-    // How far the conversation has been pushed aside, 0 (itself) to 1 (the list), and the
-    // number the clock icon and the drag both move. `historyReachable` is whether the list
-    // is composed at all: it goes true the moment either gesture starts and false again
-    // once the conversation has settled back into place.
-    var pagePos by remember { mutableFloatStateOf(0f) }
+    // How far the conversation has been pushed aside, 0 (itself) to 1 (the list), in
+    // pixels — the number both pages are drawn at and the number a drag moves.
     var pageWidth by remember { mutableIntStateOf(0) }
-    var historyReachable by remember { mutableStateOf(false) }
+    var pageOffset by remember { mutableFloatStateOf(0f) }
     var pageJob by remember { mutableStateOf<Job?>(null) }
-    // The last frame's drag distance, in pixels. A flick and a slow push of the same
-    // length mean different things, and a gesture that only counts distance makes the
-    // fast one feel stuck: `detectHorizontalDragGestures` reports no velocity, so the
-    // last sample is the velocity it has.
-    var lastDelta by remember { mutableFloatStateOf(0f) }
-    // Which page a release settles on, from where the thumb left it and how fast. The two
-    // directions are one rule read backwards: opening needs the conversation pushed past a
-    // quarter of the width (or a flick past a fortieth), and closing needs it pulled back
-    // under three quarters — a symmetric 25% band around the middle, so the same gesture
-    // that opens the list closes it.
-    val commitTarget: () -> Float = {
-        val flick = abs(lastDelta) > pageWidth * SWIPE_FLICK
-        when {
-            pagePos > 1f - SWIPE_COMMIT -> 1f
-            pagePos < SWIPE_COMMIT -> 0f
-            flick && lastDelta < 0 && pagePos > SWIPE_FLICK_FLOOR -> 1f
-            flick && lastDelta > 0 && pagePos < 1f - SWIPE_FLICK_FLOOR -> 0f
-            pagePos >= 0.5f -> 1f
-            else -> 0f
-        }
-    }
-    // Settles at [target], from wherever the thumb left it. A cancelled job and a fresh
-    // one rather than a queue: a second tap while the first animation runs means the
-    // second answer, not both.
+    // Whether the list is composed at all: it scans the session directory, so it is put
+    // away once the conversation has settled back into place.
+    var historyReachable by remember { mutableStateOf(false) }
+    val pagePos = if (pageWidth > 0) (pageOffset / pageWidth).coerceIn(0f, 1f) else 0f
+
+    // Settles at [target], from wherever the thumb left it.
     val settlePage: (Float) -> Unit = { target ->
         pageJob?.cancel()
         pageJob = scope.launch {
             animate(
-                initialValue = pagePos,
-                targetValue = target,
+                initialValue = pageOffset,
+                targetValue = target * pageWidth,
                 animationSpec = tween(PAGE_SLIDE_MILLIS),
-            ) { value, _ -> pagePos = value }
+            ) { value, _ -> pageOffset = value }
             if (target == 0f) historyReachable = false
         }
     }
+
+    /**
+     * Whether a released drag should complete, by the rule the platform's own paged
+     * gestures use: more than half the distance, **or** a fling faster than the
+     * minimum in the direction it was going — with a flick having to have moved at
+     * least a twentieth of the width so a twitch is not a fling.
+     *
+     * The two rounds of hand-tuned fractions this replaces (`1/3` with a 5% "last
+     * delta" flick, then `1/4` with 2.5%) were both guesses at the same two numbers the
+     * platform already defines, and both were wrong in the same direction: a quick
+     * thumb covers about a fifth of a 1080px screen, so any distance threshold above
+     * that reads as a gesture that has to be *completed*.
+     */
+    fun commitPage(distance: Float, velocity: Float, minFling: Float): Float {
+        val travelled = distance / pageWidth
+        val flung = abs(velocity) > minFling && abs(travelled) > FLING_MIN_TRAVEL
+        return when {
+            // Leftward opens, rightward closes; the direction decides which page a
+            // completed gesture belongs to.
+            travelled <= -0.5f || (flung && velocity < 0) -> 1f
+            travelled >= 0.5f || (flung && velocity > 0) -> 0f
+            // Neither: settle to whichever page is nearer.
+            pagePos >= 0.5f -> 1f
+            else -> 0f
+        }
+    }
+
     // A new session asked for while the agent is answering. Same question as the
     // history list's rows ask before a switch, and the same dialog: pi's
     // `new_session` aborts the running turn exactly as `switch_session` does.
@@ -793,30 +770,19 @@ internal fun ChatScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(((1f - pagePos) * pageWidth).roundToInt(), 0) }
-                    // The way back is the same gesture backwards, and it belongs to this
-                    // page rather than to the conversation: once the list has arrived, the
-                    // conversation is off to the left and its own detector would only see
-                    // drags that start on a screen it no longer covers. A rightward pull
-                    // closes the list; the detector is on the *list* so a drag that starts
-                    // on a row still scrolls the list vertically and only a horizontal one
-                    // is taken.
-                    .pointerInput(pageWidth) {
-                        if (pageWidth <= 0) return@pointerInput
-                        detectHorizontalDragGestures(
-                            onDragStart = {
-                                pageJob?.cancel()
-                                lastDelta = 0f
-                            },
-                            onHorizontalDrag = { change, delta ->
-                                change.consume()
-                                lastDelta = delta
-                                pagePos = (pagePos - delta / pageWidth).coerceIn(0f, 1f)
-                            },
-                            onDragEnd = { settlePage(commitTarget()) },
-                            onDragCancel = { settlePage(commitTarget()) },
-                        )
-                    },
+                    .offset { IntOffset(pageWidth - pageOffset.roundToInt(), 0) }
+                    // The way back, and it belongs to this page: once the list has
+                    // arrived the conversation is off to the leading edge and its own
+                    // detector only sees drags that start on a screen it no longer
+                    // covers.
+                    .pageDrag(
+                        width = pageWidth,
+                        onStart = { pageJob?.cancel() },
+                        onDrag = { delta -> pageOffset = (pageOffset + delta).coerceIn(0f, pageWidth.toFloat()) },
+                        onRelease = { distance, velocity, minFling ->
+                            settlePage(commitPage(distance, velocity, minFling))
+                        },
+                    ),
             ) {
                 SessionsScreen(
                     session = session,
@@ -828,26 +794,18 @@ internal fun ChatScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .offset { IntOffset((-pagePos * pageWidth).roundToInt(), 0) }
-                .pointerInput(pageWidth) {
-                    if (pageWidth <= 0) return@pointerInput
-                    detectHorizontalDragGestures(
-                        onDragStart = {
-                            pageJob?.cancel()
-                            historyReachable = true
-                            lastDelta = 0f
-                        },
-                        onHorizontalDrag = { change, delta ->
-                            change.consume()
-                            lastDelta = delta
-                            // Leftward is negative in Compose's coordinates, and a
-                            // leftward drag is what opens the list.
-                            pagePos = (pagePos - delta / pageWidth).coerceIn(0f, 1f)
-                        },
-                        onDragEnd = { settlePage(commitTarget()) },
-                        onDragCancel = { settlePage(commitTarget()) },
-                    )
-                },
+                .offset { IntOffset(-pageOffset.roundToInt(), 0) }
+                .pageDrag(
+                    width = pageWidth,
+                    onStart = {
+                        pageJob?.cancel()
+                        historyReachable = true
+                    },
+                    onDrag = { delta -> pageOffset = (pageOffset + delta).coerceIn(0f, pageWidth.toFloat()) },
+                    onRelease = { distance, velocity, minFling ->
+                        settlePage(commitPage(distance, velocity, minFling))
+                    },
+                ),
         ) {
             ChatPage(
                 session = session,
@@ -2670,6 +2628,9 @@ private fun metaItemOf(rows: List<TranscriptRow>): ChatItem? = rows
  * out in — so on a wide window the cap is a share of the prose measure and not of the
  * screen.
  */
+/** How long the pages take to settle after a drag is released. */
+private const val PAGE_SLIDE_MILLIS = 220
+
 private const val PROMPT_MAX_SHARE = 0.86f
 
 /**
