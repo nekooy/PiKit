@@ -1328,7 +1328,7 @@ private val BAR_SIDE_PADDING = 8.dp
  * are the `smoothstep` of the position — the one curve with no slope at either end, which
  * is what "no boundary" asks of a fade: no first pixel where a dimming starts and no last
  * pixel where it stops, so the eye finds neither edge. A linear ramp was the earlier
- * shape and its 32dp line still read as a band.
+ * shape, and its 24dp line still read as a band.
  */
 private fun barFadeBrush(startX: Float, endX: Float): Brush = Brush.horizontalGradient(
     0f to Color(0f, 0f, 0f, 0f),
