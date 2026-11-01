@@ -53,6 +53,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Layers
+import top.yukonga.miuix.kmp.icon.extended.Phone
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -258,7 +259,7 @@ internal fun WorkspacePickerSheet(
                 NavChip(text.chat.workspacePickerHome, MiuixIcons.Home) { go(home) }
             }
             if (shared != null && path != shared) {
-                NavChip(text.chat.workspacePickerShared, MiuixIcons.Layers) {
+                NavChip(text.chat.workspacePickerShared, MiuixIcons.Phone) {
                     if (granted) {
                         go(shared)
                     } else {
@@ -389,10 +390,11 @@ private fun NavChip(
         minWidth = 0.dp,
         minHeight = 0.dp,
         insideMargin = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-        colors = ButtonDefaults.buttonColors(
-            color = MiuixTheme.colorScheme.primaryContainer,
-            contentColor = MiuixTheme.colorScheme.onPrimaryContainer,
-        ),
+        // The *primary* pair, which is the blue every filled action in the app wears — the
+        // settings pages' actions, the sheet's own confirm. Plain `buttonColors()` is the
+        // secondary pair (a grey on the surface step), which on this sheet read as four
+        // disabled buttons above a list.
+        colors = ButtonDefaults.buttonColorsPrimary(),
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),

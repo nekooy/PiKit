@@ -331,24 +331,27 @@ private const val PAGE_SLIDE_MILLIS = 220
 /**
  * How far the conversation has to be dragged before letting go opens the history.
  *
- * A third of the width rather than a fixed distance: a threshold in dp is a different
+ * A quarter of the width rather than a fixed distance: a threshold in dp is a different
  * gesture on a small phone and a tablet, and what the reader is judging is "have I pulled
- * this most of the way off". Short of it the page springs back — the drag itself already
- * showed what letting go would do, which is why the commit does not need to be easier.
+ * this far enough". A third was the first value and it read as a gesture that had to be
+ * *completed*: a quick flick of a thumb covers about a fifth of a 1080px screen, so the
+ * commit landed above what a habitual swipe produces. A quarter is under that, and the
+ * flick rule below covers the rest.
  */
-private const val SWIPE_COMMIT = 1f / 3f
+private const val SWIPE_COMMIT = 1f / 4f
 
 /**
  * What counts as a flick, and how far a flick has to have moved to open the list.
  *
  * A flick is a *speed*, and the only speed available here is the size of the last drag
  * sample: at 60Hz a thumb crossing the screen in 100ms reports ~150px per frame, where a
- * slow push reports 5-15. A fifth of the width is comfortably above every slow drag that
- * was measured and below every quick one, and the floor under it is what stops a twitch
+ * slow push reports 5-15. A fortieth of the width (27px on a 1080px screen) is what a short
+ * flick reports — the first value, a twentieth, was too high for exactly that, and a 200px
+ * swipe taken quickly was the gesture that did not open. The floor under it stops a twitch
  * on the first frame from opening a page the reader had not started to pull.
  */
-private const val SWIPE_FLICK = 0.025f
-private const val SWIPE_FLICK_FLOOR = 0.04f
+private const val SWIPE_FLICK = 0.015f
+private const val SWIPE_FLICK_FLOOR = 0.025f
 
 @Composable
 internal fun ChatScreen(
@@ -378,9 +381,21 @@ internal fun ChatScreen(
     // fast one feel stuck: `detectHorizontalDragGestures` reports no velocity, so the
     // last sample is the velocity it has.
     var lastDelta by remember { mutableFloatStateOf(0f) }
+    // Which page a release settles on, from where the thumb left it and how fast. The two
+    // directions are one rule read backwards: opening needs the conversation pushed past a
+    // quarter of the width (or a flick past a fortieth), and closing needs it pulled back
+    // under three quarters — a symmetric 25% band around the middle, so the same gesture
+    // that opens the list closes it.
     val commitTarget: () -> Float = {
         val flick = abs(lastDelta) > pageWidth * SWIPE_FLICK
-        if (pagePos > SWIPE_COMMIT || (flick && pagePos > SWIPE_FLICK_FLOOR)) 1f else 0f
+        when {
+            pagePos > 1f - SWIPE_COMMIT -> 1f
+            pagePos < SWIPE_COMMIT -> 0f
+            flick && lastDelta < 0 && pagePos > SWIPE_FLICK_FLOOR -> 1f
+            flick && lastDelta > 0 && pagePos < 1f - SWIPE_FLICK_FLOOR -> 0f
+            pagePos >= 0.5f -> 1f
+            else -> 0f
+        }
     }
     // Settles at [target], from wherever the thumb left it. A cancelled job and a fresh
     // one rather than a queue: a second tap while the first animation runs means the
@@ -778,7 +793,30 @@ internal fun ChatScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(((1f - pagePos) * pageWidth).roundToInt(), 0) },
+                    .offset { IntOffset(((1f - pagePos) * pageWidth).roundToInt(), 0) }
+                    // The way back is the same gesture backwards, and it belongs to this
+                    // page rather than to the conversation: once the list has arrived, the
+                    // conversation is off to the left and its own detector would only see
+                    // drags that start on a screen it no longer covers. A rightward pull
+                    // closes the list; the detector is on the *list* so a drag that starts
+                    // on a row still scrolls the list vertically and only a horizontal one
+                    // is taken.
+                    .pointerInput(pageWidth) {
+                        if (pageWidth <= 0) return@pointerInput
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                pageJob?.cancel()
+                                lastDelta = 0f
+                            },
+                            onHorizontalDrag = { change, delta ->
+                                change.consume()
+                                lastDelta = delta
+                                pagePos = (pagePos - delta / pageWidth).coerceIn(0f, 1f)
+                            },
+                            onDragEnd = { settlePage(commitTarget()) },
+                            onDragCancel = { settlePage(commitTarget()) },
+                        )
+                    },
             ) {
                 SessionsScreen(
                     session = session,

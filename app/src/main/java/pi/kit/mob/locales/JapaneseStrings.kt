@@ -297,10 +297,8 @@ internal object JapaneseStrings : Strings {
         override val keysMessageSend = "端末に送る"
         override val keysKeyboardShow = "キーボードを表示"
         override val keysKeyboardHide = "キーボードを隠す"
-        override val paste = "C-V"
-        override val cut = "C-X"
-        override val keysHardwareOn = "外付けキーボード使用中。タップで入力メソッドに戻します"
-        override val keysHardwareOff = "入力メソッド使用中。タップで外付けキーボードに渡します"
+        override val keysPanelShow = "アプリ内キーボードを開く（入力メソッドは使いません）"
+        override val keysPanelHide = "アプリ内キーボードを閉じて入力メソッドに戻る"
     }
 
     override val files = object : Strings.Files {
@@ -405,19 +403,21 @@ internal object JapaneseStrings : Strings {
                 "置換、cat の代わりに read など）、pi のドキュメント索引。PiKit は変更しません。"
         override val agentContextInstructionsTitle = "指示ファイル AGENTS.md"
         override val agentContextInstructionsBody =
-            "pi は AGENTS.md を 2 か所から読みます：\n" +
-                "・グローバル：\$HOME/.pi/agent/AGENTS.md。PiKit がインストール時に書き込む、次の行の" +
-                "ファイルで、ここで編集できます。\n" +
-                "・ワークスペース：プロジェクトが自分のディレクトリに置く AGENTS.md（例：" +
-                "~/workspace/AGENTS.md）。pi はそのディレクトリから上へたどるので、プロジェクトに" +
+            "pi は AGENTS.md を自動で読みます。場所は二つ:\n" +
+                "· グローバル: \$HOME/.pi/agent/AGENTS.md。PiKit が二つの文書から合成します——" +
+                "「既定の指示」(AGENTS.author.md) は PiKit が書き、編集できますが、PiKit の" +
+                "既定が変わると置き換わります。「自分の指示」(AGENTS.user.md) は最初は空で、" +
+                "あなただけのもので、アプリは書き換えません;\n" +
+                "· ワークスペース: プロジェクトが自分のディレクトリに置く AGENTS.md（例: " +
+                "~/workspace/AGENTS.md）。pi はワークスペースから上へ探すので、プロジェクトに" +
                 "近いものほど具体的です。"
         override val agentContextRuntimeTitle = "実行環境"
         override val agentContextRuntimeBody =
-            "モデルとプロバイダー、思考レベル、セッション ID とセッションファイルのパス、この" +
-                "会話のワークスペース（PIKIT_WORKSPACE）、権限の段階（PIKIT_PERMISSION_FILE：" +
-                "閲覧のみ・ワークスペース内で読み書き・完全アクセス）" +
-                "（PIKIT_STORAGE_ALLOWED と PIKIT_STORAGE_LINKS）、テレメトリーのスイッチ" +
-                "（PI_TELEMETRY=0）。"
+            "モデルとプロバイダー、思考レベル、セッション ID とそのファイル、この会話の" +
+                "ワークスペース（PIKIT_WORKSPACE——相対パスの基準で、中間ティアが書き込める" +
+                "唯一のディレクトリ）、権限ティア（\$HOME/.pikit/permission.json から" +
+                "ツール呼び出しごとに読み直します: 閲覧のみ・ワークスペース内の読み書き・" +
+                "完全アクセス）、テレメトリのスイッチ（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "ツール"
         override val agentContextToolsBody =
             "pi 自身の read、bash、edit、write、grep、find、ls に加えて、PiKit が入れた " +
@@ -614,10 +614,13 @@ internal object JapaneseStrings : Strings {
             "pi-sessions にある .jsonl を 1 件ずつ、すべてと、どれをピンしているか"
         override val backupCategoryAgentPrompt = "エージェントのプロンプト"
         override val backupCategoryAgentPromptSubtitle =
-            "\$HOME/.pi/agent/AGENTS.md。「エージェントのプロセス」で編集できるファイルです"
+            "\$HOME/.pi/agent/ の二つの文書——「既定の指示」(AGENTS.author.md) と" +
+                "「自分の指示」(AGENTS.user.md)。pi が読む AGENTS.md はこの二つから合成され、" +
+                "復元後にもう一度合成されます"
         override val backupCategoryWorkspace = "ワークスペースのファイル"
         override val backupCategoryWorkspaceSubtitle =
-            "\$HOME/workspace の内容すべて。プロジェクト一式のこともあり、アーカイブは大きくなります"
+            "\$HOME/workspace のすべてと、ワークスペースメニューで追加した各" +
+                "ディレクトリ。プロジェクト一式だとバックアップが大きくなります"
         override val backupCategoryExports = "HTML エクスポート"
         override val backupCategoryExportsSubtitle =
             "/export が \$HOME/export に書き出した .html"

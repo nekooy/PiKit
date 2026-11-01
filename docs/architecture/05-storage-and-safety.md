@@ -160,6 +160,14 @@ Settings → Agent process has one row per half. The author's row offers the def
 reader's does not, because "restore the default" for a document whose promise is that the app
 never rewrites it could only mean "throw my text away".
 
+**The farm only ever shrinks to what this build creates.** `syncFarm` creates the links in
+`StorageAccess.LINKS` — today one, `shared` — and a link it does not create is *deleted*, because the
+alternative is a farm that grows and never forgets: an install that shipped the seven
+`termux-setup-storage` names kept all seven for ever, and a reader saw `~/storage` full of links
+beside the one the code documents. Only symlinks are swept; a real directory of that name is the
+reader's and is left alone. Measured on the device: two links added by hand (`downloads`, `dcim`)
+were gone after one launch, with `shared` untouched.
+
 ## What still decides what the agent may write
 
 `ShellEnvironment.build` publishes the workspace (`PIKIT_WORKSPACE`), the directory the

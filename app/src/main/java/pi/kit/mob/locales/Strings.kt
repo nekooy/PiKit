@@ -699,11 +699,6 @@ interface Strings {
         val pageUp: String
         val pageDown: String
         val interrupt: String
-        /** `Ctrl+V` — pi and readline both read it as paste. */
-        val paste: String
-
-        /** `Ctrl+X` — readline's prefix and a shell's cut. */
-        val cut: String
         val eof: String
 
         /**
@@ -743,14 +738,14 @@ interface Strings {
         val keysKeyboardHide: String
 
         /**
-         * The hardware-keys switch, in both positions.
+         * The keyboard panel's switch, in both positions.
          *
          * Two sentences rather than one label and a state: what the button *does* differs
          * by where it is, and a reader who reads only the description has to know which
          * input path a tap gives them.
          */
-        val keysHardwareOn: String
-        val keysHardwareOff: String
+        val keysPanelShow: String
+        val keysPanelHide: String
     }
 
     /**

@@ -47,6 +47,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -66,6 +67,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import pi.kit.mob.R
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
@@ -87,9 +89,9 @@ import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.ExpandLess
 import top.yukonga.miuix.kmp.icon.extended.ExpandMore
@@ -160,10 +162,11 @@ fun TerminalScreen(session: PiAgentSession) {
 
     // The bar's modes. `ctrlOn`/`altOn` are latches on the old two-row bar; the hardware
     // switch below is the one that survived it.
-    // Which input path owns the terminal: the IME, or a physical keyboard. The bar's
-    // middle round button switches it; `holders.imeSuppressed` is what the view client
-    // reads before it raises the soft keyboard on a tap.
-    var hardwareKeys by rememberSaveable { mutableStateOf(false) }
+    // Which input path owns the terminal: the phone's IME, or the app's own keyboard panel
+    // above the bar. The bar's middle button switches it, and `holders.imeSuppressed` is
+    // what the view client reads before raising the soft keyboard on a tap — a panel and
+    // an IME that both react to the same tap is two keyboards fighting over one cursor.
+    var keyboardPanel by rememberSaveable { mutableStateOf(false) }
     // Whether new output is allowed to pull the view back to the bottom.
     //
     // Held as the *inverse* of the emulator's own flag and mirrored into it on
@@ -181,6 +184,29 @@ fun TerminalScreen(session: PiAgentSession) {
     // no longer carries `CTRL`/`ALT`, so both are false — the fields stay because the view
     // client reads them unconditionally.
     val holders = remember { TerminalHolders() }
+
+    /**
+     * Raises or lowers the IME through the *terminal view*, which is the object the input
+     * connection belongs to.
+     *
+     * `LocalSoftwareKeyboardController` speaks for a Compose text field and would ask the
+     * window for a keyboard nothing is listening to; `InputMethodManager.showSoftInput` on
+     * the view that holds the session is what Termux does, and what the bar's keyboard
+     * button and the keyboard panel both call.
+     */
+    val showIme: (Boolean) -> Unit = { show ->
+        val view = holders.view
+        val manager = view?.context?.getSystemService(Context.INPUT_METHOD_SERVICE)
+            as? InputMethodManager
+        if (view != null) {
+            if (show) {
+                view.requestFocus()
+                manager?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+            } else {
+                manager?.hideSoftInputFromWindow(view.windowToken, 0)
+            }
+        }
+    }
     holders.ctrlDown = false
     holders.altDown = false
 
@@ -438,34 +464,23 @@ fun TerminalScreen(session: PiAgentSession) {
                     text = t,
                     size = keys,
                     autoScroll = autoScroll,
-                    hardwareKeys = hardwareKeys,
+                    keyboardPanel = keyboardPanel,
                     onToggleAutoScroll = { autoScroll = !autoScroll },
-                    onToggleHardwareKeys = {
-                        hardwareKeys = !hardwareKeys
-                        // Leaving the IME up while claiming the hardware keyboard owns the
-                        // input would be two answers to one question; switching *to* the
-                        // hardware path takes it down, and switching back does not raise it
-                        // (the third button is what does that).
-                        holders.imeSuppressed = hardwareKeys
+                    onToggleKeyboardPanel = { on ->
+                        keyboardPanel = on
+                        // A panel and an IME that both answer the same tap are two
+                        // keyboards fighting over one cursor, so the panel owning the
+                        // input means the IME is put away — and the terminal stops
+                        // raising it on a tap until the panel is closed.
+                        holders.imeSuppressed = on
+                        if (on) showIme(false)
                     },
                     onSend = { sequence -> selected?.write(sequence) },
                     // Through the view rather than through Compose: the IME is attached
                     // to the terminal's own input connection, so `LocalSoftware
                     // KeyboardController` (which speaks for a Compose text field) would
                     // ask the window for a keyboard nothing is listening to.
-                    onToggleKeyboard = { show ->
-                        val view = holders.view
-                        val manager = view?.context?.getSystemService(Context.INPUT_METHOD_SERVICE)
-                            as? InputMethodManager
-                        if (view != null) {
-                            if (show) {
-                                view.requestFocus()
-                                manager?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
-                            } else {
-                                manager?.hideSoftInputFromWindow(view.windowToken, 0)
-                            }
-                        }
-                    },
+                    onToggleKeyboard = { show -> showIme(show) },
                 )
             }
         }
@@ -1002,10 +1017,10 @@ private fun ExtraKeysRow(
     text: pi.kit.mob.locales.Strings,
     size: KeySize,
     autoScroll: Boolean,
-    hardwareKeys: Boolean,
+    keyboardPanel: Boolean,
     onToggleAutoScroll: () -> Unit,
     onSend: (String) -> Unit,
-    onToggleHardwareKeys: () -> Unit,
+    onToggleKeyboardPanel: (Boolean) -> Unit,
     onToggleKeyboard: (Boolean) -> Unit,
 ) {
     var sending by remember { mutableStateOf(false) }
@@ -1015,12 +1030,20 @@ private fun ExtraKeysRow(
     val density = LocalDensity.current
     val keyboardUp = WindowInsets.ime.getBottom(density) > 0
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .background(TERMINAL_BACKGROUND)
             .padding(horizontal = BAR_SIDE_PADDING, vertical = BAR_PADDING),
     ) {
+        if (keyboardPanel) {
+            PcKeyboard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = BAR_GAP),
+                onSend = onSend,
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1030,12 +1053,18 @@ private fun ExtraKeysRow(
             horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // The nine keys share the row by *weight* rather than by measuring: a bar
-            // whose keys are as wide as their labels puts the last of them off the edge at
-            // every text size above the default, and the one this replaces clipped `C-X`
-            // and `Esc` on a 1080px screen. Equal slots always fit, and equal slots are
-            // also what makes the row read as one instrument rather than as a word list.
-            BarSlot {
+            // The keys scroll; the three actions do not. Nine equal slots fit a 360dp
+            // screen but squeezed every cap down to 25dp, which is a key a thumb misses —
+            // and the row is the one place where a key that cannot be hit is worse than a
+            // key that is off screen, because the bar exists to save typing. A key is as
+            // wide as its label needs and the row scrolls when the labels do not fit.
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 BarKey(
                     label = text.terminal.scrollShort,
                     spoken = text.terminal.scrollToggleHint,
@@ -1045,40 +1074,33 @@ private fun ExtraKeysRow(
                     labelColor = if (autoScroll) TERMINAL_ACCENT else TERMINAL_ERROR,
                     onClick = onToggleAutoScroll,
                 )
+                ArrowKey(ARROW_UP, onSend)
+                ArrowKey(ARROW_DOWN, onSend)
+                ArrowKey(ARROW_LEFT, onSend)
+                ArrowKey(ARROW_RIGHT, onSend)
+                BarKey(label = text.terminal.escape, onClick = { onSend("\u001b") })
             }
-            BarSlot { ArrowKey(ARROW_UP, onSend) }
-            BarSlot { ArrowKey(ARROW_DOWN, onSend) }
-            BarSlot { ArrowKey(ARROW_LEFT, onSend) }
-            BarSlot { ArrowKey(ARROW_RIGHT, onSend) }
-            BarSlot { BarKey(label = text.terminal.interrupt, onClick = { onSend("\u0003") }) }
-            BarSlot { BarKey(label = text.terminal.paste, onClick = { onSend("\u0016") }) }
-            BarSlot { BarKey(label = text.terminal.cut, onClick = { onSend("\u0018") }) }
-            BarSlot { BarKey(label = text.terminal.escape, onClick = { onSend("\u001b") }) }
             BarAction(
-                glyph = MiuixIcons.Messages,
+                painter = painterResource(R.drawable.ic_send_text),
                 description = text.terminal.keysMessage,
             ) {
                 draft = ""
                 sending = true
             }
             BarAction(
-                glyph = MiuixIcons.GridView,
-                // The state is the sentence: a reader has to know which input path a tap
-                // gives them, and the two states are opposite instructions.
-                description = if (hardwareKeys) {
-                    text.terminal.keysHardwareOn
+                painter = painterResource(R.drawable.ic_switch_input),
+                // A *mode*, and the sentence says which one a tap gives: the panel stays
+                // up until it is tapped again, and while it is up the IME is not used.
+                description = if (keyboardPanel) {
+                    text.terminal.keysPanelHide
                 } else {
-                    text.terminal.keysHardwareOff
+                    text.terminal.keysPanelShow
                 },
-                active = hardwareKeys,
-                onClick = onToggleHardwareKeys,
+                active = keyboardPanel,
+                onClick = { onToggleKeyboardPanel(!keyboardPanel) },
             )
             BarAction(
-                // A chevron turned rather than `ExpandMore`/`ExpandLess`: those two draw a
-                // corner in this set (measured on the device: the button read as `⌐`), and
-                // the direction is the whole message.
-                glyph = MiuixIcons.ChevronForward,
-                rotate = if (keyboardUp) 90f else -90f,
+                painter = painterResource(R.drawable.ic_keyboard),
                 description = if (keyboardUp) {
                     text.terminal.keysKeyboardHide
                 } else {
@@ -1115,10 +1137,13 @@ private fun ExtraKeysRow(
         Button(
             cornerRadius = PiCorner.radius,
             onClick = {
-                // The trailing carriage return is what makes it *submitted* rather than
-                // typed into the prompt: without it the shell would sit with the text on
-                // its line waiting for a Return the reader has no key for.
-                onSend(draft + "\r")
+                // Exactly what was typed, and nothing else: the sheet is a way to get a
+                // long or multi-line string into the terminal's line, not a way to run it.
+                // The reader presses Return where they want one — in the text, or on the
+                // keyboard — and a `git commit -m` message is the case that made the
+                // difference visible: appending a return ran it before it could be
+                // reviewed or completed.
+                onSend(draft)
                 sending = false
                 draft = ""
             },
@@ -1130,18 +1155,6 @@ private fun ExtraKeysRow(
             Text(text = text.terminal.keysMessageSend)
         }
     }
-}
-
-/**
- * One of the nine equal slots the row's keys share.
- *
- * `weight` on a `Box` and `fillMaxWidth` inside it, because a Miuix button's width is its
- * content's: a `weight` on the button itself would be ignored by the library's own
- * measurement and the row would go back to being as wide as its labels.
- */
-@Composable
-private fun RowScope.BarSlot(content: @Composable () -> Unit) {
-    Box(Modifier.weight(1f)) { content() }
 }
 
 /**
@@ -1161,8 +1174,8 @@ private fun BarKey(
     Button(
         onClick = onClick,
         modifier = Modifier
-            .fillMaxWidth()
-            .height(BAR_KEY_HEIGHT),
+            .height(BAR_KEY_HEIGHT)
+            .widthIn(min = BAR_KEY_MIN_WIDTH),
         cornerRadius = BAR_KEY_RADIUS,
         minWidth = 0.dp,
         minHeight = 0.dp,
@@ -1170,9 +1183,7 @@ private fun BarKey(
             color = TERMINAL_KEY,
             contentColor = labelColor,
         ),
-        // 2dp each side: the slot already leaves nothing to spare on a 360dp screen, and
-        // the label is ellipsised rather than pushed out of its own key.
-        insideMargin = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+        insideMargin = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
     ) {
         Text(
             text = label,
@@ -1206,10 +1217,9 @@ private fun ArrowKey(key: ArrowKey, onSend: (String) -> Unit) {
  */
 @Composable
 private fun BarAction(
-    glyph: androidx.compose.ui.graphics.vector.ImageVector,
+    painter: androidx.compose.ui.graphics.painter.Painter,
     description: String,
     active: Boolean = false,
-    rotate: Float = 0f,
     onClick: () -> Unit,
 ) {
     Box(
@@ -1222,12 +1232,10 @@ private fun BarAction(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = glyph,
+            painter = painter,
             contentDescription = null,
             tint = if (active) TERMINAL_BACKGROUND else TERMINAL_KEY_INK,
-            modifier = Modifier
-                .size(BAR_ACTION_GLYPH)
-                .rotate(rotate),
+            modifier = Modifier.size(BAR_ACTION_GLYPH),
         )
     }
 }

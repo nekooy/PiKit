@@ -112,6 +112,21 @@ object StorageAccess {
             return false
         }
         directory.mkdirs()
+        // Links this build no longer makes are removed. Without this the farm only ever
+        // grows: an install that shipped the seven `termux-setup-storage` names kept all
+        // seven for ever, because the loop below creates the ones in [LINKS] and has no
+        // opinion about anything else — which is exactly what a reader sees as "`~/storage`
+        // still has a pile of links and `shared` is one of them".
+        //
+        // Only *links* are removed. A real directory of that name is the reader's — a
+        // `ln -s shared/Download downloads` of their own is a real link too, and it is
+        // indistinguishable from ours by anything but its name, so the rule is the name:
+        // one that this build does not create goes, because the alternative is a farm that
+        // disagrees with the code that documents it.
+        val wanted = LINKS.mapTo(HashSet()) { it.first }
+        directory.listFiles().orEmpty()
+            .filter { it.name !in wanted && isLink(it) }
+            .forEach { it.delete() }
         for ((name, child) in LINKS) {
             val target = if (child.isEmpty()) root else File(root, child)
             val link = File(directory, name)

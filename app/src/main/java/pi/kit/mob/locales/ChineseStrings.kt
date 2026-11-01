@@ -296,10 +296,8 @@ internal object ChineseStrings : Strings {
         override val keysMessageSend = "发送到终端"
         override val keysKeyboardShow = "弹出键盘"
         override val keysKeyboardHide = "收起键盘"
-        override val paste = "C-V"
-        override val cut = "C-X"
-        override val keysHardwareOn = "外接键盘接管中，点一下改用输入法"
-        override val keysHardwareOff = "输入法接管中，点一下交给外接键盘"
+        override val keysPanelShow = "打开应用内键盘，不使用输入法"
+        override val keysPanelHide = "收起应用内键盘，回到输入法"
     }
 
     override val files = object : Strings.Files {
@@ -409,14 +407,18 @@ internal object ChineseStrings : Strings {
         override val agentContextInstructionsTitle = "指令文件 AGENTS.md"
         override val agentContextInstructionsBody =
             "pi 会自动读取 AGENTS.md，有两处：\n" +
-                "· 全局：\$HOME/.pi/agent/AGENTS.md，PiKit 在安装时写入，就是下面这一行，可以编辑；\n" +
-                "· 工作区：项目自己放在它目录里的 AGENTS.md，例如 ~/workspace/AGENTS.md；pi 从工作" +
-                "区往上找，越靠近项目的那份越具体。"
+                "· 全局：\$HOME/.pi/agent/AGENTS.md，由 PiKit 把两份文档合成——" +
+                "「默认提示词」（AGENTS.author.md）是 PiKit 写的环境说明，可以改，" +
+                "PiKit 更新默认内容时会覆盖；「我自己的指令」（AGENTS.user.md）一开始是空的，" +
+                "只属于你，PiKit 永不改写；\n" +
+                "· 工作区：项目自己放在它目录里的 AGENTS.md，例如 ~/workspace/AGENTS.md；" +
+                "pi 从工作区往上找，越靠近项目的那份越具体。"
         override val agentContextRuntimeTitle = "运行环境"
         override val agentContextRuntimeBody =
-            "模型与供应商、思考等级、会话 ID 与会话文件路径、这个对话的工作区（PIKIT_WORKSPACE）、" +
-                "权限等级（PIKIT_PERMISSION_FILE：仅可查看、工作区内读写或完全访问）" +
-                "（PIKIT_STORAGE_ALLOWED 与 PIKIT_STORAGE_LINKS），以及遥测开关（PI_TELEMETRY=0）。"
+            "模型与供应商、思考等级、会话 ID 与会话文件路径、这个对话的工作区" +
+                "（PIKIT_WORKSPACE，也就是工具调用里相对路径的基准，中间档只允许写它）、" +
+                "权限等级（写在 \$HOME/.pikit/permission.json，每次工具调用都会重新读：" +
+                "仅可查看、工作区内读写或完全访问），以及遥测开关（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "工具"
         override val agentContextToolsBody =
             "pi 自带的 read、bash、edit、write、grep、find、ls，加上 PiKit 装的 web_search、" +
@@ -596,10 +598,13 @@ internal object ChineseStrings : Strings {
             "pi-sessions 目录下的每一个 .jsonl 会话记录，以及哪些对话被置顶"
         override val backupCategoryAgentPrompt = "Agent 提示词"
         override val backupCategoryAgentPromptSubtitle =
-            "\$HOME/.pi/agent/AGENTS.md，就是「Agent 进程」里可以编辑的那份"
+            "\$HOME/.pi/agent/ 下的两份文档——「默认提示词」（AGENTS.author.md）和" +
+                "「我自己的指令」（AGENTS.user.md）；pi 读的 AGENTS.md 是它们合成出来的，" +
+                "恢复后会重新合成"
         override val backupCategoryWorkspace = "工作区文件"
         override val backupCategoryWorkspaceSubtitle =
-            "\$HOME/workspace 下的全部内容——可能是一整个项目目录，备份包会很大"
+            "\$HOME/workspace 的全部内容，加上你在工作区菜单里添加的每一个目录" +
+                "（它们各自的内容）；可能是一整个项目，备份包会很大"
         override val backupCategoryExports = "HTML 导出"
         override val backupCategoryExportsSubtitle =
             "\$HOME/export 下由 /export 生成的 HTML 文件"

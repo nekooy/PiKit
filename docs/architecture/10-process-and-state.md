@@ -170,6 +170,15 @@ way back in. Each value is written as `{"type": …, "value": …}` rather than 
 because the type is not recoverable from the value: `1` is a valid `int` and a valid `long`, and
 `getInt` on a `putLong` throws — into whoever reads it next, not into the restore.
 
+**The agent's instructions travel as the two halves, never as the file pi reads.** `AGENTS.md` is
+*derived* — `AgentContext.compose` rebuilds it on every launch — so an archive that carried it would
+restore a document with no halves, and the migration that splits a pre-split file would then read the
+whole default text as the reader's own. `AGENTS.author.md` and `AGENTS.user.md` are the two entries
+the `AGENT_PROMPT` category writes, and a restore recomposes `AGENTS.md` at the end of the import
+rather than leaving the previous composition in place. Measured on the device: an archive taken with
+`AGENTS.user.md` = `MARK-ONE`, a file changed to `MARK-TWO`, a restore — the half came back as
+`MARK-ONE` and the composed document contained it once.
+
 **Nothing under `usr/` is in the archive.** The runtime is hundreds of megabytes of image unpacked out
 of the APK, so a reinstall puts it back — the same for `usr-staging/`, `runtime-revision.txt` and pi's
 own `models-store.json` catalogue cache, which the launch path refreshes on a four-hour window

@@ -313,10 +313,8 @@ internal object EnglishStrings : Strings {
         override val keysMessageSend = "Send to terminal"
         override val keysKeyboardShow = "Show the keyboard"
         override val keysKeyboardHide = "Hide the keyboard"
-        override val paste = "C-V"
-        override val cut = "C-X"
-        override val keysHardwareOn = "A hardware keyboard has the input; tap to use the IME"
-        override val keysHardwareOff = "The IME has the input; tap to hand it to a hardware keyboard"
+        override val keysPanelShow = "Show the app's own keyboard instead of the IME"
+        override val keysPanelHide = "Put the app's keyboard away and go back to the IME"
     }
 
     override val files = object : Strings.Files {
@@ -424,18 +422,23 @@ internal object EnglishStrings : Strings {
                 "change it."
         override val agentContextInstructionsTitle = "Instruction files, AGENTS.md"
         override val agentContextInstructionsBody =
-            "pi reads AGENTS.md from two places:\n" +
-                "· Global: \$HOME/.pi/agent/AGENTS.md, written by PiKit at install time — the " +
-                "row below, editable here;\n" +
+            "pi reads AGENTS.md automatically, in two places:\n" +
+                "· Global: \$HOME/.pi/agent/AGENTS.md, which PiKit composes from two " +
+                "documents — the default instructions (AGENTS.author.md), written by PiKit " +
+                "and editable, replaced when PiKit's own default changes; and your own " +
+                "instructions (AGENTS.user.md), empty to begin with and never rewritten by " +
+                "the app;\n" +
                 "· Workspace: an AGENTS.md a project keeps in its own directory, such as " +
-                "~/workspace/AGENTS.md. pi looks from that directory upwards, so the closest " +
-                "one is the most specific."
+                "~/workspace/AGENTS.md; pi searches upwards from the workspace, so the one " +
+                "nearest the project is the most specific."
         override val agentContextRuntimeTitle = "Runtime"
         override val agentContextRuntimeBody =
-            "The model and provider, the thinking level, the session id and session file path, " +
-                "the workspace this conversation runs in (PIKIT_WORKSPACE), the permission tier " +
-                "(PIKIT_PERMISSION_FILE: read-only, workspace-write or full-access), and the " +
-                "telemetry switch (PI_TELEMETRY=0)."
+            "The model and provider, the thinking level, the session id and its file, this " +
+                "conversation's workspace (PIKIT_WORKSPACE — the base every relative path " +
+                "resolves against, and the only directory the middle tier may write), the " +
+                "permission tier (read from \$HOME/.pikit/permission.json on every tool " +
+                "call: read-only, workspace-write or full access), and the telemetry switch " +
+                "(PI_TELEMETRY=0)."
         override val agentContextToolsTitle = "Tools"
         override val agentContextToolsBody =
             "pi's own read, bash, edit, write, grep, find and ls, plus web_search, " +
@@ -641,11 +644,13 @@ internal object EnglishStrings : Strings {
                 "of them are pinned"
         override val backupCategoryAgentPrompt = "Agent prompt"
         override val backupCategoryAgentPromptSubtitle =
-            "\$HOME/.pi/agent/AGENTS.md — the file the Agent process page lets you edit"
+            "The two documents under \$HOME/.pi/agent/ — the default instructions " +
+                "(AGENTS.author.md) and your own (AGENTS.user.md); the AGENTS.md pi reads is " +
+                "composed from them, and is composed again after a restore"
         override val backupCategoryWorkspace = "Workspace files"
         override val backupCategoryWorkspaceSubtitle =
-            "Everything under \$HOME/workspace, which may be a whole project tree — the " +
-                "archive gets large"
+            "Everything under \$HOME/workspace, plus each directory you added in " +
+                "the workspace menu; a project tree can make the archive large"
         override val backupCategoryExports = "HTML exports"
         override val backupCategoryExportsSubtitle =
             "The .html files /export wrote into \$HOME/export"

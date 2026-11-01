@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import pi.kit.mob.data.BackupArchive
 import pi.kit.mob.data.BackupCategory
 import pi.kit.mob.data.BackupManifest
+import pi.kit.mob.env.AgentContext
 import pi.kit.mob.env.SafeDelete
 import pi.kit.mob.env.TermuxEnv
 
@@ -307,7 +308,13 @@ class BackupManager(
                     count++
                     _status.value = BackupStatus.Running(BackupStatus.Kind.IMPORT, count)
                 }
-                count + archive.applyAll(staging, categories)
+                // The two halves are on disk now, so the document pi reads has to be
+                // rebuilt: an archive carries the halves, not the composed file, and a
+                // restore that left yesterday's composition in place would run the agent
+                // on the old text until the next launch.
+                val files = count + archive.applyAll(staging, categories)
+                runCatching { AgentContext.compose(env) }
+                files
             }
             // The files are in place; everything the app holds in memory is still the
             // old value, and this is what makes the restore visible without a relaunch.

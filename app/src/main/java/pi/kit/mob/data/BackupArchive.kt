@@ -196,8 +196,16 @@ internal data class BackupPaths(
     /** `files/pikit-config.json` — the profiles and the keys in them. */
     val configFile: File get() = File(filesDir, CONFIG_FILE_NAME)
 
-    /** `$HOME/.pi/agent/AGENTS.md`. */
-    val agentsPromptFile: File get() = File(piConfigDir, AgentContext.FILE_NAME)
+    /**
+     * The two documents `AGENTS.md` is composed from.
+     *
+     * The composed file is *derived* — the app writes it on every launch — so an archive
+     * that carried it would restore a document with no halves, and the migration that
+     * splits a pre-split file would then treat the whole default text as the reader's own.
+     * The halves are what a backup has to carry; the archive's restore recomposes.
+     */
+    val agentsAuthorFile: File get() = File(piConfigDir, AgentContext.AUTHOR_FILE_NAME)
+    val agentsUserFile: File get() = File(piConfigDir, AgentContext.USER_FILE_NAME)
 
     /**
      * `files/avatars` — the two custom avatar pictures, when the reader has any.
@@ -277,7 +285,8 @@ internal class BackupArchive(
         FileItem(BackupCategory.MODELS, "pi/models.json", File(paths.piConfigDir, "models.json")),
         FileItem(BackupCategory.MODELS, "pi/settings.json", File(paths.piConfigDir, "settings.json")),
         FileItem(BackupCategory.MODELS, "pi/web-search.json", File(paths.piConfigDir, WEB_SEARCH_FILE), Redaction.WEB_SEARCH),
-        FileItem(BackupCategory.AGENT_PROMPT, "agent/AGENTS.md", paths.agentsPromptFile),
+        FileItem(BackupCategory.AGENT_PROMPT, "agent/AGENTS.author.md", paths.agentsAuthorFile),
+        FileItem(BackupCategory.AGENT_PROMPT, "agent/AGENTS.user.md", paths.agentsUserFile),
     )
 
     /**

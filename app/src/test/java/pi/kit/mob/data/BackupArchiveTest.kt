@@ -64,7 +64,11 @@ class BackupArchiveTest {
             File(paths.piConfigDir, "models.json").writeText("""{"providers":{"acme":{}}}""")
             File(paths.piConfigDir, "settings.json").writeText("""{"defaultTools":[]}""")
             File(paths.piConfigDir, "web-search.json").writeText("""{"braveApiKey":"brv-secret"}""")
-            paths.agentsPromptFile.writeText("be terse\n")
+            // The two halves, not the composed file: `AGENTS.md` is derived, and an
+            // archive that carried it would restore a document whose halves the app
+            // would then have to guess at.
+            paths.agentsAuthorFile.writeText("be terse\n")
+            paths.agentsUserFile.writeText("use tabs\n")
             File(paths.sessionDir, "one.jsonl").writeText("""{"type":"message"}""" + "\n")
             File(paths.workspace, "main.kt").writeText("fun main() {}\n")
             File(paths.exportDir, "talk.html").writeText("<html></html>\n")
@@ -115,7 +119,8 @@ class BackupArchiveTest {
         assertEquals(setOf("one.jsonl"), restored["pikit_session_pins"]?.get("pinned"))
         assertTrue(target.paths.configFile.readText().contains("sk-live"))
         assertTrue(File(target.paths.piConfigDir, "models.json").readText().contains("acme"))
-        assertEquals("be terse\n", target.paths.agentsPromptFile.readText())
+        assertEquals("be terse\n", target.paths.agentsAuthorFile.readText())
+        assertEquals("use tabs\n", target.paths.agentsUserFile.readText())
         assertEquals("""{"type":"message"}""" + "\n", File(target.paths.sessionDir, "one.jsonl").readText())
         assertEquals("fun main() {}\n", File(target.paths.workspace, "main.kt").readText())
         assertEquals("<html></html>\n", File(target.paths.exportDir, "talk.html").readText())
