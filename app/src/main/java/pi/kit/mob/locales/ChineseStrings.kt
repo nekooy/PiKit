@@ -410,7 +410,7 @@ internal object ChineseStrings : Strings {
             "pi 会自动读取 AGENTS.md，有两处：\n" +
                 "· 全局：\$HOME/.pi/agent/AGENTS.md，由 PiKit 把两份文档合成——" +
                 "「默认提示词」（AGENTS.author.md）是 PiKit 写的环境说明，可以改，" +
-                "PiKit 更新默认内容时会覆盖；「我自己的指令」（AGENTS.user.md）一开始是空的，" +
+                "PiKit 更新默认内容时会覆盖；「用户指令」（AGENTS.user.md）一开始是空的，" +
                 "只属于你，PiKit 永不改写；\n" +
                 "· 工作区：项目自己放在它目录里的 AGENTS.md，例如 ~/workspace/AGENTS.md；" +
                 "pi 从工作区往上找，越靠近项目的那份越具体。"
@@ -431,7 +431,7 @@ internal object ChineseStrings : Strings {
         override val agentContextInstructions = "全局 AGENTS.md"
         override val agentContextAuthorTitle = "默认提示词"
         override val agentContextAuthorSubtitle = "PiKit 提供，可以改；PiKit 更新默认内容时会覆盖它"
-        override val agentContextUserTitle = "我自己的指令"
+        override val agentContextUserTitle = "用户指令"
         override val agentContextUserSubtitle = "一开始是空的，只属于你；PiKit 永远不会改它"
         override val agentContextUserEmpty = "还是空的，点进去写"
         override val agentContextInstructionsEditable = "可编辑"
@@ -600,7 +600,7 @@ internal object ChineseStrings : Strings {
         override val backupCategoryAgentPrompt = "Agent 提示词"
         override val backupCategoryAgentPromptSubtitle =
             "\$HOME/.pi/agent/ 下的两份文档——「默认提示词」（AGENTS.author.md）和" +
-                "「我自己的指令」（AGENTS.user.md）；pi 读的 AGENTS.md 是它们合成出来的，" +
+                "「用户指令」（AGENTS.user.md）；pi 读的 AGENTS.md 是它们合成出来的，" +
                 "恢复后会重新合成"
         override val backupCategoryWorkspace = "工作区文件"
         override val backupCategoryWorkspaceSubtitle =

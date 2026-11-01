@@ -407,7 +407,7 @@ internal object JapaneseStrings : Strings {
             "pi は AGENTS.md を自動で読みます。場所は二つ:\n" +
                 "· グローバル: \$HOME/.pi/agent/AGENTS.md。PiKit が二つの文書から合成します——" +
                 "「既定の指示」(AGENTS.author.md) は PiKit が書き、編集できますが、PiKit の" +
-                "既定が変わると置き換わります。「自分の指示」(AGENTS.user.md) は最初は空で、" +
+                "既定が変わると置き換わります。「ユーザーの指示」(AGENTS.user.md) は最初は空で、" +
                 "あなただけのもので、アプリは書き換えません;\n" +
                 "· ワークスペース: プロジェクトが自分のディレクトリに置く AGENTS.md（例: " +
                 "~/workspace/AGENTS.md）。pi はワークスペースから上へ探すので、プロジェクトに" +
@@ -431,7 +431,7 @@ internal object JapaneseStrings : Strings {
         override val agentContextInstructions = "グローバル AGENTS.md"
         override val agentContextAuthorTitle = "既定の指示"
         override val agentContextAuthorSubtitle = "PiKit が用意し、編集できます。PiKit が更新すると置き換わります"
-        override val agentContextUserTitle = "自分の指示"
+        override val agentContextUserTitle = "ユーザーの指示"
         override val agentContextUserSubtitle = "最初は空で、あなただけのもの。PiKit は書き換えません"
         override val agentContextUserEmpty = "まだ空です。開いて書いてください"
         override val agentContextInstructionsEditable = "編集可"
@@ -616,7 +616,7 @@ internal object JapaneseStrings : Strings {
         override val backupCategoryAgentPrompt = "エージェントのプロンプト"
         override val backupCategoryAgentPromptSubtitle =
             "\$HOME/.pi/agent/ の二つの文書——「既定の指示」(AGENTS.author.md) と" +
-                "「自分の指示」(AGENTS.user.md)。pi が読む AGENTS.md はこの二つから合成され、" +
+                "「ユーザーの指示」(AGENTS.user.md)。pi が読む AGENTS.md はこの二つから合成され、" +
                 "復元後にもう一度合成されます"
         override val backupCategoryWorkspace = "ワークスペースのファイル"
         override val backupCategoryWorkspaceSubtitle =

@@ -426,7 +426,7 @@ internal object EnglishStrings : Strings {
             "pi reads AGENTS.md automatically, in two places:\n" +
                 "· Global: \$HOME/.pi/agent/AGENTS.md, which PiKit composes from two " +
                 "documents — the default instructions (AGENTS.author.md), written by PiKit " +
-                "and editable, replaced when PiKit's own default changes; and your own " +
+                "and editable, replaced when PiKit's own default changes; and the user's " +
                 "instructions (AGENTS.user.md), empty to begin with and never rewritten by " +
                 "the app;\n" +
                 "· Workspace: an AGENTS.md a project keeps in its own directory, such as " +
@@ -452,7 +452,7 @@ internal object EnglishStrings : Strings {
         override val agentContextInstructions = "Global AGENTS.md"
         override val agentContextAuthorTitle = "Default instructions"
         override val agentContextAuthorSubtitle = "Written by PiKit, editable; a newer PiKit default replaces it"
-        override val agentContextUserTitle = "My own instructions"
+        override val agentContextUserTitle = "User instructions"
         override val agentContextUserSubtitle = "Empty to begin with, and only yours; PiKit never rewrites it"
         override val agentContextUserEmpty = "Still empty — open it and write"
         override val agentContextInstructionsEditable = "Editable"
@@ -646,8 +646,8 @@ internal object EnglishStrings : Strings {
         override val backupCategoryAgentPrompt = "Agent prompt"
         override val backupCategoryAgentPromptSubtitle =
             "The two documents under \$HOME/.pi/agent/ — the default instructions " +
-                "(AGENTS.author.md) and your own (AGENTS.user.md); the AGENTS.md pi reads is " +
-                "composed from them, and is composed again after a restore"
+                "(AGENTS.author.md) and the user's (AGENTS.user.md); the AGENTS.md pi reads " +
+                "is composed from them, and is composed again after a restore"
         override val backupCategoryWorkspace = "Workspace files"
         override val backupCategoryWorkspaceSubtitle =
             "Everything under \$HOME/workspace, plus each directory you added in " +
