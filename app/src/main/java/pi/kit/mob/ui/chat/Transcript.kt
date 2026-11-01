@@ -2,17 +2,22 @@ package pi.kit.mob.ui.chat
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
@@ -384,7 +389,7 @@ internal data class TurnSummaryData(
  *    existed on *all* tool rows, rail or not — moved every tool's mark 12dp right of
  *    every other row's text. The rows now start at the card's own margin, like the
  *    thinking and the answer they belong to.
- *  - **The ripple.** See [disclosureClickable].
+ *  - **The ripple.** See [DisclosureRow].
  *
  * The state mark is the app's own tick and cross — [MiuixIcons.Ok] and
  * [MiuixIcons.Close], the glyphs the model list marks an active profile and its
@@ -435,34 +440,16 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
         // output on a tap. The settled call used to drop the pill for a bare 14dp
         // mark, which moved its name and changed the row's height the moment it
         // ended; the reader's rule is one shape per step.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (running) {
-                        Modifier
-                    } else {
-                        // Only the header row toggles the card. Making the whole card
-                        // clickable would be tidier, but a clickable consumes the
-                        // long-press, which would leave the output impossible to
-                        // select or copy — the opposite of what a tool result is for.
-                        Modifier
-                            .clip(ROW_SHAPE)
-                            // The label is on the control rather than on the arrow
-                            // inside it: a screen reader reaching this row should hear
-                            // what the row does.
-                            .disclosureClickable(
-                                onClickLabel = if (expanded) {
-                                    text.chat.collapse
-                                } else {
-                                    text.chat.expand
-                                },
-                                onClick = { expanded = !expanded },
-                            )
-                    },
-                )
-                .padding(vertical = ROW_PADDING),
-            verticalAlignment = Alignment.CenterVertically,
+        // Only the header row toggles the card. Making the whole card clickable would
+        // be tidier, but a clickable consumes the long-press, which would leave the
+        // output impossible to select or copy — the opposite of what a tool result is
+        // for. A running call is not a control at all: there is nothing to open yet.
+        DisclosureRow(
+            enabled = !running,
+            // The label is on the control rather than on the arrow inside it: a screen
+            // reader reaching this row should hear what the row does.
+            onClickLabel = if (expanded) text.chat.collapse else text.chat.expand,
+            onClick = { expanded = !expanded },
         ) {
             // The mark answers "did it work", which is the question a reader has
             // about a step they did not open, and the pill's label already says which
@@ -625,19 +612,29 @@ private val TOOL_MARK_SIZE = 14.dp
 private val TOOL_CHEVRON_GAP = 4.dp
 
 /**
- * The vertical padding every one-line row on the transcript carries.
+ * The air a disclosure's press highlight leaves above and below its label.
  *
- * 3dp top and bottom around a 13sp label's line box of about 17dp, which puts a
- * row at 22dp: enough that two rows in a row do not read as one wrapped paragraph,
- * and short enough that a turn of six tool calls is still a glance rather than a
- * screen. It is *inside* the tap target, so the whole of that 22dp responds to a
- * press rather than only the glyphs.
+ * It was 3dp, and it was the row's padding rather than the highlight's: the tint then
+ * spanned the whole card's width, and its rounded ends cut into the first glyph of a
+ * short label (`2 个步骤`) while the row's top and bottom carried a line of text's own
+ * leading. 6dp is what makes the highlight read as a control.
  *
  * It is also why the tool row is not a `PiRow`: that is 14dp of padding and 52dp
  * tall, because a settings row is read and tapped one at a time, while the point
  * of this row is that six of them are one glance.
  */
-internal val ROW_PADDING = 3.dp
+private val DISCLOSURE_PAD = 6.dp
+
+/**
+ * How far a disclosure's highlight is allowed to bleed past its label.
+ *
+ * The highlight is drawn around the control rather than across the row, so its
+ * horizontal padding has to come from somewhere. It comes from the card's own inset,
+ * which is 16dp: the row moves its draw left by this much and pads the label by the
+ * same, so the label keeps the transcript's margin and the highlight gains 10dp of air
+ * on both sides without the card growing.
+ */
+private val DISCLOSURE_BLEED = 10.dp
 
 /**
  * The line box every monospace block in the app is drawn at.
@@ -664,30 +661,65 @@ private val TOOL_OUTPUT_MAX_HEIGHT = 240.dp
 private val TOOL_PANEL_GAP = 4.dp
 
 /**
- * A disclosure row's tap target, with the page's own press feedback.
+ * One of the page's three disclosures: a row that is the tap target, and a *control*
+ * that carries the feedback.
  *
- * The ripple this used to have to switch off is gone with the theme it belonged to: a
- * *bounded* ripple on a row that spans the transcript filled the whole width — a bar
- * of colour flashing across the conversation on every tap, which is what the reader
- * reported as "点击反馈的条块", a block of feedback under the finger rather than a
- * highlight on the control. Miuix's theme installs its own indication instead: a 10%
- * tint over the node that was pressed and nothing outside it, so the row that
- * answers a tap is the row the finger is on.
+ * ## Why the highlight is not the row
  *
- * The helper is kept rather than inlined because the label belongs to the *control*
- * on all three disclosures, and one place that says so is what stops a fourth
- * caller from putting it on the arrow.
+ * A row and a control are not the same size here. The row spans the card so the whole
+ * line answers a tap, while the label may be four characters wide — and the theme's
+ * indication draws a 10% tint over whichever node was pressed. Painted on the row,
+ * that tint was a band across the card with a short label jammed into its rounded
+ * leading end and a screenful of empty highlight after the chevron.
+ *
+ * So the two are separated: the row owns the tap, `interactionSource` is shared, and
+ * the tint is bound to the inner node that hugs the label. The *same* indication the
+ * rest of the app shows (`LocalIndication`) is used rather than a hand-rolled colour,
+ * which is what keeps this row's feedback the same gesture as a settings row's.
+ *
+ * The inner node is then allowed to bleed [DISCLOSURE_BLEED] past the row's own start,
+ * which is what its horizontal padding costs — see that constant for the accounting.
+ *
+ * A ripple on a row that spans the transcript was the earlier problem, and it is
+ * recorded here because its successor looks similar and is not: that one was a bar of
+ * colour flashing across the conversation on every tap ("点击反馈的条块"), a block of
+ * feedback under the finger rather than a highlight on the control.
+ *
+ * The label belongs to the *control* on all three disclosures, and one place that says
+ * so is what stops a fourth caller from putting it on the arrow.
  */
 @Composable
-internal fun Modifier.disclosureClickable(
+internal fun DisclosureRow(
     enabled: Boolean = true,
     onClickLabel: String? = null,
     onClick: () -> Unit,
-): Modifier = this.clickable(
-    enabled = enabled,
-    onClickLabel = onClickLabel,
-    onClick = onClick,
-)
+    content: @Composable RowScope.() -> Unit,
+) {
+    val interactions = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                enabled = enabled,
+                onClickLabel = onClickLabel,
+                // The feedback is the inner node's; see the KDoc.
+                interactionSource = interactions,
+                indication = null,
+                onClick = onClick,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .offset(x = -DISCLOSURE_BLEED)
+                .clip(ROW_SHAPE)
+                .indication(interactions, LocalIndication.current)
+                .padding(horizontal = DISCLOSURE_BLEED, vertical = DISCLOSURE_PAD),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+    }
+}
 
 /**
  * The one chevron this page's three disclosures use.
@@ -786,16 +818,9 @@ internal fun ReasoningToggle(
     // visual change per frame than swapping two vectors, and it reads as the same
     // control changing state. `DisclosureChevron` is where that is decided, for all
     // three of the page's disclosures.
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(ROW_SHAPE)
-            .disclosureClickable(
-                onClickLabel = if (expanded) text.chat.hideReasoning else text.chat.showReasoning,
-                onClick = onToggle,
-            )
-            .padding(vertical = ROW_PADDING),
-        verticalAlignment = Alignment.CenterVertically,
+    DisclosureRow(
+        onClickLabel = if (expanded) text.chat.hideReasoning else text.chat.showReasoning,
+        onClick = onToggle,
     ) {
         Icon(
             painter = painterResource(R.drawable.ic_thinking),
@@ -1015,17 +1040,10 @@ internal fun TurnSummaryRow(
     val foldable = summary.stepCount > 0
     val label = turnSummaryLabel(summary, text)
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(ROW_SHAPE)
-            .disclosureClickable(
-                enabled = foldable,
-                onClickLabel = if (expanded) text.chat.stepsHide else text.chat.stepsShow,
-                onClick = onToggle,
-            )
-            .padding(vertical = ROW_PADDING),
-        verticalAlignment = Alignment.CenterVertically,
+    DisclosureRow(
+        enabled = foldable,
+        onClickLabel = if (expanded) text.chat.stepsHide else text.chat.stepsShow,
+        onClick = onToggle,
     ) {
         Text(
             text = label,
