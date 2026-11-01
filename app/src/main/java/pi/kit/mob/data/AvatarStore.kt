@@ -47,9 +47,23 @@ object AvatarStore {
     /** The directory every stored picture lives in, under the app's `files/`. */
     fun directory(filesDir: File): File = File(filesDir, DIR)
 
-    /** The file [slot]'s picture is stored as. */
-    fun file(filesDir: File, slot: AvatarSlot): File =
-        File(directory(filesDir), "${slot.id}.png")
+    /**
+     * The files [slot] owns: `<slot>-<stamp>.png`, and the legacy `<slot>.png`.
+     *
+     * A picture is stored under a name of its own rather than at one fixed path, because
+     * the setting holds the *path*. Replacing a picture used to rewrite `ai.png`, so the
+     * field did not change — and everything that decodes a picture is keyed on that path
+     * (`PiAvatar`'s `produceState`, and any cache above it), so the reader kept seeing the
+     * previous picture until the page was re-entered and the decode started over. A name
+     * that changes with the content is what makes a replacement visible.
+     *
+     * The legacy fixed name is matched too: a picture stored by an older build is
+     * replaced by the next one instead of sitting in the directory for ever.
+     */
+    private fun files(filesDir: File, slot: AvatarSlot): List<File> =
+        directory(filesDir).listFiles().orEmpty()
+            .filter { it.name.startsWith("${slot.id}-") || it.name == "${slot.id}.png" }
+            .sortedBy { it.name }
 
     /**
      * The picked picture, decoded and bounded, for the crop step.
@@ -133,22 +147,26 @@ object AvatarStore {
      */
     fun storeSquare(filesDir: File, slot: AvatarSlot, square: Bitmap): String? = runCatching {
         val scaled = scaleToFit(square, AVATAR_STORED_PX)
-        val target = file(filesDir, slot)
-        target.parentFile?.mkdirs()
+        val directory = directory(filesDir)
+        directory.mkdirs()
+        val target = File(directory, "${slot.id}-${System.currentTimeMillis()}.png")
         target.outputStream().use { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }
         if (scaled !== square) scaled.recycle()
+        // One picture per speaker: the one being replaced goes as soon as the new one is
+        // on disk, or the directory grows a file per crop and the backup carries them all.
+        files(filesDir, slot).forEach { if (it != target) it.delete() }
         target.absolutePath
     }.getOrNull()
 
     /**
-     * Removes [slot]'s stored picture.
+     * Removes every stored picture of [slot].
      *
-     * A single file rather than a tree, so it is `File.delete` and not
-     * `SafeDelete` — the rule that one exists for is recursive deletes, and the
-     * directory itself is left in place with the other slot's picture in it.
+     * A handful of files rather than a tree, so it is `File.delete` and not `SafeDelete` —
+     * the rule that one exists for is recursive deletes, and the directory itself is left
+     * in place with the other slot's picture in it.
      */
     fun clear(filesDir: File, slot: AvatarSlot) {
-        runCatching { file(filesDir, slot).delete() }
+        files(filesDir, slot).forEach { runCatching { it.delete() } }
     }
 
     /**
