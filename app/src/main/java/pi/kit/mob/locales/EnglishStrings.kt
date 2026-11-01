@@ -46,6 +46,7 @@ internal object EnglishStrings : Strings {
             "Tip: tap ⌘ for the commands PiKit runs itself.",
             "Tip: long-press any text to copy it.",
             "Tip: the history icon in the header reopens a past conversation.",
+            "Tip: swipe left or right to switch between the conversation and the list.",
             "Tip: the ring at the field's corner shows window use, cost and the session file.",
         )
         override val loadingConversation = "Opening the conversation…"

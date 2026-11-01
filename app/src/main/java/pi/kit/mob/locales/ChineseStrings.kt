@@ -54,6 +54,7 @@ internal object ChineseStrings : Strings {
             "提示：点 ⌘ 可以查看 PiKit 自己执行的指令",
             "提示：长按任意文字即可复制",
             "提示：点顶部的历史图标可以回到之前的对话",
+            "提示：向左或向右滑动，可以在对话页和历史对话之间切换",
             "提示：点输入框右下角的圆环可以查看窗口占用、花费和会话文件",
         )
         override val loadingConversation = "正在打开对话…"
