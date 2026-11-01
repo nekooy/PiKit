@@ -42,9 +42,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -1067,13 +1071,48 @@ private fun ExtraKeysRow(
             // and the row is the one place where a key that cannot be hit is worse than a
             // key that is off screen, because the bar exists to save typing. A key is as
             // wide as its label needs and the row scrolls when the labels do not fit.
-            Box(Modifier.weight(1f)) {
+            val keysScroll = rememberScrollState()
+            val fadePx = with(density) { BAR_FADE_WIDTH.toPx() }
+            Box(
+                Modifier
+                    .weight(1f)
+                    // The keys dissolve as they run under the actions, and they are *erased*
+                    // rather than painted over: the pill's background is 90% opaque, so a
+                    // second coat of it reached 99% in the strip's last pixels and left a
+                    // lighter rectangle whose right, top and bottom edges were straight
+                    // lines — measured as a 3-to-4 level step across a flat bar, which is
+                    // the seam that stayed visible while the strip's own leading edge
+                    // faded. `DstOut` removes what is drawn instead of adding colour, so
+                    // over the bar there is nothing to see and over a key there is nothing
+                    // left: the dissolve has no boundary in either direction.
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        // Only as wide as the content that can still come through: with
+                        // everything on screen (`maxValue` zero) and at the end of a scroll,
+                        // there is nothing past the edge to dissolve, so the strip shrinks
+                        // to nothing and the last key is drawn whole. Without that, the
+                        // trailing inset put the last key inside the strip at rest and it
+                        // lost a fifth of its ink to a fade that had nothing to hint at.
+                        val width = minOf(fadePx, (keysScroll.maxValue - keysScroll.value).toFloat())
+                        if (width <= 0f) return@drawWithContent
+                        // `this.size` and not `size`: this composable's own `size: KeySize`
+                        // parameter shadows the draw scope's, and reading it answers a `Dp`
+                        // — the compiler reported "actual type is 'Dp', but 'Float' was
+                        // expected" against a line that looked entirely correct.
+                        val end = this.size.width
+                        drawRect(
+                            brush = barFadeBrush(startX = end - width, endX = end),
+                            blendMode = BlendMode.DstOut,
+                        )
+                    },
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         // No clip of its own: the leading edge is the pill's arc, and the
                         // trailing one is where the actions begin.
-                        .horizontalScroll(rememberScrollState()),
+                        .horizontalScroll(keysScroll),
                     horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1099,22 +1138,6 @@ private fun ExtraKeysRow(
                     BarKey(label = text.terminal.escape, onClick = { onSend("\u001b") })
                     Spacer(Modifier.width(BAR_INNER_PADDING))
                 }
-                // A hard edge where the keys run under the actions reads as a clipped key
-                // rather than as "there is more". A bounded box — `height`, not
-                // `fillMaxHeight`: an unbounded child of this Row takes the page's whole
-                // height and stretches the pill with it, which was measured as a bar that
-                // filled the screen.
-                Box(
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .width(BAR_FADE_WIDTH)
-                        .height(BAR_KEY_HEIGHT)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Transparent, BAR_BACKGROUND),
-                            ),
-                        ),
-                )
             }
             BarAction(
                 painter = painterResource(R.drawable.ic_send_text),
@@ -1293,10 +1316,29 @@ private val BAR_KEY_RADIUS = 10.dp
 private val BAR_ACTION_SIZE = 34.dp
 private val BAR_ACTION_GLYPH = 17.dp
 private val BAR_GAP = 4.dp
-private val BAR_FADE_WIDTH = 24.dp
+private val BAR_FADE_WIDTH = 32.dp
 private val BAR_PADDING = 6.dp
 private val BAR_INNER_PADDING = 5.dp
 private val BAR_SIDE_PADDING = 8.dp
+
+/**
+ * The dissolve at the bar's trailing edge, as a ramp of erased *coverage*.
+ *
+ * `DstOut` keeps nothing but the alpha, so the colour is black throughout and the stops
+ * are the `smoothstep` of the position — the one curve with no slope at either end, which
+ * is what "no boundary" asks of a fade: no first pixel where a dimming starts and no last
+ * pixel where it stops, so the eye finds neither edge. A linear ramp was the earlier
+ * shape and its 32dp line still read as a band.
+ */
+private fun barFadeBrush(startX: Float, endX: Float): Brush = Brush.horizontalGradient(
+    0f to Color(0f, 0f, 0f, 0f),
+    0.15625f to Color(0f, 0f, 0f, 0.15625f),
+    0.5f to Color(0f, 0f, 0f, 0.5f),
+    0.84375f to Color(0f, 0f, 0f, 0.84375f),
+    1f to Color(0f, 0f, 0f, 1f),
+    startX = startX,
+    endX = endX,
+)
 
 /**
  * One run of keys, on its own track.
