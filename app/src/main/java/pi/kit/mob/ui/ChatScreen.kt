@@ -2410,12 +2410,18 @@ private data class ChatAvatars(
  * One style for both sides: it is a caption on the conversation rather than part of it,
  * which is why it is the footnote face and the muted ink. Blank never reaches here — a
  * reader who chose no name passes null, and the row is then just the mark.
+ *
+ * **`footnote1` (13sp), not `footnote2` (11sp).** The smaller footnote is the smallest
+ * text the interface has, and it sat beside a 34dp disc where the mark's own drawing is
+ * 21dp: the name read as a speck attached to the mark rather than as the speaker's name,
+ * and a caption nobody can read at a glance is a caption that has stopped being one. One
+ * step up the same face keeps it below the message's 17sp, so it is still a caption.
  */
 @Composable
 private fun SpeakerName(name: String) {
     Text(
         text = name,
-        style = MiuixTheme.textStyles.footnote2,
+        style = MiuixTheme.textStyles.footnote1,
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
