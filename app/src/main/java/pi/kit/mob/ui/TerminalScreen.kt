@@ -1085,31 +1085,47 @@ private fun ExtraKeysRow(
             Box(
                 Modifier
                     .weight(1f)
-                    // The keys dissolve as they run under the actions, and they are *erased*
-                    // rather than painted over: the pill's background is 90% opaque, so a
-                    // second coat of it reached 99% in the strip's last pixels and left a
-                    // lighter rectangle whose right, top and bottom edges were straight
-                    // lines — measured as a 3-to-4 level step across a flat bar, which is
-                    // the seam that stayed visible while the strip's own leading edge
-                    // faded. `DstOut` removes what is drawn instead of adding colour, so
-                    // over the bar there is nothing to see and over a key there is nothing
-                    // left: the dissolve has no boundary in either direction.
+                    // The keys are *erased* over the last stretch of the viewport rather
+                    // than painted over. Painting the pill's own colour here was the first
+                    // version and could not work: that colour is 90% opaque, so a second
+                    // coat of it took the strip's last pixels to 99% and left a *lighter
+                    // rectangle* whose right, top and bottom edges were straight lines —
+                    // measured as a 3-to-4 level step across a flat bar. `DstOut` removes
+                    // what is drawn instead of adding colour, so over the bar there is
+                    // nothing to see and over a key there is nothing left.
+                    //
+                    // The shape is the one the implementations that exist converge on — a
+                    // mask (not an overlay) over a *short, fixed* length: Android's own
+                    // fading edge is exactly this at a fixed `fadingEdgeLength`, and
+                    // `GIGAMOLE/ComposeFadingEdges` defaults to a 16dp `FadeClip` whose
+                    // stops (0, 0.5, 1 with half alpha at the midpoint) are a linear ramp.
+                    // Compose Foundation 1.12.1 has no modifier for it — the recipes are
+                    // hand-rolled `drawWithContent` masks — so the mask is written here.
+                    //
+                    // A ramp as *wide as the distance still to scroll* was the previous
+                    // version, and it was wrong in a way the eye catches: at rest it covered
+                    // a whole key, and a rounded rectangle at 20% ink still reads as a shape
+                    // — a shape at low contrast is the smudge the fade was supposed to
+                    // remove. Sixteen dp of ramp over a 38dp key leaves an edge, not a
+                    // ghost.
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
-                        // Only as wide as the content that can still come through: with
-                        // everything on screen (`maxValue` zero) and at the end of a scroll,
-                        // there is nothing past the edge to dissolve, so the strip shrinks
-                        // to nothing and the last key is drawn whole. Without that, the
-                        // trailing inset put the last key inside the strip at rest and it
-                        // lost a fifth of its ink to a fade that had nothing to hint at.
-                        val width = minOf(fadePx, (keysScroll.maxValue - keysScroll.value).toFloat())
-                        if (width <= 0f) return@drawWithContent
                         // `this.size` and not `size`: this composable's own `size: KeySize`
                         // parameter shadows the draw scope's, and reading it answers a `Dp`
                         // — the compiler reported "actual type is 'Dp', but 'Float' was
                         // expected" against a line that looked entirely correct.
                         val end = this.size.width
+                        // Sixteen dp, except where less than that is left past the edge. The
+                        // strip is masked by what can still come through for the same reason
+                        // a fade exists at all: on a bar whose six keys fit — measured at
+                        // 271dp of viewport against 263dp of keys — a fixed strip would dim
+                        // the last key's own edge by a fifth with nothing behind it to hint
+                        // at, and that is the artefact this whole exercise started from. The
+                        // cap only bites in the last 16dp of travel, where the content that
+                        // is cut is a sliver rather than a key.
+                        val width = minOf(fadePx, (keysScroll.maxValue - keysScroll.value).toFloat())
+                        if (width <= 0f) return@drawWithContent
                         drawRect(
                             brush = barFadeBrush(startX = end - width, endX = end),
                             blendMode = BlendMode.DstOut,
@@ -1325,25 +1341,24 @@ private val BAR_KEY_RADIUS = 10.dp
 private val BAR_ACTION_SIZE = 34.dp
 private val BAR_ACTION_GLYPH = 17.dp
 private val BAR_GAP = 4.dp
-private val BAR_FADE_WIDTH = 32.dp
+private val BAR_FADE_WIDTH = 16.dp
 private val BAR_PADDING = 6.dp
 private val BAR_INNER_PADDING = 5.dp
 private val BAR_SIDE_PADDING = 8.dp
 
 /**
- * The dissolve at the bar's trailing edge, as a ramp of erased *coverage*.
+ * The erase at the bar's trailing edge: a linear alpha ramp over [BAR_FADE_WIDTH].
  *
- * `DstOut` keeps nothing but the alpha, so the colour is black throughout and the stops
- * are the `smoothstep` of the position — the one curve with no slope at either end, which
- * is what "no boundary" asks of a fade: no first pixel where a dimming starts and no last
- * pixel where it stops, so the eye finds neither edge. A linear ramp was the earlier
- * shape, and its 24dp line still read as a band.
+ * `DstOut` keeps nothing but the alpha, so the colour is black throughout. Linear, and
+ * short, because that is the shape the implementations that exist use: Android's fading
+ * edge at a fixed `fadingEdgeLength`, and `GIGAMOLE/ComposeFadingEdges` at 16dp with half
+ * alpha at the midpoint — a linear ramp. An S-curve was the previous shape, chosen while
+ * the strip was painted and as wide as the remaining scroll; with a mask 16dp wide the
+ * curve is below what the eye resolves and the length is what decides whether the strip
+ * reads as an edge or as a smudge.
  */
 private fun barFadeBrush(startX: Float, endX: Float): Brush = Brush.horizontalGradient(
     0f to Color(0f, 0f, 0f, 0f),
-    0.15625f to Color(0f, 0f, 0f, 0.15625f),
-    0.5f to Color(0f, 0f, 0f, 0.5f),
-    0.84375f to Color(0f, 0f, 0f, 0.84375f),
     1f to Color(0f, 0f, 0f, 1f),
     startX = startX,
     endX = endX,
