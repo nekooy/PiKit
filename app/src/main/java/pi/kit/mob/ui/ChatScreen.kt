@@ -778,9 +778,13 @@ internal fun ChatScreen(
                     .pageDrag(
                         width = pageWidth,
                         onStart = { pageJob?.cancel() },
-                        onDrag = { delta -> pageOffset = (pageOffset + delta).coerceIn(0f, pageWidth.toFloat()) },
+                        // Leftward is negative in Compose's coordinates, and a leftward drag is
+                        // what opens the list, so the number grows by *minus* the delta. Adding it
+                        // made a rightward pull slide the conversation aside — the one direction with
+                        // nothing behind it.
+                        onDrag = { delta -> pageOffset = (pageOffset - delta).coerceIn(0f, pageWidth.toFloat()) },
                         onRelease = { distance, velocity, minFling ->
-                            settlePage(commitPage(distance, velocity, minFling))
+                                settlePage(commitPage(distance, velocity, minFling))
                         },
                     ),
             ) {
@@ -801,7 +805,11 @@ internal fun ChatScreen(
                         pageJob?.cancel()
                         historyReachable = true
                     },
-                    onDrag = { delta -> pageOffset = (pageOffset + delta).coerceIn(0f, pageWidth.toFloat()) },
+                    // Leftward is negative in Compose's coordinates, and a leftward drag is
+                    // what opens the list, so the number grows by *minus* the delta. Adding it
+                    // made a rightward pull slide the conversation aside — the one direction with
+                    // nothing behind it.
+                    onDrag = { delta -> pageOffset = (pageOffset - delta).coerceIn(0f, pageWidth.toFloat()) },
                     onRelease = { distance, velocity, minFling ->
                         settlePage(commitPage(distance, velocity, minFling))
                     },

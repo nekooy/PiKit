@@ -1051,7 +1051,11 @@ private fun ExtraKeysRow(
                 .fillMaxWidth()
                 .clip(BarShape)
                 .background(BAR_BACKGROUND)
-                .padding(horizontal = BAR_INNER_PADDING, vertical = BAR_INNER_PADDING),
+                // No horizontal padding: the keys have to run to the pill's own edge, so
+                // the *pill's* rounded clip is what hides a half-scrolled key on the
+                // leading side. An inner inset put a straight vertical cut five dp inside
+                // the arc, which is what read as a rendering fault.
+                .padding(vertical = BAR_INNER_PADDING),
             horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1063,11 +1067,10 @@ private fun ExtraKeysRow(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    // The viewport is rounded to match the bar it sits in. A scroll
-                    // container clips to its own bounds, so a half-scrolled key used to
-                    // be cut by a straight vertical line *inside* the pill — which reads
-                    // as a rendering fault rather than as "there is more to the left".
-                    .clip(RoundedCornerShape(BAR_KEY_RADIUS + 10.dp))
+                    // No clip of its own: the leading edge is the pill's, and the
+                    // trailing edge is where the three actions begin — a key sliding
+                    // under them is cut by the row's own bounds, which is exactly where a
+                    // cut belongs.
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1089,6 +1092,7 @@ private fun ExtraKeysRow(
             }
             BarAction(
                 painter = painterResource(R.drawable.ic_send_text),
+                modifier = Modifier.padding(start = BAR_INNER_PADDING),
                 description = text.terminal.keysMessage,
             ) {
                 draft = ""
@@ -1226,11 +1230,12 @@ private fun ArrowKey(key: ArrowKey, onSend: (String) -> Unit) {
 private fun BarAction(
     painter: androidx.compose.ui.graphics.painter.Painter,
     description: String,
+    modifier: Modifier = Modifier,
     active: Boolean = false,
     onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(BAR_ACTION_SIZE)
             .clip(CircleShape)
             .background(if (active) TERMINAL_ACCENT else TERMINAL_ACTION)
