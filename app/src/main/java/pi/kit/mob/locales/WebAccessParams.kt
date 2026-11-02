@@ -634,9 +634,12 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     ),
     p(
         "ssrf.allowRanges", "string[]", "[\"198.18.0.0/15\"]",
-        "Extra CIDR ranges a fetch may reach — for a service on your own network.",
-        "允许抓取到的额外 CIDR 网段，用于自己局域网内的服务。",
-        "取得を許可する追加の CIDR。自宅ネットワーク内のサービス向け。",
+        "Extra CIDR ranges a fetch may reach — a TUN proxy's fake-IP range, or a service " +
+            "on your own network. PiKit writes the fake-IP range for you.",
+        "允许抓取到的额外 CIDR 网段：TUN 代理的 fake-IP 网段，或自己局域网内的服务。" +
+            "fake-IP 网段由 PiKit 写好。",
+        "取得を許可する追加の CIDR。TUN プロキシの fake-IP 範囲や、自宅ネットワーク内の" +
+            "サービス向けです。fake-IP の範囲は PiKit が書き込みます。",
     ),
     p(
         "ssrf.trustEnvProxy", "boolean", "false",

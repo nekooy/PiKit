@@ -109,10 +109,15 @@ Four build details carry numbers:
 
 The extension's options are its own file, `$HOME/.pi/agent/web-search.json`, and the app
 edits it directly rather than mirroring it into `SharedPreferences`: two copies of one
-setting is two answers to "which provider is in use". PiKit sets one default there —
-`"workflow": "none"` — because the extension's own default is `summary-review`, which opens
-its result curator in a browser a phone does not have. A file that does not parse is
-reported rather than overwritten. (Section 9 has the rest.)
+setting is two answers to "which provider is in use". PiKit sets **two** defaults there,
+and both are the file's rather than a control's: `"workflow": "none"`, because the
+extension's own default is `summary-review`, which opens its result curator in a browser a
+phone does not have; and `ssrf.allowRanges: ["198.18.0.0/15"]`, the range a TUN/fake-IP
+proxy answers with, which the extension's own default (`[]`) refuses — so every
+`fetch_content` on such a phone failed before it connected (§9.3 has the mechanism). Both
+are written only where the key is absent, so a value the user set — `[]` included — is
+never replaced. A file that does not parse is reported rather than overwritten. (Section 9
+has the rest.)
 
 The page used to carry two SearXNG fields (`searxngBaseUrl`, `searxngHeaders`); they were
 removed with the rest of the per-provider fields because a field PiKit draws is a field

@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -70,6 +71,19 @@ import java.io.File
  * curator so each summary can be hand-checked — a desktop workflow, useless on a
  * phone. PiKit's default is `none`, and it is in the rendered document, so the
  * default the page shows is also the default pi is running with.
+ *
+ * ## The one key PiKit writes as a *default* rather than as its own
+ *
+ * `ssrf.allowRanges` is the extension's escape hatch for a TUN/fake-IP proxy: its
+ * SSRF preflight refuses the `198.18.0.0/15` that such a proxy answers with, and
+ * its own default for the key is `[]`, so a phone behind one has every
+ * `fetch_content` refused before anything is connected. PiKit writes
+ * `["198.18.0.0/15"]` — but only when the key is *not there*
+ * ([WEB_SEARCH_DEFAULT_KEYS]): an owned key is rewritten from [WebSearchSettings]
+ * on every render, and this value is a policy the user may have set by hand,
+ * `[]` included. See [mergedDocumentText] for the write that gives an existing
+ * install the key, and ARCHITECTURE §9.3 for the alternative that was rejected
+ * (`ssrf.trustEnvProxy`) and why this is not one of [WEB_SEARCH_OWNED_PATHS].
  *
  * ## Reads are tolerant, the file on disk is not
  *
@@ -585,6 +599,88 @@ internal val WEB_SEARCH_OWNED_PATHS: Set<String> = OWNED_PATHS + TOOL_ENABLED_PA
 private val SCHEMA_PATHS: Set<String> = WEB_ACCESS_PARAMS.map { it.path }.toSet()
 
 /**
+ * The range a TUN/fake-IP proxy answers public hostnames with.
+ *
+ * Clash, Mihomo, Surge and their kin intercept DNS and answer `198.18.0.0/15` — the
+ * range RFC 2544 reserved for benchmarking — so the *address* a fetch reaches is
+ * synthetic and the TUN device is what carries the connection. The extension's SSRF
+ * preflight refuses that range unless it is exempted, and its own default for
+ * `ssrf.allowRanges` is the empty array, which is the bug this constant is here to
+ * fix.
+ */
+internal const val FAKE_IP_PROXY_RANGE = "198.18.0.0/15"
+
+/**
+ * The keys PiKit writes into a file that does not have them, and the value it writes.
+ *
+ * A **default**, not an owned key. An owned key ([WEB_SEARCH_OWNED_PATHS]) is
+ * rewritten from [WebSearchSettings] on every render, and this one is a statement
+ * about the user's own network that they may have made by hand — `[]` is a
+ * legitimate answer that means "exempt nothing", which is the extension's own
+ * default. So it is written only when the path is absent: by
+ * [WebSearchStore.defaultDocument] for a fresh install, and by [mergedDocumentText]
+ * for a file that is already on disk, which is the half that makes the fix reach an
+ * install the user never touches.
+ *
+ * The option itself is documented in `WEB_ACCESS_PARAMS` like every other key, so
+ * the note the reader sees on the document's line comes from the same row the
+ * page's "add an option" sheet shows. ARCHITECTURE §9.3 has the mechanism and the
+ * rejected alternative.
+ */
+internal val WEB_SEARCH_DEFAULT_KEYS: Map<String, JsonElement> = mapOf(
+    "ssrf.allowRanges" to JsonArray(listOf(JsonPrimitive(FAKE_IP_PROXY_RANGE))),
+)
+
+/**
+ * [this] with every key in [WEB_SEARCH_DEFAULT_KEYS] it does not have, and nothing
+ * else changed.
+ *
+ * A path that is present is left exactly as it is, whatever its type and whatever
+ * its value — `[]`, a list of the user's own LAN ranges, `null`, even a value the
+ * extension will reject — because this is the one write in this file that the user
+ * did not ask for. That is also why a parent that is present but is *not* an object
+ * is left alone instead of being replaced, which is where this differs from
+ * [withValueAt]: replacing is right for a key the user typed and wrong for one
+ * PiKit is adding on its own.
+ */
+internal fun JsonObject.withWebSearchDefaults(): JsonObject {
+    var out = this
+    WEB_SEARCH_DEFAULT_KEYS.forEach { (path, value) ->
+        val segments = path.split('.')
+        if (!out.holdsPath(segments)) out = out.withValueAt(segments, value)
+    }
+    return out
+}
+
+/**
+ * True when [segments] already resolves in this object, or when something on the
+ * way down is present but is not an object — in both cases the path is the file's
+ * and not a default's to write.
+ */
+private fun JsonObject.holdsPath(segments: List<String>): Boolean {
+    var node: JsonObject = this
+    segments.forEachIndexed { index, segment ->
+        val value = node[segment] ?: return false
+        if (index == segments.lastIndex) return true
+        node = value as? JsonObject ?: return true
+    }
+    return false
+}
+
+/**
+ * The document a fresh install's file is rendered from: nothing, plus the defaults
+ * PiKit writes.
+ *
+ * A *source* rather than a finished document, because the renderer already writes a
+ * key its source has: [WebSearchStore.defaultDocument] hands this to it, so the
+ * default is placed by the schema like every other key — in its documented position,
+ * with its own note — instead of by a second writer that would have to know where
+ * `ssrf` sits. The test reads this name so the fresh-install document has one
+ * definition rather than two.
+ */
+internal val WEB_SEARCH_DEFAULT_SOURCE: JsonObject = JsonObject(emptyMap()).withWebSearchDefaults()
+
+/**
  * The document with `path` set to [value], creating the objects on the way.
  *
  * A non-object found where the path needs to descend is replaced. `githubClone`
@@ -961,15 +1057,23 @@ class WebSearchStore(
         reload()
     }
 
-    /** Re-reads the file, and seeds it when it is not there. */
+    /**
+     * Re-reads the file, after [ensureDocument] has made it what the extension can
+     * read.
+     *
+     * In that order, because the repair and the defaults change what the file holds:
+     * a list read before them would show a key the merge had not written yet, and
+     * this list is meant to be the file. `ensureDocument` cannot make an unreadable
+     * file worse — a text it cannot parse as an object is one it leaves alone.
+     */
     fun reload() {
         scope.launch {
             lock.withLock {
+                withContext(Dispatchers.IO) { ensureDocument() }
                 val loaded = withContext(Dispatchers.IO) { load() }
                 _settings.value = loaded.settings
                 _unreadable.value = loaded.unreadable
                 _extra.value = loaded.extra
-                if (!loaded.unreadable) withContext(Dispatchers.IO) { ensureDocument() }
             }
         }
     }
@@ -1059,11 +1163,17 @@ class WebSearchStore(
      * The document PiKit renders: what a fresh install's editor shows, and what the
      * page's "restore defaults" puts back.
      *
+     * It carries [WEB_SEARCH_DEFAULT_KEYS], because a fresh install has no file for
+     * [mergedDocumentText] to merge into — this text *is* the file. Rendered from
+     * [WEB_SEARCH_DEFAULT_SOURCE] rather than by a second writer, so the default is
+     * an ordinary key of the document: the schema places it, the editor shows it live
+     * with its note, and the strict file gets it because the document has it.
+     *
      * Not a suspend function and not locked, because it touches no file: it is a
      * pure rendering of the default settings against the schema, and the page calls
      * it from a composition-free callback.
      */
-    fun defaultDocument(): String = annotated(WebSearchSettings(), JsonObject(emptyMap()))
+    fun defaultDocument(): String = annotated(WebSearchSettings(), WEB_SEARCH_DEFAULT_SOURCE)
 
     /**
      * The annotated document, for the document editor.
@@ -1123,21 +1233,23 @@ class WebSearchStore(
     suspend fun restoreDocument(): Result<Unit> = replaceDocument(defaultDocument())
 
     /**
-     * Creates the file if it is not there, and repairs it if the extension cannot
-     * read it.
+     * Creates the file if it is not there, repairs it if the extension cannot read
+     * it, and gives it any key PiKit writes as a default.
      *
-     * The repair is for exactly one shape of file: one that is a JSON object *once
-     * comments are stripped* but not as it stands — which is what an older PiKit
-     * wrote, and what the extension answers with
-     * `Unexpected token '/' … is not valid JSON` for every tool. Nothing else is
-     * touched: a file that is already strict JSON keeps its bytes and its
+     * Three shapes, and the first is why this exists: an absent file is seeded with
+     * the document a fresh install has; a file that is a JSON object *once comments
+     * are stripped* but not as it stands — what an older PiKit wrote, and what the
+     * extension answers with `Unexpected token '/' … is not valid JSON` for every
+     * tool — is rewritten in the strict form; and a strict file that lacks a key in
+     * [WEB_SEARCH_DEFAULT_KEYS] gains it, which is the only way one that is already
+     * strict can gain anything, since nothing else here rewrites it.
+     *
+     * A strict file that already has the defaults keeps its bytes and its
      * formatting, and one that does not parse at all is left alone (it is the
-     * user's, and the editor is the way out of it).
-     *
-     * Public and synchronous because the agent's start calls it — the file has to be
-     * on disk *before* pi starts the extension, and the extension registers its
-     * tools then. Idempotent; it returns immediately unless the file is absent or
-     * commented.
+     * user's, and the editor is the way out of it). Public and synchronous because
+     * the agent's start calls it — the file has to be on disk *before* pi starts the
+     * extension, and the extension registers its tools then. Idempotent; it returns
+     * immediately unless the file is absent, commented, or missing a default.
      */
     fun ensureDocument() {
         if (!file.isFile) {
@@ -1146,9 +1258,8 @@ class WebSearchStore(
         }
         val text = runCatching { file.readText() }.getOrNull() ?: return
         if (text.isBlank()) return
-        if (isStrictJsonObject(text)) return
-        val document = readWebSearchDocument(text) ?: return
-        writeFile(STRICT_JSON.encodeToString(JsonObject.serializer(), document) + "\n")
+        val merged = mergedDocumentText(text) ?: return
+        writeFile(merged)
     }
 
     private class Loaded(
@@ -1159,7 +1270,7 @@ class WebSearchStore(
 
     private fun load(): Loaded {
         // No file is not an unreadable file: the extension is running on its own
-        // defaults, and `seedIfAbsent` writes the document a fresh install has.
+        // defaults, and `ensureDocument` writes the document a fresh install has.
         if (!file.isFile) return Loaded(WebSearchSettings(), unreadable = false)
 
         val text = runCatching { file.readText() }.getOrNull()
@@ -1277,11 +1388,36 @@ class WebSearchStore(
 }
 
 /**
+ * The strict document [text] should be on disk, or null when it already is.
+ *
+ * Two additions, both of them PiKit's and both already decided elsewhere: an older
+ * build's comments are resolved away ([strictDocument]'s repair, which is what makes
+ * that fix reach an install that predates it), and a key in [WEB_SEARCH_DEFAULT_KEYS]
+ * the file does not have is merged in ([withWebSearchDefaults]). Nothing that *is* in
+ * the file is dropped, renamed or re-typed: the document is parsed and re-encoded, so
+ * every key and every value survives and only the formatting is PiKit's.
+ *
+ * Null is the answer for a file that is already strict *and* already has the defaults,
+ * which is what keeps [WebSearchStore.ensureDocument] from rewriting a file nobody
+ * asked it to change — and for text that is not a JSON object once comments are
+ * stripped, which is the user's and the editor's. A strict file that lacks a default
+ * is the one case where a file that has already been written is written again: it is
+ * the only way the key can reach an install whose file is already in the strict form,
+ * and it happens at the agent's start, not on a keystroke. ARCHITECTURE §9.3.
+ */
+internal fun mergedDocumentText(text: String): String? {
+    val document = readWebSearchDocument(text) ?: return null
+    val merged = document.withWebSearchDefaults()
+    if (merged == document && isStrictJsonObject(text)) return null
+    return STRICT_JSON.encodeToString(JsonObject.serializer(), merged) + "\n"
+}
+
+/**
  * Whether [text] is a JSON object with nothing to strip.
  *
- * The test [WebSearchStore.ensureDocument] uses to decide whether a file needs
- * repairing: `JSON.parse`'s own rule, which is the one the extension applies, not
- * the comment-tolerant one this app reads with.
+ * `JSON.parse`'s own rule, which is the one the extension applies, not the
+ * comment-tolerant one this app reads with — so a file that fails this is a file no
+ * tool can use as it stands, however well this app can read it.
  */
 internal fun isStrictJsonObject(text: String): Boolean =
     runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull() != null

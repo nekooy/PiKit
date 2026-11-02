@@ -1,6 +1,7 @@
 package pi.kit.mob.pi
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -735,6 +736,167 @@ class WebSearchStoreTest {
         // And removing it puts the file back where it started.
         val back = strictDocument(render(document = parse(once).withoutValueAt(listOf("xaiApiKey"))))
         assertEquals(emptyList<String>(), webSearchEntries(parse(back)).map { it.path })
+    }
+
+    // ------------------------------- the default for a TUN/fake-IP proxy
+
+    /** The file a fresh install ends up with: what `ensureDocument` writes when there is none. */
+    private fun freshFile(): String = strictDocument(render(document = WEB_SEARCH_DEFAULT_SOURCE))
+
+    /** `ssrf.allowRanges` as a list, or null when the key is not there. */
+    private fun JsonObject.ssrfRanges(): List<String>? =
+        (this["ssrf"] as? JsonObject)?.get("allowRanges")?.let { ranges ->
+            (ranges as? JsonArray)?.map { it.jsonPrimitive.content }
+        }
+
+    /** [this] without `ssrf.allowRanges`, leaving the emptied object as `{}` — undoing a merge. */
+    private fun JsonObject.withoutSsrfRange(): JsonObject {
+        val ssrf = this["ssrf"] as? JsonObject ?: return this
+        return JsonObject(toMutableMap().apply { put("ssrf", JsonObject(ssrf.filterKeys { it != "allowRanges" })) })
+    }
+
+    @Test
+    fun `a fresh install's file carries the fake-IP proxy range`() {
+        // The failure this pins: the extension's own default for `ssrf.allowRanges` is
+        // `[]` (`loadSsrfConfig` answers `{ allowRanges: [], trustEnvProxy: false }` when
+        // the key is absent), and its `assertPublicAddress` refuses 198.18.0.0/15 before
+        // anything is connected — so on a phone behind a Clash-style TUN proxy, whose DNS
+        // answers public hostnames out of that range, `fetch_content` and every page
+        // `source_check` fetches were refused. The key is in the reference list; this is
+        // the change that actually writes it.
+        assertEquals(setOf("ssrf.allowRanges"), WEB_SEARCH_DEFAULT_KEYS.keys)
+        val file = freshFile()
+
+        assertTrue("the file is strict JSON", isStrictJsonObject(file))
+        assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(file).ssrfRanges())
+        // Not an owned key: an owned key is rewritten from the settings on every render
+        // and never offered in the page's list, and this one has to be the file's.
+        assertFalse("ssrf.allowRanges" in WEB_SEARCH_OWNED_PATHS)
+        // It is an ordinary document key, so the editor explains it and the page lists
+        // it — the list is the file's live keys that no control owns.
+        val annotated = render(document = WEB_SEARCH_DEFAULT_SOURCE)
+        assertTrue(annotated.contains("[in effect] ssrf.allowRanges — "))
+        assertTrue("the value is live in the document", annotated.hasLiveKey("allowRanges"))
+        assertTrue(
+            "and the page's list offers it",
+            "ssrf.allowRanges" in webSearchEntries(readWebSearchDocument(annotated)!!).map { it.path },
+        )
+        // The range is not a setting: what the page shows is still the default one.
+        assertEquals(WebSearchSettings(), readWebSearchSettings(annotated))
+    }
+
+    @Test
+    fun `an existing file that lacks the range gains it, and nothing else moves`() {
+        // The install that has the bug: its file is already strict, so the repair that
+        // makes a commented file strict never runs and nothing else rewrites it. The
+        // merge is the write that reaches it, and it is an addition.
+        val existing = strictDocument(render(settings = WebSearchSettings(provider = "brave")))
+        assertNull("the file a tap writes has no range", parse(existing).ssrfRanges())
+
+        val merged = mergedDocumentText(existing)!!
+
+        assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(merged).ssrfRanges())
+        assertEquals(
+            "taking the range out gives the original document back, key for key",
+            parse(existing),
+            parse(merged).withoutSsrfRange(),
+        )
+        assertEquals("and the settings are still the file's", "brave", readWebSearchSettings(merged)!!.provider)
+        // Nothing else moved: the only line that goes is the empty `ssrf` object's, which
+        // becomes an object with the member in it.
+        val gone = existing.lines().filterNot { it in merged.lines() }
+        assertEquals("exactly one line is replaced", 1, gone.size)
+        assertTrue("it is the empty ssrf object", gone.single().trimStart().startsWith("\"ssrf\": {"))
+        // Idempotent, which is what makes this safe to run at every launch: a file that
+        // has the range is not rewritten, so its bytes and formatting stay its own.
+        assertNull("a second launch writes nothing", mergedDocumentText(merged))
+    }
+
+    @Test
+    fun `a range the user set is never replaced by the default`() {
+        // The two answers that are the user's, not PiKit's: `[]` is the extension's own
+        // meaning for "exempt nothing", and a list of LAN ranges is their own network.
+        // An owned key would rewrite both on the next tap anywhere on the page, which is
+        // exactly what makes this a default rather than a sixth control.
+        listOf(
+            """{"ssrf": {"allowRanges": []}}""",
+            """{"ssrf": {"allowRanges": ["10.0.0.0/8", "192.168.0.0/16"]}}""",
+            """{"ssrf": {"allowRanges": null}}""",
+            """{"ssrf": true}""",
+        ).forEach { mine ->
+            assertNull("no write over $mine", mergedDocumentText(mine))
+        }
+        // A control being tapped is the other writer, and it is equally hands-off: a
+        // non-owned key is written from what the file has, so `[]` survives it too.
+        val tapped = strictDocument(
+            render(
+                document = parse("""{"ssrf": {"allowRanges": []}}"""),
+                settings = WebSearchSettings(provider = "exa"),
+            ),
+        )
+        assertEquals(emptyList<String>(), parse(tapped).ssrfRanges())
+        // Something else under `ssrf` gains the range *beside* it, never instead of it.
+        val merged = mergedDocumentText("""{"ssrf": {"trustEnvProxy": true}}""")!!
+        assertEquals(JsonPrimitive(true), parse(merged).obj("ssrf").value("trustEnvProxy"))
+        assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(merged).ssrfRanges())
+    }
+
+    @Test
+    fun `the range is a default a render never adds back`() {
+        // What makes the page's ✕ a real removal: the renderer writes what the document
+        // has and has no fallback of its own, so a file without the key stays without it
+        // when a control is tapped. The launch merge is the only thing that puts it back,
+        // which is the behaviour the chapter states rather than hides.
+        val withoutIt = strictDocument(render(settings = WebSearchSettings(proxy = "socks5h://box:1080")))
+        assertNull(parse(withoutIt).ssrfRanges())
+
+        val tapped = strictDocument(
+            render(document = parse(withoutIt), settings = WebSearchSettings(provider = "kagi")),
+        )
+
+        assertNull("a tap does not resurrect it", parse(tapped).ssrfRanges())
+        // And the removal the page performs is a removal: the key goes, and the branch
+        // it emptied is pruned with it, which is what stops the list showing `ssrf`.
+        val removed = parse(mergedDocumentText(withoutIt)!!).withoutValueAt(listOf("ssrf", "allowRanges"))
+        assertNull(removed["ssrf"])
+    }
+
+    @Test
+    fun `a hand-written file keeps every key when the merge has to write it`() {
+        // The merge re-encodes, so a file formatted by hand comes back in PiKit's shape —
+        // the same shape the first control tap already gives it. What may not move is a
+        // key or a value; ARCHITECTURE §9.3 says why a byte-level insert, which this file
+        // would not survive, was rejected instead.
+        val handwritten = """
+        {
+            "workflow": "none",
+            "proxy": "socks5h://box:1080",
+            "fetch": { "timeout": 5, "retries": 2 },
+            "myOwnKey": {"nested": [1, 2]}
+        }
+        """.trimIndent()
+        val expected = JsonObject(
+            parse(handwritten).toMutableMap().apply {
+                put(
+                    "ssrf",
+                    JsonObject(
+                        mapOf("allowRanges" to JsonArray(listOf(JsonPrimitive(FAKE_IP_PROXY_RANGE)))),
+                    ),
+                )
+            },
+        )
+
+        val merged = mergedDocumentText(handwritten)!!
+
+        assertEquals("the document plus one key, and nothing else", expected, parse(merged))
+        assertEquals("a documented branch survives whole", parse(handwritten).obj("fetch"), parse(merged).obj("fetch"))
+        assertEquals(
+            "and one the schema never heard of",
+            parse(handwritten).obj("myOwnKey"),
+            parse(merged).obj("myOwnKey"),
+        )
+        assertEquals(WebSearchSettings.WORKFLOW_NONE, readWebSearchSettings(merged)!!.workflow)
+        assertEquals("socks5h://box:1080", readWebSearchSettings(merged)!!.proxy)
     }
 
     /** Every leaf path of a document, dotted, in file order. */
