@@ -357,19 +357,25 @@ internal data class TurnSummaryData(
  *
  * A call wears the screen's state pill ([ChatStatusPill]) from the moment it starts
  * until the reader opens its output — the same pill, in the same place, at the same
- * height. While it runs the pill carries the live mark ([PiTone.live], the palette's
- * secondary pair, reserved for "this is still going" and for nothing else). When it
- * settles the mark is swapped for the app's own tick or cross: the tick on a
- * success, on a muted [ChatTone.Neutral] pill, and the cross on a failure, on
- * [ChatTone.Danger] — the one red mark in a turn. The argument stays beside the pill
- * as one line of muted monospace, because for a call that has not finished yet the
- * argument is the only thing that says *what* it is doing — `ls -la` is the answer,
- * the tool's name is not — and keeping it there once the call is done is what leaves
- * the row's width unchanged when it ends.
+ * height, and of the same width. While it runs the pill carries the live mark
+ * ([PiTone.live], the palette's secondary pair, reserved for "this is still going"
+ * and for nothing else). When it settles the mark is swapped for the app's own tick
+ * or cross: the tick on a success, on a muted [ChatTone.Neutral] pill, and the cross
+ * on a failure, on [ChatTone.Danger] — the one red mark in a turn. The argument stays
+ * beside the pill as one line of muted monospace, because for a call that has not
+ * finished yet the argument is the only thing that says *what* it is doing — `ls -la`
+ * is the answer, the tool's name is not — and keeping it there once the call is done
+ * is what leaves the argument in the same place when it ends.
  *
  * The settled pill is also the row's control: it carries the disclosure chevron and
  * a tap on it opens the call's output, or closes it again. A running call is not
- * tappable — there is nothing to open yet.
+ * tappable — there is nothing to open yet. The chevron is drawn after the argument
+ * rather than inside the pill, so it takes its 4dp gap and 16dp glyph out of the
+ * weighted line's share: a long argument may ellipsise a little sooner once the call
+ * has ended, and the pill stays exactly where it was. Reserving that space while the
+ * call runs would either put an arrow over a row that cannot be tapped or leave a
+ * 20dp hole where one is about to appear — and the line it would come out of is the
+ * whole description of a call still in flight.
  *
  * ## What this replaced
  *
@@ -1155,6 +1161,13 @@ internal enum class ChatTone {
  * its own draws the running dot, which is what says "this has not come back yet"
  * without a word of its own; that is the same job the old design system's morphing
  * indicator had, done with the one palette role that means it.
+ *
+ * The mark is the only difference, and that is true of the pill's **width** only
+ * because the mark occupies a box of one size in every state: `TOOL_MARK_SIZE`, the
+ * 14dp status mark, with a narrower mark centred in it. Sizing the box by the mark
+ * instead — the 6dp dot against the 14dp tick — made a running pill 8dp narrower than
+ * the same settled pill, which moved its label and the argument beside it.
+ * ARCHITECTURE §7.3 has the arithmetic.
  */
 @Composable
 internal fun ChatStatusPill(
@@ -1183,15 +1196,30 @@ internal fun ChatStatusPill(
             modifier = Modifier.padding(horizontal = PILL_INSET),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            when {
-                mark != null -> Box(Modifier.padding(end = PILL_MARK_GAP)) { mark() }
-
-                tone == ChatTone.Live -> Box(
-                    Modifier
+            // One box for the mark in every state, with the mark centred in it. Sized
+            // by the mark instead, a running pill measured 10 + 6 + 5 + label + 10
+            // against a settled pill's 10 + 14 + 5 + label + 10 — `LIVE_DOT_SIZE`
+            // against `TOOL_MARK_SIZE` — so the label, and the tool's argument beside
+            // it, jumped 8dp right at the instant the call ended. The height never
+            // differed: both marks are shorter than `PILL_HEIGHT`, so the pill's
+            // height is its one label line's or that minimum's in both states.
+            if (mark != null || tone == ChatTone.Live) {
+                Box(
+                    modifier = Modifier
                         .padding(end = PILL_MARK_GAP)
-                        .size(LIVE_DOT_SIZE)
-                        .background(ink, CircleShape),
-                )
+                        .size(TOOL_MARK_SIZE),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (mark != null) {
+                        mark()
+                    } else {
+                        Box(
+                            Modifier
+                                .size(LIVE_DOT_SIZE)
+                                .background(ink, CircleShape),
+                        )
+                    }
+                }
             }
             Text(
                 text = label,
