@@ -1083,8 +1083,64 @@ class PiAgentSession private constructor(context: Context) {
             // refreshed when the session actually moved.
             if (response.cancelled()) return@runCommand
             _conversation.value = ConversationState()
-            refreshState()
+            // The replacement landed on the profile this process was *launched* with,
+            // which is not necessarily the one the reader is on — see [modelToState].
+            // Stating it is the same `set_model` the picker sends, so a new conversation
+            // starts on the model the chip names, and on its credential. This also reads
+            // the new session's state, which is what `refreshState` would have done.
+            stateActiveModel()
         }
+    }
+
+    /**
+     * Tells a pi that has just replaced its session which model this app is on.
+     *
+     * Called after `new_session`, because pi answers a new session from its launch
+     * arguments rather than from the switch the running session had applied
+     * ([modelToState] has the measurement). The state is read *first* and awaited, so the
+     * comparison is against pi's own answer for the session it just opened rather than
+     * against the state this call cleared — the first version raced its own
+     * fire-and-forget refresh and therefore stated the model on every new conversation.
+     *
+     * Two details are the same ones [selectProfile] states for a tap on the picker:
+     *
+     *  - the provider is the id `models.json` defines ([ProfileAddressing.launchProviderId]),
+     *    because `set_model` matches on `m.provider === command.provider`;
+     *  - pi answers a switch with the model's own remembered thinking level, so the
+     *    reader's choice is stated again afterwards.
+     *
+     * A refused `set_model` falls back to a relaunch, which reads the same store and so
+     * cannot land on the wrong profile either.
+     */
+    private suspend fun stateActiveModel() {
+        val live = client ?: return
+        applyState(live)
+        val profiles = settingsStore.profiles.profiles
+        val active = settingsStore.profiles.activeProfile ?: return
+        val provider = ProfileAddressing.launchProviderId(active, profiles, registeredProviderIds)
+        val running = _conversation.value.model
+        val wanted = modelToState(
+            runningProvider = running?.provider,
+            runningModel = running?.id,
+            wantedProvider = provider,
+            wantedModel = active.modelId,
+        ) ?: return
+        Log.i(
+            TAG,
+            "new session opened on ${running?.provider}/${running?.id}; " +
+                "stating ${wanted.first}/${wanted.second}",
+        )
+        val applied = runCatching {
+            live.requestOrThrow("set_model") {
+                PiCommand.setModel(it, wanted.first, wanted.second)
+            }
+        }.isSuccess
+        if (!applied) {
+            scheduleRestart()
+            return
+        }
+        stateThinkingLevel(live, wanted.second, piLevel = null)
+        applyState(live)
     }
 
     /**
@@ -1592,18 +1648,33 @@ class PiAgentSession private constructor(context: Context) {
      */
     fun refreshState() {
         runCommand {
-            val response = client?.request("get_state") { PiCommand.getState(it) }
-                ?: return@runCommand
-            logSessionState("refresh", response)
-            _conversation.update { ConversationReducer.reduce(it, response) }
-            // The session in force is whatever this reply names: a `new_session`
-            // or a clone lands here, and the next relaunch has to come back to it.
-            rememberSessionPath(_conversation.value.sessionFile)
-            // The supported levels follow the model, so a state refresh is also the
-            // moment they are re-read: switching the model on the composer changes
-            // which levels exist without touching anything else.
-            refreshThinkingLevels()
+            client?.let { applyState(it) }
         }
+    }
+
+    /**
+     * `get_state`, folded into the conversation and awaited by the caller.
+     *
+     * The suspend half of [refreshState], for the one caller that must see the answer
+     * before deciding anything: [stateActiveModel] cannot tell which model a replaced
+     * session opened on without it, and a fire-and-forget refresh let it decide against
+     * an empty state and state the model on every new conversation.
+     *
+     * A failure is the process's, not this function's: an exception propagates to the
+     * caller's `runCommand`, which is what marks a dead pi `Failed` and schedules the one
+     * automatic recovery.
+     */
+    private suspend fun applyState(live: PiRpcClient) {
+        val response = live.request("get_state") { PiCommand.getState(it) }
+        logSessionState("refresh", response)
+        _conversation.update { ConversationReducer.reduce(it, response) }
+        // The session in force is whatever this reply names: a `new_session`
+        // or a clone lands here, and the next relaunch has to come back to it.
+        rememberSessionPath(_conversation.value.sessionFile)
+        // The supported levels follow the model, so a state refresh is also the
+        // moment they are re-read: switching the model on the composer changes
+        // which levels exist without touching anything else.
+        refreshThinkingLevels()
     }
 
     /**
@@ -3731,6 +3802,40 @@ internal fun sessionRestoreTarget(
     if (!exists(remembered)) return null
     if (remembered == opened) return null
     return remembered
+}
+
+/**
+ * The model a **session replacement** has to be told, or null when pi is already on it.
+ *
+ * pi rebuilds its whole runtime on `new_session` — services, `models.json`, catalogue —
+ * and builds the session's model from the command line it was launched with (`--provider`
+ * and `--model`), not from the model the running session was switched to. So a
+ * conversation that was switched to another profile by `set_model` comes back on the
+ * **launch-time** profile the moment the reader starts a new conversation, silently: the
+ * chip names a model id, and two profiles of one relay commonly serve the same id, so
+ * nothing on screen says the provider moved.
+ *
+ * That is not a cosmetic difference. The launch-time profile's key may have been rotated
+ * away since, and the first message of the new conversation then answers
+ * `401 … 无效的令牌` from the relay — a failure that reads as a bad key and that the reader
+ * can only clear by tapping the model again, which is a `set_model` back onto the profile
+ * they thought they were on. Measured on the emulator: picked profile B at 17:24:58
+ * (`get_state` → `pikit-custom-relayb`), started a new conversation, and at 17:25:08 the
+ * reply was `pikit-custom-relaya` again; the next prompt carried A's stale key.
+ *
+ * Pure so the rule is pinned without a process: [wantedProvider]/[wantedModel] are the
+ * pair the app shows, [runningProvider]/[runningModel] what pi answered after the
+ * replacement, and a null answer means the two already agree and nothing is sent.
+ */
+internal fun modelToState(
+    runningProvider: String?,
+    runningModel: String?,
+    wantedProvider: String?,
+    wantedModel: String?,
+): Pair<String, String>? {
+    if (wantedProvider.isNullOrBlank() || wantedModel.isNullOrBlank()) return null
+    if (runningProvider == wantedProvider && runningModel == wantedModel) return null
+    return wantedProvider to wantedModel
 }
 
 /**
