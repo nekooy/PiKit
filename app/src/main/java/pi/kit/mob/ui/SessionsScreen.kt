@@ -507,8 +507,12 @@ fun SessionsScreen(
                         .fillMaxWidth()
                         .height(LIST_FADE)
                         .background(
+                            // Three stops, like the chat page's own fades: a row that
+                            // crosses this loses most of its contrast in the first third
+                            // instead of appearing to be cut by the field's edge.
                             Brush.verticalGradient(
                                 0f to MiuixTheme.colorScheme.surface,
+                                0.45f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
                                 1f to Color.Transparent,
                             ),
                         ),
@@ -1343,7 +1347,7 @@ private const val DIALOG_BODY_SHARE = 0.45f
 private val LIST_BOTTOM = 84.dp
 
 /** How far the drawer's list fades into the field above it. */
-private val LIST_FADE = 16.dp
+private val LIST_FADE = 30.dp
 
 /** The drawer's gutter: the heading, the field and the group headings share it. */
 private val HEADING_GUTTER = 20.dp

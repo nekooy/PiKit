@@ -1,13 +1,20 @@
 package pi.kit.mob.ui.kit
 
+import android.graphics.Paint
+import android.graphics.BlurMaskFilter
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
@@ -156,21 +163,53 @@ object PiGlass {
 }
 
 /**
- * The lift under a floating control, as a layer of its own.
+ * The lift under a floating control, drawn by hand.
  *
- * **Not `Modifier.shadow`.** On this stack that modifier's shadow does not follow the
- * shape it is given: a circle's shadow was drawn as a squircle, so a translucent capsule
- * showed the shadow's own silhouette inside it — a white block with grey corners, measured
- * at the chat bar's leading capsule, which is exactly what a reader described as "there is
- * a white block in the button". A `graphicsLayer` with the same shape and
- * `shadowElevation` draws the shadow the shape describes, and it is one line.
+ * **Not a shadow elevation.** Both routes to one — `Modifier.shadow` and a
+ * `graphicsLayer { shadowElevation }` — draw a *squircle* whatever shape they are given:
+ * a circle's shadow came out with flat corners, and because the glass fill is translucent
+ * that silhouette showed *through* it as a white block with grey corners. Measured at the
+ * chat bar's leading capsule, and reported as "why is there a white block in the two-line
+ * button".
+ *
+ * So the shadow is a blurred fill of the shape's own outline, drawn behind the content.
+ * `MaskFilter` is the platform's blur — the one thing here that Compose's own draw API
+ * cannot do without a render effect per frame — and it follows any outline: a circle, a
+ * pill, a rounded rectangle.
  */
-fun Modifier.glassLift(shape: Shape, elevation: Dp = PiGlass.elevation): Modifier =
-    graphicsLayer {
-        this.shape = shape
-        clip = false
-        shadowElevation = elevation.toPx()
+fun Modifier.glassLift(
+    shape: Shape,
+    elevation: Dp = PiGlass.elevation,
+    alpha: Float = GLASS_SHADOW_ALPHA,
+): Modifier = drawBehind {
+    val outline = shape.createOutline(size, layoutDirection, this)
+    val blur = elevation.toPx() * 1.4f
+    val drop = elevation.toPx() * 0.45f
+    drawIntoCanvas { canvas ->
+        val paint = Paint().apply {
+            color = android.graphics.Color.BLACK
+            this.alpha = (alpha * 255).toInt()
+            maskFilter = BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL)
+            isAntiAlias = true
+        }
+        val native = canvas.nativeCanvas
+        native.save()
+        native.translate(0f, drop)
+        when (outline) {
+            is Outline.Rectangle -> {
+                val r = outline.rect
+                native.drawRect(r.left, r.top, r.right, r.bottom, paint)
+            }
+            is Outline.Rounded -> {
+                val r = outline.roundRect
+                val radius = r.topLeftCornerRadius.x
+                native.drawRoundRect(r.left, r.top, r.right, r.bottom, radius, radius, paint)
+            }
+            is Outline.Generic -> native.drawPath(outline.path.asAndroidPath(), paint)
+        }
+        native.restore()
     }
+}
 
 object PiTone {
 
@@ -287,6 +326,9 @@ private const val DARK_BASE_LUMINANCE = 0.2f
  * (#3D3D3D) is the same one, which is the point of a wash.
  */
 private const val GLASS_LIGHT_ALPHA = 0.80f
+
+/** How dark the blurred shadow under a floating control is drawn. */
+private const val GLASS_SHADOW_ALPHA = 0.20f
 
 /** White's share of the dark scheme's floating fill. */
 private const val GLASS_DARK_ALPHA = 0.14f
