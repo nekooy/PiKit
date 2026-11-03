@@ -275,6 +275,12 @@ rebuild that follows the tap reads it. That ordering was measured — with the a
 published at the end, the chosen conversation was on screen with the drawer it came from
 still out over it, which reads as a tap that did nothing.
 
+The drawer's travel is kept in pixels, so a window that changes size has to re-anchor it:
+after one rotation an open drawer kept the portrait width and drew about 170px off the
+leading edge, cutting its own title in half. The size callback now re-derives the offset
+from the *answer* (open or closed) rather than from the old number, and the panel's width
+is capped at 420dp, so a tablet shows a drawer and not a second page.
+
 The terminal's glyph — a chevron and an underscore — is one of the marks drawn for this
 app, because Miuix's set has no terminal icon. The drawer's leading mark is the library's
 `Sidebar`: the set has no hamburger either, and a bar that opens a panel is the honest

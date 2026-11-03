@@ -790,6 +790,7 @@ internal fun ChatScreen(
         Modifier
             .fillMaxSize()
             .onSizeChanged {
+                val was = drawerWidth
                 pageWidth = it.width
                 // Capped as well as shared out: on a tablet a panel of 86% of the window
                 // is a page, and a drawer that covers the conversation is not a drawer.
@@ -797,6 +798,15 @@ internal fun ChatScreen(
                     (it.width * DRAWER_SHARE).roundToInt(),
                     with(density) { DRAWER_MAX_WIDTH.roundToPx() },
                 )
+                // The offset is in pixels, so a window that changes size leaves it
+                // pointing somewhere the panel is not: measured after one rotation, an
+                // open drawer kept the portrait width and drew 170px off the leading
+                // edge, cutting the title in half. Re-anchored to the same *answer*
+                // rather than to the old number.
+                if (was > 0 && drawerWidth != was) {
+                    drawerOffset = if (historyOpen) drawerWidth.toFloat() else 0f
+                    historyReachable = historyOpen
+                }
             },
     ) {
         Box(
