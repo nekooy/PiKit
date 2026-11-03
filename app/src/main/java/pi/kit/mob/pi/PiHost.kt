@@ -640,11 +640,24 @@ class PiHost private constructor(context: Context) {
 
     /** A conversation slot to open into, evicting the least recently used idle one. */
     private fun makeRoom(bound: String? = null): PiAgentSession? {
-        if (_sessions.value.size < MAX_LIVE) return createConversation(bound)
-        // Full: an idle conversation can be closed to make room, because its transcript
-        // is on disk and reopening it is one tap. The active one and any conversation
-        // with a turn in flight are not candidates — closing the one the reader is
-        // looking at is not "making room", it is a surprise.
+        // **The ceiling that matters is answering conversations, not open ones.** A
+        // conversation whose turn has finished is a transcript on disk and an idle child;
+        // opening another one costs one eviction, and the reader never notices. What the
+        // pool actually cannot hold is five simultaneous answers — five children working
+        // at once — so the refusal is written against that count and the process budget
+        // ([MAX_LIVE]) is only the memory backstop behind it.
+        //
+        // Before this, the cap was "five conversations", full stop: a sixth refused even
+        // when four of the five were idle, which reads as an app that will not open a
+        // window it has room for.
+        val answering = _sessions.value.count { it.turnInFlight }
+        if (_sessions.value.size < MAX_LIVE && answering < MAX_ANSWERING) {
+            return createConversation(bound)
+        }
+        // An idle conversation can be closed to make room: its transcript is on disk and
+        // reopening it is one tap. The active one and any conversation with a turn in
+        // flight are not candidates — closing the one the reader is looking at is not
+        // "making room", it is a surprise.
         val idle = _sessions.value
             .filter { it !== _active.value && !it.turnInFlight }
             .minByOrNull { it.lastUsedAt }
@@ -702,17 +715,26 @@ class PiHost private constructor(context: Context) {
         private const val TAG = "PiKit"
 
         /**
-         * How many conversations may be live at once.
+         * How many conversations may be *answering* at the same time.
          *
-         * Five, and the number is a memory budget rather than a taste: each live
-         * conversation is one Node.js child (~120 MB resident before it reads a
-         * transcript), so five is roughly 600 MB of resident processes on a phone whose
-         * per-app heap is smaller than that — the rest lives in the children's own
-         * address spaces, and the eviction rule ([makeRoom]) is what keeps the pool from
-         * becoming a page file. A sixth is refused with a sentence rather than allowed
-         * to end in an allocation failure nothing in the interface explains.
+         * The number the interface names when it refuses one: five children producing
+         * output is what the pool is sized for.
          */
-        const val MAX_LIVE = 5
+        const val MAX_ANSWERING = 5
+
+        /**
+         * The memory backstop: children kept alive at all, answering or not.
+         *
+         * Eight, and the number is a memory budget rather than a taste: each live
+         * conversation is one Node.js child (~120 MB resident before it reads a
+         * transcript), so eight is roughly a gigabyte of resident processes on a phone
+         * whose per-app heap is smaller than that — the rest lives in the children's own
+         * address spaces, and the eviction rule ([makeRoom]) is what keeps the pool from
+         * becoming a page file. Reaching it with nothing idle to close is refused with a
+         * sentence rather than allowed to end in an allocation failure nothing in the
+         * interface explains.
+         */
+        const val MAX_LIVE = 8
 
         private const val KEY_CATALOGUE_DUE_AT = "due_at"
 
