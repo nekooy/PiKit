@@ -16,12 +16,14 @@ package pi.kit.mob.locales
  *
  * ## Structure
  *
- * Ten numbered sections, in the order a user needs them: what to set up, the
- * two ways to drive the agent (a prompt and a shell), the chat page, the
- * terminal, the files page, what the agent can reach, web search, a table of the
- * settings rows, backup and restore, and troubleshooting. Every section is a
- * list, a table or a few short paragraphs — a wall of prose is a screen the
- * reader has to scroll past without learning anything from its shape.
+ * Twelve chapters, named after what the reader is trying to do rather than after
+ * the feature that does it: the first launch, setting up a model, the composer,
+ * more than one conversation at once, workspaces and the permission tiers, the
+ * Files tab, the Terminal tab, web search, the settings rows in one table, the
+ * agent process, backup and restore, and what to do when something fails. A
+ * chapter opens with the one sentence that answers it and then lists; a `###`
+ * inside one is a sub-question of that task, and it exists only where a reader
+ * would go looking for one.
  *
  * Brevity is a requirement here, not a preference: the manual is read on the
  * phone it documents, so a paragraph that could be a sentence is a screen the
@@ -47,49 +49,267 @@ internal val ENGLISH_MANUAL = """
 PiKit runs the Pi coding agent on your phone.
 Its Linux environment, Node.js, `ripgrep`, `fd`
 and `pi` are unpacked from the APK on first
-launch. No Termux and no root.
+launch: no Termux and no root.
 
 Four tabs: **Chat**, **Terminal**, **Files**,
 **Settings**.
 
-## 1. Getting started
+## First launch
 
-Set a provider and a model first: **Settings →
-Model & provider → Add a profile**.
+The first launch unpacks about 300 MB from the
+APK; the environment itself is never downloaded.
 
-| Step | What to do |
-| --- | --- |
-| Name | any label |
-| Provider | pick from the list |
-| API key | paste it from the provider's dashboard |
-| Models | press **Fetch models** and tap one, or type an id; tap a row to make it the answering model |
-| Save | the profile goes live and the agent restarts |
+- The app asks once about notifications, once
+  about file access and once about battery
+  optimisation. **Declining any of them is
+  fine**, and each answer can be changed later
+  in Android's own settings.
+- **File access** is the one worth granting:
+  without it the agent sees only its own
+  directory, and the phone's storage cannot be
+  browsed when you pick a workspace.
+- **Chat** reopens the conversation you were
+  in last; **Settings → Personalization → Open a
+  new conversation on launch** starts empty
+  instead.
+- **Terminal** is a real shell, **Files**
+  browses the agent's home, and the rest is
+  under **Settings**.
 
-The first launch unpacks about 285 MB and asks
-once about file access. **Declining is fine**;
-the picker that adds a workspace asks again the
-first time a folder outside the app is chosen.
+## Set up a model
 
-### A relay or a self-hosted endpoint
+A model profile is a provider, an endpoint and a
+key. Without one the composer says there is no
+model.
+
+1. **Settings → Model & provider → Add a
+profile**.
+2. Pick a **provider**.
+3. Paste the **API key** from the provider's
+dashboard.
+4. Press **Fetch models** and tap one, or type
+an id under **Models**.
+5. **Save**. The profile goes live, and the
+agent restarts if the key, endpoint or model
+moved.
+
+The **model chip** in the composer switches the
+answering model at once, and so does the
+**thinking chip** beside it.
+
+### A relay or your own endpoint
 
 Choose **Custom endpoint**, then give the base
-URL with its version segment (e.g.
-`https://relay.example.com/v1`) and a model id
+URL with its version segment, e.g.
+`https://relay.example.com/v1`, and a model id
 it serves. Calls use the OpenAI-compatible API
-at `/chat/completions`; Anthropic- or
-Google-only endpoints are not supported yet.
+at `/chat/completions`; the **API** row picks
+the protocol when the relay documents another
+one. Anthropic-only and Google-only endpoints do
+not work.
 
-The key also goes on the command line: pi does
-not expand `${'$'}VARIABLE` for a provider it
-does not know, and anything reading this app's
-process list can see it.
+A custom endpoint's key is also passed on the
+command line, where anything that can read this
+app's process list can see it.
 
-## 2. Commands
+### Thinking level
 
-A chat message starting with `!` runs in the
-shell instead of going to the model, and its
-output joins the transcript. Everything else is
-a prompt. In the **Terminal** tab:
+The menu offers only the levels the chosen model
+has, and a level the model lacks moves up to the
+nearest one it does. The names are pi's own
+(`off`, `minimal`, `low`, `medium`, `high`,
+`xhigh`, `max`), so the chip and `pi
+--list-models` in the terminal use the same word
+for the same level.
+
+### Stream ends without finish_reason
+
+**Stream ends without finish_reason** is the
+switch for a relay whose streamed answers end
+without that field. It tells pi to infer the
+stop reason when the stream ends, which is what
+stops `Stream ended without finish_reason` on
+such an endpoint; it also makes a truncated
+answer look finished, so do not turn it on for
+an official endpoint.
+
+## Ask the agent
+
+Type in the field at the bottom and press the
+round arrow; while the answer streams it is a
+red stop button. The name in the bar is the
+first thing you wrote, or **PiKit** while the
+conversation is empty.
+
+- **Above the field**: the workspace, the
+  thinking level and the model, the three values
+  the next message is sent with.
+- **Under the field**: `⌘`, the permission
+  button, `+`, the context ring and send.
+- **`⌘`** opens the command list below.
+- **The permission button** picks the tier the
+  agent's tool calls are judged by.
+- **`+`** attaches a photo, a picture or a
+  file.
+- **The ring** is how full the context window
+  is; tap it for the model, tokens, cache hit
+  rate, cost and the session file.
+
+### Commands
+
+| Command | What it does |
+| --- | --- |
+| `/new` | starts a conversation beside this one |
+| `/compact` | summarises the earlier conversation |
+| `/stop` | stops the answer, clears the queue |
+| `/clone` | duplicates this conversation |
+| `/export` | writes an HTML file into `~/export` |
+| `/model` | opens the model picker |
+| `/clear` | empties the input box |
+| `/stats` | turns, tokens and cost so far |
+| `/copy` | copies the last answer |
+
+A message starting with `!` runs in the shell
+instead of going to the model, and its output
+joins the transcript. The `!` row in the command
+list opens a field for the same thing.
+
+### Attachments
+
+- Camera, picture or file, at most four per
+  message.
+- An image over 4 MB is refused, and the model
+  has to take image input: the switch is **Model
+  parameters → Takes image input** in the
+  profile.
+- A file of any kind is copied into the app
+  and handed to the agent as a path, so it opens
+  it with its own tools.
+
+### The transcript
+
+- A finished turn folds to one line under your
+  message (`Worked 47s · 5 steps`); tap it to
+  open it. The final answer is never folded.
+- Reasoning folds to one line too (`Thinking ·
+  1.2k chars`).
+- Each tool call is one line, marked ✓ or ✕;
+  tap it to read the output.
+- Long-press any text to copy it. Answers are
+  Markdown, and a code block scrolls sideways.
+
+## More than one conversation
+
+Leaving a conversation does not stop it: an
+answer that is being written keeps arriving.
+
+- The **+** in the chat's top bar opens a new
+  conversation beside this one, and nothing that
+  is running is interrupted.
+- At most **3** conversations are live at
+  once. A fourth opens by closing the one that
+  has been idle longest; if all three are
+  answering, the fourth is refused and a message
+  says so.
+- The **history** page (the clock icon) marks
+  a live conversation with a dot and **Answering
+  now**. Tap one to switch to it, and the answer
+  continues.
+- Swipe left on the chat page for the history
+  page, and right to come back.
+
+### The history page
+
+- **Search** reads the titles and the message
+  text of every saved conversation.
+- Hold a row for **Pin to top**, **Rename**
+  and **Delete**.
+- **Select conversations** in the bar deletes
+  several at once.
+
+## Give the agent a folder
+
+A workspace is the folder a conversation runs
+in, and the folder the agent may write to.
+
+- The first chip in the composer picks it;
+  **Add a workspace** takes any folder, the
+  phone's storage included once file access is
+  granted.
+- **Settings → Agent process → Default
+  workspace** is where a new conversation
+  starts.
+- Changing the workspace while an answer runs
+  asks first, because the agent is relaunched in
+  the new folder.
+
+### Permission tiers
+
+| Tier | What it allows |
+| --- | --- |
+| Read only | looks at files; changes none and runs no command that would |
+| Workspace write | reads anywhere, writes inside the workspace |
+| Full access | refuses nothing |
+
+- The tier is checked on every tool call, so a
+  change applies at once.
+- A refused call comes back to the agent as a
+  tool error naming the tier, so it says what it
+  meant to change instead of retrying.
+
+### The phone's storage
+
+- The agent sees only its own directory until
+  Android gives this app **all files access**;
+  the folder picker has an **Allow file access**
+  row for it.
+- With the grant, the usual folders are linked
+  into the agent's home: the phone's camera roll
+  is `~/storage/dcim`. A link is a convenience,
+  not a permission, and a write through one is
+  judged like any other path.
+- The limit binds the agent, not the terminal:
+  `/sdcard` is the phone's real storage, and the
+  Terminal tab reaches it directly.
+- **Settings → Maintenance & repair → Check
+  storage** runs both guards for real, one line
+  per check.
+
+## Files
+
+The Files tab browses the agent's home,
+read-only: it shows what the agent changed
+without a second app.
+
+- The path bar under the title is tappable,
+  and a segment goes back up.
+- The filter field narrows the folder you are
+  in; the button beside it sorts by name,
+  modified time or size.
+- A row's right-hand number is a file's size
+  or a folder's entry count.
+- Tap a file to preview it: pictures are
+  drawn, text up to 64 KB, anything else is
+  labelled binary.
+- Hold a row for **Copy path**; a file also
+  offers **Open with**.
+- `/export` writes into `~/export`, a folder
+  in this tab.
+
+## Terminal
+
+The Terminal tab is a real shell in the bundled
+environment. Several sessions run at once, and
+they keep running when you switch tabs.
+
+- The key bar holds what a phone keyboard
+  cannot type: `ESC`, `TAB`, `C-C`, `C-D`,
+  `HOME`, `END`, `PGUP`, `PGDN` and symbols.
+  `CTRL` and `ALT` are toggles.
+- **Scroll** stops the view so you can read
+  what went past; the newline key breaks the
+  line you are writing instead of running it.
+- Pinch to change the text size.
 
 | Command | For |
 | --- | --- |
@@ -98,303 +318,153 @@ a prompt. In the **Terminal** tab:
 | `pkg upgrade` | upgrade everything |
 | `termux-change-repo` | switch mirrors |
 | `termux-setup-storage` | link `~/storage` |
-| `pikit-storage-check` | storage check |
 | `pi` | pi's interface |
 
-## 3. Chat
+- Packages installed with `pkg` or `apt` are
+  relocated as they install; nothing needs
+  doing.
+- A package that still refuses to start:
+  **Settings → Maintenance & repair → Installed
+  packages → Package relocation → Repair**.
+- **Rebuild the environment** unpacks the
+  runtime again, and packages installed with
+  `pkg` are recorded and put back.
+- A `pi` you start here answers with the same
+  model: PiKit writes your profile into pi's own
+  settings.
 
-Type into the box at the bottom and press the
-round arrow. While the model answers it becomes
-a red stop button. The header holds the
-conversation's name, the agent's state and two
-icons: history and new conversation. The name is
-the first thing you wrote, or **PiKit** while
-the conversation is still empty.
+## Web search
 
-The composer's controls are everything you
-change while talking:
+The agent can search the web out of the box, and
+**Settings → Search settings** needs no change.
+With no key it searches through Exa's keyless
+endpoint, which may be rate-limited when it is
+busy.
 
-| Control | For |
-| --- | --- |
-| Workspace | Which folder this conversation runs in |
-| Permission | How far the agent may change files, checked on every call |
-| Thinking level | How hard the model reasons. Immediate. |
-| Model | Which model answers. Immediate. |
-| Cache | Share served by the prompt cache. |
+- The six controls are **Web access**,
+  **Search workflow**, **Search provider**,
+  **Inline content limit**, **Fetch timeout**
+  and **Proxy**.
+- Below them, **Configuration** lists the keys
+  `web-search.json` carries; **Add an option or
+  key** adds one, and the ✕ removes it.
+- A provider's API key and a self-hosted
+  SearXNG address are added there.
+- **Restore defaults** puts the file back to
+  what a fresh install has.
+- If the file stops being JSON this app can
+  read, a text editor replaces the controls, and
+  that is the way out.
 
-The thinking menu offers the levels the chosen
-model has, because pi moves a level the model
-lacks up to the next one it does. The names are
-pi's own — `off`, `minimal`, `low`, `medium`,
-`high`, `xhigh`, `max` — so the chip here and
-`pi --list-models` in the terminal use the same
-word for the same level.
-
-The row under the input holds `⌘`, the
-permission control and `+`, in that order. `⌘`
-lists the commands PiKit runs itself: `/new`,
-`/compact`, `/stop`, `/clone`, `/export`,
-`/model`, `/clear`. A row runs as you tap it,
-and the `!` row opens a field for a shell line.
-`+` opens the attach menu, camera first, then a
-picture or a file: images over 4 MB are refused,
-and the model has to accept images. Whether it
-does is under **Settings → Model & provider →
-Model parameters**, the catalogue's own answer,
-which you can override.
-
-The ring beside the send shows how full the
-context window is; tapping it opens the
-session's details: model and provider, token
-counts, cache hit rate, cost, turns and the file
-it is written to. Near 100% the agent has to
-drop earlier parts of the conversation — that is
-what `/compact` in the `⌘` list is for.
-
-The transcript:
-
-- **Folded turns** — a finished turn collapses
-  to one line under your message (`Worked 47s ·
-  5 steps`); tap it to open the turn. The final
-  answer is never hidden.
-- **Reasoning** — one line too (`Thinking ·
-  1.2k chars`), and it stays folded until you
-  tap it.
-- **Tool calls** — one line each, marked ✓ or
-  ✕ as it finishes: tap to read the output, and
-  copy it from there.
-
-Long-press text to copy it. Answers are rendered
-as Markdown, code blocks scroll sideways, and
-inline code is drawn as a rounded chip: a
-long-press still selects and copies it,
-including part of it.
-
-## 4. Terminal
-
-The Terminal tab is a real shell in the bundled
-environment. Several sessions run at once and
-keep running when you switch tabs.
-
-The key bar holds the keys a phone keyboard
-cannot produce: `ESC`, `TAB`, `C-C`, `C-D`,
-`HOME`, `END`, `PGUP`, `PGDN` and symbols.
-`CTRL` and `ALT` are toggles. `Scroll` stops the
-view so you can read what scrolled past; the
-line-break key breaks the line being written
-instead of running it.
-
-Packages from `pkg` or `apt` are relocated as
-they are installed, so nothing needs doing. If
-something installed another way still refuses to
-start, press once: **Settings → Maintenance &
-repair → Installed packages → Package relocation
-→ Repair**. The heavier option on the same page,
-**Rebuild the environment**, unpacks the runtime
-again — packages you added with `pkg` are
-recorded first and put back afterwards.
-
-A `pi` you start here answers with the same
-model: PiKit writes your provider, model and key
-into pi's own settings, so the terminal and the
-chat page agree.
-
-## 5. Files
-
-The Files tab browses the agent's home
-directory, read-only: it exists so you can see
-what the agent changed without a second app. The
-field under the title filters the folder you are
-in, and the button beside it orders it by name,
-modified time or size. The bar under them is the
-path; tap a segment to go back up. A row's
-right-hand number is a file's size or a folder's
-entry count; hold a row for **Copy path** — a
-file also offers **Open with**. Tap a file to
-preview it — pictures are drawn, text up to 64
-KB, binary as binary.
-
-## 6. What the agent can see
-
-By itself the agent sees only its own directory;
-your photos and documents do not exist as far as
-it is concerned. Reaching them takes Android's
-**All files access** permission, asked once on
-the first launch and again from the picker when
-a workspace outside the app is chosen.
-
-There are no folder switches any more. What the
-agent may *write* is decided by the tier above
-the input box and by the folder the conversation
-runs in, so `/sdcard/Dev/app` is an ordinary
-project the moment it is a workspace:
-**Workspace write** reads anywhere and writes
-inside it.
-
-While the grant holds, the usual folders are
-also linked into the agent's home under the
-lower-case names `termux-setup-storage` has
-always used, so `/sdcard/DCIM` is
-`~/storage/dcim` inside the environment. The
-links are a convenience, not a permission: a
-write through one is judged by the tier and the
-workspace like any other path.
-
-The limit binds the agent, not the terminal:
-`/sdcard` is the phone's real storage, and a
-shell in the Terminal tab reaches it directly
-whenever the app holds all files access.
-
-Both guards are worth trusting, and both are
-checkable: the agent is refused writes outside
-its workspace, and every recursive delete inside
-PiKit refuses paths outside the app's private
-data. **Settings → Maintenance & repair → Check
-storage** runs both checks for real, in a
-separate process, one line per check.
-
-`pikit-permissions` checks every tool call
-against a tier you choose in the composer,
-between `⌘` and `+`. **Read only** refuses
-`write`, `edit` and any `bash` that would change
-a file. **Workspace write**, the default, reads
-anywhere and writes only inside the workspace.
-**Full access** refuses nothing. A refused call
-comes back to the agent as a tool error naming
-the tier, so it says what it meant to change
-instead of retrying.
-
-## 7. Web search
-
-The agent can search the web out of the box:
-**Settings → Search settings** needs no changes
-at all. With no key configured it searches
-through Exa's free endpoint, which needs no
-account and may be rate-limited when it is busy.
-
-The switches on the page cover six options: the
-web-access master switch, what a search returns,
-which provider is asked first, how much page
-text reaches the model, the fetch timeout, and a
-proxy. Everything else the extension reads is
-one row below them: **Add an option or key**
-opens the extension's own list, every entry with
-the sentence that says what it does, and what
-you type is written to the file in the shape
-that option expects. A provider's API key and a
-self-hosted SearXNG address are added there.
-What you have added is listed with its value,
-and the ✕ beside it removes it.
-
-The list is the file. Nothing is written as a
-comment, because the extension parses the
-configuration as plain JSON and would refuse it;
-an option you have not added is simply not in
-the file, so the extension's own default
-applies. **Restore defaults** puts the file back
-to what a fresh install has, and the text editor
-appears instead of the list if the file is ever
-one this app cannot read — that is the way out
-of it.
-
-## 8. Settings
+## Settings at a glance
 
 | Row | What it holds |
 | --- | --- |
-| Model & provider | Provider, key, models |
-| Search settings | Web search: how, where, limits, keys |
-| Personalization | New conversation on launch; text size; theme; home-screen icon; avatars |
-| Language | English, 简体中文 or 日本語; immediate |
-| User manual | This page |
-| Agent process | Restart, default workspace, AGENTS.md, keep alive |
-| Backup & restore | What to pack into one file, and putting it back |
-| Maintenance & repair | Model list, packages, relocation, rebuild, storage check |
-| About PiKit | Version, package id, runtime paths, licence, app update check |
+| Model & provider | provider, endpoint, key, models |
+| Search settings | the web-access switches and its file |
+| Personalization | launch, text size, theme, icon, avatars |
+| Language | English, 简体中文, 日本語 |
+| User manual | this page |
+| Agent process | restart, workspace, instructions, keep alive |
+| Backup & restore | one archive out, and back in |
+| Maintenance & repair | models, packages, rebuild, storage check |
+| About PiKit | versions, package id, paths, update check |
 
-**Theme** (under Personalization) is the only
-colour choice the app offers — follow the
-system, light or dark — and the palette itself
-is Miuix's, the component library the interface
-is drawn with, so both schemes come with it.
-**Keep alive** (on the Agent process page) is
-the battery-optimisation exemption: with the
-screen off or the app in the background, Android
-may reclaim the agent process and cut a turn
-short, and the exemption is what lets the
-foreground service and its wake lock hold the
-turn. It costs a little battery and the app
-stays resident.
+- **Theme** offers system, light or dark, and
+  nothing else colours the app.
+- **Text size** has seven steps and applies
+  when you let go.
+- **Language** switches at once between
+  English, 简体中文 and 日本語.
 
-## 9. Backup and restore
+## The agent process
 
-Uninstalling PiKit deletes the profiles and
-their keys, every conversation and the whole
-workspace, and the app deliberately keeps none
-of it in a cloud backup. **Settings → Backup &
-restore** is therefore the only way to keep
-them.
+- **Default instructions** are read-only and
+  PiKit's: they name the prefix, the three
+  permission tiers and the workspace rules, and
+  every new build rewrites them.
+- **User instructions** are yours alone, empty
+  at first, and PiKit never rewrites them.
+  Saving restarts the agent, because pi reads
+  the file only at startup.
+- A project's own `AGENTS.md` in its folder is
+  read as well, and the closest one wins.
+- **Restart agent** stops and starts pi in one
+  tap; when a start fails, pi's own error is
+  under the row.
+- **Keep alive** is Android's
+  battery-optimisation exemption. The row's
+  subtitle says which state it is in (**Battery
+  optimisation is off for this app** or **Still
+  subject to battery optimisation**), and **Ask
+  for the exemption** appears only while it is
+  missing.
+- The shade entry appears only while an answer
+  is being written and the app is in the
+  background; it names how many conversations
+  are answering, and it is gone between turns.
 
-The export card lists six groups — basic
-settings (the storage grant included), models
-and providers, all conversations and their pins,
-AGENTS.md, workspace files, HTML exports. The
-first three are ticked to begin with; the other
-three are off because the workspace alone can be
-a whole project tree. Tick what you want and
-press **Export archive**. The system's own file
-picker asks where to put it, so Downloads, a
-cloud drive or an SD card all work; nothing else
-on the device is touched.
+## Backup and restore
 
-**Include API keys** is on unless you turn it
-off. With it off the archive carries no key at
-all: the model profiles and the search options
-are written without them, and the archive's own
-contents list records which of the two you made.
+Uninstalling deletes the profiles and their
+keys, every conversation and the workspace, and
+the app keeps no cloud copy. **Settings → Backup
+& restore** is the only way to keep them.
 
-Restoring is the same list. **Choose an
-archive…** reads the file and shows you what is
-inside it —which groups, which day, which app
-version, and whether keys are in it — before
-anything is applied. A restore overwrites files
-of the same name and deletes nothing: your
-current conversations and workspace files stay,
-and the ones in the archive join them.
-Conversations keep their own dates, so the
-history list reads the same as it did on the
-device they came from. The agent stops for the
-restore and starts again on the restored
-configuration.
+- The archive carries settings, profiles,
+  conversations and workspaces: tick the groups
+  you want, and **Export archive** puts the file
+  wherever the system picker says.
+- The first three groups are ticked to begin
+  with; **Workspace files** is off because a
+  workspace can be a whole project.
+- **Include API keys** is on unless you turn
+  it off, and with it off the archive carries no
+  key at all.
+- **Choose an archive…** shows the groups, the
+  date, the app version and whether keys are in
+  it before anything is applied.
+- A restore stops the agent, overwrites files
+  of the same name and deletes nothing; each
+  conversation keeps its own date, and the agent
+  starts again on the restored settings.
+- The runtime is not in the archive: `usr` is
+  rebuilt from the APK.
 
-The archive does not carry the runtime itself.
-`usr` is hundreds of megabytes rebuilt out of
-the APK, so reinstalling is what brings that
-back.
+## When something goes wrong
 
-## 10. Troubleshooting
-
-**The agent will not start.** Check the
-profile's key and model; **Settings → Agent
-process** shows pi's own error.
-
-**A model returns "not found" or
-"unauthorised".** The key cannot use that model.
-Fetch the list again and pick one the provider
-reports for this key; with a custom endpoint,
-check the URL too.
-
-**A package does not run** — `command not
-found`, or a library error. See **Package
-relocation** in section 4; if it still fails,
-the package is broken for Android.
-
-**Where is my data?** Under the app's private
-files directory, in `home`, `usr` and
-`pi-sessions`; uninstalling deletes all of it.
-
-**Did the agent use my disk?** Yes, possibly a
-lot: it downloads packages and files into the
-environment as it works, which is normal. `du
--sh ~` shows what is there, and `pkg clean`
-removes downloaded archives.
+- **Stream ended without finish_reason**: the
+  endpoint or the network closed the stream
+  before the last chunk, and the agent retries
+  by itself up to 8 times. If the endpoint never
+  sends the field, turn on the **Stream ends
+  without finish_reason** switch in that
+  profile.
+- **A tool call was refused**: the tier said
+  no. The ✕ line names the tier and the path, so
+  change the tier with the composer's button, or
+  move the workspace.
+- **`pi exited with code 1`**: the process
+  failed to start, and the chat page shows pi's
+  first error line with **Retry**. If that does
+  not help, restart it on **Settings → Agent
+  process**, then rebuild the runtime under
+  **Maintenance & repair**.
+- **A model answers "not found" or
+  "unauthorised"**: the key cannot use that
+  model. Fetch the list again, or type an id the
+  provider reports; on a relay, check the
+  endpoint's version segment too.
+- **A package will not run**: `command not
+  found` or a library error. Use **Package
+  relocation → Repair**; if that fails, the
+  package has no build for Android.
+- **Where is my data**: under the app's
+  private files, in `home`, `usr` and
+  `pi-sessions`, and uninstalling deletes all of
+  it.
+- **A bug report needs** the version and
+  package id from **About PiKit**, pi's version
+  from the same page, and pi's own last error
+  from **Agent process**.
 """.trimIndent()

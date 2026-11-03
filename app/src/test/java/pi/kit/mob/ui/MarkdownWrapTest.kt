@@ -122,20 +122,63 @@ class MarkdownWrapTest {
         "[\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef] [\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef]",
     )
 
+    /**
+     * The three bodies are one manual, so their chapters are the same chapters.
+     *
+     * `ManualText`'s header promises it: "the same headings, in the same order, with the
+     * same table rows and the same number of bullets; only the words differ". Nothing
+     * else checks that promise, and a translation that silently drops a chapter is
+     * exactly the failure it is written against — the terminal is 48 columns wide and a
+     * reader in one language would find a section the others do not have.
+     *
+     * The test it replaces pinned one table of the manual it was written against ("the
+     * start-here steps are the manual's first table"). A full rewrite that moved those
+     * steps to a chapter of their own made it fail without anything being wrong, which
+     * is the difference between a test that pins behaviour and one that mirrors a
+     * document — this one pins the property the document has to keep.
+     */
     @Test
-    fun `the manual's start-here steps are a table`() {
-        // A numbered list reads as a sequence the user must tick off; the manual's
-        // five steps are one decision made in five fields, which is what a table
-        // says and a list does not.
-        val chinese = parseMarkdown(manualFor(Lang.CHINESE))
-        val tables = chinese.filterIsInstance<MdBlock.Table>()
-        assertTrue(
-            "the start-here steps are the manual's first table",
-            tables.first().header == listOf("步骤", "做什么") && tables.first().rows.size == 5,
+    fun `the three manuals have the same chapters in the same order`() {
+        val chapters = Lang.entries.associateWith { lang ->
+            parseMarkdown(manualFor(lang)).filterIsInstance<MdBlock.Heading>().map { it.text }
+        }
+        val reference = chapters.getValue(Lang.ENGLISH)
+        assertTrue("the English manual has chapters", reference.size > 1)
+        for ((lang, headings) in chapters) {
+            assertEquals("$lang chapters", reference.size, headings.size)
+            for ((index, heading) in headings.withIndex()) {
+                // The words differ — a heading is translated — so the check is that the
+                // *shape* matches: every language has a chapter at every position, and
+                // none is blank.
+                assertTrue("$lang chapter $index is blank", heading.isNotBlank())
+            }
+        }
+        // A chapter is a `##` heading — that is what the manual page's chip strip is
+        // built from — and the count is the one cross-language number a translated table
+        // of contents depends on: a chapter that exists in one body and not another is a
+        // section a reader in the other language cannot reach.
+        val chaptersByLevel = Lang.entries.associateWith { lang ->
+            parseMarkdown(manualFor(lang))
+                .filterIsInstance<MdBlock.Heading>()
+                .count { it.level == 2 }
+        }
+        assertEquals(
+            "every language has the same number of chapters",
+            1,
+            chaptersByLevel.values.distinct().size,
         )
-        assertFalse(
-            "and they are no longer a numbered list",
-            chinese.any { it is MdBlock.ListBlock && it.ordered },
-        )
+        assertTrue("the manual has chapters", chaptersByLevel.values.first() > 1)
+    }
+
+    @Test
+    fun `every manual still carries the tables a reader scans`() {
+        for (lang in Lang.entries) {
+            val tables = parseMarkdown(manualFor(lang)).filterIsInstance<MdBlock.Table>()
+            assertTrue("$lang: no tables at all", tables.isNotEmpty())
+            assertTrue(
+                "$lang: a table with no rows",
+                tables.all { it.rows.isNotEmpty() && it.header.isNotEmpty() },
+            )
+        }
     }
 }
