@@ -1,25 +1,41 @@
 package pi.kit.mob.ui.kit
 
-import android.content.Context
-import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -189,34 +205,42 @@ fun PiSheet(
 }
 
 /**
- * The app's ephemeral messages, drawn by the platform.
+ * The app's ephemeral messages, drawn by the app.
  *
- * It used to be a Miuix snackbar with a host remembered at the root, a `SnackbarHostState`,
- * a scope, a dismiss-the-previous rule and a `snackbarHost` slot in the root scaffold — a
- * small framework of this app's own for one sentence at a time. The platform already has
- * that component: `Toast` queues messages, places them where its own navigation bar and
- * display say, honours the accessibility settings, the text scale and the per-app
- * notification choice, and on 13+ draws the app's icon beside the text.
+ * It was the platform's `Toast` for a while, and the swap had a real argument behind it:
+ * the system owns the queue, places the message where its own navigation bar is, honours
+ * the text scale and the per-app notification choice, and all of that is free. What it
+ * does not do is look like this app. On 13+ it draws its own rounded card with the
+ * launcher icon beside the text, in the system's colours — a grey box with the app's blue
+ * mark on it, over a page whose every other surface is white glass. It reads as a
+ * notification that happened to land on the page, which is what it is.
  *
- * What is given up is Miuix's styling for this one element and the app's own queue; what
- * is kept is the interface the snackbar had — [LocalPiToast] with `show(message)` — so no
- * screen was rewritten for the swap. The platform's two-line limit is the other cost: a
- * sentence longer than that was already the wrong message for a toast.
+ * So the message is drawn here: the same glass as the bar's capsules, one or two lines of
+ * `body2`, above the composer rather than over it, and out of the way of a thumb. What is
+ * kept from the platform's version is the interface — [LocalPiToast] with
+ * `show(message)` — so no screen changed. What is given up is the system's queue (a
+ * second message replaces the first, which is the platform's rule on most versions
+ * anyway) and its own placement rules: the capsule is a `Text` inside the page's layout,
+ * so a screen reader reads it where it is.
  */
 @Stable
-class PiToast internal constructor(private val context: Context) {
+class PiToast internal constructor() {
+
+    /** The message on screen, with a token so a second one restarts the timer. */
+    internal val shown = MutableStateFlow<Message?>(null)
+
+    internal data class Message(val text: String, val token: Long)
 
     /**
      * One message, now.
      *
-     * The platform owns the queue: a second toast replaces the one on screen on most
-     * versions and queues behind it on some, and both are the system's rule rather
-     * than this app's to re-implement. A blank message is dropped — a toast with no
-     * text is a rectangle.
+     * A blank message is dropped — a capsule with no text is a rectangle — and a second
+     * one replaces the first rather than queueing behind it: an ephemeral message that
+     * arrives five seconds late is about a state the reader has already left.
      */
     fun show(message: String) {
         if (message.isBlank()) return
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        shown.value = Message(message, System.nanoTime())
     }
 }
 
@@ -224,18 +248,73 @@ class PiToast internal constructor(private val context: Context) {
 val LocalPiToast = staticCompositionLocalOf<PiToast?> { null }
 
 /**
- * Provides a [PiToast] to everything below and draws nothing itself.
+ * Provides a [PiToast] to everything below and draws the capsule itself.
  *
- * The context is the composition's, taken once: `Toast` holds it only long enough to
- * post the message to the window manager, so the application context is the right one
- * to keep and the one that cannot leak an Activity.
+ * The message is composed after the content, so it is the last thing drawn; it takes no
+ * touches, so the page under it stays usable while it is up.
  */
 @Composable
 fun PiToastProvider(content: @Composable () -> Unit) {
-    val context = LocalContext.current.applicationContext
-    val toast = remember(context) { PiToast(context) }
-    CompositionLocalProvider(LocalPiToast provides toast, content = content)
+    val toast = remember { PiToast() }
+    val current by toast.shown.collectAsState()
+    Box(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalPiToast provides toast, content = content)
+
+        val message = current
+        // One timer per message: the token is in the key, so a second message restarts
+        // the countdown instead of inheriting the rest of the first one's.
+        LaunchedEffect(message?.token) {
+            if (message != null) {
+                delay(TOAST_MILLIS)
+                toast.shown.value = null
+            }
+        }
+
+        AnimatedVisibility(
+            visible = message != null,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = TOAST_BOTTOM, start = 32.dp, end = 32.dp),
+            enter = fadeIn(tween(140)) + slideInVertically(tween(180)) { it / 2 },
+            exit = fadeOut(tween(140)),
+            label = "toast",
+        ) {
+            // The text comes from the last non-null message so the capsule can draw
+            // while it leaves.
+            val last = rememberLastMessage(message)
+            Box(
+                Modifier
+                    .glassLift(RoundedCornerShape(percent = 50), 8.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(PiGlass.fill())
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    text = last,
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
 }
+
+/** The message to draw, kept through the exit animation so the capsule is not empty. */
+@Composable
+private fun rememberLastMessage(message: PiToast.Message?): String {
+    var last by remember { mutableStateOf("") }
+    if (message != null) last = message.text
+    return last
+}
+
+/** How long a message stays up: long enough to read a sentence, short enough to ignore. */
+private const val TOAST_MILLIS = 2600L
+
+/** Where the capsule sits: above the composer's band, which owns the bottom ~190dp. */
+private val TOAST_BOTTOM = 196.dp
 
 /**
  * The navigation strip's height, for a sheet's own bottom edge.
