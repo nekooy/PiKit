@@ -257,10 +257,20 @@ the top: the content scrolls *under* the marks, fades out as it reaches them, an
 marks are the only opaque objects there. That is three decisions, and each was made
 because the strip version was worse:
 
-- **The marks sit in capsules** (`PiTone.inset()`, one step off the surface in both
-  schemes) rather than directly on the page: a mark over fading text with no fill of its
-  own is a glyph fighting whatever scrolls under it, and the capsule is what makes the
-  pair readable as a control rather than as part of the conversation.
+- **The marks sit in capsules of white glass** (`PiGlass.fill()`: white at 80% over a
+  light page, at 10% over a dark one) with a 5dp lift under them. The first attempt used
+  `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong for a
+  control, because the capsule then read as shading on the page instead of as an object
+  above it. The reference's capsules are white in the light scheme and a faint lift off
+  black in the dark one, and both are *translucent*: the last fifth lets a row that has
+  slid underneath show as a ghost, which is what says the control is above the page rather
+  than painted on it. A real backdrop blur is not available (Compose has no backdrop
+  filter — see below), so the alpha and the shadow carry the whole effect, and the shadow
+  matters as much as the fill: a translucent fill with no lift reads as a stain.
+- **The row sits lower than a bar's.** The capsules' top edge is 30dp under the status bar
+  — a bar's row would start at 0 — because the reference keeps the handle clear of the
+  clock's own line. That is also why the leading capsule is a circle and the trailing one
+  a pill: two objects at the ends, with the name standing between them on the page.
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.

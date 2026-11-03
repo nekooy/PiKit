@@ -109,6 +109,48 @@ fun PiKitMiuixTheme(
  *   chip on the reader's own card — and it is the one role in this object that is
  *   a wash rather than a pair, for the reason its own KDoc gives.
  */
+/**
+ * The fill of a control that floats over the page: white glass, not a grey slab.
+ *
+ * The reference drawing's top bar is two capsules and its composer is a row of chips,
+ * and all four are *white* objects on a grey page in the light scheme — the same raised
+ * step an answer card takes — and a faint lift off black in the dark one. The first
+ * attempt used [PiTone.inset], which is a *wash of the ink*: right for quoted material
+ * and wrong here, because a control that floats reads as a surface of its own rather than
+ * as shading on the page.
+ *
+ * ## Why white at an alpha rather than a palette role
+ *
+ * A role can be opaque, and these have to sit over a transcript that scrolls under them.
+ * White at [GLASS_LIGHT_ALPHA] over the #F7F7F7 page is #FDFDFD — white to the eye — while
+ * the last 20% lets a row that has slid underneath show as a ghost through the capsule,
+ * which is what says the control is above the page rather than painted on it. The dark
+ * scheme's [GLASS_DARK_ALPHA] is the same idea inverted: 10% of white lifts black to
+ * #1A1A1A and the #242424 card to #3A3A3A, which is the reference's own #262626 capsule
+ * against its #171717 page.
+ *
+ * ## What it is not
+ *
+ * A real backdrop blur. Compose has no backdrop filter: `Modifier.blur` blurs a node's
+ * *own* content, and the content behind a capsule lives in another node entirely.
+ * Copying the transcript through a `RenderEffect` to fake it would mean a second
+ * rendering of a `LazyColumn` on every scroll frame. The alpha is the whole of the effect,
+ * which is why the shadow matters as much as the fill — a translucent fill with no lift
+ * reads as a stain.
+ */
+object PiGlass {
+
+    /** The fill a floating control is painted with. */
+    @Composable
+    fun fill(): Color {
+        val dark = MiuixTheme.colorScheme.surface.luminance() < DARK_BASE_LUMINANCE
+        return Color.White.copy(alpha = if (dark) GLASS_DARK_ALPHA else GLASS_LIGHT_ALPHA)
+    }
+
+    /** The lift under a floating control, which is what makes a glass fill read as glass. */
+    val elevation: Dp = 5.dp
+}
+
 object PiTone {
 
     @Composable
@@ -223,6 +265,11 @@ private const val DARK_BASE_LUMINANCE = 0.2f
  * panel in the light scheme. The step it leaves on the dark scheme's #242424 card
  * (#3D3D3D) is the same one, which is the point of a wash.
  */
+private const val GLASS_LIGHT_ALPHA = 0.80f
+
+/** White's share of the dark scheme's floating fill. */
+private const val GLASS_DARK_ALPHA = 0.10f
+
 private const val INSET_ALPHA = 0.10f
 
 /**

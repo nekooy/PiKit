@@ -188,6 +188,7 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
@@ -1204,15 +1205,19 @@ private fun ChatHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // The capsules sit about a third of a status bar lower than a bar's row would:
+            // the reference's handle is clear of the clock's own line rather than tucked
+            // under it, and 22dp is what puts its top edge where the drawing has it.
             .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 30.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(HEADER_MARK_SIZE)
+                .shadow(PiGlass.elevation, CircleShape, clip = false)
                 .clip(CircleShape)
-                .background(PiTone.inset())
+                .background(PiGlass.fill())
                 .clickable(onClick = onOpenSessions),
             contentAlignment = Alignment.Center,
         ) {
@@ -1233,11 +1238,13 @@ private fun ChatHeader(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.weight(1f))
+        val trailingShape = RoundedCornerShape(percent = 50)
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(percent = 50))
-                .background(PiTone.inset())
-                .padding(horizontal = 2.dp, vertical = 2.dp),
+                .shadow(PiGlass.elevation, trailingShape, clip = false)
+                .clip(trailingShape)
+                .background(PiGlass.fill())
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Three marks, in the order the reference drawing has them: the shell the
@@ -1339,8 +1346,8 @@ private val DrawerGlyph: ImageVector by lazy {
     }.build()
 }
 
-/** The chat page's bar height, without the status bar: 44dp of capsule plus its margins. */
-private val HEADER_CLEARANCE = 56.dp
+/** The chat page's bar height, without the status bar: 30dp above, 48dp of capsule, 8dp below, and the air the first row keeps. */
+private val HEADER_CLEARANCE = 86.dp
 
 /** How much of the fade is solid, as a share of the whole: enough to hide the bar's row. */
 private const val FADE_SOLID = 0.76f
@@ -1349,7 +1356,7 @@ private const val FADE_SOLID = 0.76f
 private val FADE_TAIL = 26.dp
 
 /** One mark's box in the header, capsule and glyph alike. */
-private val HEADER_MARK_SIZE = 44.dp
+private val HEADER_MARK_SIZE = 48.dp
 
 /** How long a first back press stays armed. */
 private const val EXIT_ARM_MILLIS = 2000L
@@ -4939,10 +4946,14 @@ private fun ControlChipBase(
             // rectangle behind a pill.
             modifier = Modifier
                 .heightIn(min = CHIP_HEIGHT)
+                .shadow(PiGlass.elevation, RoundedCornerShape(percent = 50), clip = false)
                 .clip(RoundedCornerShape(percent = 50))
                 .clickable(onClick = onClick),
             shape = RoundedCornerShape(percent = 50),
-            color = MiuixTheme.colorScheme.surfaceContainerHigh,
+            // The same glass the header's capsules are drawn with: a chip floats over the
+            // fading transcript exactly as a capsule does, and the grey it used to have
+            // (`surfaceContainerHigh`) was a step *into* the page rather than above it.
+            color = PiGlass.fill(),
             // The chip's label is *normal* ink, not the muted one the library gives a
             // container-high surface. `onSurfaceContainerHigh` is #A2A2A2 — a summary's
             // grey, chosen for text that explains a row — and these are not
