@@ -122,8 +122,11 @@ whose interface it shows, so replacing one adds a file rather than overwriting i
 before it keeps its own name as a record (`preview-0.5.0.webp`, `preview-0.2.0.webp`), and
 nothing generates the file, so this is the whole recipe:
 
-1. **Capture four full-bleed screenshots** at 1080x2400, one per tab, on the interface language
-   the strip is written for (简体中文 for the one the README ships). Tap by the bounds
+1. **Capture four full-bleed screenshots** at 1080x2400 — the conversation, the terminal, the
+   files page and the settings — on the interface language the strip is written for (简体中文 for
+   the one the README ships). Since 0.6.5 the terminal and the files pages are opened by the top
+   bar's two marks, the settings by the drawer's foot, and the drawer itself is a fifth panel
+   worth adding to a strip that is meant to show the app's navigation. Tap by the bounds
    `adb shell uiautomator dump` reports rather than by eye off a screenshot: the PNG reaches a
    reader at whatever width the window has, while the tree is in device pixels.
 2. **Give the chat panel a transcript.** The emulator has no provider, so a real turn cannot be
