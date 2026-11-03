@@ -2351,7 +2351,6 @@ class PiAgentSession internal constructor(
                     settings = profile.modelSettings,
                     api = profile.api,
                     apiKey = ProfileAddressing.apiKeyReference(profile.id),
-                    omitsFinishReason = profile.omitsFinishReason,
                 )
             } else if (runtimeId != provider.id) {
                 builtInProviderObject(
@@ -2842,25 +2841,6 @@ internal fun modelsJsonWith(
                 (next["baseUrl"] as? JsonPrimitive)?.contentOrNull == definition.writtenBaseUrl ->
                 next.remove("baseUrl")
         }
-        // The endpoint's stream format, as the reader stated it. A provider-level
-        // `compat` is merged into every model by pi's composer, which is why one key
-        // here is enough for a provider whose models are a list; the other keys of a
-        // `compat` the user wrote by hand are carried over untouched.
-        //
-        // Withdrawing it is not the same as leaving it: the switch is the only way to
-        // turn the behaviour off, and a `false` left behind would keep accepting a
-        // truncated stream as complete. The key is therefore treated as the app's when
-        // it is exactly `false` — the one value this app writes.
-        val compat = (next["compat"] as? JsonObject)?.toMutableMap()
-        if (definition.omitsFinishReason) {
-            val merged = (compat ?: LinkedHashMap()).apply {
-                put("supportsFinishReason", JsonPrimitive(false))
-            }
-            next["compat"] = JsonObject(merged)
-        } else if (compat != null && (compat["supportsFinishReason"] as? JsonPrimitive)?.booleanOrNull == false) {
-            compat.remove("supportsFinishReason")
-            if (compat.isEmpty()) next.remove("compat") else next["compat"] = JsonObject(compat)
-        }
         // A `models` value that is neither absent nor an array is left exactly as the
         // user wrote it, definitions included: pi rejects the document on its schema
         // check either way, and replacing what the app cannot read is not its job.
@@ -2934,12 +2914,6 @@ internal data class ModelDefinitions(
     val overrides: Map<String, ModelSettings> = emptyMap(),
     val baseUrl: String = "",
     val writtenBaseUrl: String = "",
-    /**
-     * Whether this profile's endpoint omits `finish_reason`, which goes into the
-     * provider entry as `compat.supportsFinishReason: false` — see
-     * [ModelProfile.omitsFinishReason] for why the statement is the reader's.
-     */
-    val omitsFinishReason: Boolean = false,
 )
 
 /**
@@ -3043,7 +3017,6 @@ internal fun modelDefinitions(
             // Normalised here so the file and the model-list probe agree on the path.
             baseUrl = normalizeApiBaseUrl(profile.baseUrl),
             writtenBaseUrl = normalizeApiBaseUrl(profile.writtenBaseUrl),
-            omitsFinishReason = profile.omitsFinishReason,
         ),
     )
 }
@@ -3084,11 +3057,6 @@ internal fun builtInProviderObject(
         put("baseUrl", baseUrl)
         put("api", api)
         put("apiKey", ProfileAddressing.apiKeyReference(profile.id))
-        // A second profile of a built-in provider is a whole provider object of this
-        // app's, so the endpoint's stream format travels with it: the catalogue's `compat`
-        // is copied per model below (see `storeProviderModels`), and this is the one key
-        // the reader can state about the *endpoint*.
-        if (profile.omitsFinishReason) put("compat", finishReasonCompat())
         put(
             "models",
             buildJsonArray {
@@ -3100,16 +3068,6 @@ internal fun builtInProviderObject(
         )
     }
 }
-
-/**
- * The `compat` object that makes pi infer a stop reason from the end of a stream.
- *
- * One value, one place: [ModelProfile.omitsFinishReason] is the reader's statement, and
- * every writer of a `models.json` provider entry states it the same way.
- */
-internal fun finishReasonCompat(): JsonObject = JsonObject(
-    mapOf("supportsFinishReason" to JsonPrimitive(false)),
-)
 
 /** A catalogue model object without the fields that describe its host. */
 private fun withoutHostFields(facts: JsonObject): JsonObject =

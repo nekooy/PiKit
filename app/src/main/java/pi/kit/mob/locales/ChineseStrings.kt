@@ -487,9 +487,6 @@ internal object ChineseStrings : Strings {
             "可选。留空则使用该供应商的默认地址；填写后请求会发到这个地址" +
                 "（代理/中转），例如 https://relay.example.com/v1。仅主机名时会自动补上 /v1。" +
                 "供应商列表中的「Custom endpoint」是自定义端点，可接入任意兼容中转，并支持更换 API 协议。"
-        override val finishReasonTitle = "端点不发送 finish_reason"
-        override val finishReasonSubtitle =
-            "中转站或网关的流式回答不以该字段结尾时打开。打开后 pi 自行推断结束；被截断的回答会被当作已完成。"
         override val needBaseUrl = "自定义接口需要填写基础地址。"
         override val invalidBaseUrl =
             "接口地址必须是带主机名的 http(s) 地址，例如 https://relay.example.com/v1。" +

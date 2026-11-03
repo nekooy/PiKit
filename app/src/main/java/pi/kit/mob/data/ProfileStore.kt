@@ -95,22 +95,6 @@ data class ModelProfile(
      */
     @SerialName("api") val api: String = "",
     /**
-     * Whether this endpoint's streamed answers arrive without a `finish_reason`.
-     *
-     * ## What pi does with the field
-     *
-     * The OpenAI-compatible client treats a stream that ends without one as a failure —
-     * `Stream ended without finish_reason` — because a clean EOF is indistinguishable from
-     * a socket cut before the last chunk. `compat.supportsFinishReason: false` in a
-     * `models.json` entry tells pi to infer `stop`/`toolUse` when the stream ends, which is
-     * what a relay that never sends the field needs and what a provider that does send it
-     * must not have: the same setting makes a genuinely truncated answer look finished.
-     *
-     * Hence a per-profile statement rather than a default: the reader is the only one who
-     * can know which kind of endpoint they pasted.
-     */
-    @SerialName("omitsFinishReason") val omitsFinishReason: Boolean = false,
-    /**
      * The endpoint override PiKit last wrote into pi's `models.json` for this
      * provider, which may differ from [baseUrl] after the field was cleared.
      *

@@ -1151,18 +1151,6 @@ interface Strings {
         val baseUrlNote: String
         /** Shown for a built-in provider — blank means pi's own endpoint. */
         val baseUrlOptionalNote: String
-
-        /**
-         * The switch that tells pi an endpoint's stream ends without `finish_reason`.
-         *
-         * The label is the fact, not the mechanism: the reader knows whether their relay
-         * sends the field, and `compat.supportsFinishReason` is pi's name for what to do
-         * about it. The subtitle carries the cost — a truncated answer reads as complete —
-         * because a switch that only ever sounds like a fix is the wrong shape for a
-         * setting whose downside is invisible.
-         */
-        val finishReasonTitle: String
-        val finishReasonSubtitle: String
         val needBaseUrl: String
 
         /**

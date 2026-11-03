@@ -282,16 +282,6 @@ object CustomEndpoint {
          * profile had an address of its own.
          */
         apiKey: String = API_KEY_ENV,
-        /**
-         * Whether the endpoint's streamed answers end without `finish_reason`.
-         *
-         * A relay is exactly the case pi cannot know about: its whole protocol is
-         * declared by this object, so the one statement the reader can make about the
-         * stream's shape is written here as a provider-level `compat` — every model
-         * inherits it, and a truncated stream that had no other symptom would be the
-         * price of saying it wrongly.
-         */
-        omitsFinishReason: Boolean = false,
     ): JsonObject? {
         val base = normalizeApiBaseUrl(baseUrl)
         val models = modelIds.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -306,9 +296,6 @@ object CustomEndpoint {
             put("baseUrl", base)
             put("api", api.ifBlank { CustomApi.DEFAULT_ID })
             put("apiKey", apiKey)
-            if (omitsFinishReason) {
-                put("compat", JsonObject(mapOf("supportsFinishReason" to JsonPrimitive(false))))
-            }
             put(
                 "models",
                 buildJsonArray { models.forEach { add(entry(it, settings[it] ?: ModelSettings())) } },

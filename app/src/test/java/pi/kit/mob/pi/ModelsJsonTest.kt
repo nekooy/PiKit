@@ -239,7 +239,6 @@ class ModelsJsonTest {
         overrides: Map<String, ModelSettings> = emptyMap(),
         baseUrl: String = "",
         writtenBaseUrl: String = "",
-        omitsFinishReason: Boolean = false,
     ): Map<String, ModelDefinitions> =
         mapOf(
             "deepseek" to ModelDefinitions(
@@ -248,7 +247,6 @@ class ModelsJsonTest {
                 overrides = overrides,
                 baseUrl = baseUrl,
                 writtenBaseUrl = writtenBaseUrl,
-                omitsFinishReason = omitsFinishReason,
             ),
         )
 
@@ -1225,79 +1223,5 @@ class ModelsJsonTest {
     @Test
     fun `a wanted entry is still enough`() {
         assertTrue(hasModelsJsonEntries(definitions(listOf(entry("vision-v1")))))
-    }
-
-    /**
-     * The endpoint's stream format, which is the one statement about the *wire* rather
-     * than about a model.
-     *
-     * A relay whose answers end without `finish_reason` makes pi's client throw
-     * `Stream ended without finish_reason` on every reply, because a clean EOF and a cut
-     * socket are the same event to it. `compat.supportsFinishReason: false` is what tells
-     * pi to infer the stop, and a provider-level `compat` is the only place the app can
-     * say it: the field describes the endpoint, not one model.
-     *
-     * The withdrawal is the other half, and it is not cosmetic: leaving `false` behind
-     * would keep accepting a truncated answer as complete after the reader turned the
-     * switch off.
-     */
-    @Test
-    fun `an endpoint that omits finish_reason is written into the provider's compat`() {
-        val result = modelsJsonWith(
-            existing = userDocument,
-            definitions = definitions(
-                wanted = listOf(entry("vision-v1")),
-                omitsFinishReason = true,
-            ),
-        )
-        val compat = result.provider("deepseek")["compat"]!!.jsonObject
-        assertFalse(compat["supportsFinishReason"]!!.jsonPrimitive.booleanOrNull!!)
-    }
-
-    @Test
-    fun `turning the switch off takes the key back out and leaves the rest of compat`() {
-        val existing = json(
-            """
-            {
-              "providers": {
-                "deepseek": {
-                  "compat": { "supportsFinishReason": false, "thinkingFormat": "deepseek" }
-                }
-              }
-            }
-            """.trimIndent(),
-        )
-        val result = modelsJsonWith(
-            existing = existing,
-            definitions = definitions(wanted = listOf(entry("vision-v1"))),
-        )
-        val compat = result.provider("deepseek")["compat"]!!.jsonObject
-        assertNull(compat["supportsFinishReason"])
-        assertEquals("deepseek", compat["thinkingFormat"]!!.jsonPrimitive.contentOrNull)
-    }
-
-    @Test
-    fun `a compat the user wrote is carried over when the switch is on`() {
-        val existing = json(
-            """
-            {
-              "providers": {
-                "deepseek": {
-                  "compat": { "thinkingFormat": "deepseek" }
-                }
-              }
-            }
-            """.trimIndent(),
-        )
-        val result = modelsJsonWith(
-            existing = existing,
-            definitions = definitions(
-                wanted = listOf(entry("vision-v1")),
-                omitsFinishReason = true,
-            ),
-        )
-        val compat = result.provider("deepseek")["compat"]!!.jsonObject
-        assertFalse(compat["supportsFinishReason"]!!.jsonPrimitive.booleanOrNull!!)
-        assertEquals("deepseek", compat["thinkingFormat"]!!.jsonPrimitive.contentOrNull)
     }
 }

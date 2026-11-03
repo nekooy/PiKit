@@ -383,11 +383,12 @@ transcript.
 Write it to `.tooling/` (ignored), run it on the host, and give the emulator's profile
 that URL. Three things it settles that nothing else can:
 
-- **The console-only failure.** With `--no-finish`, the transcript shows the exact red
-  line and the `Retrying (attempt 1/8)` notice, and the profile's *Stream ends without
-  finish_reason* switch then makes the same endpoint answer cleanly — the app-side write
-  is checkable with `run-as … cat files/home/.pi/agent/models.json`, which must carry
-  `compat: {"supportsFinishReason": false}` for that provider after a relaunch.
+- **The stream failure.** With `--no-finish`, the transcript shows the exact red line
+  and the `Retrying (attempt 1/8)` notice that a relay produces. The same harness is
+  what proves a fix on the app side: a hand-written
+  `compat: {"supportsFinishReason": false}` for that provider in
+  `files/home/.pi/agent/models.json`, and one relaunch, is enough to make the same
+  endpoint answer cleanly — which is how §15's second-profile `compat` copy was checked.
 - **The notification rule.** Send a prompt, press Home within a second, and poll
   `adb shell dumpsys notification --noredact | grep -c "pkg=pi.kit.mob"`: it goes 0 → 2
   while deltas arrive and back to 0 when the turn settles. Grant

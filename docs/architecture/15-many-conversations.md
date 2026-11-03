@@ -58,12 +58,15 @@ means the one environment.
 ### The pool is bounded, and the bound is memory
 
 A live conversation is a Node.js process: ~120 MB resident before it has read anything.
-`PiHost.MAX_LIVE` is **3**, and a fourth conversation is refused with a sentence rather
-than allowed to end in an allocation failure nothing in the interface explains. Opening
-one when the pool is full evicts the **least recently used idle** conversation — never
-the active one, never one with a turn in flight — because a conversation's transcript is
-pi's and already on disk: closing is "stop the child", and the history list opens it
-again.
+`PiHost.MAX_LIVE` is **5** — a memory budget rather than a taste, and the ceiling a
+reader with several projects open asked for; a sixth conversation is refused with a
+sentence rather than allowed to end in an allocation failure nothing in the interface
+explains. Opening one when the pool is full evicts the **least recently used idle**
+conversation — never the active one, never one with a turn in flight — because a
+conversation's transcript is pi's and already on disk: closing is "stop the child", and
+the history list opens it again. The eviction rule is what makes a five-deep pool safe:
+five *working* conversations are five children that must fit; the idle ones are the ones
+that give way.
 
 The eviction rule is the reason `lastUsedAt` is written by `activate` rather than by the
 transcript: "recently useful" is what the reader did, not what the fixture wrote.

@@ -30,7 +30,7 @@ needed is one that can reach the model provider.
   agent.
 - **Several conversations at once.** A conversation is its own process, so a new one
   starts beside the answer that is still arriving and the history list is the switcher:
-  up to three live at a time, and closing one is one tap because its transcript is
+  up to five live at a time, and closing one is one tap because its transcript is
   already on disk.
 - **A terminal and a file manager.** PTY sessions that survive a tab switch, the keys a
   phone keyboard lacks, and a read-only file manager over `$HOME`: a tappable path, a

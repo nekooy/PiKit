@@ -61,12 +61,12 @@ import pi.kit.mob.terminal.TerminalSessionManager
  * ## The pool is bounded
  *
  * A live conversation is a Node.js process of its own: ~120 MB resident before it has
- * read anything, and the app's whole heap budget on a low-end phone is not much more
- * than a few times that. [MAX_LIVE] is therefore three, and a fourth conversation is
- * refused rather than allowed to end in a `OutOfMemoryError` the reader cannot connect
- * to anything. Refusing is also what keeps the promise honest: every live conversation
- * is one that can answer, because the alternative — a process per saved transcript —
- * would page the phone to death.
+ * read anything, so the pool is a memory budget rather than a taste — [MAX_LIVE] is the
+ * point where a phone still has room for the transcript, the image's own tools and the
+ * app itself. One more conversation is refused rather than allowed to end in an
+ * allocation failure the reader cannot connect to anything. The ceiling is five because
+ * a reader with several projects open asked for five; it is not a number to raise again
+ * without a measurement on the smallest phone the app supports.
  *
  * A conversation that is closed is not lost: pi writes its transcript to its session
  * file as it goes, so closing is "stop the child", and reopening it from the history
@@ -704,13 +704,15 @@ class PiHost private constructor(context: Context) {
         /**
          * How many conversations may be live at once.
          *
-         * Three, and the number is a memory budget rather than a taste: each live
+         * Five, and the number is a memory budget rather than a taste: each live
          * conversation is one Node.js child (~120 MB resident before it reads a
-         * transcript), and a phone's per-app heap is not much more than a few times
-         * that. A fourth is refused with a sentence rather than allowed to end in an
-         * allocation failure nothing in the interface explains.
+         * transcript), so five is roughly 600 MB of resident processes on a phone whose
+         * per-app heap is smaller than that — the rest lives in the children's own
+         * address spaces, and the eviction rule ([makeRoom]) is what keeps the pool from
+         * becoming a page file. A sixth is refused with a sentence rather than allowed
+         * to end in an allocation failure nothing in the interface explains.
          */
-        const val MAX_LIVE = 3
+        const val MAX_LIVE = 5
 
         private const val KEY_CATALOGUE_DUE_AT = "due_at"
 

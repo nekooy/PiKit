@@ -122,17 +122,6 @@ nearest one it does. The names are pi's own
 --list-models` in the terminal use the same word
 for the same level.
 
-### Stream ends without finish_reason
-
-**Stream ends without finish_reason** is the
-switch for a relay whose streamed answers end
-without that field. It tells pi to infer the
-stop reason when the stream ends, which is what
-stops `Stream ended without finish_reason` on
-such an endpoint; it also makes a truncated
-answer look finished, so do not turn it on for
-an official endpoint.
-
 ## Ask the agent
 
 Type in the field at the bottom and press the
@@ -206,10 +195,10 @@ answer that is being written keeps arriving.
 - The **+** in the chat's top bar opens a new
   conversation beside this one, and nothing that
   is running is interrupted.
-- At most **3** conversations are live at
-  once. A fourth opens by closing the one that
-  has been idle longest; if all three are
-  answering, the fourth is refused and a message
+- At most **5** conversations are live at
+  once. A sixth opens by closing the one that
+  has been idle longest; if all five are
+  answering, the sixth is refused and a message
   says so.
 - The **history** page (the clock icon) marks
   a live conversation with a dot and **Answering
@@ -436,10 +425,10 @@ the app keeps no cloud copy. **Settings → Backup
 - **Stream ended without finish_reason**: the
   endpoint or the network closed the stream
   before the last chunk, and the agent retries
-  by itself up to 8 times. If the endpoint never
-  sends the field, turn on the **Stream ends
-  without finish_reason** switch in that
-  profile.
+  by itself up to 8 times — the answer usually
+  carries on. If it keeps happening, try another
+  network, or ask the provider whether its
+  streaming sends `finish_reason`.
 - **A tool call was refused**: the tier said
   no. The ✕ line names the tier and the path, so
   change the tier with the composer's button, or

@@ -493,9 +493,6 @@ internal object JapaneseStrings : Strings {
                 "（例：https://relay.example.com/v1）。ホスト名のみの場合は /v1 が自動的につきます。" +
                 "プロバイダー一覧の「Custom endpoint」は自前で設定するエンドポイントで、" +
                 "任意の互換リレーに繋げられ、API プロトコルも変更できます。"
-        override val finishReasonTitle = "端点が finish_reason を返さない"
-        override val finishReasonSubtitle =
-            "中継サーバーやゲートウェイの回答がこのフィールドなしで終わる場合にオンにします。終了を pi が推定するため、途中で切れた回答も完了として扱われます。"
         override val needBaseUrl = "カスタムエンドポイントにはベース URL が必要です。"
         override val invalidBaseUrl =
             "エンドポイントはホスト名付きの http(s) URL でなければなりません" +

@@ -517,9 +517,6 @@ internal object EnglishStrings : Strings {
                 " The provider list's `Custom endpoint` row is a self-configured " +
                 "endpoint for any compatible relay, and its API protocol can be " +
                 "changed."
-        override val finishReasonTitle = "Stream ends without finish_reason"
-        override val finishReasonSubtitle =
-            "Turn on for a relay or gateway that ends its answers without that field. It makes pi infer the stop; a truncated answer would then look finished."
         override val needBaseUrl = "A custom endpoint needs its base URL."
         override val invalidBaseUrl =
             "The endpoint must be an http(s) URL with a host name, for example " +
