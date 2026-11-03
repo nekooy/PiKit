@@ -151,10 +151,10 @@ internal fun WorkspacePickerSheet(
      * Adds [folder], and answers with the sentence to show when it cannot be added.
      *
      * A *returned* refusal rather than a toast, because this body is a window of its own:
-     * the app's snackbar lives in the activity's window underneath, so a message raised
-     * from here is dimmed by the sheet's scrim or hidden by the panel — a button that
-     * appears to do nothing. `null` means the folder was taken, and the caller closes the
-     * sheet.
+     * a toast is drawn by the system, but it is anchored to the app's own window, so a
+     * message raised from here lands behind the sheet's scrim or under the panel — a
+     * button that appears to do nothing. `null` means the folder was taken, and the
+     * caller closes the sheet.
      */
     onAdd: (String) -> String?,
 ) {
@@ -236,7 +236,7 @@ internal fun WorkspacePickerSheet(
                 .fillMaxWidth()
                 .padding(start = PICKER_GUTTER, end = PICKER_GUTTER, top = 8.dp),
         )
-        // The refusal, where the button that was refused is rather than in a snackbar the
+        // The refusal, where the button that was refused is rather than in a toast the
         // sheet covers. Cleared by the next attempt.
         refusal?.let { message ->
             Text(

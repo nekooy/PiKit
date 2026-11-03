@@ -89,10 +89,7 @@ import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
-import pi.kit.mob.ui.kit.PiToastHost
-import pi.kit.mob.ui.kit.PiToastHostLayer
 import pi.kit.mob.ui.kit.PiToastProvider
-import pi.kit.mob.ui.kit.rememberPiToastHost
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
@@ -138,17 +135,15 @@ fun PiKitRoot(host: PiHost) {
     // the block returns Unit, which the lint is right to flag.
     LaunchedEffect(language) { applyLocale(language) }
 
-    // One transient message for the whole app. It is created here rather than
-    // inside the language key because a language switch disposes everything under
-    // that key, and a message raised just before the switch still has to finish
-    // being read rather than vanishing with the page that asked for it.
-    val snackbar = rememberPiToastHost()
-
+    // The one transient message is the platform's toast now, so there is no host to
+    // remember here: the provider installs a `PiToast` over the application context,
+    // and a message raised just before a language switch is the system's to finish
+    // showing rather than a subtree's to lose.
     CompositionLocalProvider(
         LocalStrings provides stringsFor(language),
         LocalLanguage provides language,
     ) {
-        PiToastProvider(snackbar) {
+        PiToastProvider {
             // The first-launch prompts sit *above* the language key, not inside it.
             // That is the fix for a measured bug rather than tidiness: a subtree
             // restart disposes the `rememberLauncherForActivityResult` registration
@@ -165,7 +160,6 @@ fun PiKitRoot(host: PiHost) {
                 RootContent(
                     host = host,
                     language = language,
-                    snackbar = snackbar,
                 )
             }
         }
@@ -333,7 +327,6 @@ private fun PermissionPrompts(host: PiHost) {
 private fun RootContent(
     host: PiHost,
     language: Lang,
-    snackbar: PiToastHost,
 ) {
     val runtime by host.runtime.collectAsState()
     // The conversation the screen is on. Everything below is *that* conversation's:
@@ -433,7 +426,6 @@ private fun RootContent(
         // for `systemBars` here would pad every page's top bar a second time.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MiuixTheme.colorScheme.surface,
-        snackbarHost = { PiToastHostLayer(snackbar) },
         bottomBar = {
             // `showDivider = false`: the bar is the page's floor, not a panel
             // laid over it. Miuix's own divider is a hairline the same colour as

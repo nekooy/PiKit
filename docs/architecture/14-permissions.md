@@ -190,7 +190,7 @@ Four facts, each one a thing that would have failed silently:
   `{"mode":"full-access"}` with the agent still running, and the control's mark changed from
   a lock to an open lock in the accent — no restart, which is the whole point of the file.
 - **A refusal is visible where it was asked for.** The workspace picker is a window of its
-  own, and the first version answered a refused folder with the app's snackbar: the sheet
+  own, and the first version answered a refused folder with the app's toast: the sheet
   stayed open, the host is in the activity's window *underneath*, and the tap looked like it
   had done nothing at all. The refusal is a line in the sheet's own body now —
   `不能把主目录本身当作工作区` under the path it refused, and the folder it *did* accept closes the

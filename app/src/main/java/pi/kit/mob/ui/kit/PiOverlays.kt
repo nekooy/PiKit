@@ -1,30 +1,26 @@
 package pi.kit.mob.ui.kit
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import pi.kit.mob.ui.kit.PiCorner
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.SnackbarDuration
-import top.yukonga.miuix.kmp.basic.SnackbarHost
-import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -193,35 +189,52 @@ fun PiSheet(
 }
 
 /**
- * The app's one transient message, hosted once at the root.
+ * The app's ephemeral messages, drawn by the platform.
  *
- * A snackbar rather than the old pill because Miuix *has* a snackbar and this app
- * would otherwise be drawing a second kind of transient message beside the one the
- * interface is made of. Screens reach it through [LocalPiToast], which is the same
- * shape the old toast host had: the message survives the page that raised it,
- * because the host is above every page.
+ * It used to be a Miuix snackbar with a host remembered at the root, a `SnackbarHostState`,
+ * a scope, a dismiss-the-previous rule and a `snackbarHost` slot in the root scaffold — a
+ * small framework of this app's own for one sentence at a time. The platform already has
+ * that component: `Toast` queues messages, places them where its own navigation bar and
+ * display say, honours the accessibility settings, the text scale and the per-app
+ * notification choice, and on 13+ draws the app's icon beside the text.
+ *
+ * What is given up is Miuix's styling for this one element and the app's own queue; what
+ * is kept is the interface the snackbar had — [LocalPiToast] with `show(message)` — so no
+ * screen was rewritten for the swap. The platform's two-line limit is the other cost: a
+ * sentence longer than that was already the wrong message for a toast.
  */
 @Stable
-class PiToastHost internal constructor(
-    private val scope: CoroutineScope,
-    internal val state: SnackbarHostState,
-) {
+class PiToast internal constructor(private val context: Context) {
+
     /**
-     * One slot, like the pill it replaces.
+     * One message, now.
      *
-     * A second message replaces the first and restarts the clock. A queue here
-     * would be a log nobody reads — the same argument as the one-sheet rule — and
-     * two messages about one tap ("Saved", then "Agent restarted") are one
-     * sentence, not two. Miuix's host draws every visible entry, so the previous
-     * one is dismissed before the new one is shown rather than being left to its
-     * own timeout.
+     * The platform owns the queue: a second toast replaces the one on screen on most
+     * versions and queues behind it on some, and both are the system's rule rather
+     * than this app's to re-implement. A blank message is dropped — a toast with no
+     * text is a rectangle.
      */
     fun show(message: String) {
-        scope.launch {
-            state.newestSnackbarData()?.dismiss()
-            state.showSnackbar(message = message, duration = SnackbarDuration.Short)
-        }
+        if (message.isBlank()) return
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
+}
+
+/** The toast, provided once at the root. A page that has no provider gets none. */
+val LocalPiToast = staticCompositionLocalOf<PiToast?> { null }
+
+/**
+ * Provides a [PiToast] to everything below and draws nothing itself.
+ *
+ * The context is the composition's, taken once: `Toast` holds it only long enough to
+ * post the message to the window manager, so the application context is the right one
+ * to keep and the one that cannot leak an Activity.
+ */
+@Composable
+fun PiToastProvider(content: @Composable () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    val toast = remember(context) { PiToast(context) }
+    CompositionLocalProvider(LocalPiToast provides toast, content = content)
 }
 
 /**
@@ -239,25 +252,3 @@ class PiToastHost internal constructor(
 @Composable
 fun piSheetBottomInset(): Dp =
     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-val LocalPiToast = compositionLocalOf<PiToastHost?> { null }
-
-/** Creates the host and its scope; call once, at the root. */
-@Composable
-fun rememberPiToastHost(): PiToastHost {
-    val scope = rememberCoroutineScope()
-    val state = remember { SnackbarHostState() }
-    return remember(scope, state) { PiToastHost(scope, state) }
-}
-
-/** Provides [host] to everything below and draws nothing itself. */
-@Composable
-fun PiToastProvider(host: PiToastHost, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalPiToast provides host, content = content)
-}
-
-/** The snackbar slot: goes in the root scaffold's `snackbarHost`. */
-@Composable
-fun PiToastHostLayer(host: PiToastHost, modifier: Modifier = Modifier) {
-    SnackbarHost(state = host.state, modifier = modifier)
-}

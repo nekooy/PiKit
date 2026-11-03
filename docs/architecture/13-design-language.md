@@ -220,16 +220,27 @@ required `show` and the caller holds the last value — `pendingDialog != null` 
 the held copy is what it draws while it leaves. The sessions page's three dialogs and
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
-**Transient messages are one snackbar**, hosted once at the root and raised through
-`LocalPiToast`. The old pill became the library's snackbar, and two of its rules
-survive with it: there is **one slot** (a second message replaces the first and
-restarts the clock — a queue is a log nobody reads), and the split against an
-in-page notice is by tense — a *moment* ("Saved", "Agent restarted") is a snackbar, a
-*condition* ("the agent failed to start", "this folder cannot be read") stays on the
-page in the error role, because a message that disappears after four seconds is the
-wrong shape for something that is still true. A failure the reader has to *read* is a
-dialog with a bounded, scrolling body (the maintenance runs, the model catalogue's
-discovery problems); a field's own validation error is a line under the box.
+**Transient messages are the platform's toast**, raised through `LocalPiToast` and
+drawn by the system. The app drew its own for two generations — a pill, then Miuix's
+snackbar with a host remembered at the root — and the host was a small framework of
+this app's own for one sentence: a `SnackbarHostState`, a scope, a
+dismiss-the-previous rule, and a `snackbarHost` slot in the root scaffold. None of
+that is the app's to decide. The platform already queues messages, places them where
+its own navigation bar and display say, honours the user's accessibility settings and
+text scale and per-app notification choice, and on 13+ draws the app's icon beside the
+text. So the whole of it was removed for `Toast.makeText(...).show()` behind the same
+`LocalPiToast` interface, and the screens were not touched: a page asks for a short
+sentence and never learns which framebuffer it lands in.
+
+What is given up is Miuix's styling for this one element and the app's own queue; what
+is kept is the split against an in-page notice, by tense — a *moment* ("Saved", "Agent
+restarted") is a toast, a *condition* ("the agent failed to start", "this folder cannot
+be read") stays on the page in the error role, because a message that disappears after
+a couple of seconds is the wrong shape for something that is still true. A failure the
+reader has to *read* is a dialog with a bounded, scrolling body (the maintenance runs,
+the model catalogue's discovery problems); a field's own validation error is a line
+under the box. The platform's own two-line limit is the cost of the swap: a sentence
+that needs more than two lines was already the wrong message for a toast.
 
 ## Navigation
 
@@ -396,8 +407,8 @@ the transcript's meta row and a tool card's output still use the same control.
   #061122, and a bubble that dark is not blue until it is beside something blacker. Both
   keep `onSurface` legible, which is the property the prompt bubble needed most.
 - **The window-level dialog phrasing** (`PiConfirm` and `PiDialogAnswers` in the kit,
-  `SettingsAlert` on the settings pages) and the snackbar host, because Miuix ships the
-  window and not this app's two-answer question. `PiDialogAnswers` is the one
+  `SettingsAlert` on the settings pages), because Miuix ships the window and not this
+  app's two-answer question. `PiDialogAnswers` is the one
   dialog-button row in the app — two filled `TextButton`s of equal weight, the
   destructive one told apart by its label's colour — and every dialog in the app draws
   its answers through it; the transparent-container variant some dialogs used to pass
