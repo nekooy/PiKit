@@ -13,6 +13,7 @@ internal object JapaneseStrings : Strings {
     }
 
     override val chat = object : Strings.Chat {
+        override val exitHint = "もう一度戻ると PiKit を終了します"
         override val newConversation = "新しい会話"
         override val loadingModel = "モデルを読み込み中…"
         override val noModel = "モデルが未設定です"

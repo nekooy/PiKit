@@ -251,10 +251,11 @@ the numbers.
 
 **Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
 glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12.3 has that
-sequence. The one exception is the terminal mark in `PiKitRoot.kt` — a chevron and an underscore,
-two strokes at Miuix's own line weight — because the library's set has no terminal icon and the
-conversation page's bar needs one; it is a *navigation* mark, not the app's mark, and the launcher
-glyph is still the only hand-drawn figure that has to survive being looked at.
+sequence. Two exceptions are the *navigation* marks in `ChatScreen.kt` — the terminal's (a chevron
+and an underscore) and the drawer's (a long rule over a short one), two strokes each at Miuix's own
+line weight — because the library's set has neither a terminal glyph nor that handle, and the
+conversation page's capsules need both; they are navigation marks, not the app's mark, and the
+launcher glyph is still the only hand-drawn figure that has to survive being looked at.
 **Render candidates at the size the app draws them, and choose from those** — a 64dp
 preview says nothing about whether a glyph survives at 21dp. And **a resource that fails to compile
 is silently replaced by a cached older one**, which is how a drawable went missing from three APKs:

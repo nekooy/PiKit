@@ -245,11 +245,47 @@ that needs more than two lines was already the wrong message for a toast.
 ## Navigation
 
 The app has one root page — the conversation — and everything else is reached from it.
-Its bar is the app's own arrangement rather than a library component: the leading mark
-opens the conversation drawer, the title is the app's name, and the three marks at the
-trailing edge open the terminal, the files and a new conversation, in that order. The
+Its top is the app's own arrangement rather than a library bar: two floating capsules and
+a name between them. The leading capsule holds the mark that opens the conversation
+drawer, the trailing one holds the terminal, the files and a new conversation in that
+order, and the app's name stands on the page itself instead of in a frame. The
 conversation is what the app is for; a bar of four equally weighted destinations said
 otherwise.
+
+**A bar with no bar in it.** The reference drawing the page follows has no strip across
+the top: the content scrolls *under* the marks, fades out as it reaches them, and the
+marks are the only opaque objects there. That is three decisions, and each was made
+because the strip version was worse:
+
+- **The marks sit in capsules** (`PiTone.inset()`, one step off the surface in both
+  schemes) rather than directly on the page: a mark over fading text with no fill of its
+  own is a glyph fighting whatever scrolls under it, and the capsule is what makes the
+  pair readable as a control rather than as part of the conversation.
+- **The transcript runs under the top**, with `headerSpace` as its *content* padding
+  rather than as a margin, so the list can still scroll a row into that space — a margin
+  would have cut the row off at the bar's edge instead of letting it dissolve.
+- **The fade is a vertical gradient** from `surface` to transparent over the bar and about
+  26dp below it. It is a fade and not a blur: Compose has no backdrop filter, and a real
+  blur here would mean rendering the transcript twice (once through a `RenderEffect`) —
+  a second copy of a `LazyColumn` for an effect that the gradient already carries at
+  arm's length. The reference's blur is a backdrop filter's; this is the same idea drawn
+  by hand, and it is why the seam is invisible while the pixels differ.
+
+**The bottom of the page is a fade too.** The composer's band is transparent at its top
+and reaches `surface` where the field starts, the transcript ends under a 30dp gradient
+of its own, and the chips float on the transparent part exactly as the marks float on the
+top's. This is what lets the page have no chrome at either end: the conversation is the
+page, and everything on top of it either has a surface (the field, the chips, the
+capsules) or is a gradient.
+
+**The agent's state is a caption on the window, not on the page.** It is the one line
+under everything, drawn by `RootContent` at the window's bottom edge, 10sp in the
+summary ink — the size the reference gives its own hint. Being outside the page is what
+makes it stay put: the page is what the keyboard lifts, so a line inside it rode up with
+the composer and hung over the keys. The keyboard now covers it, which is the correct
+answer for a caption that only matters when the field is not in use. It is hidden while
+the drawer is out, because the drawer is composed inside the page and a caption floating
+over the conversation list would be the last piece of the chat page left on screen.
 
 **The four-tab bar came first, and its costs are what retired it.** A Miuix
 `NavigationBar` at the root with one item per destination kept every page one tap away,
@@ -281,10 +317,21 @@ leading edge, cutting its own title in half. The size callback now re-derives th
 from the *answer* (open or closed) rather than from the old number, and the panel's width
 is capped at 420dp, so a tablet shows a drawer and not a second page.
 
-The terminal's glyph — a chevron and an underscore — is one of the marks drawn for this
-app, because Miuix's set has no terminal icon. The drawer's leading mark is the library's
-`Sidebar`: the set has no hamburger either, and a bar that opens a panel is the honest
-picture of what the tap does.
+Two marks are drawn for this app rather than borrowed, because Miuix's set has neither:
+the terminal's (a chevron and an underscore) and the drawer's (a long rule over a short
+one, left-aligned, which is the reference's own handle mark). Both are *navigation*
+marks — two strokes at the library's line weight on a 24-unit grid, no fill — and neither
+is the app's mark, which is the launcher glyph. The footer's settings pill is the
+library's `Settings` at 20dp inside a 48dp capsule.
+
+**Back at the root loses the app, on the second press.** The conversation is the root, so
+a back press has nowhere to go, and the platform's left-edge gesture is exactly where a
+thumb lands when it means to pull a drawer *out*. Measured on the emulator with gesture
+navigation: a left-edge swipe finished the activity and the launcher appeared, which reads
+as the app falling to a black screen. The chat page therefore handles back itself: the
+first press arms and says so in a toast, a second within two seconds leaves. The drawer's
+own handler is composed later and closes the drawer first, which is the order a back press
+has to have.
 
 The settings stack keeps its own model: a sealed `SettingsPage` with a `parent`, a
 `rememberSaveable` encode/decode, and a per-page `PiPage(onBack)` rather than one

@@ -100,6 +100,15 @@ interface Strings {
     }
 
     interface Chat {
+        /**
+         * What a first back press at the root says.
+         *
+         * The page is the app's root, so back has nowhere to go, and the platform's
+         * left-edge gesture is where a thumb lands when it means to open the drawer from
+         * the left. The first press arms and says what a second one does; the second
+         * leaves. Short enough for a toast's two lines and for a 48-column terminal.
+         */
+        val exitHint: String
         val newConversation: String
         val loadingModel: String
         val noModel: String

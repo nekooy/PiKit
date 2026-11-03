@@ -19,6 +19,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -444,6 +446,7 @@ private fun RootContent(
         val density = LocalDensity.current
         val ime = WindowInsets.ime
         val barBottomPx = with(density) { padding.calculateBottomPadding().roundToPx() }
+        Box(Modifier.fillMaxSize()) {
         Crossfade(
             targetState = destination,
             modifier = Modifier
@@ -484,6 +487,38 @@ private fun RootContent(
                 Destination.Settings -> SettingsScreen(
                     session = session,
                     onBack = { destination = Destination.Chat },
+                )
+            }
+        }
+
+            // The agent's state, at the *window's* bottom edge rather than the page's.
+            //
+            // It is a caption about the app, and it has one job the page cannot give it:
+            // staying put. The page is the thing the keyboard lifts, so a line inside the
+            // page rode up with the composer and hung over the keyboard — measured, and
+            // the wrong reading of "under the input". Here it stays on the bottom edge and
+            // the keyboard covers it, which is what the reference drawing does with its
+            // own hint.
+            //
+            // Hidden while the drawer is out: the drawer is composed inside the crossfade
+            // below this line, and a caption floating over the conversation list would be
+            // the one piece of the chat page left on screen.
+            if (destination == Destination.Chat && !historyOpen) {
+                Text(
+                    text = agentSubtitle(agent, text),
+                    style = MiuixTheme.textStyles.footnote2.copy(
+                        fontSize = 10.sp,
+                        lineHeight = 12.sp,
+                    ),
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 32.dp)
+                        .padding(bottom = 3.dp),
                 )
             }
         }

@@ -20,6 +20,7 @@ internal object ChineseStrings : Strings {
     }
 
     override val chat = object : Strings.Chat {
+        override val exitHint = "再按一次返回键退出 PiKit"
         override val newConversation = "新对话"
         override val loadingModel = "正在加载模型…"
         override val noModel = "尚未配置模型"

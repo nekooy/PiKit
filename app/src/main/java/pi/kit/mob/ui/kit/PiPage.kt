@@ -99,16 +99,6 @@ fun PiPage(
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     alignStart: Boolean = false,
-    /**
-     * The control at the bar's leading edge when it is not a way back.
-     *
-     * The chat root's edge opens the conversation drawer instead of leaving the
-     * page, so the arrow the bar used to draw there was a promise about the tap
-     * that the tap does not keep. Supplied in the arrow's place; [onBack] stays
-     * null on such a page, which is also what keeps the system back gesture for
-     * whatever the drawer does with it.
-     */
-    navigationIcon: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     body: @Composable (PaddingValues) -> Unit,
 ) {
@@ -121,19 +111,13 @@ fun PiPage(
         topBar = {
             Column(Modifier.fillMaxWidth()) {
                 if (alignStart) {
-                    StartAlignedBar(
-                        title = title,
-                        onBack = onBack,
-                        navigationIcon = navigationIcon,
-                        actions = actions,
-                    )
+                    StartAlignedBar(title = title, onBack = onBack, actions = actions)
                 } else {
                     SmallTopAppBar(
                         title = title,
                         navigationIcon = {
-                            when {
-                                navigationIcon != null -> navigationIcon()
-                                onBack != null -> IconButton(onClick = onBack) {
+                            if (onBack != null) {
+                                IconButton(onClick = onBack) {
                                     Icon(
                                         imageVector = MiuixIcons.Back,
                                         // Named, because a back arrow is the one control
@@ -199,7 +183,6 @@ fun PiPage(
 private fun StartAlignedBar(
     title: String,
     onBack: (() -> Unit)?,
-    navigationIcon: (@Composable () -> Unit)?,
     actions: @Composable RowScope.() -> Unit,
 ) {
     Row(
@@ -208,19 +191,10 @@ private fun StartAlignedBar(
             .background(MiuixTheme.colorScheme.surface)
             .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
             .height(TopAppBarDefaults.CollapsedHeight)
-            .padding(
-                start = if (navigationIcon != null) TITLE_GUTTER_CUSTOM else TITLE_GUTTER,
-                end = TopAppBarDefaults.ActionIconPadding,
-            ),
+            .padding(start = TITLE_GUTTER, end = TopAppBarDefaults.ActionIconPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // The custom mark is drawn *before* the title without the gutter spacer
-        // below: it is a glyph in the bar's first slot, and the slot's own padding
-        // is what puts it where a back arrow would be.
-        if (navigationIcon != null) {
-            navigationIcon()
-            Spacer(Modifier.width(NAV_ICON_GAP))
-        } else if (onBack != null) {
+        if (onBack != null) {
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = MiuixIcons.Back,
@@ -258,20 +232,6 @@ private fun StartAlignedBar(
  * column.
  */
 private val TITLE_GUTTER = TopAppBarDefaults.TitlePadding
-
-/**
- * Where a custom leading mark stands.
- *
- * The library's gutter is the *title's* box, not a control's: a button placed
- * there would put its own 12dp of internal padding on top of 26dp and leave the
- * glyph floating. Six puts a 48dp button's centre at 30dp from the edge — about
- * where the platform's own bars draw one — and [NAV_ICON_GAP] then puts the title
- * at 60dp, which is the space the reference drawing gives the pair.
- */
-private val TITLE_GUTTER_CUSTOM = 6.dp
-
-/** The air between a custom leading mark and the title beside it. */
-private val NAV_ICON_GAP = 6.dp
 
 /** The air between a left-aligned title and the first action icon. */
 private val ACTION_GAP = 8.dp

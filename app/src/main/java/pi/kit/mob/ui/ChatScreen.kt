@@ -1,6 +1,7 @@
 package pi.kit.mob.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.ClipData
 import android.content.Context
 import android.content.pm.PackageManager
@@ -19,7 +20,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -30,6 +34,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,10 +42,16 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -97,6 +108,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -127,6 +139,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -824,6 +837,11 @@ internal fun ChatScreen(
                     onStart = {
                         drawerJob?.cancel()
                         historyReachable = true
+                        // The root's caption hides from the first frame of the gesture
+                        // rather than at its end: it is composed above the drawer, and a
+                        // caption left floating over a panel being pulled out is the one
+                        // piece of the page that would not get out of the way.
+                        onHistoryOpenChange(true)
                     },
                     // Rightward is positive in Compose's coordinates and rightward is
                     // what pulls the drawer out, so the number grows by the delta itself.
@@ -1160,6 +1178,182 @@ internal fun ChatScreen(
  * took the state could never be skipped and would re-run for every token, while the
  * two things it draws change once per conversation and once per process lifecycle.
  */
+/**
+ * The chat page's bar, as the reference draws it: two floating capsules and a name.
+ *
+ * A circle at the leading edge holds the drawer's mark; the app's name stands on the page
+ * itself, not in a frame; and the three marks at the trailing edge share one pill. None of
+ * them has a bar behind it — what is behind them is the transcript, faded out by
+ * [FADE_TAIL]'s gradient — which is the whole of the difference between this and the
+ * opaque strip a `PiPage` would draw.
+ *
+ * The capsules are `surfaceContainer`, the same raised role the composer's field and the
+ * answer cards use: a control that floats over the page is the same object whether it
+ * holds text or a glyph.
+ */
+@Composable
+private fun ChatHeader(
+    title: String,
+    onOpenSessions: () -> Unit,
+    onOpenTerminal: () -> Unit,
+    onOpenFiles: () -> Unit,
+    onNewSession: () -> Unit,
+    text: Strings,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(HEADER_MARK_SIZE)
+                .clip(CircleShape)
+                .background(PiTone.inset())
+                .clickable(onClick = onOpenSessions),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = DrawerGlyph,
+                contentDescription = text.chat.sessions,
+                tint = MiuixTheme.colorScheme.onSurface,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MiuixTheme.textStyles.title3,
+            fontWeight = FontWeight.Medium,
+            color = MiuixTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(PiTone.inset())
+                .padding(horizontal = 2.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Three marks, in the order the reference drawing has them: the shell the
+            // agent drives, the files it changed, then a new conversation — the last one
+            // is the circled plus, because that is the one control here that makes
+            // something rather than opening something.
+            HeaderMark(TerminalGlyph, text.header.terminal, onOpenTerminal)
+            HeaderMark(MiuixIcons.Folder, text.header.files, onOpenFiles)
+            HeaderMark(MiuixIcons.AddCircle, text.chat.newSession, onNewSession)
+        }
+    }
+}
+
+/** One mark inside the trailing pill. */
+@Composable
+private fun HeaderMark(
+    glyph: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(HEADER_MARK_SIZE)) {
+        Icon(
+            imageVector = glyph,
+            contentDescription = description,
+            tint = MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+/**
+ * Back from the conversation.
+ *
+ * The page is the app's root, so a back press has nothing to go back *to* — and the
+ * platform's left-edge gesture is exactly where a thumb lands when it means to open a
+ * drawer from the left. Measured on the emulator with gesture navigation: the activity
+ * was finished by a left-edge swipe and the launcher appeared, which reads as the app
+ * crashing to black. The first press therefore arms and says so, and a second within
+ * [EXIT_ARM_MILLIS] leaves the app — the convention every Chinese phone app uses, and one
+ * that makes an accidental edge swipe a sentence instead of an exit.
+ */
+@Composable
+private fun ExitBackHandler() {
+    val context = LocalContext.current
+    val toasts = LocalPiToast.current
+    val text = strings
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(armed) {
+        if (armed) {
+            delay(EXIT_ARM_MILLIS)
+            armed = false
+        }
+    }
+    BackHandler(enabled = true) {
+        if (armed) {
+            armed = false
+            (context as? Activity)?.finish()
+        } else {
+            armed = true
+            toasts?.show(text.chat.exitHint)
+        }
+    }
+}
+
+/**
+ * The drawer's mark: a long line over a short one, left-aligned.
+ *
+ * The reference draws the drawer's handle this way — two strokes of unequal length, which
+ * is what makes it read as a list rather than as a hamburger. Miuix has no such glyph
+ * (its `ListView` is three bullets and three rules, its `Sidebar` a framed panel), so this
+ * is the second *navigation* mark drawn for this app beside the terminal's: two strokes,
+ * the library's line weight, no fill.
+ */
+private val DrawerGlyph: ImageVector by lazy {
+    val stroke = SolidColor(Color.Black)
+    ImageVector.Builder(
+        name = "Drawer",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = stroke,
+            strokeLineWidth = 1.9f,
+            strokeLineCap = StrokeCap.Round,
+        ) {
+            moveTo(4.5f, 9.4f)
+            lineTo(19.5f, 9.4f)
+        }
+        path(
+            stroke = stroke,
+            strokeLineWidth = 1.9f,
+            strokeLineCap = StrokeCap.Round,
+        ) {
+            moveTo(4.5f, 14.6f)
+            lineTo(12.5f, 14.6f)
+        }
+    }.build()
+}
+
+/** The chat page's bar height, without the status bar: 44dp of capsule plus its margins. */
+private val HEADER_CLEARANCE = 56.dp
+
+/** How much of the fade is solid, as a share of the whole: enough to hide the bar's row. */
+private const val FADE_SOLID = 0.76f
+
+/** How far the fade reaches below the bar before it is fully transparent. */
+private val FADE_TAIL = 26.dp
+
+/** One mark's box in the header, capsule and glyph alike. */
+private val HEADER_MARK_SIZE = 44.dp
+
+/** How long a first back press stays armed. */
+private const val EXIT_ARM_MILLIS = 2000L
+
 @Composable
 private fun ChatPage(
     session: PiAgentSession,
@@ -1286,64 +1480,22 @@ private fun ChatPage(
         listState.scrollToItem(0)
     }
 
-    PiPage(
-        // The root left-aligns its title: the bar's trailing edge now carries three
-        // marks, and the library centres a title between the two ends, so a centred one
-        // would be pushed off centre by exactly their width. See `PiPage`'s *Why a root
-        // can be left-aligned*.
-        alignStart = true,
-        // The app's name, not the conversation's. What the bar is for now is saying
-        // where you are in the app, and the page below it is the answer to "which
-        // conversation" — the drawer is where a conversation is *named*, and its list
-        // highlights the one on screen. A derived title here was also the one thing on
-        // the bar that changed while the reader watched it, whenever a first message
-        // became the conversation's name.
-        title = text.root.appName,
-        navigationIcon = {
-            IconButton(onClick = onOpenSessions) {
-                Icon(
-                    imageVector = MiuixIcons.Sidebar,
-                    contentDescription = text.chat.sessions,
-                    tint = MiuixTheme.colorScheme.onSurface,
-                )
-            }
-        },
-        actions = {
-            // Three marks, in the order the reference drawing has them: the shell the
-            // agent drives, the files it changed, then a new conversation — the last one
-            // is the circled plus, because that is the one control here that makes
-            // something rather than opening something.
-            IconButton(onClick = onOpenTerminal) {
-                Icon(
-                    imageVector = TerminalGlyph,
-                    contentDescription = text.header.terminal,
-                    tint = MiuixTheme.colorScheme.onSurface,
-                )
-            }
-            IconButton(onClick = onOpenFiles) {
-                Icon(
-                    imageVector = MiuixIcons.Folder,
-                    contentDescription = text.header.files,
-                    tint = MiuixTheme.colorScheme.onSurface,
-                )
-            }
-            IconButton(onClick = onNewSession) {
-                Icon(
-                    imageVector = MiuixIcons.AddCircle,
-                    contentDescription = text.chat.newSession,
-                    tint = MiuixTheme.colorScheme.onSurface,
-                )
-            }
-        },
-    ) { pagePadding ->
+    // The page, and the layer its bar floats on.
+    //
+    // The reference draws the top of the screen as a *surface* the conversation runs
+    // under: two capsules holding the marks, the app's name between them, and the top of
+    // the transcript fading into the background behind them. A `PiPage` bar is the
+    // opposite of that — an opaque strip that pushes the content down — so this page
+    // draws its own frame: the transcript fills the window, a gradient covers its first
+    // stretch, and the marks sit on the gradient.
+    val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
+    val headerSpace = topInset + HEADER_CLEARANCE
+    ExitBackHandler()
+
+    Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxSize()
-                // The page's own insets: the top bar's height at the top and the
-                // navigation strip at the bottom. Applied here rather than to the
-                // transcript alone, so the composer ends above the strip instead of
-                // under it.
-                .padding(pagePadding)
                 // Tapping anywhere that is not a control gives up the composer's
                 // focus, and clearing focus is what closes the text toolbar — the
                 // floating "粘贴 / 全选" strip Compose shows over a long-pressed field.
@@ -1479,7 +1631,13 @@ private fun ChatPage(
                                 contentPadding = PaddingValues(
                                     start = TRANSCRIPT_GUTTER,
                                     end = TRANSCRIPT_GUTTER,
-                                    top = 10.dp,
+                                    // The bar floats over the list, so the list starts
+                                    // *under* it: this is the clearance that keeps a
+                                    // restored conversation's first row off the capsules,
+                                    // and it is content padding rather than a margin for
+                                    // the reason a scroll must still be able to put that
+                                    // row under the fade.
+                                    top = 10.dp + headerSpace,
                                     // One line of the body style's air, and nothing
                                     // else: the composer is a band in this page's
                                     // column now rather than a panel over the list, so
@@ -1633,6 +1791,22 @@ private fun ChatPage(
                         )
                     }
                 }
+                // The last rows fade under the composer's edge rather than being cut by
+                // it. Drawn inside the transcript's own box, so it ends exactly where the
+                // band begins and the band's own gradient continues the same surface: two
+                // gradients, one seam, none visible.
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(BAND_FADE)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                1f to MiuixTheme.colorScheme.surface,
+                            ),
+                        ),
+                )
             }
 
             // The notices and the composer, under the transcript in the page's own
@@ -1755,24 +1929,34 @@ private fun ChatPage(
                 },
             )
 
-            // What the agent is doing, in the one line the reference drawing keeps under
-            // the composer. It is *always* here — the line is part of the page's frame
-            // rather than a message that appears with news, so the composer never moves
-            // when the agent starts or stops, and "ready" is said out loud instead of
-            // being the absence of a sentence.
-            Text(
-                text = agentSubtitle(agent, text),
-                style = MiuixTheme.textStyles.footnote1,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 24.dp, end = 24.dp)
-                    .padding(bottom = 6.dp),
-            )
         }
+
+        // The conversation fades out under the bar rather than being cut by it: a hard
+        // edge there is the seam the reference drawing spends the whole top of the screen
+        // hiding. Drawn over the transcript and under the marks, so a row scrolling up
+        // dissolves into the page instead of colliding with a capsule.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(headerSpace + FADE_TAIL)
+                .background(
+                    Brush.verticalGradient(
+                        0f to MiuixTheme.colorScheme.surface,
+                        FADE_SOLID to MiuixTheme.colorScheme.surface,
+                        1f to Color.Transparent,
+                    ),
+                ),
+        )
+
+        ChatHeader(
+            title = text.root.appName,
+            onOpenSessions = onOpenSessions,
+            onOpenTerminal = onOpenTerminal,
+            onOpenFiles = onOpenFiles,
+            onNewSession = onNewSession,
+            text = text,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 
@@ -2435,7 +2619,7 @@ private fun noticeLines(message: String): String {
 }
 
 /** The agent's state, in one line. Never blank: the subtitle slot is always there. */
-private fun agentSubtitle(agent: AgentStatus, text: Strings): String = when (agent) {
+internal fun agentSubtitle(agent: AgentStatus, text: Strings): String = when (agent) {
     is AgentStatus.Running -> text.chat.agentReady
     is AgentStatus.Starting -> text.chat.agentStarting
     // The failure message is pi's own stderr and can be several lines; the first
@@ -3438,18 +3622,20 @@ private fun AssistantBlock(
 /** How many lines the field grows to before it scrolls inside itself. */
 private const val COMPOSER_MAX_LINES = 8
 
+/** How much of the composer band is solid before the fade begins, as a share of it. */
+private const val BAND_SOLID = 0.35f
+
 /**
- * The composer's corner, and only the composer's.
+ * The room under the composer's frame: the agent's state line and its margins.
  *
- * `PiCorner.radius` is the app's one card radius (20dp), and the composer used to be a
- * card like the rest. It is not one: the reference drawing makes the field the largest
- * and softest object on the page, and at 28dp on a two-row-tall box (~96dp) the corner
- * reads as a rounded capsule without being one — the shape stays a rectangle with soft
- * corners however many lines the draft grows to, which is the property that keeps a long
- * draft from becoming a badly drawn pill. The field inside states the same number so the
- * two corners are one corner.
+ * The line is drawn by the root at the window's bottom edge, so this is the space it needs
+ * between the frame and the gesture strip — the composer's own 10dp of air plus the ~12dp
+ * the caption occupies.
  */
-private val COMPOSER_CORNER = 28.dp
+private val COMPOSER_FOOT = 26.dp
+
+/** How far the transcript fades out above the composer's edge. */
+private val BAND_FADE = 30.dp
 
 /**
  * The field's own inset: 14dp beside the text and 12dp above and below it.
@@ -3654,24 +3840,35 @@ private fun Composer(
     // `WindowInsets.ime`, `WindowInsets.navigationBars` — was needed only by the gap that
     // used to shrink after the keyboard had gone.
 
-    // The band: full bleed, in the page's column, on **`surface`** — the colour the tab
-    // strip and the root scaffold behind it are painted in, so the foot of the page is
-    // one continuous surface from the transcript's end to the navigation bar and the two
-    // meet at no seam at all.
+    // Whether the keyboard is up. One boolean read, at the two places the band would
+    // otherwise reserve room for things the keyboard already covers.
+    @OptIn(ExperimentalLayoutApi::class)
+    val keyboardUp = WindowInsets.isImeVisible
+
+    // The band: full bleed, in the page's column, and **transparent at its top edge**.
     //
-    // It used to be `surfaceContainer` (white) on a `surface` page, which made the band a
-    // raised white box under a grey one: two different greys meeting at a horizontal line
-    // that ran the width of the screen, with the tab strip below it back on the page's
-    // own grey. That is the seam — and the reason the field inside the band no longer
-    // needs a fill of its own to be seen: the band is the page, and the composer's frame
-    // is the one raised object on it.
-    //
-    // There is no shadow and no hairline: the composer's own white frame against this
-    // grey *is* the boundary, and a drawn line here would compete with the transcript's
-    // own dividers (§7.1 has the measurement that settled that).
-    Surface(
-        color = MiuixTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth(),
+    // The reference drawing has no bar above the field: the chips and the input float on
+    // the page and the conversation dissolves under them. That is what this is — a
+    // gradient from nothing at the top to `surface` where the field starts, so the last
+    // rows of the transcript fade out instead of being cut by a slab. Everything inside
+    // sits on the opaque part of the gradient or has a surface of its own (the chips and
+    // the field do), which is why the transparency costs no legibility.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    BAND_SOLID to MiuixTheme.colorScheme.surface,
+                    1f to MiuixTheme.colorScheme.surface,
+                ),
+            )
+            // The page ends at the window's edge now that no bar is below it, so the
+            // gesture strip's inset is the band's own — but only while the keyboard is
+            // down. With the keyboard up the page already ends at its top edge, and the
+            // strip's inset would become a 48px hole above the keys; measured, that hole
+            // plus the caption's room was 116px of empty page under the field.
+            .then(if (keyboardUp) Modifier else Modifier.navigationBarsPadding()),
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
@@ -3993,14 +4190,14 @@ private fun Composer(
             // navigation bar and the two no longer meet at a seam.
             Surface(
                 color = MiuixTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(COMPOSER_CORNER),
+                shape = RoundedCornerShape(PiCorner.radius),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
-                        cornerRadius = COMPOSER_CORNER,
+                        cornerRadius = PiCorner.radius,
                         value = value,
                         onValueChange = onValueChange,
                         modifier = Modifier
@@ -4340,11 +4537,12 @@ private fun Composer(
                 }
             }
 
-            // The air below the frame, constant: see [COMPOSER_IME_GAP]. It used to be
-            // a layout-phase read of the keyboard's inset, which is why this column's
-            // measurement is worth stating — a value that changed per frame was also a
-            // *second* motion at the end of the keyboard's close, and it is gone with it.
-            Spacer(Modifier.fillMaxWidth().height(COMPOSER_IME_GAP))
+            // The air below the frame, and the room the agent's state line needs under
+            // it. The line itself is drawn by the root at the *window's* bottom edge, not
+            // here: it is a caption about the app, it stays put when the keyboard opens
+            // (the keyboard covers it), and a line that travelled with the page would be
+            // the one piece of the frame that moved. See `RootContent`.
+            Spacer(Modifier.fillMaxWidth().height(if (keyboardUp) COMPOSER_IME_GAP else COMPOSER_FOOT))
         }
     }
 }

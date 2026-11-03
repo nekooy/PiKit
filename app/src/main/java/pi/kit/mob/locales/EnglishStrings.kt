@@ -12,6 +12,7 @@ internal object EnglishStrings : Strings {
     }
 
     override val chat = object : Strings.Chat {
+        override val exitHint = "Press back again to leave PiKit"
         override val newConversation = "New conversation"
         override val loadingModel = "Loading model…"
         override val noModel = "No model configured"
