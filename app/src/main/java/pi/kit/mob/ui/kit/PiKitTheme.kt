@@ -126,7 +126,7 @@ fun PiKitMiuixTheme(
  * the last 20% lets a row that has slid underneath show as a ghost through the capsule,
  * which is what says the control is above the page rather than painted on it. The dark
  * scheme's [GLASS_DARK_ALPHA] is the same idea inverted: 10% of white lifts black to
- * #1A1A1A and the #242424 card to #3A3A3A, which is the reference's own #262626 capsule
+ * #242424 and the #2A2A2A card to #454545, which is the reference's own #262626 capsule
  * against its #171717 page.
  *
  * ## What it is not
@@ -268,7 +268,7 @@ private const val DARK_BASE_LUMINANCE = 0.2f
 private const val GLASS_LIGHT_ALPHA = 0.80f
 
 /** White's share of the dark scheme's floating fill. */
-private const val GLASS_DARK_ALPHA = 0.10f
+private const val GLASS_DARK_ALPHA = 0.14f
 
 private const val INSET_ALPHA = 0.10f
 
