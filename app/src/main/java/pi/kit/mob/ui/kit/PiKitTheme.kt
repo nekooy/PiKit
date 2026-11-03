@@ -5,8 +5,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -149,7 +152,25 @@ object PiGlass {
 
     /** The lift under a floating control, which is what makes a glass fill read as glass. */
     val elevation: Dp = 5.dp
+
 }
+
+/**
+ * The lift under a floating control, as a layer of its own.
+ *
+ * **Not `Modifier.shadow`.** On this stack that modifier's shadow does not follow the
+ * shape it is given: a circle's shadow was drawn as a squircle, so a translucent capsule
+ * showed the shadow's own silhouette inside it — a white block with grey corners, measured
+ * at the chat bar's leading capsule, which is exactly what a reader described as "there is
+ * a white block in the button". A `graphicsLayer` with the same shape and
+ * `shadowElevation` draws the shadow the shape describes, and it is one line.
+ */
+fun Modifier.glassLift(shape: Shape, elevation: Dp = PiGlass.elevation): Modifier =
+    graphicsLayer {
+        this.shape = shape
+        clip = false
+        shadowElevation = elevation.toPx()
+    }
 
 object PiTone {
 

@@ -99,7 +99,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
@@ -189,6 +188,7 @@ import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiGlass
+import pi.kit.mob.ui.kit.glassLift
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
@@ -823,16 +823,73 @@ internal fun ChatScreen(
                 }
             },
     ) {
+        // Composed only while it is on screen: the list scans the session directory, and
+        // doing that behind every conversation would be a cost paid on every chat frame
+        // for a page the reader is not looking at.
+        if (historyReachable) {
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .width(with(LocalDensity.current) { drawerWidth.toDp() })
+                    // No shadow of its own and no offset: the panel is a surface the
+                    // card has *uncovered*, so the depth belongs to the card's edge, and
+                    // a panel that slides as well would be two things moving for one
+                    // gesture.
+                    .background(MiuixTheme.colorScheme.surface)
+                    // The way out, from the page the drawer is next to as well as from the
+                    // conversation: once the panel is out, its own width is where the
+                    // thumb is, and dragging it left is the same gesture that closes it.
+                    .pageDrag(
+                        width = drawerWidth,
+                        onStart = { drawerJob?.cancel() },
+                        onDrag = { delta ->
+                            drawerOffset =
+                                (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
+                        },
+                        onRelease = { distance, velocity, minFling ->
+                            settlePage(commitPage(distance, velocity, minFling))
+                        },
+                    ),
+            ) {
+                SessionsScreen(
+                    session = session,
+                    onBack = { settlePage(0f) },
+                    onOpened = { settlePage(0f) },
+                    onOpenConversation = onOpenConversation,
+                    onOpenSettings = onOpenSettings,
+                    currentPath = state.sessionFile,
+                )
+            }
+        }
+
+        // The card, over the panel.
         Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    translationX = pageWidth * CHAT_SHIFT * drawerPos
+                    // The card travels exactly the drawer's width, so its leading edge
+                    // lands on the panel's: the reveal is the same distance the page
+                    // moved, which is what makes the pair read as one gesture.
+                    translationX = drawerOffset
                     val scale = 1f - CHAT_SHRINK * drawerPos
                     scaleX = scale
                     scaleY = scale
                     transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    // Rounded and lifted only while it is a card. At rest the page is the
+                    // window, and a corner radius there would cut the screen.
+                    shape = RoundedCornerShape(PAGE_CARD_CORNER)
+                    clip = drawerPos > 0f
+                    shadowElevation = 6.dp.toPx() * drawerPos
                 }
+                // After the layer, so the fill travels with the card. Before it, the
+                // background is painted at the layer's *untranslated* position: measured
+                // mid-drag, the page's own surface covered the panel the card had just
+                // uncovered, and the drawer was in the tree and invisible.
+                //
+                // And opaque, which it has to be: the page's top and bottom are gradients
+                // into `surface`, so with the panel behind them those gradients would
+                // dissolve into the conversation list instead of into the page.
+                .background(MiuixTheme.colorScheme.surface)
                 .pageDrag(
                     width = drawerWidth,
                     onStart = {
@@ -947,15 +1004,15 @@ internal fun ChatScreen(
             )
         }
 
-        // The scrim: every touch that is not on the panel lands here, so a tap beside the
-        // list closes it and the conversation behind the dim cannot be typed into through
-        // it. Drawn between the two, which is also what makes the panel the only thing
-        // above the dim.
+        // The card's own surface takes every touch while it is out — a tap on it closes
+        // the drawer, and a leftward drag is the same gesture that closes it. Composed
+        // over the card and starting where the card does, so the panel beside it keeps its
+        // own rows, its own taps and its own drag.
         if (drawerPos > 0f) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = SCRIM_ALPHA * drawerPos))
+                    .offset { IntOffset(drawerOffset.roundToInt(), 0) }
                     .pointerInput(drawerWidth) {
                         detectTapGestures { settlePage(0f) }
                     }
@@ -973,52 +1030,7 @@ internal fun ChatScreen(
             )
         }
 
-        // Composed only while it is on screen: the list scans the session directory, and
-        // doing that behind every conversation would be a cost paid on every chat frame
-        // for a page the reader is not looking at.
-        if (historyReachable) {
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .width(with(LocalDensity.current) { drawerWidth.toDp() })
-                    // A hair of shadow on the panel's trailing edge, which is what makes
-                    // the page behind read as *under* it rather than beside it. The one
-                    // shadow in the app besides the settings pill's, and for the same
-                    // reason: a surface that floats over another one says so.
-                    .shadow(10.dp, RectangleShape, clip = false)
-                    // The box that carries the shadow has to paint something: the panel's
-                    // own `Surface` is inside it, and a shadow cast by a transparent box
-                    // is no shadow at all — measured, the first attempt left the edge a
-                    // hard line with the dimmed page flush against it.
-                    .background(MiuixTheme.colorScheme.surface)
-                    .offset { IntOffset((drawerOffset - drawerWidth).roundToInt(), 0) }
-                    // The way out, from the page the drawer is next to as well as from the
-                    // conversation: once the panel is out, its own width is where the
-                    // thumb is, and dragging it left is the same gesture that closes it.
-                    .pageDrag(
-                        width = drawerWidth,
-                        onStart = { drawerJob?.cancel() },
-                        onDrag = { delta ->
-                            drawerOffset =
-                                (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
-                        },
-                        onRelease = { distance, velocity, minFling ->
-                            settlePage(commitPage(distance, velocity, minFling))
-                        },
-                    ),
-            ) {
-                SessionsScreen(
-                    session = session,
-                    onBack = { settlePage(0f) },
-                    onOpened = { settlePage(0f) },
-                    onOpenConversation = onOpenConversation,
-                    onOpenSettings = onOpenSettings,
-                    currentPath = state.sessionFile,
-                )
-            }
-        }
     }
-
     // The same question for a workspace switch: pi's working directory is fixed at
     // launch, so the switch is a relaunch, and a relaunch ends the answer in flight.
     PiConfirm(
@@ -1209,13 +1221,13 @@ private fun ChatHeader(
             // the reference's handle is clear of the clock's own line rather than tucked
             // under it, and 22dp is what puts its top edge where the drawing has it.
             .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
-            .padding(start = 12.dp, end = 12.dp, top = 30.dp, bottom = 8.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 22.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(HEADER_MARK_SIZE)
-                .shadow(PiGlass.elevation, CircleShape, clip = false)
+                .glassLift(CircleShape)
                 .clip(CircleShape)
                 .background(PiGlass.fill())
                 .clickable(onClick = onOpenSessions),
@@ -1241,7 +1253,7 @@ private fun ChatHeader(
         val trailingShape = RoundedCornerShape(percent = 50)
         Row(
             modifier = Modifier
-                .shadow(PiGlass.elevation, trailingShape, clip = false)
+                .glassLift(trailingShape)
                 .clip(trailingShape)
                 .background(PiGlass.fill())
                 .padding(horizontal = 4.dp, vertical = 2.dp),
@@ -1350,10 +1362,10 @@ private val DrawerGlyph: ImageVector by lazy {
 private val HEADER_CLEARANCE = 86.dp
 
 /** How much of the fade is solid, as a share of the whole: enough to hide the bar's row. */
-private const val FADE_SOLID = 0.76f
+private const val FADE_SOLID = 0.80f
 
 /** How far the fade reaches below the bar before it is fully transparent. */
-private val FADE_TAIL = 26.dp
+private val FADE_TAIL = 34.dp
 
 /** One mark's box in the header, capsule and glyph alike. */
 private val HEADER_MARK_SIZE = 48.dp
@@ -1762,6 +1774,7 @@ private fun ChatPage(
                         },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
+                            .glassLift(CircleShape)
                             // Clear of the transcript's own gutter, and of the scrollbar
                             // the platform draws in the last few dp of the window: the
                             // button is drawn over the list, so it has to sit inside the
@@ -1777,7 +1790,7 @@ private fun ChatPage(
                             // for are the same shape without either of them stating a
                             // radius of its own.
                             .size(40.dp),
-                        backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                        backgroundColor = PiGlass.fill(),
                     ) {
                         Icon(
                             // An arrow, not the chevron the disclosure controls use:
@@ -1810,6 +1823,7 @@ private fun ChatPage(
                         .background(
                             Brush.verticalGradient(
                                 0f to Color.Transparent,
+                                0.55f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
                                 1f to MiuixTheme.colorScheme.surface,
                             ),
                         ),
@@ -2625,17 +2639,6 @@ private fun noticeLines(message: String): String {
     return lines.take(NOTICE_LINES).joinToString("\n") + "\u2026"
 }
 
-/** The agent's state, in one line. Never blank: the subtitle slot is always there. */
-internal fun agentSubtitle(agent: AgentStatus, text: Strings): String = when (agent) {
-    is AgentStatus.Running -> text.chat.agentReady
-    is AgentStatus.Starting -> text.chat.agentStarting
-    // The failure message is pi's own stderr and can be several lines; the first
-    // one names the cause, the rest is a stack.
-    is AgentStatus.Failed -> agent.message.lineSequence().first()
-    AgentStatus.Stopped -> text.chat.agentStopped
-}
-
-
 /**
  * The two avatars the transcript draws over its cards, or null when they are off.
  *
@@ -2931,19 +2934,15 @@ private const val DRAWER_SHARE = 0.86f
 private val DRAWER_MAX_WIDTH = 420.dp
 
 /**
- * How far the conversation moves right, and how much it shrinks, at the drawer's full
- * width.
+ * How much the card shrinks as the drawer comes out.
  *
- * The shift is not the drawer's width: the page is also scaled down, and a full shift
- * plus a scale would push the visible strip off the screen's edge. 0.18 of the screen
- * with a 6% scale leaves the scaled page's trailing edge a little inside the screen's,
- * which is the "slightly smaller, slightly to one side" the reference drawing shows.
+ * Two percent: enough to put its edges inside the window's, which is what reads as "this
+ * is a card now"; not enough to be noticed as a zoom.
  */
-private const val CHAT_SHIFT = 0.18f
-private const val CHAT_SHRINK = 0.06f
+private const val CHAT_SHRINK = 0.02f
 
-/** How dark the conversation goes behind the drawer, at full width. */
-private const val SCRIM_ALPHA = 0.32f
+/** The radius the conversation is cut with while it is a card over the drawer. */
+private val PAGE_CARD_CORNER = 24.dp
 
 private const val PROMPT_MAX_SHARE = 0.86f
 
@@ -3630,7 +3629,10 @@ private fun AssistantBlock(
 private const val COMPOSER_MAX_LINES = 8
 
 /** How much of the composer band is solid before the fade begins, as a share of it. */
-private const val BAND_SOLID = 0.35f
+private const val BAND_SOLID = 0.22f
+
+/** Where the band's ramp is already mostly solid. */
+private const val BAND_MID = 0.56f
 
 /**
  * The room under the composer's frame: the agent's state line and its margins.
@@ -3639,10 +3641,10 @@ private const val BAND_SOLID = 0.35f
  * between the frame and the gesture strip — the composer's own 10dp of air plus the ~12dp
  * the caption occupies.
  */
-private val COMPOSER_FOOT = 26.dp
+private val COMPOSER_FOOT = 10.dp
 
 /** How far the transcript fades out above the composer's edge. */
-private val BAND_FADE = 30.dp
+private val BAND_FADE = 40.dp
 
 /**
  * The field's own inset: 14dp beside the text and 12dp above and below it.
@@ -3866,7 +3868,8 @@ private fun Composer(
             .background(
                 Brush.verticalGradient(
                     0f to Color.Transparent,
-                    BAND_SOLID to MiuixTheme.colorScheme.surface,
+                    BAND_SOLID to MiuixTheme.colorScheme.surface.copy(alpha = 0.34f),
+                    BAND_MID to MiuixTheme.colorScheme.surface.copy(alpha = 0.72f),
                     1f to MiuixTheme.colorScheme.surface,
                 ),
             )
@@ -4200,7 +4203,10 @@ private fun Composer(
                 shape = RoundedCornerShape(PiCorner.radius),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 12.dp)
+                    // The field floats with the chips, not above them: one lift for
+                    // everything this page draws over the transcript.
+                    .glassLift(RoundedCornerShape(PiCorner.radius)),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
@@ -4946,7 +4952,9 @@ private fun ControlChipBase(
             // rectangle behind a pill.
             modifier = Modifier
                 .heightIn(min = CHIP_HEIGHT)
-                .shadow(PiGlass.elevation, RoundedCornerShape(percent = 50), clip = false)
+                // The same lift as the header's capsules, so the page has one kind of
+                // floating object rather than two depths of it.
+                .glassLift(RoundedCornerShape(percent = 50))
                 .clip(RoundedCornerShape(percent = 50))
                 .clickable(onClick = onClick),
             shape = RoundedCornerShape(percent = 50),

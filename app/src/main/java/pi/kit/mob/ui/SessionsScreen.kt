@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.systemBars
@@ -39,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -62,6 +65,7 @@ import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.glassLift
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
@@ -292,7 +296,12 @@ fun SessionsScreen(
                     val visiblePaths = visible.map { it.path }.toSet()
                     val allVisibleSelected =
                         visiblePaths.isNotEmpty() && visiblePaths.all { it in selected }
+                    // 36dp, not the library's 48: these three are the *same* control
+                    // the single select button was, and a row of three full-size icon
+                    // buttons beside a title wider than the title itself was the reason
+                    // the heading looked crowded rather than the reason it was useful.
                     IconButton(
+                        modifier = Modifier.size(SELECTION_BUTTON),
                         onClick = {
                             selected = if (allVisibleSelected) {
                                 selected - visiblePaths
@@ -314,6 +323,7 @@ fun SessionsScreen(
                             } else {
                                 text.sessions.selectAll
                             },
+                            modifier = Modifier.size(SELECTION_GLYPH),
                             tint = if (allVisibleSelected) {
                                 MiuixTheme.colorScheme.primary
                             } else {
@@ -322,23 +332,40 @@ fun SessionsScreen(
                         )
                     }
                     IconButton(
+                        modifier = Modifier.size(SELECTION_BUTTON),
                         onClick = {
                             deleteTargets = summaries.filter { it.path in selected }
                             deleteUp = true
                         },
                         enabled = selected.isNotEmpty(),
                     ) {
-                        Icon(MiuixIcons.Delete, contentDescription = text.sessions.deleteSelected)
+                        Icon(
+                            MiuixIcons.Delete,
+                            contentDescription = text.sessions.deleteSelected,
+                            modifier = Modifier.size(SELECTION_GLYPH),
+                        )
                     }
-                    IconButton(onClick = { exitSelection() }) {
-                        Icon(MiuixIcons.Close, contentDescription = text.sessions.cancelSelection)
+                    IconButton(
+                        modifier = Modifier.size(SELECTION_BUTTON),
+                        onClick = { exitSelection() },
+                    ) {
+                        Icon(
+                            MiuixIcons.Close,
+                            contentDescription = text.sessions.cancelSelection,
+                            modifier = Modifier.size(SELECTION_GLYPH),
+                        )
                     }
                 } else {
                     IconButton(
+                        modifier = Modifier.size(SELECTION_BUTTON),
                         onClick = { selecting = true },
                         enabled = summaries.isNotEmpty(),
                     ) {
-                        Icon(MiuixIcons.SelectAll, contentDescription = text.sessions.select)
+                        Icon(
+                            MiuixIcons.SelectAll,
+                            contentDescription = text.sessions.select,
+                            modifier = Modifier.size(SELECTION_GLYPH),
+                        )
                     }
                 }
             }
@@ -404,9 +431,13 @@ fun SessionsScreen(
                 },
             )
 
+            // The list passes under the field rather than starting beneath it: a row
+            // that has been scrolled to the top was cut by the field's own edge, which
+            // is the seam this drawer's reference drawing spends the same 16dp hiding.
+            Box(Modifier.fillMaxWidth().weight(1f)) {
             when {
                 loading -> Box(
-                    Modifier.fillMaxWidth().weight(1f),
+                    Modifier.fillMaxWidth().fillMaxHeight(),
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
@@ -416,7 +447,7 @@ fun SessionsScreen(
                 // used to say "nothing matches" for as long as the scan ran, which is
                 // a claim about a search that was still reading files.
                 searching && visible.isEmpty() -> Box(
-                    Modifier.fillMaxWidth().weight(1f),
+                    Modifier.fillMaxWidth().fillMaxHeight(),
                     contentAlignment = Alignment.Center,
                 ) {
                     SearchingNote(label = text.sessions.searching)
@@ -433,7 +464,7 @@ fun SessionsScreen(
                     } else {
                         text.sessions.searchEmptyNote
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 else -> ConversationList(
@@ -467,7 +498,20 @@ fun SessionsScreen(
                         deleteTargets = listOf(it)
                         deleteUp = true
                     },
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                )
+            }
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(LIST_FADE)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to MiuixTheme.colorScheme.surface,
+                                1f to Color.Transparent,
+                            ),
+                        ),
                 )
             }
         }
@@ -483,7 +527,7 @@ fun SessionsScreen(
             onClick = onOpenSettings,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = HEADING_GUTTER, bottom = 12.dp),
+                .padding(start = HEADING_GUTTER, bottom = 24.dp),
         )
     }
 
@@ -645,11 +689,6 @@ private fun ConversationList(
                     onTogglePin = { onTogglePin(item) },
                     onDelete = { onDelete(item) },
                 )
-            }
-            if (otherVisible.isNotEmpty()) {
-                item(key = "heading-recent") {
-                    GroupHeading(text = text.sessions.recent)
-                }
             }
         }
         groups.forEach { group ->
@@ -1303,8 +1342,15 @@ private const val DIALOG_BODY_SHARE = 0.45f
  */
 private val LIST_BOTTOM = 84.dp
 
+/** How far the drawer's list fades into the field above it. */
+private val LIST_FADE = 16.dp
+
 /** The drawer's gutter: the heading, the field and the group headings share it. */
 private val HEADING_GUTTER = 20.dp
+
+/** The selection controls in the drawer's heading, and their glyphs. */
+private val SELECTION_BUTTON = 36.dp
+private val SELECTION_GLYPH = 20.dp
 
 /** A row's corner, when it is the highlighted one. */
 private val ROW_CORNER = 14.dp
@@ -1331,7 +1377,10 @@ private fun SettingsPill(
     val shape = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
-            .shadow(8.dp, shape, clip = false)
+            // The same lift the page's capsules use, and for the same reason: see
+            // `glassLift`. The library's `Modifier.shadow` does not follow the shape it
+            // is given on this stack.
+            .glassLift(shape, 8.dp)
             .clip(shape)
             .background(MiuixTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick)
