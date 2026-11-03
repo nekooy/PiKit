@@ -1115,7 +1115,16 @@ internal fun storeProviderModels(store: File, providerId: String): Map<String, J
     storeModels(store, providerId).mapNotNull { model ->
         val id = model["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
             ?: return@mapNotNull null
-        id to modelDefinitionFacts(model)
+        // The model's own facts, plus `compat`: it is a fact about how this model's stream
+        // is shaped, and a second profile of the provider has no catalogue to inherit it
+        // from. Dropping it made a second DeepSeek profile speak the generic OpenAI
+        // dialect — `thinkingFormat`, `maxTokensField` and the assistant-reasoning rule
+        // all lost — because `DEFINITION_FACT_KEYS` is the *relay* whitelist and must not
+        // grow this key: a relay whose model id matched a catalogued one would start
+        // inheriting a dialect it never had.
+        val facts = modelDefinitionFacts(model)
+        val compat = model["compat"] as? JsonObject
+        id to if (compat == null) facts else JsonObject(facts + ("compat" to compat))
     }.toMap()
 
 /** The provider ids pi's store describes, in file order. */

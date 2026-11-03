@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -221,14 +223,16 @@ internal fun AgentPage(
                 // the app's own prompts — which a newer PiKit replaces — and the reader's,
                 // which nothing here ever writes. One row for both would make "may I edit
                 // this" and "is my text safe" the same question, and they are opposites.
+                // Read-only, and it says so in the value slot: the text is PiKit's
+                // (it names this build's prefix, its tiers and its workspace rules),
+                // and the place for the reader's own rules is the row below it. Tapping
+                // still opens the document — reading it is the point of the row — but
+                // the sheet has no field and no Save.
                 ArrowPreference(
                     title = text.settings.agentContextAuthorTitle,
                     summary = text.settings.agentContextAuthorSubtitle,
                     endActions = {
-                        SettingsValue(
-                            text.settings.agentContextInstructionsEditable,
-                            emphasised = true,
-                        )
+                        SettingsValue(text.settings.agentContextReadOnly)
                     },
                     onClick = { editingDocument = InstructionsDocument.Author },
                 )
@@ -462,7 +466,14 @@ private fun KeepAliveRow(text: Strings) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
+            // BOTH events, and that is the fix rather than belt and braces. The system
+            // dialog is another task's activity: some launchers deliver
+            // `STOP` → `START` → `RESUME` on the way back and some deliver
+            // `PAUSE` → `RESUME` only, and a grant that landed while the page was
+            // stopped is what the row has to re-read. `ON_RESUME` alone was the report
+            // "关闭电池优化之后仍然可以用" — the exemption was held and the row kept
+            // offering the ask.
+            if (event == Lifecycle.Event.ON_RESUME || event == Lifecycle.Event.ON_START) {
                 exempt = BatteryOptimisation.isExempt(context)
             }
         }
@@ -474,27 +485,35 @@ private fun KeepAliveRow(text: Strings) {
         title = text.settings.keepAliveTitle,
         summary = if (exempt) text.settings.keepAliveGranted else text.settings.keepAliveDenied,
         endActions = {
-            // Always drawn, disabled once held: a button that appeared when the exemption
-            // was missing made the section jump a button taller and then shorter again as
-            // the answer changed.
-            SettingsAction(
-                text = text.settings.keepAliveAsk,
-                onClick = { BatteryOptimisation.request(context) },
-                enabled = !exempt,
-            )
+            // Drawn only while the exemption is missing. It used to be drawn always and
+            // disabled once held — which is a button that still exists on screen for a
+            // decision that has already been made, and the exemption is not something
+            // there is any reason to ask for twice. The row's subtitle is what reports
+            // the state once it is held, so nothing is lost by the button going away.
+            if (!exempt) {
+                SettingsAction(
+                    text = text.settings.keepAliveAsk,
+                    onClick = { BatteryOptimisation.request(context) },
+                )
+            }
         },
     )
 }
 
 /**
- * The editor for the global `AGENTS.md`, over the page.
+ * The two halves of the global `AGENTS.md`, over the page.
+ *
+ * One sheet with two modes. The app's half ([InstructionsDocument.Author]) is a
+ * *document to read*: it is PiKit's, rewritten from this build on every launch, and
+ * the row that opens it says "read-only". The reader's half is an editor, unchanged in
+ * what it promises — nothing in this app ever writes it.
  *
  * ## Its own draft
  *
- * The text is read once when the sheet opens and kept in the composition: the file is
- * the user's and re-reading it under their cursor would delete keystrokes. Nothing
- * else in the app writes it either — [AgentContext] writes it only when it is missing
- * — so there is no "the file changed underneath" state to handle.
+ * The reader's text is read once when the sheet opens and kept in the composition:
+ * the file is theirs and re-reading it under their cursor would delete keystrokes.
+ * Nothing else in the app writes it either, so there is no "the file changed
+ * underneath" state to handle.
  *
  * ## Why a save restarts the agent
  *
@@ -502,12 +521,13 @@ private fun KeepAliveRow(text: Strings) {
  * change the model does not see until the next launch. Saying "restart the agent
  * yourself" would leave the sentence the user just wrote unread, which is worse than
  * a restart they did not ask for: the same trade the storage page already makes.
+ * Every live conversation restarts, because the file is global.
  *
  * ## No close button, in the title or in the footer
  *
  * The sheet's title is Miuix's own and has no action slot, and the panel is dismissible
  * three ways that need no control at all: the scrim, a downward drag and back. What is
- * left in the footer is the two buttons that *change* the file.
+ * left in the footer is the one button that *changes* the file.
  *
  * ## Why the field is Miuix's field with its own style
  *
@@ -542,13 +562,12 @@ private fun InstructionsEditor(
     }
     var saved by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
-    var confirmRestore by remember { mutableStateOf(false) }
 
     Column(
         Modifier
             .fillMaxWidth()
             // Scrollable, and that is what makes the panel survive a keyboard: a
-            // 240-440dp field plus two buttons against a window that just lost 300dp
+            // 240-440dp field plus a button against a window that just lost 300dp
             // would be *clipped* — the buttons and the bottom of the document
             // unreachable — so it scrolls instead, and it does not scroll at all while
             // everything fits.
@@ -566,39 +585,53 @@ private fun InstructionsEditor(
             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
         )
 
-        TextField(
-            cornerRadius = PiCorner.radius,
-            value = draft,
-            onValueChange = {
-                draft = it
-                saved = false
-                failed = false
-            },
-            // Monospace and small, like the web-search document editor and for the same
-            // reason: this is a document the model reads, its structure is headings and
-            // bullets, and a proportional face hides that.
-            textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Ascii,
-                // A Markdown document: an autocorrected command in a bullet is a
-                // sentence that tells the agent to run something that does not exist.
-                autoCorrectEnabled = false,
-            ),
-            maxLines = Int.MAX_VALUE,
-            // No focus ring, and the caret stated instead: see `piFieldColors`.
-            colors = piFieldColors(),
-            cursorBrush = piFieldCursor(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
-        )
+        if (document == InstructionsDocument.Author) {
+            // The app's half is read, never edited: it is PiKit's text and a newer
+            // build replaces it. A field here would be a control that silently loses
+            // its answer on the next launch.
+            SelectionContainer {
+                Text(
+                    text = draft,
+                    style = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
+                    color = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT)
+                        .verticalScroll(rememberScrollState()),
+                )
+            }
+        } else {
+            TextField(
+                cornerRadius = PiCorner.radius,
+                value = draft,
+                onValueChange = {
+                    draft = it
+                    saved = false
+                    failed = false
+                },
+                // Monospace and small, like the web-search document editor and for the same
+                // reason: this is a document the model reads, its structure is headings and
+                // bullets, and a proportional face hides that.
+                textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Ascii,
+                    // A Markdown document: an autocorrected command in a bullet is a
+                    // sentence that tells the agent to run something that does not exist.
+                    autoCorrectEnabled = false,
+                ),
+                maxLines = Int.MAX_VALUE,
+                // No focus ring, and the caret stated instead: see `piFieldColors`.
+                colors = piFieldColors(),
+                cursorBrush = piFieldCursor(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
+            )
+        }
 
         // What the last press did is the app's one transient message rather than a line
         // of prose under the field, which used to stay there until the next keystroke —
-        // a sentence about an action that has already finished. The note that used to
-        // sit above the buttons — "saving restarts the agent" — is gone with it: the
-        // save *does* restart the agent (`scheduleRestart` below), so telling the reader
-        // to expect it is telling them about something they do not have to act on.
+        // a sentence about an action that has already finished.
         LaunchedEffect(failed, saved) {
             if (failed || saved) {
                 toasts?.show(
@@ -613,89 +646,46 @@ private fun InstructionsEditor(
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                // The pair splits the row — Restore, then Save — with room under them so
-                // the sheet's last control is not against the panel edge. It used to be
-                // sized to its words on the trailing edge; a sheet's footer is the same
-                // shape as a form's, so the two buttons are halves here as they are on
-                // every page that ends in a pair. There is no Cancel: the scrim, the back
-                // gesture and a downward drag all leave the sheet without saving.
-                .padding(top = 12.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        ) {
-            // Only the app's own half has a default to restore. A "restore" on the
-            // reader's document could only mean "throw my text away", which is the one
-            // thing that document exists to promise never happens.
-            if (document == InstructionsDocument.Author) {
+        if (document == InstructionsDocument.User) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // The button takes the whole row: there is one control here, and a
+                    // half-width Save with nothing bidding against it read as a choice.
+                    // There is no Cancel either: the scrim, the back gesture and a
+                    // downward drag all leave the sheet without saving.
+                    .padding(top = 12.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
                 SettingsAction(
-                    text = text.settings.agentContextRestore,
-                    onClick = { confirmRestore = true },
+                    text = text.settings.agentContextSave,
+                    onClick = {
+                        // Written first, reported after: a save that claims to have
+                        // happened and did not is the one outcome this button must not
+                        // have.
+                        val written = runCatching {
+                            file.parentFile?.mkdirs()
+                            file.writeText(draft)
+                            // The composed document is what pi reads, and pi reads it once at
+                            // startup: writing a half without recomposing leaves the running
+                            // agent — and the next launch — on the previous text.
+                            AgentContext.compose(session.env)
+                        }.isSuccess
+                        failed = !written
+                        saved = written
+                        // Every live conversation reads AGENTS.md at its own startup, so
+                        // every one of them is stale — the host's restart loop is what
+                        // reaches them (a turn in flight is waited out per conversation).
+                        if (written) session.host.restartAll()
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
-            SettingsAction(
-                text = text.settings.agentContextSave,
-                onClick = {
-                    // Written first, reported after: a save that claims to have
-                    // happened and did not is the one outcome this button must not
-                    // have.
-                    val written = runCatching {
-                        file.parentFile?.mkdirs()
-                        file.writeText(draft)
-                        // The composed document is what pi reads, and pi reads it once at
-                        // startup: writing a half without recomposing leaves the running
-                        // agent — and the next launch — on the previous text.
-                        if (document == InstructionsDocument.Author) {
-                            if (draft.isBlank()) file.writeText(AgentContext.default(session.env))
-                        }
-                        AgentContext.compose(session.env)
-                    }.isSuccess
-                    failed = !written
-                    saved = written
-                    if (written) session.scheduleRestart()
-                },
-                modifier = Modifier.weight(1f),
-            )
+        } else {
+            Spacer(Modifier.height(16.dp))
         }
     }
-
-    PiConfirm(
-        show = confirmRestore,
-        title = text.settings.agentContextRestoreTitle,
-        text = text.settings.agentContextRestoreBody,
-        confirm = text.settings.agentContextRestoreConfirm,
-        dismiss = text.common.cancel,
-        onConfirm = {
-            // The file itself, not a draft of it: this button says "restore the
-            // default", and a version that only refilled the editor would leave the file
-            // as it was until a second press of Save — which is the button beside it,
-            // not this one. The question above is what makes writing here safe.
-            //
-            // `AgentContext.default` is also what the installer writes, so this is the
-            // *initial* text rather than a second copy of it kept for this button.
-            val restored = AgentContext.default(session.env)
-            val written = runCatching {
-                file.parentFile?.mkdirs()
-                file.writeText(restored)
-            }.isSuccess
-            // The editor shows what is in the file, whether or not the write worked:
-            // leaving an unsaved draft of the default on screen after a failed write
-            // would invite a Save that appears to do nothing.
-            draft = if (written) {
-                restored
-            } else {
-                runCatching { file.readText() }.getOrDefault(restored)
-            }
-            confirmRestore = false
-            failed = !written
-            saved = written
-            if (written) session.scheduleRestart()
-        },
-        onDismiss = { confirmRestore = false },
-    )
 }
 
 /**

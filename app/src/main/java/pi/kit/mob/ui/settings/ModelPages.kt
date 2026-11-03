@@ -331,6 +331,10 @@ internal fun ModelEditPage(
     // `CustomApi.DEFAULT_ID`, which is what a profile written before the field
     // existed already did.
     var api by remember { mutableStateOf(existing?.api.orEmpty()) }
+    // The one statement about the *stream* rather than about the model: a relay that ends
+    // its answers without `finish_reason` needs pi told so, and an endpoint that does send
+    // the field must not be told (a truncated answer would read as finished).
+    var omitsFinishReason by remember { mutableStateOf(existing?.omitsFinishReason == true) }
 
     // The models this provider may answer with, and which of them the agent is
     // launched with. Held as a list rather than as one field because a provider is
@@ -735,6 +739,9 @@ internal fun ModelEditPage(
                 models = listed,
                 baseUrl = baseUrl.trim(),
                 api = if (isCustomEndpoint) api else "",
+                // Stated about the endpoint, so it travels with the profile rather than
+                // with one model's settings.
+                omitsFinishReason = omitsFinishReason,
                 // The withdrawal record follows the write, not the field: an emptied
                 // field means "use the provider's own endpoint", and the override this
                 // app last put in pi's file is what has to come out next launch. A
@@ -900,6 +907,21 @@ internal fun ModelEditPage(
                     },
                     keyboardType = KeyboardType.Uri,
                 )
+
+                // The stream's shape, for an endpoint this app named itself. A relay is
+                // the case pi cannot know about, and the symptom without this statement is
+                // `Stream ended without finish_reason` on every answer — the error is the
+                // client's, because a clean EOF and a cut socket look the same. Only shown
+                // where the answer can be different: a built-in provider on pi's own URL is
+                // pi's catalogue's business.
+                if (isCustomEndpoint || baseUrl.isNotBlank()) {
+                    SwitchPreference(
+                        title = text.settings.finishReasonTitle,
+                        summary = text.settings.finishReasonSubtitle,
+                        checked = omitsFinishReason,
+                        onCheckedChange = { omitsFinishReason = it },
+                    )
+                }
 
                 // The wire protocol, only for a custom endpoint: a built-in provider's client
                 // is pi's own and its models already name it. Offering it there would be a

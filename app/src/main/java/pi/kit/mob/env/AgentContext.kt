@@ -85,38 +85,37 @@ object AgentContext {
     fun userFile(env: TermuxEnv): File = File(env.piConfigDir, USER_FILE_NAME)
 
     /**
-     * Writes the two halves if they are missing, refreshes the app's half when this build
-     * carries a newer generation, and composes the document pi reads.
+     * Writes the app's half from this build, creates the reader's half when it is
+     * missing, and composes the document pi reads.
      *
-     * The reader's half is created empty and left alone for ever: it is theirs. The app's
-     * half is replaced when its marker is behind (see [isStaleDefault]) and kept
-     * otherwise — which is what "我改了默认提示词，你没改我的 text 就别动它" means in one
-     * rule: the generation says whether the *app's* text moved, not whether the reader
-     * edited it.
+     * ## The app's half is read-only, and this is why it is rewritten every launch
+     *
+     * It is PiKit's document: it names the prefix, the workspace rules and the three
+     * permission tiers, and it has to describe the build it ships in. Leaving it
+     * editable meant a reader could produce a file that told the model the wrong tier —
+     * which is a bug report about the app rather than a preference — and a generation
+     * marker that kept a stale copy was the same mistake with a slower clock. So it is
+     * written every launch from [default], and the place for the reader's own rules is
+     * the second half, which nothing here ever rewrites.
+     *
+     * [GENERATION] and [isStaleDefault] survive for one job: recognising the *old*
+     * single-file document an install from before the split left behind, so it can be
+     * adopted as the reader's half instead of thrown away.
      */
     fun install(env: TermuxEnv) {
         val author = authorFile(env)
         author.parentFile?.mkdirs()
-        val current = if (author.isFile) author.readText() else null
-        // A file from before the split has no author half: the old `AGENTS.md` is the
-        // reader's now, and is kept as the user half rather than thrown away.
+        // A file from before the split has no author half: the old `AGENTS.md` may be the
+        // reader's own document, which becomes their half rather than being thrown away.
         val legacy = file(env)
-        if (current == null && legacy.isFile) {
+        if (!author.isFile && legacy.isFile) {
             val old = legacy.readText()
-            if (isStaleDefault(old)) {
-                // PiKit's own earlier text: replaced, and the reader's half starts empty
-                // rather than inheriting a default they did not write.
-                author.writeText(default(env))
-            } else {
-                // Someone's own document, written when there was one file. It becomes
-                // their half; the app's half is written fresh.
+            if (!isStaleDefault(old)) {
                 val user = userFile(env)
                 if (!user.isFile) user.writeText(old)
-                author.writeText(default(env))
             }
-        } else if (current == null || isStaleDefault(current)) {
-            author.writeText(default(env))
         }
+        author.writeText(default(env))
         val user = userFile(env)
         if (!user.isFile) user.writeText("")
         compose(env)

@@ -83,7 +83,9 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.locales.stringsFor
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.pi.PiHost
 import pi.kit.mob.pi.RuntimeStatus
+import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
@@ -125,8 +127,8 @@ private enum class Destination {
 }
 
 @Composable
-fun PiKitRoot(session: PiAgentSession) {
-    val settings by session.settingsStore.settings.collectAsState()
+fun PiKitRoot(host: PiHost) {
+    val settings by host.settingsStore.settings.collectAsState()
     val language = settings.language
 
     // Applies the choice to the default locale as well as to the catalogs, so
@@ -154,14 +156,14 @@ fun PiKitRoot(session: PiAgentSession) {
             // the request had opened. Everything under `key(language)` is rebuilt when
             // the language arrives, which is exactly long enough after launch to hit
             // that window. See `PermissionPrompts`.
-            PermissionPrompts(session = session)
+            PermissionPrompts(host = host)
 
             // Keyed on the language so that switching it rebuilds every screen. The
             // catalogs are plain objects, not observable state, so without this the
             // pages that are already composed would keep the old text.
             key(language) {
                 RootContent(
-                    session = session,
+                    host = host,
                     language = language,
                     snackbar = snackbar,
                 )
@@ -208,10 +210,10 @@ private object NotificationPrompt {
  * no page to attach an overlay to yet.
  */
 @Composable
-private fun PermissionPrompts(session: PiAgentSession) {
+private fun PermissionPrompts(host: PiHost) {
     val text = strings
     val context = LocalContext.current
-    val runtime by session.runtime.collectAsState()
+    val runtime by host.runtime.collectAsState()
     val ready = runtime is RuntimeStatus.Ready
 
     var step by remember { mutableStateOf(PromptStep.None) }
@@ -329,15 +331,26 @@ private fun PermissionPrompts(session: PiAgentSession) {
 
 @Composable
 private fun RootContent(
-    session: PiAgentSession,
+    host: PiHost,
     language: Lang,
     snackbar: PiToastHost,
 ) {
-    val runtime by session.runtime.collectAsState()
+    val runtime by host.runtime.collectAsState()
+    // The conversation the screen is on. Everything below is *that* conversation's:
+    // its process, its transcript, its composer. A switch of conversation is a change
+    // of this value, and the pages below are keyed on it so the change is a rebuild of
+    // the chat page rather than a mix of two transcripts.
+    val session by host.active.collectAsState()
     val agent by session.agent.collectAsState()
     var destination by remember { mutableStateOf(Destination.Chat) }
     val scope = rememberCoroutineScope()
     val text = strings
+    // A draft, the attached images and the transcript's scroll position are per
+    // *conversation*: a draft belongs to the conversation it was typed in, and a
+    // scroll offset belongs to the transcript it was measured on. Kept above the tab
+    // crossfade so a look at the terminal does not lose either (see
+    // [ChatComposerState]), and keyed by the conversation so switching one does.
+    val composers = remember { mutableMapOf<PiAgentSession, ChatComposerState>() }
 
     // The chat page's composer, owned here rather than inside `ChatScreen`.
     //
@@ -346,7 +359,9 @@ private fun RootContent(
     // transcript's scroll position would all be destroyed by a look at the
     // terminal. Hoisted to the one scope that outlives every destination — see
     // [ChatComposerState] for why `rememberSaveable` is not the fix.
-    val composer = rememberChatComposerState()
+    val composer = remember(session) {
+        composers.getOrPut(session) { ChatComposerState() }
+    }
 
     // The conversation is *not* read here, and that is a performance decision rather
     // than a style one: a streaming answer changes it several times a second, and a
@@ -369,8 +384,16 @@ private fun RootContent(
     // Unpacking is a one-time, ~200MB operation, so it runs behind a blocking
     // gate rather than letting the user into a half-installed environment.
     LaunchedEffect(Unit) {
-        session.ensureEnvironment()
-        session.startAgent()
+        host.ensureEnvironment()
+    }
+
+    // A conversation is started when the screen first arrives on it: the one the app
+    // launched into, a new one from the composer's +, and one opened from the history
+    // list. `Stopped` is the only state that starts — `Running` and `Starting` are
+    // already what was asked for, and a `Failed` one is the reader's to retry from the
+    // Agent page rather than something to relaunch under them on every recomposition.
+    LaunchedEffect(session) {
+        if (session.agent.value is AgentStatus.Stopped) session.startAgent()
     }
 
     when (val status = runtime) {
@@ -466,6 +489,7 @@ private fun RootContent(
             when (shown) {
                 Destination.Terminal -> TerminalScreen(session = session)
                 Destination.Chat -> ChatTab(
+                    host = host,
                     session = session,
                     agent = agent,
                     composer = composer,
@@ -550,10 +574,53 @@ private fun RootContent(
  * whose scope is the page.
  */
 @Composable
-private fun ChatTab(session: PiAgentSession, agent: AgentStatus, composer: ChatComposerState) {
+private fun ChatTab(
+    host: PiHost,
+    session: PiAgentSession,
+    agent: AgentStatus,
+    composer: ChatComposerState,
+) {
     val state by session.conversation.collectAsState()
+    val text = strings
+    val toasts = LocalPiToast.current
+    val scope = rememberCoroutineScope()
+    // A conversation is opened as a *second* process, not by rebinding the one that is
+    // already here, so a tap on a conversation that is answering switches to it and
+    // leaves the answer running. The pool is bounded (PiHost.MAX_LIVE) and the refusal
+    // is a sentence rather than a silent no-op.
+    val open: (PiAgentSession.SessionSummary) -> Unit = remember(host) {
+        { summary ->
+            val opened = host.openConversation(summary.path, summary.workspace)
+            if (opened == null) toasts?.show(text.sessions.poolFull(PiHost.MAX_LIVE))
+            scope.launch { opened?.startAgent() }
+        }
+    }
+    val openNew: () -> Unit = remember(host) {
+        {
+            val opened = host.newConversation()
+            if (opened == null) {
+                toasts?.show(text.sessions.poolFull(PiHost.MAX_LIVE))
+            } else {
+                scope.launch { opened.startAgent() }
+            }
+        }
+    }
     WarmFormulaRenderer()
-    ChatScreen(session = session, agent = agent, state = state, composer = composer)
+    // Keyed on the conversation, because a switch of conversation is a different
+    // transcript and every `remember` in the page belongs to the one it was measured on —
+    // the expanded turns, the page offset, whether the history list is composed. The
+    // composer is the exception and is hoisted above this: a draft belongs to the
+    // conversation it was typed in, which is why the map keys on the session.
+    key(session) {
+        ChatScreen(
+            session = session,
+            agent = agent,
+            state = state,
+            composer = composer,
+            onOpenConversation = open,
+            onNewConversation = openNew,
+        )
+    }
 }
 
 private fun Destination.label(text: pi.kit.mob.locales.Strings): String = when (this) {

@@ -92,7 +92,7 @@ class CatalogueUpdater(private val session: PiAgentSession) {
         _status.value = CatalogueStatus.Running
         job = scope.launch {
             _status.value = try {
-                CatalogueStatus.Done(changed = session.requestCatalogueRefresh())
+                CatalogueStatus.Done(changed = session.host.requestCatalogueRefresh())
             } catch (cancellation: CancellationException) {
                 // The scope's own job, not a failure of the refresh: a throwable caught
                 // and swallowed here would leave the coroutine machinery believing a

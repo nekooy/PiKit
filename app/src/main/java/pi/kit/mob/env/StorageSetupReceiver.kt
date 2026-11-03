@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.pi.PiHost
 
 /**
  * Handles the broadcast `termux-setup-storage` sends.
@@ -20,14 +20,14 @@ class StorageSetupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ACTION || intent.getStringExtra(ACTION) != "storage") return
 
-        val session = PiAgentSession.of(context.applicationContext)
+        val host = PiHost.of(context.applicationContext)
         if (!StorageAccess.isGranted()) {
             // The command cannot raise the system page itself, so it reports
             // what is missing rather than failing silently.
             Log.w(TAG, "Storage access has not been granted; ignoring $ACTION")
             return
         }
-        session.syncStorageLinks()
+        host.syncStorageLinks()
     }
 
     private companion object {

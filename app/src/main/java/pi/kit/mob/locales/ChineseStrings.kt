@@ -219,6 +219,8 @@ internal object ChineseStrings : Strings {
     }
 
     override val sessions = object : Strings.Sessions {
+        override val running = "正在回答"
+        override fun poolFull(max: Int) = "同时最多 $max 个对话在运行，先关掉一个再开新的。"
         override val title = "历史对话"
         override val loading = "加载中…"
         override fun selected(count: Int) = "已选 $count 个"
@@ -431,18 +433,15 @@ internal object ChineseStrings : Strings {
             "当前这段会话，包括工具调用与结果，随每条消息一起发送，并写入会话文件。"
         override val agentContextInstructions = "全局 AGENTS.md"
         override val agentContextAuthorTitle = "默认提示词"
-        override val agentContextAuthorSubtitle = "PiKit 提供，可以改；PiKit 更新默认内容时会覆盖它"
+        override val agentContextAuthorSubtitle = "由 PiKit 维护：运行环境、权限分级与规则，随每个版本重写"
         override val agentContextUserTitle = "用户指令"
         override val agentContextUserSubtitle = "一开始是空的，只属于你；PiKit 永远不会改它"
         override val agentContextUserEmpty = "还是空的，点进去写"
         override val agentContextInstructionsEditable = "可编辑"
+        override val agentContextReadOnly = "只读"
         override val agentContextSave = "保存"
         override val agentContextSaved = "已保存"
         override val agentContextFailed = "保存失败，文件没有改动"
-        override val agentContextRestore = "恢复默认"
-        override val agentContextRestoreTitle = "恢复默认说明？"
-        override val agentContextRestoreBody = "文件会换回 PiKit 的初始内容，你写的内容会丢失。"
-        override val agentContextRestoreConfirm = "恢复"
 
         override val profilesTitle = "模型与供应商"
         override val profilesEmptyHint = "先保存一个配置，Pi 才能开始回答。填一个 Key、选一个模型就好。"
@@ -488,6 +487,9 @@ internal object ChineseStrings : Strings {
             "可选。留空则使用该供应商的默认地址；填写后请求会发到这个地址" +
                 "（代理/中转），例如 https://relay.example.com/v1。仅主机名时会自动补上 /v1。" +
                 "供应商列表中的「Custom endpoint」是自定义端点，可接入任意兼容中转，并支持更换 API 协议。"
+        override val finishReasonTitle = "端点不发送 finish_reason"
+        override val finishReasonSubtitle =
+            "中转站或网关的流式回答不以该字段结尾时打开。打开后 pi 自行推断结束；被截断的回答会被当作已完成。"
         override val needBaseUrl = "自定义接口需要填写基础地址。"
         override val invalidBaseUrl =
             "接口地址必须是带主机名的 http(s) 地址，例如 https://relay.example.com/v1。" +
@@ -882,6 +884,14 @@ internal object ChineseStrings : Strings {
         override val setupNote = "这一步只会执行一次。Termux、Node.js 和 Pi Agent 都从 APK 中解包，无需下载任何东西。"
         override val environmentIncomplete = "运行环境不完整"
         override val couldNotPrepare = "运行环境准备失败"
+    }
+
+    override val shade = object : Strings.Shade {
+        override val title = "PiKit"
+        override fun answering(count: Int) = if (count <= 1) "1 个对话正在回答" else "$count 个对话正在回答"
+        override val stop = "停止"
+        override val channelName = "Agent"
+        override val channelDescription = "只在 Agent 输出回答时显示。"
     }
 
     override val common = object : Strings.Common {

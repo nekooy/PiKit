@@ -152,10 +152,15 @@ tier — never "off". The rule the old switch carried is kept: a missing variabl
 be what takes a policy out of force.
 
 `AGENTS.md` is the document half (`env/AgentContext`). It describes the three tiers, the
-workspace, and the fact that an install needs `full-access`; it also carries a generation
-marker, because the previous default described the guard's rules in prose (it told the model
-a single-file delete outside the workspace was allowed, which `workspace-write` now
-refuses), and a stale default teaches the wrong rules.
+workspace, and the fact that an install needs `full-access`. It is composed from two
+halves, and the difference between them is the design: the app's half names this build's
+prefix, its tiers and its workspace rules, so it is **read-only and rewritten from
+`AgentContext.default` on every launch** — a stale or hand-edited copy teaches the wrong
+tiers, which is a bug report about the app rather than a preference. The reader's half is
+created empty, is the only place their own rules belong, and nothing in the app ever
+writes it. A generation marker survives for one job: recognising the old single-file
+document an install from before the split left behind, so it can be adopted as the
+reader's half rather than thrown away.
 
 ## The rules are tested, not trusted
 

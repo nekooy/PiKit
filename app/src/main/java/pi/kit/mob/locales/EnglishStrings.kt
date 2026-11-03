@@ -220,6 +220,8 @@ internal object EnglishStrings : Strings {
     }
 
     override val sessions = object : Strings.Sessions {
+        override val running = "Answering now"
+        override fun poolFull(max: Int) = "$max conversations can be open at once. Close one before opening another."
         override val title = "Conversations"
         override val loading = "Loading…"
         override fun selected(count: Int) = "$count selected"
@@ -452,19 +454,15 @@ internal object EnglishStrings : Strings {
                 "written to the session file."
         override val agentContextInstructions = "Global AGENTS.md"
         override val agentContextAuthorTitle = "Default instructions"
-        override val agentContextAuthorSubtitle = "Written by PiKit, editable; a newer PiKit default replaces it"
+        override val agentContextAuthorSubtitle = "Maintained by PiKit — the environment, the tiers and the rules, rewritten from each build"
         override val agentContextUserTitle = "User instructions"
         override val agentContextUserSubtitle = "Empty to begin with, and only yours; PiKit never rewrites it"
         override val agentContextUserEmpty = "Still empty — open it and write"
         override val agentContextInstructionsEditable = "Editable"
+        override val agentContextReadOnly = "Read-only"
         override val agentContextSave = "Save"
         override val agentContextSaved = "Saved"
         override val agentContextFailed = "Could not save; the file is unchanged"
-        override val agentContextRestore = "Restore the default"
-        override val agentContextRestoreTitle = "Restore the default text?"
-        override val agentContextRestoreBody =
-            "The file goes back to PiKit's initial text and what you wrote is lost."
-        override val agentContextRestoreConfirm = "Restore"
 
         override val profilesTitle = "Model & provider"
         override val profilesEmptyHint =
@@ -519,6 +517,9 @@ internal object EnglishStrings : Strings {
                 " The provider list's `Custom endpoint` row is a self-configured " +
                 "endpoint for any compatible relay, and its API protocol can be " +
                 "changed."
+        override val finishReasonTitle = "Stream ends without finish_reason"
+        override val finishReasonSubtitle =
+            "Turn on for a relay or gateway that ends its answers without that field. It makes pi infer the stop; a truncated answer would then look finished."
         override val needBaseUrl = "A custom endpoint needs its base URL."
         override val invalidBaseUrl =
             "The endpoint must be an http(s) URL with a host name, for example " +
@@ -965,6 +966,14 @@ internal object EnglishStrings : Strings {
                 "app itself — no downloads needed."
         override val environmentIncomplete = "The environment is incomplete"
         override val couldNotPrepare = "Could not prepare the environment"
+    }
+
+    override val shade = object : Strings.Shade {
+        override val title = "PiKit"
+        override fun answering(count: Int) = if (count <= 1) "1 conversation is answering" else "$count conversations are answering"
+        override val stop = "Stop"
+        override val channelName = "Agent"
+        override val channelDescription = "Shown only while the agent is writing an answer."
     }
 
     override val common = object : Strings.Common {

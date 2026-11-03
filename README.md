@@ -28,16 +28,20 @@ needed is one that can reach the model provider.
   (`Worked 47s · 5 steps`) and reopens on a tap; thinking level, model, context use and
   cache hits are chips above the input, and both switches apply without restarting the
   agent.
+- **Several conversations at once.** A conversation is its own process, so a new one
+  starts beside the answer that is still arriving and the history list is the switcher:
+  up to three live at a time, and closing one is one tap because its transcript is
+  already on disk.
 - **A terminal and a file manager.** PTY sessions that survive a tab switch, the keys a
   phone keyboard lacks, and a read-only file manager over `$HOME`: a tappable path, a
   filter and three orders, a size or entry count per row, image previews and copy-path.
 - **Providers on pi's terms.** The 34 providers pi's own key table knows, plus a custom
   endpoint; a model's context window, output limit, thinking levels and image support
   come from pi's catalogue.
-- **Storage is scoped and safe.** The grant starts empty and is opened one folder at a
-  time; a delete cannot leave the app's own data; and a **guard extension** in the agent
-  refuses a recursive delete outside `$HOME/workspace` and any rewrite of pi's own files.
-  No account, no telemetry.
+- **Storage is scoped and safe.** The workspace a conversation starts in is its write
+  boundary; every tool call is judged against a tier (read-only, workspace-write,
+  full-access) by an extension in the agent, and a delete cannot leave the app's own
+  data. No account, no telemetry.
 
 ## Install
 

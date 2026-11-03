@@ -3,33 +3,53 @@
 *[Architecture](../ARCHITECTURE.md) §10.*
 
 ```
-PiAgentSession  (process-wide singleton — the single source of truth)
-  ├─ TermuxEnv + BootstrapInstaller   first-run unpack
-  ├─ SettingsStore                    provider / model / key / cwd
+PiHost  (process-wide singleton — the app-wide half)
+  ├─ TermuxEnv + BootstrapInstaller   first-run unpack, one per app
+  ├─ SettingsStore                    provider / model / key / tier
+  ├─ TerminalSessionManager           the terminal tab's shells, and which one shows
+  ├─ model catalogue + refresh window one models-store.json, one deadline
+  └─ the pool: up to PiHost.MAX_LIVE conversations, and which one is active (§15)
+PiAgentSession  (one per live conversation)
   ├─ PiProcessLauncher → Process      `node cli.js --mode rpc ...`
   ├─ PiRpcClient                      framing, correlation, stderr, shutdown
   ├─ ConversationReducer              events → ConversationState (pure)
-  ├─ TerminalSessionManager           the terminal tab's shells, and which one shows
-  └─ StateFlow<ConversationState>     observed by Compose
-PiAgentService  (foreground service)  keeps the child alive when backgrounded
+  ├─ StateFlow<ConversationState>     observed by Compose
+  └─ StateFlow<AgentStatus>           one process's lifecycle
+PiAgentService  (foreground service)  keeps the children alive while an answer arrives
 ```
+
+The split is §15's: a fact two conversations cannot disagree about — the image, a
+setting, a shell, pi's catalogue — is the host's, and everything about one process is a
+conversation's. `PiAgentSession` keeps its public shape and delegates the shared half, so
+a screen that says `session.env` still means the one environment.
 
 The reducer is a pure function over `(ConversationState, PiRecord)`, so the state machine is
 testable on the JVM against captured wire traffic — no device, no live model. The service owns no
 state, so the UI can bind and unbind freely and a turn keeps running when you leave the app.
 
-## The keep-alive is the notification, and the notification is the system's to hide
+## The entry exists while an answer is being written, and not otherwise
 
 A foreground service exists *because* of its notification: that is the deal Android offers. What
-the app does control is *when* that entry is up. [PiAgentService] drops the shade entry the moment
-a window of the app is in front — the Activity is already keeping the process alive, and a
-persistent "agent is running" over a turn the reader is watching is noise ("去除 agent is running
-的通知"). `MainActivity.onStart`/`onStop` tell the service which side of that line the UI is on;
-the status collector keeps the claim honest on the other axis (running vs failed vs stopped).
+the app does control is *when* that entry is up, and the answer is now **only while at least one
+conversation is streaming** — `PiHost.streamingConversations` is the count, and the entry is
+dropped the moment the last answer settles ("应用在后台后的通知改为只有有 ai 在输出时才有"). A
+persistent "agent is running" between turns said nothing the reader did not know, and the turn
+that a reclaim would actually destroy is the one worth telling them about.
 
-When the entry *is* up it is silent and empty of prose: `PRIORITY_MIN`, an `IMPORTANCE_MIN` channel
-with no sound or badge, and no title. It is the price of the foreground claim, not an
-announcement. A user who wants even that gone turns the *Agent* channel off in system settings:
+Two conditions, and both are required: something is streaming, and no window is in front. The
+Activity is already keeping the process alive while the reader is looking at it, so the entry
+there is noise over a turn they are watching. `MainActivity.onStart`/`onStop` tell the service
+which side of that line the UI is on; the collectors keep the claim honest on the other axis (a
+pool that empties, a conversation that is closed, a stop the user asked for).
+
+Between turns the service keeps running without the foreground claim. That is a deliberate trade
+and it has a cost: with no notification the service is a background service, and Android may
+reclaim it — which loses the terminal's shells and costs a relaunch on the next prompt, but
+cannot lose a turn, because a turn is exactly when the entry is up and the claim held.
+
+When the entry *is* up it is silent: `PRIORITY_MIN`, an `IMPORTANCE_MIN` channel with no sound or
+badge, one line of text naming how many conversations are answering, and a Stop action that stops
+all of them. A user who wants even that gone turns the *Agent* channel off in system settings:
 `startForeground` still succeeds and the service stays a foreground service.
 
 Keep-alive has three layers, and the report "息屏后会直接 terminated" is what made the third one
@@ -37,11 +57,12 @@ necessary:
 
 1. **The foreground service**, with `android:stopWithTask="false"` so a swipe-away does not take
    the child with it. The shade entry only appears while the UI is gone.
-2. **Two wake locks.** The turn lock (`pikit:agent-turn`) is acquired on `agent_start` and
-   released on `agent_settled` — it keeps the CPU awake *and* the child's stdout drained for the
-   length of one turn. The background lock (`pikit:agent-bg`) is held while the UI is gone and
-   the agent is up, which covers the screen-off with nothing streaming that the turn lock never
-   saw.
+2. **Two wake locks.** A turn lock per conversation (`pikit:agent-turn`) is acquired on
+   `agent_start` and released on `agent_settled` — it keeps the CPU awake *and* the child's
+   stdout drained for the length of one turn, and a second conversation answering at the same
+   time holds its own. The background lock (`pikit:agent-bg`) is held while the UI is gone and
+   an answer is arriving, which is the window in which a suspended radio would truncate a
+   stream.
 3. **The battery-optimisation exemption.** Neither of the above survives a power manager that has
    already decided to reclaim the process. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is the system's
    own dialog and cannot be granted by the app; the Agent page's keep-alive row reports whether

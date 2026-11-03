@@ -330,6 +330,14 @@ internal fun ChatScreen(
     agent: AgentStatus,
     state: ConversationState,
     composer: ChatComposerState,
+    /**
+     * Makes [summary]'s conversation the one on screen — the host opens it as a second
+     * process when it is not already live, so this never stops the answer that is
+     * running here.
+     */
+    onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
+    /** Opens an empty conversation beside this one, which keeps running. */
+    onNewConversation: () -> Unit,
 ) {
     val text = strings
     val context = LocalContext.current
@@ -388,10 +396,6 @@ internal fun ChatScreen(
         }
     }
 
-    // A new session asked for while the agent is answering. Same question as the
-    // history list's rows ask before a switch, and the same dialog: pi's
-    // `new_session` aborts the running turn exactly as `switch_session` does.
-    var confirmNewSession by remember { mutableStateOf(false) }
     // A workspace picked while the agent is answering. Switching starts a new
     // conversation in that folder — the same interruption `newSession` makes, because
     // the workspace is the child process's working directory and pi reads it once at
@@ -613,21 +617,16 @@ internal fun ChatScreen(
     // centrally.
 
     /**
-     * Starts a new conversation, asking first when an answer is running.
+     * Starts a new conversation beside this one.
      *
-     * The same question the history list's rows ask before a switch, and the same
-     * dialog: pi's `new_session` ends the running answer as its first step. It used
-     * to be a flat refusal with a notice, which was a tap that produced a sentence
-     * and no result.
+     * No question and no interruption, which is what having more than one conversation
+     * means: the answer that is arriving here keeps arriving, because the new
+     * conversation is a second pi process rather than a `new_session` on this one. The
+     * old behaviour — a dialog asking whether to throw the answer away — is what the
+     * reader asked to be rid of.
      */
     fun newSession() {
-        if (session.turnInFlight) {
-            confirmNewSession = true
-        } else {
-            session.newSession()
-            composer.attachments = emptyList()
-            composer.notice = null
-        }
+        onNewConversation()
     }
 
     /**
@@ -792,6 +791,7 @@ internal fun ChatScreen(
                     session = session,
                     onBack = { settlePage(0f) },
                     onOpened = { settlePage(0f) },
+                    onOpenConversation = onOpenConversation,
                 )
             }
         }
@@ -903,29 +903,6 @@ internal fun ChatScreen(
             )
         }
     }
-
-    // Drawn over whichever of the two pages above is showing — the history list is
-    // where the same question is asked about a saved conversation, and a Miuix
-    // dialog is a window of its own, so it belongs to the screen rather than to
-    // either page the swap holds.
-    PiConfirm(
-        show = confirmNewSession,
-        title = text.sessions.switchInterruptTitle,
-        text = text.sessions.switchInterruptBody,
-        confirm = text.sessions.switchInterruptConfirm,
-        dismiss = text.common.cancel,
-        // The one dialog in the app whose confirm throws work away: an answer that is
-        // still arriving dies with the session, and the two buttons should not look
-        // like equivalent choices.
-        destructive = true,
-        onConfirm = {
-            confirmNewSession = false
-            session.newSession(interrupt = true)
-            composer.attachments = emptyList()
-            composer.notice = null
-        },
-        onDismiss = { confirmNewSession = false },
-    )
 
     // The same question for a workspace switch: pi's working directory is fixed at
     // launch, so the switch is a relaunch, and a relaunch ends the answer in flight.

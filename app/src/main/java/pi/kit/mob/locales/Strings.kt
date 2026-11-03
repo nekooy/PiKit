@@ -67,6 +67,7 @@ interface Strings {
     val settings: Settings
     val manual: Manual
     val notes: Notes
+    val shade: Shade
     val common: Common
 
     /** The text shown while the bundled runtime is being unpacked. */
@@ -575,6 +576,23 @@ interface Strings {
         val recent: String
 
         /**
+         * The line above a conversation that is a live process right now.
+         *
+         * A live row is the one thing in the list that is a state as well as a question:
+         * tapping it goes back to an answer that is still arriving, because a
+         * conversation is a process of its own rather than a rebind of one shared child.
+         */
+        val running: String
+
+        /**
+         * The refusal when every conversation slot is taken by one that is working.
+         *
+         * The pool is bounded by memory (`PiHost.MAX_LIVE`), and the ceiling is named in
+         * the sentence: a refusal that does not say how many is a tap that did nothing.
+         */
+        fun poolFull(max: Int): String
+
+        /**
          * A history group's heading: the workspace's name and how many conversations it holds.
          *
          * The name is an argument rather than the word for "workspace": a heading
@@ -1021,11 +1039,12 @@ interface Strings {
         val agentContextInstructions: String
 
         /**
-         * The app's own instructions, which the reader may edit.
+         * The app's own instructions, which the reader reads but does not edit.
          *
-         * The document is maintained by PiKit: a build that carries a newer generation
-         * replaces it, and anything the reader wrote in it is the price of that — which
-         * is why there is a second document beside it for what must never be touched.
+         * The document is maintained by PiKit: it names this build's prefix, its three
+         * permission tiers and its workspace rules, and a launched build rewrites it.
+         * The second document beside it is where the reader's own rules go, and nothing
+         * in the app ever writes that one.
          */
         val agentContextAuthorTitle: String
         val agentContextAuthorSubtitle: String
@@ -1038,13 +1057,12 @@ interface Strings {
         val agentContextUserEmpty: String
         val agentContextInstructionsEditable: String
 
+        /** The app's half's value slot: it is PiKit's document, and it is not edited here. */
+        val agentContextReadOnly: String
+
         val agentContextSave: String
         val agentContextSaved: String
         val agentContextFailed: String
-        val agentContextRestore: String
-        val agentContextRestoreTitle: String
-        val agentContextRestoreBody: String
-        val agentContextRestoreConfirm: String
 
         // Model profiles
         val profilesTitle: String
@@ -1133,6 +1151,18 @@ interface Strings {
         val baseUrlNote: String
         /** Shown for a built-in provider — blank means pi's own endpoint. */
         val baseUrlOptionalNote: String
+
+        /**
+         * The switch that tells pi an endpoint's stream ends without `finish_reason`.
+         *
+         * The label is the fact, not the mechanism: the reader knows whether their relay
+         * sends the field, and `compat.supportsFinishReason` is pi's name for what to do
+         * about it. The subtitle carries the cost — a truncated answer reads as complete —
+         * because a switch that only ever sounds like a fix is the wrong shape for a
+         * setting whose downside is invisible.
+         */
+        val finishReasonTitle: String
+        val finishReasonSubtitle: String
         val needBaseUrl: String
 
         /**
@@ -1895,6 +1925,21 @@ interface Strings {
         val licence: String
         val creditsTitle: String
         val credits: String
+    }
+
+    /**
+     * The foreground service's shade entry.
+     *
+     * Only present while an answer is being written — the entry exists to keep *that*
+     * alive, and the reader asked for it not to sit in the shade between turns. [answering]
+     * names how many conversations are streaming, because more than one can be.
+     */
+    interface Shade {
+        val title: String
+        fun answering(count: Int): String
+        val stop: String
+        val channelName: String
+        val channelDescription: String
     }
 
     interface Common {

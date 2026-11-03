@@ -17,7 +17,7 @@ import pi.kit.mob.data.TEXT_SCALE_BASELINE
 import pi.kit.mob.data.applyLauncherIcon
 import pi.kit.mob.env.AgentContext
 import pi.kit.mob.pi.PiAgentService
-import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.pi.PiHost
 import pi.kit.mob.ui.kit.PiKitMiuixTheme
 
 class MainActivity : ComponentActivity() {
@@ -26,14 +26,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val session = PiAgentSession.of(applicationContext)
+        val host = PiHost.of(applicationContext)
 
         setContent {
             // The theme is assembled from the preferences here rather than inside
             // the composable's default: the light/dark choice and the text size
             // both live in the settings store, and a theme that read the store
             // itself would be a second owner of those decisions.
-            val settings by session.settingsStore.settings.collectAsState()
+            val settings by host.settingsStore.settings.collectAsState()
 
             // The launcher icon is the system's to draw, so choosing one is a
             // component switch rather than a redraw. Keyed on the preference,
@@ -56,13 +56,13 @@ class MainActivity : ComponentActivity() {
             // a half only when that half is missing or its generation is behind.
             LaunchedEffect(Unit) {
                 withContext(Dispatchers.IO) {
-                    AgentContext.install(session.env)
+                    AgentContext.install(host.env)
                     // One scan at launch, for the same reason and with a second payoff:
                     // it is what adopts a workspace that arrived from outside this app
                     // (a `pi` run by hand in the terminal writes its session with its own
                     // `cwd`), and it is what makes the history page's list ready before
                     // the page is opened rather than a second later.
-                    runCatching { session.listSessions() }
+                    runCatching { host.active.value.listSessions() }
                 }
             }
 
@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
                         PiAgentService.start(this@MainActivity)
                     }
 
-                    PiKitRoot(session = session)
+                    PiKitRoot(host = host)
                 }
             }
         }

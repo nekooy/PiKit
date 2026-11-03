@@ -1,5 +1,6 @@
 package pi.kit.mob.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,9 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -105,6 +109,12 @@ fun SessionsScreen(
     session: PiAgentSession,
     onBack: () -> Unit,
     onOpened: () -> Unit,
+    /**
+     * Makes [PiAgentSession.SessionSummary]'s conversation the one on screen. The host
+     * opens a second process for a conversation that is not live, so this is a move
+     * between conversations rather than a rebind of the one that is answering.
+     */
+    onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
 ) {
     val text = strings
     var summaries by remember { mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList()) }
@@ -132,11 +142,14 @@ fun SessionsScreen(
     // the live list reads "0 conversations" while the panel leaves. Each keeps its
     // subject in one state and its visibility in another — the shape the Files page's
     // preview sheet uses.
+    // Which saved conversations are live *processes* right now. A live row is one tap
+    // back to a conversation that is still answering, which is the thing that did not
+    // exist while the app had one child.
+    val livePaths = session.host.sessions.collectAsState().value
+        .mapNotNull { it.sessionPath }
+        .toSet()
     var renameTarget by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
     var renameUp by remember { mutableStateOf(false) }
-    // A conversation the user tapped while the agent was answering.
-    var switchTarget by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
-    var switchUp by remember { mutableStateOf(false) }
     var deleteTargets by remember {
         mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList())
     }
@@ -386,25 +399,15 @@ fun SessionsScreen(
                     onToggle = { path ->
                         selected = if (path in selected) selected - path else selected + path
                     },
+                    // No question and no interruption: a conversation that is live is
+                    // switched to and keeps its answer, and one that is not is opened as
+                    // a second process in the directory its session file records. The
+                    // dialog that used to stand here asked whether to throw an answer
+                    // away, which is a cost this design does not charge.
+                    runningPaths = livePaths,
                     onOpen = { item ->
-                        // A turn in flight makes this a question rather than a switch:
-                        // pi aborts the running answer as the first step of its own
-                        // `switch_session` (`RuntimeHost.teardownCurrent`), so the tap
-                        // would stop an answer the reader may still want. See
-                        // [InterruptTurnDialog].
-                        if (session.turnInFlight) {
-                            switchTarget = item
-                            switchUp = true
-                        } else {
-                            // `openSession` rather than `switchSession`: a conversation
-                            // records the directory it was started in, and one from
-                            // another workspace has to be opened *there* — the agent is
-                            // relaunched in it and rebound to this file. A pi standing in
-                            // this workspace would show the old transcript while every
-                            // tool call acted in the wrong tree.
-                            session.openSession(item)
-                            onOpened()
-                        }
+                        if (item.path != activeSessionFile) onOpenConversation(item)
+                        onOpened()
                     },
                     onRename = {
                         renameTarget = it
@@ -442,18 +445,6 @@ fun SessionsScreen(
         },
     )
 
-    InterruptTurnDialog(
-        show = switchUp,
-        text = text,
-        onDismiss = { switchUp = false },
-        onConfirm = {
-            val target = switchTarget ?: return@InterruptTurnDialog
-            switchUp = false
-            session.openSession(target, interrupt = true)
-            onOpened()
-        },
-    )
-
     DeleteConfirm(
         show = deleteUp,
         text = text,
@@ -464,6 +455,17 @@ fun SessionsScreen(
             deleteUp = false
             exitSelection()
             scope.launch {
+                // A live conversation owns its file while it runs: pi appends to it, so
+                // unlinking it would leave a process writing into nothing. The close is
+                // asked for first — and a conversation that is *answering* refuses it, in
+                // which case the delete is refused with the sentence that says why.
+                val live = targets.mapNotNull { session.host.sessionFor(it.path) }
+                if (live.any { it.turnInFlight }) {
+                    toasts?.show(text.sessions.switchWhileWorking)
+                    reload++
+                    return@launch
+                }
+                live.forEach { session.host.closeConversation(it, interrupt = true) }
                 session.deleteSessions(targets)
                     .onSuccess { removed ->
                         if (removed < targets.size) {
@@ -520,6 +522,8 @@ private fun ConversationList(
     selecting: Boolean,
     selected: Set<String>,
     snippets: Map<String, String>,
+    /** The saved conversations that are live processes right now. */
+    runningPaths: Set<String>,
     onToggle: (String) -> Unit,
     onOpen: (PiAgentSession.SessionSummary) -> Unit,
     onRename: (PiAgentSession.SessionSummary) -> Unit,
@@ -567,6 +571,7 @@ private fun ConversationList(
                     selecting = selecting,
                     checked = item.path in selected,
                     snippet = snippets[item.path],
+                    running = item.path in runningPaths,
                     pinned = true,
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
@@ -592,6 +597,7 @@ private fun ConversationList(
                     selecting = selecting,
                     checked = item.path in selected,
                     snippet = snippets[item.path],
+                    running = item.path in runningPaths,
                     pinned = false,
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
@@ -705,6 +711,8 @@ private fun ConversationRow(
     selecting: Boolean,
     checked: Boolean,
     snippet: String?,
+    /** Whether this conversation is a live process, i.e. one tap away from its answer. */
+    running: Boolean,
     pinned: Boolean,
     onToggleChecked: () -> Unit,
     onOpen: () -> Unit,
@@ -757,6 +765,30 @@ private fun ConversationRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(Modifier.weight(1f)) {
+                    // A live conversation is the one row in the list that is a *state*
+                    // as well as a question: tapping it goes back to an answer that is
+                    // still arriving. The dot is the same "live" mark the transcript's
+                    // tool pill uses, one line above the title so it cannot be mistaken
+                    // for part of the reader's own words.
+                    if (running) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(bottom = 3.dp),
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(MiuixTheme.colorScheme.primary),
+                            )
+                            Text(
+                                text = text.sessions.running,
+                                style = MiuixTheme.textStyles.footnote2,
+                                color = MiuixTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                     Text(
                         text = item.title.ifBlank { text.sessions.emptyTitle },
                         style = MiuixTheme.textStyles.headline1,

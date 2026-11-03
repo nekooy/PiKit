@@ -32,11 +32,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -104,24 +106,43 @@ class TurnInFlightException :
     IllegalStateException("the agent is still working on this session")
 
 /**
- * Owns everything that outlives a single screen: the unpacked environment, the
- * agent process, and the conversation state derived from its event stream.
+ * One conversation: the agent process that answers it, and the state its transcript is
+ * drawn from.
  *
- * A process-wide singleton, because the agent must keep running while the UI is
- * backgrounded and must not be tied to an Activity lifecycle. [PiAgentService]
- * exists only to hold a foreground notification so the OS does not reclaim it
- * mid-turn.
+ * ## Why there can be more than one
+ *
+ * The app used to own a single `pi --mode rpc` child, and a move to another conversation
+ * was a `switch_session` on that child — which pi implements by aborting the running
+ * turn first (`RuntimeHost.teardownCurrent`), so a tap on another conversation stopped
+ * the answer. A conversation is therefore a *process* now, and this class is what one of
+ * them is: its child, its transcript, its workspace, its model. [PiHost] owns what all
+ * of them share — the unpacked environment, the settings, the terminal, the pool — and
+ * decides which one the screen is on.
+ *
+ * What is deliberately still single: the environment. Two conversations do not unpack
+ * the image twice, write `models.json` twice at once, or run two catalogue refreshes;
+ * [PiHost] holds the lock for each of those, and the parts of this class that need them
+ * read them through [host].
  */
-class PiAgentSession private constructor(context: Context) {
+class PiAgentSession internal constructor(
+    internal val host: PiHost,
+    /**
+     * The saved conversation this one was opened for, when it was opened from the
+     * history list; null for a new one. The launch rebinds the fresh child to that file
+     * after the handshake, because pi has no resume flag — every launch opens a new
+     * session file.
+     */
+    private val boundSession: String? = null,
+) {
 
-    private val appContext: Context = context.applicationContext
-    val env: TermuxEnv = TermuxEnv.of(appContext)
-    val settingsStore: SettingsStore = SettingsStore(appContext)
+    internal val appContext: Context get() = host.appContext
+    val env: TermuxEnv get() = host.env
+    val settingsStore: SettingsStore get() = host.settingsStore
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _runtime = MutableStateFlow<RuntimeStatus>(RuntimeStatus.NotInstalled)
-    val runtime: StateFlow<RuntimeStatus> = _runtime.asStateFlow()
+    /** The environment's install state. The image is unpacked once, for every conversation. */
+    val runtime: StateFlow<RuntimeStatus> get() = host.runtime
 
     private val _agent = MutableStateFlow<AgentStatus>(AgentStatus.Stopped)
     val agent: StateFlow<AgentStatus> = _agent.asStateFlow()
@@ -129,23 +150,16 @@ class PiAgentSession private constructor(context: Context) {
     private val _conversation = MutableStateFlow(ConversationState())
     val conversation: StateFlow<ConversationState> = _conversation.asStateFlow()
 
-    private val _catalogueThinkingLevels = MutableStateFlow<Map<String, List<String>>>(emptyMap())
-
     /**
      * The thinking levels each catalogued model declares, keyed by model id.
      *
-     * pi's live answer (`get_available_thinking_levels`) is the authority for the model
-     * that is running, and it stays first in `thinkingLevelsFor`. This is the *file*
-     * the same facts are in, read ahead of the process: pi's store on disk carries every
-     * built-in provider's catalogue (§7.2), so the composer can offer a model's own
-     * levels on the frame the reader switches to it instead of two round trips later.
-     *
-     * Empty until [reloadCatalogueThinkingLevels] has read the store — on the launch
-     * path and after a refresh — which reads as "nothing is known about this model" and
-     * falls back to pi's seven, exactly as the app did before it had this.
+     * The file it is read from is pi's store, which every conversation reads at its own
+     * launch and one catalogue refresh writes, so the map is the [host]'s: two
+     * conversations cannot disagree about what a model offers. See
+     * [PiHost.catalogueThinkingLevels] for what it is used for.
      */
-    val catalogueThinkingLevels: StateFlow<Map<String, List<String>>> =
-        _catalogueThinkingLevels.asStateFlow()
+    val catalogueThinkingLevels: StateFlow<Map<String, List<String>>>
+        get() = host.catalogueThinkingLevels
 
     private var client: PiRpcClient? = null
     private var recordJob: Job? = null
@@ -176,22 +190,34 @@ class PiAgentSession private constructor(context: Context) {
 
     private var turnWakeLock: PowerManager.WakeLock? = null
 
-    /** The session the user is in, so a relaunch can rebind to it. */
-    private val sessionPrefs by lazy {
-        appContext.getSharedPreferences("pikit_agent_session", Context.MODE_PRIVATE)
-    }
+    /**
+     * Whether the next restore is this conversation's first launch.
+     *
+     * Only the host's *first* conversation may reopen the conversation remembered from
+     * the last run, and only on its first launch: "cold start" is the launch of the app,
+     * and a later `restartAgent` — a crash, a settings change — is the same conversation
+     * continuing under a new pi process. [PiHost] sets this on the conversation it
+     * creates at startup and on no other.
+     */
+    internal var restoresRememberedSession = false
 
     /**
-     * Whether the next restore is this process's first.
-     *
-     * Set once per process, not per activity or composition: "cold start" is the
-     * launch of the app, and a later `restartAgent` — a crash, a settings change —
-     * is the same conversation continuing under a new pi process. See
-     * [shouldRestoreRememberedSession].
+     * Set once this conversation has been launched at least once, so a restart rebinds
+     * to the session file this process opened rather than to a remembered one.
      */
-    private val coldStartRestore = java.util.concurrent.atomic.AtomicBoolean(true)
+    private var coldStartRestore = java.util.concurrent.atomic.AtomicBoolean(true)
 
-    private val environmentLock = Mutex()
+    /**
+     * The session file this conversation is bound to, when it was opened from the
+     * history list. Cleared once the child has been rebound, because from then on the
+     * transcript's own `sessionFile` is the better answer.
+     */
+    @Volatile
+    private var restoreTarget: String? = boundSession
+
+    /** When the screen was last on this conversation, for [PiHost.makeRoom]'s eviction. */
+    @Volatile
+    internal var lastUsedAt: Long = System.currentTimeMillis()
 
     /**
      * Serialises [startAgent], so the "already running" guard cannot be read by two
@@ -202,120 +228,43 @@ class PiAgentSession private constructor(context: Context) {
     /** Where pi writes a conversation; the path lives in [TermuxEnv] with the rest. */
     val sessionDir: File get() = env.sessionDir
 
+    /** The terminal's PTYs. Shared: a shell is not a conversation, it is the tab's. */
+    val terminalSessions: TerminalSessionManager get() = host.terminalSessions
+
     /**
-     * PTY sessions shown in the terminal tab.
+     * The conversation this process is in, as pi names it: the session file it writes.
      *
-     * Owned here rather than by the composable: the terminal is one of four tabs
-     * and leaves the composition whenever the user looks at another one, which
-     * used to kill the shell along with it. Anything long-running started there —
-     * `pkg upgrade`, a build — has to outlive the tab.
+     * Null until the handshake has answered — a conversation nothing has been sent to
+     * has no file yet — which is also why the history list cannot offer a row for one.
      */
-    val terminalSessions: TerminalSessionManager by lazy {
-        TerminalSessionManager(appContext, env) {
-            // Every saved profile's credential, not only the active one. A shell is the
-            // other way into the same pi: the file it reads is the one this app writes,
-            // and the variables its entries name are the ones here.
-            ProfileAddressing.providerEnvironment(settingsStore.profiles.snapshots.value)
-        }
-    }
+    val sessionPath: String?
+        get() = _conversation.value.sessionFile ?: restoreTarget
+
+    /** Whether [path] is the session file this conversation is (or is being) bound to. */
+    internal fun matchesPath(path: String): Boolean =
+        path == _conversation.value.sessionFile || path == restoreTarget
 
     // ----------------------------------------------------------- environment
 
     /**
-     * Unpacks the bundled runtime if needed. Cheap to call repeatedly: the
-     * installer no-ops when the installed image already matches.
-     */
-    suspend fun ensureEnvironment(): Boolean = environmentLock.withLock {
-        if (_runtime.value is RuntimeStatus.Ready) return@withLock true
-
-        val installer = BootstrapInstaller(appContext)
-        try {
-            // The whole body runs off the caller's thread, not just the unpack. The
-            // caller here is the composition that draws the first usable frame, and
-            // the two steps after the unpack are both filesystem work: the
-            // environment probe stats five paths, and `syncStorageLinks` creates a
-            // symlink farm and then writes, reads and deletes a probe file inside
-            // `/sdcard` — a FUSE round trip per granted folder. None of it needs the
-            // main thread; a `StateFlow` is safe to write from any of them.
-            withContext(Dispatchers.IO) {
-                val plan = installer.ensureInstalled { progress ->
-                    when (progress) {
-                        is BootstrapInstaller.Progress.Working ->
-                            _runtime.value = RuntimeStatus.Installing(progress.fraction, progress.message)
-                        is BootstrapInstaller.Progress.Done -> Unit
-                    }
-                }
-                _runtime.value = RuntimeStatus.Ready(plan.revision, checkEnvironment())
-                // Runs after the unpack so `$HOME` exists; harmless when the
-                // permission has not been granted yet.
-                syncStorageLinks()
-                // The packages a reinstall displaced are put back in the
-                // background rather than awaited here: the pass can need a
-                // network (a cached `.deb` covers most names offline, but not a
-                // name whose archive apt has already dropped) and this lock is
-                // what `startAgent` waits on. `restorePendingPackages` is
-                // idempotent and trims its manifest as it goes, so a launch
-                // killed mid-restore finishes the job on the next one.
-                scope.launch {
-                    runCatching { installer.restorePendingPackages() }
-                        .onFailure { Log.w(TAG, "Restoring the user's packages failed", it) }
-                    // Whatever happened, the ledger and the restore manifest are
-                    // what the maintenance page reports; re-read them once the
-                    // attempt has settled.
-                    refreshPackages()
-                }
-            }
-            true
-        } catch (t: Throwable) {
-            Log.e(TAG, "Installing the bundled runtime failed", t)
-            _runtime.value = RuntimeStatus.Failed(t.message ?: t.toString())
-            false
-        }
-    }
-
-    /**
-     * Rewrites the shell's welcome banner in the current interface language.
+     * Unpacks the bundled environment if needed, once for the whole app.
      *
-     * Off the main thread and safe to call on every launch and on every language
-     * change: the write is skipped unless the text actually differs.
+     * The unpack is the host's: two conversations starting together on a cold launch
+     * would otherwise both see `NotInstalled` and unpack the same ~285 MB over the top
+     * of each other. See [PiHost.ensureEnvironment].
      */
-    suspend fun refreshTerminalBanner() = withContext(Dispatchers.IO) {
-        runCatching { BootstrapInstaller(appContext).installTerminalBanner(settingsStore.read().language) }
-            .onFailure { Log.w(TAG, "Could not write the terminal banner", it) }
-        Unit
-    }
+    suspend fun ensureEnvironment(): Boolean = host.ensureEnvironment()
 
-    /**
-     * Reports missing pieces rather than discovering them later as mysterious
-     * tool failures. `rg` and `fd` matter most: pi's `grep` and `find` tools
-     * shell out to them and pi will not download them on Android.
-     */
-    private fun checkEnvironment(): List<String> = buildList {
-        PiInstallation.requiredTools(env).forEach { (tool, present) ->
-            if (!present) add("'$tool' is missing from the bundled environment")
-        }
-        if (PiInstallation.cliEntry(env) == null) add("the pi CLI was not found in the bundled environment")
-    }
+    /** The shell's welcome banner follows the interface language; one file, one writer. */
+    suspend fun refreshTerminalBanner() = host.refreshTerminalBanner()
 
     /**
      * Brings `~/storage` in line with the Android grant.
      *
-     * There is no switch any more (§14): the farm is a convenience that exists while
-     * "all files access" does and is taken away when it is not, which is what a revoked
-     * grant has to mean — a directory of dead paths reads as a broken environment.
-     *
-     * Called before every launch and from `termux-setup-storage`'s broadcast, so a
-     * failure is logged rather than surfaced: the rest of the runtime works without
-     * shared storage, and a workspace on `/sdcard` is what actually needs the grant.
+     * Called from `termux-setup-storage`'s broadcast; the farm itself is one directory
+     * in `$HOME`, so the work is the host's.
      */
-    fun syncStorageLinks(): Boolean {
-        val granted = StorageAccess.isGranted()
-        val synced = runCatching { StorageAccess.syncFarm(env) }
-            .onFailure { Log.w(TAG, "Could not reconcile the storage symlinks", it) }
-            .getOrDefault(false)
-        Log.i(TAG, "shared storage: granted=$granted farm=$synced")
-        return synced
-    }
+    fun syncStorageLinks(): Boolean = host.syncStorageLinks()
 
     // ------------------------------------------------------------- workspace
 
@@ -326,7 +275,7 @@ class PiAgentSession private constructor(context: Context) {
      * workspace is read: this is one process with one working directory, so a
      * conversation that lived somewhere else is reopened by relaunching the agent there
      * rather than by switching a pi that is already standing in the old tree. See
-     * [selectWorkspace] and [openSession].
+     * [selectWorkspace].
      */
     private val _workspace = MutableStateFlow("")
 
@@ -354,14 +303,39 @@ class PiAgentSession private constructor(context: Context) {
      * Only when the app is set to come back to the last conversation: a launch that opens a
      * *new* one starts in the default workspace, which is what that setting means. When it
      * does restore, the directory is the one the session file records — the same rule
-     * [openSession] applies to a row the reader taps, so a cold start and a reopen cannot
+     * [PiHost.openConversation] applies to a row the reader taps, so a cold start and a reopen cannot
      * disagree about where a conversation lives.
      */
     private fun restoredWorkspace(): String? {
         if (settingsStore.read().openNewOnLaunch) return null
-        val path = lastRememberedSession() ?: return null
+        val path = restoreTarget ?: host.lastRememberedSession() ?: return null
         val workspace = SessionMetadata.workspaceOf(File(path)) ?: return null
         return workspace.takeIf { File(it).isDirectory }
+    }
+
+    /**
+     * Opens this conversation in [path] before it has been launched.
+     *
+     * The host calls this when it opens a saved conversation from the history list: the
+     * session file records the directory pi ran in, and a child launched anywhere else
+     * would show that transcript while every tool call acted in another tree. Distinct
+     * from [selectWorkspace], which is the reader's own move and relaunches a running
+     * process.
+     */
+    internal fun prepareWorkspace(path: String) {
+        _workspace.value = path
+        restoreTarget = restoreTarget ?: boundSession
+    }
+
+    /**
+     * Records that the screen is on this conversation, for a cold start to reopen.
+     *
+     * Only the active conversation writes it: a background conversation finishing a turn
+     * must not decide what the next launch restores.
+     */
+    internal fun rememberAsLastConversation() {
+        lastUsedAt = System.currentTimeMillis()
+        host.rememberLastSession(sessionPath)
     }
 
     /**
@@ -371,7 +345,7 @@ class PiAgentSession private constructor(context: Context) {
      * the base every relative path in a tool call resolves against, and pi reads it once
      * at startup. The remembered session is cleared before the restart so the new process
      * does not reopen the conversation that belongs to the workspace being left — see
-     * [restoreRememberedSession], which would otherwise do exactly that.
+     * [restoreAfterLaunch], which would otherwise do exactly that.
      *
      * @param interrupt false refuses the switch while an answer is streaming, which is
      *   the same rule [newSession] follows and the same dialog asks about it.
@@ -381,7 +355,10 @@ class PiAgentSession private constructor(context: Context) {
         if (wanted.isBlank() || wanted == _workspace.value) return
         if (turnInFlight && !interrupt) return
         _workspace.value = wanted
-        rememberSessionPath(null)
+        // This conversation is leaving the one it was in: the fresh child has to open an
+        // empty session there rather than rebind to the file of the workspace it left.
+        restoreTarget = null
+        if (host.active.value === this) host.rememberLastSession(null)
         // The page must stop claiming the old conversation while the process is being
         // replaced: the relaunch's handshake opens a fresh session, and the old turns
         // were only ever the old process's.
@@ -391,32 +368,6 @@ class PiAgentSession private constructor(context: Context) {
         } else {
             scope.launch { startAgent() }
         }
-    }
-
-    /**
-     * Reopens a saved conversation, relaunching the agent if it lived elsewhere.
-     *
-     * The session file records the `cwd` pi was started in (`{"type":"session",…,
-     * "cwd":…}`, its first line), so a conversation from another workspace has to be
-     * opened *there*: switching a pi that is standing in this workspace to a session from
-     * that one would show the old transcript while every tool call acted in the wrong
-     * tree.
-     */
-    fun openSession(target: SessionSummary, interrupt: Boolean = false) {
-        if (turnInFlight && !interrupt) return
-        val elsewhere = target.workspace
-            ?.takeIf { it.isNotBlank() && it != _workspace.value && File(it).isDirectory }
-        if (elsewhere == null) {
-            switchSession(target, interrupt)
-            return
-        }
-        _workspace.value = elsewhere
-        // Remembered before the restart: `restoreRememberedSession` rebinds the fresh
-        // process to this path, which is what makes the relaunch land on the
-        // conversation the reader tapped instead of an empty one.
-        rememberSessionPath(target.path)
-        _conversation.value = ConversationState(loadingSession = true)
-        restartAgent()
     }
 
     /**
@@ -456,7 +407,7 @@ class PiAgentSession private constructor(context: Context) {
      * The mutex is what makes the guard mean what it says: the second caller waits
      * here instead of at the environment lock, re-reads the status inside the lock, and
      * returns the running agent rather than starting another. It is not the same lock
-     * as [environmentLock] and must not be: `ensureEnvironment()` takes that one, and
+     * as the host's environment lock and must not be: `ensureEnvironment()` takes that one, and
      * nesting them in the other order somewhere else would be the deadlock.
      */
     suspend fun startAgent(): Boolean = startLock.withLock { startAgentLocked() }
@@ -469,7 +420,7 @@ class PiAgentSession private constructor(context: Context) {
         // The catalogue's thinking levels, before the process that would answer them:
         // the composer's picker reads this while pi is still starting, and a model
         // switch must not wait for a handshake to know what the new model can do.
-        scope.launch { reloadCatalogueThinkingLevels() }
+        host.scope.launch { host.reloadCatalogueThinkingLevels() }
 
         val cliEntry = PiInstallation.cliEntry(env)
         if (cliEntry == null) {
@@ -488,56 +439,63 @@ class PiAgentSession private constructor(context: Context) {
         // rendered `web-search.json` on the main thread, between the user's tap and
         // the next frame. Everything below is filesystem work; the `_agent` writes
         // above and below are safe from any thread.
-        val (settings, workingDir, modelsJsonFailure) = withContext(Dispatchers.IO) {
-            val settings = settingsStore.read()
-            val profileSnapshot = settingsStore.profiles.snapshots.value
-            // The ids the file will define, and therefore the only ones a launch may name.
-            // See [ProfileAddressing.launchProviderId] for why a launch must not name one
-            // that is missing.
-            val entries = profileProviderEntries(profileSnapshot)
-            registeredProviderIds = entries.keys
-            // The pair that decides whether a model switch is a `set_model` or a
-            // relaunch, in one line: an id models.json defines can be switched to, and a
-            // profile whose entry is missing falls back to pi's own id (see
-            // [ProfileAddressing.launchProviderId]). A report of "switching restarts"
-            // is answered by these two lists rather than by guesswork — the store's, in
-            // particular, is the one nothing else logs, and an empty one is what an
-            // offline phone has.
-            if (Log.isLoggable(TAG, Log.INFO)) {
-                Log.i(
-                    TAG,
-                    "models.json defines ${entries.keys}; store describes " +
-                        storeProviders(File(env.piConfigDir, CATALOGUE_STORE_NAME)),
-                )
+        //
+        // Under the host's launch-file lock, because these files are one set for the
+        // whole app: a second conversation starting at the same moment would otherwise
+        // write `models.json` while this one is reading it back for pi to launch on,
+        // and pi reads a torn document as an `Unknown provider` exit.
+        val (settings, workingDir, modelsJsonFailure) = host.launchFileLock.withLock {
+            withContext(Dispatchers.IO) {
+                val settings = settingsStore.read()
+                val profileSnapshot = settingsStore.profiles.snapshots.value
+                // The ids the file will define, and therefore the only ones a launch may name.
+                // See [ProfileAddressing.launchProviderId] for why a launch must not name one
+                // that is missing.
+                val entries = profileProviderEntries(profileSnapshot)
+                registeredProviderIds = entries.keys
+                // The pair that decides whether a model switch is a `set_model` or a
+                // relaunch, in one line: an id models.json defines can be switched to, and a
+                // profile whose entry is missing falls back to pi's own id (see
+                // [ProfileAddressing.launchProviderId]). A report of "switching restarts"
+                // is answered by these two lists rather than by guesswork — the store's, in
+                // particular, is the one nothing else logs, and an empty one is what an
+                // offline phone has.
+                if (Log.isLoggable(TAG, Log.INFO)) {
+                    Log.i(
+                        TAG,
+                        "models.json defines ${entries.keys}; store describes " +
+                            storeProviders(File(env.piConfigDir, CATALOGUE_STORE_NAME)),
+                    )
+                }
+                // Same lifecycle as `models.json`: rewritten on every launch, because
+                // these files live in `$HOME` while the profile lives in the app's
+                // config, and a user who edits one by hand would otherwise have no way
+                // back. A write that had to land and did not stops the launch here —
+                // see [writeModelsJson]'s return contract for why the alternative is
+                // an `Unknown provider` exit or a `401` that reads as a bad key.
+                val modelsJsonFailure = writeModelsJson(settings, profileSnapshot, entries)
+                writePiDefaults(settings)
+                // The bundled extension's own default is `workflow: "summary-review"`,
+                // which opens its result curator in a browser; there is no browser here,
+                // so PiKit writes the document a fresh install has before pi starts. Done
+                // on every launch rather than from the settings page, because the page may
+                // never be opened and the default has to hold anyway.
+                webSearch.ensureDocument()
+                // `$HOME/workspace`, not `$HOME`: see [TermuxEnv.workspace]. The reader may
+                // have started this conversation in another workspace ([WorkspaceStore]),
+                // and the extension is told the same path through `PIKIT_WORKSPACE`, so "the
+                // workspace" and where pi actually runs can never be two different
+                // directories.
+                val workingDir = File(launchWorkspace())
+                workingDir.mkdirs()
+                // The tier the reader last chose, written before the process starts so the
+                // first tool call of the launch is already judged by it: the preference is
+                // authoritative, and a restored backup or an interrupted write could have
+                // left the file behind.
+                PermissionPolicy.write(env, settings.permissionMode)
+                sessionDir.mkdirs()
+                Triple(settings, workingDir, modelsJsonFailure)
             }
-            // Same lifecycle as `models.json`: rewritten on every launch, because
-            // these files live in `$HOME` while the profile lives in the app's
-            // config, and a user who edits one by hand would otherwise have no way
-            // back. A write that had to land and did not stops the launch here —
-            // see [writeModelsJson]'s return contract for why the alternative is
-            // an `Unknown provider` exit or a `401` that reads as a bad key.
-            val modelsJsonFailure = writeModelsJson(settings, profileSnapshot, entries)
-            writePiDefaults(settings)
-            // The bundled extension's own default is `workflow: "summary-review"`,
-            // which opens its result curator in a browser; there is no browser here,
-            // so PiKit writes the document a fresh install has before pi starts. Done
-            // on every launch rather than from the settings page, because the page may
-            // never be opened and the default has to hold anyway.
-            webSearch.ensureDocument()
-            // `$HOME/workspace`, not `$HOME`: see [TermuxEnv.workspace]. The reader may
-            // have started this conversation in another workspace ([WorkspaceStore]),
-            // and the extension is told the same path through `PIKIT_WORKSPACE`, so "the
-            // workspace" and where pi actually runs can never be two different
-            // directories.
-            val workingDir = File(launchWorkspace())
-            workingDir.mkdirs()
-            // The tier the reader last chose, written before the process starts so the
-            // first tool call of the launch is already judged by it: the preference is
-            // authoritative, and a restored backup or an interrupted write could have
-            // left the file behind.
-            PermissionPolicy.write(env, settings.permissionMode)
-            sessionDir.mkdirs()
-            Triple(settings, workingDir, modelsJsonFailure)
         }
 
         if (modelsJsonFailure != null) {
@@ -554,30 +512,32 @@ class PiAgentSession private constructor(context: Context) {
         }
 
         return try {
-            val process = withContext(Dispatchers.IO) {
-                PiProcessLauncher.launch(
-                    context = appContext,
-                    env = env,
-                    options = settings.toLaunchOptions(
-                        nodePath = env.node.absolutePath,
-                        cliEntry = cliEntry.absolutePath,
-                        workingDir = workingDir.absolutePath,
-                        sessionDir = sessionDir.absolutePath,
-                        // The id this profile is registered under, and every saved
-                        // profile's credential: the launch is the only moment either
-                        // can be handed to pi, and pi decides what is usable from them.
-                        providerId = settingsStore.profiles.activeProfile?.let { active ->
-                            ProfileAddressing.launchProviderId(
-                                active,
-                                settingsStore.profiles.profiles,
-                                registeredProviderIds,
-                            )
-                        },
-                        credentials = ProfileAddressing.providerEnvironment(
-                            settingsStore.profiles.snapshots.value,
+            val process = host.launchFileLock.withLock {
+                withContext(Dispatchers.IO) {
+                    PiProcessLauncher.launch(
+                        context = appContext,
+                        env = env,
+                        options = settings.toLaunchOptions(
+                            nodePath = env.node.absolutePath,
+                            cliEntry = cliEntry.absolutePath,
+                            workingDir = workingDir.absolutePath,
+                            sessionDir = sessionDir.absolutePath,
+                            // The id this profile is registered under, and every saved
+                            // profile's credential: the launch is the only moment either
+                            // can be handed to pi, and pi decides what is usable from them.
+                            providerId = settingsStore.profiles.activeProfile?.let { active ->
+                                ProfileAddressing.launchProviderId(
+                                    active,
+                                    settingsStore.profiles.profiles,
+                                    registeredProviderIds,
+                                )
+                            },
+                            credentials = ProfileAddressing.providerEnvironment(
+                                settingsStore.profiles.snapshots.value,
+                            ),
                         ),
-                    ),
-                )
+                    )
+                }
             }
             val newClient = PiRpcClient.from(process).also { it.start() }
             client = newClient
@@ -596,8 +556,8 @@ class PiAgentSession private constructor(context: Context) {
             // Every `pi --mode rpc` launch opens a *new* session file. Without
             // this the UI kept the previous transcript on screen while every
             // prompt after a restart landed in that fresh file — the report of
-            // "同一界面，但是实际上已经新开了对话". See [restoreRememberedSession].
-            restoreRememberedSession()
+            // "同一界面，但是实际上已经新开了对话". See [restoreAfterLaunch].
+            restoreAfterLaunch()
 
             _agent.value = AgentStatus.Running
             // The foreground service is what keeps this process alive while the
@@ -636,8 +596,8 @@ class PiAgentSession private constructor(context: Context) {
                 stateThinkingLevel(newClient, model, _conversation.value.thinkingLevel)
             }
             // Off the launch path, and nothing waits on it: this is a network round
-            // trip and the launch is a tap. See [refreshCatalogueIfStale].
-            scope.launch { refreshCatalogueIfStale(workingDir) }
+            // trip and the launch is a tap. See [PiHost.refreshCatalogueIfStale].
+            host.scope.launch { host.refreshCatalogueIfStale(workingDir) }
             true
         } catch (e: PiProcessExitedException) {
             // pi writes nothing to stdout before its first response, so a
@@ -653,259 +613,6 @@ class PiAgentSession private constructor(context: Context) {
             false
         }
     }
-
-    /**
-     * Refreshes pi's own model catalogue when the copy on disk is old enough, and
-     * relaunches the agent if it changed.
-     *
-     * ## What this is for
-     *
-     * pi resolves a model id its catalogue does not contain from a copy of the
-     * provider's **default** model (`buildFallbackModel`), so every model-shaped fact
-     * about it — the thinking levels, the context window, the cost, whether it takes
-     * images — is the default model's. That is not a display problem: it is what the
-     * reader saw as "deepseek 含关闭一共 4 档你却只有 3 档" (the fallback says
-     * `deepseek-v4-pro`'s `off, high, max` where pi.dev's catalogue gives
-     * `deepseek-flash` `off, low, high, max`) and as "openai 一共 6 你却只有 5"
-     * (`gpt-5.6-*` has six levels, `gpt-5.5` — the default — has five). The agent
-     * logs the same fact as `Model "…" not found for provider "…". Using custom model
-     * id.`
-     *
-     * The catalogue lives in `$HOME/.pi/agent/models-store.json`, and an agent launched
-     * by this app reads whatever is in that file. Nothing pi does on the RPC path
-     * *writes* it: `refreshModelCatalogs` is imported by the interactive TUI and the
-     * model selector and by nothing else. RPC mode does start a fire-and-forget
-     * `modelRuntime.refresh()` at launch (`main()`: `!offlineMode && appMode === "rpc"`),
-     * but that call only republishes the overlay **inside the running process** — it goes
-     * through `Models.refresh`, not through the CLI's `refreshModelCatalogs`, and the
-     * store on disk is not touched. So it can move the model list out from under a
-     * question without making the next launch any fresher, which is a second reason this
-     * function exists. [PiProcessLauncher.refreshCatalogue] runs pi's own
-     * `update --models`, which *does* persist. See that function for the measurement.
-     *
-     * (An earlier version of this note and of `PiLaunchOptions.offline` read the two calls
-     * as one and said "RPC mode refreshes the catalogue", which is true of the process
-     * and false of the file. The distinction is what makes the 4-hour window necessary
-     * rather than redundant.)
-     *
-     * ## Where it runs, and what it costs
-     *
-     * After the handshake, in the background, when the copy on disk is older than
-     * [CATALOGUE_REFRESH_WINDOW_MS] — 0.67 s and one small HTTPS request measured on a
-     * desktop bundle with one configured provider, and now one request per *built-in*
-     * provider rather than per provider the user has a key for
-     * (`catalogueRefreshEnvironment`): ~757 KB across thirty-two of them, concurrent, so
-     * roughly one round trip. It is deliberately *not* on the launch path: pi is already
-     * up and answering by the time this starts, so a phone with no network pays nothing
-     * the user can see. A failure (no network, a provider pi.dev does not list) is logged
-     * and rescheduled after [CATALOGUE_RETRY_MS] — an offline phone must not pay the
-     * timeout at every start.
-     *
-     * The agent is launched without `--offline`, which is what the report asked for, but
-     * that alone does not refresh this store — see above.
-     *
-     * When it *did* change something, the running agent is reading the old one —
-     * pi reads the store at startup — so it is relaunched, which is the same
-     * convergence the old `models.json` writer used. Only when the agent is idle:
-     * a turn in flight is worth more than a correct level list, and the fresh
-     * catalogue is on disk for the next launch either way.
-     *
-     * ## What "changed" means, and the restart loop it used to be
-     *
-     * A restart is itself an agent start, and an agent start runs this function, so
-     * "did it change" has to be a test that converges — and the obvious test did not.
-     * The store's *file* was compared by `(lastModified, length)`, and a refresh
-     * rewrites that file on every run even when nothing about the catalogue moved:
-     *
-     *  - `remote-catalog-provider.js` persists `{ ...stored, checkedAt }` when the
-     *    provider answers `304 Not Modified` — the freshness stamp moves and nothing
-     *    else — and persists a fresh entry with a new `checkedAt` on a `200` as well.
-     *  - `FileModelsStore.write` does that unconditionally: it returns
-     *    `JSON.stringify(current, null, 2)` as the next body for the lock to write,
-     *    with no comparison against what is already there.
-     *
-     * So every refresh changed the file's mtime, every mtime change scheduled a
-     * restart, every restart ran another refresh (which was always due while
-     * [CATALOGUE_REFRESH_WINDOW_MS] was zero), and the agent was torn down
-     * and relaunched on a loop — measured from the report as the status line
-     * flickering between "starting" and "ready" for as long as the app was open, with
-     * one `launching:` line after another in the log. The two flags pi writes that
-     * the agent never reads are `checkedAt` (pi's own freshness window) and `etag`
-     * (its revalidation validator), so [catalogueRevision] projects them out and
-     * compares what is left: each provider's `models` and its `lastModified`, which
-     * is everything `remoteModels` consults when it decides what the agent resolves.
-     *
-     * @param workingDir the directory pi is run from, which `update` inherits.
-     */
-    private suspend fun refreshCatalogueIfStale(workingDir: File) {
-        val due = catalogueRefreshDue(System.currentTimeMillis())
-        // A profile whose `models.json` entry cannot be built without catalogue facts is a
-        // reason to refresh *now*, even inside the retry window: the refresh is what makes
-        // that entry possible, and the failures that empty a store are the ones that wrote
-        // the window. See [needsCatalogueFacts].
-        if (!due && !savedProfilesNeedCatalogueFacts()) return
-        refreshCatalogueNow(workingDir)
-    }
-
-    /** [needsCatalogueFacts] against the store on disk. */
-    private fun savedProfilesNeedCatalogueFacts(): Boolean {
-        val profiles = settingsStore.profiles.profiles
-        if (profiles.isEmpty()) return false
-        val store = File(env.piConfigDir, CATALOGUE_STORE_NAME)
-        val cache = HashMap<String, Map<String, JsonObject>>()
-        return needsCatalogueFacts(profiles) { providerId ->
-            cache.getOrPut(providerId) { storeModelFacts(store, providerId) }
-        }
-    }
-
-    /** Whether the launch path would refresh the catalogue at [now]. */
-    private fun catalogueRefreshDue(now: Long): Boolean =
-        catalogueRefreshDue(now, cataloguePrefs.getLong(KEY_CATALOGUE_DUE_AT, 0L))
-
-    /**
-     * Re-reads [catalogueThinkingLevels] out of pi's store on disk.
-     *
-     * Called on the launch path and after every catalogue refresh, which are the only
-     * two moments the file can move: the store is written by `pi update --models` and by
-     * nothing else. A read that finds an empty store — a fresh install before the first
-     * refresh — leaves the published map alone rather than clearing what a previous read
-     * found, because "the file is empty now" is not a fact about any model.
-     */
-    private suspend fun reloadCatalogueThinkingLevels() {
-        val levels = withContext(Dispatchers.IO) {
-            readCatalogueThinkingLevels(File(env.piConfigDir, CATALOGUE_STORE_NAME))
-        }
-        if (levels.isNotEmpty()) _catalogueThinkingLevels.value = levels
-    }
-
-    /**
-     * Runs the catalogue refresh, whatever the deadline says, and reports what it found.
-     *
-     * The one entry point for both callers: the launch path
-     * ([refreshCatalogueIfStale], which checks the window first) and the maintenance
-     * page's own button ([requestCatalogueRefresh]). They have to behave identically —
-     * one refresh in flight at a time, the same deadline written back, the same
-     * "did anything change" test — or the button and the window would disagree about
-     * what the store on disk means.
-     *
-     * @return true when the refresh succeeded *and* the catalogue it wrote differs from
-     *   the one the agent would otherwise have resolved from.
-     */
-    private suspend fun refreshCatalogueNow(workingDir: File): Boolean {
-        if (!catalogueRefreshRunning.compareAndSet(false, true)) return false
-        val now = System.currentTimeMillis()
-        try {
-            val cliEntry = PiInstallation.cliEntry(env)?.absolutePath ?: return false
-            val store = File(env.piConfigDir, CATALOGUE_STORE_NAME)
-            val before = store.catalogueContent()
-            val settings = settingsStore.read()
-            val exit = withContext(Dispatchers.IO) {
-                runCatching {
-                    PiProcessLauncher.refreshCatalogue(
-                        context = appContext,
-                        env = env,
-                        options = settings.toLaunchOptions(
-                            nodePath = env.node.absolutePath,
-                            cliEntry = cliEntry,
-                            workingDir = workingDir.absolutePath,
-                            // Not used by `update --models` (the argv it builds has no
-                            // `--session-dir`), but the environment is shared with the
-                            // agent launch and a `pi` that writes a session somewhere
-                            // unexpected is worse than one that writes it here.
-                            sessionDir = sessionDir.absolutePath,
-                            // `update --models` reads neither: its argv is built by
-                            // `buildCatalogueCommand`, and the credential it needs comes
-                            // from `extraEnv` below.
-                            providerId = null,
-                            credentials = emptyMap(),
-                        ),
-                        // Every built-in provider, not only the profile's: the point of
-                        // this scan is the providers the user is *not* currently on, which
-                        // is where the model they cannot select lives. The profile's own
-                        // key still wins for the provider it names — see
-                        // `catalogueRefreshEnvironment` and [PiLaunchOptions.extraEnv].
-                        //
-                        // The saved profiles' variables go on top, and they are not
-                        // optional: `models.json` now names `$PIKIT_KEY_…` for every
-                        // profile it registers, and pi resolves a provider's credential
-                        // while refreshing — an unresolvable one aborts the whole refresh
-                        // (`Could not refresh model catalogs: deepseek: Failed to resolve
-                        // API key … PIKIT_KEY_…`), which is how a launch path that could
-                        // not read the catalogue started building entries with no facts.
-                        extraEnv = catalogueRefreshEnvironment() +
-                            ProfileAddressing.providerEnvironment(
-                                settingsStore.profiles.snapshots.value,
-                            ),
-                    )
-                }.getOrNull()
-            }
-            // Scheduled from the attempt: a success is trusted for the full window
-            // [CATALOGUE_REFRESH_WINDOW_MS] — pi's own freshness window, and the reason a
-            // launch does not re-download thirty-two catalogues — while a failure buys
-            // half an hour so an offline phone does not wait for the timeout every time
-            // the agent starts.
-            val succeeded = exit == 0
-            cataloguePrefs.edit()
-                .putLong(
-                    KEY_CATALOGUE_DUE_AT,
-                    now + if (succeeded) CATALOGUE_REFRESH_WINDOW_MS else CATALOGUE_RETRY_MS,
-                )
-                .apply()
-            if (!succeeded) return false
-            // What the composer reads ahead of pi is this file, so it is re-read on
-            // every successful refresh — including the one whose revision did not move,
-            // which on a first run is the read that fills it.
-            reloadCatalogueThinkingLevels()
-            // The file is rewritten by every refresh; the catalogue is not. See the
-            // note above: comparing the file made this a restart loop.
-            if (store.catalogueContent() == before) return false
-            if (_conversation.value.isStreaming) {
-                Log.i(TAG, "model catalogue changed; the agent keeps the old one until it restarts")
-                return false
-            }
-            Log.i(TAG, "model catalogue changed; restarting pi to read it")
-            scheduleRestart()
-            return true
-        } finally {
-            catalogueRefreshRunning.set(false)
-        }
-    }
-
-    /**
-     * The maintenance page's manual catalogue refresh, run to completion.
-     *
-     * The button is the *only* thing this adds over the launch path: pi's own
-     * freshness window is four hours ([CATALOGUE_REFRESH_WINDOW_MS]), so a model
-     * published an hour ago is not due for another three by the clock. Pressing the
-     * button skips that test — nothing else about the refresh is different, which is
-     * why this delegates to the same function the launch path uses.
-     *
-     * Only [refreshCatalogueNow] running is a failure here: the launch path was
-     * already refreshing, so the answer the button was about to buy is on its way.
-     * A refresh that succeeded without changing anything is a success — the model the
-     * user was looking for may simply not exist yet.
-     *
-     * @return true when the catalogue actually moved, which is also the case where the
-     *   agent is restarted to read it.
-     */
-    internal suspend fun requestCatalogueRefresh(): Boolean {
-        val workingDir = File(
-            workspace.value.ifBlank { WorkspaceStore.default(appContext, env).path },
-        )
-        Log.i(TAG, "manual model catalogue refresh requested")
-        return refreshCatalogueNow(workingDir)
-    }
-
-    /**
-     * The catalogue the agent would resolve from, as a comparable string.
-     *
-     * An absent or unreadable file both read as [CATALOGUE_UNREADABLE], so the first
-     * write to a store that did not exist is a change — which it is: that refresh is
-     * the one that fills the overlay in.
-     */
-    private fun File.catalogueContent(): String =
-        if (isFile) runCatching { readText() }.getOrNull().let(::catalogueRevision)
-        else CATALOGUE_UNREADABLE
 
     private fun attach(source: PiRpcClient) {
         recordJob?.cancel()
@@ -1161,7 +868,7 @@ class PiAgentSession private constructor(context: Context) {
         /**
          * The directory pi recorded in the session file, or null for one written before
          * pi recorded a `cwd`. It is what the history page groups by, and what
-         * [openSession] relaunches the agent into.
+         * [PiHost.openConversation] relaunches the agent into.
          */
         val workspace: String? = null,
     ) {
@@ -1272,21 +979,6 @@ class PiAgentSession private constructor(context: Context) {
     private val searchIndex = SessionSearchIndex()
 
     // ------------------------------------------------------- model catalogue
-
-    /**
-     * When the next catalogue refresh is allowed, and whether one is running.
-     *
-     * `SharedPreferences` rather than a field: the deadline has to survive the
-     * process, or a phone that is offline would attempt — and wait for — the refresh
-     * on every launch. The pins next door are stored the same way, for the same
-     * reason: this is app state that is not a user *setting*, so it is not in
-     * [SettingsStore].
-     */
-    private val cataloguePrefs by lazy {
-        appContext.getSharedPreferences("pikit_model_catalogue", Context.MODE_PRIVATE)
-    }
-
-    private val catalogueRefreshRunning = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /**
      * One snippet per conversation whose *content* — not just its title — contains
@@ -1439,37 +1131,15 @@ class PiAgentSession private constructor(context: Context) {
 
 
     /**
-     * Reopens a saved conversation.
-     *
-     * The transcript is also re-fetched: switching sessions rebinds pi's state,
-     * so the messages shown afterwards come from `get_messages` rather than from
-     * anything the UI still had.
-     *
-     * ## The turn in flight
-     *
-     * `switch_session` ends the running turn — `RuntimeHost.teardownCurrent` starts
-     * with `await this.session.abort()` — so a move made while the agent is
-     * answering stops that answer, and there is no way to keep it. The refusal this
-     * used to be (a silent return, and a notice on the page saying why) was itself
-     * the report: the tap did nothing the user could act on. [interrupt] is the
-     * caller saying the user was asked and said yes; the page raises the question
-     * with `InterruptTurnDialog`, which is where the cost of the tap is spelled out.
-     */
-    fun switchSession(target: SessionSummary, interrupt: Boolean = false) {
-        if (turnInFlight && !interrupt) return
-        runCommand {
-            switchSessionTo(target.path)
-        }
-    }
-
-    /**
      * Rebinds the live process to [path] and re-reads its transcript.
      *
-     * Shared by the history list and by [restoreRememberedSession]: one
-     * implementation, so a restored session and a chosen one cannot drift.
-     * The transcript is re-fetched because switching rebinds pi's state —
-     * messages shown afterwards must come from `get_messages`, not from what
-     * the UI still held.
+     * Used by [restoreAfterLaunch] and by nothing else now: a move between
+     * conversations is a move between *processes* ([PiHost.openConversation]), so the
+     * only reason to rebind this one is that pi just opened a fresh file and the
+     * conversation it belongs to is the one this process was launched for.
+     *
+     * The transcript is re-fetched because switching rebinds pi's state — messages
+     * shown afterwards must come from `get_messages`, not from what the UI still held.
      */
     private suspend fun switchSessionTo(path: String) {
         val live = client ?: return
@@ -1480,7 +1150,7 @@ class PiAgentSession private constructor(context: Context) {
         // `success: true`, so without this the transcript on screen was replaced
         // by the messages of a session pi never opened.
         if (response.cancelled()) {
-            rememberSessionPath(_conversation.value.sessionFile)
+            adoptSessionPath(_conversation.value.sessionFile)
             return
         }
         // pi rebinds to a different session, so stale UI state would be wrong — but
@@ -1508,59 +1178,64 @@ class PiAgentSession private constructor(context: Context) {
             live.request("get_messages") { PiCommand.getMessages(it) }
         }.getOrNull()
         _conversation.update { ConversationReducer.replaceWithMessages(it, messages?.data) }
-        rememberSessionPath(_conversation.value.sessionFile)
+        adoptSessionPath(_conversation.value.sessionFile)
     }
 
     /**
-     * Rebinds a freshly launched agent to the session the user was last in.
+     * Notes the session file this process is in, so a relaunch can rebind to it.
+     *
+     * The path is also what a cold start remembers, and only the active conversation
+     * writes that: a background conversation finishing a turn must not decide what the
+     * next launch restores.
+     */
+    private fun adoptSessionPath(path: String?) {
+        if (path.isNullOrBlank()) return
+        restoreTarget = path
+        if (host.active.value === this) host.rememberLastSession(path)
+    }
+
+    /**
+     * Rebinds a freshly launched agent to the conversation it belongs to.
      *
      * ## Why this exists
      *
-     * pi has no resume flag: every `pi --mode rpc` launch opens a **new**
-     * session file. The handshake only folds `get_state` into the conversation
-     * — including that new `sessionFile` — while `items` and `turns` from the
-     * previous process stay on screen. The reader therefore saw their
-     * conversation and typed into a different one. Measured as the report:
-     * after 切后台/锁屏 and a few failed retries, the next message "在同一界面"
-     * started a new conversation.
+     * pi has no resume flag: every `pi --mode rpc` launch opens a **new** session
+     * file. The handshake only folds `get_state` into the conversation — including
+     * that new `sessionFile` — while `items` and `turns` from the previous process
+     * stay on screen. The reader therefore saw their conversation and typed into a
+     * different one. Measured as the report: after 切后台/锁屏 and a few failed
+     * retries, the next message "在同一界面" started a new conversation.
      *
-     * The path in force is remembered across restarts (including process
-     * death), and after every launch the agent is switched back to it and its
-     * messages re-read. [sessionRestoreTarget] is the pure rule.
+     * ## Which conversation this one is
+     *
+     * Three answers, in order: the file this conversation is already bound to (a
+     * restart, or the history row it was opened from), then — only for the first
+     * conversation of a cold start — the file the last run was in, and otherwise the
+     * fresh session pi just opened. [sessionRestoreTarget] is the pure rule.
      */
-    private suspend fun restoreRememberedSession() {
+    private suspend fun restoreAfterLaunch() {
         val live = client ?: return
-        // A cold start that opens a new conversation leaves the handshake's
-        // fresh session alone. Every later start of the agent still restores:
-        // abandoning a conversation already on screen is the bug this preference
-        // is not meant to bring back.
         val coldStart = coldStartRestore.getAndSet(false)
-        if (!shouldRestoreRememberedSession(
-                openNewOnColdStart = settingsStore.read().openNewOnLaunch,
-                coldStart = coldStart,
-            )
-        ) {
-            val opened = _conversation.value.sessionFile
-            if (!opened.isNullOrBlank()) rememberSessionPath(opened)
-            return
-        }
-        val remembered = lastRememberedSession()
         val opened = _conversation.value.sessionFile
-        if (remembered.isNullOrBlank() && !opened.isNullOrBlank()) {
-            rememberSessionPath(opened)
-            return
-        }
-        val target = sessionRestoreTarget(remembered, opened) { File(it).isFile }
-        if (target == null) {
-            // A remembered path whose file is gone is a stale key: clear it so
-            // the next launch does not chase a deleted conversation. When the
-            // handshake already opened the right file (or there is nothing to
-            // restore), just note whatever is in force and reload if the UI is
-            // empty — a cold start with the same path still needs the messages.
-            if (!remembered.isNullOrBlank() && !File(remembered).isFile) {
-                rememberSessionPath(null)
+        val wanted = restoreTarget ?: if (coldStart && restoresRememberedSession) {
+            if (shouldRestoreRememberedSession(
+                    openNewOnColdStart = settingsStore.read().openNewOnLaunch,
+                    coldStart = true,
+                )
+            ) {
+                host.lastRememberedSession()
+            } else {
+                null
             }
-            rememberSessionPath(opened ?: remembered)
+        } else {
+            null
+        }
+        val target = sessionRestoreTarget(wanted, opened) { File(it).isFile }
+        if (target == null) {
+            // A remembered path whose file is gone is a stale key: clear it so the next
+            // launch does not chase a deleted conversation.
+            if (wanted != null && !File(wanted).isFile) restoreTarget = null
+            adoptSessionPath(opened)
             if (_conversation.value.items.isEmpty() && opened != null) {
                 loadCurrentMessages(live)
             }
@@ -1569,16 +1244,6 @@ class PiAgentSession private constructor(context: Context) {
         Log.i(TAG, "restoring session $target (pi opened $opened)")
         switchSessionTo(target)
     }
-
-    private fun rememberSessionPath(path: String?) {
-        sessionPrefs.edit().apply {
-            if (path.isNullOrBlank()) remove(KEY_LAST_SESSION) else putString(KEY_LAST_SESSION, path)
-            apply()
-        }
-    }
-
-    private fun lastRememberedSession(): String? =
-        sessionPrefs.getString(KEY_LAST_SESSION, null)?.takeIf { it.isNotBlank() }
 
     /**
      * Holds a partial wake lock for the length of one turn.
@@ -1638,6 +1303,43 @@ class PiAgentSession private constructor(context: Context) {
         get() = _conversation.value.isStreaming && _agent.value is AgentStatus.Running
 
     /**
+     * [turnInFlight] as a flow, for the one observer that is not a screen.
+     *
+     * The foreground service draws its shade entry from this: an entry that says "an
+     * agent is running" for as long as a process is alive is the noise the reader
+     * reported, and what they actually want to know from the shade is whether an answer
+     * is still being written.
+     */
+    val streaming: StateFlow<Boolean> =
+        kotlinx.coroutines.flow.combine(_conversation, _agent) { conversation, status ->
+            conversation.isStreaming && status is AgentStatus.Running
+        }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+
+    /**
+     * Stops this conversation for good and releases its scope.
+     *
+     * [PiHost.closeConversation]'s half of a close: the transcript is pi's and already
+     * on disk, so nothing is saved here — the child is closed gracefully (stdin closed,
+     * which is pi's only clean shutdown) and the coroutines that were draining it are
+     * cancelled afterwards. Called on a conversation that is already out of the pool, so
+     * nothing observes the `Stopped` it writes.
+     */
+    internal fun shutdown() {
+        stopRequested = true
+        autoRestartJob?.cancel()
+        autoRestartJob = null
+        settingsRestartJob?.cancel()
+        releaseCpuDuringTurn()
+        val current = client
+        detach()
+        _agent.value = AgentStatus.Stopped
+        scope.launch {
+            withContext(Dispatchers.IO) { current?.close() }
+            scope.cancel()
+        }
+    }
+
+    /**
      * Re-reads the session state.
      *
      * The response has to be folded in by hand: a correlated response is consumed
@@ -1670,7 +1372,7 @@ class PiAgentSession private constructor(context: Context) {
         _conversation.update { ConversationReducer.reduce(it, response) }
         // The session in force is whatever this reply names: a `new_session`
         // or a clone lands here, and the next relaunch has to come back to it.
-        rememberSessionPath(_conversation.value.sessionFile)
+        adoptSessionPath(_conversation.value.sessionFile)
         // The supported levels follow the model, so a state refresh is also the
         // moment they are re-read: switching the model on the composer changes
         // which levels exist without touching anything else.
@@ -2332,36 +2034,18 @@ class PiAgentSession private constructor(context: Context) {
 
     // -------------------------------------------------------------- rebuild
 
-    /** True while [rebuildEnvironment] is unpacking. */
-    private val _rebuildRunning = MutableStateFlow(false)
-    val rebuildRunning: StateFlow<Boolean> = _rebuildRunning.asStateFlow()
-
     /**
      * Re-extracts the whole runtime from the APK — the escape hatch the
      * seed/content split made rarely necessary.
      *
-     * Deleting the stamps *is* the mechanism: [BootstrapInstaller.ensureInstalled]
-     * compares them, and a missing stamp is a mismatch, so the next pass takes
-     * the rebuild path — capture the user's packages, unpack the seed and the
-     * content layer, replay what was captured. Nothing else is touched here;
-     * the installer owns the rest. A running agent is stopped first, because
-     * the environment under it is about to be replaced.
+     * The operation is the host's because the environment is: it stops *every* live
+     * conversation, not just this one, and the page's row is the same row whichever
+     * conversation opened it. See [PiHost.rebuildEnvironment].
      */
-    fun rebuildEnvironment() {
-        if (!_rebuildRunning.compareAndSet(expect = false, update = true)) return
-        scope.launch {
-            try {
-                stopAgent()
-                runCatching { env.stampFile.delete() }
-                runCatching { env.contentStampFile.delete() }
-                _runtime.value = RuntimeStatus.NotInstalled
-                ensureEnvironment()
-            } finally {
-                _rebuildRunning.value = false
-                refreshPackages()
-            }
-        }
-    }
+    fun rebuildEnvironment() = host.rebuildEnvironment()
+
+    /** True while [PiHost.rebuildEnvironment] is unpacking. */
+    val rebuildRunning: StateFlow<Boolean> get() = host.rebuildRunning
 
     // ----------------------------------------------------------------- backup
 
@@ -2667,6 +2351,7 @@ class PiAgentSession private constructor(context: Context) {
                     settings = profile.modelSettings,
                     api = profile.api,
                     apiKey = ProfileAddressing.apiKeyReference(profile.id),
+                    omitsFinishReason = profile.omitsFinishReason,
                 )
             } else if (runtimeId != provider.id) {
                 builtInProviderObject(
@@ -2864,14 +2549,6 @@ class PiAgentSession private constructor(context: Context) {
         private const val TURN_WAKE_LOCK_MAX_MS = 6 * 60 * 60 * 1000L
 
         private val ENVELOPE_ID = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"")
-
-        @Volatile
-        private var instance: PiAgentSession? = null
-
-        fun of(context: Context): PiAgentSession =
-            instance ?: synchronized(this) {
-                instance ?: PiAgentSession(context).also { instance = it }
-            }
     }
 }
 
@@ -3165,6 +2842,25 @@ internal fun modelsJsonWith(
                 (next["baseUrl"] as? JsonPrimitive)?.contentOrNull == definition.writtenBaseUrl ->
                 next.remove("baseUrl")
         }
+        // The endpoint's stream format, as the reader stated it. A provider-level
+        // `compat` is merged into every model by pi's composer, which is why one key
+        // here is enough for a provider whose models are a list; the other keys of a
+        // `compat` the user wrote by hand are carried over untouched.
+        //
+        // Withdrawing it is not the same as leaving it: the switch is the only way to
+        // turn the behaviour off, and a `false` left behind would keep accepting a
+        // truncated stream as complete. The key is therefore treated as the app's when
+        // it is exactly `false` — the one value this app writes.
+        val compat = (next["compat"] as? JsonObject)?.toMutableMap()
+        if (definition.omitsFinishReason) {
+            val merged = (compat ?: LinkedHashMap()).apply {
+                put("supportsFinishReason", JsonPrimitive(false))
+            }
+            next["compat"] = JsonObject(merged)
+        } else if (compat != null && (compat["supportsFinishReason"] as? JsonPrimitive)?.booleanOrNull == false) {
+            compat.remove("supportsFinishReason")
+            if (compat.isEmpty()) next.remove("compat") else next["compat"] = JsonObject(compat)
+        }
         // A `models` value that is neither absent nor an array is left exactly as the
         // user wrote it, definitions included: pi rejects the document on its schema
         // check either way, and replacing what the app cannot read is not its job.
@@ -3238,6 +2934,12 @@ internal data class ModelDefinitions(
     val overrides: Map<String, ModelSettings> = emptyMap(),
     val baseUrl: String = "",
     val writtenBaseUrl: String = "",
+    /**
+     * Whether this profile's endpoint omits `finish_reason`, which goes into the
+     * provider entry as `compat.supportsFinishReason: false` — see
+     * [ModelProfile.omitsFinishReason] for why the statement is the reader's.
+     */
+    val omitsFinishReason: Boolean = false,
 )
 
 /**
@@ -3341,6 +3043,7 @@ internal fun modelDefinitions(
             // Normalised here so the file and the model-list probe agree on the path.
             baseUrl = normalizeApiBaseUrl(profile.baseUrl),
             writtenBaseUrl = normalizeApiBaseUrl(profile.writtenBaseUrl),
+            omitsFinishReason = profile.omitsFinishReason,
         ),
     )
 }
@@ -3381,6 +3084,11 @@ internal fun builtInProviderObject(
         put("baseUrl", baseUrl)
         put("api", api)
         put("apiKey", ProfileAddressing.apiKeyReference(profile.id))
+        // A second profile of a built-in provider is a whole provider object of this
+        // app's, so the endpoint's stream format travels with it: the catalogue's `compat`
+        // is copied per model below (see `storeProviderModels`), and this is the one key
+        // the reader can state about the *endpoint*.
+        if (profile.omitsFinishReason) put("compat", finishReasonCompat())
         put(
             "models",
             buildJsonArray {
@@ -3392,6 +3100,16 @@ internal fun builtInProviderObject(
         )
     }
 }
+
+/**
+ * The `compat` object that makes pi infer a stop reason from the end of a stream.
+ *
+ * One value, one place: [ModelProfile.omitsFinishReason] is the reader's statement, and
+ * every writer of a `models.json` provider entry states it the same way.
+ */
+internal fun finishReasonCompat(): JsonObject = JsonObject(
+    mapOf("supportsFinishReason" to JsonPrimitive(false)),
+)
 
 /** A catalogue model object without the fields that describe its host. */
 private fun withoutHostFields(facts: JsonObject): JsonObject =
@@ -3854,7 +3572,7 @@ internal fun clearedQueueText(response: PiRecord.Response?): String? {
     return messages.takeIf { it.isNotEmpty() }?.joinToString("\n")
 }
 
-private fun PiSettings.toLaunchOptions(
+internal fun PiSettings.toLaunchOptions(
     nodePath: String,
     cliEntry: String,
     workingDir: String,

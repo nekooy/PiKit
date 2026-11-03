@@ -13,6 +13,7 @@ import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import pi.kit.mob.R
+import pi.kit.mob.locales.stringsFor
 import pi.kit.mob.ui.MainActivity
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -20,42 +21,43 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Keeps the agent process alive and privileged while the UI is backgrounded.
+ * Keeps the agent processes alive and privileged while the UI is backgrounded.
  *
- * The agent is a long-lived child process that can be mid-turn for minutes; an
- * Activity-scoped owner would have it killed as soon as the user switched apps.
- * This service holds a foreground notification so the OS leaves the process
- * alone, and deliberately owns no state of its own — [PiAgentSession] is the
- * single source of truth, so the UI can bind, unbind and re-attach freely.
+ * The agents are long-lived child processes that can be mid-turn for minutes; an
+ * Activity-scoped owner would have them killed as soon as the user switched apps. This
+ * service holds a foreground notification so the OS leaves the process alone, and
+ * deliberately owns no state of its own — [PiHost] is the single source of truth, so the
+ * UI can bind, unbind and re-attach freely.
  *
- * ## Why the shade entry only exists while the UI does not
+ * ## The entry exists while an answer is being written, and not otherwise
  *
- * The report "去除 agent is running 的通知" is about a persistent entry that
- * said nothing the reader did not already know — they were *in* the app watching
- * the turn. A foreground service exists *because* of its notification, so the
- * notification cannot be deleted while the claim is held; what it can do is
- * appear only when the claim is doing work. [onUiVisible] drops the shade entry
- * the moment a window is in front (the Activity is already keeping the process
- * alive), and the status collector puts it back when the UI leaves. The
- * keep-alive is unchanged; the noise is not.
+ * A shade entry that says "an agent is running" for as long as a process is alive is the
+ * persistent noise the reader reported: between turns there is nothing happening that a
+ * notification could report. The claim it holds is a different question from the entry —
+ * a foreground service exists *because* of its notification — so what this does is:
+
+ *  * **an answer is arriving** — the entry is up, and it names how many conversations
+ *    are answering. That is the window in which the OS reclaiming the process would
+ *    destroy work the reader is waiting for;
+ *  * **the UI is in front** — no entry. The Activity is already keeping the process
+ *    alive, and the reader can see the stream itself;
+ *  * **nothing is streaming** — no entry either. The conversation is on disk, a killed
+ *    process costs a relaunch on the next prompt, and the Terminal tab's shells are the
+ *    only thing that could be lost — which is the trade the reader asked for by
+ *    choosing "only while it is answering".
  *
- * When the entry *is* up it is silent: one short line of text so the shade
- * entry is not a blank icon, and nothing more. A user who wants even that gone
- * turns the *Agent* channel off in system settings — `startForeground` still
- * succeeds and the service stays a foreground service.
+ * [onUiVisible] is what tells the service a window is in front; the streaming count comes
+ * from [PiHost.streamingConversations].
  *
- * ## Why the service tracks [AgentStatus]
+ * ## Why the service tracks the pool
  *
- * It used to decide everything once, in [onStartCommand]: promote, then stop
- * if that one `startAgent` returned false. Two things were wrong with that.
- * A start that later succeeded from the UI — the Agent page's Restart, a
- * `scheduleRestart` after a settings edit, the one automatic recovery after a
- * crash — never brought the service back, so the turn that needed keep-alive
- * most was the one running without it. And a deliberate stop from the Agent
- * page left the shade claiming "running". The collector below is the fix: the
- * service stays as long as the agent has something to supervise, drops the
- * notification the moment it is not running (or the UI covers it), and tears
- * itself down when the agent is deliberately stopped.
+ * It used to decide everything once, in [onStartCommand]: promote, then stop if that one
+ * `startAgent` returned false. Two things were wrong with that. A start that later
+ * succeeded from the UI — the Agent page's Restart, a `scheduleRestart` after a settings
+ * edit, the one automatic recovery after a crash — never brought the service back. And a
+ * deliberate stop from the Agent page left the shade claiming "running". The collectors
+ * below are the fix: the service stays as long as the host has a live conversation to
+ * supervise, and tears itself down when the last one is closed deliberately.
  */
 class PiAgentService : LifecycleService() {
 
@@ -63,47 +65,41 @@ class PiAgentService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
-        // Drop the shade entry (and the foreground claim with it) when the agent
-        // is not actually running, and take the whole service down when a stop
-        // the user asked for lands. `sawActive` skips the initial `Stopped` a
-        // cold service sees before its own `startAgent` has been called — that
-        // one must not race `onStartCommand` into `stopSelf`.
+        // The pool's own lifecycle: drop the shade entry when the last conversation is
+        // closed, and take the whole service down when a stop the user asked for lands.
+        // `sawActive` skips the initial empty list a cold service sees before its own
+        // `startAgent` has been called — that one must not race `onStartCommand` into
+        // `stopSelf`.
         lifecycleScope.launch {
             var sawActive = false
-            PiAgentSession.of(this@PiAgentService).agent.collect { status ->
-                when (status) {
-                    is AgentStatus.Stopped -> {
-                        if (sawActive) {
-                            stopForegroundCompat()
-                            // Debounced, because `scheduleRestart` and
-                            // `restartAgent` stop the agent and start it again
-                            // in one breath and a `stopSelf` landing between
-                            // the two would tear down the service the start
-                            // just asked for. A start inside the window cancels
-                            // this job; a stop that stays stopped still dies.
-                            stopJob?.cancel()
-                            stopJob = lifecycleScope.launch {
-                                delay(STOP_DEBOUNCE_MS)
-                                stopSelf()
-                            }
-                        }
-                    }
-                    is AgentStatus.Starting, is AgentStatus.Running -> {
-                        sawActive = true
-                        stopJob?.cancel()
-                        syncNotification()
-                    }
-                    is AgentStatus.Failed -> {
-                        sawActive = true
-                        stopJob?.cancel()
-                        // Honest shade: a process that is not answering is not
-                        // "running". The service itself stays up for the one
-                        // automatic restart, and that restart's `startAgent`
-                        // puts the notification back.
-                        stopForegroundCompat()
+            host.sessions.collect { live ->
+                if (live.isNotEmpty()) {
+                    sawActive = true
+                    stopJob?.cancel()
+                    syncNotification()
+                    return@collect
+                }
+                if (sawActive) {
+                    stopForegroundCompat()
+                    // Debounced, because `closeConversation` can empty the pool and a
+                    // fresh conversation be created on the same frame — a `stopSelf`
+                    // landing between them would tear down the service the new
+                    // conversation just asked for. A live conversation inside the window
+                    // cancels this job; a pool that stays empty still dies.
+                    stopJob?.cancel()
+                    stopJob = lifecycleScope.launch {
+                        delay(STOP_DEBOUNCE_MS)
+                        stopSelf()
                     }
                 }
             }
+        }
+        // What the entry is *for*: the count of conversations that are answering right
+        // now. Collected separately from the pool so a token arriving does not rebuild
+        // anything but the sentence, and so this is the one signal that turns the claim
+        // on and off.
+        lifecycleScope.launch {
+            host.streamingConversations.collect { syncNotification() }
         }
     }
 
@@ -112,7 +108,7 @@ class PiAgentService : LifecycleService() {
 
         if (intent?.action == ACTION_STOP) {
             lifecycleScope.launch {
-                PiAgentSession.of(this@PiAgentService).stopAgent()
+                host.stopAllAgents()
                 stopForegroundCompat()
                 stopSelf()
             }
@@ -128,22 +124,21 @@ class PiAgentService : LifecycleService() {
 
         // A service entered through `startForegroundService` owes the system a
         // `startForeground` call inside its deadline (5 s on Android 12+), and
-        // it owes one even while the agent is still `Stopped` — which is the
-        // state a cold launch is in, while the runtime image unpacks. Waiting
-        // for `Running` before promoting is what turned a first-run install into
+        // it owes one even while nothing is streaming — which is the state a
+        // cold launch is in, while the runtime image unpacks. Waiting for the
+        // agent before promoting is what turned a first-run install into
         // `ForegroundServiceDidNotStartInTimeException`. Promote first, then let
-        // [syncNotification] take the notification away again if the agent is
-        // not actually up *or* the UI already covers it.
+        // [syncNotification] take the notification away again if no answer is
+        // being written.
         promoteToForeground()
 
         syncNotification()
 
         lifecycleScope.launch {
-            val session = PiAgentSession.of(this@PiAgentService)
-            val started = session.startAgent()
+            val started = host.startActive()
             if (!started) {
                 // Nothing to supervise; drop the notification rather than
-                // leaving a permanent "running" lie in the shade. The collector
+                // leaving a permanent "answering" lie in the shade. The collector
                 // covers the case where a later start succeeds from the UI.
                 stopForegroundCompat()
                 stopSelf()
@@ -151,7 +146,7 @@ class PiAgentService : LifecycleService() {
         }
 
         // Sticky: if the OS reclaims the process mid-turn, the service comes
-        // back and `startAgent` restores the remembered session. A null intent
+        // back and `startActive` restores the remembered conversation. A null intent
         // after that reclaim is not "nobody asked for an agent" — it is "the
         // agent was already supposed to be running" (the report of a turn
         // interrupted by 切后台/锁屏). The explicit stop path above is the one
@@ -160,22 +155,23 @@ class PiAgentService : LifecycleService() {
     }
 
     /**
-     * Shows the ongoing notification only while the agent is actually up *and*
+     * Shows the ongoing notification only while an answer is being written *and*
      * the UI is not already in front.
      *
-     * Called from [onStartCommand], from the status collector and from
+     * Called from [onStartCommand], from both collectors and from
      * [onUiVisible], so the shade never keeps claiming anything across a crash,
      * a deliberate stop, or the user simply looking at the app.
      */
     private fun syncNotification() {
-        val status = PiAgentSession.of(this).agent.value
-        val active = status is AgentStatus.Starting || status is AgentStatus.Running
-        if (active && !uiVisible.get()) {
+        val answering = host.streamingConversations.value > 0
+        if (answering && !uiVisible.get()) {
             promoteToForeground()
         } else {
             stopForegroundCompat()
         }
     }
+
+    private val host: PiHost get() = PiHost.of(this)
 
     private fun promoteToForeground() {
         ServiceCompat.startForeground(
@@ -195,17 +191,17 @@ class PiAgentService : LifecycleService() {
     }
 
     /**
-     * The ongoing keep-alive marker.
+     * The ongoing marker, drawn while answers are arriving.
      *
      * `PRIORITY_MIN` + a `MIN`-importance channel means no peek, no sound, no
      * badge — it sits at the bottom of the shade as the price of the foreground
-     * claim. The title and body are one short English sentence so a shade entry
-     * with nothing on it does not read as a rendering fault; a user who wants
-     * even that gone turns the *Agent* channel off in system settings —
-     * `startForeground` still succeeds and the service stays a foreground
-     * service.
+     * claim. The title and body are one short sentence in the interface's language: a
+     * shade entry with nothing on it does not read as a rendering fault, and an entry
+     * that is always there is what "只有有 AI 在输出时才有" asks to be rid of.
      */
     private fun buildNotification(): Notification {
+        val answering = host.streamingConversations.value.coerceAtLeast(1)
+        val text = stringsFor(host.settingsStore.read().language)
         val openApp = PendingIntent.getActivity(
             this,
             0,
@@ -221,11 +217,11 @@ class PiAgentService : LifecycleService() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(getString(R.string.notification_title))
-            .setContentText(getString(R.string.notification_text))
+            .setContentTitle(text.shade.title)
+            .setContentText(text.shade.answering(answering))
             .setOngoing(true)
             .setContentIntent(openApp)
-            .addAction(0, getString(R.string.notification_stop), stopAgent)
+            .addAction(0, text.shade.stop, stopAgent)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setSilent(true)
             .build()
@@ -252,12 +248,13 @@ class PiAgentService : LifecycleService() {
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            val text = stringsFor(PiHost.of(context).settingsStore.read().language)
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                context.getString(R.string.notification_channel_name),
+                text.shade.channelName,
                 NotificationManager.IMPORTANCE_MIN,
             ).apply {
-                description = context.getString(R.string.notification_channel_description)
+                description = text.shade.channelDescription
                 setShowBadge(false)
                 setSound(null, null)
                 enableVibration(false)
@@ -277,7 +274,7 @@ class PiAgentService : LifecycleService() {
 
         /**
          * Tells the service whether a window is in front, so the shade entry
-         * appears only when the keep-alive claim is actually doing work.
+         * appears only when an answer is being written and nobody is looking at it.
          *
          * [MainActivity] calls this from `onStart`/`onStop`. A service that is
          * not up yet ignores the message: the next `start`/`syncNotification`
@@ -286,8 +283,8 @@ class PiAgentService : LifecycleService() {
          * Also the moment to hold (or drop) the background wake lock: the turn
          * lock is owned by [PiAgentSession] and only covers a live turn, while
          * the "息屏后 terminated" report is about the process going away
-         * *between* turns as well. A partial lock while the UI is gone and the
-         * agent is up keeps the child's stdout drained for as long as the user
+         * *between* turns as well. A partial lock while the UI is gone and an
+         * answer is streaming keeps the child's stdout drained for as long as the user
          * has actually left.
          */
         fun onUiVisible(context: Context, visible: Boolean) {
@@ -300,22 +297,21 @@ class PiAgentService : LifecycleService() {
         }
 
         /**
-         * A partial wake lock held while the UI is gone and the agent is up.
+         * A partial wake lock held while the UI is gone and an answer is arriving.
          *
          * Separate from the turn lock on purpose: that one is acquired on
          * `agent_start` and released on `agent_settled`, so a screen-off with
          * nothing streaming had nothing holding the CPU. This one is the
-         * "user left the app" lock, and it is what the keep-alive is for.
+         * "user left the app while something was still being written" lock, and it is
+         * what the keep-alive is for.
          */
         private var backgroundWakeLock: android.os.PowerManager.WakeLock? = null
 
         private fun syncBackgroundWakeLock(context: Context, uiGone: Boolean) {
-            val agentUp = runCatching {
-                PiAgentSession.of(context).agent.value
-            }.getOrNull().let {
-                it is AgentStatus.Starting || it is AgentStatus.Running
-            }
-            if (uiGone && agentUp) {
+            val answering = runCatching {
+                PiHost.of(context).streamingConversations.value > 0
+            }.getOrDefault(false)
+            if (uiGone && answering) {
                 val lock = backgroundWakeLock ?: (context.getSystemService(Context.POWER_SERVICE)
                     as android.os.PowerManager)
                     .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "pikit:agent-bg")

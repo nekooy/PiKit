@@ -219,6 +219,8 @@ internal object JapaneseStrings : Strings {
     }
 
     override val sessions = object : Strings.Sessions {
+        override val running = "応答中"
+        override fun poolFull(max: Int) = "同時に開ける会話は $max 件までです。一つ閉じてから開いてください。"
         override val title = "会話履歴"
         override val loading = "読み込み中…"
         override fun selected(count: Int) = "$count 件を選択中"
@@ -431,18 +433,15 @@ internal object JapaneseStrings : Strings {
                 "セッションファイルに書き込まれます。"
         override val agentContextInstructions = "グローバル AGENTS.md"
         override val agentContextAuthorTitle = "既定の指示"
-        override val agentContextAuthorSubtitle = "PiKit が用意し、編集できます。PiKit が更新すると置き換わります"
+        override val agentContextAuthorSubtitle = "PiKit が管理します：実行環境・権限の段階・ルールを各ビルドで書き直します"
         override val agentContextUserTitle = "ユーザーの指示"
         override val agentContextUserSubtitle = "最初は空で、あなただけのもの。PiKit は書き換えません"
         override val agentContextUserEmpty = "まだ空です。開いて書いてください"
         override val agentContextInstructionsEditable = "編集可"
+        override val agentContextReadOnly = "読み取り専用"
         override val agentContextSave = "保存"
         override val agentContextSaved = "保存しました"
         override val agentContextFailed = "保存できませんでした。ファイルは変更されていません"
-        override val agentContextRestore = "既定に戻す"
-        override val agentContextRestoreTitle = "既定の内容に戻しますか？"
-        override val agentContextRestoreBody = "ファイルは PiKit の初期内容に戻り、書いた内容は失われます。"
-        override val agentContextRestoreConfirm = "戻す"
 
         override val profilesTitle = "モデルとプロバイダー"
         override val profilesEmptyHint =
@@ -494,6 +493,9 @@ internal object JapaneseStrings : Strings {
                 "（例：https://relay.example.com/v1）。ホスト名のみの場合は /v1 が自動的につきます。" +
                 "プロバイダー一覧の「Custom endpoint」は自前で設定するエンドポイントで、" +
                 "任意の互換リレーに繋げられ、API プロトコルも変更できます。"
+        override val finishReasonTitle = "端点が finish_reason を返さない"
+        override val finishReasonSubtitle =
+            "中継サーバーやゲートウェイの回答がこのフィールドなしで終わる場合にオンにします。終了を pi が推定するため、途中で切れた回答も完了として扱われます。"
         override val needBaseUrl = "カスタムエンドポイントにはベース URL が必要です。"
         override val invalidBaseUrl =
             "エンドポイントはホスト名付きの http(s) URL でなければなりません" +
@@ -908,6 +910,14 @@ internal object JapaneseStrings : Strings {
         override val setupNote = "これは一度だけ行われます。Termux、Node.js、Pi エージェントは APK から展開されるため、ダウンロードは不要です。"
         override val environmentIncomplete = "実行環境が不完全です"
         override val couldNotPrepare = "実行環境を準備できませんでした"
+    }
+
+    override val shade = object : Strings.Shade {
+        override val title = "PiKit"
+        override fun answering(count: Int) = if (count <= 1) "1 件の会話が応答中" else "$count 件の会話が応答中"
+        override val stop = "停止"
+        override val channelName = "Agent"
+        override val channelDescription = "Agent が回答を出力している間だけ表示されます。"
     }
 
     override val common = object : Strings.Common {
