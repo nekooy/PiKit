@@ -362,3 +362,38 @@ out in [MAINTAINING.md](MAINTAINING.md)'s *The README preview strip*, steps 2 an
 which is the recipe for exactly this. Delete the seed file from the app afterwards: it
 lands in its real session directory. Nothing here is committed — `.tooling/` is ignored,
 and a seeded transcript is scaffolding for a screenshot, not a fixture.
+
+### Verifying a live turn without a provider
+
+A seeded transcript is a picture of a turn; it cannot exercise the stream. The way to
+get a real one is a throwaway OpenAI-compatible endpoint on the host — the emulator
+reaches the host's loopback as `10.0.2.2`, so a profile whose endpoint is
+`http://10.0.2.2:19001/v1` and whose model id matches what the mock serves drives the
+whole path: spawn, prompt, streamed deltas, `agent_settled`, the notification, the
+transcript.
+
+```python
+# .tooling/mock-llm.py — the shape that matters is the SSE frames, not the words.
+# GET /v1/models answers one model; POST /v1/chat/completions streams deltas and
+# ends with a chunk carrying `finish_reason` plus `data: [DONE]`. `--no-finish`
+# omits the field, which is how a relay behaves and how pi's
+# "Stream ended without finish_reason" is reproduced on demand.
+```
+
+Write it to `.tooling/` (ignored), run it on the host, and give the emulator's profile
+that URL. Three things it settles that nothing else can:
+
+- **The console-only failure.** With `--no-finish`, the transcript shows the exact red
+  line and the `Retrying (attempt 1/8)` notice, and the profile's *Stream ends without
+  finish_reason* switch then makes the same endpoint answer cleanly — the app-side write
+  is checkable with `run-as … cat files/home/.pi/agent/models.json`, which must carry
+  `compat: {"supportsFinishReason": false}` for that provider after a relaunch.
+- **The notification rule.** Send a prompt, press Home within a second, and poll
+  `adb shell dumpsys notification --noredact | grep -c "pkg=pi.kit.mob"`: it goes 0 → 2
+  while deltas arrive and back to 0 when the turn settles. Grant
+  `POST_NOTIFICATIONS` first (`adb shell pm grant pi.kit.mob
+  android.permission.POST_NOTIFICATIONS`) or the entry is invisible and the test reads
+  as a failure.
+- **A second conversation.** A saved conversation opened from the history list launches
+  its own child; `logcat -s PiKit:I` prints `restoring session …` with the path it bound
+  to, and the answer already streaming in the first conversation is untouched.
