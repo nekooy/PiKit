@@ -211,6 +211,23 @@ fun Modifier.glassLift(
     }
 }
 
+/**
+ * The same lift for a surface that paints its own opaque fill.
+ *
+ * The hand-drawn version blurs the outline with a `MaskFilter`, and a blur that wide on a
+ * thousand-pixel capsule is re-rasterised on every frame it is drawn — measured while the
+ * keyboard closed, that was a 48 ms frame. An opaque fill hides the silhouette a shadow
+ * elevation gets wrong, so an opaque surface can have the cheap one: same depth, no
+ * per-frame blur, and no white block because there is nothing translucent to show it
+ * through.
+ */
+fun Modifier.solidLift(shape: Shape, elevation: Dp = PiGlass.elevation): Modifier =
+    graphicsLayer {
+        this.shape = shape
+        clip = false
+        shadowElevation = elevation.toPx()
+    }
+
 object PiTone {
 
     @Composable
@@ -218,6 +235,21 @@ object PiTone {
 
     @Composable
     fun liveContainer(): Color = MiuixTheme.colorScheme.tertiaryContainer
+
+    /**
+     * The ink of a finished-and-unread dot.
+     *
+     * The palette has an accent, an error pair and greys, and no green: "done" was never
+     * a state this interface drew. The drawer needs it now, as the counterpart of the
+     * accent's "answering", so it is two fixed greens rather than a role — one that
+     * carries on white (4.6:1) and one that carries on black (7.1:1).
+     */
+    @Composable
+    fun done(): Color = if (MiuixTheme.colorScheme.surface.luminance() < DARK_BASE_LUMINANCE) {
+        Color(0xFF4CD07E)
+    } else {
+        Color(0xFF1FA855)
+    }
 
     @Composable
     fun error(): Color = MiuixTheme.colorScheme.error

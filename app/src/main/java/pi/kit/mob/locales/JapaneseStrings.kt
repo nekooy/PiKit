@@ -214,6 +214,7 @@ internal object JapaneseStrings : Strings {
 
     override val sessions = object : Strings.Sessions {
         override val running = "応答中"
+        override val unread = "回答済み・未読"
         override fun poolFull(max: Int) = "同時に $max 件が回答中です。一つ終わってから開いてください。"
         override val loading = "読み込み中…"
         override fun selected(count: Int) = "$count 件を選択中"

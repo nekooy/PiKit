@@ -497,6 +497,42 @@ class PiHost private constructor(context: Context) {
      * reader with two answers arriving sees that rather than a repeated "one".
      */
     @OptIn(ExperimentalCoroutinesApi::class)
+    /**
+     * The conversations answering right now, and the ones that finished unseen.
+     *
+     * Two flows rather than a flag per row: the drawer is a list of sessions, and each
+     * row has to say which of the two states it is in — answering (accent) or answered
+     * while the reader was elsewhere (green) — without holding a subscription of its own
+     * for every conversation in the file.
+     */
+    val streamingPaths: StateFlow<Set<String>> = _sessions
+        .flatMapLatest { live ->
+            if (live.isEmpty()) {
+                kotlinx.coroutines.flow.flowOf(emptySet<String>())
+            } else {
+                kotlinx.coroutines.flow.combine(live.map { it.streaming }) { flags ->
+                    live.filterIndexed { index, _ -> flags[index] }
+                        .mapNotNull { it.sessionPath }
+                        .toSet()
+                }
+            }
+        }
+        .stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptySet())
+
+    val unreadPaths: StateFlow<Set<String>> = _sessions
+        .flatMapLatest { live ->
+            if (live.isEmpty()) {
+                kotlinx.coroutines.flow.flowOf(emptySet<String>())
+            } else {
+                kotlinx.coroutines.flow.combine(live.map { it.finishedUnseen }) { flags ->
+                    live.filterIndexed { index, _ -> flags[index] }
+                        .mapNotNull { it.sessionPath }
+                        .toSet()
+                }
+            }
+        }
+        .stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptySet())
+
     val streamingConversations: StateFlow<Int> = _sessions
         .flatMapLatest { live ->
             if (live.isEmpty()) {
@@ -526,6 +562,51 @@ class PiHost private constructor(context: Context) {
         // on its first launch (see `PiAgentSession.restoreAfterLaunch`).
         _sessions.value = listOf(_active.value)
         _active.value.restoresRememberedSession = true
+
+        // **Only what is answering keeps a process.**
+        //
+        // A live conversation is a Node.js child, and one that has finished its turn is
+        // an idle child holding ~120 MB for a transcript that is already on disk. The
+        // pool used to keep `MAX_LIVE` of those, which is why "five at once" read as a
+        // limit on conversations; the limit is really about five *answers* in flight. An
+        // idle child is stopped here: switching to it starts it again (`RootContent`'s
+        // launch effect sees `Stopped`), and a turn that finished in the background stops
+        // it as soon as it settles.
+        sweepIdleAgents()
+    }
+
+    /**
+     * Stops every conversation that is neither on screen nor answering.
+     *
+     * Watched from three places because any of them can be the last thing that happens:
+     * the reader switching away, a background turn settling, and a conversation leaving
+     * the pool. The sweep is idempotent — a stopped conversation is not in the list — so
+     * the three watchers can fire freely.
+     */
+    private fun sweepIdleAgents() {
+        scope.launch { _active.collect { stopIdleAgents() } }
+        scope.launch { _sessions.collect { stopIdleAgents() } }
+        scope.launch {
+            _sessions
+                .flatMapLatest { live ->
+                    if (live.isEmpty()) {
+                        kotlinx.coroutines.flow.flowOf(Unit)
+                    } else {
+                        kotlinx.coroutines.flow.combine(live.map { it.streaming }) { _ -> Unit }
+                    }
+                }
+                .collect { stopIdleAgents() }
+        }
+    }
+
+    private fun stopIdleAgents() {
+        val active = _active.value
+        _sessions.value
+            .filter { it !== active && !it.streaming.value && it.agent.value is AgentStatus.Running }
+            .forEach { idle ->
+                Log.i(TAG, "stopping an idle conversation's agent")
+                scope.launch { idle.stopAgent() }
+            }
     }
 
     /**
@@ -608,6 +689,8 @@ class PiHost private constructor(context: Context) {
             _sessions.value = _sessions.value + session
         }
         _active.value = session
+        // Whatever it finished while it was not on screen has now been seen.
+        session.markSeen()
         session.rememberAsLastConversation()
     }
 

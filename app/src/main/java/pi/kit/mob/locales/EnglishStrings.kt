@@ -215,6 +215,7 @@ internal object EnglishStrings : Strings {
 
     override val sessions = object : Strings.Sessions {
         override val running = "Answering now"
+        override val unread = "Answered, not read"
         override fun poolFull(max: Int) = "$max conversations are answering right now — wait for one to finish before opening another."
         override val loading = "Loading…"
         override fun selected(count: Int) = "$count selected"

@@ -281,21 +281,29 @@ because the strip version was worse:
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
-- **The fade is a vertical gradient** from `surface` to transparent over the bar and about
-  34dp below it, in four stops (`100% → 62% → 26% → 0`) rather than two: a two-stop ramp
-  hits its transparent end while the eye still expects a gradual departure, so the row
-  crossing it seemed to snap into place. It is a fade and not a blur: Compose has no backdrop filter, and a real
+- **The fade starts at the status bar's bottom edge**, not at the button row's: its solid
+  part is exactly the status bar's height and the ramp runs from there, so a row begins to
+  dissolve the moment it leaves the clock's line. It is a four-stop ramp
+  (`100% → 62% → 26% → 0`): a two-stop one hits its transparent end while the eye still
+  expects a gradual departure, so the row crossing it seemed to snap into place. It is a fade and not a blur: Compose has no backdrop filter, and a real
   blur here would mean rendering the transcript twice (once through a `RenderEffect`) —
   a second copy of a `LazyColumn` for an effect that the gradient already carries at
   arm's length. The reference's blur is a backdrop filter's; this is the same idea drawn
   by hand, and it is why the seam is invisible while the pixels differ.
 
-**The bottom of the page is a fade too.** The composer's band is transparent at its top
-and reaches `surface` where the field starts, the transcript ends under a 30dp gradient
-of its own, and the chips float on the transparent part exactly as the marks float on the
-top's. This is what lets the page have no chrome at either end: the conversation is the
-page, and everything on top of it either has a surface (the field, the chips, the
-capsules) or is a gradient.
+**The bottom of the page is a fade too, and it starts at the field.** The composer is a
+band that *floats over* the transcript rather than a row under it: the list's bottom
+content padding is the band's measured height, so the end of the conversation still
+scrolls clear of it, while a row in the middle of the list passes *behind* the band and
+dissolves from the field's top edge down. The chips above the field sit on the page itself,
+with nothing behind them — a conversation at full contrast behind a floating chip — which
+is what the reference's own composer does.
+
+Two consequences follow. The gradient is drawn on the field's wrapper rather than on the
+band, because that wrapper's top edge *is* the line where the fade begins. And the
+transcript has no fade of its own any more: the one it had ended where the band began,
+which is now above the chips rather than above the field, and two ramps with a gap between
+them would have been visible as a seam.
 
 **The agent's state is not on the page at all.** It was a 10sp caption on the window's
 bottom edge for a while — the size the reference gives its own "内容由AI生成" hint — and it
@@ -331,9 +339,10 @@ had the other order (a panel sliding over a dimmed page, with a scrim between th
 one frame is enough to tell them apart: in one the conversation looks pushed aside, in the
 other it looks covered.
 
-So the panel is composed first and stays at the leading edge; the chat card is composed
-over it and travels its own width, which is exactly the panel's width — the reveal is the
-same distance the page moved, and the two read as one gesture. It is reached by the
+So the panel is composed first, the chat card over it, and **both move**: at progress `p`
+the panel occupies `[-W + pW, pW]` and the card `[pW, pW + W]`, so their edges meet on every
+frame and both halves of the gesture are visible. A panel that only sat still behind the
+card was a reveal rather than a slide, which is not what the reference shows. It is reached by the
 leading mark or by a rightward drag from anywhere on the page, and both drive one number
 (0..1), so a drag and a tap cannot animate differently and a released drag springs back
 from where the thumb left it. While the card is out, a transparent target over it takes
@@ -391,6 +400,14 @@ The settings stack keeps its own model: a sealed `SettingsPage` with a `parent`,
 `rememberSaveable` encode/decode, and a per-page `PiPage(onBack)` rather than one
 handler above the stack. It survives process death, which a single "current page"
 variable does not.
+
+**A row's dot is a state, and the two states are different facts.** The drawer's dot used
+to mean "this conversation has a live process", which is a fact about memory rather than
+about the conversation, and it appeared on every conversation that had ever been opened.
+It now says one of two things: **answering** (the accent, while a turn streams) or
+**answered while you were elsewhere** (a green, cleared the moment the conversation becomes
+the one on screen). A turn that ends on the conversation being read marks nothing: the
+reader watched it arrive.
 
 **The drawer's heading is the name, the count, and three controls.** It used to break a
 mixed list with a "Recent" heading under the pinned shelf; the workspace headings already

@@ -168,9 +168,12 @@ fun SessionsScreen(
     // Which saved conversations are live *processes* right now. A live row is one tap
     // back to a conversation that is still answering, which is the thing that did not
     // exist while the app had one child.
-    val livePaths = session.host.sessions.collectAsState().value
-        .mapNotNull { it.sessionPath }
-        .toSet()
+    // Two states, not one: a row's dot says whether an answer is being written right now
+    // (blue) or finished while the reader was elsewhere (green). "Live" — a process that
+    // exists — is neither of those, and drawing it was the dot that appeared on every
+    // conversation that merely had a child.
+    val streamingPaths by session.host.streamingPaths.collectAsState()
+    val unreadPaths by session.host.unreadPaths.collectAsState()
     var renameTarget by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
     var renameUp by remember { mutableStateOf(false) }
     var deleteTargets by remember {
@@ -484,7 +487,8 @@ fun SessionsScreen(
                     // a second process in the directory its session file records. The
                     // dialog that used to stand here asked whether to throw an answer
                     // away, which is a cost this design does not charge.
-                    runningPaths = livePaths,
+                    streamingPaths = streamingPaths,
+                    unreadPaths = unreadPaths,
                     onOpen = { item ->
                         if (item.path != activeSessionFile) onOpenConversation(item)
                         onOpened()
@@ -531,7 +535,7 @@ fun SessionsScreen(
             onClick = onOpenSettings,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = HEADING_GUTTER, bottom = 24.dp),
+                .padding(start = HEADING_GUTTER, bottom = 40.dp),
         )
     }
 
@@ -632,7 +636,8 @@ private fun ConversationList(
     selected: Set<String>,
     snippets: Map<String, String>,
     /** The saved conversations that are live processes right now. */
-    runningPaths: Set<String>,
+    streamingPaths: Set<String>,
+    unreadPaths: Set<String>,
     /** The session file on screen: its row is the one drawn filled. */
     currentPath: String?,
     onToggle: (String) -> Unit,
@@ -684,7 +689,8 @@ private fun ConversationList(
                     selecting = selecting,
                     checked = item.path in selected,
                     snippet = snippets[item.path],
-                    running = item.path in runningPaths,
+                    streaming = item.path in streamingPaths,
+                    unread = item.path in unreadPaths,
                     pinned = true,
                     current = item.path == currentPath,
                     onToggleChecked = { onToggle(item.path) },
@@ -706,7 +712,8 @@ private fun ConversationList(
                     selecting = selecting,
                     checked = item.path in selected,
                     snippet = snippets[item.path],
-                    running = item.path in runningPaths,
+                    streaming = item.path in streamingPaths,
+                    unread = item.path in unreadPaths,
                     pinned = false,
                     current = item.path == currentPath,
                     onToggleChecked = { onToggle(item.path) },
@@ -835,8 +842,10 @@ private fun ConversationRow(
     selecting: Boolean,
     checked: Boolean,
     snippet: String?,
-    /** Whether this conversation is a live process, i.e. one tap away from its answer. */
-    running: Boolean,
+    /** Whether an answer is being written in this conversation right now. */
+    streaming: Boolean,
+    /** Whether an answer finished here while the reader was somewhere else. */
+    unread: Boolean,
     pinned: Boolean,
     /** Whether this is the conversation the page behind the drawer is showing. */
     current: Boolean,
@@ -927,17 +936,28 @@ private fun ConversationRow(
                         modifier = Modifier.size(14.dp),
                     )
                 }
-                if (running) {
+                if (streaming || unread) {
                     // A dot is a colour and no words, so it carries its meaning as a
-                    // description: a row whose conversation is answering right now is the
-                    // one fact here a screen reader would otherwise never say.
+                    // description: whether a row is answering right now, or has answered
+                    // while the reader was elsewhere, is the one fact here a screen reader
+                    // would otherwise never say.
                     Box(
                         Modifier
                             .size(6.dp)
                             .clip(CircleShape)
-                            .background(MiuixTheme.colorScheme.primary)
+                            .background(
+                                if (streaming) {
+                                    MiuixTheme.colorScheme.primary
+                                } else {
+                                    PiTone.done()
+                                },
+                            )
                             .semantics {
-                                contentDescription = text.sessions.running
+                                contentDescription = if (streaming) {
+                                    text.sessions.running
+                                } else {
+                                    text.sessions.unread
+                                }
                             },
                     )
                 }
@@ -1344,7 +1364,7 @@ private const val DIALOG_BODY_SHARE = 0.45f
  * floats over the end of the list — 16dp put the pill on top of the last conversation
  * and made the final row unreadable, and the pill plus its own margin is about 72dp.
  */
-private val LIST_BOTTOM = 84.dp
+private val LIST_BOTTOM = 112.dp
 
 /** How far the drawer's list fades into the field above it. */
 private val LIST_FADE = 30.dp

@@ -80,6 +80,20 @@ and wait out.
 The eviction rule is the reason `lastUsedAt` is written by `activate` rather than by the
 transcript: "recently useful" is what the reader did, not what the fixture wrote.
 
+### Only what is answering keeps a process
+
+`MAX_LIVE` bounds how many children may exist, but nothing *stops* an idle one — and a
+conversation that has finished its turn is an idle child holding ~120 MB for a transcript
+that is already on disk. `PiHost` sweeps them: any conversation that is neither the one on
+screen nor answering has its agent stopped, watched from three places because any of them
+can be the last thing that happens (the reader switching away, a background turn settling,
+a conversation leaving the pool). Switching back starts it again — `RootContent`'s launch
+effect sees `Stopped` — which costs about two seconds and buys the memory back.
+
+The cost is visible and deliberate: a conversation that was open a moment ago shows its
+titlebar again for a beat before it can be typed into. What it buys is that "five at once"
+is a limit on *work* rather than on windows.
+
 ### The notification followed the same split
 
 The foreground service used to keep one shade entry for as long as an agent process was

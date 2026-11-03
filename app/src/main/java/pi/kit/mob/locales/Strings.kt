@@ -580,6 +580,12 @@ interface Strings {
         val cancelSelection: String
 
         /**
+         * The drawer dot of a conversation whose answer finished while the reader was
+         * elsewhere. The accent dot says "answering now"; this one says "answered".
+         */
+        val unread: String
+
+        /**
          * The line above a conversation that is a live process right now.
          *
          * A live row is the one thing in the list that is a state as well as a question:

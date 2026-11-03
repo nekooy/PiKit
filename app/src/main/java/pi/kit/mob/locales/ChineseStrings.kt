@@ -214,6 +214,7 @@ internal object ChineseStrings : Strings {
 
     override val sessions = object : Strings.Sessions {
         override val running = "正在回答"
+        override val unread = "已完成，未查看"
         override fun poolFull(max: Int) = "已经有 $max 个对话在回答，等其中一条结束再开新的。"
         override val loading = "加载中…"
         override fun selected(count: Int) = "已选 $count 个"

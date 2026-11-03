@@ -24,6 +24,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -448,9 +449,17 @@ private fun RootContent(
         // of the ramp the page's own travel is sub-pixel; the floor lands it instead,
         // and the keyboard's remaining sliver is covered by the page for those
         // frames. ChatScreen's composer gap uses the same trick over its last 10dp.
+        // The keyboard's inset is read in *layout*, not in composition.
+        //
+        // It used to be read here — `padding.calculateBottomPadding()` in the body — and
+        // the platform reports a keyboard close as a staircase (125, 94, 32, 10, 5, 1 px).
+        // Every step invalidated this composable, which rebuilt the destination, the chat
+        // page and the transcript under it for a change only the page's height needed:
+        // measured on the emulator, a keyboard close drew 28 frames of which 17 were
+        // janky, 90th percentile 48 ms. `imePaddingFloor` reads the same number inside
+        // its measure pass instead, where it costs a layout and not a recomposition.
         val density = LocalDensity.current
         val ime = WindowInsets.ime
-        val barBottomPx = with(density) { padding.calculateBottomPadding().roundToPx() }
         Box(Modifier.fillMaxSize()) {
         // A page that arrives has to be seen arriving. A cross-fade alone reads as a
         // redraw rather than as a move — the settings stack has slid its pages since it
@@ -464,7 +473,7 @@ private fun RootContent(
                 .fillMaxSize()
                 .padding(padding)
                 .consumeWindowInsets(padding)
-                .imePaddingFloor(density, ime, barBottomPx),
+                .imePaddingFloor(density, ime, padding),
             transitionSpec = {
                 val incoming = if (targetState == Destination.Chat) -1 else 1
                 (
@@ -1002,8 +1011,12 @@ private val SETUP_TERTIARY = Color(0xFF69717F)
 private fun Modifier.imePaddingFloor(
     density: Density,
     ime: WindowInsets,
-    consumedBelow: Int,
+    bars: PaddingValues,
 ): Modifier = layout { measurable, constraints ->
+    // Both reads happen here, in the measure pass: `getBottom` on `WindowInsets.ime` and
+    // `calculateBottomPadding` on the scaffold's padding are inset reads, and doing them
+    // in composition is what subscribed the whole root to every keyboard frame.
+    val consumedBelow = bars.calculateBottomPadding().roundToPx()
     val bottom = (ime.getBottom(density) - consumedBelow).coerceAtLeast(0)
     val floored = if (bottom in 1 until IME_PADDING_FLOOR.roundToPx()) 0 else bottom
     // Two constraints-modifier traps, both hit while the activity's window was

@@ -1315,6 +1315,42 @@ class PiAgentSession internal constructor(
             conversation.isStreaming && status is AgentStatus.Running
         }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
 
+    init {
+        scope.launch {
+            var was = false
+            streaming.collect { now ->
+                if (was && !now) {
+                    // `active` is the host's answer to "which conversation is on screen".
+                    // The mark is only news when it is not the one being read.
+                    _finishedUnseen.value = host.active.value !== this@PiAgentSession
+                }
+                was = now
+            }
+        }
+    }
+
+
+    /**
+     * An answer that finished while the reader was somewhere else.
+     *
+     * The drawer's dot is a *state*, and the two states it has are not the same fact:
+     * a conversation that is writing right now is live and cannot be read yet, and one
+     * that finished is finished and has something new. The first is [streaming]; this is
+     * the second, set when a turn ends while another conversation is the one on screen
+     * and cleared when this one becomes it ([markSeen]).
+     *
+     * A turn that ends on the conversation the reader is looking at marks nothing: they
+     * watched it arrive, and a dot that appears under their eyes is a notification about
+     * the thing they are already reading.
+     */
+    private val _finishedUnseen = MutableStateFlow(false)
+    val finishedUnseen: StateFlow<Boolean> = _finishedUnseen.asStateFlow()
+
+    /** The reader is looking at this conversation: whatever it said has been seen. */
+    fun markSeen() {
+        _finishedUnseen.value = false
+    }
+
     /**
      * Stops this conversation for good and releases its scope.
      *

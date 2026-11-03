@@ -41,11 +41,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.height
@@ -78,6 +80,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -178,7 +181,6 @@ import pi.kit.mob.ui.chat.TurnSummaryRow
 import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.components.CopyButton
-import pi.kit.mob.ui.components.CopyButtonInkInset
 import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiAvatar
@@ -189,6 +191,7 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.glassLift
+import pi.kit.mob.ui.kit.solidLift
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
@@ -831,10 +834,13 @@ internal fun ChatScreen(
                 Modifier
                     .fillMaxHeight()
                     .width(with(LocalDensity.current) { drawerWidth.toDp() })
-                    // No shadow of its own and no offset: the panel is a surface the
-                    // card has *uncovered*, so the depth belongs to the card's edge, and
-                    // a panel that slides as well would be two things moving for one
-                    // gesture.
+                    // The panel slides in from the leading edge while the card slides
+                    // right: at progress p the panel occupies `[-W + pW, pW]` and the
+                    // card `[pW, pW + W]`, so their edges meet on every frame and both
+                    // halves of the gesture are visible. A panel that merely sat still
+                    // was a reveal, not a slide, and the reference is explicit about
+                    // which it is.
+                    .offset { IntOffset(((-1f + drawerPos) * drawerWidth).roundToInt(), 0) }
                     .background(MiuixTheme.colorScheme.surface)
                     // The way out, from the page the drawer is next to as well as from the
                     // conversation: once the panel is out, its own width is where the
@@ -1365,7 +1371,7 @@ private val HEADER_CLEARANCE = 86.dp
 private const val FADE_SOLID = 0.80f
 
 /** How far the fade reaches below the bar before it is fully transparent. */
-private val FADE_TAIL = 34.dp
+private val FADE_TAIL = 96.dp
 
 /** One mark's box in the header, capsule and glyph alike. */
 private val HEADER_MARK_SIZE = 48.dp
@@ -1512,7 +1518,14 @@ private fun ChatPage(
     ExitBackHandler()
 
     Box(Modifier.fillMaxSize()) {
-        Column(
+        // The transcript fills the page and the composer floats over its bottom, so the
+        // conversation runs *behind* the band rather than being cut by it. That is what
+        // lets the bottom fade start where the reference draws it — at the field's top —
+        // instead of at the top of the chip row, which is where the band's own edge used
+        // to fall.
+        var bottomStackPx by remember { mutableIntStateOf(0) }
+        val bottomStack: Dp = with(LocalDensity.current) { bottomStackPx.toDp() }
+        Box(
             Modifier
                 .fillMaxSize()
                 // Tapping anywhere that is not a control gives up the composer's
@@ -1548,11 +1561,7 @@ private fun ChatPage(
             // SelectionContainer sizes itself to its content instead of taking the
             // space it is offered, so a weight applied to it is ignored and the
             // transcript collapses to nothing.
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
+            Box(Modifier.fillMaxSize()) {
                 // The transcript is capped and centred on a window wide enough to need
                 // it, and uncapped on a phone.
                 //
@@ -1662,7 +1671,7 @@ private fun ChatPage(
                                     // column now rather than a panel over the list, so
                                     // the list's own box already ends above it. The
                                     // measured height the floating panel needed is gone.
-                                    bottom = TRANSCRIPT_TAIL_SPACE,
+                                    bottom = TRANSCRIPT_TAIL_SPACE + bottomStack,
                                 ),
                                 // No uniform gap. See `rowGap`: the space between two rows is
                                 // a statement about what the two rows *are*, and one number
@@ -1783,7 +1792,7 @@ private fun ChatPage(
                             // Inside the list's own box, which the composer's band no
                             // longer overlaps: the 10dp is the gutter's own figure and
                             // not a clearance from a floating panel.
-                            .padding(end = 10.dp, bottom = 10.dp)
+                            .padding(end = 10.dp, bottom = 10.dp + bottomStack)
                             // 40dp, the same drawn size as the composer's send control
                             // at the other end of the page — Miuix's icon button *is* a
                             // 40dp pill by default, so the two controls the thumb reaches
@@ -1811,29 +1820,13 @@ private fun ChatPage(
                         )
                     }
                 }
-                // The last rows fade under the composer's edge rather than being cut by
-                // it. Drawn inside the transcript's own box, so it ends exactly where the
-                // band begins and the band's own gradient continues the same surface: two
-                // gradients, one seam, none visible.
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(BAND_FADE)
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                0.55f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
-                                1f to MiuixTheme.colorScheme.surface,
-                            ),
-                        ),
-                )
             }
 
-            // The notices and the composer, under the transcript in the page's own
-            // column rather than stacked over it. The band is part of the page's
-            // layout, so nothing here has to clear a floating panel's measured height
-            // any more, and a message scrolls to the band rather than behind it.
+            // The notices and the composer, floating over the transcript's last stretch.
+            // Their height is published to the list as its bottom content padding, so
+            // the end of the conversation still scrolls clear of the band; what changed
+            // is only what happens *above* that end, where a row now passes behind the
+            // band and fades at the field's top instead of meeting the chips' edge.
             //
             // The notices are in the same stack because both are things said *to* the
             // reader about what they are doing rather than part of the conversation.
@@ -1858,6 +1851,12 @@ private fun ChatPage(
             // buries the composer under the report it is making. The first three lines
             // carry the reason and a stack frame or two, and the rest is the Terminal
             // tab's job.
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .onSizeChanged { bottomStackPx = it.height },
+            ) {
             val failure = (agent as? AgentStatus.Failed)?.message
             if (failure != null) {
                 ChatNotice(
@@ -1949,21 +1948,32 @@ private fun ChatPage(
                     }
                 },
             )
-
+            }
         }
 
         // The conversation fades out under the bar rather than being cut by it: a hard
         // edge there is the seam the reference drawing spends the whole top of the screen
         // hiding. Drawn over the transcript and under the marks, so a row scrolling up
         // dissolves into the page instead of colliding with a capsule.
+        // The fade belongs to the **status bar's bottom edge**, not to the button row's.
+        //
+        // Its solid part is exactly the status bar's height and the ramp starts there, so
+        // a row begins to dissolve the moment it leaves the clock's line rather than
+        // staying at full contrast all the way down to the capsules. That is where the
+        // reference drawing's own fade begins.
+        val fadeHeight = topInset + FADE_TAIL
+        val fadeSolid = if (fadeHeight > 0.dp) topInset / fadeHeight else 0f
+        val ramp = 1f - fadeSolid
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(headerSpace + FADE_TAIL)
+                .height(fadeHeight)
                 .background(
                     Brush.verticalGradient(
                         0f to MiuixTheme.colorScheme.surface,
-                        FADE_SOLID to MiuixTheme.colorScheme.surface,
+                        fadeSolid to MiuixTheme.colorScheme.surface,
+                        fadeSolid + ramp * 0.45f to MiuixTheme.colorScheme.surface.copy(alpha = 0.62f),
+                        fadeSolid + ramp * 0.8f to MiuixTheme.colorScheme.surface.copy(alpha = 0.26f),
                         1f to Color.Transparent,
                     ),
                 ),
@@ -3336,79 +3346,18 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
 }
 
 /**
- * What a message carries under it: when it was sent, and a copy button.
+ * The time under a message, and nothing else.
  *
- * ## Where the row is drawn
- *
- * **Under the message's card, not inside it** — and mirrored between the two sides,
- * which is what [alignment] decides. It is the arrangement the page had before the
- * cards arrived: a prompt is `[time][copy]` at its end edge, an answer is
- * `[copy][time]` at its start edge, so the glyph is always the outer mark and the
- * time is always inboard. Drawn *inside* the fill it read as a second line of the
- * message — the report "时间和复制按钮应该显示在气泡外而非里面" — because the pair sat on the
- * same colour as the words above it and inherited none of the air a footnote needs.
- * Nothing about the row changed except its parent: the card is still the item, and
- * the row is still the card's own furniture.
- *
- * ## Which messages wear it
- *
- * A prompt and **the reply its turn settled on** — nothing else. Every message used
- * to, and a tool-using turn is five or six assistant messages: "let me look at the
- * file", a tool card, "found it", another card, the answer. Under each of those sat
- * a copy glyph and a time, so one answer read as five, and the furniture was denser
- * than the text it belonged to. The row that keeps both is the one folding already
- * treats as the turn's answer (`ChatTurn.finalReplyKey`), which is what makes a
- * collapsed turn and an expanded one agree about which message is the answer —
- * expanding a turn adds the steps, it does not move the button.
- *
- * The prompt keeps both: it is a message the reader wrote, and its time is the only
- * record of when the question was asked.
- *
- * What that costs is worth naming. [transcriptContextMenu] drops the platform's own
- * "Select all" — a `LazyColumn`'s uncomposed items cannot be reached by it — and
- * the per-message button was the compensation. A *turn* still has one, at its
- * answer, so copying what was asked and what was answered is unchanged; copying a
- * mid-turn fragment, or a leading assistant greeting that belongs to no turn, means
- * dragging a selection over it.
- *
- * ## Why the row is not always drawn
- *
- * A message with no timestamp — a restored session whose records carried none, or a
- * row the reducer created with its default zero — shows the copy button alone, and
- * a *streaming* answer shows neither: it has not been sent yet in any sense the
- * reader cares about, and a copy button beside a paragraph that is still growing is
- * copying a sentence the model has not finished writing. The caller decides that
- * with [ChatItem.isStreaming], and this returns without drawing anything rather
- * than leaving 20dp of blank space under every token.
- *
- * ## Why the timestamp is computed once
- *
- * `remember(at)` rather than a call to the catalog on every composition: an answer
- * re-renders on every streamed token, and `messageTime` reads a `Calendar`. Nothing
- * here changes with the clock — a message's time is a fact about the message — so
- * re-deriving it per frame would be work whose answer is always the same.
- *
- * The button is 28dp rather than Miuix's own 40dp icon-button minimum, and that is a
- * deliberate exception: it sits *under* a message, next to text that is not a
- * control, and a 40dp disc there would be a second bubble.
- *
- * ## Which edge, and why the row is pulled out by the glyph's inset
- *
- * The pull's *direction* is the mirror: the glyph sits at the row's outer edge on
- * both sides — right for a prompt, left for an answer — so the row moves out by
- * [CopyButtonInkInset] toward that edge and the same magnitude serves both. See the
- * inline note where `pull` is computed for the measurement behind it.
+ * It carried a copy button for a while, and the button was two things at once: a
+ * 28dp target that had to be aligned by its ink rather than its box, and a second way
+ * to do what the transcript's `SelectionContainer` already does with a long press.
+ * Both are gone with it — a message's actions belong on the message (a long press),
+ * not on a control that floats under it.
  *
  * ## Why the row is the accent colour
  *
- * The glyph and the timestamp are both the app's accent. The reader's report — "把工作几秒、
- * 几个步骤、消息时间、消息复制按钮等都变成主题蓝色，代码块复制按钮不变" — is that the three pieces of
- * furniture a finished turn wears (`工作 X 秒 · N 个步骤`, a message's time, its copy
- * button) should read as one accent, and that the code block's copy button, which is
- * body content rather than furniture, should not. The accent is also what the two ways
- * to copy a message now share: `SelectionContainer`'s own handles are the theme's
- * primary, so tapping the button and dragging a selection no longer look like two
- * different features.
+ * The timestamp is furniture a finished turn wears, next to the turn's own
+ * `工作 X 秒 · N 个步骤`, and the two read as one accent.
  */
 @Composable
 private fun MessageMeta(
@@ -3420,78 +3369,24 @@ private fun MessageMeta(
     if (item is ChatItem.Assistant && item.isStreaming) return
     if (item is ChatItem.Assistant && item.text.isBlank()) return
 
-    val accent = ChatTone.Accent.ink()
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
+    // The stamp is the whole row now, so an item with no time draws nothing rather than
+    // an empty line: the space belongs to the message, not to a missing label.
     val now = remember { System.currentTimeMillis() }
     val stamp = remember(item.createdAt, now) {
         if (item.createdAt > 0L) text.chat.messageTime(item.createdAt, now) else null
-    }
+    } ?: return
 
-    // The row is aligned by its **ink**, and the button's ink is smaller than its
-    // box: an 18dp glyph centred in a 28dp button leaves 5dp of the button on each
-    // side the reader cannot see — the report "ai消息回复气泡下面复制按钮最左侧没对齐气泡",
-    // measured with `uiautomator dump` at 32px against 46px. [CopyButtonInkInset] is
-    // that 5dp, taken from the button's own geometry rather than written down twice.
-    //
-    // Which side is pulled depends on which side the *button* ends: a left-aligned
-    // row starts with it, a right-aligned one ends with it.
-    val pull = if (alignment == Alignment.End) CopyButtonInkInset else -CopyButtonInkInset
-    // Mirrored order: an answer is [button][time] at the left, a prompt is
-    // [time][button] at the right, so the button is always the outer glyph — which is
-    // what "copy sits under the bubble's edge" means on either side.
-    val timeThenButton = alignment == Alignment.End
-
-    // No width request: the column this row is the last child of decides the side —
-    // the prompt's card column is end-aligned, the answer's is the full measure and
-    // starts at the start edge — so `fillMaxWidth` here would be the minimum-width trap
-    // the card above documents, and the row would sit on the wrong edge if the parent
-    // ever changed its alignment.
     Row(
-        modifier = Modifier
-            .offset(x = pull)
-            .padding(top = 2.dp),
+        modifier = Modifier.padding(top = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (timeThenButton && stamp != null) {
-            Text(
-                text = stamp,
-                modifier = Modifier.padding(end = 2.dp),
-                style = MiuixTheme.textStyles.footnote2,
-                color = accent,
-                maxLines = 1,
-            )
-        }
-        CopyButton(
-            onClick = { scope.launch { clipboard.setClipEntry(clipEntryFor(messageSource(item))) } },
-            contentDescription = text.chat.copyMessage,
-            tint = accent,
+        Text(
+            text = stamp,
+            style = MiuixTheme.textStyles.footnote2,
+            color = ChatTone.Accent.ink(),
+            maxLines = 1,
         )
-        if (!timeThenButton && stamp != null) {
-            Text(
-                text = stamp,
-                modifier = Modifier.padding(start = 2.dp),
-                style = MiuixTheme.textStyles.footnote2,
-                color = accent,
-                maxLines = 1,
-            )
-        }
     }
-}
-
-/**
- * What a message's copy button puts on the clipboard.
- *
- * The source text, and only the source: what the reader selected is what the model
- * wrote, not the rendering of it, so copying a reply that contains a table or a
- * formula gives back the Markdown that produced them. That is the same choice the
- * code block's own button makes, which is the one precedent in the app.
- */
-private fun messageSource(item: ChatItem): String = when (item) {
-    is ChatItem.User -> item.text
-    is ChatItem.Assistant -> item.text
-    is ChatItem.Tool -> item.output.ifBlank { item.argumentsJson }
-    is ChatItem.Notice -> item.text
 }
 
 /**
@@ -3643,8 +3538,7 @@ private const val BAND_MID = 0.56f
  */
 private val COMPOSER_FOOT = 10.dp
 
-/** How far the transcript fades out above the composer's edge. */
-private val BAND_FADE = 40.dp
+
 
 /**
  * The field's own inset: 14dp beside the text and 12dp above and below it.
@@ -3849,36 +3743,27 @@ private fun Composer(
     // `WindowInsets.ime`, `WindowInsets.navigationBars` — was needed only by the gap that
     // used to shrink after the keyboard had gone.
 
-    // Whether the keyboard is up. One boolean read, at the two places the band would
-    // otherwise reserve room for things the keyboard already covers.
-    @OptIn(ExperimentalLayoutApi::class)
-    val keyboardUp = WindowInsets.isImeVisible
 
-    // The band: full bleed, in the page's column, and **transparent at its top edge**.
+    // The band: full bleed over the transcript, and **not a surface of its own**.
     //
-    // The reference drawing has no bar above the field: the chips and the input float on
-    // the page and the conversation dissolves under them. That is what this is — a
-    // gradient from nothing at the top to `surface` where the field starts, so the last
-    // rows of the transcript fade out instead of being cut by a slab. Everything inside
-    // sits on the opaque part of the gradient or has a surface of its own (the chips and
-    // the field do), which is why the transparency costs no legibility.
+    // The chips float on the page with nothing behind them — the conversation stays at
+    // full contrast until it reaches the field — and the fade that hides it starts at the
+    // field's own top edge, which is where the reference draws it. That is why the
+    // gradient is on the field's wrapper below rather than on this box.
+    //
+    // The gesture strip's inset is the band's own, and it is resolved in *layout*: the
+    // strip minus whatever the keyboard has already taken. Two inset reads in composition
+    // — `isImeVisible` and a conditional padding — were what made a keyboard close
+    // recompose this subtree on every step of its animation.
     Box(
         Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    BAND_SOLID to MiuixTheme.colorScheme.surface.copy(alpha = 0.34f),
-                    BAND_MID to MiuixTheme.colorScheme.surface.copy(alpha = 0.72f),
-                    1f to MiuixTheme.colorScheme.surface,
-                ),
-            )
-            // The page ends at the window's edge now that no bar is below it, so the
-            // gesture strip's inset is the band's own — but only while the keyboard is
-            // down. With the keyboard up the page already ends at its top edge, and the
-            // strip's inset would become a 48px hole above the keys; measured, that hole
-            // plus the caption's room was 116px of empty page under the field.
-            .then(if (keyboardUp) Modifier else Modifier.navigationBarsPadding()),
+            .windowInsetsPadding(
+                WindowInsets.navigationBars
+                    .union(WindowInsets.ime)
+                    .exclude(WindowInsets.ime)
+                    .only(WindowInsetsSides.Bottom),
+            ),
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
@@ -4198,15 +4083,30 @@ private fun Composer(
             // band itself is now the tab strip's own colour rather than a step above it
             // (§7.1), so the foot of the page is one surface from the transcript to the
             // navigation bar and the two no longer meet at a seam.
+            // The fade, from the field's top edge down to `surface` by its bottom: the
+            // conversation dissolves where it meets the field and nowhere above it.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.55f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
+                            1f to MiuixTheme.colorScheme.surface,
+                        ),
+                    ),
+            ) {
             Surface(
                 color = MiuixTheme.colorScheme.surfaceContainer,
                 shape = RoundedCornerShape(PiCorner.radius),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    // The field floats with the chips, not above them: one lift for
-                    // everything this page draws over the transcript.
-                    .glassLift(RoundedCornerShape(PiCorner.radius)),
+                    // The field floats with the chips, not above them. The cheap lift is
+                    // right here and only here: the field is opaque, so the shadow
+                    // elevation's silhouette never shows, and a blurred outline of a
+                    // thousand-pixel capsule costs a re-rasterisation per frame.
+                    .solidLift(RoundedCornerShape(PiCorner.radius)),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
@@ -4550,12 +4450,13 @@ private fun Composer(
                 }
             }
 
-            // The air below the frame, and the room the agent's state line needs under
-            // it. The line itself is drawn by the root at the *window's* bottom edge, not
-            // here: it is a caption about the app, it stays put when the keyboard opens
-            // (the keyboard covers it), and a line that travelled with the page would be
-            // the one piece of the frame that moved. See `RootContent`.
-            Spacer(Modifier.fillMaxWidth().height(if (keyboardUp) COMPOSER_IME_GAP else COMPOSER_FOOT))
+            }
+
+            // The air below the frame. Ten dp, and it no longer changes with the
+            // keyboard: the strip's inset above is what the keyboard takes away, and a
+            // second conditional here was a second relayout in the middle of the closing
+            // animation.
+            Spacer(Modifier.fillMaxWidth().height(COMPOSER_FOOT))
         }
     }
 }
