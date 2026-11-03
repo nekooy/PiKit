@@ -60,6 +60,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /** Progress of unpacking the bundled Termux environment. */
@@ -1349,6 +1350,46 @@ class PiAgentSession internal constructor(
     /** The reader is looking at this conversation: whatever it said has been seen. */
     fun markSeen() {
         _finishedUnseen.value = false
+    }
+
+    /**
+     * Writes this conversation up to its [messages]th message record, and opens nothing.
+     *
+     * pi's sessions are append-only JSONL, so "fork here" is exactly "copy the records up
+     * to here into a new file": the branch is a conversation with the same history and a
+     * different future. The header keeps its directory and gets a new id, which is what
+     * makes the copy a session of its own rather than a second name for this one.
+     *
+     * @return the new file's path, or null when this conversation has no file yet, the
+     *   count is past the end of it, or the write fails.
+     */
+    fun forkAt(messages: Int): String? {
+        val path = sessionPath ?: return null
+        val file = File(path)
+        if (messages <= 0 || !file.isFile) return null
+        val lines = runCatching { file.readLines() }.getOrNull() ?: return null
+        if (lines.size < 2) return null
+        val kept = ArrayList<String>(lines.size)
+        kept += lines.first()
+        var seen = 0
+        for (line in lines.drop(1)) {
+            if (line.isBlank()) continue
+            kept += line
+            if (line.contains("\"type\":\"message\"")) {
+                seen++
+                if (seen >= messages) break
+            }
+        }
+        if (seen < messages) return null
+        kept[0] = kept[0].replaceFirst(Regex("\"id\":\"[^\"]*\""), "\"id\":\"${UUID.randomUUID()}\"")
+        return runCatching {
+            val target = File(
+                file.parentFile,
+                "${System.currentTimeMillis()}-fork-${UUID.randomUUID().toString().take(8)}.jsonl",
+            )
+            target.writeText(kept.joinToString("\n", postfix = "\n"))
+            target.absolutePath
+        }.getOrNull()
     }
 
     /**

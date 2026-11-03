@@ -190,6 +190,24 @@ interface Strings {
 
         /** The copy button under a message, which copies the message's source text. */
         val copyMessage: String
+
+        /**
+         * The title of the sheet a long press on a message opens.
+         *
+         * The menu holds what a message can do rather than what can be done to it:
+         * copy its source, select its text, or branch the conversation from it.
+         */
+        val messageActions: String
+
+        /** The menu's row that enters text selection for the pressed message. */
+        val selectText: String
+
+        /** The menu's row that writes the conversation up to this message as a new one. */
+        val fork: String
+
+        /** Said when a branch could not be written — no file yet, or the write failed. */
+        val forkFailed: String
+
         val expand: String
         val collapse: String
         fun outputLines(count: Int): String

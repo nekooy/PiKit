@@ -1505,6 +1505,52 @@ private fun ChatPage(
         listState.scrollToItem(0)
     }
 
+    val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
+    val headerSpace = topInset + HEADER_CLEARANCE
+    // The message menu, and the one message that is in selection mode.
+    var menuFor by remember { mutableStateOf<ChatItem?>(null) }
+    var menuCardKey by remember { mutableStateOf<String?>(null) }
+    var menuMessages by remember { mutableIntStateOf(0) }
+    var selectionKey by remember { mutableStateOf<String?>(null) }
+    ExitBackHandler()
+    // The message menu. A sheet rather than a floating toolbar, for the reason the
+    // composer's own menus are sheets: the page is read at arm's length and a menu that
+    // appears under a thumb covers the message it is about.
+    val clipboard = LocalClipboard.current
+    val toasts = LocalPiToast.current
+    val menuScope = rememberCoroutineScope()
+    val menu = menuFor
+    PiSheet(
+        show = menu != null,
+        title = text.chat.messageActions,
+        onDismiss = { menuFor = null },
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+            MessageAction(text.chat.copyMessage) {
+                if (menu != null) {
+                    menuScope.launch { clipboard.setClipEntry(clipEntryFor(itemSource(menu))) }
+                }
+                menuFor = null
+            }
+            MessageAction(text.chat.selectText) {
+                selectionKey = menuCardKey
+                menuFor = null
+            }
+            // A branch is the conversation up to this message, written as a new session
+            // file and opened: pi's sessions are append-only, so "fork here" is "copy the
+            // records up to here". Refused while a turn is streaming — the file is being
+            // written, and a fork of a half-written turn is a fork of nothing.
+            if (!state.isStreaming && menuMessages > 0) {
+                MessageAction(text.chat.fork) {
+                    val path = menuMessages.let { session.forkAt(it) }
+                    menuFor = null
+                    val opened = path?.let { session.host.openConversation(it, currentWorkspace) }
+                    if (opened == null) toasts?.show(text.chat.forkFailed)
+                }
+            }
+        }
+    }
+
     // The page, and the layer its bar floats on.
     //
     // The reference draws the top of the screen as a *surface* the conversation runs
@@ -1513,9 +1559,7 @@ private fun ChatPage(
     // opposite of that — an opaque strip that pushes the content down — so this page
     // draws its own frame: the transcript fills the window, a gradient covers its first
     // stretch, and the marks sit on the gradient.
-    val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
-    val headerSpace = topInset + HEADER_CLEARANCE
-    ExitBackHandler()
+
 
     Box(Modifier.fillMaxSize()) {
         // The transcript fills the page and the composer floats over its bottom, so the
@@ -1546,7 +1590,14 @@ private fun ChatPage(
                 // consumed here, a drag still reaches the list and scrolls it. A tap on
                 // the field itself never reaches this: the text field consumes it.
                 .pointerInput(Unit) {
-                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                    detectTapGestures(
+                        onTap = {
+                            focusManager.clearFocus()
+                            // A message in selection mode goes back to being a message:
+                            // the mode has to have a way out that does not need a menu.
+                            selectionKey = null
+                        },
+                    )
                 },
         ) {
             // One container for the whole transcript, not one per row.
@@ -1585,15 +1636,19 @@ private fun ChatPage(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    SelectionContainer(
+                    // **No selection container around the whole transcript.**
+                    //
+                    // It was one, and Compose's text selection is what consumed the
+                    // long press: a press on a bubble raised the platform's copy
+                    // toolbar, which is the behaviour this page no longer wants. The
+                    // gesture belongs to the message now — a long press opens the page's
+                    // own menu — and selection is one of that menu's answers, applied to
+                    // the one message that asked for it (see `selectionKey`).
+                    Box(
                         modifier = if (maxWidth >= WIDE_TRANSCRIPT_WINDOW) {
-                            Modifier
-                                .widthIn(max = MAX_TRANSCRIPT_WIDTH)
-                                .transcriptContextMenu()
+                            Modifier.widthIn(max = MAX_TRANSCRIPT_WIDTH)
                         } else {
-                            Modifier
-                                .fillMaxWidth()
-                                .transcriptContextMenu()
+                            Modifier.fillMaxWidth()
                         },
                     ) {
                         // A conversation nothing has been sent to is not a blank
@@ -1705,14 +1760,55 @@ private fun ChatPage(
                                             ),
                                         ),
                                     ) {
-                                        TranscriptCardView(
-                                            card = card,
-                                            text = text,
-                                            expandedTurns = expandedTurns,
-                                            onToggleTurn = onToggleTurn,
-                                            avatars = avatars,
-                                            onShowExtras = onShowPromptExtras,
-                                        )
+                                        // The long press is the message's gesture now: the
+                                        // menu that opens from it carries the actions that
+                                        // used to live under the bubble.
+                                        val menuTarget = card.rows
+                                            .filterIsInstance<TranscriptRow.Message>()
+                                            .lastOrNull {
+                                                it.item is ChatItem.User || it.item is ChatItem.Assistant
+                                            }
+                                            ?.item
+                                        val counted = cards.take(index + 1).sumOf { c ->
+                                            c.rows.count { row ->
+                                                row is TranscriptRow.Message &&
+                                                    (row.item is ChatItem.User || row.item is ChatItem.Assistant)
+                                            }
+                                        }
+                                        val cardBody: @Composable () -> Unit = {
+                                            TranscriptCardView(
+                                                card = card,
+                                                text = text,
+                                                expandedTurns = expandedTurns,
+                                                onToggleTurn = onToggleTurn,
+                                                avatars = avatars,
+                                                onShowExtras = onShowPromptExtras,
+                                            )
+                                        }
+                                        Box(
+                                            Modifier.pointerInput(card.key, menuTarget) {
+                                                detectTapGestures(
+                                                    onLongPress = {
+                                                        if (menuTarget != null) {
+                                                            menuFor = menuTarget
+                                                            menuCardKey = card.key
+                                                            menuMessages = counted
+                                                            selectionKey = null
+                                                        }
+                                                    },
+                                                )
+                                            },
+                                        ) {
+                                            // Selecting is a *mode*: the message the reader
+                                            // asked to select wears the container, and the
+                                            // rest of the transcript is not selectable, which
+                                            // is what keeps a long press meaning "actions".
+                                            if (selectionKey == card.key) {
+                                                SelectionContainer { cardBody() }
+                                            } else {
+                                                cardBody()
+                                            }
+                                        }
                                     }
                                 }
                                 if (state.isCompacting) {
@@ -3387,6 +3483,39 @@ private fun MessageMeta(
             maxLines = 1,
         )
     }
+}
+
+/**
+ * One row of the message menu.
+ *
+ * A plain clickable row rather than `PiMenuRow`: that one is built for a popup column
+ * measured with an unbounded width (see the note in AGENTS.md), and this list is a
+ * column with a known width.
+ */
+@Composable
+private fun MessageAction(label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(PiCorner.radius))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.body1,
+            color = MiuixTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/** The text a message's menu copies: the source, not its rendering. */
+private fun itemSource(item: ChatItem): String = when (item) {
+    is ChatItem.User -> item.text
+    is ChatItem.Assistant -> item.text
+    is ChatItem.Tool -> item.output.ifBlank { item.argumentsJson }
+    is ChatItem.Notice -> item.text
 }
 
 /**
