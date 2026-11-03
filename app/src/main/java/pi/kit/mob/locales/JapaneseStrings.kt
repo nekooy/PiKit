@@ -214,7 +214,7 @@ internal object JapaneseStrings : Strings {
 
     override val sessions = object : Strings.Sessions {
         override val running = "応答中"
-        override fun poolFull(max: Int) = "同時に開ける会話は $max 件までです。一つ閉じてから開いてください。"
+        override fun poolFull(max: Int) = "同時に $max 件が回答中です。一つ終わってから開いてください。"
         override val loading = "読み込み中…"
         override fun selected(count: Int) = "$count 件を選択中"
         override fun saved(count: Int) = "全 $count 件"
@@ -226,7 +226,6 @@ internal object JapaneseStrings : Strings {
         override val deselectAll = "すべての選択を解除"
         override val deleteSelected = "選択した項目を削除"
         override val cancelSelection = "選択を解除"
-        override val recent = "最近"
 
         override fun groupTitle(name: String, count: Int) = "$name · $count"
         override val groupUnknown = "ワークスペース未記録"

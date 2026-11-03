@@ -200,11 +200,11 @@ answer that is being written keeps arriving.
 - The circled **+** at the top bar's right end
   opens a new conversation beside this one, and
   nothing that is running is interrupted.
-- At most **5** conversations are live at
-  once. A sixth opens by closing the one that
-  has been idle longest; if all five are
-  answering, the sixth is refused and a message
-  says so.
+- At most **5** answers run at once. Opening
+  another conversation closes the one that has
+  been idle longest; only five answering with
+  nothing idle is refused, and a message says
+  so.
 - The drawer marks a live conversation with a
   dot and **Answering now**. Tap one to switch
   to it, and the answer continues.

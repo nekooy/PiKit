@@ -214,7 +214,7 @@ internal object ChineseStrings : Strings {
 
     override val sessions = object : Strings.Sessions {
         override val running = "正在回答"
-        override fun poolFull(max: Int) = "同时最多 $max 个对话在运行，先关掉一个再开新的。"
+        override fun poolFull(max: Int) = "已经有 $max 个对话在回答，等其中一条结束再开新的。"
         override val loading = "加载中…"
         override fun selected(count: Int) = "已选 $count 个"
         override fun saved(count: Int) = "共 $count 个"
@@ -226,7 +226,6 @@ internal object ChineseStrings : Strings {
         override val deselectAll = "取消全选"
         override val deleteSelected = "删除所选"
         override val cancelSelection = "取消选择"
-        override val recent = "最近"
 
         override fun groupTitle(name: String, count: Int) = "$name · $count"
         override val groupUnknown = "未记录工作区"

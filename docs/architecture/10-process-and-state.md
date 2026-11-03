@@ -8,7 +8,8 @@ PiHost  (process-wide singleton — the app-wide half)
   ├─ SettingsStore                    provider / model / key / tier
   ├─ TerminalSessionManager           the terminal tab's shells, and which one shows
   ├─ model catalogue + refresh window one models-store.json, one deadline
-  └─ the pool: up to PiHost.MAX_LIVE conversations, and which one is active (§15)
+  └─ the pool: up to PiHost.MAX_ANSWERING answers in flight and MAX_LIVE
+     children resident, and which conversation is active (§15)
 PiAgentSession  (one per live conversation)
   ├─ PiProcessLauncher → Process      `node cli.js --mode rpc ...`
   ├─ PiRpcClient                      framing, correlation, stderr, shutdown

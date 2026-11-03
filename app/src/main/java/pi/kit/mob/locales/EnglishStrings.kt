@@ -215,7 +215,7 @@ internal object EnglishStrings : Strings {
 
     override val sessions = object : Strings.Sessions {
         override val running = "Answering now"
-        override fun poolFull(max: Int) = "$max conversations can be open at once. Close one before opening another."
+        override fun poolFull(max: Int) = "$max conversations are answering right now — wait for one to finish before opening another."
         override val loading = "Loading…"
         override fun selected(count: Int) = "$count selected"
         override fun saved(count: Int) = "$count saved"
@@ -227,7 +227,6 @@ internal object EnglishStrings : Strings {
         override val deselectAll = "Clear selection"
         override val deleteSelected = "Delete selected"
         override val cancelSelection = "Cancel selection"
-        override val recent = "Recent"
 
         override fun groupTitle(name: String, count: Int) = "$name · $count"
         override val groupUnknown = "No workspace recorded"

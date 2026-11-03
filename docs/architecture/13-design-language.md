@@ -267,15 +267,24 @@ because the strip version was worse:
   than painted on it. A real backdrop blur is not available (Compose has no backdrop
   filter — see below), so the alpha and the shadow carry the whole effect, and the shadow
   matters as much as the fill: a translucent fill with no lift reads as a stain.
-- **The row sits lower than a bar's.** The capsules' top edge is 30dp under the status bar
-  — a bar's row would start at 0 — because the reference keeps the handle clear of the
-  clock's own line. That is also why the leading capsule is a circle and the trailing one
-  a pill: two objects at the ends, with the name standing between them on the page.
+- **The row sits a little lower than a bar's.** The capsules' top edge is 22dp under the
+  status bar — a bar's row would start at 0 — because the reference keeps the handle clear
+  of the clock's own line. That is also why the leading capsule is a circle and the
+  trailing one a pill: two objects at the ends, with the name standing between them on the
+  page.
+- **The lift is a `graphicsLayer`, not `Modifier.shadow`.** On this Compose version the
+  modifier's shadow does not follow the shape it is given: a circle's shadow was drawn as
+  a squircle, so a translucent capsule showed the shadow's own silhouette *inside* it —
+  a white block with grey corners, measured at the leading capsule and read as "the button
+  has a white block in it". `Modifier.glassLift(shape)` sets the same two properties on a
+  layer directly, and the shadow then matches the shape.
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
 - **The fade is a vertical gradient** from `surface` to transparent over the bar and about
-  26dp below it. It is a fade and not a blur: Compose has no backdrop filter, and a real
+  34dp below it, in four stops (`100% → 62% → 26% → 0`) rather than two: a two-stop ramp
+  hits its transparent end while the eye still expects a gradual departure, so the row
+  crossing it seemed to snap into place. It is a fade and not a blur: Compose has no backdrop filter, and a real
   blur here would mean rendering the transcript twice (once through a `RenderEffect`) —
   a second copy of a `LazyColumn` for an effect that the gradient already carries at
   arm's length. The reference's blur is a backdrop filter's; this is the same idea drawn
@@ -288,14 +297,22 @@ top's. This is what lets the page have no chrome at either end: the conversation
 page, and everything on top of it either has a surface (the field, the chips, the
 capsules) or is a gradient.
 
-**The agent's state is a caption on the window, not on the page.** It is the one line
-under everything, drawn by `RootContent` at the window's bottom edge, 10sp in the
-summary ink — the size the reference gives its own hint. Being outside the page is what
-makes it stay put: the page is what the keyboard lifts, so a line inside it rode up with
-the composer and hung over the keys. The keyboard now covers it, which is the correct
-answer for a caption that only matters when the field is not in use. It is hidden while
-the drawer is out, because the drawer is composed inside the page and a caption floating
-over the conversation list would be the last piece of the chat page left on screen.
+**The agent's state is not on the page at all.** It was a 10sp caption on the window's
+bottom edge for a while — the size the reference gives its own "内容由AI生成" hint — and it
+is gone: the composer's own placeholder says "Agent 启动失败" when the agent has failed,
+the composer's chip row says which model is loading, and a line under everything that
+mostly read "Agent 已就绪" was the interface telling the reader that nothing was happening.
+The state that matters is the one that is *not* the happy path, and that one already has a
+place.
+
+**A toast is part of the page, not a visit from the system.** The app's ephemeral messages
+were the platform's `Toast` for a while — the system owns the queue, the placement and the
+text scale, and that is a real bargain — but it draws its own card in the system's colours
+with the launcher icon beside the text, which on this page reads as a notification that
+happened to land on it. They are white glass capsules now, drawn above the composer in the
+same fill as the bar's, and the interface (`LocalPiToast.show`) did not change. The cost is
+the system's queue and its per-app notification choice; the gain is one kind of floating
+object everywhere.
 
 **The four-tab bar came first, and its costs are what retired it.** A Miuix
 `NavigationBar` at the root with one item per destination kept every page one tap away,
@@ -306,14 +323,29 @@ destroyed the page that left, and `ChatComposerState` existed to survive that. W
 root page and three pushed ones the draft survives because the page is not destroyed, and
 the terminal and the files are still one tap from the conversation.
 
-**The drawer, not a page.** The conversation list is the second thing a chat app is used
-for, and it is pulled *over* the conversation rather than pushed in front of it: the page
-behind stays visible at the drawer's trailing edge, dimmed and scaled to about 94% of its
-size, which is what says the conversation is one drag away. It is reached by the leading
-mark or by a rightward drag from anywhere on the page, and both drive one number (0..1),
-so a drag and a tap cannot animate differently and a released drag springs back from where
-the thumb left it. The scrim takes every touch while it is out, so the conversation cannot
-be typed into through it.
+**The drawer is behind the page, and the page is the thing that moves.** The conversation
+list is the second thing a chat app is used for, and the reference screens are unambiguous
+about the layer order: the *conversation* is a card that slides right — rounded leading
+edge, a shadow, about 2% smaller — and the panel is what it uncovers. The first version
+had the other order (a panel sliding over a dimmed page, with a scrim between them), and
+one frame is enough to tell them apart: in one the conversation looks pushed aside, in the
+other it looks covered.
+
+So the panel is composed first and stays at the leading edge; the chat card is composed
+over it and travels its own width, which is exactly the panel's width — the reveal is the
+same distance the page moved, and the two read as one gesture. It is reached by the
+leading mark or by a rightward drag from anywhere on the page, and both drive one number
+(0..1), so a drag and a tap cannot animate differently and a released drag springs back
+from where the thumb left it. While the card is out, a transparent target over it takes
+the touches: a tap closes the drawer, a leftward drag is the same gesture that closes it,
+and the panel beside it keeps its own rows, taps and drag. There is no dim any more — the
+card's own surface is the separation, and a scrim over a page that is already off-screen
+was dimming nothing.
+
+Two consequences of that order are worth naming. The card's corner and shadow are set on
+its `graphicsLayer` and only while `progress > 0`: at rest the page *is* the window, and a
+radius there would cut the screen's own corners. And the panel no longer has a shadow of
+its own: the depth belongs to the card's edge, where the reference puts it.
 
 Opening a conversation from the list closes the drawer *before* the page is rebuilt: the
 open/closed answer is published when the settle starts, not when it ends, because the
@@ -343,10 +375,29 @@ first press arms and says so in a toast, a second within two seconds leaves. The
 own handler is composed later and closes the drawer first, which is the order a back press
 has to have.
 
+**One bar, and a page that arrives.** `PiPage` used to have a second, left-aligned
+variant for its roots: the title on the page's own gutter, with its back arrow inside a
+button that started at 26dp — 38dp from the edge with the button's own padding, against
+the 16dp the same arrow had on every settings page. Two pushes, two arrow positions. The
+chat page has no bar at all now, so the left-aligned variant had no caller left; it is
+gone, and every page's arrow starts where the library puts it.
+
+A page that arrives is also *seen* arriving: the destinations cross-fade with a tenth of
+the width of travel, from the trailing edge on the way in and from the leading edge on the
+way back. The fade alone read as a redraw rather than as a move, which is what "tapping
+terminal does nothing" looks like when the page does change.
+
 The settings stack keeps its own model: a sealed `SettingsPage` with a `parent`, a
 `rememberSaveable` encode/decode, and a per-page `PiPage(onBack)` rather than one
 handler above the stack. It survives process death, which a single "current page"
 variable does not.
+
+**The drawer's heading is the name, the count, and three controls.** It used to break a
+mixed list with a "Recent" heading under the pinned shelf; the workspace headings already
+say where a run of rows came from, and "Recent" was the only label in the panel that
+described nothing — the list is all recent. The selection controls are 36dp with 20dp
+glyphs rather than the library's 48dp: three full-size icon buttons beside the app's name
+were wider than the name, and the panel's heading is not the place to spend that.
 
 ## Shapes, motion, icons
 

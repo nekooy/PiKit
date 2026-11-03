@@ -580,13 +580,6 @@ interface Strings {
         val cancelSelection: String
 
         /**
-         * The unpinned section's heading, shown only when something above it is
-         * pinned. Without that break a mixed list has no way to say where the
-         * pinned group ends.
-         */
-        val recent: String
-
-        /**
          * The line above a conversation that is a live process right now.
          *
          * A live row is the one thing in the list that is a state as well as a question:

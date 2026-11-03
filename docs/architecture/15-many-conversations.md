@@ -58,16 +58,24 @@ means the one environment.
 
 ### The pool is bounded, and the bound is memory
 
-A live conversation is a Node.js process: ~120 MB resident before it has read anything.
-`PiHost.MAX_LIVE` is **5** — a memory budget rather than a taste, and the ceiling a
-reader with several projects open asked for; a sixth conversation is refused with a
-sentence rather than allowed to end in an allocation failure nothing in the interface
-explains. Opening one when the pool is full evicts the **least recently used idle**
-conversation — never the active one, never one with a turn in flight — because a
+A live conversation is a Node.js process: ~120 MB resident before it has read anything,
+so there is a ceiling, and the ceiling has two numbers rather than one.
+
+- **`PiHost.MAX_ANSWERING` is 5**, and it is the number the interface names: five
+  conversations *producing output at once* is what the pool is sized for. It is not a
+  limit on how many may be open, which is how it was first written and what it felt like:
+  a sixth conversation was refused with four of the five sitting idle.
+- **`PiHost.MAX_LIVE` is 8**, and it is the memory backstop behind that: eight children is
+  roughly a gigabyte of resident processes, which is as far as a phone's memory goes
+  before the pool starts being a page file.
+
+Opening a conversation when either bound is reached evicts the **least recently used
+idle** conversation — never the active one, never one with a turn in flight — because a
 conversation's transcript is pi's and already on disk: closing is "stop the child", and
-the history list opens it again. The eviction rule is what makes a five-deep pool safe:
-five *working* conversations are five children that must fit; the idle ones are the ones
-that give way.
+the history list opens it again. The refusal is therefore rare by construction: it needs
+five answers in flight *and* nothing idle to give way, or eight children all mid-turn. The
+sentence it shows names the answering cap, because that is the limit the reader can see
+and wait out.
 
 The eviction rule is the reason `lastUsedAt` is written by `activate` rather than by the
 transcript: "recently useful" is what the reader did, not what the fixture wrote.
