@@ -262,11 +262,11 @@ fun FilesScreen(session: PiAgentSession,
     }
 
     PiPage(
-        // A pushed page, but left-aligned all the same: it keeps the title at the
-        // page's own gutter after the back arrow, which is where the drawer's list
-        // puts its own heading — the two pages read as one column when one opens the
-        // other. See `PiPage`'s *Why a root can be left-aligned*.
-        alignStart = true,
+        // The library's bar, not the app's left-aligned one: this page is reached from
+        // the chat bar and left with the arrow at the top-left, and the settings pages
+        // behind the drawer draw that arrow at the library's own inset. Two pushes and
+        // two arrow positions read as two apps — measured at 38dp against 16dp from the
+        // edge before this page moved to the shared bar.
         onBack = onBack,
         // The folder's own name, not the tab's: on a file manager the title is the
         // place you are standing in, and "Files" over a folder called `workspace` is

@@ -240,11 +240,9 @@ fun TerminalScreen(session: PiAgentSession,
     val keys = rememberKeySize(t, LocalDensity.current.fontScale)
 
     PiPage(
-        // A pushed page, but left-aligned all the same: it keeps the title at the
-        // page's own gutter after the back arrow, which is where the drawer's list
-        // puts its own heading — the two pages read as one column when one opens the
-        // other. See `PiPage`'s *Why a root can be left-aligned*.
-        alignStart = true,
+        // The library's bar, like every other pushed page: the settings pages behind
+        // the drawer put their back arrow at the library's inset, and a second arrow
+        // position on the one page reached from the chat bar read as a second app.
         onBack = onBack,
         // Which shell this is, and what the page is. The subtitle *is* the roster
         // count once there is more than one shell: the line is there either way, so

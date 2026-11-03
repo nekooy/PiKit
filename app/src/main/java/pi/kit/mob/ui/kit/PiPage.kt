@@ -74,23 +74,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * a line that appeared and disappeared once per folder moved the whole page by
  * its height twice. A page whose subtitle arrives later passes `orEmpty()`.
  *
- * ## Why a root can be left-aligned, and a pushed page is not
+ * ## One bar, and the arrow at the library's inset
  *
- * The four tab roots carry a title the reader already knows they are looking at,
- * and the bar's right side is where three or four action icons live. The
- * library centres the title between the navigation icon and those actions, and
- * clamps it into the space they leave, so a root with four actions has its title
- * pushed off centre by their width — measured on the chat root, whose title
- * moved left by the width of the third action icon. A pushed page has one arrow
- * and at most two actions, so the clamp does not bite and the centred title is
- * the platform's own idiom there.
- *
- * [alignStart] is therefore a property of a *root*: the title and the subtitle
- * start on the page's own gutter instead of being centred between two sets of
- * controls. It is drawn here rather than by the library because the library's
- * bar has no alignment parameter — it computes one — and the bar it draws is the
- * same one, at the same height and with the same type, so the two variants differ
- * only in where the title begins.
+ * The app used to draw a second, left-aligned bar for its roots: a title on the page's
+ * own gutter, with the back arrow inside a button that started at 26dp. That put the one
+ * arrow the pushed pages share at 38dp from the edge while the settings pages behind the
+ * drawer drew theirs at 16dp — two pushes, two arrow positions, and a page that moved its
+ * own back control depending on where you came from. The chat page no longer has a bar at
+ * all (§13), so the left-aligned variant had no caller left; the shared bar is the only
+ * one, and every page's arrow starts where the library puts it.
  */
 @Composable
 fun PiPage(
@@ -98,7 +90,6 @@ fun PiPage(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
-    alignStart: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     body: @Composable (PaddingValues) -> Unit,
 ) {
@@ -110,10 +101,7 @@ fun PiPage(
         modifier = modifier,
         topBar = {
             Column(Modifier.fillMaxWidth()) {
-                if (alignStart) {
-                    StartAlignedBar(title = title, onBack = onBack, actions = actions)
-                } else {
-                    SmallTopAppBar(
+                SmallTopAppBar(
                         title = title,
                         navigationIcon = {
                             if (onBack != null) {
@@ -131,8 +119,7 @@ fun PiPage(
                             }
                         },
                         actions = actions,
-                    )
-                }
+                )
                 if (subtitle != null) {
                     Text(
                         // A zero-width space keeps a blank line's height without
@@ -143,7 +130,7 @@ fun PiPage(
                         text = subtitle.ifEmpty { "\u200B" },
                         style = MiuixTheme.textStyles.body2,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        textAlign = if (alignStart) TextAlign.Start else TextAlign.Center,
+                        textAlign = TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
@@ -164,63 +151,6 @@ fun PiPage(
     }
 }
 
-/**
- * The bar a root draws when its title starts at the page's gutter.
- *
- * Every number here is the library's: [TopAppBarDefaults.CollapsedHeight] for the
- * row, `title3` at medium weight for the title — the style
- * `SmallTopAppBarLayout` draws it in — `NavigationIconPadding` and
- * `ActionIconPadding` for the two ends, and the same `systemBars` top inset the
- * library's bar applies. What is *not* the library's is the placement: the title
- * is the first child of a row whose remainder belongs to the actions, so it
- * begins where the page's own content begins and cannot be pushed by them.
- *
- * The title is the same [TITLE_GUTTER] as the subtitle under it, which is what
- * makes the two read as one block rather than as a heading that is indented
- * differently from its own second line.
- */
-@Composable
-private fun StartAlignedBar(
-    title: String,
-    onBack: (() -> Unit)?,
-    actions: @Composable RowScope.() -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MiuixTheme.colorScheme.surface)
-            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
-            .height(TopAppBarDefaults.CollapsedHeight)
-            .padding(start = TITLE_GUTTER, end = TopAppBarDefaults.ActionIconPadding),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (onBack != null) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = MiuixIcons.Back,
-                    contentDescription = LocalStrings.current.common.back,
-                )
-            }
-            Spacer(Modifier.width(TITLE_GUTTER - TopAppBarDefaults.NavigationIconPadding))
-        }
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            style = MiuixTheme.textStyles.title3,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Box(Modifier.padding(start = ACTION_GAP)) {
-            Row(
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-                content = actions,
-            )
-        }
-    }
-}
 
 /**
  * The page's own left margin for a title.

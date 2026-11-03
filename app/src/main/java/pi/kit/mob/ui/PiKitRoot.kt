@@ -7,7 +7,12 @@ import android.os.Build
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -447,13 +452,26 @@ private fun RootContent(
         val ime = WindowInsets.ime
         val barBottomPx = with(density) { padding.calculateBottomPadding().roundToPx() }
         Box(Modifier.fillMaxSize()) {
-        Crossfade(
+        // A page that arrives has to be seen arriving. A cross-fade alone reads as a
+        // redraw rather than as a move — the settings stack has slid its pages since it
+        // existed, and the three pages reached from the chat bar did not, which is what
+        // made "tap terminal" feel like a flicker. The incoming page now travels a tenth
+        // of the width while it fades in, from the trailing edge on the way in and from
+        // the leading edge on the way back, and the outgoing one fades under it.
+        AnimatedContent(
             targetState = destination,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .consumeWindowInsets(padding)
                 .imePaddingFloor(density, ime, barBottomPx),
+            transitionSpec = {
+                val incoming = if (targetState == Destination.Chat) -1 else 1
+                (
+                    fadeIn(animationSpec = tween(220)) +
+                        slideInHorizontally(animationSpec = tween(260)) { it * incoming / 10 }
+                    ) togetherWith fadeOut(animationSpec = tween(140))
+            },
             label = "page",
         ) { shown ->
             when (shown) {
@@ -490,37 +508,6 @@ private fun RootContent(
                 )
             }
         }
-
-            // The agent's state, at the *window's* bottom edge rather than the page's.
-            //
-            // It is a caption about the app, and it has one job the page cannot give it:
-            // staying put. The page is the thing the keyboard lifts, so a line inside the
-            // page rode up with the composer and hung over the keyboard — measured, and
-            // the wrong reading of "under the input". Here it stays on the bottom edge and
-            // the keyboard covers it, which is what the reference drawing does with its
-            // own hint.
-            //
-            // Hidden while the drawer is out: the drawer is composed inside the crossfade
-            // below this line, and a caption floating over the conversation list would be
-            // the one piece of the chat page left on screen.
-            if (destination == Destination.Chat && !historyOpen) {
-                Text(
-                    text = agentSubtitle(agent, text),
-                    style = MiuixTheme.textStyles.footnote2.copy(
-                        fontSize = 10.sp,
-                        lineHeight = 12.sp,
-                    ),
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(horizontal = 32.dp)
-                        .padding(bottom = 3.dp),
-                )
-            }
         }
     }
 
@@ -615,12 +602,13 @@ private fun ChatTab(
     val scope = rememberCoroutineScope()
     // A conversation is opened as a *second* process, not by rebinding the one that is
     // already here, so a tap on a conversation that is answering switches to it and
-    // leaves the answer running. The pool is bounded (PiHost.MAX_LIVE) and the refusal
-    // is a sentence rather than a silent no-op.
+    // leaves the answer running. What is refused — with a sentence rather than a silent
+    // no-op — is starting one more while five are already answering, or while the process
+    // budget is full of conversations that are all mid-turn.
     val open: (PiAgentSession.SessionSummary) -> Unit = remember(host) {
         { summary ->
             val opened = host.openConversation(summary.path, summary.workspace)
-            if (opened == null) toasts?.show(text.sessions.poolFull(PiHost.MAX_LIVE))
+            if (opened == null) toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
             scope.launch { opened?.startAgent() }
         }
     }
@@ -628,7 +616,7 @@ private fun ChatTab(
         {
             val opened = host.newConversation()
             if (opened == null) {
-                toasts?.show(text.sessions.poolFull(PiHost.MAX_LIVE))
+                toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
             } else {
                 scope.launch { opened.startAgent() }
             }

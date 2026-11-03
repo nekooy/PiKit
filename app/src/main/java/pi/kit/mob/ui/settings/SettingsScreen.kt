@@ -377,7 +377,7 @@ private fun RootPage(
     // back gesture leave the app from here rather than doing nothing.
     // The settings root left-aligns its title for the reason the other three tab
     // roots do — see `PiPage`'s *Why a root can be left-aligned*.
-    PiPage(title = text.settings.title, alignStart = true, onBack = onBack) { padding ->
+    PiPage(title = text.settings.title, onBack = onBack) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
