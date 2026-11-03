@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
@@ -79,6 +80,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -86,10 +88,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -192,15 +197,16 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.AddCircle
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Sidebar
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Photos
-import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
@@ -338,6 +344,12 @@ internal fun ChatScreen(
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
     /** Opens an empty conversation beside this one, which keeps running. */
     onNewConversation: () -> Unit,
+    /** Whether the conversation drawer is out; owned by `RootContent`. */
+    historyOpen: Boolean,
+    onHistoryOpenChange: (Boolean) -> Unit,
+    onOpenTerminal: () -> Unit,
+    onOpenFiles: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val text = strings
     val context = LocalContext.current
@@ -347,26 +359,46 @@ internal fun ChatScreen(
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
     val listState = composer.listState
-    // How far the conversation has been pushed aside, 0 (itself) to 1 (the list), in
-    // pixels — the number both pages are drawn at and the number a drag moves.
+    // How far the drawer has been pulled out, 0 (closed) to 1 (fully out), in pixels of
+    // the drawer's own width — the number the panel and the conversation behind it are
+    // both drawn at, and the number a drag moves.
+    val density = LocalDensity.current
     var pageWidth by remember { mutableIntStateOf(0) }
-    var pageOffset by remember { mutableFloatStateOf(0f) }
-    var pageJob by remember { mutableStateOf<Job?>(null) }
+    var drawerWidth by remember { mutableIntStateOf(0) }
+    var drawerOffset by remember { mutableFloatStateOf(0f) }
+    var drawerJob by remember { mutableStateOf<Job?>(null) }
     // Whether the list is composed at all: it scans the session directory, so it is put
-    // away once the conversation has settled back into place.
-    var historyReachable by remember { mutableStateOf(false) }
-    val pagePos = if (pageWidth > 0) (pageOffset / pageWidth).coerceIn(0f, 1f) else 0f
+    // away once the drawer has settled back into the screen's edge.
+    var historyReachable by remember { mutableStateOf(historyOpen) }
+    val drawerPos =
+        if (drawerWidth > 0) (drawerOffset / drawerWidth).coerceIn(0f, 1f) else 0f
+
+    // Arrives with the drawer already out when the page is rebuilt on the way back from
+    // the settings page, which is where `historyOpen` came from; the width is only known
+    // after the first measure, so the offset is placed then.
+    LaunchedEffect(drawerWidth) {
+        if (historyOpen && drawerWidth > 0 && drawerOffset == 0f) {
+            drawerOffset = drawerWidth.toFloat()
+        }
+    }
 
     // Settles at [target], from wherever the thumb left it.
+    //
+    // The open/closed *answer* is published before the animation runs rather than after
+    // it. A conversation opened from the drawer rebuilds this page (`key(session)`), and
+    // a rebuild that still read "the drawer is out" would draw the drawer it was opened
+    // from over the conversation that tap had just chosen — measured on the emulator:
+    // the row highlighted, the panel still out, and the page behind it already swapped.
     val settlePage: (Float) -> Unit = { target ->
-        pageJob?.cancel()
-        pageJob = scope.launch {
+        drawerJob?.cancel()
+        onHistoryOpenChange(target > 0f)
+        if (target == 0f) historyReachable = false
+        drawerJob = scope.launch {
             animate(
-                initialValue = pageOffset,
-                targetValue = target * pageWidth,
+                initialValue = drawerOffset,
+                targetValue = target * drawerWidth,
                 animationSpec = tween(PAGE_SLIDE_MILLIS),
-            ) { value, _ -> pageOffset = value }
-            if (target == 0f) historyReachable = false
+            ) { value, _ -> drawerOffset = value }
         }
     }
 
@@ -376,23 +408,20 @@ internal fun ChatScreen(
      * minimum in the direction it was going — with a flick having to have moved at
      * least a twentieth of the width so a twitch is not a fling.
      *
-     * The two rounds of hand-tuned fractions this replaces (`1/3` with a 5% "last
-     * delta" flick, then `1/4` with 2.5%) were both guesses at the same two numbers the
-     * platform already defines, and both were wrong in the same direction: a quick
-     * thumb covers about a fifth of a 1080px screen, so any distance threshold above
-     * that reads as a gesture that has to be *completed*.
+     * A rightward drag opens. The two rounds of hand-tuned fractions this replaces
+     * (`1/3` with a 5% "last delta" flick, then `1/4` with 2.5%) were both guesses at
+     * the same two numbers the platform already defines, and both were wrong in the
+     * same direction: a quick thumb covers about a fifth of a 1080px screen, so any
+     * distance threshold above that reads as a gesture that has to be *completed*.
      */
     fun commitPage(distance: Float, velocity: Float, minFling: Float): Float {
-        val travelled = distance / pageWidth
+        val travelled = distance / drawerWidth.coerceAtLeast(1)
         val flung = abs(velocity) > minFling && abs(travelled) > FLING_MIN_TRAVEL
         return when {
-            // Leftward opens, rightward closes; the direction decides which page a
-            // completed gesture belongs to.
-            travelled <= -0.5f || (flung && velocity < 0) -> 1f
-            travelled >= 0.5f || (flung && velocity > 0) -> 0f
-            // Neither: settle to whichever page is nearer.
-            pagePos >= 0.5f -> 1f
-            else -> 0f
+            travelled >= 0.5f || (flung && velocity > 0) -> 1f
+            travelled <= -0.5f || (flung && velocity < 0) -> 0f
+            // Neither: settle to whichever side is nearer.
+            else -> if (drawerPos >= 0.5f) 1f else 0f
         }
     }
 
@@ -739,77 +768,61 @@ internal fun ChatScreen(
         transcriptRows(state, expandedTurns)
     }
 
-    // The history list is the chat tab's second level, and it is reached two ways: the
-    // clock icon, and a rightward drag on the conversation.
+    // The conversation drawer, and the page it covers.
     //
-    // Both drive the *same* number — how far the conversation has been pushed aside,
-    // 0 to 1 — so a drag and a tap cannot animate differently, and a drag released short
-    // of the threshold springs back from where the thumb left it instead of from a
-    // guess. The gesture is the reason the pair is not an `AnimatedContent` any more: a
-    // transition has no notion of "follow the finger", and a drag that waits for a
-    // release before moving anything is the thing this screen was asked not to be.
+    // The list is reached three ways: the mark at the bar's leading edge, a rightward
+    // drag from anywhere on the conversation, and — coming back from the settings page —
+    // already being out.
     //
-    // It is one page over another rather than two travelling ones, because that is what
-    // a pull is: the conversation slides right and off, and the list is simply behind it.
-    // `offset` rather than `graphicsLayer.translationX`: a graphics layer moves what is
-    // drawn and not what is touched, so the conversation would still be swallowing taps
-    // over the list it has just left.
+    // All three drive the *same* number, how far the drawer has been pulled out, so a
+    // drag and a tap cannot animate differently, and a drag released short of the
+    // threshold springs back from where the thumb left it rather than from a guess.
+    // That is also why the swap is not an `AnimatedContent`: a transition has no notion
+    // of "follow the finger".
+    //
+    // The page behind it moves right and shrinks a little, which is what makes the panel
+    // read as a layer over the conversation rather than as a second screen: the page it
+    // covers is still visibly there, at the edge. `graphicsLayer` for that motion rather
+    // than `offset`, because the page is not interactive while the drawer is out — the
+    // scrim below takes every touch — so moving what is drawn and not what is touched is
+    // exactly right here, and it is the cheap version of the same thing.
     Box(
         Modifier
             .fillMaxSize()
-            .onSizeChanged { pageWidth = it.width },
-    ) {
-        // Composed only while it is being reached for: the list scans the session
-        // directory, and doing that behind every conversation would be a cost paid on
-        // every chat frame for a page the reader is not looking at.
-        if (historyReachable) {
-            // The list arrives from the trailing edge as the conversation is pushed
-            // off to the leading one: a *forward* move, which is what opening a
-            // second level is, and it is the direction a leftward drag implies.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .offset { IntOffset(pageWidth - pageOffset.roundToInt(), 0) }
-                    // The way back, and it belongs to this page: once the list has
-                    // arrived the conversation is off to the leading edge and its own
-                    // detector only sees drags that start on a screen it no longer
-                    // covers.
-                    .pageDrag(
-                        width = pageWidth,
-                        onStart = { pageJob?.cancel() },
-                        // Leftward is negative in Compose's coordinates, and a leftward drag is
-                        // what opens the list, so the number grows by *minus* the delta. Adding it
-                        // made a rightward pull slide the conversation aside — the one direction with
-                        // nothing behind it.
-                        onDrag = { delta -> pageOffset = (pageOffset - delta).coerceIn(0f, pageWidth.toFloat()) },
-                        onRelease = { distance, velocity, minFling ->
-                                settlePage(commitPage(distance, velocity, minFling))
-                        },
-                    ),
-            ) {
-                SessionsScreen(
-                    session = session,
-                    onBack = { settlePage(0f) },
-                    onOpened = { settlePage(0f) },
-                    onOpenConversation = onOpenConversation,
+            .onSizeChanged {
+                pageWidth = it.width
+                // Capped as well as shared out: on a tablet a panel of 86% of the window
+                // is a page, and a drawer that covers the conversation is not a drawer.
+                drawerWidth = minOf(
+                    (it.width * DRAWER_SHARE).roundToInt(),
+                    with(density) { DRAWER_MAX_WIDTH.roundToPx() },
                 )
-            }
-        }
+            },
+    ) {
         Box(
             Modifier
                 .fillMaxSize()
-                .offset { IntOffset(-pageOffset.roundToInt(), 0) }
+                .graphicsLayer {
+                    translationX = pageWidth * CHAT_SHIFT * drawerPos
+                    val scale = 1f - CHAT_SHRINK * drawerPos
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                }
                 .pageDrag(
-                    width = pageWidth,
+                    width = drawerWidth,
                     onStart = {
-                        pageJob?.cancel()
+                        drawerJob?.cancel()
                         historyReachable = true
                     },
-                    // Leftward is negative in Compose's coordinates, and a leftward drag is
-                    // what opens the list, so the number grows by *minus* the delta. Adding it
-                    // made a rightward pull slide the conversation aside — the one direction with
-                    // nothing behind it.
-                    onDrag = { delta -> pageOffset = (pageOffset - delta).coerceIn(0f, pageWidth.toFloat()) },
+                    // Rightward is positive in Compose's coordinates and rightward is
+                    // what pulls the drawer out, so the number grows by the delta itself.
+                    // A leftward drag with the drawer shut moves it by nothing: the clamp
+                    // at zero is the whole of that answer.
+                    onDrag = { delta ->
+                        drawerOffset =
+                            (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
+                    },
                     onRelease = { distance, velocity, minFling ->
                         settlePage(commitPage(distance, velocity, minFling))
                     },
@@ -900,7 +913,80 @@ internal fun ChatScreen(
                         }
                     }
                 },
+                onOpenTerminal = onOpenTerminal,
+                onOpenFiles = onOpenFiles,
             )
+        }
+
+        // The scrim: every touch that is not on the panel lands here, so a tap beside the
+        // list closes it and the conversation behind the dim cannot be typed into through
+        // it. Drawn between the two, which is also what makes the panel the only thing
+        // above the dim.
+        if (drawerPos > 0f) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = SCRIM_ALPHA * drawerPos))
+                    .pointerInput(drawerWidth) {
+                        detectTapGestures { settlePage(0f) }
+                    }
+                    .pageDrag(
+                        width = drawerWidth,
+                        onStart = { drawerJob?.cancel() },
+                        onDrag = { delta ->
+                            drawerOffset =
+                                (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
+                        },
+                        onRelease = { distance, velocity, minFling ->
+                            settlePage(commitPage(distance, velocity, minFling))
+                        },
+                    ),
+            )
+        }
+
+        // Composed only while it is on screen: the list scans the session directory, and
+        // doing that behind every conversation would be a cost paid on every chat frame
+        // for a page the reader is not looking at.
+        if (historyReachable) {
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .width(with(LocalDensity.current) { drawerWidth.toDp() })
+                    // A hair of shadow on the panel's trailing edge, which is what makes
+                    // the page behind read as *under* it rather than beside it. The one
+                    // shadow in the app besides the settings pill's, and for the same
+                    // reason: a surface that floats over another one says so.
+                    .shadow(10.dp, RectangleShape, clip = false)
+                    // The box that carries the shadow has to paint something: the panel's
+                    // own `Surface` is inside it, and a shadow cast by a transparent box
+                    // is no shadow at all — measured, the first attempt left the edge a
+                    // hard line with the dimmed page flush against it.
+                    .background(MiuixTheme.colorScheme.surface)
+                    .offset { IntOffset((drawerOffset - drawerWidth).roundToInt(), 0) }
+                    // The way out, from the page the drawer is next to as well as from the
+                    // conversation: once the panel is out, its own width is where the
+                    // thumb is, and dragging it left is the same gesture that closes it.
+                    .pageDrag(
+                        width = drawerWidth,
+                        onStart = { drawerJob?.cancel() },
+                        onDrag = { delta ->
+                            drawerOffset =
+                                (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
+                        },
+                        onRelease = { distance, velocity, minFling ->
+                            settlePage(commitPage(distance, velocity, minFling))
+                        },
+                    ),
+            ) {
+                SessionsScreen(
+                    session = session,
+                    onBack = { settlePage(0f) },
+                    onOpened = { settlePage(0f) },
+                    onOpenConversation = onOpenConversation,
+                    onOpenSettings = onOpenSettings,
+                    currentPath = state.sessionFile,
+                )
+            }
         }
     }
 
@@ -1091,6 +1177,8 @@ private fun ChatPage(
     onShowPromptExtras: (PromptExtras) -> Unit,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
+    onOpenTerminal: () -> Unit,
+    onOpenFiles: () -> Unit,
     /** The workspace this conversation runs in, as an absolute path. */
     currentWorkspace: String,
     onSelectWorkspace: (String) -> Unit,
@@ -1189,31 +1277,49 @@ private fun ChatPage(
     }
 
     PiPage(
-        // The four tab roots left-align their titles and subtitles. The bar's right
-        // side is where three or four action icons live, and the library centres a
-        // title between the navigation icon and those actions — so a root with four
-        // actions has its title pushed off centre by their width. See `PiPage`'s
-        // *Why a root can be left-aligned*.
+        // The root left-aligns its title: the bar's trailing edge now carries three
+        // marks, and the library centres a title between the two ends, so a centred one
+        // would be pushed off centre by exactly their width. See `PiPage`'s *Why a root
+        // can be left-aligned*.
         alignStart = true,
-        title = conversationTitle(state),
-        subtitle = agentSubtitle(agent, text),
-        actions = {
-            // Two actions, not three. The compress control that used to stand first
-            // here is gone, and the command list is where it went: `⌘` already
-            // carries `/compact`, so the bar offered the same operation twice and
-            // one of the two was an icon on a row of *navigation* that did not open
-            // anything. A one-shot operation on the conversation belongs in the list
-            // of them rather than beside the two that move between conversations.
+        // The app's name, not the conversation's. What the bar is for now is saying
+        // where you are in the app, and the page below it is the answer to "which
+        // conversation" — the drawer is where a conversation is *named*, and its list
+        // highlights the one on screen. A derived title here was also the one thing on
+        // the bar that changed while the reader watched it, whenever a first message
+        // became the conversation's name.
+        title = text.root.appName,
+        navigationIcon = {
             IconButton(onClick = onOpenSessions) {
                 Icon(
-                    imageVector = MiuixIcons.Recent,
+                    imageVector = MiuixIcons.Sidebar,
                     contentDescription = text.chat.sessions,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        actions = {
+            // Three marks, in the order the reference drawing has them: the shell the
+            // agent drives, the files it changed, then a new conversation — the last one
+            // is the circled plus, because that is the one control here that makes
+            // something rather than opening something.
+            IconButton(onClick = onOpenTerminal) {
+                Icon(
+                    imageVector = TerminalGlyph,
+                    contentDescription = text.header.terminal,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                )
+            }
+            IconButton(onClick = onOpenFiles) {
+                Icon(
+                    imageVector = MiuixIcons.Folder,
+                    contentDescription = text.header.files,
                     tint = MiuixTheme.colorScheme.onSurface,
                 )
             }
             IconButton(onClick = onNewSession) {
                 Icon(
-                    imageVector = MiuixIcons.Add,
+                    imageVector = MiuixIcons.AddCircle,
                     contentDescription = text.chat.newSession,
                     tint = MiuixTheme.colorScheme.onSurface,
                 )
@@ -1637,6 +1743,24 @@ private fun ChatPage(
                         if (input.isBlank()) onInputChange(dropped)
                     }
                 },
+            )
+
+            // What the agent is doing, in the one line the reference drawing keeps under
+            // the composer. It is *always* here — the line is part of the page's frame
+            // rather than a message that appears with news, so the composer never moves
+            // when the agent starts or stops, and "ready" is said out loud instead of
+            // being the absence of a sentence.
+            Text(
+                text = agentSubtitle(agent, text),
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp)
+                    .padding(bottom = 6.dp),
             )
         }
     }
@@ -2310,43 +2434,6 @@ private fun agentSubtitle(agent: AgentStatus, text: Strings): String = when (age
     AgentStatus.Stopped -> text.chat.agentStopped
 }
 
-/**
- * pi does not generate titles, so an unnamed conversation is labelled with its
- * first user message — the same rule pi's own session picker uses. Reusing
- * [SessionMetadata.asTitle] keeps the two identical.
- *
- * A conversation with nothing in it yet is labelled with the application's name
- * rather than with `chat.newConversation`. The header is where the reader looks to
- * see *what* they are looking at, and "新对话" answers a question nobody asked: the
- * page is a new conversation because that is what an empty transcript is. The name
- * is a literal because it is a proper noun and not interface text — the same
- * spelling in all three catalogs, and the same one the About page writes.
- *
- * A name and a derived title are the same slot and no longer different styles: the
- * top bar owns that decision now, where before this page styled its own title and
- * drew a derived one (`titleMedium`) smaller than a session's name (`titleLarge`).
- * The distinction the two facts above still make is *what* is shown, not how big it
- * is: a name is a name, and the app's own name on an empty conversation is a proper
- * noun.
- */
-private fun conversationTitle(state: ConversationState): String {
-    state.sessionName?.takeIf { it.isNotBlank() }?.let { return it }
-    // The reader's words, not the machinery pi travels with them: a prompt sent with a
-    // file starts with the address header ("These files are ready; read them by path:")
-    // and one sent with a picture carries an `[Image: …]` note, and either would
-    // otherwise become the page's title verbatim. [parsePromptExtras] is the same
-    // parser the bubble's extras chip uses, so the title and the chip cannot disagree
-    // about what the prose is.
-    val prose = state.items
-        .asSequence()
-        .filterIsInstance<ChatItem.User>()
-        .map { parsePromptExtras(it.text).displayText }
-        .firstOrNull { it.isNotBlank() }
-    return if (prose == null) APP_NAME else SessionMetadata.asTitle(prose)
-}
-
-/** The application's name, as it is written wherever a proper noun is wanted. */
-private const val APP_NAME = "PiKit"
 
 /**
  * The two avatars the transcript draws over its cards, or null when they are off.
@@ -2621,6 +2708,41 @@ private fun metaItemOf(rows: List<TranscriptRow>): ChatItem? = rows
  */
 /** How long the pages take to settle after a drag is released. */
 private const val PAGE_SLIDE_MILLIS = 220
+
+/**
+ * The drawer's width, as a share of the screen.
+ *
+ * The reference drawing leaves a strip of the conversation visible down the trailing
+ * edge — about a seventh of the screen — and that strip is the whole reason the panel
+ * reads as a layer rather than as a page: a drawer that covered the screen would be a
+ * second screen. 0.86 is the same share the prompt bubble's cap uses, so the two
+ * decisions agree about how much of a page is "most of it".
+ */
+private const val DRAWER_SHARE = 0.86f
+
+/**
+ * The widest the drawer gets, whatever the window is.
+ *
+ * A phone at 1080px lands at 930px, well under this. A tablet would not: 86% of a
+ * 1600dp window is a page, and a drawer that covers the conversation stops being a drawer.
+ * 420dp is the width of a comfortable reading column, which is what a list of titles is.
+ */
+private val DRAWER_MAX_WIDTH = 420.dp
+
+/**
+ * How far the conversation moves right, and how much it shrinks, at the drawer's full
+ * width.
+ *
+ * The shift is not the drawer's width: the page is also scaled down, and a full shift
+ * plus a scale would push the visible strip off the screen's edge. 0.18 of the screen
+ * with a 6% scale leaves the scaled page's trailing edge a little inside the screen's,
+ * which is the "slightly smaller, slightly to one side" the reference drawing shows.
+ */
+private const val CHAT_SHIFT = 0.18f
+private const val CHAT_SHRINK = 0.06f
+
+/** How dark the conversation goes behind the drawer, at full width. */
+private const val SCRIM_ALPHA = 0.32f
 
 private const val PROMPT_MAX_SHARE = 0.86f
 
@@ -3307,6 +3429,19 @@ private fun AssistantBlock(
 private const val COMPOSER_MAX_LINES = 8
 
 /**
+ * The composer's corner, and only the composer's.
+ *
+ * `PiCorner.radius` is the app's one card radius (20dp), and the composer used to be a
+ * card like the rest. It is not one: the reference drawing makes the field the largest
+ * and softest object on the page, and at 28dp on a two-row-tall box (~96dp) the corner
+ * reads as a rounded capsule without being one — the shape stays a rectangle with soft
+ * corners however many lines the draft grows to, which is the property that keeps a long
+ * draft from becoming a badly drawn pill. The field inside states the same number so the
+ * two corners are one corner.
+ */
+private val COMPOSER_CORNER = 28.dp
+
+/**
  * The field's own inset: 14dp beside the text and 12dp above and below it.
  *
  * Miuix's default is 16dp on both axes, which is a settings field's height; a
@@ -3848,14 +3983,14 @@ private fun Composer(
             // navigation bar and the two no longer meet at a seam.
             Surface(
                 color = MiuixTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(PiCorner.radius),
+                shape = RoundedCornerShape(COMPOSER_CORNER),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
-                        cornerRadius = PiCorner.radius,
+                        cornerRadius = COMPOSER_CORNER,
                         value = value,
                         onValueChange = onValueChange,
                         modifier = Modifier

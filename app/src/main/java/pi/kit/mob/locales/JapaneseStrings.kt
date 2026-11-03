@@ -5,13 +5,6 @@ import pi.kit.mob.data.WorkspaceRefusal
 
 /** Japanese catalog. */
 internal object JapaneseStrings : Strings {
-    override val tabs = object : Strings.Tabs {
-        override val chat = "チャット"
-        override val terminal = "ターミナル"
-        override val files = "ファイル"
-        override val settings = "設定"
-    }
-
     override val header = object : Strings.Header {
         override val files = "ファイル"
         override val terminal = "ターミナル"
@@ -46,8 +39,8 @@ internal object JapaneseStrings : Strings {
             "ヒント：+ で画像やファイルを添付できます。",
             "ヒント：⌘ で PiKit 自身が実行するコマンドの一覧を開けます。",
             "ヒント：テキストを長押しするとコピーできます。",
-            "ヒント：ヘッダーの履歴アイコンから過去の会話に戻れます。",
-            "ヒント：左右にスワイプすると会話ページと会話履歴を切り替えられます。",
+            "ヒント：左上のマークから会話の一覧を開けます。",
+            "ヒント：右にスワイプしても開き、左に戻すと閉じます。",
             "ヒント：入力欄の右下のリングで使用量とコストを確認できます。",
         )
         override val loadingConversation = "会話を開いています…"
@@ -221,7 +214,6 @@ internal object JapaneseStrings : Strings {
     override val sessions = object : Strings.Sessions {
         override val running = "応答中"
         override fun poolFull(max: Int) = "同時に開ける会話は $max 件までです。一つ閉じてから開いてください。"
-        override val title = "会話履歴"
         override val loading = "読み込み中…"
         override fun selected(count: Int) = "$count 件を選択中"
         override fun saved(count: Int) = "全 $count 件"
@@ -247,9 +239,7 @@ internal object JapaneseStrings : Strings {
         override val pin = "上部に固定"
         override val unpin = "固定を解除"
         override val delete = "削除"
-        override val untitled = "無題"
         override val emptyTitle = "空の会話"
-        override fun messageCount(count: Int) = "$count 件のメッセージ"
         override val renameTitle = "会話の名前を変更"
         override val renameLabel = "名前"
         override val renameActiveNote = "この会話は開いているため、Pi が直接名前を変更します。"
@@ -901,6 +891,7 @@ internal object JapaneseStrings : Strings {
         ).joinToString("\n")
     }
     override val root = object : Strings.Root {
+        override val appName = "PiKit"
         override val preparing = "準備中"
         override val settingUp = "PiKit をセットアップ中"
         override val setupSubtitle = "初回起動のため実行環境を展開しています"

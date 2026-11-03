@@ -14,7 +14,7 @@ first launch — no repository to reach, no package to fetch. The only connectio
 needed is one that can reach the model provider.
 
 <p align="center">
-  <img src="docs/assets/preview-0.6.2.webp" width="90%" alt="PiKit 0.6.2 — the Chat, Terminal, Files and Settings tabs">
+  <img src="docs/assets/preview-0.6.2.webp" width="90%" alt="PiKit 0.6.2 — the conversation, terminal, files and settings pages">
 </p>
 
 <p align="center"><sub>PiKit 0.6.2 interface preview</sub></p>
@@ -22,19 +22,20 @@ needed is one that can reach the model provider.
 ## Features
 
 - **A simple idea, an elegant native interface.** Kotlin and Jetpack Compose on
-  Miuix, the MIUI/HyperOS component library for Compose, four tabs, no WebView.
-  English, 简体中文 or 日本語.
+  Miuix, the MIUI/HyperOS component library for Compose, one conversation page with a
+  drawer, no WebView. English, 简体中文 or 日本語.
 - **Chat on pi's RPC protocol.** A finished turn folds to one line
   (`Worked 47s · 5 steps`) and reopens on a tap; thinking level, model, context use and
   cache hits are chips above the input, and both switches apply without restarting the
   agent.
 - **Several conversations at once.** A conversation is its own process, so a new one
-  starts beside the answer that is still arriving and the history list is the switcher:
-  up to five live at a time, and closing one is one tap because its transcript is
-  already on disk.
-- **A terminal and a file manager.** PTY sessions that survive a tab switch, the keys a
-  phone keyboard lacks, and a read-only file manager over `$HOME`: a tappable path, a
-  filter and three orders, a size or entry count per row, image previews and copy-path.
+  starts beside the answer that is still arriving and the list in the drawer is the
+  switcher: up to five live at a time, and closing one is one tap because its transcript
+  is already on disk.
+- **A terminal and a file manager.** PTY sessions that keep running when you leave the
+  page, the keys a phone keyboard lacks, and a read-only file manager over `$HOME`: a
+  tappable path, a filter and three orders, a size or entry count per row, image previews
+  and copy-path.
 - **Providers on pi's terms.** The 34 providers pi's own key table knows, plus a custom
   endpoint; a model's context window, output limit, thinking levels and image support
   come from pi's catalogue.
@@ -56,7 +57,7 @@ needed is one that can reach the model provider.
 <p align="center"><sub>Phones and tablets · about 110 MB</sub></p>
 
 First launch unpacks the runtime (a few seconds). Give it the API key under
-**Settings → Model & provider**, or `pi /login` in the Terminal tab for a subscription.
+**Settings → Model & provider**, or `pi /login` on the terminal page for a subscription.
 Updates install over the old APK with your data intact — **About PiKit → Check for
 updates** when you want one. Other builds and checksums live on the
 [releases page](https://github.com/nekooy/PiKit/releases/latest); `adb shell getprop

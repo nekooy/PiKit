@@ -32,10 +32,11 @@ rebind:
   session file records (`{"type":"session",…,"cwd":…}`), then bound to that file with
   `switch_session` once — the same launch-then-rebind that restores a conversation after
   a restart (§8), because pi has no resume flag.
-- **The history list is the switcher.** A row whose conversation is a live process
-  carries a dot and `正在回答`; tapping it switches to that window. There is no separate
-  tab strip, because the list already existed and a second place to find a conversation
-  would be a second thing to keep in step.
+- **The conversation drawer is the switcher.** A row whose conversation is a live
+  process carries a dot; tapping it switches to that window, and the row of the
+  conversation on screen is the one drawn filled. There is no second place to find a
+  conversation, because the list already existed and a second place would be a second
+  thing to keep in step.
 
 ### The three things that had to become shared
 

@@ -26,7 +26,7 @@ of everything under `docs/`.
 | 5 | [Storage, and why the first design could delete a phone](architecture/05-storage-and-safety.md) | The grant page the tiers made redundant, the refusing delete, the link farm as a convenience, and the self-test that proves all three on the device |
 | 6.1 | [Custom endpoints](architecture/06.1-custom-endpoints.md) | `models.json` merged and never replaced, the provider list, why the key is in `argv`, and the end-to-end run |
 | 6.2 | [The model page's facts](architecture/06.2-models-and-catalogue.md) | How a model's settings pick between a merging override and a replacing definition, why the catalogue check is a read, and what a custom id's entry holds |
-| 7.1 | [The composer](architecture/07.1-composer.md) | The bottom of the screen: the tab strip, the IME insets, the workspace and permission controls, and the constant gap the band keeps |
+| 7.1 | [The composer](architecture/07.1-composer.md) | The bottom of the screen: the band, the IME insets, the workspace and permission controls, and the constant gap the band keeps |
 | 7.2 | [The model and thinking-level switches](architecture/07.2-models-and-thinking.md) | One provider with many models, where the levels come from, and what is saved |
 | 7.3 | [The transcript](architecture/07.3-transcript.md) | One card per turn, following, folding, tool rows, the removed cursor and turn rail, and the page's rhythm |
 | 7.4 | [The terminal's key bar](architecture/07.4-terminal-keys.md) | Uniform keys, an arrow pad, and the word that toggles |

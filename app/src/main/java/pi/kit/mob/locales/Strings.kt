@@ -58,7 +58,6 @@ internal fun plural(count: Int, one: String, many: String): String =
  */
 interface Strings {
     val root: Root
-    val tabs: Tabs
     val header: Header
     val chat: Chat
     val sessions: Sessions
@@ -72,6 +71,17 @@ interface Strings {
 
     /** The text shown while the bundled runtime is being unpacked. */
     interface Root {
+        /**
+         * The app's name, as the two pages that show it spell it.
+         *
+         * A proper noun, so every catalog answers the same word — but it is a member
+         * here rather than a literal at the two call sites because it is *interface*
+         * text: the chat page's bar and the drawer's heading are the same string, and
+         * a name edited in one place and not the other is the kind of drift a catalog
+         * exists to prevent. The About page and the launcher label keep their own
+         * spellings; this one is the word the two headings draw.
+         */
+        val appName: String
         val preparing: String
         val settingUp: String
 
@@ -80,13 +90,6 @@ interface Strings {
         val setupNote: String
         val environmentIncomplete: String
         val couldNotPrepare: String
-    }
-
-    interface Tabs {
-        val chat: String
-        val terminal: String
-        val files: String
-        val settings: String
     }
 
     interface Header {
@@ -542,7 +545,6 @@ interface Strings {
     }
 
     interface Sessions {
-        val title: String
         val loading: String
         fun selected(count: Int): String
         fun saved(count: Int): String
@@ -640,11 +642,9 @@ interface Strings {
         val pin: String
         val unpin: String
         val delete: String
-        val untitled: String
 
         /** A conversation whose transcript holds no message at all. */
         val emptyTitle: String
-        fun messageCount(count: Int): String
         val renameTitle: String
         val renameLabel: String
         val renameActiveNote: String

@@ -19,7 +19,7 @@ package pi.kit.mob.locales
  * Twelve chapters, named after what the reader is trying to do rather than after
  * the feature that does it: the first launch, setting up a model, the composer,
  * more than one conversation at once, workspaces and the permission tiers, the
- * Files tab, the Terminal tab, web search, the settings rows in one table, the
+ * files page, the terminal, web search, the settings rows in one table, the
  * agent process, backup and restore, and what to do when something fails. A
  * chapter opens with the one sentence that answers it and then lists; a `###`
  * inside one is a sub-question of that task, and it exists only where a reader
@@ -51,8 +51,12 @@ Its Linux environment, Node.js, `ripgrep`, `fd`
 and `pi` are unpacked from the APK on first
 launch: no Termux and no root.
 
-Four tabs: **Chat**, **Terminal**, **Files**,
-**Settings**.
+The conversation is the whole app. Its top bar
+holds a mark at the left that opens the
+conversation list, the name **PiKit** beside it,
+and the terminal, files and new-conversation
+marks on the right; **Settings** sits at the
+foot of the drawer.
 
 ## First launch
 
@@ -68,13 +72,14 @@ APK; the environment itself is never downloaded.
   without it the agent sees only its own
   directory, and the phone's storage cannot be
   browsed when you pick a workspace.
-- **Chat** reopens the conversation you were
+- **PiKit** reopens the conversation you were
   in last; **Settings → Personalization → Open a
   new conversation on launch** starts empty
   instead.
 - **Terminal** is a real shell, **Files**
-  browses the agent's home, and the rest is
-  under **Settings**.
+  browses the agent's home; the top bar opens
+  both, and **Settings** is at the drawer's
+  foot.
 
 ## Set up a model
 
@@ -126,9 +131,9 @@ for the same level.
 
 Type in the field at the bottom and press the
 round arrow; while the answer streams it is a
-red stop button. The name in the bar is the
-first thing you wrote, or **PiKit** while the
-conversation is empty.
+red stop button. The bar always reads **PiKit**;
+a conversation is named in the drawer, where the
+one on screen is highlighted.
 
 - **Above the field**: the workspace, the
   thinking level and the model, the three values
@@ -192,29 +197,43 @@ list opens a field for the same thing.
 Leaving a conversation does not stop it: an
 answer that is being written keeps arriving.
 
-- The **+** in the chat's top bar opens a new
-  conversation beside this one, and nothing that
-  is running is interrupted.
+- The circled **+** at the top bar's right end
+  opens a new conversation beside this one, and
+  nothing that is running is interrupted.
 - At most **5** conversations are live at
   once. A sixth opens by closing the one that
   has been idle longest; if all five are
   answering, the sixth is refused and a message
   says so.
-- The **history** page (the clock icon) marks
-  a live conversation with a dot and **Answering
-  now**. Tap one to switch to it, and the answer
-  continues.
-- Swipe left on the chat page for the history
-  page, and right to come back.
+- The drawer marks a live conversation with a
+  dot and **Answering now**. Tap one to switch
+  to it, and the answer continues.
+- Tap the mark at the top-left, or swipe right
+  anywhere on the conversation, to pull the
+  drawer out; swipe left, or tap the dimmed
+  conversation, to put it back.
 
-### The history page
+### The conversation drawer
 
-- **Search** reads the titles and the message
-  text of every saved conversation.
+The drawer covers about 86% of the width, and
+the conversation stays visible, dimmed and a
+little smaller, at its right edge. A caption
+under the name says how many conversations are
+saved, how many are selected, or whether a
+search is still reading.
+
+- The search field is always there, and reads
+  the titles and the message text of every saved
+  conversation.
+- Conversations are grouped by workspace, each
+  group headed with the workspace's name and its
+  count, the pinned ones first, and the one on
+  screen is highlighted.
 - Hold a row for **Pin to top**, **Rename**
   and **Delete**.
-- **Select conversations** in the bar deletes
-  several at once.
+- **Select conversations**, the mark at the
+  drawer's top-right, turns the header into
+  select all, delete and close.
 
 ## Give the agent a folder
 
@@ -259,16 +278,18 @@ in, and the folder the agent may write to.
   judged like any other path.
 - The limit binds the agent, not the terminal:
   `/sdcard` is the phone's real storage, and the
-  Terminal tab reaches it directly.
+  terminal reaches it directly.
 - **Settings → Maintenance & repair → Check
   storage** runs both guards for real, one line
   per check.
 
 ## Files
 
-The Files tab browses the agent's home,
-read-only: it shows what the agent changed
-without a second app.
+The files page browses the agent's home,
+read-only: the folder mark in the top bar opens
+it, the arrow at its top-left returns to the
+conversation, and it shows what the agent
+changed without a second app.
 
 - The path bar under the title is tappable,
   and a segment goes back up.
@@ -283,13 +304,16 @@ without a second app.
 - Hold a row for **Copy path**; a file also
   offers **Open with**.
 - `/export` writes into `~/export`, a folder
-  in this tab.
+  on this page.
 
 ## Terminal
 
-The Terminal tab is a real shell in the bundled
-environment. Several sessions run at once, and
-they keep running when you switch tabs.
+The terminal is a real shell in the bundled
+environment; the `>_` mark in the top bar opens
+it, and the arrow at its top-left returns to the
+conversation. Several sessions run at once, and
+they keep running while you are back in the
+conversation.
 
 - The key bar holds what a phone keyboard
   cannot type: `ESC`, `TAB`, `C-C`, `C-D`,
@@ -346,6 +370,10 @@ busy.
   that is the way out.
 
 ## Settings at a glance
+
+The gear pill at the drawer's foot opens these
+rows, and the arrow at the top-left returns to
+the drawer.
 
 | Row | What it holds |
 | --- | --- |

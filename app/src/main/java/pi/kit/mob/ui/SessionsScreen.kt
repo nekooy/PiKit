@@ -1,20 +1,30 @@
 package pi.kit.mob.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,12 +38,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,13 +63,10 @@ import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
-import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
@@ -64,9 +74,7 @@ import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
@@ -74,13 +82,13 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Rename
 import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.icon.extended.Tasks
 import top.yukonga.miuix.kmp.icon.extended.Unpin
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -89,20 +97,21 @@ import java.util.Locale
 /**
  * Management for pi's saved conversations: reopen, rename, pin, delete.
  *
- * Shown in place of the chat rather than in a dialog because the list is the whole
- * point of the screen — a dialog leaves no room for a search field, and multi-select
- * delete in a dialog is a worse experience than a real page.
+ * The drawer's content, drawn over the conversation rather than instead of it: the list
+ * is what the leading mark and a rightward drag pull out, and the conversation stays
+ * visible at the panel's trailing edge, which is what says the page behind is one drag
+ * away. It is not a dialog for the older reason — a dialog leaves no room for a search
+ * field, and multi-select delete in a dialog is a worse experience than a real list.
  *
- * Titles come from the session file: pi does not generate names, so an unnamed
- * session is labelled with its first user message, which is exactly what pi's own
- * session picker does. That is also the reason the rows are drawn as questions rather
- * than as records: for most of the list the title *is* the reader's own words.
+ * Titles come from the session file: pi does not generate names, so an unnamed session
+ * is labelled with its first user message, which is exactly what pi's own session picker
+ * does. That is also the reason the rows are drawn as questions rather than as records:
+ * for most of the list the title *is* the reader's own words.
  *
- * The title is one line that never changes ("Conversations") and the subtitle is the
- * list's own state — how many are saved, how many are selected, whether a search is
- * still reading. §9.2 has why the header is one fixed strip rather than a bar that
- * grows, collapses or moves as the list does; it is Miuix's small bar now, and the
- * shape that chapter describes is the same one.
+ * The heading is the app's name at page-title size, with the list's own state on a
+ * caption under it — how many are saved, how many are selected, whether a search is
+ * still reading. §9.2 has why that caption is one fixed line rather than a heading that
+ * grows, collapses or moves as the list does.
  */
 @Composable
 fun SessionsScreen(
@@ -115,6 +124,16 @@ fun SessionsScreen(
      * between conversations rather than a rebind of the one that is answering.
      */
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
+    /** Leaves the drawer for the settings page, which is reached from its foot. */
+    onOpenSettings: () -> Unit,
+    /**
+     * The session file the conversation on screen is writing to.
+     *
+     * The one row in the list that is also a position: it is drawn filled, the way the
+     * reference drawing marks the conversation being read, and tapping it is a
+     * no-op rather than opening a second process on the file that is already open.
+     */
+    currentPath: String?,
 ) {
     val text = strings
     var summaries by remember { mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList()) }
@@ -230,108 +249,137 @@ fun SessionsScreen(
         reload++
     }
 
-    PiPage(
-        // The four tab roots left-align their titles and subtitles. The bar's right
-        // side is where three or four action icons live, and the library centres a
-        // title between the navigation icon and those actions — so a root with four
-        // actions has its title pushed off centre by their width. See `PiPage`'s
-        // *Why a root can be left-aligned*.
-        alignStart = true,
-        title = text.sessions.title,
-        subtitle = when {
-            selecting -> text.sessions.selected(selected.size)
-            loading -> text.sessions.loading
-            // The scan has no progress to report — it is one file at a time and
-            // the count is not known — so the subtitle says what is happening
-            // rather than how far along it is. Without it a slow scan is
-            // indistinguishable from an empty result.
-            searching -> text.sessions.searching
-            else -> text.sessions.saved(summaries.size)
-        },
-        // The back arrow belongs at the start of the bar, which is where the
-        // platform convention puts it and where `PiPage` draws it. It used to be the
-        // last item in the action row, i.e. next to Delete, which is both
-        // unconventional and a hazard.
-        onBack = onBack,
-        actions = {
-            if (selecting) {
-                // Scoped to `visible` rather than every saved conversation: a search
-                // that has narrowed the page to three rows is a list of three, and a
-                // button that silently selected rows nobody can see would make the
-                // next delete a surprise. Tapping again drops exactly those rows, so a
-                // selection built up under an earlier filter is not thrown away by
-                // clearing one list's worth of it.
-                val visiblePaths = visible.map { it.path }.toSet()
-                val allVisibleSelected =
-                    visiblePaths.isNotEmpty() && visiblePaths.all { it in selected }
-                IconButton(
-                    onClick = {
-                        selected = if (allVisibleSelected) {
-                            selected - visiblePaths
-                        } else {
-                            selected + visiblePaths
-                        }
-                    },
-                    enabled = visiblePaths.isNotEmpty(),
-                ) {
-                    // One glyph for both answers, told apart by the accent: the
-                    // library's set has a check-the-list mark and no un-check one, and
-                    // the state a reader needs from this button is "what will the tap
-                    // do", which the tint says and the spoken description below says
-                    // out loud.
-                    Icon(
-                        imageVector = MiuixIcons.SelectAll,
-                        contentDescription = if (allVisibleSelected) {
-                            text.sessions.deselectAll
-                        } else {
-                            text.sessions.selectAll
-                        },
-                        tint = if (allVisibleSelected) {
-                            MiuixTheme.colorScheme.primary
-                        } else {
-                            MiuixTheme.colorScheme.onBackground
-                        },
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        deleteTargets = summaries.filter { it.path in selected }
-                        deleteUp = true
-                    },
-                    enabled = selected.isNotEmpty(),
-                ) {
-                    Icon(MiuixIcons.Delete, contentDescription = text.sessions.deleteSelected)
-                }
-                IconButton(onClick = { exitSelection() }) {
-                    Icon(MiuixIcons.Close, contentDescription = text.sessions.cancelSelection)
-                }
-            } else {
-                IconButton(
-                    onClick = { selecting = true },
-                    enabled = summaries.isNotEmpty(),
-                ) {
-                    Icon(MiuixIcons.Tasks, contentDescription = text.sessions.select)
-                }
-            }
-        },
-    ) { padding ->
+    // The drawer, in the shape the reference drawing gives it: the app's name at the
+    // size of a page title, a search field under it, the conversations, and one control
+    // at the foot.
+    //
+    // Not a `PiPage`. A page's bar is 48dp of chrome with a small title in it, and this
+    // is not a page under a bar: it is a surface pulled over the conversation, and its
+    // heading is the app's own name at twice a bar title's height. The one thing the bar
+    // was still carrying here is `onBack`, which the drawer now owns — the system gesture
+    // closes the panel rather than leaving the app.
+    BackHandler(onBack = onBack)
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MiuixTheme.colorScheme.surface),
+    ) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .windowInsetsPadding(WindowInsets.systemBars),
         ) {
-            // Directly under the bar and not inside a card: the field filters the list
-            // under it, and a frame of its own would put a third border between the
-            // bar and the rows it acts on. The library's `SearchBar` is not used here
-            // for the same reason it is not used on the Files page: its expanded state
-            // is a results surface, and this field narrows the list in place.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = HEADING_GUTTER, end = 4.dp, top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = text.root.appName,
+                    style = MiuixTheme.textStyles.title1,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                if (selecting) {
+                    // The three answers selection mode has, in the bar's own order:
+                    // everything, then what happens to it, then out. The list is the same
+                    // list, so the control that starts a selection and the controls that
+                    // end one stand in the same place.
+                    val visiblePaths = visible.map { it.path }.toSet()
+                    val allVisibleSelected =
+                        visiblePaths.isNotEmpty() && visiblePaths.all { it in selected }
+                    IconButton(
+                        onClick = {
+                            selected = if (allVisibleSelected) {
+                                selected - visiblePaths
+                            } else {
+                                selected + visiblePaths
+                            }
+                        },
+                        enabled = visiblePaths.isNotEmpty(),
+                    ) {
+                        // One glyph for both answers, told apart by the accent: the
+                        // library's set has a check-the-list mark and no un-check one, and
+                        // the state a reader needs from this button is "what will the tap
+                        // do", which the tint says and the spoken description says out
+                        // loud.
+                        Icon(
+                            imageVector = MiuixIcons.SelectAll,
+                            contentDescription = if (allVisibleSelected) {
+                                text.sessions.deselectAll
+                            } else {
+                                text.sessions.selectAll
+                            },
+                            tint = if (allVisibleSelected) {
+                                MiuixTheme.colorScheme.primary
+                            } else {
+                                MiuixTheme.colorScheme.onBackground
+                            },
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            deleteTargets = summaries.filter { it.path in selected }
+                            deleteUp = true
+                        },
+                        enabled = selected.isNotEmpty(),
+                    ) {
+                        Icon(MiuixIcons.Delete, contentDescription = text.sessions.deleteSelected)
+                    }
+                    IconButton(onClick = { exitSelection() }) {
+                        Icon(MiuixIcons.Close, contentDescription = text.sessions.cancelSelection)
+                    }
+                } else {
+                    IconButton(
+                        onClick = { selecting = true },
+                        enabled = summaries.isNotEmpty(),
+                    ) {
+                        Icon(MiuixIcons.SelectAll, contentDescription = text.sessions.select)
+                    }
+                }
+            }
+
+            // What the list is doing, under the heading and in the search field's own
+            // column. The line is always drawn — an empty one holds its height — because a
+            // sentence that came and went would move the field and every row under it by a
+            // line, which is the jump `PiPage` reserves its subtitle line to avoid.
+            Text(
+                text = when {
+                    selecting -> text.sessions.selected(selected.size)
+                    loading -> text.sessions.loading
+                    // The scan has no progress to report — it is one file at a time and
+                    // the count is not known — so the line says what is happening rather
+                    // than how far along it is. Without it a slow scan is
+                    // indistinguishable from an empty result.
+                    searching -> text.sessions.searching
+                    else -> text.sessions.saved(summaries.size)
+                },
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = HEADING_GUTTER, end = HEADING_GUTTER)
+                    .padding(top = 2.dp, bottom = 8.dp),
+            )
+
+            // The search field is a permanent row rather than a magnifier that opens one:
+            // the reference drawing's first row is a place to type, and a drawer that
+            // needs a tap before it can be searched reads as a list with no way into it.
+            // The library's `SearchBar` is still not used — its expanded state is a
+            // results surface, and this field narrows the list in place.
             TextField(
                 cornerRadius = PiCorner.radius,
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+                    .padding(start = HEADING_GUTTER, end = HEADING_GUTTER, bottom = 8.dp),
                 label = text.sessions.searchHint,
                 useLabelAsPlaceholder = true,
                 singleLine = true,
@@ -396,6 +444,7 @@ fun SessionsScreen(
                     selecting = selecting,
                     selected = selected,
                     snippets = snippets,
+                    currentPath = currentPath,
                     onToggle = { path ->
                         selected = if (path in selected) selected - path else selected + path
                     },
@@ -422,6 +471,20 @@ fun SessionsScreen(
                 )
             }
         }
+
+        // The one control at the drawer's foot, and the only way into the settings now
+        // that the bar that carried four destinations is gone. A pill rather than an icon:
+        // it floats over a list it does not belong to, and the word is what keeps a
+        // floating gear from reading as another row action. Its width follows the word —
+        // `設定` and `Settings` are not the same length, and a fixed width would make one
+        // language's label touch the edges.
+        SettingsPill(
+            label = text.settings.title,
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = HEADING_GUTTER, bottom = 12.dp),
+        )
     }
 
     // All three are composed for as long as the page is; `show` is what changes, so the
@@ -497,17 +560,15 @@ fun SessionsScreen(
 /**
  * The conversations, grouped, with the pinned group first.
  *
- * Pinned and unpinned are two groups under two small titles rather than one flat list
+ * Pinned and unpinned are two groups under two small headings rather than one flat list
  * with a glyph stuck on every pinned title: the grouping says it once, at the heading,
- * where a mark on every row fought the title for attention.
+ * where a mark on every row fought the title for attention. A pinned row also carries a
+ * pin of its own, because the heading scrolls away and the mark on the row does not.
  *
- * The pinned rows are drawn in the scheme's secondary container — one run of tinted
- * rows under [Strings.Sessions.pinned] rather than one lifted panel. A panel is what
- * the first answer was (a half-strength container behind the whole group), and it
- * cannot survive this rewrite: a row is a `Card`, which is the one container in the
- * library that carries both a click and a hold, and a card inside a card is a frame
- * inside a frame. The tint says the same thing at the row's own edge, and the heading
- * above the run says where the group begins.
+ * A row is a flat run of text on the panel's own surface. The pinned run used to be
+ * tinted in the scheme's secondary container to say where it began, and that tint is
+ * gone with the outlines: the one fill in the list now belongs to the conversation on
+ * screen, and a second meaning for the same colour is a list with two highlights.
  *
  * The unpinned heading appears only when something above it is pinned. Without that
  * break a mixed list has no way to say where the pinned group ends, and with it on an
@@ -524,6 +585,8 @@ private fun ConversationList(
     snippets: Map<String, String>,
     /** The saved conversations that are live processes right now. */
     runningPaths: Set<String>,
+    /** The session file on screen: its row is the one drawn filled. */
+    currentPath: String?,
     onToggle: (String) -> Unit,
     onOpen: (PiAgentSession.SessionSummary) -> Unit,
     onRename: (PiAgentSession.SessionSummary) -> Unit,
@@ -542,27 +605,29 @@ private fun ConversationList(
         workspaces = workspaces,
         defaultPath = defaultPath,
         unknownLabel = text.sessions.groupUnknown,
-        chip = text.chat::workspaceChip,
+        // The folder's own name, without the composer chip's `（默认）` marker: a
+        // heading is read once at the top of a run of rows, and the marker is about a
+        // choice the reader made elsewhere. Two workspaces with the same name are told
+        // apart by their conversations, not by which of them is the default.
+        chip = { label, _ -> label },
     )
 
     LazyColumn(
-        // The history page's body, so it takes the page's elastic end: the list is
-        // short after the first conversation and long after a month of them, and the
-        // first case is the one Compose's own effect skips. See `piOverScroll`.
+        // The drawer's body, so it takes the panel's elastic end: the list is short after
+        // the first conversation and long after a month of them, and the first case is the
+        // one Compose's own effect skips. See `piOverScroll`.
         modifier = modifier.piOverScroll(),
-        // A gap above the navigation bar, so the last conversation is not read
-        // against the bar's own edge.
+        // Room at the end for the settings pill, which floats over the last rows: without
+        // it the final conversation is the one under the control that leaves the list.
         contentPadding = PaddingValues(bottom = LIST_BOTTOM),
-        // The seam between two row cards, at the kit's row gap: a row is one object
-        // with one outline, and the 2dp this used to use — shared with the Files
-        // listing — was tighter than the gap *inside* a row, so two rows read as one
-        // panel with a line drawn through it. `PiCorner.rowGap` is the one number both
-        // lists state, so the two lists are spaced alike.
-        verticalArrangement = Arrangement.spacedBy(PiCorner.rowGap),
+        // A row is a run of text with its own inset now, not a card with an outline, so the
+        // gap between two of them is the room the rows already carry — 2dp keeps two
+        // highlighted rows from merging into one when they happen to be neighbours.
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         if (pinnedVisible.isNotEmpty()) {
             item(key = "heading-pinned") {
-                SmallTitle(text = text.sessions.pinned)
+                GroupHeading(text = text.sessions.pinned)
             }
             items(pinnedVisible, key = { it.path }) { item ->
                 ConversationRow(
@@ -573,6 +638,7 @@ private fun ConversationList(
                     snippet = snippets[item.path],
                     running = item.path in runningPaths,
                     pinned = true,
+                    current = item.path == currentPath,
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
                     onRename = { onRename(item) },
@@ -582,13 +648,13 @@ private fun ConversationList(
             }
             if (otherVisible.isNotEmpty()) {
                 item(key = "heading-recent") {
-                    SmallTitle(text = text.sessions.recent)
+                    GroupHeading(text = text.sessions.recent)
                 }
             }
         }
         groups.forEach { group ->
             item(key = "workspace-" + group.key) {
-                SmallTitle(text = text.sessions.groupTitle(group.label, group.sessions.size))
+                GroupHeading(text = text.sessions.groupTitle(group.label, group.sessions.size))
             }
             items(group.sessions, key = { it.path }) { item ->
                 ConversationRow(
@@ -599,6 +665,7 @@ private fun ConversationList(
                     snippet = snippets[item.path],
                     running = item.path in runningPaths,
                     pinned = false,
+                    current = item.path == currentPath,
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
                     onRename = { onRename(item) },
@@ -609,6 +676,30 @@ private fun ConversationList(
         }
     }
 }
+
+/**
+ * A group's heading: a small word at the list's own gutter.
+ *
+ * The library's `SmallTitle` measures 28dp on each side, which is the settings pages'
+ * gutter and not this list's — a heading two steps in from the rows it heads reads as
+ * another row. Drawn here so the heading and the row titles below it begin on one column.
+ */
+@Composable
+private fun GroupHeading(text: String) {
+    Text(
+        text = text,
+        style = MiuixTheme.textStyles.footnote1,
+        fontWeight = FontWeight.Medium,
+        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = HEADING_GUTTER, end = HEADING_GUTTER)
+            .padding(top = 10.dp, bottom = 4.dp),
+    )
+}
+
 
 /** One workspace's conversations, as a heading draws them. */
 internal data class SessionGroup(
@@ -680,30 +771,20 @@ internal fun sessionGroups(
 /**
  * One conversation as the question it was.
  *
- * The primary line is the reader's own words — the title pi shows is either the name
- * they gave it or, far more often, their first message — and the second line is when
- * it was and how much followed. A match from the content scan is the third line, and
- * only while searching. The title is one line and ellipsises: a title that could take
- * two made the list a mix of one- and two-line rows, and every row is the same height
- * now.
+ * A flat row rather than a card: the list is a column of the reader's own questions,
+ * and an outline around each one made a page of framed boxes out of what the reference
+ * drawing shows as text on a surface. The only row with a fill is the conversation on
+ * screen — that is the one fact the list carries about the page behind it, and colour is
+ * how it is said. The row is one line: a title, when it was, and the marks that say
+ * "live" and "pinned", so the list is one rhythm whatever the content is.
  *
- * The row is a `Card` and not a `BasicComponent` for one reason: the hold. The
- * library's settings row carries a single click, and this list's per-row actions —
- * rename, pin, delete — are reached by pressing and holding, which `Card` is the
- * container that supports. What separates the two lines here is still weight and
- * colour rather than a box or a glyph, which is what keeps a list of questions one
- * rhythm instead of a table.
- *
- * ## Why the actions are a hold, not a button
- *
- * The row used to carry a trailing `MoreVert`, which was the only thing in it that was
- * not the reader's question, sitting in the 48dp of edge the title wanted. A
- * press-and-hold is the platform's own convention for per-row actions on a list, and
- * it gives the row's right edge back to the text; the same three actions stay
- * reachable, and one of them — delete — is also in the multi-select bar. The long
- * click is labelled with [Strings.Sessions.actions] rather than left an unnamed
- * gesture, which is what a screen reader reads out for it.
+ * The row is a `combinedClickable` box rather than the library's `Card` because it has to
+ * be: `Card` draws the container this design removes, and what the row still needs from a
+ * card is exactly its two gestures — a tap to open and a hold for the three per-row
+ * actions. Both are on the box, and the hold is labelled with [Strings.Sessions.actions]
+ * rather than left an unnamed gesture, which is what a screen reader reads out for it.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRow(
     item: PiAgentSession.SessionSummary,
@@ -714,6 +795,8 @@ private fun ConversationRow(
     /** Whether this conversation is a live process, i.e. one tap away from its answer. */
     running: Boolean,
     pinned: Boolean,
+    /** Whether this is the conversation the page behind the drawer is showing. */
+    current: Boolean,
     onToggleChecked: () -> Unit,
     onOpen: () -> Unit,
     onRename: () -> Unit,
@@ -722,76 +805,47 @@ private fun ConversationRow(
 ) {
     // Locale.getDefault() follows the interface language because the root applies it,
     // so a date under a Chinese interface reads as Chinese.
-    val formatter = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
-    // The menu is the row's own state: it is anchored on this card, it dies with the
-    // row, and a row that scrolls out of the list with its menu open takes the menu
-    // with it.
+    val formatter = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
+    // The menu is the row's own state: it is anchored on this row, it dies with the row,
+    // and a row that scrolls out of the list with its menu open takes the menu with it.
     var actionsUp by remember(item.path) { mutableStateOf(false) }
 
     Box {
-        Card(
-            cornerRadius = PiCorner.radius,
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp)
+                // The margin is outside the fill: a highlighted row has to be inset from
+                // the panel's edge to read as a highlight rather than as a band across it.
+                .padding(horizontal = 8.dp)
+                .clip(RoundedCornerShape(ROW_CORNER))
+                .background(
+                    if (current) PiTone.inset() else Color.Transparent,
+                )
                 .semantics {
                     onLongClick(label = text.sessions.actions) {
                         // Nothing to hold for while the list is in selection mode: the
-                        // tap is already the checkbox, and a second way to reach the
-                        // same three actions there would be a menu over a multi-select.
+                        // tap is already the checkbox, and a second way to reach the same
+                        // three actions there would be a menu over a multi-select.
                         if (!selecting) actionsUp = true
                         true
                     }
-                },
-            // The pinned group's tint, painted at the row's own edge — see
-            // [ConversationList] for why it is not one panel any more.
-            colors = if (pinned) {
-                CardDefaults.defaultColors(
-                    color = MiuixTheme.colorScheme.secondaryContainer,
-                    contentColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                }
+                .combinedClickable(
+                    onClick = { if (selecting) onToggleChecked() else onOpen() },
+                    onLongClick = if (selecting) null else ({ actionsUp = true }),
                 )
-            } else {
-                CardDefaults.defaultColors()
-            },
-            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            pressFeedbackType = PressFeedbackType.Sink,
-            showIndication = true,
-            onClick = { if (selecting) onToggleChecked() else onOpen() },
-            onLongPress = if (selecting) null else { { actionsUp = true } },
+                .padding(horizontal = 14.dp, vertical = 13.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    // A live conversation is the one row in the list that is a *state*
-                    // as well as a question: tapping it goes back to an answer that is
-                    // still arriving. The dot is the same "live" mark the transcript's
-                    // tool pill uses, one line above the title so it cannot be mistaken
-                    // for part of the reader's own words.
-                    if (running) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(bottom = 3.dp),
-                        ) {
-                            Box(
-                                Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(MiuixTheme.colorScheme.primary),
-                            )
-                            Text(
-                                text = text.sessions.running,
-                                style = MiuixTheme.textStyles.footnote2,
-                                color = MiuixTheme.colorScheme.primary,
-                            )
-                        }
-                    }
                     Text(
                         text = item.title.ifBlank { text.sessions.emptyTitle },
-                        style = MiuixTheme.textStyles.headline1,
+                        style = MiuixTheme.textStyles.body1,
+                        fontWeight = if (current) FontWeight.Medium else FontWeight.Normal,
                         color = MiuixTheme.colorScheme.onSurface,
                         // One line, always: the list is a rhythm of equal rows, and a
                         // title that could take two made some rows two lines and some
@@ -799,23 +853,10 @@ private fun ConversationRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
-                        text = buildString {
-                            append(formatter.format(Date(item.modifiedAt)))
-                            append(" · ")
-                            append(text.sessions.messageCount(item.messageCount))
-                            if (!item.hasExplicitName) append(" · ").append(text.sessions.untitled)
-                        },
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
                     snippet?.let { match ->
                         Text(
                             text = match,
-                            style = MiuixTheme.textStyles.body2,
+                            style = MiuixTheme.textStyles.footnote2,
                             color = MiuixTheme.colorScheme.primary,
                             // Two lines, and only while searching: every result carries
                             // a snippet, so the list stays one rhythm in each mode.
@@ -831,14 +872,42 @@ private fun ConversationRow(
                         )
                     }
                 }
+                // The two facts a row carries about its own state, in the order they are
+                // read: pinned (a decision the reader made) then live (a process that is
+                // answering). Both are small and in the trailing lane, which is where the
+                // eye goes for meta rather than for the question.
+                if (pinned) {
+                    Icon(
+                        imageVector = MiuixIcons.Pin,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+                if (running) {
+                    // A dot is a colour and no words, so it carries its meaning as a
+                    // description: a row whose conversation is answering right now is the
+                    // one fact here a screen reader would otherwise never say.
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(MiuixTheme.colorScheme.primary)
+                            .semantics {
+                                contentDescription = text.sessions.running
+                            },
+                    )
+                }
+                Text(
+                    text = formatter.format(Date(item.modifiedAt)),
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                )
                 // The selection box is the row's *trailing* control, not its leading
-                // one. On the leading edge it is the first thing in the reading
-                // direction: it displaces every title by its own width the moment
-                // selection begins, which re-flows the whole list under the reader's
-                // finger, and it puts a control where the eye starts a line rather than
-                // where the hand ends one. The right edge is where a list's per-row
-                // control belongs on this platform, and it is also where this row's
-                // press-and-hold menu was anchored before selection mode replaced it.
+                // one: on the leading edge it displaces every title by its own width the
+                // moment selection begins, which re-flows the whole list under the
+                // reader's finger.
                 if (selecting) {
                     Checkbox(
                         state = ToggleableState(checked),
@@ -1228,7 +1297,60 @@ private const val DIALOG_BODY_SHARE = 0.45f
 /**
  * The gap under the last row.
  *
- * The page's own furniture, not the bar's height: the bar is the root scaffold's, and
- * this is the space that keeps a row from being read against its edge.
+ * The drawer's own furniture: it has to be tall enough for the settings pill, which
+ * floats over the end of the list — 16dp put the pill on top of the last conversation
+ * and made the final row unreadable, and the pill plus its own margin is about 72dp.
  */
-private val LIST_BOTTOM = 16.dp
+private val LIST_BOTTOM = 84.dp
+
+/** The drawer's gutter: the heading, the field and the group headings share it. */
+private val HEADING_GUTTER = 20.dp
+
+/** A row's corner, when it is the highlighted one. */
+private val ROW_CORNER = 14.dp
+
+/**
+ * The one control at the drawer's foot: a pill with the gear and the word.
+ *
+ * The reader's way into the settings, and the only one now that the four-destination bar
+ * is gone. It is a pill rather than a floating icon because it sits over a list of rows
+ * that are themselves tappable: a bare disc there is a fourth row action with no label,
+ * while a word says "this leaves the list". Its width follows the word, so `設定` and
+ * `Settings` both fit without a fixed measure and without the label touching either end.
+ *
+ * Raised on a shadow — the one shadow in the app — because it is the only control here
+ * that is not part of the surface it is drawn on, and a fill alone left it reading as a
+ * highlighted row.
+ */
+@Composable
+private fun SettingsPill(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(percent = 50)
+    Row(
+        modifier = modifier
+            .shadow(8.dp, shape, clip = false)
+            .clip(shape)
+            .background(MiuixTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = MiuixIcons.Settings,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.body1,
+            fontWeight = FontWeight.Medium,
+            color = MiuixTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+    }
+}

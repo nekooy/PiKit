@@ -4,13 +4,6 @@ import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.WorkspaceRefusal
 
 internal object EnglishStrings : Strings {
-    override val tabs = object : Strings.Tabs {
-        override val chat = "Chat"
-        override val terminal = "Terminal"
-        override val files = "Files"
-        override val settings = "Settings"
-    }
-
     override val header = object : Strings.Header {
         override val files = "Files"
         override val terminal = "Terminal"
@@ -45,8 +38,8 @@ internal object EnglishStrings : Strings {
             "Tip: tap + to attach an image or a file.",
             "Tip: tap ⌘ for the commands PiKit runs itself.",
             "Tip: long-press any text to copy it.",
-            "Tip: the history icon in the header reopens a past conversation.",
-            "Tip: swipe left or right to switch between the conversation and the list.",
+            "Tip: the mark at the top-left opens your conversations.",
+            "Tip: swiping right does the same, and swiping left closes it.",
             "Tip: the ring at the field's corner shows window use, cost and the session file.",
         )
         override val loadingConversation = "Opening the conversation…"
@@ -222,7 +215,6 @@ internal object EnglishStrings : Strings {
     override val sessions = object : Strings.Sessions {
         override val running = "Answering now"
         override fun poolFull(max: Int) = "$max conversations can be open at once. Close one before opening another."
-        override val title = "Conversations"
         override val loading = "Loading…"
         override fun selected(count: Int) = "$count selected"
         override fun saved(count: Int) = "$count saved"
@@ -248,9 +240,7 @@ internal object EnglishStrings : Strings {
         override val pin = "Pin to top"
         override val unpin = "Unpin"
         override val delete = "Delete"
-        override val untitled = "untitled"
         override val emptyTitle = "Empty conversation"
-        override fun messageCount(count: Int) = plural(count, "message", "messages")
         override val renameTitle = "Rename conversation"
         override val renameLabel = "Name"
         override val renameActiveNote = "This conversation is open, so pi renames it directly."
@@ -955,6 +945,7 @@ internal object EnglishStrings : Strings {
     }
 
     override val root = object : Strings.Root {
+        override val appName = "PiKit"
         override val preparing = "Preparing"
         override val settingUp = "Setting up PiKit"
         override val setupSubtitle = "Unpacking the runtime for the first launch"

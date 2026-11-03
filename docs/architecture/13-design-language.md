@@ -244,13 +244,41 @@ that needs more than two lines was already the wrong message for a toast.
 
 ## Navigation
 
-The four destinations are a Miuix `NavigationBar` at the root, one item per
-destination — icon and label, the library's own selected state, no custom indicator.
-The tab switch is a `Crossfade` with the bar outside it, so the bar does not travel
-with the page and a draft in the composer survives a look at the terminal (the
-composer is hoisted above the destination for the same reason). The terminal's
-glyph — a chevron and an underscore — is the one mark drawn for this app, because
-Miuix's set has no terminal icon.
+The app has one root page — the conversation — and everything else is reached from it.
+Its bar is the app's own arrangement rather than a library component: the leading mark
+opens the conversation drawer, the title is the app's name, and the three marks at the
+trailing edge open the terminal, the files and a new conversation, in that order. The
+conversation is what the app is for; a bar of four equally weighted destinations said
+otherwise.
+
+**The four-tab bar came first, and its costs are what retired it.** A Miuix
+`NavigationBar` at the root with one item per destination kept every page one tap away,
+and it also spent 48dp of every screen on the same four words for the whole life of the
+app, while the chat page drew a second bar of its own above the transcript. It was also
+the only reason the composer had to be hoisted above the destination: a crossfade
+destroyed the page that left, and `ChatComposerState` existed to survive that. With one
+root page and three pushed ones the draft survives because the page is not destroyed, and
+the terminal and the files are still one tap from the conversation.
+
+**The drawer, not a page.** The conversation list is the second thing a chat app is used
+for, and it is pulled *over* the conversation rather than pushed in front of it: the page
+behind stays visible at the drawer's trailing edge, dimmed and scaled to about 94% of its
+size, which is what says the conversation is one drag away. It is reached by the leading
+mark or by a rightward drag from anywhere on the page, and both drive one number (0..1),
+so a drag and a tap cannot animate differently and a released drag springs back from where
+the thumb left it. The scrim takes every touch while it is out, so the conversation cannot
+be typed into through it.
+
+Opening a conversation from the list closes the drawer *before* the page is rebuilt: the
+open/closed answer is published when the settle starts, not when it ends, because the
+rebuild that follows the tap reads it. That ordering was measured — with the answer
+published at the end, the chosen conversation was on screen with the drawer it came from
+still out over it, which reads as a tap that did nothing.
+
+The terminal's glyph — a chevron and an underscore — is one of the marks drawn for this
+app, because Miuix's set has no terminal icon. The drawer's leading mark is the library's
+`Sidebar`: the set has no hamburger either, and a bar that opens a panel is the honest
+picture of what the tap does.
 
 The settings stack keeps its own model: a sealed `SettingsPage` with a `parent`, a
 `rememberSaveable` encode/decode, and a per-page `PiPage(onBack)` rather than one
@@ -294,15 +322,15 @@ its geometry is not.
 
 ## What the pages do with it
 
-The four destinations and their second levels, and the one decision each makes that
-the shared vocabulary does not:
+The conversation's three pushed pages, the settings behind the drawer's foot, and the
+one decision each makes that the shared vocabulary does not:
 
 - **Chat** — the transcript is the app's densest surface and the one place a `Card`
   per turn is right, because a turn is a subject: a prompt card on the reader's own
   colour at the end edge, an answer card holding that turn's reasoning, tool calls and
   reply. Tool calls are dense rows inside it, a live turn carries `PiTone.live()`, and
-  the composer is the page's bottom band on `surface` — the same grey the tab strip is
-  painted in, so the foot of the page meets the navigation bar at no seam. Inside the
+  the composer is the page's bottom band on `surface` — the same grey the page is
+  painted in, so the foot of the page meets the window's edge at no seam. Inside the
   band the field is a raised white frame (`surfaceContainer` at the kit's corner)
   holding the text **and the four controls**, in the order a thumb meets them: the
   command list and the attach control at the field's left corner, the context

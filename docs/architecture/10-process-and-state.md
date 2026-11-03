@@ -87,10 +87,10 @@ Two lifecycle facts are load-bearing, and both were measured on a device rather 
 
 ## The terminal's shells are the process's, and a close is not a choice
 
-The terminal tab's sessions are process state for the same reason. A shell created inside
-`TerminalScreen`'s composition dies with it, and the terminal is one of four tabs, so looking
-at another one killed a `pkg upgrade` or a running build; `TerminalSessionManager` holds them
-beside the agent and the page only displays one of them.
+The terminal's sessions are process state for the same reason. A shell created inside
+`TerminalScreen`'s composition dies with it, and the terminal page is one the reader leaves
+by its back arrow, so a look at the conversation killed a `pkg upgrade` or a running build;
+`TerminalSessionManager` holds them beside the agent and the page only displays one of them.
 
 Which one it displays is a rule of its own, `TerminalSelection.afterClose` — a pure function
 over the roster's ids, tested on the JVM, because a screenshot cannot tell the two answers

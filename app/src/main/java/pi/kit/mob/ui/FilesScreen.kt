@@ -186,7 +186,9 @@ import java.util.Locale
  * instead of pushing a body into a layer above the whole app.
  */
 @Composable
-fun FilesScreen(session: PiAgentSession) {
+fun FilesScreen(session: PiAgentSession,
+    onBack: () -> Unit,
+) {
     val text = strings
     val home = remember { session.env.home }
     val toasts = LocalPiToast.current
@@ -260,12 +262,12 @@ fun FilesScreen(session: PiAgentSession) {
     }
 
     PiPage(
-        // The four tab roots left-align their titles and subtitles. The bar's right
-        // side is where three or four action icons live, and the library centres a
-        // title between the navigation icon and those actions — so a root with four
-        // actions has its title pushed off centre by their width. See `PiPage`'s
-        // *Why a root can be left-aligned*.
+        // A pushed page, but left-aligned all the same: it keeps the title at the
+        // page's own gutter after the back arrow, which is where the drawer's list
+        // puts its own heading — the two pages read as one column when one opens the
+        // other. See `PiPage`'s *Why a root can be left-aligned*.
         alignStart = true,
+        onBack = onBack,
         // The folder's own name, not the tab's: on a file manager the title is the
         // place you are standing in, and "Files" over a folder called `workspace` is
         // the one fact the page already knows better.

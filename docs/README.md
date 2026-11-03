@@ -15,7 +15,7 @@ Every document in this repository, and the rule for adding one.
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass, the README preview strip — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
 | [assets/icon.svg](assets/icon.svg) | The launcher icon, as the README shows it — **generated** | Never by hand |
-| [assets/preview-0.6.2.webp](assets/preview-0.6.2.webp) | The four tabs as the README shows them — a screenshot of the running app, compressed and not generated | When the interface it shows changes, and only after the repository's owner has asked for it |
+| [assets/preview-0.6.2.webp](assets/preview-0.6.2.webp) | The four pages — conversation, terminal, files, settings — as the README shows them; a screenshot of the running app, compressed and not generated, and of the navigation before 0.6.5's drawer | When the interface it shows changes, and only after the repository's owner has asked for it |
 | [assets/preview-0.6.0.webp](assets/preview-0.6.0.webp) | The same strip as it looked in 0.6.0, kept rather than overwritten | Never — it is a record, not the preview |
 | [assets/preview-0.5.0.webp](assets/preview-0.5.0.webp) | The same strip as it looked before the Miuix rewrite, kept rather than overwritten | Never — it is a record, not the preview |
 | [assets/preview-0.2.0.webp](assets/preview-0.2.0.webp) | The same strip as it looked in 0.2.0, kept rather than overwritten | Never — it is a record, not the preview |

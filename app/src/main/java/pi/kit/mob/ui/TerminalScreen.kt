@@ -149,7 +149,9 @@ private const val MAX_TEXT_SIZE_SP = 40
  * output the reader may already be reading.
  */
 @Composable
-fun TerminalScreen(session: PiAgentSession) {
+fun TerminalScreen(session: PiAgentSession,
+    onBack: () -> Unit,
+) {
     // `t`, not `strings`: that is the imported accessor read on the next line, and
     // `text` is the name the composables below take for the same catalog.
     val t = strings
@@ -238,12 +240,12 @@ fun TerminalScreen(session: PiAgentSession) {
     val keys = rememberKeySize(t, LocalDensity.current.fontScale)
 
     PiPage(
-        // The four tab roots left-align their titles and subtitles. The bar's right
-        // side is where three or four action icons live, and the library centres a
-        // title between the navigation icon and those actions — so a root with four
-        // actions has its title pushed off centre by their width. See `PiPage`'s
-        // *Why a root can be left-aligned*.
+        // A pushed page, but left-aligned all the same: it keeps the title at the
+        // page's own gutter after the back arrow, which is where the drawer's list
+        // puts its own heading — the two pages read as one column when one opens the
+        // other. See `PiPage`'s *Why a root can be left-aligned*.
         alignStart = true,
+        onBack = onBack,
         // Which shell this is, and what the page is. The subtitle *is* the roster
         // count once there is more than one shell: the line is there either way, so
         // the count costs no height, where a pill reporting it above the terminal

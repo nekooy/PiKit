@@ -354,7 +354,8 @@ MSYS_NO_PATHCONV=1 adb shell \
   "run-as pi.kit.mob sh -c 'cp /data/local/tmp/seed.jsonl files/pi-sessions/seed.jsonl'"
 ```
 
-It is picked up by the history list, which the chat header's history icon opens. The
+It is picked up by the conversation drawer, which the mark at the conversation page's
+leading edge opens. The
 records and the two traps — a **linear `parentId` chain**, because pi stores messages as a
 tree and `get_messages` returns only the branch reaching the last record, and the profile
 file that makes the composer's chips read a real model instead of `unknown` — are written

@@ -12,7 +12,7 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 `pi` 命令行都打包在 APK 里，首次启动解包即用，无需软件源或额外下载——唯一要连的是模型供应商。
 
 <p align="center">
-  <img src="docs/assets/preview-0.6.2.webp" width="90%" alt="PiKit 0.6.2——对话、终端、文件、设置四个标签页">
+  <img src="docs/assets/preview-0.6.2.webp" width="90%" alt="PiKit 0.6.2——对话、终端、文件和设置页面">
 </p>
 
 <p align="center"><sub>PiKit 0.6.2 界面预览</sub></p>
@@ -20,12 +20,13 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 ## 特色
 
 - **简洁的理念，原生优雅的界面。** Kotlin 与 Jetpack Compose，界面用 Miuix
-  （MIUI/HyperOS 风格的 Compose 组件库）绘制，四个标签页，没有 WebView。界面有英文、简体中文和日文。
+  （MIUI/HyperOS 风格的 Compose 组件库）绘制，一个对话页加一个会话抽屉，没有 WebView。
+  界面有英文、简体中文和日文。
 - **对话走在 pi 的 RPC 协议上。** 回合结束折叠成一行（`Worked 47s · 5 steps`），点一下重新展开；
   思考等级、模型、上下文占用和缓存命中是输入框上方的一排按钮，两个开关都不重启 Agent 就生效。
 - **多个对话可以同时进行。** 每个对话是独立的进程：新建的对话在旁边开始，原来那条回答照常继续，
-  历史列表就是切换器；最多同时五个，关掉一个只需一下，记录早已写在磁盘上。
-- **终端和文件管理器。** 切换标签页也不中断的 PTY 会话、手机键盘没有的按键，以及 `$HOME` 的只读
+  抽屉里的会话列表就是切换器；最多同时五个，关掉一个只需一下，记录早已写在磁盘上。
+- **终端和文件管理器。** 离开页面也不中断的 PTY 会话、手机键盘没有的按键，以及 `$HOME` 的只读
   文件管理器：可点的路径、筛选和三种排序、每行的大小或项目数、图片预览和复制路径。
 - **按 pi 的规则对待供应商。** pi 自己的密钥表认识的 34 家，外加一个自定义端点；模型的上下文窗口、
   输出上限、思考等级和图片支持都读自 pi 的目录。
@@ -46,7 +47,7 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 <p align="center"><sub>手机和平板 · 约 110 MB</sub></p>
 
 首次启动会解包运行时（约几秒）。到 **设置 → 模型与供应商** 填 API Key，或在有订阅时
-于终端标签页运行 `pi /login`。更新时覆盖安装即可保留数据——需要时点 **关于 PiKit →
+于终端页运行 `pi /login`。更新时覆盖安装即可保留数据——需要时点 **关于 PiKit →
 检查更新**。其他架构和校验文件见 [releases 页面](https://github.com/nekooy/PiKit/releases/latest)；
 `adb shell getprop ro.product.cpu.abi` 会告诉你该下哪个文件。
 

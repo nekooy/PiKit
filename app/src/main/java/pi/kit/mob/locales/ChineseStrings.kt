@@ -12,13 +12,6 @@ import pi.kit.mob.data.WorkspaceRefusal
  * this catalog uses it.
  */
 internal object ChineseStrings : Strings {
-    override val tabs = object : Strings.Tabs {
-        override val chat = "对话"
-        override val terminal = "终端"
-        override val files = "文件"
-        override val settings = "设置"
-    }
-
     override val header = object : Strings.Header {
         override val files = "文件"
         override val terminal = "终端"
@@ -53,8 +46,8 @@ internal object ChineseStrings : Strings {
             "提示：点 + 可以给消息附上图片或文件",
             "提示：点 ⌘ 可以查看 PiKit 自己执行的指令",
             "提示：长按任意文字即可复制",
-            "提示：点顶部的历史图标可以回到之前的对话",
-            "提示：向左或向右滑动，可以在对话页和历史对话之间切换",
+            "提示：点左上角的标记可以打开对话列表",
+            "提示：向右滑动也能打开对话列表，向左滑回去",
             "提示：点输入框右下角的圆环可以查看窗口占用、花费和会话文件",
         )
         override val loadingConversation = "正在打开对话…"
@@ -221,7 +214,6 @@ internal object ChineseStrings : Strings {
     override val sessions = object : Strings.Sessions {
         override val running = "正在回答"
         override fun poolFull(max: Int) = "同时最多 $max 个对话在运行，先关掉一个再开新的。"
-        override val title = "历史对话"
         override val loading = "加载中…"
         override fun selected(count: Int) = "已选 $count 个"
         override fun saved(count: Int) = "共 $count 个"
@@ -247,9 +239,7 @@ internal object ChineseStrings : Strings {
         override val pin = "置顶"
         override val unpin = "取消置顶"
         override val delete = "删除"
-        override val untitled = "未命名"
         override val emptyTitle = "空对话"
-        override fun messageCount(count: Int) = "$count 条消息"
         override val renameTitle = "重命名对话"
         override val renameLabel = "名称"
         override val renameActiveNote = "这个对话正在使用中，Pi 会直接改名。"
@@ -875,6 +865,7 @@ internal object ChineseStrings : Strings {
         ).joinToString("\n")
     }
     override val root = object : Strings.Root {
+        override val appName = "PiKit"
         override val preparing = "正在准备"
         override val settingUp = "正在初始化 PiKit"
         override val setupSubtitle = "首次启动需要解包运行环境"

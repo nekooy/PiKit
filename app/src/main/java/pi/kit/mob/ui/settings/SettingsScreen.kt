@@ -192,7 +192,7 @@ private fun SettingsPage.encode(): String = when (this) {
  * argue for at length.
  */
 @Composable
-fun SettingsScreen(session: PiAgentSession) {
+fun SettingsScreen(session: PiAgentSession, onBack: () -> Unit) {
     val settings by session.settingsStore.settings.collectAsState()
     val agent by session.agent.collectAsState()
     val context = LocalContext.current
@@ -261,6 +261,7 @@ fun SettingsScreen(session: PiAgentSession) {
                 session = session,
                 onOpen = ::open,
                 agent = agent,
+                onBack = onBack,
             )
 
             SettingsPage.Model -> ModelPage(
@@ -350,6 +351,7 @@ private fun RootPage(
     session: PiAgentSession,
     onOpen: (SettingsPage) -> Unit,
     agent: AgentStatus,
+    onBack: () -> Unit,
 ) {
     // Collected here rather than read off the store inside the rows, so a saved
     // profile is reflected the moment the store publishes it.
@@ -375,7 +377,7 @@ private fun RootPage(
     // back gesture leave the app from here rather than doing nothing.
     // The settings root left-aligns its title for the reason the other three tab
     // roots do — see `PiPage`'s *Why a root can be left-aligned*.
-    PiPage(title = text.settings.title, alignStart = true) { padding ->
+    PiPage(title = text.settings.title, alignStart = true, onBack = onBack) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

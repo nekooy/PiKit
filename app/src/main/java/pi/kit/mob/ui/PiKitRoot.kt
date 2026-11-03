@@ -94,27 +94,22 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
-import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Folder
-import top.yukonga.miuix.kmp.icon.extended.Messages
-import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The four destinations, in the bar's order.
+ * The app's four whole-screen pages.
  *
- * The order is by how often the app is opened for each: the conversation first,
- * then the shell it drives, then what it changed, and the settings last. A
- * destination that moves because the bar was redesigned is a destination the
- * reader has to find twice.
+ * The chat is the root and the other three are pushed onto it: the bar's three
+ * marks open the shell, the file tree and a new conversation, and the drawer's
+ * foot opens the settings. The bar that used to list all four is gone, so this
+ * enum is no longer an order — it is the set of things that can cover the
+ * conversation, and every member except [Chat] has a way back to it.
  */
 private enum class Destination {
     Chat,
@@ -336,6 +331,11 @@ private fun RootContent(
     val session by host.active.collectAsState()
     val agent by session.agent.collectAsState()
     var destination by remember { mutableStateOf(Destination.Chat) }
+    // Whether the conversation drawer is out. Held up here rather than inside the chat
+    // page because the settings page is reached from the drawer's own foot, and the way
+    // back from it has to land on the list it was opened from — a drawer that closed
+    // itself on the way to the settings would make every visit two taps.
+    var historyOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val text = strings
     // A draft, the attached images and the transcript's scroll position are per
@@ -420,36 +420,14 @@ private fun RootContent(
     }
 
     Scaffold(
-        // The pages own their top inset (every one of them is a `Scaffold`
-        // with a top bar of its own), so the root asks for no content insets
-        // and takes only the bottom bar's height out of the content. Asking
-        // for `systemBars` here would pad every page's top bar a second time.
+        // The pages own their insets (every one of them is a `Scaffold` with a top bar
+        // of its own), so the root asks for no content insets at all: asking for
+        // `systemBars` here would pad every page's top bar a second time.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MiuixTheme.colorScheme.surface,
-        bottomBar = {
-            // `showDivider = false`: the bar is the page's floor, not a panel
-            // laid over it. Miuix's own divider is a hairline the same colour as
-            // the card outlines *inside* the page, so a bar that drew one read as
-            // one more card edge at the bottom of every screen — a line across the
-            // interface that divides nothing, because the surface above and the
-            // surface below are the same surface.
-            NavigationBar(showDivider = false) {
-                Destination.entries.forEach { entry ->
-                    NavigationBarItem(
-                        selected = destination == entry,
-                        onClick = { destination = entry },
-                        icon = entry.icon(),
-                        label = entry.label(text),
-                    )
-                }
-            }
-        },
     ) { padding ->
-        // `padding` is the bar's height. `consumeWindowInsets` makes the
-        // keyboard inset below subtract it instead of adding to it, so the page
-        // ends at `max(bar, keyboard)` — the bar's height is not left as a dead
-        // band above the keyboard, and with the keyboard down the page ends
-        // exactly at the bar's top edge.
+        // `padding` is empty now that the root has no bar, and what is left of this
+        // block is the keyboard floor the chat page still relies on.
         //
         // The modifiers are on the crossfade itself and there is no wrapper `Box`:
         // the scaffold already paints `surface`, and a `Box` around a single child
@@ -463,9 +441,6 @@ private fun RootContent(
         // of the ramp the page's own travel is sub-pixel; the floor lands it instead,
         // and the keyboard's remaining sliver is covered by the page for those
         // frames. ChatScreen's composer gap uses the same trick over its last 10dp.
-        // `consumeWindowInsets(padding)` above only speaks to `windowInsetsPadding`-
-        // shaped modifiers, so the bar's height is subtracted here by hand — it is
-        // what `imePadding` would have consumed.
         val density = LocalDensity.current
         val ime = WindowInsets.ime
         val barBottomPx = with(density) { padding.calculateBottomPadding().roundToPx() }
@@ -476,19 +451,40 @@ private fun RootContent(
                 .padding(padding)
                 .consumeWindowInsets(padding)
                 .imePaddingFloor(density, ime, barBottomPx),
-            label = "tab",
+            label = "page",
         ) { shown ->
             when (shown) {
-                Destination.Terminal -> TerminalScreen(session = session)
+                Destination.Terminal -> TerminalScreen(
+                    session = session,
+                    onBack = { destination = Destination.Chat },
+                )
+
                 Destination.Chat -> ChatTab(
                     host = host,
                     session = session,
                     agent = agent,
                     composer = composer,
+                    historyOpen = historyOpen,
+                    onHistoryOpenChange = { historyOpen = it },
+                    onOpenTerminal = { destination = Destination.Terminal },
+                    onOpenFiles = { destination = Destination.Files },
+                    onOpenSettings = {
+                        historyOpen = true
+                        destination = Destination.Settings
+                    },
                 )
 
-                Destination.Files -> FilesScreen(session = session)
-                Destination.Settings -> SettingsScreen(session = session)
+                Destination.Files -> FilesScreen(
+                    session = session,
+                    onBack = { destination = Destination.Chat },
+                )
+
+                // Back from the settings returns to the drawer it was opened from:
+                // `historyOpen` is still true, and the chat page composes with it out.
+                Destination.Settings -> SettingsScreen(
+                    session = session,
+                    onBack = { destination = Destination.Chat },
+                )
             }
         }
     }
@@ -571,6 +567,12 @@ private fun ChatTab(
     session: PiAgentSession,
     agent: AgentStatus,
     composer: ChatComposerState,
+    /** Whether the conversation drawer is out; owned by [RootContent] — see there. */
+    historyOpen: Boolean,
+    onHistoryOpenChange: (Boolean) -> Unit,
+    onOpenTerminal: () -> Unit,
+    onOpenFiles: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val state by session.conversation.collectAsState()
     val text = strings
@@ -611,35 +613,30 @@ private fun ChatTab(
             composer = composer,
             onOpenConversation = open,
             onNewConversation = openNew,
+            historyOpen = historyOpen,
+            onHistoryOpenChange = onHistoryOpenChange,
+            onOpenTerminal = onOpenTerminal,
+            onOpenFiles = onOpenFiles,
+            onOpenSettings = onOpenSettings,
         )
     }
-}
-
-private fun Destination.label(text: pi.kit.mob.locales.Strings): String = when (this) {
-    Destination.Chat -> text.tabs.chat
-    Destination.Terminal -> text.tabs.terminal
-    Destination.Files -> text.tabs.files
-    Destination.Settings -> text.tabs.settings
-}
-
-private fun Destination.icon(): ImageVector = when (this) {
-    Destination.Chat -> MiuixIcons.Messages
-    Destination.Terminal -> TerminalGlyph
-    Destination.Files -> MiuixIcons.Folder
-    Destination.Settings -> MiuixIcons.Settings
 }
 
 /**
  * The shell's glyph: a chevron and an underscore.
  *
- * Miuix carries no terminal icon, and this is the one destination mark the
- * library cannot supply. It is drawn rather than borrowed from another set
- * because a mark from another set carries that set's weight, and a heavier glyph
- * beside three Miuix icons reads as a different control — the rule that also
- * sized ⌘ down at its call site. Two strokes at the library's own line weight on
- * a 24-unit grid, tinted by the bar: a chevron at the left, a bar at the right.
+ * Miuix carries no terminal icon, and this is the one mark the library cannot
+ * supply. It is drawn rather than borrowed from another set because a mark from
+ * another set carries that set's weight, and a heavier glyph beside three Miuix
+ * icons reads as a different control — the rule that also sized ⌘ down at its call
+ * site. Two strokes at the library's own line weight on a 24-unit grid, tinted by
+ * the bar: a chevron at the left, a bar at the right.
+ *
+ * A *navigation* mark, and it moved with the navigation: the bottom bar is gone and
+ * this now stands at the chat page's trailing edge, beside the folder and the
+ * circled plus. It is still not the app's own mark — that is the launcher glyph.
  */
-private val TerminalGlyph: ImageVector by lazy {
+internal val TerminalGlyph: ImageVector by lazy {
     val stroke = SolidColor(Color.Black)
     ImageVector.Builder(
         name = "Terminal",
