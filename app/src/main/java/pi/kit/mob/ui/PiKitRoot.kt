@@ -472,8 +472,7 @@ private fun RootContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .consumeWindowInsets(padding)
-                .imePaddingFloor(density, ime, padding),
+                .consumeWindowInsets(padding),
             transitionSpec = {
                 val incoming = if (targetState == Destination.Chat) -1 else 1
                 (
@@ -484,11 +483,16 @@ private fun RootContent(
             label = "page",
         ) { shown ->
             when (shown) {
-                Destination.Terminal -> TerminalScreen(
-                    session = session,
-                    onBack = { destination = Destination.Chat },
-                )
+                Destination.Terminal -> KeyboardLifted(density, ime, padding) {
+                    TerminalScreen(
+                        session = session,
+                        onBack = { destination = Destination.Chat },
+                    )
+                }
 
+                // The chat page is *not* lifted here: its composer band takes the
+                // keyboard itself, which keeps the page's height fixed while the
+                // keyboard animates and stops the transcript re-measuring per step.
                 Destination.Chat -> ChatTab(
                     host = host,
                     session = session,
@@ -504,17 +508,21 @@ private fun RootContent(
                     },
                 )
 
-                Destination.Files -> FilesScreen(
-                    session = session,
-                    onBack = { destination = Destination.Chat },
-                )
+                Destination.Files -> KeyboardLifted(density, ime, padding) {
+                    FilesScreen(
+                        session = session,
+                        onBack = { destination = Destination.Chat },
+                    )
+                }
 
                 // Back from the settings returns to the drawer it was opened from:
                 // `historyOpen` is still true, and the chat page composes with it out.
-                Destination.Settings -> SettingsScreen(
-                    session = session,
-                    onBack = { destination = Destination.Chat },
-                )
+                Destination.Settings -> KeyboardLifted(density, ime, padding) {
+                    SettingsScreen(
+                        session = session,
+                        onBack = { destination = Destination.Chat },
+                    )
+                }
             }
         }
         }
@@ -1044,6 +1052,23 @@ private fun Modifier.imePaddingFloor(
     layout(placeable.width, placeable.height + applied) {
         placeable.placeRelative(0, 0)
     }
+}
+
+/**
+ * Lifts a pushed page by the keyboard, for the pages that have no composer of their own.
+ *
+ * The chat page handles this inside itself (its band rises, its content does not), which
+ * is what keeps a keyboard close from re-measuring the transcript at every step; every
+ * other page still wants the whole page pushed up, and gets it here.
+ */
+@Composable
+private fun KeyboardLifted(
+    density: Density,
+    ime: WindowInsets,
+    padding: PaddingValues,
+    content: @Composable () -> Unit,
+) {
+    Box(Modifier.fillMaxSize().imePaddingFloor(density, ime, padding)) { content() }
 }
 
 /**

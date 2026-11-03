@@ -67,6 +67,7 @@ internal object ChineseStrings : Strings {
         override val copyMessage = "复制消息"
         override val messageActions = "消息操作"
         override val selectText = "选取文字"
+        override val selectHint = "长按文字即可选取"
         override val fork = "分叉出新对话"
         override val forkFailed = "分叉失败：这条对话还没有写入文件"
         override val expand = "展开"

@@ -118,6 +118,9 @@ import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.Clipboard
+import kotlinx.coroutines.CoroutineScope
+import pi.kit.mob.ui.kit.PiToast
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -204,6 +207,9 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.DropdownDefaults
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
@@ -219,6 +225,9 @@ import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.Share
+import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Sidebar
 import top.yukonga.miuix.kmp.icon.extended.Lock
@@ -409,7 +418,13 @@ internal fun ChatScreen(
     val settlePage: (Float) -> Unit = { target ->
         drawerJob?.cancel()
         onHistoryOpenChange(target > 0f)
-        if (target == 0f) historyReachable = false
+        // The panel is **never dropped once it has been opened**. Letting it leave the
+        // composition on close threw away its rows and its scan, so a quick re-open
+        // rebuilt the drawer from nothing — measured: swipe out, swipe back in within a
+        // second, and the panel was empty while it rescanned — and every re-open paid for
+        // a scan it had already done. It now stays composed, parked off the leading edge
+        // at progress zero, which is what makes the second open instant.
+        historyReachable = true
         drawerJob = scope.launch {
             animate(
                 initialValue = drawerOffset,
@@ -1513,43 +1528,12 @@ private fun ChatPage(
     var menuMessages by remember { mutableIntStateOf(0) }
     var selectionKey by remember { mutableStateOf<String?>(null) }
     ExitBackHandler()
-    // The message menu. A sheet rather than a floating toolbar, for the reason the
-    // composer's own menus are sheets: the page is read at arm's length and a menu that
-    // appears under a thumb covers the message it is about.
-    val clipboard = LocalClipboard.current
-    val toasts = LocalPiToast.current
-    val menuScope = rememberCoroutineScope()
-    val menu = menuFor
-    PiSheet(
-        show = menu != null,
-        title = text.chat.messageActions,
-        onDismiss = { menuFor = null },
-    ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-            MessageAction(text.chat.copyMessage) {
-                if (menu != null) {
-                    menuScope.launch { clipboard.setClipEntry(clipEntryFor(itemSource(menu))) }
-                }
-                menuFor = null
-            }
-            MessageAction(text.chat.selectText) {
-                selectionKey = menuCardKey
-                menuFor = null
-            }
-            // A branch is the conversation up to this message, written as a new session
-            // file and opened: pi's sessions are append-only, so "fork here" is "copy the
-            // records up to here". Refused while a turn is streaming — the file is being
-            // written, and a fork of a half-written turn is a fork of nothing.
-            if (!state.isStreaming && menuMessages > 0) {
-                MessageAction(text.chat.fork) {
-                    val path = menuMessages.let { session.forkAt(it) }
-                    menuFor = null
-                    val opened = path?.let { session.host.openConversation(it, currentWorkspace) }
-                    if (opened == null) toasts?.show(text.chat.forkFailed)
-                }
-            }
-        }
-    }
+    // The message menu's actions live at the page; the menu itself is emitted at the
+    // message (see the transcript's item scope), because a menu belongs where the finger
+    // was rather than at the bottom edge of the screen.
+    val messageClipboard = LocalClipboard.current
+    val messageToasts = LocalPiToast.current
+    val messageScope = rememberCoroutineScope()
 
     // The page, and the layer its bar floats on.
     //
@@ -1799,6 +1783,36 @@ private fun ChatPage(
                                                 )
                                             },
                                         ) {
+                                            // A dropdown at the message, not a panel over the
+                                            // page: three short actions on one bubble do not
+                                            // need the whole bottom edge, and the menu lands on
+                                            // the thing it is about.
+                                            menuTarget?.let { target ->
+                                                OverlayDropdownPopup(
+                                                    entry = DropdownEntry(
+                                                        items = messageMenuItems(
+                                                            target = target,
+                                                            cardKey = card.key,
+                                                            counted = counted,
+                                                            streaming = state.isStreaming,
+                                                            text = text,
+                                                            session = session,
+                                                            workspace = currentWorkspace,
+                                                            clipboard = messageClipboard,
+                                                            scope = messageScope,
+                                                            toasts = messageToasts,
+                                                            onDismiss = { menuFor = null },
+                                                            onSelect = { key -> selectionKey = key },
+                                                        ),
+                                                    ),
+                                                    show = menuFor == target,
+                                                    onDismiss = { menuFor = null },
+                                                    onDismissFinished = {},
+                                                    maxHeight = null,
+                                                    dropdownColors = DropdownDefaults.dropdownColors(),
+                                                    renderInRootScaffold = true,
+                                                )
+                                            }
                                             // Selecting is a *mode*: the message the reader
                                             // asked to select wears the container, and the
                                             // rest of the transcript is not selectable, which
@@ -1879,7 +1893,6 @@ private fun ChatPage(
                         },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .glassLift(CircleShape)
                             // Clear of the transcript's own gutter, and of the scrollbar
                             // the platform draws in the last few dp of the window: the
                             // button is drawn over the list, so it has to sit inside the
@@ -1894,7 +1907,13 @@ private fun ChatPage(
                             // 40dp pill by default, so the two controls the thumb reaches
                             // for are the same shape without either of them stating a
                             // radius of its own.
-                            .size(40.dp),
+                            .size(40.dp)
+                            // **After** the size and the padding: the lift is a drawing
+                            // layer, and one declared ahead of them is the size of
+                            // everything that follows it. Measured, the shadow was a
+                            // 40dp circle drawn around a box 10dp larger and 10dp higher
+                            // — the "the jump button's shadow is broken" report.
+                            .glassLift(CircleShape),
                         backgroundColor = PiGlass.fill(),
                     ) {
                         Icon(
@@ -1951,6 +1970,19 @@ private fun ChatPage(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    // The keyboard lifts **this column and nothing else**: the page's
+                    // height, and with it the transcript's measurement, stays put while
+                    // the keyboard animates. `onSizeChanged` sits *after* the inset, so
+                    // what the list pads its end by is the band's own content height and
+                    // not the keyboard's — which is what keeps a keyboard close from
+                    // re-measuring every row of the conversation on each step of it.
+                    // The union, not the two added: with the keyboard up the gesture
+                    // strip is behind it, and stacking both left a 48px hole.
+                    .windowInsetsPadding(
+                        WindowInsets.ime
+                            .union(WindowInsets.navigationBars)
+                            .only(WindowInsetsSides.Bottom),
+                    )
                     .onSizeChanged { bottomStackPx = it.height },
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
@@ -3028,7 +3060,7 @@ private const val PAGE_SLIDE_MILLIS = 220
  * second screen. 0.86 is the same share the prompt bubble's cap uses, so the two
  * decisions agree about how much of a page is "most of it".
  */
-private const val DRAWER_SHARE = 0.86f
+private const val DRAWER_SHARE = 0.79f
 
 /**
  * The widest the drawer gets, whatever the window is.
@@ -3479,7 +3511,9 @@ private fun MessageMeta(
         Text(
             text = stamp,
             style = MiuixTheme.textStyles.footnote2,
-            color = ChatTone.Accent.ink(),
+            // Grey, not the accent: the accent is for what is live (a streaming turn's
+            // working line), and a finished message's time is furniture.
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             maxLines = 1,
         )
     }
@@ -3516,6 +3550,67 @@ private fun itemSource(item: ChatItem): String = when (item) {
     is ChatItem.Assistant -> item.text
     is ChatItem.Tool -> item.output.ifBlank { item.argumentsJson }
     is ChatItem.Notice -> item.text
+}
+
+/**
+ * The rows a message's menu offers.
+ *
+ * Built here rather than inline in the transcript's item scope so the three actions read as
+ * one list: copy the source, select the text, or branch the conversation from this message.
+ * The branch needs the *count* of message records up to the card, which is what the item
+ * scope knows and the item itself does not.
+ */
+private fun messageMenuItems(
+    target: ChatItem,
+    cardKey: String,
+    counted: Int,
+    streaming: Boolean,
+    text: Strings,
+    session: pi.kit.mob.pi.PiAgentSession,
+    workspace: String,
+    clipboard: Clipboard,
+    scope: CoroutineScope,
+    toasts: PiToast?,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+): List<DropdownItem> = buildList {
+    add(
+        DropdownItem(
+            text = text.chat.copyMessage,
+            icon = { modifier -> Icon(MiuixIcons.Copy, contentDescription = null, modifier = modifier) },
+            onClick = {
+                onDismiss()
+                scope.launch { clipboard.setClipEntry(clipEntryFor(itemSource(target))) }
+            },
+        ),
+    )
+    add(
+        DropdownItem(
+            text = text.chat.selectText,
+            icon = { modifier -> Icon(MiuixIcons.SelectAll, contentDescription = null, modifier = modifier) },
+            onClick = {
+                onDismiss()
+                onSelect(cardKey)
+                // Compose cannot select text for the reader: the container it needs is
+                // what this turns on, and the long press that picks characters is theirs.
+                toasts?.show(text.chat.selectHint)
+            },
+        ),
+    )
+    if (!streaming && counted > 0) {
+        add(
+            DropdownItem(
+                text = text.chat.fork,
+                icon = { modifier -> Icon(MiuixIcons.Share, contentDescription = null, modifier = modifier) },
+                onClick = {
+                    onDismiss()
+                    val path = session.forkAt(counted)
+                    val opened = path?.let { session.host.openConversation(it, workspace) }
+                    if (opened == null) toasts?.show(text.chat.forkFailed)
+                },
+            ),
+        )
+    }
 }
 
 /**
@@ -3884,16 +3979,7 @@ private fun Composer(
     // strip minus whatever the keyboard has already taken. Two inset reads in composition
     // — `isImeVisible` and a conditional padding — were what made a keyboard close
     // recompose this subtree on every step of its animation.
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(
-                WindowInsets.navigationBars
-                    .union(WindowInsets.ime)
-                    .exclude(WindowInsets.ime)
-                    .only(WindowInsetsSides.Bottom),
-            ),
-    ) {
+    Box(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
                 LazyRow(
@@ -4220,7 +4306,8 @@ private fun Composer(
                     .background(
                         Brush.verticalGradient(
                             0f to Color.Transparent,
-                            0.55f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
+                            0.42f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
+                            0.72f to MiuixTheme.colorScheme.surface,
                             1f to MiuixTheme.colorScheme.surface,
                         ),
                     ),
@@ -4231,11 +4318,9 @@ private fun Composer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    // The field floats with the chips, not above them. The cheap lift is
-                    // right here and only here: the field is opaque, so the shadow
-                    // elevation's silhouette never shows, and a blurred outline of a
-                    // thousand-pixel capsule costs a re-rasterisation per frame.
-                    .solidLift(RoundedCornerShape(PiCorner.radius)),
+                    // The same hand-drawn lift as the capsules: an elevation shadow
+                    // leans downward and made the field's underside heavier than its top.
+                    .glassLift(RoundedCornerShape(PiCorner.radius)),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
@@ -4579,13 +4664,12 @@ private fun Composer(
                 }
             }
 
+                // The air below the frame, **inside** the gradient: below the field the
+                // band has to be opaque, or the transcript shows through under the
+                // input box — the report "you said it fades upward from the field, so
+                // nothing below it should be readable", and it was right.
+                Spacer(Modifier.fillMaxWidth().height(COMPOSER_FOOT))
             }
-
-            // The air below the frame. Ten dp, and it no longer changes with the
-            // keyboard: the strip's inset above is what the keyboard takes away, and a
-            // second conditional here was a second relayout in the middle of the closing
-            // animation.
-            Spacer(Modifier.fillMaxWidth().height(COMPOSER_FOOT))
         }
     }
 }

@@ -172,7 +172,10 @@ object PiGlass {
  * chat bar's leading capsule, and reported as "why is there a white block in the two-line
  * button".
  *
- * So the shadow is a blurred fill of the shape's own outline, drawn behind the content.
+ * So the shadow is a blurred fill of the shape's own outline, drawn behind the content
+ * and **not offset downward**: an elevation shadow leans away from the light, and on a
+ * floating control that reads as a heavier underside — the report "the dialog's shadow is
+ * not even, the bottom is darker". This one is concentric.
  * `MaskFilter` is the platform's blur — the one thing here that Compose's own draw API
  * cannot do without a render effect per frame — and it follows any outline: a circle, a
  * pill, a rounded rectangle.
@@ -184,7 +187,6 @@ fun Modifier.glassLift(
 ): Modifier = drawBehind {
     val outline = shape.createOutline(size, layoutDirection, this)
     val blur = elevation.toPx() * 1.4f
-    val drop = elevation.toPx() * 0.45f
     drawIntoCanvas { canvas ->
         val paint = Paint().apply {
             color = android.graphics.Color.BLACK
@@ -194,7 +196,6 @@ fun Modifier.glassLift(
         }
         val native = canvas.nativeCanvas
         native.save()
-        native.translate(0f, drop)
         when (outline) {
             is Outline.Rectangle -> {
                 val r = outline.rect
@@ -357,13 +358,13 @@ private const val DARK_BASE_LUMINANCE = 0.2f
  * panel in the light scheme. The step it leaves on the dark scheme's #242424 card
  * (#3D3D3D) is the same one, which is the point of a wash.
  */
-private const val GLASS_LIGHT_ALPHA = 0.80f
+private const val GLASS_LIGHT_ALPHA = 0.90f
 
 /** How dark the blurred shadow under a floating control is drawn. */
 private const val GLASS_SHADOW_ALPHA = 0.20f
 
 /** White's share of the dark scheme's floating fill. */
-private const val GLASS_DARK_ALPHA = 0.14f
+private const val GLASS_DARK_ALPHA = 0.20f
 
 private const val INSET_ALPHA = 0.10f
 

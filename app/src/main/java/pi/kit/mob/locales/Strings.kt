@@ -202,6 +202,14 @@ interface Strings {
         /** The menu's row that enters text selection for the pressed message. */
         val selectText: String
 
+        /**
+         * What the toast says after that row is chosen.
+         *
+         * Compose cannot select text on the app's behalf — the container the row turns on
+         * is the whole of what it can do — so the sentence hands the gesture back.
+         */
+        val selectHint: String
+
         /** The menu's row that writes the conversation up to this message as a new one. */
         val fork: String
 

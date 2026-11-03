@@ -85,7 +85,7 @@ transcript: "recently useful" is what the reader did, not what the fixture wrote
 `MAX_LIVE` bounds how many children may exist, but nothing *stops* an idle one — and a
 conversation that has finished its turn is an idle child holding ~120 MB for a transcript
 that is already on disk. `PiHost` sweeps them: any conversation that is neither the one on
-screen nor answering has its agent stopped, watched from three places because any of them
+screen nor answering has its agent stopped **after a 90-second grace**, watched from three places because any of them
 can be the last thing that happens (the reader switching away, a background turn settling,
 a conversation leaving the pool). Switching back starts it again — `RootContent`'s launch
 effect sees `Stopped` — which costs about two seconds and buys the memory back.

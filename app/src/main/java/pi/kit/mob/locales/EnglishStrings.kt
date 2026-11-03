@@ -59,6 +59,7 @@ internal object EnglishStrings : Strings {
         override val copyMessage = "Copy message"
         override val messageActions = "Message actions"
         override val selectText = "Select text"
+        override val selectHint = "Long-press the text to select it"
         override val fork = "Branch from here"
         override val forkFailed = "Could not branch: this conversation is not on disk yet"
         override val expand = "Expand"

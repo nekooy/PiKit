@@ -60,6 +60,7 @@ internal object JapaneseStrings : Strings {
         override val copyMessage = "メッセージをコピー"
         override val messageActions = "メッセージ操作"
         override val selectText = "テキストを選択"
+        override val selectHint = "テキストを長押しすると選択できます"
         override val fork = "ここから分岐"
         override val forkFailed = "分岐できませんでした（まだ保存されていません）"
         override val expand = "展開"

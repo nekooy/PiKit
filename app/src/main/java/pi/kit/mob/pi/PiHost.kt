@@ -5,6 +5,7 @@ import android.util.Log
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -599,14 +600,34 @@ class PiHost private constructor(context: Context) {
         }
     }
 
+    /** Conversations waiting out the grace period before their agent is stopped. */
+    private val pendingStops = mutableMapOf<PiAgentSession, kotlinx.coroutines.Job>()
+
     private fun stopIdleAgents() {
         val active = _active.value
-        _sessions.value
-            .filter { it !== active && !it.streaming.value && it.agent.value is AgentStatus.Running }
-            .forEach { idle ->
-                Log.i(TAG, "stopping an idle conversation's agent")
-                scope.launch { idle.stopAgent() }
+        _sessions.value.forEach { idle ->
+            val idleNow = idle !== active &&
+                !idle.streaming.value &&
+                idle.agent.value is AgentStatus.Running
+            if (!idleNow) {
+                // Back in use: the pending stop is called off, which is what makes a
+                // look at another conversation and back cost nothing.
+                pendingStops.remove(idle)?.cancel()
+                return@forEach
             }
+            if (pendingStops[idle]?.isActive == true) return@forEach
+            pendingStops[idle] = scope.launch {
+                delay(IDLE_GRACE_MILLIS)
+                if (idle !== _active.value &&
+                    !idle.streaming.value &&
+                    idle.agent.value is AgentStatus.Running
+                ) {
+                    Log.i(TAG, "stopping an idle conversation's agent")
+                    idle.stopAgent()
+                }
+                pendingStops.remove(idle)
+            }
+        }
     }
 
     /**
@@ -818,6 +839,16 @@ class PiHost private constructor(context: Context) {
          * interface explains.
          */
         const val MAX_LIVE = 8
+
+        /**
+         * How long an idle conversation keeps its child before it is stopped.
+         *
+         * Ninety seconds: long enough that looking at another conversation and coming
+         * back is free — the report was "几秒钟才能加载历史记录", and a switch inside the
+         * grace period is instant — and short enough that a phone left alone is not
+         * holding a gigabyte of Node processes for conversations nobody is reading.
+         */
+        private const val IDLE_GRACE_MILLIS = 90_000L
 
         private const val KEY_CATALOGUE_DUE_AT = "due_at"
 
