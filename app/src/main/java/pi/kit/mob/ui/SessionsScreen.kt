@@ -572,15 +572,22 @@ fun SessionsScreen(
         // floating gear from reading as another row action. Its width follows the word —
         // `設定` and `Settings` are not the same length, and a fixed width would make one
         // language's label touch the edges.
+        //
+        // **Centred on the panel, not hung at its gutter.** At the leading edge the pill
+        // shared a column with the row marks under it, so it read as the last row's
+        // action rather than as the drawer's own footer; the foot of a panel is a
+        // centred control, and the list's gutter is the rows' rule. The list's own
+        // end padding is unchanged, so the centred pill still clears the last row when
+        // the list is scrolled to its end.
         SettingsPill(
             label = text.settings.title,
             onClick = onOpenSettings,
             modifier = Modifier
-                .align(Alignment.BottomStart)
+                .align(Alignment.BottomCenter)
                 // The pill floats over the panel's foot, so the strip is its own margin:
                 // it keeps the control above the gesture handle now that the panel
                 // reaches the window's last pixel.
-                .padding(start = HEADING_GUTTER, bottom = 40.dp + navigationInset),
+                .padding(bottom = 40.dp + navigationInset),
         )
     }
 

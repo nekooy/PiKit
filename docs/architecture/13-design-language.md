@@ -441,7 +441,11 @@ the terminal's (a chevron and an underscore) and the drawer's (a long rule over 
 one, left-aligned, which is the reference's own handle mark). Both are *navigation*
 marks — two strokes at the library's line weight on a 24-unit grid, no fill — and neither
 is the app's mark, which is the launcher glyph. The footer's settings pill is the
-library's `Settings` at 20dp inside a 48dp capsule.
+library's `Settings` at 20dp inside a 48dp capsule. It is **centred on the panel**, not
+hung at the list's gutter: at the leading edge it shared a column with the row marks above
+it, so it read as the last row's action rather than as the drawer's foot, and a control
+that belongs to the panel is centred on the panel. The list's end padding is unchanged, so
+a list scrolled to its last conversation still stops above the pill.
 
 **Back at the root loses the app, on the second press.** The conversation is the root, so
 a back press has nowhere to go, and the platform's left-edge gesture is exactly where a
