@@ -380,7 +380,7 @@ private const val TAG = "PiKit"
  *
  * ## The contents bar, and why it is pinned
  *
- * The manual is ten chapters and about seven screens of prose, and the only way to reach
+ * The manual is twelve chapters and several screens of prose, and the only way to reach
  * a chapter used to be to scroll until it arrived. The bar above the document is a
  * horizontal run of chips — one per `##` heading, read from the prose itself so all
  * three languages get their own without a second list to keep in step — and a tap
@@ -564,7 +564,7 @@ private class ManualDocument(val intro: String, val chapters: List<ManualChapter
  * Splits the manual's Markdown at its `##` headings.
  *
  * The headings are the document's own chapter markers — every language's manual is
- * written with ten of them, `## 1. …` through `## 10. …` — so this reads the prose
+ * written with twelve of them, `## 1. …` through `## 12. …` — so this reads the prose
  * rather than a parallel list of chapters: a heading added to one catalog appears in
  * that language's index, and a language's index can never name a chapter its prose does
  * not have. The level-one `# PiKit` title and the paragraphs under it are the intro.
