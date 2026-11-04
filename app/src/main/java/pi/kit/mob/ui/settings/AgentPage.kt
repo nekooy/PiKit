@@ -39,6 +39,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
@@ -171,6 +172,10 @@ internal fun AgentPage(
         subtitle = agentDescription(agent, text),
         onBack = onBack,
     ) { padding ->
+        // The page draws through the navigation strip now, so the strip's height is content
+        // padding at the end of the scroll: the last row can still be scrolled clear of the
+        // gesture handle, which a bottom padding on the viewport would have prevented.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -179,7 +184,7 @@ internal fun AgentPage(
                 // five do not, and both sizes have to answer a drag. See `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.workspace) {
                 // The row that used to be a text field for the agent's working directory.

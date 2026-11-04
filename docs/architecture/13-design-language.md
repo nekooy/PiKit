@@ -137,12 +137,14 @@ know nothing about it.
 
 ## A page is a scaffold, a bar and a one-line subtitle
 
-`PiPage(title, subtitle, onBack, bottomBarColor, actions, body)` is the frame every
+`PiPage(title, subtitle, onBack, actions, body)` is the frame every
 destination and every settings page uses. It is a Miuix `Scaffold` with a pinned
 `SmallTopAppBar`, a `BackHandler` that exists only when `onBack` does (a page with no parent
 has no back arrow and does not swallow the system gesture), and a body that receives the
-scaffold's `PaddingValues`. The `floating` slot this signature used to take was passed by no
-caller and is gone; `bottomBarColor` is the one addition since, and it is described below.
+scaffold's `PaddingValues` with the navigation strip taken out of it — see *The window's
+last pixels* below. The `floating` slot this signature used to take was passed by no
+caller and is gone, and the `bottomBarColor` that briefly followed it is gone with the strip
+it painted.
 
 The subtitle is drawn by the kit, not passed to the bar, and that is a measured rule:
 `SmallTopAppBar` renders its `subtitle` with **no line limit**, so a sentence wider
@@ -164,17 +166,33 @@ same enforcement under the terminal's black page is a light band under a black s
 navigation strip is then whatever the page's own bottom edge is, and the bar icons' ink is
 the theme's (`PiKitMiuixTheme`): light icons on a dark palette, dark icons on a light one.
 
-A page whose own bottom edge is **not** the scaffold's `surface` hands its strip a colour:
-`PiPage`'s `bottomBarColor` paints a sibling box behind the body in exactly the inset the
-scaffold leaves, so the body's own padding is unchanged and the strip is covered only where
-nothing else draws. The terminal is the only caller today — its shell, key bar and banner are
-black in both schemes — and it also raises `DarkNavigationBar()`, which flips the
-`isAppearanceLightNavigationBars` flag for as long as the page is composed. The flag is a
-composition (`LocalDarkNavigationBars` holds it, the theme's `SideEffect` reads it) rather
-than an imperative write into the window controller, because a theme change while the page
-is open must not leave the icons and the strip disagreeing. The status bar is deliberately
-not included: the top bar keeps its own surface, which is what puts the terminal's header in
-the app's light chrome and its body in the shell's black.
+A page's content does not reserve that strip, and the strip is not painted by the scaffold.
+`PiPage` hands its body the scaffold's start, top and end and **zero** bottom, and provides
+the strip's height as `LocalPiNavigationInset`; a scrolling page spends it as padding at the
+end of its content, where the last row can still be scrolled clear of the gesture handle and
+the rows above it pass *under* the handle. Reserving it as a body padding was the opaque
+band this section used to describe: the viewport ended at the strip's top edge, the
+scaffold's `surface` filled the strip, and in the dark scheme that was a black band cutting
+the last card of the page in two. The inset belongs to the
+content because the content is what moves; the viewport is the window.
+
+The terminal is the one page whose bottom edge is not the app's `surface`: its shell, key
+bar and banner are black in both schemes. It paints the strip as padding *inside* the key
+bar's own black — background first, then `BAR_PADDING + LocalPiNavigationInset` — so the
+black reaches the window's last pixel and the keys stay above the handle. It also raises
+`DarkNavigationBar()`, which flips the `isAppearanceLightNavigationBars` flag for as long as
+the page is composed. The flag is a composition (`LocalDarkNavigationBars` holds it, the
+theme's `SideEffect` reads it) rather than an imperative write into the window controller,
+because a theme change while the page is open must not leave the icons and the strip
+disagreeing. The status bar is deliberately not included: the top bar keeps its own surface,
+which is what puts the terminal's header in the app's light chrome and its body in the
+shell's black.
+
+The conversation drawer is not a page and does not use `PiPage`; its panel reaches the
+window's last pixel too, and the list and the Settings pill spend the strip as their own
+bottom padding (`SessionsScreen` reads `WindowInsets.navigationBars` for exactly that). A
+panel that stopped above the handle was the same band in the one place where the surface
+behind it is a different colour.
 
 ## Sections, rows, and the one thing a row may not do
 
@@ -281,16 +299,20 @@ the top: the content scrolls *under* the marks, fades out as it reaches them, an
 marks are the only opaque objects there. That is three decisions, and each was made
 because the strip version was worse:
 
-- **The marks sit in capsules of white glass** (`PiGlass.fill()`: opaque white over a light
-  page, 24% white over a dark one) with a 5dp lift under them. The first attempt used
-  `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong for a
-  control, because the capsule then read as shading on the page instead of as an object
-  above it. The reference's capsules are white in the light scheme and a faint lift off
-  black in the dark one, and both are *translucent*: the last fifth lets a row that has
-  slid underneath show as a ghost, which is what says the control is above the page rather
-  than painted on it. A real backdrop blur is not available (Compose has no backdrop
-  filter — see below), so the alpha and the shadow carry the whole effect, and the shadow
-  matters as much as the fill: a translucent fill with no lift reads as a stain.
+- **The marks sit in opaque capsules** (`PiGlass.fill()`: white in the light scheme and
+  `surfaceContainerHighest`, #2D2D2D, in the dark one) with a 5dp lift under them. The first
+  attempt used `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong for
+  a control, because the capsule then read as shading on the page instead of as an object
+  above it. The fill was white at an alpha for a while — 80%, then 90%, then 100% over the
+  light page, and 14%, 20%, 24% of white over the black one — and the dark half of that pair
+  never became opaque, so the same control was a solid object by day and a tinted pane by
+  night: a row scrolled under the capsule showed through it, and the page stopped reading as
+  one object per theme. **A floating control is filled, not tinted.** The light scheme paints
+  the white an answer card would use, and the dark scheme paints the palette's top container
+  role — one step above the card (`surfaceContainer`, #242424) and two above the page
+  (black) — which is the same "raised by one step" the light scheme gets from white on
+  #F7F7F7. The lift stays: an opaque fill still needs its shadow to read as an object, and
+  that shadow is what separates a capsule from a card whose fill is close to it.
 - **The row sits a little lower than a bar's.** The capsules' top edge is 22dp under the
   status bar — a bar's row would start at 0 — because the reference keeps the handle clear
   of the clock's own line. That is also why the leading capsule is a circle and the
@@ -298,10 +320,12 @@ because the strip version was worse:
   page.
 - **The lift is a `graphicsLayer`, not `Modifier.shadow`.** On this Compose version the
   modifier's shadow does not follow the shape it is given: a circle's shadow was drawn as
-  a squircle, so a translucent capsule showed the shadow's own silhouette *inside* it —
-  a white block with grey corners, measured at the leading capsule and read as "the button
-  has a white block in it". `Modifier.glassLift(shape)` sets the same two properties on a
-  layer directly, and the shadow then matches the shape.
+  a squircle, so the shadow's own silhouette showed *inside* the capsule while its fill was
+  translucent — a white block with grey corners, measured at the leading capsule and read as
+  "the button has a white block in it". `Modifier.glassLift(shape)` sets the same two
+  properties on a layer directly, and the shadow then matches the shape; the fill being
+  opaque now hides the silhouette, but the shadow outside the shape is still the squircle's
+  until it is drawn this way.
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
@@ -343,8 +367,8 @@ place.
 were the platform's `Toast` for a while — the system owns the queue, the placement and the
 text scale, and that is a real bargain — but it draws its own card in the system's colours
 with the launcher icon beside the text, which on this page reads as a notification that
-happened to land on it. They are white glass capsules now, drawn above the composer in the
-same fill as the bar's, and the interface (`LocalPiToast.show`) did not change. The cost is
+happened to land on it. They are opaque capsules now, drawn above the composer in the same
+fill as the bar's, and the interface (`LocalPiToast.show`) did not change. The cost is
 the system's queue and its per-app notification choice; the gain is one kind of floating
 object everywhere.
 
@@ -374,9 +398,14 @@ leading mark or by a rightward drag from anywhere on the page, and both drive on
 (0..1), so a drag and a tap cannot animate differently and a released drag springs back
 from where the thumb left it. While the card is out, a transparent target over it takes
 the touches: a tap closes the drawer, a leftward drag is the same gesture that closes it,
-and the panel beside it keeps its own rows, taps and drag. There is no dim any more — the
-card's own surface is the separation, and a scrim over a page that is already off-screen
-was dimming nothing.
+and the panel beside it keeps its own rows, taps and drag. There is no dim any more, and
+the separation is not one mechanism: in the light scheme the card's shadow owns it, while in
+the dark scheme a black card's shadow is invisible, so the panel is painted
+`background` (#242424) under a `surface` card (black) — one palette step that a shadow
+would otherwise have had to draw. A panel painted `surface` in both schemes was the same
+colour as the card in the dark one, so the two halves of the screen were divided by a gesture
+with nothing to see at the division: the drawer read as one page split by a seam that was not
+there.
 
 Two consequences of that order are worth naming. The card's corner and shadow are set on
 its `graphicsLayer` and only while `progress > 0`: at rest the page *is* the window, and a
@@ -388,6 +417,18 @@ open/closed answer is published when the settle starts, not when it ends, becaus
 rebuild that follows the tap reads it. That ordering was measured — with the answer
 published at the end, the chosen conversation was on screen with the drawer it came from
 still out over it, which reads as a tap that did nothing.
+
+**The motion is not the page's, and neither is the panel's composition.** The tap that
+opens a conversation is two events in one gesture: the drawer starts to close and
+`key(session)` replaces the page behind it. When the offset, the measured width and the
+panel's `reachable` flag were `remember`ed inside the page, the rebuild disposed them, so
+the close animation was cancelled at full offset while the new page composed at zero — the
+drawer vanished between two frames and the chosen row's fill blinked with it. Both now live
+in `ConversationDrawerState`, above `key(session)` (`RootContent`), and the settle runs on
+the root's scope: the panel slides out over the conversation the tap opened, which is the
+motion a list of conversations should have on the way back to one, and the row that was tapped is
+drawn filled on the new page's first frame. Publishing the *answer* early and keeping the
+*motion* alive are two different owners, and both are needed.
 
 The drawer's travel is kept in pixels, so a window that changes size has to re-anchor it:
 after one rotation an open drawer kept the portrait width and drew about 170px off the

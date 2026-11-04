@@ -350,6 +350,13 @@ private fun RootContent(
     // inside it was recreated with it — which is why coming back to the drawer showed its
     // top instead of the row that was tapped (measured: row 12, back on row 0).
     val historyListState = rememberLazyListState()
+    // The drawer's motion, for the same reason and one step further: opening a
+    // conversation from the list both starts the drawer's close and replaces the page
+    // behind it. The close has to be animated by something the page rebuild cannot
+    // cancel, and the panel — with the row that was chosen in it — has to stay composed
+    // across that rebuild instead of being re-created on the next swipe. Both live here,
+    // above `key(session)`; see [ConversationDrawerState].
+    val drawer = remember { ConversationDrawerState() }
     val scope = rememberCoroutineScope()
     val text = strings
     // A draft, the attached images and the transcript's scroll position are per
@@ -513,6 +520,8 @@ private fun RootContent(
                     session = session,
                     agent = agent,
                     composer = composer,
+                    drawer = drawer,
+                    drawerScope = scope,
                     historyListState = historyListState,
                     scaffoldBottom = with(LocalDensity.current) {
                         padding.calculateBottomPadding().roundToPx()
@@ -627,6 +636,15 @@ private fun ChatTab(
     composer: ChatComposerState,
     /** Whether the conversation drawer is out; owned by [RootContent] — see there. */
     historyOpen: Boolean,
+    /**
+     * The drawer's motion, owned by [RootContent] so it survives `key(session)`.
+     *
+     * A conversation opened from the drawer rebuilds this page, and the close that tap
+     * started has to keep moving after the rebuild; see [ConversationDrawerState].
+     */
+    drawer: ConversationDrawerState,
+    /** The root's scope: the settle animation outlives the page it was started from. */
+    drawerScope: kotlinx.coroutines.CoroutineScope,
     historyListState: androidx.compose.foundation.lazy.LazyListState,
     /**
      * The scaffold's bottom inset in pixels.
@@ -645,6 +663,21 @@ private fun ChatTab(
     val text = strings
     val toasts = LocalPiToast.current
     val scope = rememberCoroutineScope()
+    // The session file a drawer tap asked for, kept until the conversation on screen
+    // reports a file of its own.
+    //
+    // A saved conversation is opened from disk in the same event, so the state normally
+    // carries its path on the next frame. It does not always: a file the transcript
+    // reader cannot parse leaves the conversation's state empty until the agent starts
+    // and adopts the path, and the drawer then drew the chosen row without its fill for
+    // that interval — the "灰色背景消失一下然后出现" on a quick swipe back into the list.
+    // Remembered here rather than in the drawer because the drawer is re-created by the
+    // same switch, and cleared as soon as the state names a file so a genuinely new
+    // conversation cannot inherit a highlight.
+    var openedPath by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.sessionFile) {
+        if (state.sessionFile != null) openedPath = null
+    }
     // A conversation is opened as a *second* process, not by rebinding the one that is
     // already here, so a tap on a conversation that is answering switches to it and
     // leaves the answer running. What is refused — with a sentence rather than a silent
@@ -652,6 +685,7 @@ private fun ChatTab(
     // budget is full of conversations that are all mid-turn.
     val open: (PiAgentSession.SessionSummary) -> Unit = remember(host) {
         { summary ->
+            openedPath = summary.path
             val opened = host.openConversation(summary.path, summary.workspace)
             if (opened == null) toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
             scope.launch { opened?.startAgent() }
@@ -659,6 +693,7 @@ private fun ChatTab(
     }
     val openNew: () -> Unit = remember(host) {
         {
+            openedPath = null
             val opened = host.newConversation()
             if (opened == null) {
                 toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
@@ -682,6 +717,9 @@ private fun ChatTab(
             onOpenConversation = open,
             onNewConversation = openNew,
             historyOpen = historyOpen,
+            drawer = drawer,
+            drawerScope = drawerScope,
+            currentPath = state.sessionFile ?: openedPath,
             historyListState = historyListState,
             scaffoldBottom = scaffoldBottom,
             onHistoryOpenChange = onHistoryOpenChange,

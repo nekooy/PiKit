@@ -46,6 +46,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.ui.MarkdownText
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
@@ -129,6 +130,10 @@ internal fun AboutPage(
         subtitle = "PiKit ${BuildConfig.VERSION_NAME}",
         onBack = onBack,
     ) { padding ->
+        // The page draws through the navigation strip now, so the strip's height is content
+        // padding at the end of the scroll: the last row can still be scrolled clear of the
+        // gesture handle, which a bottom padding on the viewport would have prevented.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -137,7 +142,7 @@ internal fun AboutPage(
                 // them names the tools' presence row by row. See `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.application) {
                 BasicComponent(
@@ -431,6 +436,11 @@ internal fun ManualPage(onBack: () -> Unit) {
         subtitle = text.manual.subtitle,
         onBack = onBack,
     ) { padding ->
+        // The document is the page's body and now draws through the navigation strip, so
+        // the strip's height belongs at the end of the prose rather than around the
+        // viewport: it keeps the last line clear of the gesture handle and still lets a
+        // chapter's own text scroll under it.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -473,11 +483,11 @@ internal fun ManualPage(onBack: () -> Unit) {
                             .padding(start = 20.dp, end = 20.dp),
                     )
                 }
-                // The bottom inset is the page's own gap above the navigation bar: a
+                // The bottom inset is the page's own gap above the gesture handle: a
                 // manual's last line set against the bar reads as a page that was cut
                 // rather than as one that ended. It is a spacer rather than the last
                 // chapter's padding because the last chapter ends the prose.
-                Spacer(Modifier.height(MANUAL_FOOT_SPACE))
+                Spacer(Modifier.height(MANUAL_FOOT_SPACE + inset))
             }
         }
     }

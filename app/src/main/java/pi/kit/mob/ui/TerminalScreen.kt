@@ -79,6 +79,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.ui.kit.DarkNavigationBar
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
@@ -243,9 +244,10 @@ fun TerminalScreen(session: PiAgentSession,
     // surface, and the gesture handle on it is light in both schemes: the page is a
     // black rectangle from the header down, and a #F7F7F7 band under it — measured on
     // the 1080 px emulator, 63 px tall — was the one place the app's light chrome met
-    // the shell's black along a straight line. `PiPage` paints the strip; this effect
-    // owns the handle's ink, and it is a composition rather than a page body effect so
-    // a theme change while the page is open cannot leave the two disagreeing.
+    // the shell's black along a straight line. The key bar paints the strip itself now
+    // (see [ExtraKeysRow]); this effect owns the handle's ink, and it is a composition
+    // rather than a page body effect so a theme change while the page is open cannot
+    // leave the two disagreeing.
     DarkNavigationBar()
 
     PiPage(
@@ -270,10 +272,6 @@ fun TerminalScreen(session: PiAgentSession,
         } else {
             t.header.terminalSubtitleIdle
         },
-        // The page's own bottom edge is the shell's black; the strip the scaffold
-        // leaves under the key bar is painted the same colour rather than the app's
-        // surface. See `PiPage`'s `bottomBarColor`.
-        bottomBarColor = TERMINAL_BACKGROUND,
         // The header's height is the terminal's: the PTY is sized from the rectangle
         // under it, so anything that grew the header while the reader watched would
         // resize the shell under them. The bar is Miuix's small bar at its fixed
@@ -351,9 +349,10 @@ fun TerminalScreen(session: PiAgentSession,
             }
         },
     ) { padding ->
-        // The scaffold's padding is the bar's height and the insets the page is
-        // actually under: the root already took the navigation bar away, so the
-        // column ends where the page does and the terminal is measured from there.
+        // The scaffold's padding is the bar's height at the top; its bottom is zero, because
+        // the key bar below paints the navigation strip as its own bottom padding. The column
+        // therefore reaches the window's last pixel without the terminal growing: the strip
+        // the body used to stop above is now spent inside the key bar's black.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1018,6 +1017,11 @@ private fun barLabels(text: pi.kit.mob.locales.Strings): List<String> = listOf(
  * its bottom edge read as a second surface rather than as part of the terminal. The keys are
  * one step lighter on it, the actions are circles, and nothing here takes a colour from the
  * app's theme — the app is light, the terminal is not, and the bar belongs to the terminal.
+ *
+ * Its background also carries the navigation strip: the black is painted first and the
+ * strip's height is padding *inside* it, so the shell reaches the window's last pixel while
+ * the keys stay above the gesture handle. A strip painted by the page instead — the app's
+ * #F7F7F7 in the light scheme — was the one straight line where the two surfaces met.
  */
 @Composable
 private fun ExtraKeysRow(
@@ -1037,12 +1041,21 @@ private fun ExtraKeysRow(
     // raised by tapping the terminal instead of by a button.
     val density = LocalDensity.current
     val keyboardUp = WindowInsets.ime.getBottom(density) > 0
+    // The strip under the bar is the bar's own: the background goes on first and the inset
+    // is padding *inside* it, so the shell's black reaches the window's last pixel and the
+    // keys stay above the gesture handle rather than being cut by it.
+    val inset = LocalPiNavigationInset.current
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(TERMINAL_BACKGROUND)
-            .padding(horizontal = BAR_SIDE_PADDING, vertical = BAR_PADDING),
+            .padding(
+                start = BAR_SIDE_PADDING,
+                top = BAR_PADDING,
+                end = BAR_SIDE_PADDING,
+                bottom = BAR_PADDING + inset,
+            ),
     ) {
         if (keyboardPanel) {
             PcKeyboard(

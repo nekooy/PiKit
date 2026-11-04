@@ -3,7 +3,6 @@ package pi.kit.mob.ui.kit
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,21 +10,24 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.LocalStrings
 import top.yukonga.miuix.kmp.basic.Icon
@@ -47,12 +49,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * that Miuix's own dialogs draw into, and the corner clip a pushed page slides
  * under.
  *
- * [body] receives the scaffold's [PaddingValues] rather than the raw window: with
- * the bar in place those are the insets the content is actually under — the bar's
- * height at the top, the navigation strip at the bottom — and applying them is the
- * body's whole contract. A list scrolled inside the page therefore ends at the bar
- * rather than under it, and a composer typed into ends above the keyboard without
- * the page having to know the keyboard exists.
+ * [body] receives the scaffold's [PaddingValues] with start, top and end intact and
+ * bottom **zero**. The page's own surface runs to the window's last pixel, so the body
+ * draws through the navigation strip rather than the scaffold painting an opaque band
+ * under it — the band that used to cut the last card of a page in two. The strip has not
+ * gone away, though: its height is provided as [LocalPiNavigationInset], and a scrolling
+ * page adds it to the end of its own content, where it keeps the last row clear of the
+ * gesture handle and moves with the content instead of shrinking the viewport. A composer
+ * typed into still ends above the keyboard without the page having to know the keyboard
+ * exists.
  *
  * [onBack] is null on a tab root, which is also what turns the system back gesture
  * off: a handler that does nothing is a page that swallows a gesture meant for the
@@ -92,21 +97,6 @@ fun PiPage(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
-    /**
-     * The colour a page whose own surface reaches the window's last pixel paints under
-     * the navigation strip, or null for the scaffold's.
-     *
-     * The scaffold owns the strip below [body]'s padding: it is the page's own
-     * `containerColor`, so a page drawn on `surface` needs nothing and gets nothing.
-     * The terminal is the one page that is not: its shell, its key bar and its banner
-     * are the terminal's black in both schemes, and the strip the scaffold painted
-     * under them was the app's #F7F7F7 in the light one — a white band under a black
-     * page, with the gesture handle on it. This parameter lets such a page hand the
-     * strip the colour its own bottom edge already has. The status bar is not included:
-     * the top bar keeps its own surface, which is what puts the terminal's header in
-     * the app's light chrome and its body in the shell's black.
-     */
-    bottomBarColor: Color? = null,
     actions: @Composable RowScope.() -> Unit = {},
     body: @Composable (PaddingValues) -> Unit,
 ) {
@@ -160,34 +150,41 @@ fun PiPage(
             }
         },
     ) { padding ->
-        // No wrapper `Box` when the page has nothing to paint: the body *is* the page.
-        // The `floating` slot this used to draw into was passed by no caller, and its
-        // `Box` sat outside `body`'s padding — a control placed there would have landed
-        // under the root navigation bar.
-        if (bottomBarColor == null) {
-            body(padding)
-        } else {
-            // The strip is a sibling *behind* the body rather than a background on it:
-            // the body applies `padding` itself, so a fill declared here would paint the
-            // whole page, including the header, and the top bar's own surface would be
-            // the only thing keeping it out. Drawn first, it is covered by the body
-            // everywhere the body draws and shows only in the inset the scaffold left.
-            Box(Modifier.fillMaxSize()) {
-                val inset = padding.calculateBottomPadding()
-                if (inset > 0.dp) {
-                    Box(
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(inset)
-                            .background(bottomBarColor),
-                    )
-                }
-                body(padding)
-            }
+        // The body is the page, and the page reaches the window's last pixel: only the
+        // bar's height and the horizontal system insets are its, while the strip is handed
+        // down as a value a scrolling body spends as content padding. Handing the strip in
+        // as a bottom *padding* here was the opaque band under every page — the scaffold's
+        // surface showed through it and the viewport ended above the handle.
+        CompositionLocalProvider(
+            LocalPiNavigationInset provides padding.calculateBottomPadding(),
+        ) {
+            body(
+                PaddingValues(
+                    start = padding.calculateStartPadding(LocalLayoutDirection.current),
+                    top = padding.calculateTopPadding(),
+                    end = padding.calculateEndPadding(LocalLayoutDirection.current),
+                    bottom = 0.dp,
+                ),
+            )
         }
     }
 }
+
+/**
+ * The height of the navigation strip a page body now draws through.
+ *
+ * `Scaffold` used to hand its content a bottom padding equal to the strip, so every page's
+ * viewport ended above it and the scaffold's own `surface` filled it — in dark mode a band
+ * of black across the bottom of a page whose last card it cut. The body reaches the window's
+ * last pixel now, which leaves a list's last row under the gesture handle unless something
+ * pushes it up: a scrolling page reads this value and adds it to the padding at the end of
+ * its content, where the row can still be scrolled above the handle and the extra space
+ * belongs to the content rather than to the viewport.
+ *
+ * Outside [PiPage] the value is `0.dp`, which is the safe answer: a composable that is not
+ * inside a page has no strip of its own to keep clear of.
+ */
+val LocalPiNavigationInset: ProvidableCompositionLocal<Dp> = compositionLocalOf { 0.dp }
 
 
 /**

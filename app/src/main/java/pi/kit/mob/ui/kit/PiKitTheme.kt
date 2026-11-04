@@ -130,10 +130,10 @@ private val LocalDarkNavigationBars = staticCompositionLocalOf { mutableStateOf(
  * Takes the light navigation-bar icons for as long as this page is composed.
  *
  * The terminal page is the only caller: its shell, its key bar and its banner are black
- * in both schemes, and the strip under the key bar is painted black (see `PiPage`'s
- * `bottomBarColor`), so the gesture handle has to be light there even in the light
- * theme. On leaving, the theme's own answer is applied again by the same `SideEffect`
- * that read the flag.
+ * in both schemes, and the key bar paints the navigation strip black as its own bottom
+ * padding (see `ExtraKeysRow`), so the gesture handle has to be light there even in the
+ * light theme. On leaving, the theme's own answer is applied again by the same
+ * `SideEffect` that read the flag.
  */
 @Composable
 fun DarkNavigationBar() {
@@ -164,33 +164,37 @@ fun DarkNavigationBar() {
  *   a wash rather than a pair, for the reason its own KDoc gives.
  */
 /**
- * The fill of a control that floats over the page: white glass, not a grey slab.
+ * The fill of a control that floats over the page: an opaque raised surface.
  *
  * The reference drawing's top bar is two capsules and its composer is a row of chips,
  * and all four are *white* objects on a grey page in the light scheme — the same raised
- * step an answer card takes — and a faint lift off black in the dark one. The first
- * attempt used [PiTone.inset], which is a *wash of the ink*: right for quoted material
- * and wrong here, because a control that floats reads as a surface of its own rather than
- * as shading on the page.
+ * step an answer card takes — and a lifted near-black in the dark one. The first attempt
+ * used [PiTone.inset], which is a *wash of the ink*: right for quoted material and wrong
+ * here, because a control that floats reads as a surface of its own rather than as
+ * shading on the page.
  *
- * ## Why white at an alpha rather than a palette role
+ * ## Why it is opaque, and why it took three tries
  *
- * A role can be opaque, and these have to sit over a transcript that scrolls under them.
- * White at [GLASS_LIGHT_ALPHA] over the #F7F7F7 page is #FDFDFD — white to the eye — while
- * the last 20% lets a row that has slid underneath show as a ghost through the capsule,
- * which is what says the control is above the page rather than painted on it. The dark
- * scheme's [GLASS_DARK_ALPHA] is the same idea inverted: 10% of white lifts black to
- * #242424 and the #2A2A2A card to #454545, which is the reference's own #262626 capsule
- * against its #171717 page.
+ * The fill was white at an alpha: 80%, then 90%, then 100% in the light scheme, and 14%,
+ * 20% then 24% of white in the dark one. The light one ended at opaque and the dark one
+ * did not, so the same control was a solid object by day and a tinted pane by night — a
+ * row scrolled underneath showed through the capsule and the chip, and the page stopped
+ * reading as one object per theme. **A floating control is filled, not tinted.** The
+ * light scheme therefore paints the white an answer card would use, and the dark scheme
+ * paints [surfaceContainerHighest] (#2D2D2D): one step above the card (`surfaceContainer`,
+ * #242424) and two above the page (black), which is the same "raised by one step" the
+ * light scheme gets from white on #F7F7F7. It is a palette role rather than a second
+ * literal so a theme change moves it with everything else.
+ *
+ * The lift stays: an opaque fill still needs its shadow to read as an object, and the
+ * shadow is what separates a capsule from a card whose fill is close to it.
  *
  * ## What it is not
  *
  * A real backdrop blur. Compose has no backdrop filter: `Modifier.blur` blurs a node's
- * *own* content, and the content behind a capsule lives in another node entirely.
- * Copying the transcript through a `RenderEffect` to fake it would mean a second
- * rendering of a `LazyColumn` on every scroll frame. The alpha is the whole of the effect,
- * which is why the shadow matters as much as the fill — a translucent fill with no lift
- * reads as a stain.
+ * *own* content, and the content behind a capsule lives in another node entirely. A blur
+ * would also have no pixel of the page to read once the fill is opaque, which is the
+ * point of the change.
  */
 object PiGlass {
 
@@ -198,10 +202,13 @@ object PiGlass {
     @Composable
     fun fill(): Color {
         val dark = MiuixTheme.colorScheme.surface.luminance() < DARK_BASE_LUMINANCE
-        return Color.White.copy(alpha = if (dark) GLASS_DARK_ALPHA else GLASS_LIGHT_ALPHA)
+        // A near-white lift, not white: #2D2D2D is visible against both the black page
+        // and the #242424 card, while white would make every capsule the brightest
+        // object on screen.
+        return if (dark) MiuixTheme.colorScheme.surfaceContainerHighest else Color.White
     }
 
-    /** The lift under a floating control, which is what makes a glass fill read as glass. */
+    /** The lift under a floating control, which is what makes its fill read as raised. */
     val elevation: Dp = 5.dp
 
 }
@@ -393,6 +400,9 @@ private const val PROMPT_SHARE_DARK = 0.34f
  */
 private const val DARK_BASE_LUMINANCE = 0.2f
 
+/** How dark the blurred shadow under a floating control is drawn. */
+private const val GLASS_SHADOW_ALPHA = 0.20f
+
 /**
  * How much of the surface's own ink a quotation's fill is washed with.
  *
@@ -402,14 +412,6 @@ private const val DARK_BASE_LUMINANCE = 0.2f
  * panel in the light scheme. The step it leaves on the dark scheme's #242424 card
  * (#3D3D3D) is the same one, which is the point of a wash.
  */
-private const val GLASS_LIGHT_ALPHA = 1f
-
-/** How dark the blurred shadow under a floating control is drawn. */
-private const val GLASS_SHADOW_ALPHA = 0.20f
-
-/** White's share of the dark scheme's floating fill. */
-private const val GLASS_DARK_ALPHA = 0.24f
-
 private const val INSET_ALPHA = 0.10f
 
 /**

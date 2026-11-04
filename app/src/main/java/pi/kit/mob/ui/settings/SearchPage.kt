@@ -19,6 +19,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebSearchSettings
 import pi.kit.mob.pi.WebSearchStore
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
@@ -124,6 +125,10 @@ internal fun SearchPage(
         subtitle = text.settings.searchPageSubtitle,
         onBack = onBack,
     ) { padding ->
+        // The page draws through the navigation strip now, so the strip's height is content
+        // padding at the end of the scroll: the last row can still be scrolled clear of the
+        // gesture handle, which a bottom padding on the viewport would have prevented.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -133,7 +138,7 @@ internal fun SearchPage(
                 // `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             if (extension == null) {
                 // Nothing interactive at all: there is no file for these controls

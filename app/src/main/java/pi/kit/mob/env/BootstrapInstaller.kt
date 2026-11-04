@@ -712,6 +712,99 @@ class BootstrapInstaller(private val context: Context) {
         report
     }
 
+    /**
+     * Runs `pkg upgrade -y` and reports what the device is still behind on.
+     *
+     * The run goes through the environment's own `pkg`, not through a terminal
+     * the page would have to keep open: apt treats this tree as the device, and
+     * the prefix hooks that make a package installable — apt's
+     * `DPkg::Pre-Install-Pkgs` relocation plus the `dpkg` wrapper — are what
+     * rewrite each archive before it is unpacked. A run started from the
+     * terminal page would be the same command with a screen attached to it,
+     * and it would keep downloading after the user left that screen.
+     *
+     * `DEBIAN_FRONTEND=noninteractive` is not decoration: apt asks about a
+     * configuration file it wants to overwrite, and a child whose stdin is
+     * `/dev/null` answers every prompt with its default. Saying so in the
+     * environment makes apt take the default rather than try to draw a dialog
+     * nothing can see.
+     *
+     * The bound is 15 minutes because the download is the whole cost of this
+     * run, and a bound short enough to feel responsive would cut off the one
+     * run that mattered. It exists so a wedged mirror cannot leave the row
+     * spinning for the life of the process; [runEnvironmentCommand]'s
+     * transcript says where it stopped.
+     *
+     * dpkg's status is read back whatever the exit status was, and compared
+     * against the bundled image's own set: `pkg upgrade` updating most of the
+     * list and failing on one package is a real outcome, and the comparison
+     * against `build-metadata.json` is the only answer that needs no network
+     * to check afterwards.
+     */
+    internal suspend fun upgradePackages(): UpgradeOutcome = withContext(Dispatchers.IO) {
+        val log = File(env.pkgRestoreDir, UPGRADE_LOG)
+        // The restore's log lives beside its manifest, and a device that never
+        // ran a restore has no directory for either.
+        env.pkgRestoreDir.mkdirsOrThrow()
+        val exitCode = runEnvironmentCommand(
+            argv = listOf(env.binDir.resolve("pkg").absolutePath, "upgrade", "-y"),
+            log = log,
+            timeoutSeconds = UPGRADE_TIMEOUT_SECONDS,
+            what = "pkg upgrade",
+            extraEnv = mapOf("DEBIAN_FRONTEND" to "noninteractive"),
+        )
+        val installed = readInstalledPackages()
+        val shipped = BundledImage.metadata(context)?.packages.orEmpty()
+        val upgradable = PackageManifest.upgradable(installed, shipped)
+        UpgradeOutcome(
+            exitCode = exitCode,
+            upgradable = upgradable,
+            // A clean run has nothing for the failure dialog to show, so the
+            // transcript is only read when the run did not come back clean.
+            logLines = if (exitCode == EXIT_OK && upgradable.isEmpty()) {
+                emptyList()
+            } else {
+                readLogTail(log)
+            },
+        )
+    }
+
+    /**
+     * What one `pkg upgrade` run came back with: its exit status, what the device
+     * is still behind on, and the end of its transcript.
+     *
+     * The three fields are separate because the page's two sentences need
+     * different ones: "still behind" is a comparison against the image, and a
+     * non-zero exit is a run that failed for a reason that comparison cannot
+     * name — offline, a dead mirror, a package apt no longer holds. [logLines]
+     * is empty when the run came back clean, because the failure dialog is the
+     * only thing that shows it.
+     */
+    internal data class UpgradeOutcome(
+        val exitCode: Int,
+        val upgradable: List<PackageManifest.Entry>,
+        val logLines: List<String>,
+    ) {
+        /** True when the command finished and nothing is behind the image. */
+        val succeeded: Boolean get() = exitCode == EXIT_OK && upgradable.isEmpty()
+    }
+
+    /**
+     * The last lines of a run's transcript, for the dialog that reports it.
+     *
+     * Bounded because a `pkg upgrade` transcript is hundreds of lines of
+     * download progress, and the dialog reports a failure rather than a build
+     * log: what matters is where it stopped. Reading is best-effort — a log
+     * that cannot be read leaves the sentence alone instead of replacing it
+     * with an I/O error.
+     */
+    private fun readLogTail(log: File): List<String> = runCatching {
+        log.readLines()
+            .takeLast(LOG_TAIL_LINES)
+            .map { it.trimEnd() }
+            .filter { it.isNotBlank() }
+    }.getOrDefault(emptyList())
+
     private fun readInstalledPackages(): List<PackageManifest.Entry> {
         val status = File(env.prefix, "var/lib/dpkg/status")
         return if (status.isFile) PackageManifest.parseStatus(status.readText()) else emptyList()
@@ -948,6 +1041,12 @@ class BootstrapInstaller(private val context: Context) {
      * extraction — which is why Termux's own hook `chmod +x`es the second stage
      * before running it. Naming the interpreter skips that step entirely.
      *
+     * [extraEnv] is laid over [ShellEnvironment] rather than merged into it,
+     * because it is the caller's answer about this one command: apt's
+     * non-interactive frontend is only wanted by the run that installs
+     * packages, and a shell environment shared with the terminal must not carry
+     * it.
+     *
      * @return the command's exit code, or a negative sentinel when it could not
      *   be started or had to be killed.
      */
@@ -956,6 +1055,7 @@ class BootstrapInstaller(private val context: Context) {
         log: File,
         timeoutSeconds: Long,
         what: String,
+        extraEnv: Map<String, String> = emptyMap(),
     ): Int {
         val process = try {
             ProcessBuilder(argv)
@@ -985,6 +1085,7 @@ class BootstrapInstaller(private val context: Context) {
                     // [ShellEnvironment] one day: with it set, the script fails
                     // unless `id -u` matches it.
                     environment().remove("TERMUX__UID")
+                    environment().putAll(extraEnv)
                 }
                 .start()
         } catch (t: Throwable) {
@@ -1214,6 +1315,9 @@ class BootstrapInstaller(private val context: Context) {
         /** The restore transcript, beside the manifest it describes. */
         const val RESTORE_LOG = "restore.log"
 
+        /** The upgrade transcript; kept apart from the restore's so neither overwrites the other. */
+        const val UPGRADE_LOG = "pkg-upgrade.log"
+
         /**
          * The same generous bound, for `dpkg -i` of a handful of cached
          * archives and one `pkg install` call. Both are bounded rather than
@@ -1221,6 +1325,17 @@ class BootstrapInstaller(private val context: Context) {
          * restoring into.
          */
         const val RESTORE_TIMEOUT_SECONDS = 120L
+
+        /**
+         * `pkg upgrade` downloads every archive it applies, so this bound is
+         * measured against a network rather than against a local write: 15
+         * minutes covers a slow phone installing a few tens of megabytes, and
+         * anything past it is a mirror that stopped answering.
+         */
+        const val UPGRADE_TIMEOUT_SECONDS = 900L
+
+        /** How many lines of a transcript a failure dialog shows. */
+        const val LOG_TAIL_LINES = 20
 
         const val KILL_GRACE_SECONDS = 5L
 

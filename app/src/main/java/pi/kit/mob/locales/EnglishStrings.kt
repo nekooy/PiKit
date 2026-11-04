@@ -717,11 +717,32 @@ internal object EnglishStrings : Strings {
             "${plural(count, "package", "packages")} waiting to be restored"
         override fun packagesUpgradable(count: Int) =
             "${plural(count, "package", "packages")} with updates"
-        override fun packagesPendingNote(names: String) =
-            "Still missing: $names. Run pkg install -y $names on the terminal page to retry."
-        override val packagesUpgradableNote =
-            "The bundled environment ships newer versions of these. Run pkg upgrade on the " +
-                "terminal page to move to the latest."
+
+        override val packagesUpgrade = "Update packages"
+        override fun packagesUpgradeSubtitle(count: Int) =
+            "${plural(count, "package", "packages")} behind the bundled environment; " +
+                "updating needs a network"
+        override val packagesUpgradeNow = "Update"
+        override val packagesUpgradeRunning = "Updating packages"
+        override val packagesUpgradeDone = "Packages updated"
+        override fun packagesUpgradeLeft(count: Int) =
+            "Still behind the bundled environment: ${plural(count, "package", "packages")}. " +
+                "The end of the log is below."
+
+        override val packagesRestore = "Restore packages"
+        override fun packagesRestoreSubtitle(count: Int) =
+            "${plural(count, "package", "packages")} from the last update still missing; " +
+                "restoring needs a network"
+        override val packagesRestoreNow = "Restore"
+        override val packagesRestoreRunning = "Restoring packages"
+        override val packagesRestoreDone = "Packages restored"
+        override fun packagesRestoreLeft(count: Int) =
+            "${plural(count, "package", "packages")} could not be restored. " +
+                "Their names are below."
+
+        override val packagesRunIncomplete = "The run did not finish. Its last lines are below."
+        override val packagesUpgradeFailed = "Update failed"
+        override val packagesRestoreFailed = "Restore failed"
         override val rebuildEnvironment = "Rebuild the environment"
         override val rebuildEnvironmentSubtitle =
             "Unpack the runtime again; your installed packages are recorded and restored after"

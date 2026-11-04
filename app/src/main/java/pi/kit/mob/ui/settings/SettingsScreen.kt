@@ -41,6 +41,7 @@ import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.StorageSelfTest
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
@@ -378,6 +379,10 @@ private fun RootPage(
     // The settings root left-aligns its title for the reason the other three tab
     // roots do — see `PiPage`'s *Why a root can be left-aligned*.
     PiPage(title = text.settings.title, onBack = onBack) { padding ->
+        // The page draws through the navigation strip now, so the strip's height is content
+        // padding at the end of the scroll: the last row can still be scrolled clear of the
+        // gesture handle, which a bottom padding on the viewport would have prevented.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -387,7 +392,7 @@ private fun RootPage(
                 // See `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.essentials) {
                 ArrowPreference(

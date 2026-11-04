@@ -663,10 +663,28 @@ internal object ChineseStrings : Strings {
         override fun packagesRestored(count: Int) = "已恢复 $count 个"
         override fun packagesPending(count: Int) = "$count 个待恢复"
         override fun packagesUpgradable(count: Int) = "$count 个有可用更新"
-        override fun packagesPendingNote(names: String) =
-            "仍未装回：$names。在终端里运行 pkg install -y $names 可以重试。"
-        override val packagesUpgradableNote =
-            "应用附带的环境比它们更新。在终端里运行 pkg upgrade 即可更新到最新版本。"
+
+        override val packagesUpgrade = "更新软件包"
+        override fun packagesUpgradeSubtitle(count: Int) =
+            "有 $count 个软件包比附带的环境旧；更新需要联网"
+        override val packagesUpgradeNow = "更新"
+        override val packagesUpgradeRunning = "正在更新软件包"
+        override val packagesUpgradeDone = "软件包已更新"
+        override fun packagesUpgradeLeft(count: Int) =
+            "仍有 $count 个软件包落后于附带的环境，日志末尾见下方。"
+
+        override val packagesRestore = "恢复软件包"
+        override fun packagesRestoreSubtitle(count: Int) =
+            "上次更新后有 $count 个软件包没有装回；恢复需要联网"
+        override val packagesRestoreNow = "恢复"
+        override val packagesRestoreRunning = "正在恢复软件包"
+        override val packagesRestoreDone = "软件包已恢复"
+        override fun packagesRestoreLeft(count: Int) =
+            "仍有 $count 个软件包没能装回，名称见下方。"
+
+        override val packagesRunIncomplete = "操作没有完成，可看下方日志末尾。"
+        override val packagesUpgradeFailed = "更新失败"
+        override val packagesRestoreFailed = "恢复失败"
         override val rebuildEnvironment = "重建运行环境"
         override val rebuildEnvironmentSubtitle = "从安装包重新解包；已装的软件包会先记录、之后自动尝试装回"
         override val rebuildEnvironmentNow = "重建"

@@ -681,11 +681,28 @@ internal object JapaneseStrings : Strings {
         override fun packagesRestored(count: Int) = "$count 個を復元済み"
         override fun packagesPending(count: Int) = "$count 個が未復元"
         override fun packagesUpgradable(count: Int) = "$count 個に更新があります"
-        override fun packagesPendingNote(names: String) =
-            "まだ戻っていません：$names。ターミナルで pkg install -y $names を実行すると再試行できます。"
-        override val packagesUpgradableNote =
-            "アプリ同梱の環境の方が新しいバージョンです。ターミナルで pkg upgrade を実行すると" +
-                "最新版に更新できます。"
+
+        override val packagesUpgrade = "パッケージを更新"
+        override fun packagesUpgradeSubtitle(count: Int) =
+            "同梱の環境より古いパッケージが $count 個あります。更新にはネットワークが必要です"
+        override val packagesUpgradeNow = "更新"
+        override val packagesUpgradeRunning = "パッケージを更新中"
+        override val packagesUpgradeDone = "パッケージを更新しました"
+        override fun packagesUpgradeLeft(count: Int) =
+            "同梱の環境より古いパッケージが $count 個残っています。ログの末尾を以下に表示します。"
+
+        override val packagesRestore = "パッケージを復元"
+        override fun packagesRestoreSubtitle(count: Int) =
+            "前回の更新で戻せなかったパッケージが $count 個あります。復元にはネットワークが必要です"
+        override val packagesRestoreNow = "復元"
+        override val packagesRestoreRunning = "パッケージを復元中"
+        override val packagesRestoreDone = "パッケージを復元しました"
+        override fun packagesRestoreLeft(count: Int) =
+            "$count 個のパッケージを復元できませんでした。名前を以下に表示します。"
+
+        override val packagesRunIncomplete = "処理が完了しませんでした。ログの末尾を以下に表示します。"
+        override val packagesUpgradeFailed = "更新失敗"
+        override val packagesRestoreFailed = "復元失敗"
         override val rebuildEnvironment = "実行環境を再構築"
         override val rebuildEnvironmentSubtitle =
             "ランタイムを展開し直します。入れたパッケージは記録され、後で復元されます"

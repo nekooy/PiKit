@@ -226,8 +226,9 @@ users, never for a version people will install and keep.
       A release that moved the pins after the dispatch has shipped the previous ones.
 - [ ] **The device half of the sweep is walked too**, because `build-apks.py` cannot see
       it: `Settings → Maintenance & repair` reports the packages row (a non-zero
-      `N 个有可用更新` means `pkg upgrade` in the terminal page before the release goes
-      out), and the model list's *Refresh* is what shows a just-released model.
+      `N 个有可用更新` means the row's *Update* button — `pkg upgrade` through the
+      installer — before the release goes out), and the model list's *Refresh* is what
+      shows a just-released model.
 - [ ] `versionName`/`versionCode` bumped in `gradle.properties`, in the commit
       being released — and `git status` clean, because the workflow releases the
       commit it checks out.

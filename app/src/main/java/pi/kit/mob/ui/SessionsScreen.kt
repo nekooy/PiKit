@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -53,6 +55,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -285,15 +288,30 @@ fun SessionsScreen(
     // closes the panel rather than leaving the app.
     BackHandler(onBack = onBack)
 
+    // The drawer is a surface pulled over the conversation, not a page: the window's own
+    // insets are its only frame, so the panel reaches the window's last pixel and the list
+    // and the settings pill carry the navigation strip as their own bottom padding instead.
+    // A band of `surface` under the panel was the opaque strip that cut the last row.
+    val navigationInset = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(MiuixTheme.colorScheme.surface),
+            .background(MiuixTheme.colorScheme.background),
     ) {
         Column(
             Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars),
+                // Top and sides only: the strip is spent by the list's content padding
+                // and the pill's own margin, both of which can be scrolled or moved,
+                // where a padding here would end the panel above the handle.
+                .windowInsetsPadding(
+                    WindowInsets.systemBars.only(
+                        WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+                    ),
+                ),
         ) {
             Row(
                 modifier = Modifier
@@ -520,6 +538,7 @@ fun SessionsScreen(
                         deleteTargets = listOf(it)
                         deleteUp = true
                     },
+                    bottomInset = navigationInset,
                     modifier = Modifier.fillMaxWidth().fillMaxHeight(),
                     listState = listState,
                 )
@@ -532,10 +551,14 @@ fun SessionsScreen(
                         .background(
                             // Three stops, like the chat page's own fades: a row that
                             // crosses this loses most of its contrast in the first third
-                            // instead of appearing to be cut by the field's edge.
+                            // instead of appearing to be cut by the field's edge. The
+                            // colour is the panel's `background`, not the card's
+                            // `surface`: the panel is the step from the chat card behind
+                            // it, and a fade in the card's colour erased that step under
+                            // the field.
                             Brush.verticalGradient(
-                                0f to MiuixTheme.colorScheme.surface,
-                                0.45f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
+                                0f to MiuixTheme.colorScheme.background,
+                                0.45f to MiuixTheme.colorScheme.background.copy(alpha = 0.55f),
                                 1f to Color.Transparent,
                             ),
                         ),
@@ -554,7 +577,10 @@ fun SessionsScreen(
             onClick = onOpenSettings,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = HEADING_GUTTER, bottom = 40.dp),
+                // The pill floats over the panel's foot, so the strip is its own margin:
+                // it keeps the control above the gesture handle now that the panel
+                // reaches the window's last pixel.
+                .padding(start = HEADING_GUTTER, bottom = 40.dp + navigationInset),
         )
     }
 
@@ -666,6 +692,8 @@ private fun ConversationList(
     onRename: (PiAgentSession.SessionSummary) -> Unit,
     onTogglePin: (PiAgentSession.SessionSummary) -> Unit,
     onDelete: (PiAgentSession.SessionSummary) -> Unit,
+    /** The navigation strip the panel now draws through, as the list's own end padding. */
+    bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
     val pinnedVisible = visible.filter { it.pinned }
@@ -693,8 +721,10 @@ private fun ConversationList(
         // one Compose's own effect skips. See `piOverScroll`.
         modifier = modifier.piOverScroll(),
         // Room at the end for the settings pill, which floats over the last rows: without
-        // it the final conversation is the one under the control that leaves the list.
-        contentPadding = PaddingValues(bottom = LIST_BOTTOM),
+        // it the final conversation is the one under the control that leaves the list. The
+        // strip is added here rather than around the panel: the list draws through it, and
+        // its rows have to be able to scroll clear of the gesture handle.
+        contentPadding = PaddingValues(bottom = LIST_BOTTOM + bottomInset),
         // A row is a run of text with its own inset now, not a card with an outline, so the
         // gap between two of them is the room the rows already carry — 2dp keeps two
         // highlighted rows from merging into one when they happen to be neighbours.

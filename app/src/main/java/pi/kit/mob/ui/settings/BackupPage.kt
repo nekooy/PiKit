@@ -28,6 +28,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.BackupStatus
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
@@ -152,6 +153,10 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
         subtitle = text.settings.backupSubtitle,
         onBack = onBack,
     ) { padding ->
+        // The page draws through the navigation strip now, so the strip's height is content
+        // padding at the end of the scroll: the last row can still be scrolled clear of the
+        // gesture handle, which a bottom padding on the viewport would have prevented.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -161,7 +166,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 // `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.backupExportSection) {
                 Categories(

@@ -37,6 +37,7 @@ import pi.kit.mob.pi.ModelSource
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.anyProviderModelFacts
 import pi.kit.mob.pi.modelDefinitionFacts
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
@@ -142,6 +143,10 @@ internal fun ModelPage(
         subtitle = text.settings.modelCount(profiles.size),
         onBack = onBack,
     ) { padding ->
+        // The page draws through the navigation strip now, so the strip's height is content
+        // padding at the end of the scroll: the last row can still be scrolled clear of the
+        // gesture handle, which a bottom padding on the viewport would have prevented.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -151,7 +156,7 @@ internal fun ModelPage(
                 // `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             // An empty list is not drawn as an empty frame: a card with no rows in it is a
             // slab of nothing under a heading. The store refuses to delete the last
@@ -844,6 +849,10 @@ internal fun ModelEditPage(
         // out has to say so first.
         onBack = ::requestLeave,
     ) { padding ->
+        // The page draws through the navigation strip now, so the strip's height is content
+        // padding at the end of the scroll: the last row can still be scrolled clear of the
+        // gesture handle, which a bottom padding on the viewport would have prevented.
+        val inset = LocalPiNavigationInset.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -853,7 +862,7 @@ internal fun ModelEditPage(
                 // See `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.profile) {
                 SettingsTextField(

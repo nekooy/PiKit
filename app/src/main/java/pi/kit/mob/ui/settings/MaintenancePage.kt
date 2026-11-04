@@ -21,6 +21,7 @@ import pi.kit.mob.pi.CatalogueStatus
 import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.StorageSelfTest
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
@@ -47,12 +48,13 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
  * own four-hour window and which the button forces when a just-released model is
  * wanted now.
  *
- * ## The three runs are one row each, and none of them speaks in the row
+ * ## The runs are one row each, and none of them speaks in the row
  *
- * The page has three things that run: the catalogue refresh, the relocation walk,
- * and the storage self-test. Each is one Miuix row whose trailing slot holds the
- * run's one control — the button, or the live spinner while it is going — and whose
- * title and summary never move.
+ * The page has runs, and each is one row: the catalogue refresh, the relocation
+ * walk, the environment rebuild, the storage self-test, and — only while the
+ * ledger says they matter — the package update and the package restore. Each row's
+ * trailing slot holds the run's one control — the button, or the live spinner while
+ * it is going — and its title and summary never move.
  *
  * The run's status text used to fill the row's value slot, and it squeezed the text
  * beside it: measured mid-walk, "正在检测…已扫描 2816 个文件" held 464px of the row
@@ -68,14 +70,19 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
  * run's own clear call lives now, since no row carries a verdict to dismiss. A success
  * is only the toast.
  *
+ * The package runs resolve their sentence where they finish, in
+ * [PiAgentSession.PackageRun]: `pkg upgrade` can be minutes over a network, and the
+ * page is a tab that leaves the composition while it runs, so the result cannot be
+ * re-derived from a report the page might never read.
+ *
  * ## Why the verdict and the output are two components
  *
  * A run can come back with the installer's own output — the walk reports one line per
- * file it could not rewrite, and the self-test prints one per failing check — and those
- * lines have no bound. The sentence is the dialog's own summary; the lines are drawn
- * under it in a bounded, scrolling block, because the version that printed them into
- * the page pushed this page's own buttons off the screen and buried the one line the
- * reader came for.
+ * file it could not rewrite, the self-test prints one per failing check, and a
+ * package run ends with the last lines of apt's transcript — and those lines have no
+ * bound. The sentence is the dialog's own summary; the lines are drawn under it in a
+ * bounded, scrolling block, because the version that printed them into the page pushed
+ * this page's own buttons off the screen and buried the one line the reader came for.
  */
 @Composable
 internal fun MaintenancePage(
@@ -90,6 +97,9 @@ internal fun MaintenancePage(
     val version by catalogue.version.collectAsState()
     val storageCheck by selfTest.status.collectAsState()
     val packages by session.packages.collectAsState()
+    val upgradeRunning by session.upgradeRunning.collectAsState()
+    val restoreRunning by session.restoreRunning.collectAsState()
+    val packageRun by session.packageRun.collectAsState()
     val rebuildRunning by session.rebuildRunning.collectAsState()
     var confirmRebuild by remember { mutableStateOf(false) }
     val text = strings
@@ -125,6 +135,18 @@ internal fun MaintenancePage(
             storageVerdict(storageCheck, text)?.let { toasts?.show(it) }
         }
     }
+    // The package runs have one result slot between them, so one `seen` covers
+    // both. It starts as whatever was settled when the page opened: a failure
+    // that is still on screen belongs to the alert below, not to a toast the
+    // reader missed.
+    var seenPackageRun by remember { mutableStateOf(packageRun) }
+    LaunchedEffect(packageRun) {
+        val run = packageRun
+        if (run != null && run !== seenPackageRun) {
+            seenPackageRun = run
+            if (run.succeeded) toasts?.show(run.message)
+        }
+    }
 
     PiPage(
         // The Settings row is "Maintenance & repair" and the manual quotes that
@@ -144,7 +166,10 @@ internal fun MaintenancePage(
                 // The page's elastic end. See `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 12.dp),
+                // The strip under the page is content padding rather than a
+                // viewport cut (see `PiPage`): the card scrolls behind the
+                // gesture handle and its last row can still be cleared of it.
+                .padding(top = 4.dp, bottom = 12.dp + LocalPiNavigationInset.current),
         ) {
             PiSection(title = text.settings.piAgent) {
                 BasicComponent(
@@ -185,7 +210,7 @@ internal fun MaintenancePage(
                 }
             }
 
-            // A failure is not announced by a banner here. The three runs' errors
+            // A failure is not announced by a banner here. The runs' errors
             // are *operations that came back wrong*, and in settings that is a
             // dialog — announced then dismissed — not a strip that stays on the
             // page (ARCHITECTURE §13); the dialogs are bound to the state below.
@@ -202,15 +227,15 @@ internal fun MaintenancePage(
             // answer "do I need this" for a control almost nobody needs is a paragraph
             // the reader scrolls past on every visit.
             PiSection(title = text.settings.installedPackages) {
+                val report = packages
                 // The ledger's state first, because it is the question the
                 // section answers before any button in it does: did my packages
                 // survive, and are they current. No control on this row — it is
-                // a fact, and the two below are the actions.
+                // a fact, and the rows below it are the actions.
                 BasicComponent(
                     title = text.settings.packagesRow,
                     summary = text.settings.packagesRowSubtitle,
                     endActions = {
-                        val report = packages
                         SettingsValue(
                             text = packagesValue(report, text),
                             emphasised = report?.let { it.upgradable.isNotEmpty() || it.restored.isNotEmpty() } == true,
@@ -218,6 +243,44 @@ internal fun MaintenancePage(
                         )
                     },
                 )
+                // The two runs the ledger can ask for, each present only while
+                // its count is non-zero: a button for a gap that is not there
+                // is routine maintenance pressed on a healthy install. The
+                // update leads because it is the one that moves the whole
+                // environment; the restore is the narrower retry of a restore
+                // that did not finish, so it only appears in that state.
+                if (report != null && report.upgradable.isNotEmpty()) {
+                    BasicComponent(
+                        title = text.settings.packagesUpgrade,
+                        summary = text.settings.packagesUpgradeSubtitle(report.upgradable.size),
+                        endActions = {
+                            RunControl(
+                                running = upgradeRunning,
+                                label = text.settings.packagesUpgradeNow,
+                                onAction = {
+                                    toasts?.show(text.settings.packagesUpgradeRunning)
+                                    session.upgradePackages()
+                                },
+                            )
+                        },
+                    )
+                }
+                if (report != null && report.pending.isNotEmpty()) {
+                    BasicComponent(
+                        title = text.settings.packagesRestore,
+                        summary = text.settings.packagesRestoreSubtitle(report.pending.size),
+                        endActions = {
+                            RunControl(
+                                running = restoreRunning,
+                                label = text.settings.packagesRestoreNow,
+                                onAction = {
+                                    toasts?.show(text.settings.packagesRestoreRunning)
+                                    session.restorePendingPackages()
+                                },
+                            )
+                        },
+                    )
+                }
                 BasicComponent(
                     title = text.settings.relocate,
                     summary = text.settings.relocateSubtitle,
@@ -250,8 +313,6 @@ internal fun MaintenancePage(
                 )
             }
 
-            packages?.let { report -> PackagesNotices(report) }
-
             // Storage does not belong on this page conceptually — it changes no
             // file under $PREFIX — but the *check* is a maintenance action, and it
             // is the only place a user can get an answer to "can the agent really
@@ -279,7 +340,7 @@ internal fun MaintenancePage(
         }
     }
 
-    // The three runs' failures are operations that came back wrong, and in
+    // The runs' failures are operations that came back wrong, and in
     // settings that is a dialog — announced then dismissed — not a strip that
     // stays on the page (ARCHITECTURE §13). Each is bound to the run's own
     // state, so its OK button *is* the run's clear call: pressing it reads the
@@ -305,6 +366,24 @@ internal fun MaintenancePage(
         confirm = text.common.ok,
         lines = repairFailure?.errors.orEmpty(),
         onConfirm = session::clearRepairResult,
+    )
+
+    // The two package runs report in this page's one shape: the success is the
+    // toast above, and a failure is a dialog carrying the run's own sentence and
+    // the end of its log. Its OK is the run's clear call — reading the failure
+    // and dismissing it are one press, as with the three runs above.
+    val packageFailure = packageRun?.takeIf { !it.succeeded }
+    SettingsAlert(
+        show = packageFailure != null,
+        title = if (packageFailure?.kind == PiAgentSession.PackageRun.Kind.Restore) {
+            text.settings.packagesRestoreFailed
+        } else {
+            text.settings.packagesUpgradeFailed
+        },
+        body = packageFailure?.message.orEmpty(),
+        confirm = text.common.ok,
+        lines = packageFailure?.lines.orEmpty(),
+        onConfirm = session::clearPackageRun,
     )
 
     val storageFailure = (storageCheck as? StorageSelfTest.Status.Finished)
@@ -367,7 +446,8 @@ private fun RunControl(
  * A restore that left names behind outranks the update hint, which outranks the
  * story of what the last restore did, which outranks a bare count — the same
  * "one fact in a value slot" rule the runs on this page follow. The detail the
- * phrase cannot carry is in [PackagesNotices] under the group.
+ * phrase cannot carry is in the run's dialog, and the two rows under the ledger
+ * are the actions it names.
  */
 private fun packagesValue(report: PiAgentSession.PackagesReport?, text: Strings): String =
     when {
@@ -377,29 +457,6 @@ private fun packagesValue(report: PiAgentSession.PackagesReport?, text: Strings)
         report.restored.isNotEmpty() -> text.settings.packagesRestored(report.restored.size)
         else -> text.settings.packagesInstalled(report.installed)
     }
-
-/**
- * What a count cannot say: which names a restore left behind, and which command
- * closes an update gap. One card of notes under the group — the page's "the row
- * states the fact, the note answers" split, with the card untitled because the group
- * directly above it is what the notes are about. Neither is a button: both answers are
- * commands the terminal runs, and a button here would have to download something the
- * note only points at.
- */
-@Composable
-private fun PackagesNotices(report: PiAgentSession.PackagesReport) {
-    if (report.pending.isEmpty() && report.upgradable.isEmpty()) return
-    val text = strings
-    PiSection {
-        if (report.pending.isNotEmpty()) {
-            val names = report.pending.joinToString(", ") { it.name }
-            SettingsNote(text.settings.packagesPendingNote(names), danger = true)
-        }
-        if (report.upgradable.isNotEmpty()) {
-            SettingsNote(text.settings.packagesUpgradableNote)
-        }
-    }
-}
 
 /**
  * What a successful run announces, as a toast: null while there is nothing to

@@ -54,8 +54,9 @@ sweep is a check, and a check that skipped its own command is not evidence.
 **The device half is the app's own page.** `Settings → Maintenance & repair` reports the
 same state from inside the installed build, and walking it before a release is what
 catches the two things the repository cannot: the packages row's `N 个有可用更新` (the
-device's dpkg status against the image's shipped set — `pkg upgrade` in the terminal page
-is the fix, and the count coming back to zero is the pass), and the model list, whose
+device's dpkg status against the image's shipped set — the row's *Update* button runs
+`pkg upgrade` through the installer, and the count coming back to zero is the pass), and
+the model list, whose
 `Refresh` is the only way to see a just-released model before the release ships. The
 relocation row and the storage check are the two runs whose failure is a device fact
 rather than a build one; *The device pass* below has the rest. The page deliberately has

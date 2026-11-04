@@ -132,6 +132,7 @@ import pi.kit.mob.ui.files.humanSize
 import pi.kit.mob.ui.files.openExternally
 import pi.kit.mob.ui.files.readDirectory
 import pi.kit.mob.ui.files.stampFor
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiPage
@@ -598,6 +599,10 @@ private fun DirectoryTable(
     onCopyPath: (FileEntry) -> Unit,
     onOpenWith: (FileEntry) -> Unit,
 ) {
+    // The page draws through the navigation strip, so its height is the last row's own
+    // bottom padding: a row scrolled to the end clears the gesture handle, and the rows
+    // below the fold still scroll *under* it rather than stopping at its edge.
+    val inset = LocalPiNavigationInset.current
     LazyColumn(
         // The page's elastic end, from the kit rather than from the list: `LazyColumn`
         // installs an effect of its own, and Compose does not dispatch to it when there
@@ -606,10 +611,9 @@ private fun DirectoryTable(
         modifier = Modifier
             .fillMaxSize()
             .piOverScroll(),
-        // The gap above the navigation bar as content padding rather than as a band of
-        // empty page: the last row scrolls past it, and at rest it is the space that
-        // keeps the last row off the bar.
-        contentPadding = PaddingValues(bottom = PAGE_BOTTOM),
+        // Content padding rather than a band of empty page: the last row scrolls past it,
+        // and at rest it is the space that keeps the last row off the gesture handle.
+        contentPadding = PaddingValues(bottom = PAGE_BOTTOM + inset),
         // The seam between two row cards, at the kit's row gap — the same number the
         // conversation history states, because the two lists are read one after the
         // other and were spaced by the same too-tight figure. 2dp is tighter than the
@@ -995,9 +999,9 @@ private val SHEET_SUFFIXES = setOf("csv", "tsv", "xls", "xlsx", "ods")
 private val SIZE_COLUMN = 88.dp
 
 /**
- * The gap under the last row.
+ * The gap under the last row, before the navigation strip's own inset is added.
  *
- * The page's own furniture, not the bar's height: the bar is the root scaffold's, and
- * this is the space that keeps a row from being read against its edge.
+ * The page's own furniture, not the strip's height: [LocalPiNavigationInset] is the
+ * strip, and this is the space that keeps a row from being read against the page's edge.
  */
 private val PAGE_BOTTOM = 16.dp

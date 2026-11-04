@@ -2169,6 +2169,185 @@ class PiAgentSession internal constructor(
         )
     }
 
+    // ------------------------------------------------------- package runs
+
+    /**
+     * The result of the most recent package run: which row started it, whether
+     * it came back clean, the sentence the page shows and the detail it shows
+     * under it.
+     *
+     * The message is resolved here rather than in the page because the run ends
+     * while the page may not be composed at all — the same reason
+     * [AgentStatus.Failed] carries its sentence. It is read in the interface
+     * language in effect when the run finishes, which is the language the toast
+     * and the dialog are about to be read in.
+     */
+    internal data class PackageRun(
+        val kind: Kind,
+        val succeeded: Boolean,
+        val message: String,
+        val lines: List<String>,
+    ) {
+        /** Which of the page's two rows produced this run. */
+        internal enum class Kind { Upgrade, Restore }
+    }
+
+    /** True while `pkg upgrade -y` is running in the environment. */
+    private val _upgradeRunning = MutableStateFlow(false)
+    val upgradeRunning: StateFlow<Boolean> = _upgradeRunning.asStateFlow()
+
+    /** True while the captured packages are being put back. */
+    private val _restoreRunning = MutableStateFlow(false)
+    val restoreRunning: StateFlow<Boolean> = _restoreRunning.asStateFlow()
+
+    /**
+     * The most recent package run, until the page's dialog dismisses it.
+     *
+     * One slot for both runs because only one of them can be pressed at a time
+     * and the dialog's OK is the clear call for whichever it was: two slots
+     * would need two clear calls for one acknowledgement.
+     */
+    private val _packageRun = MutableStateFlow<PackageRun?>(null)
+    internal val packageRun: StateFlow<PackageRun?> = _packageRun.asStateFlow()
+
+    /**
+     * Updates the environment's packages — the command the ledger's update
+     * count used to point at in a terminal.
+     *
+     * Guarded on *running*, compare-and-set for the reason
+     * [repairInstalledPackages] is: two taps in one frame would otherwise start
+     * two apt runs over one database, and the second would sit waiting on the
+     * lock the first holds with no way to tell it apart from a hang.
+     */
+    fun upgradePackages() {
+        if (!_upgradeRunning.compareAndSet(expect = false, update = true)) return
+        // The previous run's result is cleared or the page shows the old
+        // failure under a spinner for a run that has not produced anything yet.
+        _packageRun.value = null
+        scope.launch {
+            try {
+                val outcome = runCatching { BootstrapInstaller(appContext).upgradePackages() }
+                _packageRun.value = upgradeRun(outcome)
+            } finally {
+                // In `finally` for the reason the walk's flag is: an `Error` or a
+                // cancellation escaping the run would otherwise leave the row
+                // spinning for the life of the process, with no result to dismiss.
+                _upgradeRunning.value = false
+                // The ledger is what the page reports, so it is re-read whatever
+                // the exit status was: a run that updated most of the list still
+                // changed it.
+                refreshPackages()
+            }
+        }
+    }
+
+    /**
+     * Puts back the packages a runtime update displaced — the command the
+     * ledger's pending count used to point at in a terminal.
+     *
+     * [BootstrapInstaller.restorePendingPackages] is idempotent and trims its
+     * manifest as it goes, so a second press after a partial restore continues
+     * where the first stopped rather than starting over.
+     */
+    fun restorePendingPackages() {
+        if (!_restoreRunning.compareAndSet(expect = false, update = true)) return
+        _packageRun.value = null
+        scope.launch {
+            try {
+                val result = runCatching { BootstrapInstaller(appContext).restorePendingPackages() }
+                _packageRun.value = restoreRun(result)
+            } finally {
+                _restoreRunning.value = false
+                refreshPackages()
+            }
+        }
+    }
+
+    /** Dismisses the last package run's result; the page's dialog OK is the only caller. */
+    fun clearPackageRun() {
+        _packageRun.value = null
+    }
+
+    /**
+     * Turns one upgrade outcome into the page's one sentence plus detail.
+     *
+     * "Still behind" and "did not finish" are separate sentences because they
+     * ask for different things: the first is a count the reader can decide to
+     * ignore, the second is a run to look at the log for. A thrown run has no
+     * exit status at all, so it takes the same sentence as a command that
+     * failed without moving the ledger — whatever went wrong, the log's end is
+     * where the answer is.
+     */
+    private fun upgradeRun(
+        result: Result<BootstrapInstaller.UpgradeOutcome>,
+    ): PackageRun {
+        val text = stringsFor(settingsStore.read().language).settings
+        val outcome = result.getOrNull()
+        if (outcome == null) {
+            return PackageRun(
+                kind = PackageRun.Kind.Upgrade,
+                succeeded = false,
+                message = text.packagesRunIncomplete,
+                lines = result.exceptionOrNull()?.let { listOf(it.message ?: it.toString()) }
+                    .orEmpty(),
+            )
+        }
+        if (outcome.succeeded) {
+            return PackageRun(
+                kind = PackageRun.Kind.Upgrade,
+                succeeded = true,
+                message = text.packagesUpgradeDone,
+                lines = emptyList(),
+            )
+        }
+        return PackageRun(
+            kind = PackageRun.Kind.Upgrade,
+            succeeded = false,
+            message = if (outcome.upgradable.isNotEmpty()) {
+                text.packagesUpgradeLeft(outcome.upgradable.size)
+            } else {
+                text.packagesRunIncomplete
+            },
+            lines = outcome.logLines,
+        )
+    }
+
+    /**
+     * Turns one restore report into the page's sentence plus detail.
+     *
+     * The report names what is still missing and nothing else — the restore's
+     * `pkg install` pass may have failed for a network reason, but the names it
+     * could not bring back are the part a reader can act on.
+     */
+    private fun restoreRun(result: Result<PackageManifest.Report>): PackageRun {
+        val text = stringsFor(settingsStore.read().language).settings
+        val report = result.getOrNull()
+        if (report == null) {
+            return PackageRun(
+                kind = PackageRun.Kind.Restore,
+                succeeded = false,
+                message = text.packagesRunIncomplete,
+                lines = result.exceptionOrNull()?.let { listOf(it.message ?: it.toString()) }
+                    .orEmpty(),
+            )
+        }
+        return if (report.pending.isEmpty()) {
+            PackageRun(
+                kind = PackageRun.Kind.Restore,
+                succeeded = true,
+                message = text.packagesRestoreDone,
+                lines = emptyList(),
+            )
+        } else {
+            PackageRun(
+                kind = PackageRun.Kind.Restore,
+                succeeded = false,
+                message = text.packagesRestoreLeft(report.pending.size),
+                lines = report.pending.map { "${it.name} ${it.version}".trim() },
+            )
+        }
+    }
+
     // -------------------------------------------------------------- rebuild
 
     /**

@@ -324,6 +324,55 @@ internal class ChatComposerState {
     val transcriptPlaced = mutableStateOf(false)
 }
 
+/**
+ * The conversation drawer's motion, held above the conversation switch.
+ *
+ * `key(session)` rebuilds the chat page when the reader opens another conversation, and
+ * every `remember` inside it — the offset, the panel's width, whether the panel is still
+ * composed — went with it. That produced two defects at once, and both were measured on
+ * the emulator before this state moved:
+ *
+ *  - **The tap jumped instead of moving.** Opening a row starts the drawer's close
+ *    animation and, in the same gesture, swaps the page behind it. The animation ran in
+ *    the *old* page's scope and was cancelled by the rebuild, while the new page started
+ *    at offset zero, so the panel disappeared between two frames. A page whose own
+ *    conversation was replaced had no way to show that the drawer it came from was
+ *    *leaving*; the motion now belongs to a scope that outlives the page.
+ *  - **The chosen row's highlight blinked.** The peer of that defect: the rebuilt page
+ *    started with `reachable = false`, so the list was dropped and re-created on the
+ *    next swipe — a frame of the freshly built list before its rows were filled. With
+ *    the panel kept composed across the switch, the row the reader tapped is drawn
+ *    filled on the first frame of the new page and stays that way.
+ *
+ * The offset is in pixels and the width is measured by the page, so both live here rather
+ * than being passed as parameters: a rotation while the drawer is open must re-anchor the
+ * same number the drag wrote.
+ */
+internal class ConversationDrawerState {
+    /** The panel's measured width in pixels; zero until the first layout. */
+    var width by mutableIntStateOf(0)
+
+    /** How far out the panel is, in pixels, from 0 (closed) to [width] (fully out). */
+    var offset by mutableFloatStateOf(0f)
+
+    /**
+     * Whether the panel is composed at all.
+     *
+     * Once opened it stays true for the life of the app: the list scans the session
+     * directory and keeps its rows, so dropping it on close made a quick re-open a blank
+     * panel and a second scan. The state is hoisted with the offset so a conversation
+     * switch cannot drop it either.
+     */
+    var reachable by mutableStateOf(false)
+
+    /** The settle animation, run on the root's scope so a page rebuild cannot cancel it. */
+    var job: Job? = null
+
+    /** How far out the panel is as a fraction of its width. */
+    val progress: Float
+        get() = if (width > 0) (offset / width).coerceIn(0f, 1f) else 0f
+}
+
 /** Creates the one [ChatComposerState] per app run, in the scope that outlives the tabs. */
 @Composable
 internal fun rememberChatComposerState(): ChatComposerState = remember { ChatComposerState() }
@@ -391,6 +440,23 @@ internal fun ChatScreen(
     onNewConversation: () -> Unit,
     /** Whether the conversation drawer is out; owned by `RootContent`. */
     historyOpen: Boolean,
+    /**
+     * The drawer's own motion — offset, measured width, composition flag.
+     *
+     * Owned by `RootContent`, above `key(session)`, for the reason [ConversationDrawerState]
+     * gives: a conversation switch must not cancel the close that switch started.
+     */
+    drawer: ConversationDrawerState,
+    /** The scope the settle animation runs on: the root's, which outlives the page. */
+    drawerScope: CoroutineScope,
+    /**
+     * The saved conversation whose row is drawn filled.
+     *
+     * [ConversationState.sessionFile] once the conversation has one; until then, the path
+     * the drawer tap asked for ([ChatTab] keeps it). Null is a conversation that was never
+     * saved, which has no row to mark.
+     */
+    currentPath: String?,
     /** The drawer's own scroll position, held by the root so a conversation change keeps it. */
     historyListState: LazyListState,
     /** The scaffold's bottom inset in px; the root consumes the insets this page would read. */
@@ -408,40 +474,37 @@ internal fun ChatScreen(
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
     val listState = composer.listState
-    // How far the drawer has been pulled out, 0 (closed) to 1 (fully out), in pixels of
-    // the drawer's own width — the number the panel and the conversation behind it are
-    // both drawn at, and the number a drag moves.
+    // How far the drawer has been pulled out: [ConversationDrawerState.offset] in pixels
+    // of its own width — the number the panel and the conversation behind it are both
+    // drawn at, and the number a drag moves. Hoisted above the conversation switch, so
+    // the close a tap starts is still moving when the new page is composed.
     val density = LocalDensity.current
-    var pageWidth by remember { mutableIntStateOf(0) }
-    var drawerWidth by remember { mutableIntStateOf(0) }
     // Used by the drawer's gestures: opening it drops the composer's keyboard.
     val focus = LocalFocusManager.current
-    var drawerOffset by remember { mutableFloatStateOf(0f) }
-    var drawerJob by remember { mutableStateOf<Job?>(null) }
-    // Whether the list is composed at all: it scans the session directory, so it is put
-    // away once the drawer has settled back into the screen's edge.
-    var historyReachable by remember { mutableStateOf(historyOpen) }
-    val drawerPos =
-        if (drawerWidth > 0) (drawerOffset / drawerWidth).coerceIn(0f, 1f) else 0f
+    val drawerPos = drawer.progress
 
     // Arrives with the drawer already out when the page is rebuilt on the way back from
     // the settings page, which is where `historyOpen` came from; the width is only known
-    // after the first measure, so the offset is placed then.
-    LaunchedEffect(drawerWidth) {
-        if (historyOpen && drawerWidth > 0 && drawerOffset == 0f) {
-            drawerOffset = drawerWidth.toFloat()
+    // after the first measure, so the offset is placed then. The other way round — a page
+    // rebuilt while its drawer is closing — needs nothing here: the settle animation runs
+    // on the root's scope and keeps writing [drawer]'s offset across the rebuild.
+    LaunchedEffect(drawer.width) {
+        if (historyOpen && drawer.width > 0 && drawer.offset == 0f) {
+            drawer.offset = drawer.width.toFloat()
         }
     }
 
     // Settles at [target], from wherever the thumb left it.
     //
     // The open/closed *answer* is published before the animation runs rather than after
-    // it. A conversation opened from the drawer rebuilds this page (`key(session)`), and
-    // a rebuild that still read "the drawer is out" would draw the drawer it was opened
-    // from over the conversation that tap had just chosen — measured on the emulator:
-    // the row highlighted, the panel still out, and the page behind it already swapped.
+    // it, because the rebuild that follows a tap reads it and a page that still believed
+    // the drawer was out would draw the panel over the conversation just chosen. The
+    // animation itself is the root's, not this page's: the rebuild would otherwise cancel
+    // it at offset zero and the drawer would vanish between two frames instead of sliding
+    // out over the conversation the tap opened. Published answer, surviving motion —
+    // both halves are needed, and they are two different owners.
     val settlePage: (Float) -> Unit = { target ->
-        drawerJob?.cancel()
+        drawer.job?.cancel()
         onHistoryOpenChange(target > 0f)
         // The panel is **never dropped once it has been opened**. Letting it leave the
         // composition on close threw away its rows and its scan, so a quick re-open
@@ -449,13 +512,13 @@ internal fun ChatScreen(
         // second, and the panel was empty while it rescanned — and every re-open paid for
         // a scan it had already done. It now stays composed, parked off the leading edge
         // at progress zero, which is what makes the second open instant.
-        historyReachable = true
-        drawerJob = scope.launch {
+        drawer.reachable = true
+        drawer.job = drawerScope.launch {
             animate(
-                initialValue = drawerOffset,
-                targetValue = target * drawerWidth,
+                initialValue = drawer.offset,
+                targetValue = target * drawer.width,
                 animationSpec = tween(PAGE_SLIDE_MILLIS),
-            ) { value, _ -> drawerOffset = value }
+            ) { value, _ -> drawer.offset = value }
         }
     }
 
@@ -472,7 +535,7 @@ internal fun ChatScreen(
      * distance threshold above that reads as a gesture that has to be *completed*.
      */
     fun commitPage(distance: Float, velocity: Float, minFling: Float): Float {
-        val travelled = distance / drawerWidth.coerceAtLeast(1)
+        val travelled = distance / drawer.width.coerceAtLeast(1)
         val flung = abs(velocity) > minFling && abs(travelled) > FLING_MIN_TRAVEL
         return when {
             travelled >= 0.5f || (flung && velocity > 0) -> 1f
@@ -847,11 +910,10 @@ internal fun ChatScreen(
         Modifier
             .fillMaxSize()
             .onSizeChanged {
-                val was = drawerWidth
-                pageWidth = it.width
+                val was = drawer.width
                 // Capped as well as shared out: on a tablet a panel of 79% of the window
                 // is a page, and a drawer that covers the conversation is not a drawer.
-                drawerWidth = minOf(
+                drawer.width = minOf(
                     (it.width * DRAWER_SHARE).roundToInt(),
                     with(density) { DRAWER_MAX_WIDTH.roundToPx() },
                 )
@@ -860,20 +922,23 @@ internal fun ChatScreen(
                 // open drawer kept the portrait width and drew 170px off the leading
                 // edge, cutting the title in half. Re-anchored to the same *answer*
                 // rather than to the old number.
-                if (was > 0 && drawerWidth != was) {
-                    drawerOffset = if (historyOpen) drawerWidth.toFloat() else 0f
-                    historyReachable = historyOpen
+                if (was > 0 && drawer.width != was) {
+                    drawer.offset = if (historyOpen) drawer.width.toFloat() else 0f
+                    drawer.reachable = historyOpen
                 }
             },
     ) {
         // Composed only while it is on screen: the list scans the session directory, and
         // doing that behind every conversation would be a cost paid on every chat frame
-        // for a page the reader is not looking at.
-        if (historyReachable) {
+        // for a page the reader is not looking at. Kept composed across a conversation
+        // switch by the state rather than by this `if` alone: the page is rebuilt on the
+        // way out of the list, and a flag remembered here was re-created with it — which
+        // is the frame the chosen row's fill spent missing.
+        if (drawer.reachable) {
             Box(
                 Modifier
                     .fillMaxHeight()
-                    .width(with(LocalDensity.current) { drawerWidth.toDp() })
+                    .width(with(LocalDensity.current) { drawer.width.toDp() })
                     // The panel slides in from the leading edge while the card slides
                     // right: at progress p the panel occupies `[-W + pW, pW]` and the
                     // card `[pW, pW + W]`, so their edges meet on every frame and both
@@ -885,21 +950,28 @@ internal fun ChatScreen(
                     // on every frame of the drag. Measured on the emulator, the drawer's
                     // open/close animation was 90-100% janky frames; a graphics layer only
                     // moves what was already rasterised.
-                    .graphicsLayer { translationX = (-1f + drawerPos) * drawerWidth }
-                    .background(MiuixTheme.colorScheme.surface)
+                    .graphicsLayer { translationX = (-1f + drawerPos) * drawer.width }
+                    // `background`, not `surface`: the card over this panel is `surface`
+                    // and the dark scheme's `surface` is black, so a surface panel made
+                    // the two halves of the screen one colour — the seam the shadow was
+                    // drawing in the light scheme had nothing left to draw in the dark
+                    // one. `background` is #242424 there and white in the light scheme,
+                    // so the panel is a step away from the card in both and the drawer
+                    // reads as a layer instead of as one page split by a gesture.
+                    .background(MiuixTheme.colorScheme.background)
 
                     // The way out, from the page the drawer is next to as well as from the
                     // conversation: once the panel is out, its own width is where the
                     // thumb is, and dragging it left is the same gesture that closes it.
                     .pageDrag(
-                        width = drawerWidth,
+                        width = drawer.width,
                         onStart = {
-                            drawerJob?.cancel()
+                            drawer.job?.cancel()
                             focus.clearFocus()
                         },
                         onDrag = { delta ->
-                            drawerOffset =
-                                (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
+                            drawer.offset =
+                                (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
                         },
                         onRelease = { distance, velocity, minFling ->
                             settlePage(commitPage(distance, velocity, minFling))
@@ -913,7 +985,7 @@ internal fun ChatScreen(
                     onOpened = { settlePage(0f) },
                     onOpenConversation = onOpenConversation,
                     onOpenSettings = onOpenSettings,
-                    currentPath = state.sessionFile,
+                    currentPath = currentPath,
                 )
             }
         }
@@ -926,7 +998,7 @@ internal fun ChatScreen(
                     // The card travels exactly the drawer's width, so its leading edge
                     // lands on the panel's: the reveal is the same distance the page
                     // moved, which is what makes the pair read as one gesture.
-                    translationX = drawerOffset
+                    translationX = drawer.offset
                     val scale = 1f - CHAT_SHRINK * drawerPos
                     scaleX = scale
                     scaleY = scale
@@ -951,10 +1023,10 @@ internal fun ChatScreen(
                 // dissolve into the conversation list instead of into the page.
                 .background(MiuixTheme.colorScheme.surface)
                 .pageDrag(
-                    width = drawerWidth,
+                    width = drawer.width,
                     onStart = {
-                        drawerJob?.cancel()
-                        historyReachable = true
+                        drawer.job?.cancel()
+                        drawer.reachable = true
                         // The drawer takes the screen, so the composer gives up the
                         // keyboard on the first frame of the gesture: a keyboard that
                         // stayed up would resize the page the drawer is sliding over, and
@@ -971,8 +1043,8 @@ internal fun ChatScreen(
                     // A leftward drag with the drawer shut moves it by nothing: the clamp
                     // at zero is the whole of that answer.
                     onDrag = { delta ->
-                        drawerOffset =
-                            (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
+                        drawer.offset =
+                            (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
                     },
                     onRelease = { distance, velocity, minFling ->
                         settlePage(commitPage(distance, velocity, minFling))
@@ -1016,7 +1088,7 @@ internal fun ChatScreen(
                     showPromptExtras = true
                 },
                 onOpenSessions = {
-                    historyReachable = true
+                    drawer.reachable = true
                     settlePage(1f)
                 },
                 onNewSession = ::newSession,
@@ -1079,16 +1151,16 @@ internal fun ChatScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer { translationX = drawerOffset }
-                    .pointerInput(drawerWidth) {
+                    .graphicsLayer { translationX = drawer.offset }
+                    .pointerInput(drawer.width) {
                         detectTapGestures { settlePage(0f) }
                     }
                     .pageDrag(
-                        width = drawerWidth,
-                        onStart = { drawerJob?.cancel() },
+                        width = drawer.width,
+                        onStart = { drawer.job?.cancel() },
                         onDrag = { delta ->
-                            drawerOffset =
-                                (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
+                            drawer.offset =
+                                (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
                         },
                         onRelease = { distance, velocity, minFling ->
                             settlePage(commitPage(distance, velocity, minFling))
@@ -3787,6 +3859,17 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
  * Both are gone with it — a message's actions belong on the message (a long press),
  * not on a control that floats under it.
  *
+ * ## Where it starts
+ *
+ * One corner radius in from the card's side on the message's own edge, not flush with
+ * it. The card is a rounded rectangle and the stamp is drawn *under* it, so a line
+ * starting at the card's left edge reads as though it begins inside the bottom-left
+ * arc — the corner cuts the imaginary column the text is on. The flat part of the
+ * bottom edge begins one [PiCorner.radius] in, and that is where the first glyph
+ * stands; on the reader's own card the same inset is taken off its trailing edge so
+ * the last glyph ends on the flat part there. The two sides are mirrored rather than
+ * padded on both, because the stamp belongs to the message's edge, not to the middle.
+ *
  * ## Why the row is the accent colour
  *
  * The timestamp is furniture a finished turn wears, next to the turn's own
@@ -3809,8 +3892,16 @@ private fun MessageMeta(
         if (item.createdAt > 0L) text.chat.messageTime(item.createdAt, now) else null
     } ?: return
 
+    // Read once from the shared radius: the stamp has to begin where the card's curved
+    // corner has ended, and that distance is the corner's own definition.
+    val flatEdge = PiCorner.radius
+    val onEnd = alignment == Alignment.End
     Row(
-        modifier = Modifier.padding(top = 2.dp),
+        modifier = Modifier.padding(
+            start = if (onEnd) 0.dp else flatEdge,
+            end = if (onEnd) flatEdge else 0.dp,
+            top = 2.dp,
+        ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

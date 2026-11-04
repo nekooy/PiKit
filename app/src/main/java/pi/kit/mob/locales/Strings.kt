@@ -1645,18 +1645,59 @@ interface Strings {
         /** The count a last restore brought back; the one-time migration notice. */
         fun packagesRestored(count: Int): String
 
-        /** Names the restore could not bring back; the note names them. */
+        /** Names the restore could not bring back; the row below it retries them. */
         fun packagesPending(count: Int): String
 
         /**
          * The image ships a newer version than the device has. Offline by
          * construction — the comparison is against the bundled
-         * `build-metadata.json` — so the note names the command that closes the
-         * gap rather than a button that would have to download anything itself.
+         * `build-metadata.json` — and the row it belongs to is the run that
+         * closes the gap through the installer, not a command to type into a
+         * terminal: an archive only becomes usable through the prefix hooks,
+         * and those hooks are the installer's.
          */
         fun packagesUpgradable(count: Int): String
-        fun packagesPendingNote(names: String): String
-        val packagesUpgradableNote: String
+
+        /**
+         * The two rows the ledger adds when it has something to report, each
+         * with its own run control. The title says what the run is; the counted
+         * subtitle says why the row appeared and that the run needs a network;
+         * the `Now` member is the button, and the `Running` one is the toast the
+         * run announces itself with.
+         */
+        val packagesUpgrade: String
+        fun packagesUpgradeSubtitle(count: Int): String
+        val packagesUpgradeNow: String
+        val packagesUpgradeRunning: String
+
+        /** What a run that closed the gap announces, as the toast the row does not carry. */
+        val packagesUpgradeDone: String
+
+        /** The sentence a failed update opens its dialog with: what is still behind. */
+        fun packagesUpgradeLeft(count: Int): String
+
+        val packagesRestore: String
+        fun packagesRestoreSubtitle(count: Int): String
+        val packagesRestoreNow: String
+        val packagesRestoreRunning: String
+
+        /** What a restore that put everything back announces. */
+        val packagesRestoreDone: String
+
+        /** The sentence a failed restore opens its dialog with; the names are its lines. */
+        fun packagesRestoreLeft(count: Int): String
+
+        /**
+         * The sentence a run that never came back — an exception, a timeout, a
+         * killed child — puts in its dialog, with the log's last lines under it.
+         * One sentence for both runs: whatever the failure was, the reader is
+         * being pointed at the same block.
+         */
+        val packagesRunIncomplete: String
+
+        /** The two dialogs' titles; the sentence under each is the run's own. */
+        val packagesUpgradeFailed: String
+        val packagesRestoreFailed: String
 
         /**
          * Re-extracts the runtime from the APK — the escape hatch the
