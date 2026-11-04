@@ -600,13 +600,32 @@ class PiHost private constructor(context: Context) {
         }
     }
 
-    /** Conversations waiting out the grace period before their agent is stopped. */
-    private val pendingStops = mutableMapOf<PiAgentSession, kotlinx.coroutines.Job>()
+    /**
+     * Conversations waiting out the grace period before their agent is stopped.
+     *
+     * `by lazy` rather than a plain field: the sweep runs from this class's `init`, which
+     * can reach this map before the field's own initialiser has run — measured as a
+     * `NullPointerException` on `Map.remove` inside `stopIdleAgents` on the first
+     * `sessions` emission after a restart with saved conversations.
+     */
+    private val pendingStops by lazy { mutableMapOf<PiAgentSession, kotlinx.coroutines.Job>() }
 
     private fun stopIdleAgents() {
         val active = _active.value
+        // The two most recently used idle conversations stay warm even past the grace.
+        // The report that produced this is "switching to a conversation takes several
+        // seconds": every switch used to be a relaunch, because the sweep stopped every
+        // conversation that was not on screen. Keeping a couple costs two children and
+        // makes the two switches a reader actually makes — to the last conversation and
+        // back — instant, which is what the grace period alone could not do.
+        val warm = _sessions.value
+            .filter { it !== active && !it.streaming.value && it.agent.value is AgentStatus.Running }
+            .sortedByDescending { it.lastUsedAt }
+            .take(WARM_IDLE)
+            .toSet()
         _sessions.value.forEach { idle ->
             val idleNow = idle !== active &&
+                idle !in warm &&
                 !idle.streaming.value &&
                 idle.agent.value is AgentStatus.Running
             if (!idleNow) {
@@ -849,6 +868,9 @@ class PiHost private constructor(context: Context) {
          * holding a gigabyte of Node processes for conversations nobody is reading.
          */
         private const val IDLE_GRACE_MILLIS = 90_000L
+
+        /** How many idle conversations keep their child warm regardless of the grace. */
+        private const val WARM_IDLE = 2
 
         private const val KEY_CATALOGUE_DUE_AT = "due_at"
 
