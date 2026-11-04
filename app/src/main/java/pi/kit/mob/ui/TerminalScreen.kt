@@ -6,6 +6,7 @@ import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -349,6 +350,19 @@ fun TerminalScreen(session: PiAgentSession,
             }
         },
     ) { padding ->
+        // The app's own keyboard is a panel of keys, so back closes it rather than the
+        // page: it is the thing on top of the page, and the same rule every sheet and
+        // the drawer follow. Registered here, inside the page's body, so it is composed
+        // after `PiPage`'s own handler and wins (the dispatcher runs the most recently
+        // added enabled callback first). It also clears `imeSuppressed`, or the
+        // terminal would keep refusing to raise the IME after the panel was dismissed
+        // by a gesture rather than by its own button.
+        if (keyboardPanel) {
+            BackHandler {
+                keyboardPanel = false
+                holders.imeSuppressed = false
+            }
+        }
         // The scaffold's padding is the bar's height at the top; its bottom is zero, because
         // the key bar below paints the navigation strip as its own bottom padding. The column
         // therefore reaches the window's last pixel without the terminal growing: the strip
@@ -1734,7 +1748,18 @@ private class TerminalHolders {
             manager?.showSoftInput(terminal, InputMethodManager.SHOW_IMPLICIT)
         }
 
-        override fun shouldBackButtonBeMappedToEscape(): Boolean = true
+        // **False, unlike Termux's own default.** In Termux the back key is the
+        // hardware escape key a phone does not have, so it is offered as one. This
+        // app is page-based and has both an ESC key on the bar and a back arrow in
+        // the page bar, which leaves back with exactly one meaning — leave the page —
+        // and the mapped escape broke it: `TerminalView.onKeyPreIme` consumed the key
+        // and wrote `\e` into the shell, so the gesture never reached `PiPage`'s
+        // `BackHandler`. Measured on the emulator: two back presses on a fresh shell
+        // left the page where it was and produced `Display all 491 possibilities?`
+        // after the banner, because readline binds `ESC ESC` to `complete` and the
+        // prompt was empty. A gesture that types into the thing it was meant to leave
+        // is the bug this line removes; Escape stays available on the bar.
+        override fun shouldBackButtonBeMappedToEscape(): Boolean = false
 
         override fun shouldEnforceCharBasedInput(): Boolean = true
 
