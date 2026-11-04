@@ -663,17 +663,20 @@ private fun ChatTab(
     val text = strings
     val toasts = LocalPiToast.current
     val scope = rememberCoroutineScope()
-    // The session file a drawer tap asked for, kept until the conversation on screen
-    // reports a file of its own.
+    // The session file a drawer tap asked for, until the conversation on screen reports
+    // a file of its own.
     //
     // A saved conversation is opened from disk in the same event, so the state normally
     // carries its path on the next frame. It does not always: a file the transcript
     // reader cannot parse leaves the conversation's state empty until the agent starts
-    // and adopts the path, and the drawer then drew the chosen row without its fill for
-    // that interval — the "灰色背景消失一下然后出现" on a quick swipe back into the list.
-    // Remembered here rather than in the drawer because the drawer is re-created by the
-    // same switch, and cleared as soon as the state names a file so a genuinely new
-    // conversation cannot inherit a highlight.
+    // and adopts the path, and the drawer would draw the chosen row without its fill for
+    // that interval. (The other reason the fill used to blink — a launch handshake
+    // naming the fresh file pi opens for itself before the restore switches back — is
+    // fixed where it happens, in `sessionFileAfterHandshake`; the drawer's file is not
+    // allowed to disagree with the transcript on screen.) Remembered here rather than in
+    // the drawer because the drawer is re-created by the same switch, and cleared as soon
+    // as the state names a file so a genuinely new conversation cannot inherit a
+    // highlight.
     var openedPath by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(state.sessionFile) {
         if (state.sessionFile != null) openedPath = null

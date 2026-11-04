@@ -71,6 +71,18 @@ is pure (`sessionRestoreTarget`) and pinned by `SessionRestoreTest`: a remembere
 only when the file still exists and is not already the one pi opened. A deleted file is
 cleared rather than chased.
 
+**The file the state names is the one on screen, even while the switch is in flight.** The
+handshake folds `get_state` — including the fresh `sessionFile` — a moment before the
+`switch_session` above lands, and for that moment the conversation's state named a file no
+drawer row has. The drawer marks its current row by that path, so a reader who opened a
+conversation and swiped back into the list before pi finished starting lost the row's fill
+and got it back: the "灰色背景消失一下然后出现" report, one frame of it caught on a 175 ms
+screencap cadence. `sessionFileAfterHandshake` is the rule that fixes it — while a restore
+is pending the file the page is already showing wins, and the switch's own `get_state`
+writes the name once it has landed. `SessionRestoreTest` pins the three cases: a pending
+restore keeps the shown file, a launch with nothing to restore follows pi's report, and a
+restore that was not needed (pi opened the very file that was wanted) follows it too.
+
 Two neighbours of that rule matter for the same report:
 
 - **A partial wake lock for the length of one turn** (`agent_start` → `agent_settled`).

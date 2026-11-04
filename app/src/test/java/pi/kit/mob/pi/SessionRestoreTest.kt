@@ -89,4 +89,56 @@ class SessionRestoreTest {
         assertTrue(shouldRestoreRememberedSession(openNewOnColdStart = true, coldStart = false))
         assertTrue(shouldRestoreRememberedSession(openNewOnColdStart = false, coldStart = false))
     }
+
+    @Test
+    fun `a pending restore keeps the file the drawer is marking`() {
+        // The handshake names the file pi opened for itself; the row the reader tapped
+        // names the one on screen. Keeping pi's name for the length of the switch is
+        // what made the row's fill disappear and come back.
+        assertEquals(
+            "/sessions/a.jsonl",
+            sessionFileAfterHandshake(
+                shown = "/sessions/a.jsonl",
+                reported = "/sessions/brand-new.jsonl",
+                restoring = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `a launch with nothing to restore follows pi's own session`() {
+        assertEquals(
+            "/sessions/brand-new.jsonl",
+            sessionFileAfterHandshake(
+                shown = "/sessions/a.jsonl",
+                reported = "/sessions/brand-new.jsonl",
+                restoring = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `a restore pi did not need to make still follows the handshake`() {
+        // `sessionRestoreTarget` answers null when pi opened the very file that was
+        // wanted; there is no switch in flight and the handshake is the truth.
+        assertEquals(
+            "/sessions/a.jsonl",
+            sessionFileAfterHandshake(
+                shown = "/sessions/a.jsonl",
+                reported = "/sessions/a.jsonl",
+                restoring = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `a first conversation has no shown file to keep`() {
+        assertNull(
+            sessionFileAfterHandshake(
+                shown = null,
+                reported = "/sessions/brand-new.jsonl",
+                restoring = true,
+            ),
+        )
+    }
 }

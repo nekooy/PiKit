@@ -627,12 +627,33 @@ class PiAgentSession internal constructor(
             // use and sits on "Loading model…" forever.
             val sessionState = newClient.handshake()
             logSessionState("handshake", sessionState)
-            _conversation.update { ConversationReducer.reduce(it, sessionState) }
+            // Which session the launch binds to is decided *before* the handshake is
+            // folded in, because the answer changes what the fold may write. Every
+            // `pi --mode rpc` launch opens a new session file, so the handshake names a
+            // file the reader has never seen even when this process was started for a
+            // saved conversation; [restoreAfterLaunch] switches pi back to that file a
+            // moment later. Folding the fresh name in the meantime made the drawer lose
+            // the row it marks as current for the length of the switch — the
+            // "选中的灰色背景消失一下然后出现" report, measured on the emulator as one
+            // frame in six at 175 ms a frame on a quick swipe back into the list.
+            val opened = (sessionState.data as? JsonObject)?.str("sessionFile")
+            val restoreTargetPath = restoreTargetFor(opened)
+            val shown = _conversation.value.sessionFile
+            _conversation.update { state ->
+                val reduced = ConversationReducer.reduce(state, sessionState)
+                reduced.copy(
+                    sessionFile = sessionFileAfterHandshake(
+                        shown = shown,
+                        reported = reduced.sessionFile,
+                        restoring = restoreTargetPath != null,
+                    ),
+                )
+            }
             // Every `pi --mode rpc` launch opens a *new* session file. Without
             // this the UI kept the previous transcript on screen while every
             // prompt after a restart landed in that fresh file — the report of
             // "同一界面，但是实际上已经新开了对话". See [restoreAfterLaunch].
-            restoreAfterLaunch()
+            restoreAfterLaunch(opened, restoreTargetPath)
 
             _agent.value = AgentStatus.Running
             // The foreground service is what keeps this process alive while the
@@ -1263,28 +1284,21 @@ class PiAgentSession internal constructor(
     }
 
     /**
-     * Rebinds a freshly launched agent to the conversation it belongs to.
+     * The saved conversation this launch has to rebind to, or null to keep the session
+     * pi opened for itself.
      *
-     * ## Why this exists
-     *
-     * pi has no resume flag: every `pi --mode rpc` launch opens a **new** session
-     * file. The handshake only folds `get_state` into the conversation — including
-     * that new `sessionFile` — while `items` and `turns` from the previous process
-     * stay on screen. The reader therefore saw their conversation and typed into a
-     * different one. Measured as the report: after 切后台/锁屏 and a few failed
-     * retries, the next message "在同一界面" started a new conversation.
-     *
-     * ## Which conversation this one is
+     * This is [restoreAfterLaunch]'s first half, split out because its answer is needed
+     * *before* the handshake is folded into the conversation: while a switch is pending
+     * the state's session file has to stay the one on screen — see
+     * [sessionFileAfterHandshake].
      *
      * Three answers, in order: the file this conversation is already bound to (a
      * restart, or the history row it was opened from), then — only for the first
      * conversation of a cold start — the file the last run was in, and otherwise the
      * fresh session pi just opened. [sessionRestoreTarget] is the pure rule.
      */
-    private suspend fun restoreAfterLaunch() {
-        val live = client ?: return
+    private fun restoreTargetFor(opened: String?): String? {
         val coldStart = coldStartRestore.getAndSet(false)
-        val opened = _conversation.value.sessionFile
         val wanted = restoreTarget ?: if (coldStart && restoresRememberedSession) {
             if (shouldRestoreRememberedSession(
                     openNewOnColdStart = settingsStore.read().openNewOnLaunch,
@@ -1299,10 +1313,31 @@ class PiAgentSession internal constructor(
             null
         }
         val target = sessionRestoreTarget(wanted, opened) { File(it).isFile }
+        // A remembered path whose file is gone is a stale key: clear it so the next
+        // launch does not chase a deleted conversation.
+        if (wanted != null && !File(wanted).isFile) restoreTarget = null
+        return target
+    }
+
+    /**
+     * Rebinds a freshly launched agent to the conversation it belongs to.
+     *
+     * ## Why this exists
+     *
+     * pi has no resume flag: every `pi --mode rpc` launch opens a **new** session
+     * file, and the handshake folds `get_state` into the conversation — including that
+     * new `sessionFile` — while `items` and `turns` from the previous process stay on
+     * screen. The reader therefore saw their conversation and typed into a different
+     * one. Measured as the report: after 切后台/锁屏 and a few failed retries, the next
+     * message "在同一界面" started a new conversation.
+     *
+     * [opened] and [target] are [restoreTargetFor]'s answer, passed in rather than
+     * derived here so the fold that happens between the two calls knows whether a
+     * switch is coming.
+     */
+    private suspend fun restoreAfterLaunch(opened: String?, target: String?) {
+        val live = client ?: return
         if (target == null) {
-            // A remembered path whose file is gone is a stale key: clear it so the next
-            // launch does not chase a deleted conversation.
-            if (wanted != null && !File(wanted).isFile) restoreTarget = null
             adoptSessionPath(opened)
             if (_conversation.value.items.isEmpty() && opened != null) {
                 loadCurrentMessages(live)
@@ -3783,6 +3818,29 @@ internal fun shouldRestoreRememberedSession(
     openNewOnColdStart: Boolean,
     coldStart: Boolean,
 ): Boolean = !(openNewOnColdStart && coldStart)
+
+/**
+ * The session file a conversation is in once a launch handshake has been folded in.
+ *
+ * A launch handshake answers with the file **pi opened for itself**, which is not the
+ * conversation on screen when the process was started for a saved one: the restore
+ * switches pi back to that file a moment later. Writing the fresh name into
+ * [ConversationState.sessionFile] in the meantime makes the file — and therefore the
+ * row a drawer marks as current — disagree with the transcript the page is showing, so
+ * the row the reader just opened loses its fill for the length of the switch and gets
+ * it back: the "选中的灰色背景消失一下然后出现" report. While a restore is pending the
+ * file already on screen is the answer; the switch's own `get_state` writes the name
+ * once it has landed.
+ *
+ * Pure so the rule is pinned by a test: it is the difference between a blink and no
+ * blink, and it cannot be measured from a screenshot without the drawer open at the
+ * moment a pi process finishes starting.
+ */
+internal fun sessionFileAfterHandshake(
+    shown: String?,
+    reported: String?,
+    restoring: Boolean,
+): String? = if (restoring) shown else reported
 
 /**
  * The session an agent launch should rebind to, or null to keep the one pi opened.
