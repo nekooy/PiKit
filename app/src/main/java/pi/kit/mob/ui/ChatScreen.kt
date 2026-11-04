@@ -88,6 +88,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -95,8 +96,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -270,7 +271,7 @@ internal data class PendingImage(
 )
 
 /**
- * Everything the chat page owns that has to survive a tab switch.
+ * Everything the chat page owns that has to survive a switch to another destination.
  *
  * ## Why this is not `remember`ed inside the page
  *
@@ -288,12 +289,12 @@ internal data class PendingImage(
  * in [RootContent], above the crossfade, and only its *readers* come and go.
  *
  * The page's own dialogs (`showSessions`, `confirmNewSession`) deliberately stay in the
- * page: they are modal over content that is not on screen any more, so a tab switch is a
+ * page: they are modal over content that is not on screen any more, so a page switch is a
  * reasonable way to answer them.
  *
  * `listState` is the transcript's scroll position and the anchor for the follow rule.
  * [ChatScreen] hands it to `rememberFollowTail`, which is remembered per composition — so
- * the scroll offset survives a tab switch and the follow rule's own "did the reader scroll
+ * the scroll offset survives a page switch and the follow rule's own "did the reader scroll
  * away" flag does not. That is the safe half of the pair: a switched-back-to chat page that
  * starts out following the answer is the behaviour the user asked for by looking at the
  * chat tab again.
@@ -310,6 +311,17 @@ internal class ChatComposerState {
 
     /** The transcript's scroll position. */
     val listState = LazyListState()
+
+    /**
+     * Whether this conversation's transcript has been placed at its end before its
+     * first draw.
+     *
+     * Per conversation rather than per page, because the page is rebuilt when the
+     * reader comes back from the terminal while the list state — and the position the
+     * reader left it at — survives. A page-local flag would put a scrolled-up
+     * conversation back at its end on every return.
+     */
+    val transcriptPlaced = mutableStateOf(false)
 }
 
 /** Creates the one [ChatComposerState] per app run, in the scope that outlives the tabs. */
@@ -392,7 +404,7 @@ internal fun ChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val toasts = LocalPiToast.current
-    // Owned by `RootContent`, above the tab crossfade, so a tab switch does not destroy
+    // Owned by `RootContent`, above the page crossfade, so a page switch does not destroy
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
     val listState = composer.listState
@@ -837,7 +849,7 @@ internal fun ChatScreen(
             .onSizeChanged {
                 val was = drawerWidth
                 pageWidth = it.width
-                // Capped as well as shared out: on a tablet a panel of 86% of the window
+                // Capped as well as shared out: on a tablet a panel of 79% of the window
                 // is a page, and a drawer that covers the conversation is not a drawer.
                 drawerWidth = minOf(
                     (it.width * DRAWER_SHARE).roundToInt(),
@@ -975,6 +987,7 @@ internal fun ChatScreen(
                 text = text,
                 rows = rows,
                 listState = listState,
+                transcriptPlaced = composer.transcriptPlaced,
                 follow = follow,
                 programmatic = programmatic,
                 expandedTurns = expandedTurns,
@@ -1439,6 +1452,8 @@ private fun ChatPage(
     scaffoldBottom: Int,
     rows: List<TranscriptRow>,
     listState: LazyListState,
+    /** Whether the transcript has been put at its end for this conversation. */
+    transcriptPlaced: MutableState<Boolean>,
     follow: FollowTailController,
     programmatic: MutableState<Boolean>,
     expandedTurns: Set<Int>,
@@ -1543,8 +1558,8 @@ private fun ChatPage(
 
     // One scroll position belongs to one conversation.
     //
-    // The state is hoisted above the tab crossfade (`ChatComposerState`), so the offset
-    // survives a tab switch — which is what it is for. It also survived the *conversation*
+    // The state is hoisted above the page crossfade (`ChatComposerState`), so the offset
+    // survives a page switch — which is what it is for. It also survived the *conversation*
     // changing, and that is not the same thing: a new conversation inherited the previous
     // one's first visible index, and every question about the list answered from a
     // position that no longer existed. `canScrollForward` was the visible half — the
@@ -1559,6 +1574,39 @@ private fun ChatPage(
         // item 0 as well put the reader at the top of the conversation a frame later —
         // the "点开历史消息，闪一下又回到顶部" report.
         if (state.items.isEmpty()) listState.scrollToItem(0)
+    }
+
+    // A transcript that arrives with messages opens at its **end**, before it is ever
+    // measured.
+    //
+    // The follow effect above is a coroutine: it runs after composition, and the list is
+    // laid out for the first time between the two — so a conversation opened from the
+    // history list drew its first question for one frame and replaced it with the last
+    // answer on the next. How long that frame lasts is the first layout of the whole
+    // transcript (every row measured, every formula's drawable attached), which is why
+    // the flash was long on the conversations worth opening and why opening one while
+    // the drawer was already sliding over it made it obvious. `requestScrollToItem`
+    // records the position and is applied by the next measure pass, so the frame that
+    // first draws the list already draws its end. It is a pre-measure request rather
+    // than a scroll, which is also why there is no animation to stand aside from.
+    //
+    // Once per conversation: the list state outlives the page (a look at the terminal
+    // disposes the page and not the state), and a reader who had scrolled up comes back
+    // to where they were rather than being put back at the tail.
+    if (!transcriptPlaced.value && cards.isNotEmpty()) {
+        SideEffect {
+            transcriptPlaced.value = true
+            listState.requestScrollToItem(
+                index = cards.lastIndex,
+                // Past the last card on purpose: the list clamps the request to its own
+                // furthest scroll position, and that is the one thing this code cannot
+                // compute — the end of the content is the last card's height plus its
+                // bottom padding, and neither is known before the first measure. A
+                // request for the last card's *top* would draw that card at the top and
+                // leave the rest below the fold, which is the jump this exists to avoid.
+                scrollOffset = TRANSCRIPT_END_REQUEST,
+            )
+        }
     }
 
     // The composer band's insets: the objects here, their heights inside the layout
@@ -2137,8 +2185,15 @@ private fun ChatPage(
                             )
                         }
                     }
-                    .bandBottom(imeInsets, barInsets, scaffoldBottom)
-                    .onSizeChanged { bottomStackPx = it.height },
+                    // **Before the inset, like the draw.** A modifier declared after
+                    // `bandBottom` sees the *content* node, so the height it published
+                    // was the band's body without the gesture strip — measured, 95 px
+                    // short on the 1080 px emulator. The jump-to-latest button then sat
+                    // 95 px lower than the band's top, its disc half hidden behind the
+                    // chip row, and the transcript's tail padded by 95 px too little.
+                    // Declared here, it spans content and inset together.
+                    .onSizeChanged { bottomStackPx = it.height }
+                    .bandBottom(imeInsets, barInsets, scaffoldBottom),
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
             if (failure != null) {
@@ -3218,17 +3273,18 @@ private const val PAGE_SLIDE_MILLIS = 220
  * The drawer's width, as a share of the screen.
  *
  * The reference drawing leaves a strip of the conversation visible down the trailing
- * edge — about a seventh of the screen — and that strip is the whole reason the panel
- * reads as a layer rather than as a page: a drawer that covered the screen would be a
- * second screen. 0.86 is the same share the prompt bubble's cap uses, so the two
- * decisions agree about how much of a page is "most of it".
+ * edge — about a fifth of the screen at this share — and that strip is the whole reason
+ * the panel reads as a layer rather than as a page: a drawer that covered the screen would
+ * be a second screen. It was 0.86 when the drawer was first drawn; the wider strip is
+ * deliberate, because the card's rounded edge and its shadow need to fit in the part of it
+ * the reader can see. The prompt bubble's own cap is unrelated (0.86) and stays.
  */
 private const val DRAWER_SHARE = 0.79f
 
 /**
  * The widest the drawer gets, whatever the window is.
  *
- * A phone at 1080px lands at 930px, well under this. A tablet would not: 86% of a
+ * A phone at 1080px lands at 853px, well under this. A tablet would not: 79% of a
  * 1600dp window is a page, and a drawer that covers the conversation stops being a drawer.
  * 420dp is the width of a comfortable reading column, which is what a list of titles is.
  */
@@ -3259,13 +3315,23 @@ private val PAGE_CARD_LIFT = 20.dp
  * The composer band's bottom inset. The surface that fills it is the band's own
  * background (see `ChatPage`), which spans this padding as well as the content.
  *
- * Two airs, because the two edges are not the same edge: above a keyboard the reader wants
- * the field *close* to the keys (10dp), and above the window's own bottom the gesture strip
- * already provides most of the gap (15dp on top of it). The keyboard's is smaller on
- * purpose — a keyboard is a wall the field should nearly touch, a gesture strip is not.
+ * **One air, not two.** The band adds [BAND_AIR] above whichever edge is lowest — the
+ * keyboard, the navigation strip, or the inset the root consumed before handing the page
+ * its rectangle — and the same number on both edges. The first design had a smaller air
+ * above a keyboard (10dp) than above the gesture strip (15dp), and the difference was a
+ * hop at the end of every close: the band followed the keyboard's inset to zero and then
+ * moved another 5dp as the air changed. The height is derived from the window's *safe*
+ * edge rather than from any layout above it, so the number the band is drawn at and the
+ * number the transcript's tail reserves are one measurement.
  *
  * Both inset heights are read **in the measure pass**: a window in `adjustResize` mode
  * reports no bottom inset at all, so in that mode the air *is* the whole gap.
+ *
+ * The declaration order at the call site is load-bearing: `onSizeChanged` must sit
+ * *outside* this modifier to see the padding it adds. Inside, it publishes the content's
+ * height, and the page pads its transcript's tail and lifts the jump-to-latest control by
+ * that number — measured, 95 px of under-count at this density, which put the disc behind
+ * the chip row. See §7.1.
  */
 private fun Modifier.bandBottom(
     ime: WindowInsets,
@@ -5110,6 +5176,19 @@ private val REASONING_ANSWER_GAP = 5.dp
 private val TRANSCRIPT_TAIL_SPACE = 26.dp
 
 /**
+ * How far past the last card a first frame asks to be scrolled, in pixels.
+ *
+ * `requestScrollToItem` takes a pixel offset into the item it names, and the truthful
+ * offset — the one that puts the content's end on the viewport's end — needs the last
+ * card's height and the list's bottom padding, neither of which exists before the first
+ * measure. A request past the end is clamped to the list's own furthest position, so the
+ * number only has to be larger than any transcript: 100,000 px is ~38,000dp, three
+ * hundred screens of a 26sp line. It is not an offset the list can honour, which is the
+ * point.
+ */
+private const val TRANSCRIPT_END_REQUEST = 100_000
+
+/**
  * How full the context window is, as the number the ring draws and its tooltip states.
  *
  * A percentage only. Integer division, so 99.6% does not read as "full" a message
@@ -5884,7 +5963,7 @@ internal class BuiltInCommand(
  * - `/model` opens the model picker instead of switching to a model the user has
  *   not chosen.
  * - `/clear` empties the composer. It is the only *local* command in the list, and
- *   it earns its row: the field keeps its draft across a tab switch and there was
+ *   it earns its row: the field keeps its draft across a page switch and there was
  *   no way to throw one away except by selecting all of it and deleting.
  *
  * What is deliberately not here. `/steer` and `/follow-up` need message text, which
