@@ -93,12 +93,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -122,6 +126,7 @@ import androidx.compose.ui.platform.Clipboard
 import kotlinx.coroutines.CoroutineScope
 import pi.kit.mob.ui.kit.PiToast
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -372,6 +377,8 @@ internal fun ChatScreen(
     onNewConversation: () -> Unit,
     /** Whether the conversation drawer is out; owned by `RootContent`. */
     historyOpen: Boolean,
+    /** The drawer's own scroll position, held by the root so a conversation change keeps it. */
+    historyListState: LazyListState,
     onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -855,8 +862,14 @@ internal fun ChatScreen(
                     // halves of the gesture are visible. A panel that merely sat still
                     // was a reveal, not a slide, and the reference is explicit about
                     // which it is.
-                    .offset { IntOffset(((-1f + drawerPos) * drawerWidth).roundToInt(), 0) }
+                    // A *layer* translation, not a layout offset: the panel holds the
+                    // whole conversation list, and `Modifier.offset` re-laid-out all of it
+                    // on every frame of the drag. Measured on the emulator, the drawer's
+                    // open/close animation was 90-100% janky frames; a graphics layer only
+                    // moves what was already rasterised.
+                    .graphicsLayer { translationX = (-1f + drawerPos) * drawerWidth }
                     .background(MiuixTheme.colorScheme.surface)
+
                     // The way out, from the page the drawer is next to as well as from the
                     // conversation: once the panel is out, its own width is where the
                     // thumb is, and dragging it left is the same gesture that closes it.
@@ -874,6 +887,7 @@ internal fun ChatScreen(
             ) {
                 SessionsScreen(
                     session = session,
+                    listState = historyListState,
                     onBack = { settlePage(0f) },
                     onOpened = { settlePage(0f) },
                     onOpenConversation = onOpenConversation,
@@ -896,11 +910,10 @@ internal fun ChatScreen(
                     scaleX = scale
                     scaleY = scale
                     transformOrigin = TransformOrigin(0.5f, 0.5f)
-                    // Rounded and lifted only while it is a card. At rest the page is the
-                    // window, and a corner radius there would cut the screen.
+                    // Rounded only while it is a card. At rest the page is the window,
+                    // and a corner radius there would cut the screen.
                     shape = RoundedCornerShape(PAGE_CARD_CORNER)
                     clip = drawerPos > 0f
-                    shadowElevation = 6.dp.toPx() * drawerPos
                 }
                 // After the layer, so the fill travels with the card. Before it, the
                 // background is painted at the layer's *untranslated* position: measured
@@ -1025,6 +1038,35 @@ internal fun ChatScreen(
             )
         }
 
+        // The depth between the two layers, drawn over both: an elevation shadow leans
+        // away from the light, so its underside is darker (the report was "the shadow
+        // between the pages is deeper at the bottom"), and a shadow drawn under the card
+        // would be hidden by the card's own surface. This is a horizontal gradient
+        // anchored at the card's edge — the same from top to bottom by construction, and
+        // it travels with the card because the card's edge is what it is drawn at.
+        if (drawerPos > 0f) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawBehind {
+                        val edge = drawerOffset
+                        val width = SEAM_SHADOW_WIDTH.toPx() * drawerPos
+                        if (width > 0f) {
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    0f to Color.Transparent,
+                                    1f to Color.Black.copy(alpha = SEAM_SHADOW_ALPHA * drawerPos),
+                                    startX = edge,
+                                    endX = edge + width,
+                                ),
+                                topLeft = Offset(edge, 0f),
+                                size = Size(width, size.height),
+                            )
+                        }
+                    },
+            )
+        }
+
         // The card's own surface takes every touch while it is out — a tap on it closes
         // the drawer, and a leftward drag is the same gesture that closes it. Composed
         // over the card and starting where the card does, so the panel beside it keeps its
@@ -1033,7 +1075,7 @@ internal fun ChatScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(drawerOffset.roundToInt(), 0) }
+                    .graphicsLayer { translationX = drawerOffset }
                     .pointerInput(drawerWidth) {
                         detectTapGestures { settlePage(0f) }
                     }
@@ -1303,7 +1345,9 @@ private fun HeaderMark(
             imageVector = glyph,
             contentDescription = description,
             tint = MiuixTheme.colorScheme.onSurface,
-            modifier = Modifier.size(22.dp),
+            // 18dp in a 38dp capsule, the same proportion the 22dp glyph had in 48: the
+            // capsules shrank to the reference's size and the marks shrank with them.
+            modifier = Modifier.size(18.dp),
         )
     }
 }
@@ -1389,7 +1433,7 @@ private const val FADE_SOLID = 0.80f
 private val FADE_TAIL = 96.dp
 
 /** One mark's box in the header, capsule and glyph alike. */
-private val HEADER_MARK_SIZE = 48.dp
+private val HEADER_MARK_SIZE = 38.dp
 
 /** How long a first back press stays armed. */
 private const val EXIT_ARM_MILLIS = 2000L
@@ -1527,6 +1571,11 @@ private fun ChatPage(
     var menuCardKey by remember { mutableStateOf<String?>(null) }
     var menuMessages by remember { mutableIntStateOf(0) }
     var selectionKey by remember { mutableStateOf<String?>(null) }
+    // Where the finger was, in window coordinates: the menu opens *there*, not at the
+    // corner of the card and not at the bottom of the screen.
+    var menuAt by remember { mutableStateOf(Offset.Zero) }
+    // The message whose Markdown source is open in the reader sheet.
+    var sourceFor by remember { mutableStateOf<ChatItem?>(null) }
     ExitBackHandler()
     // The message menu's actions live at the page; the menu itself is emitted at the
     // message (see the transcript's item scope), because a menu belongs where the finger
@@ -1534,6 +1583,99 @@ private fun ChatPage(
     val messageClipboard = LocalClipboard.current
     val messageToasts = LocalPiToast.current
     val messageScope = rememberCoroutineScope()
+
+    // The message menu: a small panel at the finger, dismissed by a tap anywhere else.
+    val menuDensity = LocalDensity.current
+    val menuWidthPx = with(menuDensity) { MENU_WIDTH.roundToPx() }
+    val menuMarginPx = with(menuDensity) { 12.dp.roundToPx() }
+    val screenWidthPx = with(menuDensity) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
+    val menuTarget = menuFor
+    if (menuTarget != null) {
+        Popup(
+            alignment = Alignment.TopStart,
+            // Kept off the screen's edges: a menu that opens under a thumb at the right
+            // edge would have half of itself outside the window.
+            offset = IntOffset(
+                // Kept a margin clear of the window's edges: a menu opened with a thumb
+                // near the right edge would otherwise draw half of itself outside.
+                menuAt.x.roundToInt().coerceIn(
+                    menuMarginPx,
+                    (screenWidthPx - menuWidthPx - menuMarginPx).coerceAtLeast(menuMarginPx),
+                ),
+                menuAt.y.roundToInt(),
+            ),
+            onDismissRequest = { menuFor = null },
+            properties = PopupProperties(focusable = true),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(PiCorner.radius),
+                color = MiuixTheme.colorScheme.surfaceContainer,
+                modifier = Modifier
+                    .width(MENU_WIDTH)
+                    .glassLift(RoundedCornerShape(PiCorner.radius), 10.dp),
+            ) {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    MessageAction(text.chat.copyMessage, icon = MiuixIcons.Copy) {
+                        menuFor = null
+                        messageScope.launch {
+                            messageClipboard.setClipEntry(clipEntryFor(itemSource(menuTarget)))
+                        }
+                    }
+                    MessageAction(text.chat.selectText, painter = painterResource(R.drawable.ic_text_cursor)) {
+                        menuFor = null
+                        sourceFor = menuTarget
+                    }
+                    if (!state.isStreaming && menuMessages > 0) {
+                        MessageAction(text.chat.fork, icon = MiuixIcons.Share) {
+                            menuFor = null
+                            val path = session.forkAt(menuMessages)
+                            val opened = path?.let {
+                                session.host.openConversation(it, currentWorkspace)
+                            }
+                            if (opened == null) messageToasts?.show(text.chat.forkFailed)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The Markdown source of the message, in a sheet of its own: what the reader asked
+    // for when they chose "select text" is the *text*, not a selection mode they then have
+    // to discover. Everything here is selectable and copyable without a second gesture.
+    val sourceItem = sourceFor
+    PiSheet(
+        show = sourceItem != null,
+        title = text.chat.selectText,
+        onDismiss = { sourceFor = null },
+    ) {
+        if (sourceItem != null) {
+            val source = itemSource(sourceItem)
+            val sourceClipboard = messageClipboard
+            val sourceScope = messageScope
+            val sourceToast = messageToasts
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                SelectionContainer {
+                    Text(
+                        text = source,
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                    )
+                }
+                MessageAction(text.chat.copyMessage, icon = MiuixIcons.Copy) {
+                    sourceScope.launch {
+                        sourceClipboard.setClipEntry(clipEntryFor(source))
+                    }
+                    sourceToast?.show(text.chat.copied)
+                }
+            }
+        }
+    }
 
     // The page, and the layer its bar floats on.
     //
@@ -1769,50 +1911,24 @@ private fun ChatPage(
                                                 onShowExtras = onShowPromptExtras,
                                             )
                                         }
+                                        var origin by remember { mutableStateOf(Offset.Zero) }
                                         Box(
-                                            Modifier.pointerInput(card.key, menuTarget) {
-                                                detectTapGestures(
-                                                    onLongPress = {
-                                                        if (menuTarget != null) {
-                                                            menuFor = menuTarget
-                                                            menuCardKey = card.key
-                                                            menuMessages = counted
-                                                            selectionKey = null
-                                                        }
-                                                    },
-                                                )
-                                            },
+                                            Modifier
+                                                .onGloballyPositioned { origin = it.localToWindow(Offset.Zero) }
+                                                .pointerInput(card.key, menuTarget) {
+                                                    detectTapGestures(
+                                                        onLongPress = { press ->
+                                                            if (menuTarget != null) {
+                                                                menuFor = menuTarget
+                                                                menuCardKey = card.key
+                                                                menuMessages = counted
+                                                                menuAt = origin + press
+                                                                selectionKey = null
+                                                            }
+                                                        },
+                                                    )
+                                                },
                                         ) {
-                                            // A dropdown at the message, not a panel over the
-                                            // page: three short actions on one bubble do not
-                                            // need the whole bottom edge, and the menu lands on
-                                            // the thing it is about.
-                                            menuTarget?.let { target ->
-                                                OverlayDropdownPopup(
-                                                    entry = DropdownEntry(
-                                                        items = messageMenuItems(
-                                                            target = target,
-                                                            cardKey = card.key,
-                                                            counted = counted,
-                                                            streaming = state.isStreaming,
-                                                            text = text,
-                                                            session = session,
-                                                            workspace = currentWorkspace,
-                                                            clipboard = messageClipboard,
-                                                            scope = messageScope,
-                                                            toasts = messageToasts,
-                                                            onDismiss = { menuFor = null },
-                                                            onSelect = { key -> selectionKey = key },
-                                                        ),
-                                                    ),
-                                                    show = menuFor == target,
-                                                    onDismiss = { menuFor = null },
-                                                    onDismissFinished = {},
-                                                    maxHeight = null,
-                                                    dropdownColors = DropdownDefaults.dropdownColors(),
-                                                    renderInRootScaffold = true,
-                                                )
-                                            }
                                             // Selecting is a *mode*: the message the reader
                                             // asked to select wears the container, and the
                                             // rest of the transcript is not selectable, which
@@ -3077,10 +3193,47 @@ private val DRAWER_MAX_WIDTH = 420.dp
  * Two percent: enough to put its edges inside the window's, which is what reads as "this
  * is a card now"; not enough to be noticed as a zoom.
  */
-private const val CHAT_SHRINK = 0.02f
+private const val CHAT_SHRINK = 0.05f
 
 /** The radius the conversation is cut with while it is a card over the drawer. */
 private val PAGE_CARD_CORNER = 24.dp
+
+/** How far the seam shadow reaches from the card's edge, and how dark it is there. */
+private val SEAM_SHADOW_WIDTH = 28.dp
+private const val SEAM_SHADOW_ALPHA = 0.20f
+
+/**
+ * The composer band's bottom inset: the bigger of the keyboard and the gesture strip, plus
+ * [BAND_BOTTOM_AIR].
+ *
+ * Both heights are read **in the measure pass**. Reading them in composition would
+ * subscribe the page to every step of a keyboard animation, which is the stutter this page
+ * spent a round removing.
+ */
+private fun Modifier.bandBottom(ime: WindowInsets, bars: WindowInsets): Modifier =
+    layout { measurable, constraints ->
+        val inset = maxOf(ime.getBottom(this), bars.getBottom(this)) + BAND_BOTTOM_AIR.roundToPx()
+        val applied = if (constraints.hasBoundedHeight) {
+            inset.coerceAtMost(constraints.maxHeight)
+        } else {
+            0
+        }
+        val inner = if (applied > 0) {
+            constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - applied)
+        } else {
+            constraints
+        }
+        val placeable = measurable.measure(inner)
+        layout(placeable.width, placeable.height + applied) {
+            placeable.placeRelative(0, 0)
+        }
+    }
+
+/** The air between the composer's field and the bottom of the window, or the keyboard. */
+private val BAND_BOTTOM_AIR = 12.dp
+
+/** The message menu's width. Wide enough for "分叉出新对话" on one line. */
+private val MENU_WIDTH = 176.dp
 
 private const val PROMPT_MAX_SHARE = 0.86f
 
@@ -3527,15 +3680,35 @@ private fun MessageMeta(
  * column with a known width.
  */
 @Composable
-private fun MessageAction(label: String, onClick: () -> Unit) {
+private fun MessageAction(
+    label: String,
+    icon: ImageVector? = null,
+    painter: Painter? = null,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(PiCorner.radius))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        when {
+            icon != null -> Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MiuixTheme.colorScheme.onSurface,
+            )
+            painter != null -> Icon(
+                painter = painter,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MiuixTheme.colorScheme.onSurface,
+            )
+        }
         Text(
             text = label,
             style = MiuixTheme.textStyles.body1,

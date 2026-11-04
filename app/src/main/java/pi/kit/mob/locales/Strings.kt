@@ -199,6 +199,9 @@ interface Strings {
          */
         val messageActions: String
 
+        /** Said after a message's text has been copied from the source sheet. */
+        val copied: String
+
         /** The menu's row that enters text selection for the pressed message. */
         val selectText: String
 

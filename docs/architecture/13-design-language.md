@@ -257,8 +257,8 @@ the top: the content scrolls *under* the marks, fades out as it reaches them, an
 marks are the only opaque objects there. That is three decisions, and each was made
 because the strip version was worse:
 
-- **The marks sit in capsules of white glass** (`PiGlass.fill()`: white at 90% over a
-  light page, at 20% over a dark one) with a 5dp lift under them. The first attempt used
+- **The marks sit in capsules of white glass** (`PiGlass.fill()`: opaque white over a light
+  page, 24% white over a dark one) with a 5dp lift under them. The first attempt used
   `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong for a
   control, because the capsule then read as shading on the page instead of as an object
   above it. The reference's capsules are white in the light scheme and a faint lift off

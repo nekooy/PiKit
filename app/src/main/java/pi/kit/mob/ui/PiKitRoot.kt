@@ -24,6 +24,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
@@ -344,6 +345,11 @@ private fun RootContent(
     // back from it has to land on the list it was opened from — a drawer that closed
     // itself on the way to the settings would make every visit two taps.
     var historyOpen by remember { mutableStateOf(false) }
+    // The drawer's scroll position, held **above** the conversation key. `key(session)`
+    // rebuilds the chat page when the conversation changes, and a list state remembered
+    // inside it was recreated with it — which is why coming back to the drawer showed its
+    // top instead of the row that was tapped (measured: row 12, back on row 0).
+    val historyListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val text = strings
     // A draft, the attached images and the transcript's scroll position are per
@@ -498,6 +504,7 @@ private fun RootContent(
                     session = session,
                     agent = agent,
                     composer = composer,
+                    historyListState = historyListState,
                     historyOpen = historyOpen,
                     onHistoryOpenChange = { historyOpen = it },
                     onOpenTerminal = { destination = Destination.Terminal },
@@ -608,6 +615,7 @@ private fun ChatTab(
     composer: ChatComposerState,
     /** Whether the conversation drawer is out; owned by [RootContent] — see there. */
     historyOpen: Boolean,
+    historyListState: androidx.compose.foundation.lazy.LazyListState,
     onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -654,6 +662,7 @@ private fun ChatTab(
             onOpenConversation = open,
             onNewConversation = openNew,
             historyOpen = historyOpen,
+            historyListState = historyListState,
             onHistoryOpenChange = onHistoryOpenChange,
             onOpenTerminal = onOpenTerminal,
             onOpenFiles = onOpenFiles,

@@ -358,13 +358,13 @@ private const val DARK_BASE_LUMINANCE = 0.2f
  * panel in the light scheme. The step it leaves on the dark scheme's #242424 card
  * (#3D3D3D) is the same one, which is the point of a wash.
  */
-private const val GLASS_LIGHT_ALPHA = 0.90f
+private const val GLASS_LIGHT_ALPHA = 1f
 
 /** How dark the blurred shadow under a floating control is drawn. */
 private const val GLASS_SHADOW_ALPHA = 0.20f
 
 /** White's share of the dark scheme's floating fill. */
-private const val GLASS_DARK_ALPHA = 0.20f
+private const val GLASS_DARK_ALPHA = 0.24f
 
 private const val INSET_ALPHA = 0.10f
 

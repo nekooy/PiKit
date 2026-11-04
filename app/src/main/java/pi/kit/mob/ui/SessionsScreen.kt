@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
@@ -120,6 +121,11 @@ import java.util.Locale
 @Composable
 fun SessionsScreen(
     session: PiAgentSession,
+    /**
+     * The list's scroll position, owned by the caller: this screen is rebuilt whenever the
+     * conversation changes, and a position remembered here was rebuilt with it.
+     */
+    listState: LazyListState,
     onBack: () -> Unit,
     onOpened: () -> Unit,
     /**
@@ -503,6 +509,7 @@ fun SessionsScreen(
                         deleteUp = true
                     },
                     modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                    listState = listState,
                 )
             }
                 Box(
@@ -629,6 +636,8 @@ fun SessionsScreen(
 @Composable
 private fun ConversationList(
     visible: List<PiAgentSession.SessionSummary>,
+    /** The list's scroll position, owned by the root so a rebuild keeps it. */
+    listState: LazyListState,
     text: Strings,
     workspaces: List<Workspace>,
     defaultPath: String,
@@ -666,6 +675,7 @@ private fun ConversationList(
     )
 
     LazyColumn(
+        state = listState,
         // The drawer's body, so it takes the panel's elastic end: the list is short after
         // the first conversation and long after a month of them, and the first case is the
         // one Compose's own effect skips. See `piOverScroll`.
