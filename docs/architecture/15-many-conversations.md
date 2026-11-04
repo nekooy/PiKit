@@ -86,6 +86,21 @@ the first frame a newly composed drawer draws, so a switch costs a refresh rathe
 blank. The drawer's own scroll position is hoisted above the conversation key for the same
 reason — it is the list's state, not a conversation's — and `RootContent` holds it.
 
+**The page also has to *read* the conversation it is keyed on, and that is not automatic.**
+`ChatTab` hands the page a `ConversationState` collected from `session.conversation`, and
+`collectAsState` remembers the `MutableState` it returns **with no key of its own** — the keys
+it takes restart the collector and nothing else — so a change of `session` kept the previous
+conversation's value until the new flow emitted, one frame later. `key(session)` sits *below*
+that read, so that frame was built from the old conversation's state: measured on the 1080 px
+emulator, a tap on the header's new-conversation mark composed the new conversation's page
+carrying the previous transcript's **28 rows**, for **300 ms** — the frame is long because the
+new conversation's `startAgent` runs on the same thread — and the page then replaced them with
+the empty state. That is the flash of the conversation, scrolled where it had been left, that
+precedes a new conversation on a faster device, where the same frame is one frame long.
+`collectAsState`'s `initial` argument cannot fix it, because it is read only on the first
+composition; the reads are `key(session)`-ed instead — the transcript and the agent status —
+so the first frame of a switch draws the conversation being switched to.
+
 ### The pool is bounded, and the bound is memory
 
 A live conversation is a Node.js process: ~120 MB resident before it has read anything,

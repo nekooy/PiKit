@@ -338,7 +338,6 @@ private fun RootContent(
     // of this value, and the pages below are keyed on it so the change is a rebuild of
     // the chat page rather than a mix of two transcripts.
     val session by host.active.collectAsState()
-    val agent by session.agent.collectAsState()
     var destination by remember { mutableStateOf(Destination.Chat) }
     // Whether the conversation drawer is out. Held up here rather than inside the chat
     // page because the settings page is reached from the drawer's own foot, and the way
@@ -518,7 +517,6 @@ private fun RootContent(
                 Destination.Chat -> ChatTab(
                     host = host,
                     session = session,
-                    agent = agent,
                     composer = composer,
                     drawer = drawer,
                     drawerScope = scope,
@@ -632,7 +630,6 @@ private fun RootContent(
 private fun ChatTab(
     host: PiHost,
     session: PiAgentSession,
-    agent: AgentStatus,
     composer: ChatComposerState,
     /** Whether the conversation drawer is out; owned by [RootContent] — see there. */
     historyOpen: Boolean,
@@ -659,7 +656,24 @@ private fun ChatTab(
     onOpenFiles: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    val state by session.conversation.collectAsState()
+    // The conversation and its agent are read **per conversation**, and the `key` is the
+    // whole of the reason.
+    //
+    // `collectAsState` hands back a `MutableState` it remembers with no key of its own —
+    // the keys it takes only restart the collector — so a switch of `session` kept the
+    // *previous* conversation's value until the new flow emitted, one frame later. That
+    // frame is a whole frame of the old page, and on an emulator 300 ms long: a tap on the
+    // new-conversation mark composed the new conversation's page with the *previous*
+    // transcript's 28 rows on it, which is the flash of the conversation — scrolled where
+    // it had been left — that precedes the new page. Keyed on the
+    // conversation, the first frame of a switch draws the conversation being switched to:
+    // empty, for a new one.
+    //
+    // The agent is read here rather than in the root for the second half of the same
+    // reason: it is a fact about this conversation, and a stale `Running` from the one
+    // before would draw a composer that accepts a prompt for an agent still starting.
+    val state by key(session) { session.conversation.collectAsState() }
+    val agent by key(session) { session.agent.collectAsState() }
     val text = strings
     val toasts = LocalPiToast.current
     val scope = rememberCoroutineScope()
