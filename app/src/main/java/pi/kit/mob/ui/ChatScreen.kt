@@ -1405,7 +1405,14 @@ private fun ChatHeader(
                 .glassLift(trailingShape)
                 .clip(trailingShape)
                 .background(PiGlass.fill())
-                .padding(horizontal = 4.dp, vertical = 2.dp),
+                // **No vertical padding**, and the height is the reason: a capsule's
+                // height is [HEADER_MARK_SIZE], because that is what the leading circle
+                // beside this one is. It had 2dp above and below them, so this pill was
+                // 46dp against the circle's 42dp and the two ends of the bar did not line
+                // up — a 4dp difference that reads as a mistake rather than as a design.
+                // The horizontal padding is the pill's own: it is what keeps the three
+                // marks off the rounded ends, and it does not change the height.
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Three marks, in the order the reference drawing has them: the shell the

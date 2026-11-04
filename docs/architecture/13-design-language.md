@@ -328,6 +328,14 @@ because the strip version was worse:
   of the clock's own line. That is also why the leading capsule is a circle and the
   trailing one a pill: two objects at the ends, with the name standing between them on the
   page.
+- **Both capsules are the same height, and the height is the mark's box.** 42dp
+  (`HEADER_MARK_SIZE`): the circle draws one mark, the pill boxes three, so the pill's
+  padding is *horizontal only* — 4dp at each end to keep the marks off its rounded ends. It
+  had 2dp above and below as well, which made the pill 46dp against the circle's 42dp, and
+  the two ends of one row differing by 4dp does not read as two objects of a kind: measured
+  on the 1080 px emulator the circle was 110 px tall and the pill 120 px, now 110 and 110.
+  The touch targets are independent of this — every mark keeps the platform's 48dp target —
+  so the rule costs nothing to obey.
 - **The lift is drawn, not `Modifier.shadow`, and there are two of them.** On this Compose
   version the modifier's shadow does not follow the shape it is given: a circle's shadow was
   drawn as a squircle, and while the capsules' fill was translucent that silhouette showed
