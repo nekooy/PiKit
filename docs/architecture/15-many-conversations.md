@@ -3,6 +3,22 @@
 The app used to be one conversation. What that cost, why the second one is a second
 process rather than a switch, and what stays single on purpose.
 
+## Opening a conversation does not start an agent
+
+A saved conversation is a JSONL file, and every message in it is one record in the same
+shape `get_messages` answers with. `SessionTranscript` turns the file into that payload and
+`ConversationReducer.replaceWithMessages` folds it, so opening a conversation is a file read
+— measured at well under a frame — with **no process at all**. The agent starts when
+something is sent (`sendPrompt` starts one when its client is null), and the page's launch
+effect now skips a conversation that already has a transcript.
+
+That replaces the old path, which launched pi, waited for its handshake, then asked it for
+`switch_session`, `get_state` and `get_messages` — two seconds of Node startup to display
+text that was already on disk. When the agent does start for a conversation restored this
+way, `switchSessionTo` binds the process to the file but does **not** re-fetch or clear the
+transcript: the page would otherwise go blank for a moment at the exact instant the reader
+sent something.
+
 ## What "one conversation" meant
 
 One `pi --mode rpc` child, one `ConversationState`, one workspace, one transcript on

@@ -241,6 +241,32 @@ class PiAgentSession internal constructor(
     val sessionPath: String?
         get() = _conversation.value.sessionFile ?: restoreTarget
 
+    /**
+     * The session file this conversation's transcript was read from, when it was read from
+     * disk rather than from a live agent's `get_messages`.
+     */
+    private var restoredFrom: String? = null
+
+    /**
+     * Fills the transcript from a saved conversation on disk, without starting anything.
+     *
+     * The message list is the same envelope `get_messages` answers with, so the fold is
+     * [ConversationReducer.replaceWithMessages]'s and the page cannot tell the two apart
+     * except that this one is instant.
+     *
+     * @return true when the file was read and had at least one message.
+     */
+    fun openFromDisk(path: String): Boolean {
+        val payload = SessionTranscript.payload(File(path)) ?: return false
+        val base = ConversationState(sessionFile = path)
+        _conversation.value = ConversationReducer
+            .replaceWithMessages(base, payload)
+            .copy(loadingSession = false)
+        restoreTarget = path
+        restoredFrom = path
+        return true
+    }
+
     /** Whether [path] is the session file this conversation is (or is being) bound to. */
     internal fun matchesPath(path: String): Boolean =
         path == _conversation.value.sessionFile || path == restoreTarget
@@ -1154,17 +1180,16 @@ class PiAgentSession internal constructor(
             adoptSessionPath(_conversation.value.sessionFile)
             return
         }
-        // pi rebinds to a different session, so stale UI state would be wrong — but
-        // the two round trips below leave the transcript empty for a moment, and an
-        // empty transcript is what a *new* conversation looks like. The flag is what
-        // tells the page the difference; `ConversationState.loadingSession` has the
-        // measurement.
-        _conversation.value = ConversationState(loadingSession = true)
+        // A transcript read from **this** file on disk is already the answer: clearing it
+        // and asking the process for the same messages again is what made a conversation
+        // flash empty when its agent finally started.
+        val alreadyLoaded = restoredFrom == path && _conversation.value.items.isNotEmpty()
+        if (!alreadyLoaded) _conversation.value = ConversationState(loadingSession = true)
         try {
             val state = live.request("get_state") { PiCommand.getState(it) }
             _conversation.update { ConversationReducer.reduce(it, state) }
             refreshThinkingLevels()
-            loadCurrentMessages(live)
+            if (!alreadyLoaded) loadCurrentMessages(live)
         } finally {
             // In a `finally` because the flag has to come down on the failure paths
             // too: a switch that threw would otherwise leave the page saying

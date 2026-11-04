@@ -573,8 +573,17 @@ class PiHost private constructor(context: Context) {
         // idle child is stopped here: switching to it starts it again (`RootContent`'s
         // launch effect sees `Stopped`), and a turn that finished in the background stops
         // it as soon as it settles.
-        sweepIdleAgents()
     }
+
+    /**
+     * Starts the idle sweep. Called once, **after** construction (see [of]).
+     *
+     * Not from `init`: the collectors it launches can run before the constructor body has
+     * finished initialising the fields they touch, which is a `NullPointerException` on
+     * the first `sessions` emission after a restart with saved conversations — measured
+     * twice, once on the bookkeeping map and once on its delegate.
+     */
+    internal fun startIdleSweep() = sweepIdleAgents()
 
     /**
      * Stops every conversation that is neither on screen nor answering.
@@ -600,15 +609,8 @@ class PiHost private constructor(context: Context) {
         }
     }
 
-    /**
-     * Conversations waiting out the grace period before their agent is stopped.
-     *
-     * `by lazy` rather than a plain field: the sweep runs from this class's `init`, which
-     * can reach this map before the field's own initialiser has run — measured as a
-     * `NullPointerException` on `Map.remove` inside `stopIdleAgents` on the first
-     * `sessions` emission after a restart with saved conversations.
-     */
-    private val pendingStops by lazy { mutableMapOf<PiAgentSession, kotlinx.coroutines.Job>() }
+    /** Conversations waiting out the grace period before their agent is stopped. */
+    private val pendingStops = mutableMapOf<PiAgentSession, kotlinx.coroutines.Job>()
 
     private fun stopIdleAgents() {
         val active = _active.value
@@ -697,6 +699,10 @@ class PiHost private constructor(context: Context) {
         }
         val session = makeRoom(bound = path) ?: return null
         _sessions.value = _sessions.value + session
+        // The transcript comes from the file, not from a process. Opening a saved
+        // conversation is a file read now; the agent is started when the reader sends
+        // something (`sendPrompt` starts it) and not before.
+        session.openFromDisk(path)
         // The workspace is fixed when the child starts, and a saved conversation records
         // the directory it ran in — opening it elsewhere would show one transcript while
         // every tool call acted in another tree.
@@ -882,7 +888,10 @@ class PiHost private constructor(context: Context) {
         /** The one host of this process. */
         fun of(context: Context): PiHost =
             instance ?: synchronized(this) {
-                instance ?: PiHost(context).also { instance = it }
+                instance ?: PiHost(context).also {
+                    it.startIdleSweep()
+                    instance = it
+                }
             }
     }
 }
