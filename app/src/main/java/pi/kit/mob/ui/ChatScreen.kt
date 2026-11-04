@@ -1978,9 +1978,11 @@ private fun ChatPage(
                                     ) {
                                         // The long press is the message's gesture: the menu
                                         // that opens from it carries the actions that used to
-                                        // live under the bubble, and the bubble it belongs to
-                                        // is lit for as long as the menu is open — see
-                                        // `TranscriptCardView`'s `pressed`.
+                                        // live under the bubble. The bubble itself paints no
+                                        // pressed state — a fill that followed a hold was tried
+                                        // and removed, because a tap is this page's most
+                                        // frequent touch and any fill that tracked the finger
+                                        // read as noise; the haptic is the acknowledgement.
                                         val menuTarget = card.rows
                                             .filterIsInstance<TranscriptRow.Message>()
                                             .lastOrNull {
@@ -2001,14 +2003,6 @@ private fun ChatPage(
                                                 onToggleTurn = onToggleTurn,
                                                 avatars = avatars,
                                                 onShowExtras = onShowPromptExtras,
-                                                // Lit exactly while this card's menu is
-                                                // open: the fill is the answer to "which
-                                                // bubble are these actions about", and it
-                                                // appears only when a long press has been
-                                                // recognised. A tap never lights anything —
-                                                // the transcript's most frequent touch would
-                                                // otherwise flash on every one of them.
-                                                pressed = menuCardKey == card.key,
                                             )
                                         }
                                         Box(
@@ -3200,8 +3194,6 @@ private fun TranscriptCardView(
     onToggleTurn: (Int) -> Unit,
     avatars: ChatAvatars?,
     onShowExtras: (PromptExtras) -> Unit,
-    /** Whether this card's actions are open; the bubble paints [PiTone.pressed]. */
-    pressed: Boolean,
 ) {
     when (card) {
         // The prompt is measured against the transcript's own width so the cap can
@@ -3254,11 +3246,7 @@ private fun TranscriptCardView(
                         // themselves. Their words are the one thing on this page that
                         // must never be muted, so both halves are explicit.
                         colors = CardDefaults.defaultColors(
-                            // Held: the same blue, one step toward the ink. The bubble is
-                            // the object the finger is on, so it is the object that answers
-                            // the press — a menu that appears with nothing before it reads
-                            // as a delayed tap.
-                            color = if (pressed) PiTone.pressed(PiTone.prompt()) else PiTone.prompt(),
+                            color = PiTone.prompt(),
                             contentColor = MiuixTheme.colorScheme.onSurface,
                         ),
                     ) {
@@ -3311,14 +3299,8 @@ private fun TranscriptCardView(
                 // The answer's card is the palette's standard surface step — one step
                 // off the page behind it — because it is *the page's* content rather
                 // than a bubble, and the reader's own half is the one that wears a
-                // container. Held, it takes the same step toward the ink the prompt does.
-                colors = CardDefaults.defaultColors(
-                    color = if (pressed) {
-                        PiTone.pressed(MiuixTheme.colorScheme.surfaceContainer)
-                    } else {
-                        MiuixTheme.colorScheme.surfaceContainer
-                    },
-                ),
+                // container.
+                colors = CardDefaults.defaultColors(),
             ) {
                 card.rows.forEachIndexed { index, row ->
                     Column(Modifier.padding(top = rowGap(card.rows.getOrNull(index - 1), row))) {
