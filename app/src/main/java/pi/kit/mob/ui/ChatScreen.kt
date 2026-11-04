@@ -1564,9 +1564,8 @@ private fun ChatPage(
     // modifier, so a keyboard animation is a layout and not a recomposition.
     val imeInsets = WindowInsets.ime
     val barInsets = WindowInsets.navigationBars
-    // The field block's height, reported by the composer, and the colour the band fades
-    // into. Both are read inside the band's draw and nowhere else.
-    var fieldBlockPx by remember { mutableIntStateOf(0) }
+    // The colour the band's own surface, its rank and the strip under the field are
+    // painted with. Read inside the draws and nowhere else.
     val bandSurface = MiuixTheme.colorScheme.surface
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val headerSpace = topInset + HEADER_CLEARANCE
@@ -2101,39 +2100,22 @@ private fun ChatPage(
                     // keyboard — measured, 5px of it — which is the "输入框和键盘之间没有
                     // 间距" report, and on a phone whose gesture strip reports zero it put
                     // the field on the screen's edge.
-                    .bandBottom(imeInsets, barInsets, scaffoldBottom)
-                    // **One** background for the whole band, painted here rather than in
-                    // the composer: the composer's box stops at its own content, so the
-                    // inset strip below it and the fade above it were drawn by two
-                    // different nodes and disagreed — with the keyboard up the fade was
-                    // missing and the strip showed the transcript through it. This box
-                    // spans content *and* inset, so one draw covers both.
+                    // **Before** the inset: a draw declared after `bandBottom` is a node
+                    // the size of the *content*, so the strip the inset adds was outside
+                    // it and the transcript showed through under the field. Declared
+                    // first, this node spans content and inset together.
                     .drawBehind {
                         val inset = bandInset(imeInsets, barInsets, scaffoldBottom)
                             .coerceAtMost(size.height.toInt())
-                        val surface = bandSurface
-                        val fieldTop = (size.height - inset - fieldBlockPx).coerceAtLeast(0f)
-                        val rampTop = (fieldTop - BAND_FADE.toPx()).coerceAtLeast(0f)
-                        if (fieldBlockPx > 0 && fieldTop > rampTop) {
+                        if (inset > 0) {
                             drawRect(
-                                brush = Brush.verticalGradient(
-                                    0f to Color.Transparent,
-                                    1f to surface,
-                                    startY = rampTop,
-                                    endY = fieldTop,
-                                ),
-                                topLeft = Offset(0f, rampTop),
-                                size = Size(size.width, fieldTop - rampTop),
-                            )
-                        }
-                        if (fieldBlockPx > 0) {
-                            drawRect(
-                                color = surface,
-                                topLeft = Offset(0f, fieldTop),
-                                size = Size(size.width, size.height - fieldTop),
+                                color = bandSurface,
+                                topLeft = Offset(0f, size.height - inset),
+                                size = Size(size.width, inset.toFloat()),
                             )
                         }
                     }
+                    .bandBottom(imeInsets, barInsets, scaffoldBottom)
                     .onSizeChanged { bottomStackPx = it.height },
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
@@ -2186,7 +2168,6 @@ private fun ChatPage(
 
             Composer(
                 session = session,
-                onFieldBlockSize = { fieldBlockPx = it },
                 text = text,
                 value = input,
                 onValueChange = onInputChange,
@@ -3295,6 +3276,15 @@ private val BAND_AIR_ABOVE_KEYBOARD = 10.dp
 private val BAND_AIR_ABOVE_BAR = 15.dp
 
 /**
+ * How far above the chip row the band is already fully opaque.
+ *
+ * Sixty-four dp, and it is the answer to "how much text may be readable near the
+ * composer": none. The fade begins above *this*, not at the chips' own edge, so the
+ * thumb's reach is over a solid surface.
+ */
+private val BAND_OPAQUE_ABOVE_CHIPS = 64.dp
+
+/**
  * How far the transcript fades above the composer's field.
  *
  * The fade's solid edge is the field's top: everything below it is the page, and the
@@ -4132,8 +4122,6 @@ private fun Composer(
     onOpenWorkspacePicker: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    /** The field block's height, for the band's own background. */
-    onFieldBlockSize: (Int) -> Unit,
 ) {
     // The saved configuration, collected so the model chip follows a change made
     // on the settings page. A plain read of the store here was the report that
@@ -4312,6 +4300,38 @@ private fun Composer(
                 state = chipState,
                 modifier = Modifier
                     .fillMaxWidth()
+                    // The band's background starts **here**: solid behind the chips, and a
+                    // ramp of [BAND_FADE] above them. Painted on the chip row instead of on
+                    // a box that has to find the field's top edge by measuring it — that
+                    // measurement is what kept going wrong with the keyboard up, and a
+                    // background that needs to know where two other children are is a
+                    // background that can be missing.
+                    .drawBehind {
+                        val surface = bandColor
+                        val opaque = BAND_OPAQUE_ABOVE_CHIPS.toPx()
+                        val fade = BAND_FADE.toPx()
+                        // Solid **through** the chip row and a band above it, ramp above
+                        // that. A gradient that begins at the chips' own top edge leaves
+                        // text one thumb-width above it at 90% contrast, which is still
+                        // readable — and readable is what the reader kept seeing.
+                        if (fade > 0f) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    0f to surface.copy(alpha = 0f),
+                                    1f to surface,
+                                    startY = -opaque - fade,
+                                    endY = -opaque,
+                                ),
+                                topLeft = Offset(0f, -opaque - fade),
+                                size = Size(size.width, fade),
+                            )
+                        }
+                        drawRect(
+                            color = surface,
+                            topLeft = Offset(0f, -opaque),
+                            size = Size(size.width, size.height + opaque),
+                        )
+                    }
                     .drawWithContent {
                         drawContent()
                         val fade = CHIP_FADE_WIDTH.toPx()
@@ -4560,7 +4580,10 @@ private fun Composer(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .onSizeChanged { onFieldBlockSize(it.height) },
+                    // Solid from the field's top edge down: nothing behind the band is
+                    // readable under the input box, which is what the reader asked for
+                    // twice and what a transparent wrapper could not do.
+                    .background(bandColor)
             ) {
             Surface(
                 color = MiuixTheme.colorScheme.surfaceContainer,
