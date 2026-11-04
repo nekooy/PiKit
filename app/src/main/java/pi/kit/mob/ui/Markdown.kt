@@ -23,8 +23,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -54,7 +58,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.chat.MONO_LINE_HEIGHT
 import pi.kit.mob.ui.components.CopyButton
@@ -104,6 +111,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * emphasis run stays open across the formula and the formula is simply inline
  * content inside a bold span.
  */
+@Immutable
 internal sealed interface MdBlock {
     data class Paragraph(val text: String) : MdBlock
 
@@ -247,12 +255,19 @@ fun MarkdownText(
     modifier: Modifier = Modifier,
 ) {
     val style = inlineStyle()
-    val blocks = remember(text) { parseMarkdown(text) }
+    val blocks = rememberStableBlocks(text)
     // Fill the formula cache before the blocks are drawn, on a worker, so the common case —
-    // opening a saved conversation — draws formulas rather than their source. Keyed on the
-    // text, so it runs once per reply rather than once per frame.
+    // opening a saved conversation — draws formulas rather than their source. The delay is
+    // the streaming fix: this effect is keyed on the text, so a streamed answer relaunches
+    // it once per token, and the tokenise inside is O(the whole reply) — enough to pay the
+    // parse again on the composition thread for every delta. Waiting for a pause means it
+    // runs once on the settled reply, which is what it was added for; the block on screen
+    // requests its own formulas meanwhile.
     val spec = mathSpec(bodyStyle().fontSize)
-    LaunchedEffect(text, spec) { MathCache.prefetch(text, spec) }
+    LaunchedEffect(text, spec) {
+        delay(MATH_PREFETCH_SETTLE_MS)
+        withContext(Dispatchers.Default) { MathCache.prefetch(text, spec) }
+    }
     // One subcomposition for the whole reply, because the width every formula is fitted to is the
     // *reply's* width and not each block's — see `LocalFormulaWidth`. A `BoxWithConstraints` per
     // paragraph would say the same thing at a cost per block, and a formula inside a paragraph
@@ -266,6 +281,69 @@ fun MarkdownText(
         }
     }
 }
+
+/**
+ * The blocks of [text], reparsed off the main thread at most once per [MARKDOWN_PARSE_INTERVAL_MS].
+ *
+ * A streamed answer arrives a token at a time, and every delta used to become a new
+ * `remember(text)` key — so a twelve-kilobyte reply was parsed, in full, on the composition
+ * thread about a thousand times, and the cost grew with the square of the answer's length.
+ * The parse is a pure function of the text, so the fix is a cadence rather than a smarter
+ * parser: the reply is drawn from the last parse and the next one lands when it is ready,
+ * a frame or two behind the stream. A restored reply still has its body on the first
+ * frame — the initial parse is synchronous, exactly as it was before.
+ *
+ * [reuseBlocks] keeps the pipeline below this one quiet: a growing reply's earlier blocks
+ * are structurally equal from one parse to the next, and handing the previous instance
+ * back means their composables are skipped instead of redrawn.
+ */
+@Composable
+private fun rememberStableBlocks(text: String): List<MdBlock> {
+    var blocks by remember { mutableStateOf(parseMarkdown(text)) }
+    var parsedText by remember { mutableStateOf(text) }
+    val latest = rememberUpdatedState(text)
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(MARKDOWN_PARSE_INTERVAL_MS)
+            val wanted = latest.value
+            if (wanted == parsedText) continue
+            val next = withContext(Dispatchers.Default) { parseMarkdown(wanted) }
+            blocks = reuseBlocks(blocks, next)
+            parsedText = wanted
+        }
+    }
+    return blocks
+}
+
+/**
+ * [next]'s blocks with every block that [previous] already had at the same index.
+ *
+ * `MdBlock` is a set of data classes, so equality is the content; a block that has not
+ * changed is the same block as far as Compose can tell only if it is also the same
+ * *instance* or compares equal through a stable parameter, and instance reuse is the
+ * answer that does not depend on skipping inference.
+ */
+private fun reuseBlocks(previous: List<MdBlock>, next: List<MdBlock>): List<MdBlock> {
+    if (previous.isEmpty()) return next
+    val out = ArrayList<MdBlock>(next.size)
+    var reused = false
+    for (index in next.indices) {
+        val old = previous.getOrNull(index)
+        if (old != null && old == next[index]) {
+            out += old
+            reused = true
+        } else {
+            out += next[index]
+        }
+    }
+    return if (reused) out else next
+}
+
+/** See [rememberStableBlocks]: 80 ms is under the eye's read time and well under a token's. */
+private const val MARKDOWN_PARSE_INTERVAL_MS = 80L
+
+/** How long a reply has to stop growing before its formulas are prefetched. */
+private const val MATH_PREFETCH_SETTLE_MS = 150L
 
 /** 8dp: the gap between two blocks of a reply. */
 private val BLOCK_GAP = 8.dp
