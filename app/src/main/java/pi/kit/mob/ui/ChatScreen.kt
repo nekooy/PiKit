@@ -3221,11 +3221,14 @@ private fun Modifier.bandBottom(
 /**
  * The air between the composer's field and the bottom of the window, or the keyboard.
  *
- * Sixteen rather than twelve: a phone whose gesture strip reports no inset at all — some
- * ROMs answer zero — left the field's bottom edge on the screen's edge with only a hint of
- * air, which reads as the input box being cut off.
+ * Twenty-eight, and the number is a floor rather than a taste: a window in `adjustResize`
+ * mode reports **no** bottom inset of its own — the platform has already shortened the
+ * window to the keyboard's top — so in that mode this constant *is* the whole gap, and
+ * twelve or sixteen dp of it looked like the field was resting on the keyboard. Under
+ * edge-to-edge the same value is added to the IME or navigation inset and reads as a
+ * generous margin rather than a hairline.
  */
-private val BAND_BOTTOM_AIR = 16.dp
+private val BAND_BOTTOM_AIR = 28.dp
 
 /**
  * How far the transcript fades above the composer's field.
