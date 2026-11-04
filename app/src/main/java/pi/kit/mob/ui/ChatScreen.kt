@@ -141,6 +141,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -1542,7 +1543,11 @@ private fun ChatPage(
     // is the state it has, and the control's own gate (below) covers the one frame before
     // the new list has been measured.
     LaunchedEffect(state.sessionFile) {
-        listState.scrollToItem(0)
+        // **Only for a conversation with nothing in it.** A transcript read from disk
+        // arrives with its messages and the follow lands the list at its end; jumping to
+        // item 0 as well put the reader at the top of the conversation a frame later —
+        // the "点开历史消息，闪一下又回到顶部" report.
+        if (state.items.isEmpty()) listState.scrollToItem(0)
     }
 
     // The composer band's insets: the objects here, their heights inside the layout
@@ -2082,7 +2087,7 @@ private fun ChatPage(
                     // keyboard — measured, 5px of it — which is the "输入框和键盘之间没有
                     // 间距" report, and on a phone whose gesture strip reports zero it put
                     // the field on the screen's edge.
-                    .bandBottom(imeInsets, barInsets, scaffoldBottom)
+                    .bandBottom(imeInsets, barInsets, scaffoldBottom, MiuixTheme.colorScheme.surface)
                     .onSizeChanged { bottomStackPx = it.height },
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
@@ -3193,48 +3198,66 @@ private val PAGE_CARD_CORNER = 24.dp
 private val PAGE_CARD_LIFT = 20.dp
 
 /**
- * The composer band's bottom inset: the bigger of the keyboard and the gesture strip, plus
- * [BAND_BOTTOM_AIR].
+ * The composer band's bottom inset, and the surface that fills it.
  *
- * Both heights are read **in the measure pass**. Reading them in composition would
- * subscribe the page to every step of a keyboard animation, which is the stutter this page
- * spent a round removing.
+ * Two airs, because the two edges are not the same edge: above a keyboard the reader wants
+ * the field *close* to the keys (10dp), and above the window's own bottom the gesture strip
+ * already provides most of the gap (15dp on top of it). The keyboard's is smaller on
+ * purpose — a keyboard is a wall the field should nearly touch, a gesture strip is not.
+ *
+ * Both inset heights are read **in the measure pass**, and the surface is painted in the
+ * draw: a window in `adjustResize` mode reports no bottom inset at all, so in that mode the
+ * air *is* the whole gap. Painting it here rather than in the band's own `drawBehind` is
+ * what stops the transcript showing through the gap — that background covers the band's
+ * content and nothing else, and the inset sits below it.
  */
 private fun Modifier.bandBottom(
     ime: WindowInsets,
     bars: WindowInsets,
     scaffoldBottom: Int,
-): Modifier =
-    layout { measurable, constraints ->
-        val inset = maxOf(ime.getBottom(this), bars.getBottom(this), scaffoldBottom) +
-            BAND_BOTTOM_AIR.roundToPx()
-        val applied = if (constraints.hasBoundedHeight) {
-            inset.coerceAtMost(constraints.maxHeight)
-        } else {
-            0
-        }
-        val inner = if (applied > 0) {
-            constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - applied)
-        } else {
-            constraints
-        }
-        val placeable = measurable.measure(inner)
-        layout(placeable.width, placeable.height + applied) {
-            placeable.placeRelative(0, 0)
-        }
+    surface: Color,
+): Modifier = layout { measurable, constraints ->
+    val applied = bandInset(ime, bars, scaffoldBottom)
+        .let { if (constraints.hasBoundedHeight) it.coerceAtMost(constraints.maxHeight) else 0 }
+    val inner = if (applied > 0) {
+        constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - applied)
+    } else {
+        constraints
     }
+    val placeable = measurable.measure(inner)
+    layout(placeable.width, placeable.height + applied) {
+        placeable.placeRelative(0, 0)
+    }
+}.drawBehind {
+    val applied = bandInset(ime, bars, scaffoldBottom).coerceAtMost(size.height.toInt())
+    if (applied > 0) {
+        drawRect(
+            color = surface,
+            topLeft = Offset(0f, size.height - applied),
+            size = Size(size.width, applied.toFloat()),
+        )
+    }
+}
+
+/** The band's bottom inset in px, for a measure or a draw. */
+private fun Density.bandInset(ime: WindowInsets, bars: WindowInsets, scaffoldBottom: Int): Int {
+    val imeBottom = ime.getBottom(this)
+    val air = if (imeBottom > 0) BAND_AIR_ABOVE_KEYBOARD else BAND_AIR_ABOVE_BAR
+    return maxOf(imeBottom, bars.getBottom(this), scaffoldBottom) + air.roundToPx()
+}
 
 /**
- * The air between the composer's field and the bottom of the window, or the keyboard.
+ * The air above the keyboard, and above the window's own bottom edge.
  *
- * Twenty-eight, and the number is a floor rather than a taste: a window in `adjustResize`
- * mode reports **no** bottom inset of its own — the platform has already shortened the
- * window to the keyboard's top — so in that mode this constant *is* the whole gap, and
- * twelve or sixteen dp of it looked like the field was resting on the keyboard. Under
- * edge-to-edge the same value is added to the IME or navigation inset and reads as a
- * generous margin rather than a hairline.
+ * **Zero above the keyboard**, because the band already has a 10dp foot below the field
+ * ([COMPOSER_FOOT]) and that foot *is* the gap the reader sees there — a second helping on
+ * top of it measured 23dp and was reported as too far from the keys. Above the window's own
+ * bottom the gesture strip supplies most of the gap, and 15dp on top of it measures 38dp of
+ * total clearance — which is the quarter less the reader asked for, against the 51dp the
+ * 28dp foot gave.
  */
-private val BAND_BOTTOM_AIR = 28.dp
+private val BAND_AIR_ABOVE_KEYBOARD = 10.dp
+private val BAND_AIR_ABOVE_BAR = 15.dp
 
 /**
  * How far the transcript fades above the composer's field.
