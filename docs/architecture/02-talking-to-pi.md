@@ -129,7 +129,7 @@ project's own extension registers). The check that fails if this regresses is
 
 ### What a `pi` started by hand gets
 
-A `pi` typed into the Terminal tab used to answer "no model": the app gives its agent
+A `pi` typed into the terminal page used to answer "no model": the app gives its agent
 provider, model and key on its own command line and in its environment and leaves pi's
 own settings empty. That is not a terminal bug — the fix is to keep them, in pi's files:
 
@@ -140,7 +140,7 @@ own settings empty. That is not a terminal bug — the fix is to keep them, in p
   exists in `models.json` — so the two cannot disagree; `defaultTools` and the bundled
   extension's `packages` entry are written by the same merge, which is also where the
   exclusion-list reasoning for `models.json` lives (§6.1).
-- The login shell that the Terminal tab spawns gets **every** saved profile's key, under
+- The login shell that the terminal page spawns gets **every** saved profile's key, under
   the same variables the agent's launch carries, so the credential is in scope for
   whatever the user runs — and it gets `PI_CODING_AGENT_SESSION_DIR` pointing at the same
   directory the agent writes its transcripts to, so a `pi` typed there `--continue`s the
@@ -154,6 +154,6 @@ own settings empty. That is not a terminal bug — the fix is to keep them, in p
 
 Because parsing a TUI is strictly worse than a protocol: it is lossy, it breaks on
 any layout change, and it cannot express structured tool calls. The PTY exists in
-this app for the *user's* terminal tab, not for the agent.
+this app for the *user's* terminal page, not for the agent.
 
 ---

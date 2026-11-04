@@ -6,7 +6,7 @@
 PiHost  (process-wide singleton — the app-wide half)
   ├─ TermuxEnv + BootstrapInstaller   first-run unpack, one per app
   ├─ SettingsStore                    provider / model / key / tier
-  ├─ TerminalSessionManager           the terminal tab's shells, and which one shows
+  ├─ TerminalSessionManager           the terminal page's shells, and which one shows
   ├─ model catalogue + refresh window one models-store.json, one deadline
   └─ the pool: up to PiHost.MAX_ANSWERING answers in flight and MAX_LIVE
      children resident, and which conversation is active (§15)
@@ -104,8 +104,9 @@ one, because there is nothing below the last row. Closing every shell (`closeAll
 invariant taken to the whole list: one replacement, selected, since every candidate is gone.
 
 The roster is never emptied. A close that would leave none opens a replacement and selects it,
-rather than being refused: the terminal is a primary tab, and the one thing worse than a shell
-the reader did not ask for is a blank rectangle with nothing to type into.
+rather than being refused: the terminal is a page the reader opened on purpose, and the one
+thing worse than a shell the reader did not ask for is a blank rectangle with nothing to type
+into.
 
 ## The workspace is the conversation's, not the app's
 
@@ -118,21 +119,23 @@ conversations from different folders, and going back to an old one meant retypin
 belonged to. `WorkspaceStore` holds the list — the built-in `$HOME/workspace`, which cannot be
 removed, plus the folders the reader added — and `pikit_settings`'s `defaultWorkspace` says
 which one a *new* conversation starts in. The composer's first chip picks the conversation's
-own; the agent page's `默认工作区` row picks the default; the history page groups by it.
+own; the agent page's `默认工作区` row picks the default; the drawer groups by it.
 
 **Why a relaunch rather than a `cd`.** The workspace is the child process's working directory
 and the base every relative path in a tool call resolves against, and pi reads it once at
 startup. So `PiAgentSession.selectWorkspace` remembers the directory, clears the remembered
 session — the conversation on screen belongs to the directory being left — and restarts the
 agent; `restoreRememberedSession` then opens a fresh session there instead of the old one. The
-same machinery in the other direction is `openSession`: a saved conversation records the
-directory pi was started in (`{"type":"session",…,"cwd":…}`, its **first** line), so tapping a
-history row from another workspace remembers that path and relaunches, and the handshake
-rebinds the new process to the conversation the reader tapped. A pi standing in the wrong tree
-would show the old transcript while every tool call acted somewhere else.
+same machinery in the other direction is the conversation drawer: a saved conversation records
+the directory pi was started in (`{"type":"session",…,"cwd":…}`, its **first** line), so tapping
+a row from another workspace binds the conversation to that file and records the directory
+(`PiHost.openConversation`); the transcript is read from the file, and the process the first
+prompt starts is launched there and rebound to the same session
+(`PiAgentSession.restoreAfterLaunch`). A pi standing in the wrong tree would show the old
+transcript while every tool call acted somewhere else.
 
 **The `cwd` is the grouping key, not a second table.** `SessionMetadata.read` takes it from
-that header record, which means the history page groups conversations from before this change
+that header record, which means the drawer groups conversations from before this change
 — and conversations a `pi` typed in the terminal wrote — without the app having to remember
 anything of its own. `sessionGroups` (tested in `SessionGroupingTest`) names each group the way
 the composer's chip names that folder, keeps the group holding the newest conversation first,
@@ -143,13 +146,13 @@ want to read. Sessions whose file records no directory at all are one last group
 **A workspace that arrived from outside the app is adopted.** The `cwd` header is also how a
 directory gets *into* the list without the picker: a reader who runs `pi` by hand in the terminal
 — or any pi that starts in a directory of its own — writes a session whose first line names that
-folder, and the history page then grouped it under a workspace the composer's menu had never
+folder, and the drawer then grouped it under a workspace the composer's menu had never
 heard of. The same conversation in two places disagreeing about where it lives. `listSessions`
 now adopts every distinct `cwd` that still exists and is not already in the list, added exactly
 the way the picker adds one so the order, the dedupe and the deleted-default fallback all behave
 the same; a directory that has since been deleted is skipped, because it cannot be launched in.
-The scan also runs once at launch, which is what makes the menu complete before the history page
-has ever been opened — and what makes the history page's list ready on its first frame.
+The scan also runs once at launch, which is what makes the menu complete before the drawer
+has ever been opened — and what makes the drawer's list ready on its first frame.
 
 **What a backup carries.** Every workspace, as `workspaces/<its path relative to $HOME>/…`
 beside the built-in one's `workspace/` — an entry name a restore can decode back on an install
@@ -169,11 +172,11 @@ the files. A workspace outside `$HOME` has no relative path to record and is lef
 | Agent instructions and permission extension | `<app files>/home/.pi/agent/AGENTS.md`, `.../extensions/pikit-permissions.ts` |
 | The permission tier in force | `<app files>/home/.pikit/permission.json` — a file, because the extension reads it per tool call (§14) |
 | The built-in workspace | `<app files>/home/workspace` |
-| Shared storage links | `<app files>/home/storage/*` → `/storage/emulated/0/...`, the seven usual folders, while the grant holds |
+| Shared storage links | `<app files>/home/storage/shared` → `/storage/emulated/0`, one convenience link, while the grant holds (§5) |
 
 Everything is under the app's private data directory, and uninstalling the app deletes all of it.
 The app itself writes nothing outside it; the *agent* may, in a workspace on the phone and in the
-tier the reader chose (§5, §14). The API key's exposure is in [§5](05-storage-and-safety.md).
+tier the reader chose (§5, §14). The API key's exposure is in [§6.1](06.1-custom-endpoints.md).
 
 ## What a backup carries, and why a restore has to re-read
 
@@ -234,7 +237,7 @@ would be a second answer to "who owns this file". It runs **before** the agent i
 the launch path re-derives `models.json` and `settings.json` *from* the restored profile — and it
 re-derives those two files itself, on the same profile, because a restore that finds the agent
 already stopped never reaches a launch. Without that half, the archive's own `settings.json` is all a
-hand-run `pi` can read, and one taken before the defaults were first written leaves the terminal tab
+hand-run `pi` can read, and one taken before the defaults were first written leaves the terminal page
 typing `pi` into a process with no model at all.
 
 **The archive is refused before anything is written.** The manifest is the first entry of the zip, its
@@ -257,8 +260,8 @@ holds the key (`PIKIT_API_KEY`), so blanking it would produce a file the custom 
 resolve while protecting nothing ([§6.1](06.1-custom-endpoints.md)).
 
 **The run is owned by the session, not by the page.** A workspace backup is thousands of files, and a
-restore is a stop, an unpack and a restart; the page is one tab that leaves the composition the moment
-the user looks at another one. `BackupManager` therefore hangs off `PiAgentSession`, beside
+restore is a stop, an unpack and a restart; the page leaves the composition the moment the
+user looks at another one. `BackupManager` therefore hangs off `PiAgentSession`, beside
 `repairInstalledPackages`, which walks `$PREFIX` for the same reason — and not off the composition the
 way `CatalogueUpdater` and `StorageSelfTest` are, because those run for seconds and their result is a
 line of text, where losing this halfway is a half-restored device.

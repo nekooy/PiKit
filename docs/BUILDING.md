@@ -342,9 +342,9 @@ previous dump lands on the row that took its place.
 
 ### Seeing a populated transcript without a provider
 
-An emulator has no API key, so a prompt produces no answer and the chat tab opens on its
-empty state — which is no use for anything the transcript draws. The way in is a seeded
-session file, written to the tree's own scratch directory first:
+An emulator has no API key, so a prompt produces no answer and the conversation page opens
+on its empty state — which is no use for anything the transcript draws. The way in is a
+seeded session file, written to the tree's own scratch directory first:
 
 ```bash
 # .tooling/seed.jsonl — the records are described in MAINTAINING.md, step 2 of
@@ -396,6 +396,7 @@ that URL. Three things it settles that nothing else can:
   `POST_NOTIFICATIONS` first (`adb shell pm grant pi.kit.mob
   android.permission.POST_NOTIFICATIONS`) or the entry is invisible and the test reads
   as a failure.
-- **A second conversation.** A saved conversation opened from the history list launches
-  its own child; `logcat -s PiKit:I` prints `restoring session …` with the path it bound
-  to, and the answer already streaming in the first conversation is untouched.
+- **A second conversation.** A saved conversation opened from the drawer is read from its
+  file and starts no child; the first prompt is what launches one, and
+  `logcat -s PiKit:I` then prints `restoring session …` with the path it bound to. The
+  answer already streaming in the first conversation is untouched.

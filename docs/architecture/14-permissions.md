@@ -35,7 +35,7 @@ an agent told `full-access` stops asking permission for `npm install`.
 | Tier | Reads | Writes | What the composer says |
 | --- | --- | --- | --- |
 | `read-only` | anywhere | nothing | 仅可查看 · `只读：能查看文件，不能修改，也不执行会改动文件的命令` |
-| `workspace-write` (default) | anywhere | inside the workspace, and inside the shared-storage folders the user granted | 工作区内读写 · `只能修改工作区和你授权的共享存储文件夹` |
+| `workspace-write` (default) | anywhere | inside the workspace the conversation runs in | 工作区内读写 · `能读任何地方，只能修改这次对话的工作区` |
 | `full-access` | anywhere | anywhere | 完全访问 · `不做任何拦截，Agent 可以改动它有权改动的任何文件` |
 
 ## Where it is enforced, and why there
@@ -89,9 +89,13 @@ Three properties follow from the file's location, and each one is a decision:
   `git commit -m 'fix; rm -rf /sdcard case'` is one command and not two; `sh -c '…'`,
   `eval '…'` and a heredoc fed to a shell are inspected as the command they are; `~`,
   `$HOME`, `${HOME}` and `$PREFIX` are expanded except inside single quotes. A segment that
-  mutates is refused when a path it names is outside the writable roots. The `~/storage`
-  link farm is translated back to the `/sdcard` path it points at (`PIKIT_STORAGE_LINKS`),
-  because that is the spelling PiKit itself hands the agent.
+  mutates is refused when a path it names is outside the writable roots. A `~/storage`
+  spelling is translated back to the `/sdcard` path it points at through the link map the
+  extension can be handed (`PIKIT_STORAGE_LINKS`); the app hands it none any more — since the
+  grant page went (§5), the only variables the app publishes for the tiers are
+  `PIKIT_WORKSPACE` and `PIKIT_PERMISSION_FILE`, so the middle tier's writable roots are the
+  workspace alone. The mapping stays in the classifier for a hand-run `pi` that sets the two
+  variables itself, and `tools/test-permissions.mjs` is where it is exercised.
 - **`read-only` is a whitelist, not a blacklist.** A blacklist of "commands that write" is
   a losing game — `awk` writes, `sed`'s `w` command writes, `jq` can write — so the tier
   allows a curated list of inspection commands (`cat`, `ls`, `rg`, `git log`, `git diff`,

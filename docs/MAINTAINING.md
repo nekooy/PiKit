@@ -54,7 +54,7 @@ sweep is a check, and a check that skipped its own command is not evidence.
 **The device half is the app's own page.** `Settings → Maintenance & repair` reports the
 same state from inside the installed build, and walking it before a release is what
 catches the two things the repository cannot: the packages row's `N 个有可用更新` (the
-device's dpkg status against the image's shipped set — `pkg upgrade` in the Terminal tab
+device's dpkg status against the image's shipped set — `pkg upgrade` in the terminal page
 is the fix, and the count coming back to zero is the pass), and the model list, whose
 `Refresh` is the only way to see a just-released model before the release ships. The
 relocation row and the storage check are the two runs whose failure is a device fact
@@ -109,18 +109,20 @@ storage, real network and the ARM translation trap. Both are described in
   request of its own, so it is also the one that no JVM test can prove end to end:
   the suite pins the parsing and the version comparison, and the request itself needs
   a device with a network and a published release to see.
-- Switch tabs mid-turn, background the app mid-turn, and confirm the turn survives.
+- Switch pages mid-turn — the drawer, the terminal, the files — background the app
+  mid-turn, and confirm the turn survives.
 - Write through shared storage, and run **Settings → Maintenance & repair → Check
   storage**.
 - `pkg install` one small package and confirm it lands in the app's prefix.
 
 ## The README preview strip
 
-Four phone screenshots — Chat, Terminal, Files, Settings — butted together with no frames and
-no captions, saved as `docs/assets/preview-<version>.webp`. The file is named for the version
-whose interface it shows, so replacing one adds a file rather than overwriting it: the strip
-before it keeps its own name as a record (`preview-0.5.0.webp`, `preview-0.2.0.webp`), and
-nothing generates the file, so this is the whole recipe:
+Four phone screenshots — the conversation, the terminal, the files page and the settings —
+butted together with no frames and no captions, saved as
+`docs/assets/preview-<version>.webp`. The file is named for the version whose interface it
+shows, so replacing one adds a file rather than overwriting it: the strip before it keeps its
+own name as a record (`preview-0.5.0.webp`, `preview-0.2.0.webp`), and nothing generates the
+file, so this is the whole recipe:
 
 1. **Capture four full-bleed screenshots** at 1080x2400 — the conversation, the terminal, the
    files page and the settings — on the interface language the strip is written for (简体中文 for
@@ -130,18 +132,18 @@ nothing generates the file, so this is the whole recipe:
    `adb shell uiautomator dump` reports rather than by eye off a screenshot: the PNG reaches a
    reader at whatever width the window has, while the tree is in device pixels.
 2. **Give the chat panel a transcript.** The emulator has no provider, so a real turn cannot be
-   produced and the empty state is what the tab opens on. Seed a conversation into
+   produced and the empty state is what the page opens on. Seed a conversation into
    `files/pi-sessions/` with `run-as`: a `{"type":"session",…}` line, then one record per
    message — `{"type":"message",…,"message":{"role":"user"…}}`, assistant messages whose
    `content` carries `toolCall` blocks, a `toolResult` record per call, and a last assistant
    message carrying `usage`. Two traps, both hit while shooting 0.5.0: the records must form a
    **linear `parentId` chain**, because pi stores messages as a tree and `get_messages` returns
    only the branch that reaches the last record — five tool calls hanging off one prompt
-   collapse to one step — and the file only reaches the screen if the app *restores* it, which
-   needs `open_new_on_launch=false` (or a tap on its row in History). The file is written
-   to `.tooling/seed.jsonl` first — the ignored scratch directory, so it is never a commit
-   — and `adb push` from there needs `MSYS_NO_PATHCONV=1` in Git Bash, or the destination
-   arrives as a drive-rooted path instead of `/data/local/tmp/seed.jsonl`.
+   collapse to one step — and the file only reaches the screen if the app *opens* it, which
+   needs `open_new_on_launch=false` at launch (or a tap on its row in the drawer). The file
+   is written to `.tooling/seed.jsonl` first — the ignored scratch directory, so it is never
+   a commit — and `adb push` from there needs `MSYS_NO_PATHCONV=1` in Git Bash, or the
+   destination arrives as a drive-rooted path instead of `/data/local/tmp/seed.jsonl`.
 3. **Make the chips read something.** With no profile configured, `get_state` reports the model
    as `unknown`, so the composer's chips say `unknown` and `0%`. A `files/pikit-config.json`
    naming a provider and a model fixes the first (a dummy key is fine — nothing is sent), and a

@@ -11,7 +11,7 @@ that only show up on a real device:
 
 1. **There is a window in which the package is broken.** Between `dpkg` unpacking
    a binary and the repair pass reaching it, running that binary fails. On a
-   phone the window is however long the user takes to leave the terminal tab —
+   phone the window is however long the user takes to leave the terminal page —
    which may be never.
 2. **It is quadratic.** The repair walks all ~19 000 files of the prefix to fix
    the handful that changed.
@@ -155,7 +155,7 @@ out to them rather than carrying decompressors written in JavaScript.
   identically; the two exist because the shell one can run without the app process
   and the Kotlin one can run without the terminal.
 - **`PrefixPatcher`** in the app. It is now reached only from that one button. It
-  used to run on leaving the terminal tab, ran whether or not anything had been
+  used to run on leaving the terminal page, ran whether or not anything had been
   installed, and walked ~19 000 files to repair what the hooks above prevent.
 
   It applies the **same exclusion list as the build**, read from

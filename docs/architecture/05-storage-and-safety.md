@@ -65,7 +65,7 @@ What replaced it, precisely:
   the workspace like any other path.
 - **Nothing publishes a grant to the agent any more.** `PIKIT_STORAGE_ALLOWED` and
   `PIKIT_STORAGE_LINKS` are gone from `ShellEnvironment.build`; the only environment variables
-  the tiers read are `PIKIT_WORKSPACE` and `PIKIT_PERMISSION_FILE` (§14).
+  the app publishes for the tiers are `PIKIT_WORKSPACE` and `PIKIT_PERMISSION_FILE` (§14).
 
 Two facts about the removed design are worth keeping, because they are measurements rather
 than preferences. **The whole tree subsumed the rest:** with `shared` on, the switches below it

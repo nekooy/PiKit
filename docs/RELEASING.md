@@ -12,8 +12,8 @@ and the release job runs every test and checker `tools/build-apks.py` runs.
 `gradle.properties`:
 
 ```properties
-pikit.versionName=0.6.0
-pikit.versionCode=12
+pikit.versionName=0.6.4
+pikit.versionCode=16
 ```
 
 - **`versionName`** is what the user sees — **Settings → About PiKit**, the in-app
@@ -226,7 +226,7 @@ users, never for a version people will install and keep.
       A release that moved the pins after the dispatch has shipped the previous ones.
 - [ ] **The device half of the sweep is walked too**, because `build-apks.py` cannot see
       it: `Settings → Maintenance & repair` reports the packages row (a non-zero
-      `N 个有可用更新` means `pkg upgrade` in the Terminal tab before the release goes
+      `N 个有可用更新` means `pkg upgrade` in the terminal page before the release goes
       out), and the model list's *Refresh* is what shows a just-released model.
 - [ ] `versionName`/`versionCode` bumped in `gradle.properties`, in the commit
       being released — and `git status` clean, because the workflow releases the

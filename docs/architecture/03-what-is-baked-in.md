@@ -13,7 +13,7 @@ requires).
 The image is assembled by `tools/build-runtime-image.py` from five sources:
 
 1. the official Termux bootstrap, taken verbatim from termux-packages and then
-   relocated to PiKit's package id (see section 1);
+   relocated to PiKit's package id (see §1);
 2. Termux `.deb` packages for `nodejs`, `npm`, `ripgrep`, `fd` and their
    transitive dependencies, resolved from the apt index and unpacked into the
    same prefix;
@@ -116,12 +116,12 @@ phone does not have; and `ssrf.allowRanges: ["198.18.0.0/15"]`, the range a TUN/
 proxy answers with, which the extension's own default (`[]`) refuses — so every
 `fetch_content` on such a phone failed before it connected (§9.3 has the mechanism). Both
 are written only where the key is absent, so a value the user set — `[]` included — is
-never replaced. A file that does not parse is reported rather than overwritten. (Section 9
+never replaced. A file that does not parse is reported rather than overwritten. (§9.3
 has the rest.)
 
 The page used to carry two SearXNG fields (`searxngBaseUrl`, `searxngHeaders`); they were
 removed with the rest of the per-provider fields because a field PiKit draws is a field
-PiKit has to *write* (section 9), and the extension documents and validates them now.
+PiKit has to *write* (§9.3), and the extension documents and validates them now.
 
 ## The extension's licence, and why it is named on the About page
 
@@ -257,10 +257,11 @@ app actually has. The two `github.com/termux/...` links in the same file are lef
 
 ## Every version in the image is pinned, pi's included
 
-`BOOTSTRAP_TAG`, `PI_VERSION` and `WEB_ACCESS_VERSION` are constants in
-`tools/build-runtime-image.py`, and all three are hashed into the image's revision, so two
-builds of one commit are the same image — which is the whole point of a revision a device
-compares against.
+`BOOTSTRAP_TAG` is a constant in `tools/build-runtime-image.py`; pi's version and the
+extension's are the two *product* pins in `tools/image-versions.json`, which the builder
+reads as `PI_VERSION` and `WEB_ACCESS_VERSION`. All three are hashed into the image's
+revision, so two builds of one commit are the same image — which is the whole point of a
+revision a device compares against.
 
 pi was once vendored as `@earendil-works/pi-coding-agent` with no version — npm's
 "latest" — and `vendor_pi` reused `.runtime-build/cache/pi` whenever `node_modules` was
