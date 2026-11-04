@@ -1606,17 +1606,6 @@ interface Strings {
         val relocateNow: String
 
         /**
-         * The paragraph under the relocation button.
-         *
-         * It leads with *only if something is already failing*, because the row's title
-         * ("package relocation") reads as housekeeping and the button was pressed for no
-         * reason by users whose runtime was fine. The reasoning that used to be here —
-         * package ids, `DT_RUNPATH`, shebangs — is in docs/ARCHITECTURE.md, and this page
-         * only has to say when the button is for and why it is almost never needed.
-         */
-        val relocateNote: String
-
-        /**
          * Shown when the runtime's package relocator is itself damaged.
          *
          * Only reachable on an install that pressed "check and repair" with a build

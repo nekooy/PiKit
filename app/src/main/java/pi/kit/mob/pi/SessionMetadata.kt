@@ -21,7 +21,7 @@ data class SessionMeta(
      *
      * pi writes `{"type":"session","version":1,"id":…,"cwd":"…"}` as line one, which is
      * the only place a saved conversation records the workspace it belonged to — a fact
-     * the history page groups by and the agent needs in order to reopen the conversation
+     * the drawer groups by and the agent needs in order to reopen the conversation
      * in the directory its tool calls were written for. Null for a file written by a pi
      * old enough not to record one, and for a session created by a launch that had not
      * answered `get_state` yet.

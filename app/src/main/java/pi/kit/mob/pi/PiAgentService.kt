@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  * **the UI is in front** — no entry. The Activity is already keeping the process
  *    alive, and the reader can see the stream itself;
  *  * **nothing is streaming** — no entry either. The conversation is on disk, a killed
- *    process costs a relaunch on the next prompt, and the Terminal tab's shells are the
+ *    process costs a relaunch on the next prompt, and the terminal page's shells are the
  *    only thing that could be lost — which is the trade the reader asked for by
  *    choosing "only while it is answering".
  *

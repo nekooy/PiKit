@@ -38,7 +38,7 @@ internal object EnglishStrings : Strings {
             "Tip: start a line with ! to run it as a shell command.",
             "Tip: tap + to attach an image or a file.",
             "Tip: tap ⌘ for the commands PiKit runs itself.",
-            "Tip: long-press any text to copy it.",
+            "Tip: long-press a message for copy, select text and branch.",
             "Tip: the mark at the top-left opens your conversations.",
             "Tip: swiping right does the same, and swiping left closes it.",
             "Tip: the ring at the field's corner shows window use, cost and the session file.",
@@ -698,13 +698,6 @@ internal object EnglishStrings : Strings {
         override val relocate = "Package relocation"
         override val relocateSubtitle = "Rewrite a package that still points at Termux"
         override val relocateNow = "Repair"
-        override val relocateNote =
-            "Only needed if something you installed already fails to run — normally " +
-                "nothing has to be pressed: anything installed with pkg or apt is " +
-                "rewritten automatically as it installs. For a package that arrived some " +
-                "other way and refuses to start, this scan reads every file in the " +
-                "runtime and rewrites the paths inside them; nothing installed outside " +
-                "it is touched, and nothing is deleted."
         override val relocateBroken =
             "The package relocator in this runtime has been damaged, so a repair cannot " +
                 "help. Rebuild the environment below: the runtime is unpacked fresh from the app."
@@ -725,10 +718,10 @@ internal object EnglishStrings : Strings {
         override fun packagesUpgradable(count: Int) =
             "${plural(count, "package", "packages")} with updates"
         override fun packagesPendingNote(names: String) =
-            "Still missing: $names. Run pkg install -y $names in the Terminal tab to retry."
+            "Still missing: $names. Run pkg install -y $names on the terminal page to retry."
         override val packagesUpgradableNote =
-            "The bundled environment ships newer versions of these. Run pkg upgrade in " +
-                "the Terminal tab to move to the latest."
+            "The bundled environment ships newer versions of these. Run pkg upgrade on the " +
+                "terminal page to move to the latest."
         override val rebuildEnvironment = "Rebuild the environment"
         override val rebuildEnvironmentSubtitle =
             "Unpack the runtime again; your installed packages are recorded and restored after"
@@ -891,7 +884,7 @@ internal object EnglishStrings : Strings {
                 "quote; comments and trailing commas are fine."
         override val searchConfigSaved = "Saved"
         override val searchConfigFailed =
-            "The file could not be written. Check the terminal tab for the reason."
+            "The file could not be written. Check the terminal page for the reason."
         override val searchConfigRestored =
             "Restored. The file is back to what a fresh install has, so anything you had " +
                 "configured is gone."

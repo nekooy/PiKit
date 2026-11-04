@@ -197,10 +197,10 @@ internal fun MaintenancePage(
             // installed before those hooks existed or by something that bypassed
             // both. The reasoning that used to be on this page — package ids,
             // `DT_RUNPATH`, shebangs — is in docs/ARCHITECTURE.md, where it is
-            // useful and invisible. `Strings.Settings.relocateNote` is the short
-            // version, and it leads with "only if something already errors" rather
-            // than with what the button does: the row states the fact, the note
-            // answers "do I need this", and the honest answer is almost always no.
+            // useful and invisible. The row states the fact and the button says what
+            // it does; there is no note under it, because a paragraph that has to
+            // answer "do I need this" for a control almost nobody needs is a paragraph
+            // the reader scrolls past on every visit.
             PiSection(title = text.settings.installedPackages) {
                 // The ledger's state first, because it is the question the
                 // section answers before any button in it does: did my packages

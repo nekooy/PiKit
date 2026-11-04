@@ -46,7 +46,7 @@ internal object ChineseStrings : Strings {
             "提示：以 ! 开头可以直接执行命令，例如 !ls",
             "提示：点 + 可以给消息附上图片或文件",
             "提示：点 ⌘ 可以查看 PiKit 自己执行的指令",
-            "提示：长按任意文字即可复制",
+            "提示：长按一条消息可以复制、选中文字或从这里分叉",
             "提示：点左上角的标记可以打开对话列表",
             "提示：向右滑动也能打开对话列表，向左滑回去",
             "提示：点输入框右下角的圆环可以查看窗口占用、花费和会话文件",
@@ -648,10 +648,6 @@ internal object ChineseStrings : Strings {
         override val relocate = "软件包重定位"
         override val relocateSubtitle = "修复仍然指向 Termux 路径的软件包"
         override val relocateNow = "修复"
-        override val relocateNote =
-            "仅在已安装的东西确实启动报错时才需要点 —— 正常情况无需点击：用 pkg 或 apt 安装的" +
-                "软件包会在安装时自动完成重定位。若是从别的途径装进来、启动报错的包，这个检测会" +
-                "读取运行环境里的每个文件并改写其中的路径；环境之外的东西不会被改，也不会被删除。"
         override val relocateBroken =
             "当前运行环境里的包重定位器已经损坏，修复无法解决。请用下方的「重建运行环境」—— " +
                 "运行环境会从应用里重新解包。"
