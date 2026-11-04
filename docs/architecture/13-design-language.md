@@ -294,6 +294,16 @@ order, and the app's name stands on the page itself instead of in a frame. The
 conversation is what the app is for; a bar of four equally weighted destinations said
 otherwise.
 
+**The drawer's foot wears the same capsule.** The one control at the bottom of the history
+panel — the way into the settings — is a `PiGlass.fill()` pill on `glassLift`, the pair the
+bar's marks are drawn with, because it is the same kind of object: a control floating over
+a page rather than a row on it. It used to be an opaque `surfaceContainer` pill on
+`solidLift` — the cheap lift, chosen for a control that floats over a scrolling list — and
+that made it a different kind of object from the capsules one panel away. The blur is
+redrawn as the list scrolls under it; the header's capsules accept the same cost on a page
+that scrolls under them, and a way out of the list that looks like the bar it was reached
+from is worth more than the frames.
+
 **A bar with no bar in it.** The reference drawing the page follows has no strip across
 the top: the content scrolls *under* the marks, fades out as it reaches them, and the
 marks are the only opaque objects there. That is three decisions, and each was made
@@ -329,9 +339,8 @@ because the strip version was worse:
   which is the exact silhouette and is re-rasterised on every frame it is drawn — the right
   trade for the 42dp header capsules, the composer's chips and the toast, and the wrong one
   for a surface as wide as the window: measured while the keyboard closed, the blur under the
-  composer's field was a **48 ms frame**. The field, the message menu and the drawer's
-  Settings pill therefore take `solidLift`; the small floating marks keep `glassLift` for its
-  exact outline.
+  composer's field was a **48 ms frame**. The composer's field therefore takes `solidLift`,
+  and the small floating marks keep `glassLift` for its exact outline.
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
