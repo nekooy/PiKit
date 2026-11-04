@@ -50,7 +50,7 @@ import pi.kit.mob.terminal.TerminalSessionManager
  *
  *  * the unpacked image and its [RuntimeStatus] (one install, one set of stamps);
  *  * [SettingsStore] — a setting is a fact about the app, not about a transcript;
- *  * the terminal's sessions, which belong to the Terminal tab and not to a conversation;
+ *  * the terminal's sessions, which belong to the terminal page and not to a conversation;
  *  * pi's model catalogue (`models-store.json`) and the refresh window that guards it;
  *  * the preference that remembers which conversation a cold start should reopen;
  *  * the pool itself: which conversations are live, and which one the screen is on.
@@ -204,7 +204,7 @@ class PiHost private constructor(context: Context) {
      * Owned here rather than by a conversation: the terminal is one of four tabs and
      * leaves the composition whenever the user looks at another one, which used to
      * kill the shell along with it. A shell is not a conversation either — a
-     * `pkg upgrade` started from the Terminal tab must survive a switch to another
+     * `pkg upgrade` started from the terminal page must survive a switch to another
      * conversation, and it does because nothing about this moved with the transcript.
      */
     val terminalSessions: TerminalSessionManager by lazy {
@@ -549,7 +549,7 @@ class PiHost private constructor(context: Context) {
     /**
      * The conversation the screen is on.
      *
-     * A screen that is *about* a conversation (the chat, its history list acting on the
+     * A screen that is *about* a conversation (the chat, its drawer acting on the
      * live transcript) reads this; a screen that is about one of them (the agent page's
      * process controls) takes it as a parameter, so a change of conversation is a
      * recomposition there rather than a silent retarget.
@@ -685,9 +685,10 @@ class PiHost private constructor(context: Context) {
      * Makes the conversation saved at [path] the active one.
      *
      * A conversation that is already live is *activated*, not reopened: that is the
-     * whole point — a tap on the history list of a conversation that is answering
+     * whole point — a tap on the drawer of a conversation that is answering
      * switches to it and leaves the answer running. Otherwise a conversation is opened
-     * for it, bound to that file, and launched in the directory the session records.
+     * for it, read from that file, and bound to the directory the session records;
+     * nothing is launched until the reader sends something.
      *
      * @return null when the pool is full of working conversations.
      */
@@ -717,7 +718,7 @@ class PiHost private constructor(context: Context) {
      * The live conversation bound to [path], if there is one.
      *
      * A conversation is identified by the session file pi writes it to, which is also
-     * what the history list keys on. A conversation that has not asked anything yet has
+     * what the drawer keys on. A conversation that has not asked anything yet has
      * no file of its own; it is matched by nothing, which is correct — nobody can tap a
      * row for it.
      */
@@ -744,7 +745,7 @@ class PiHost private constructor(context: Context) {
      * Stops a conversation and takes it out of the pool.
      *
      * Its transcript is pi's, on disk, so nothing is lost: closing is "stop the child",
-     * and the history list opens it again. The active conversation can be closed too —
+     * and the drawer opens it again. The active conversation can be closed too —
      * the screen then moves to another live one, or to a fresh empty conversation when
      * that was the last.
      *

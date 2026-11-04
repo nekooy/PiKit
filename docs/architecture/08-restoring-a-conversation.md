@@ -2,10 +2,11 @@
 
 *[Architecture](../ARCHITECTURE.md) §8.*
 
-pi persists every session as JSONL and `get_messages` returns the messages, so switching to
-an earlier conversation can rebuild the transcript. It cannot rebuild the **turns** — pi
-stores the messages but not the `agent_start` / `agent_settled` events that bracketed them —
-and the fold depends entirely on the turn list, so switching sessions appeared to *lose* the
+pi persists every session as JSONL, and a conversation opened from the drawer is rebuilt
+from that file (`SessionTranscript.payload`) without a process: the records are in the same
+shape `get_messages` answers with. What the file cannot rebuild is the **turns** — pi stores
+the messages but not the `agent_start` / `agent_settled` events that bracketed them — and
+the fold depends entirely on the turn list, so switching sessions appeared to *lose* the
 folding: every tool card of every past turn came back on screen at full length. The live path
 builds turns in the reducer as the events arrive; history re-derives them, from the same rule,
 at load time:
@@ -33,7 +34,7 @@ disk. `ChatFoldTest` pins both numbers.
 
 ## Searching a conversation's content
 
-The history list filtered on the title alone, and a title is the first user message, so
+The drawer's list filtered on the title alone, and a title is the first user message, so
 "which conversation was that about the retry logic" was answerable only by opening
 conversations until one looked right. It now searches the prose of every transcript too,
 under three decisions:

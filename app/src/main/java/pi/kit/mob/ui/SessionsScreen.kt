@@ -130,8 +130,9 @@ fun SessionsScreen(
     onOpened: () -> Unit,
     /**
      * Makes [PiAgentSession.SessionSummary]'s conversation the one on screen. The host
-     * opens a second process for a conversation that is not live, so this is a move
-     * between conversations rather than a rebind of the one that is answering.
+     * reads a saved conversation from its file and activates it — no process is started
+     * until the first prompt — so this is a move between windows, and the conversation
+     * that was answering keeps its own child.
      */
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
     /** Leaves the drawer for the settings page, which is reached from its foot. */
@@ -146,8 +147,16 @@ fun SessionsScreen(
     currentPath: String?,
 ) {
     val text = strings
-    var summaries by remember { mutableStateOf<List<PiAgentSession.SessionSummary>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    // The first frame comes from the last listing, not from an empty list. The drawer is
+    // rebuilt when the reader switches conversation (the chat page is keyed on the
+    // session), and a drawer that starts empty draws its spinner and then its rows — on
+    // a quick swipe back into it, a blank panel that fills in. The rows are the same
+    // directory the scan below is about to read, so they are the right thing to draw
+    // while it does; see `PiAgentSession.cachedSessionSummaries`.
+    var summaries by remember {
+        mutableStateOf<List<PiAgentSession.SessionSummary>>(session.cachedSessionSummaries())
+    }
+    var loading by remember { mutableStateOf(summaries.isEmpty()) }
     var query by remember { mutableStateOf("") }
     var selecting by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -194,7 +203,10 @@ fun SessionsScreen(
     val toasts = LocalPiToast.current
 
     LaunchedEffect(reload) {
-        loading = true
+        // Only a drawer with nothing to show draws the spinner. With a listing already
+        // on screen the scan is a refresh, and raising `loading` for it is what put an
+        // empty panel over rows the reader had seen a frame earlier.
+        if (summaries.isEmpty()) loading = true
         summaries = session.listSessions()
         loading = false
     }

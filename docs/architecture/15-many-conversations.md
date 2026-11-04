@@ -66,11 +66,25 @@ disagree about is not a conversation's fact.
 | `SettingsStore`, the permission tier, the terminal's PTYs | `PiHost` | A setting is about the app. A shell outlives the transcript that opened it — `pkg upgrade` must not die because the reader switched conversation. |
 | pi's model catalogue and its refresh window | `PiHost` | One `models-store.json`. Two refreshes would be two `pi update --models` processes writing one file; the deadline is persisted once. |
 | `models.json` and pi's `settings.json` | `PiHost.launchFileLock` around the write **and** the spawn | The files are one set for the whole app, and pi reads a torn document as `Unknown provider` and exits. The lock is held across the spawn so a second launch cannot observe a document being replaced. |
+| The session directory's listing and its per-file metadata cache | `SessionListingCache` | The files are one directory. A cache owned by a conversation was emptied by every switch, so the drawer re-parsed every session file the reader had — and drew its spinner while it did (below). |
 | The child, its RPC client, `ConversationState`, the workspace, the model, the wake lock | `PiAgentSession` | One process, one transcript. |
 
 `PiAgentSession` keeps its public shape and delegates the shared half to the host, which
 is why the screens did not have to be rewritten: a screen that says `session.env` still
 means the one environment.
+
+**The drawer's listing is the shared fact the first release missed.** The history drawer is
+rebuilt when the reader switches conversation — the chat page is keyed on the session — and
+the listing it scans was cached in the *session*, so every switch started from an empty
+cache and re-read the first line of every JSONL file in the directory. Measured on the
+1080 px emulator with twenty saved conversations: the drawer composed with `n=0,
+loading=true`, the scan finished 3 ms later, and the rows were on screen **146 ms** after
+the composition, with a spinner in between. That is the flash a quick swipe back into the
+drawer showed: a blank panel that fills in. The cache is process-wide now (`meta`, keyed by
+path with the `(mtime, length)` stamp), and the last complete listing is kept and used as
+the first frame a newly composed drawer draws, so a switch costs a refresh rather than a
+blank. The drawer's own scroll position is hoisted above the conversation key for the same
+reason — it is the list's state, not a conversation's — and `RootContent` holds it.
 
 ### The pool is bounded, and the bound is memory
 
@@ -88,7 +102,7 @@ so there is a ceiling, and the ceiling has two numbers rather than one.
 Opening a conversation when either bound is reached evicts the **least recently used
 idle** conversation — never the active one, never one with a turn in flight — because a
 conversation's transcript is pi's and already on disk: closing is "stop the child", and
-the history list opens it again. The refusal is therefore rare by construction: it needs
+the drawer opens it again. The refusal is therefore rare by construction: it needs
 five answers in flight *and* nothing idle to give way, or eight children all mid-turn. The
 sentence it shows names the answering cap, because that is the limit the reader can see
 and wait out.

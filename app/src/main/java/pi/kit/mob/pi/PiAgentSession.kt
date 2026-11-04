@@ -107,6 +107,47 @@ class TurnInFlightException :
     IllegalStateException("the agent is still working on this session")
 
 /**
+ * What the last parse of each session file found, shared by every conversation.
+ *
+ * The conversation drawer re-reads a transcript from its first line to its last to count its
+ * messages, and a session is megabytes of JSONL with four regexes run per line. It used
+ * to be a field of [PiAgentSession] — one cache per conversation — which was invisible
+ * while the app had a single one and became a cost the moment a tap could open another:
+ * every switch built a session with an empty cache, so the drawer re-parsed every session
+ * file the user had ever had, and drew its spinner while it did. The directory is the
+ * environment's and is the same for all of them, so the cache is too.
+ *
+ * The key is the path, so a rename or a delete cannot leave a stale entry behind, and the
+ * stamp is (mtime, length) — the same pair [SessionSearchIndex] uses, and for the same
+ * reason: a file written twice inside the filesystem's timestamp granularity keeps its
+ * modification time.
+ *
+ * [last] is the most recent listing rather than a cache of it: it is what lets a drawer
+ * that is composed before the next scan has answered draw the rows it had a moment ago
+ * instead of an empty panel with a spinner. It is replaced by every completed scan.
+ */
+internal object SessionListingCache {
+    internal class CachedMeta(val modifiedAt: Long, val length: Long, val meta: SessionMeta)
+
+    /**
+     * Concurrent because the listing runs on the IO dispatcher and two conversations can
+     * scan at once — one opened from the drawer while the last one is still loading its
+     * transcript.
+     */
+    val meta = ConcurrentHashMap<String, CachedMeta>()
+
+    /** The most recent complete listing, in display order. */
+    @Volatile
+    var last: List<PiAgentSession.SessionSummary> = emptyList()
+
+    /** A restore rewrites mtimes, so neither half of the cache survives it. */
+    fun clear() {
+        meta.clear()
+        last = emptyList()
+    }
+}
+
+/**
  * One conversation: the agent process that answers it, and the state its transcript is
  * drawn from.
  *
@@ -129,7 +170,7 @@ class PiAgentSession internal constructor(
     internal val host: PiHost,
     /**
      * The saved conversation this one was opened for, when it was opened from the
-     * history list; null for a new one. The launch rebinds the fresh child to that file
+     * drawer; null for a new one. The launch rebinds the fresh child to that file
      * after the handshake, because pi has no resume flag — every launch opens a new
      * session file.
      */
@@ -210,7 +251,7 @@ class PiAgentSession internal constructor(
 
     /**
      * The session file this conversation is bound to, when it was opened from the
-     * history list. Cleared once the child has been rebound, because from then on the
+     * drawer. Cleared once the child has been rebound, because from then on the
      * transcript's own `sessionFile` is the better answer.
      */
     @Volatile
@@ -229,14 +270,14 @@ class PiAgentSession internal constructor(
     /** Where pi writes a conversation; the path lives in [TermuxEnv] with the rest. */
     val sessionDir: File get() = env.sessionDir
 
-    /** The terminal's PTYs. Shared: a shell is not a conversation, it is the tab's. */
+    /** The terminal's PTYs. Shared: a shell is not a conversation, it is the terminal's. */
     val terminalSessions: TerminalSessionManager get() = host.terminalSessions
 
     /**
      * The conversation this process is in, as pi names it: the session file it writes.
      *
      * Null until the handshake has answered — a conversation nothing has been sent to
-     * has no file yet — which is also why the history list cannot offer a row for one.
+     * has no file yet — which is also why the drawer cannot offer a row for one.
      */
     val sessionPath: String?
         get() = _conversation.value.sessionFile ?: restoreTarget
@@ -343,7 +384,7 @@ class PiAgentSession internal constructor(
     /**
      * Opens this conversation in [path] before it has been launched.
      *
-     * The host calls this when it opens a saved conversation from the history list: the
+     * The host calls this when it opens a saved conversation from the drawer: the
      * session file records the directory pi ran in, and a child launched anywhere else
      * would show that transcript while every tool call acted in another tree. Distinct
      * from [selectWorkspace], which is the reader's own move and relaunches a running
@@ -894,7 +935,7 @@ class PiAgentSession internal constructor(
         val pinned: Boolean,
         /**
          * The directory pi recorded in the session file, or null for one written before
-         * pi recorded a `cwd`. It is what the history page groups by, and what
+         * pi recorded a `cwd`. It is what the drawer groups by, and what
          * [PiHost.openConversation] relaunches the agent into.
          */
         val workspace: String? = null,
@@ -908,26 +949,6 @@ class PiAgentSession internal constructor(
      * Reads every session file, so it runs on an IO dispatcher — a long history
      * is megabytes of JSONL and this must not block the frame.
      */
-    /**
-     * What the last parse of each session file found, stamped with the file it was
-     * parsed from.
-     *
-     * The history list re-reads a transcript from its first line to its last to
-     * count its messages, and a session is megabytes of JSONL with four regexes run
-     * per line — so opening the list re-parsed every session the user has ever had,
-     * every time, including the ones that had not been touched since the last open.
-     * The key is the path, so a rename or a delete cannot leave a stale entry
-     * behind, and the stamp is (mtime, length) — the same pair
-     * [SessionSearchIndex] uses, and for the same reason: a file written twice
-     * inside the filesystem's timestamp granularity keeps its modification time.
-     *
-     * Concurrent because the listing is a `withContext(Dispatchers.IO)` body and two
-     * opens can overlap.
-     */
-    private class CachedMeta(val modifiedAt: Long, val length: Long, val meta: SessionMeta)
-
-    private val sessionMetaCache = ConcurrentHashMap<String, CachedMeta>()
-
     suspend fun listSessions(): List<SessionSummary> = withContext(Dispatchers.IO) {
         val pinned = pinnedSessions.value
         val files = sessionDir.listFiles { file -> file.isFile && file.extension == "jsonl" }
@@ -936,14 +957,14 @@ class PiAgentSession internal constructor(
         files.map { file ->
             val modifiedAt = file.lastModified()
             val length = file.length()
-            val cached = sessionMetaCache[file.absolutePath]
+            val cached = SessionListingCache.meta[file.absolutePath]
             val meta = if (cached != null && cached.modifiedAt == modifiedAt && cached.length == length) {
                 cached.meta
             } else {
                 runCatching {
                     file.bufferedReader().use { reader -> SessionMetadata.read(reader.lineSequence()) }
                 }.getOrDefault(SessionMeta()).also {
-                    sessionMetaCache[file.absolutePath] = CachedMeta(modifiedAt, length, it)
+                    SessionListingCache.meta[file.absolutePath] = SessionListingCache.CachedMeta(modifiedAt, length, it)
                 }
             }
             SessionSummary(
@@ -965,17 +986,31 @@ class PiAgentSession internal constructor(
         }.also { summaries ->
             // A conversation deleted while the app was running would otherwise be
             // cached for the life of the process.
-            sessionMetaCache.keys.retainAll(files.mapTo(HashSet()) { file -> file.absolutePath })
+            SessionListingCache.meta.keys.retainAll(files.mapTo(HashSet()) { file -> file.absolutePath })
             adoptWorkspaces(summaries)
         }.sortedWith(compareByDescending<SessionSummary> { it.pinned }.thenByDescending { it.modifiedAt })
+            .also { SessionListingCache.last = it }
     }
+
+    /**
+     * The listing the last scan produced, for a page that is composed before this
+     * conversation has ever scanned the directory.
+     *
+     * The drawer is rebuilt when the reader switches conversation — the chat page
+     * is keyed on the session — and a drawer composed from nothing draws its spinner
+     * first and its rows a frame or two later. On a quick swipe back into the drawer
+     * that is a blank panel that fills in, which reads as the page flashing; the last
+     * listing is the same directory the new conversation is about to scan, so it is the
+     * right first frame. See [SessionListingCache].
+     */
+    fun cachedSessionSummaries(): List<SessionSummary> = SessionListingCache.last
 
     /**
      * Workspaces that arrived from somewhere other than this app's picker.
      *
      * A reader who runs `pi` by hand in the terminal — or any pi session that starts in a
      * directory of its own — writes a session file whose header records that directory, so
-     * the history page groups it under a workspace the composer's menu had never heard of:
+     * the drawer groups it under a workspace the composer's menu had never heard of:
      * the group was there and the chip list was not, which is the same conversation in two
      * places disagreeing about where it lives.
      *
@@ -2199,7 +2234,7 @@ class PiAgentSession internal constructor(
         // usually misses on; cleared because an extracted file's mtime is the
         // moment it was extracted, and two restores in the same second would
         // otherwise be served the first one's metadata.
-        sessionMetaCache.clear()
+        SessionListingCache.clear()
         reloadPinnedSessions()
         // The policy decides which of the phone's own folders are linked into
         // `$HOME`, so a restored one changes the tree the agent sees, not just the
@@ -2228,7 +2263,7 @@ class PiAgentSession internal constructor(
      *
      * The preferences instance is shared with the write path, so its values are
      * already the restored ones; the flow beside it is a copy taken at
-     * construction, and the history page reads *that*.
+     * construction, and the drawer reads *that*.
      */
     private fun reloadPinnedSessions() {
         _pinnedSessions.value = pinnedPrefs.getStringSet(KEY_PINNED, emptySet()).orEmpty().toSet()
