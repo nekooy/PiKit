@@ -4409,7 +4409,12 @@ private fun Composer(
                         // instead of pi's identifier.
                         label = config.activeProfile?.modelId?.takeIf { it.isNotBlank() }
                             ?: state.model?.takeIf { it.isUsable }?.id?.takeIf { it.isNotBlank() }
-                            ?: text.chat.loadingModel,
+                            // Three answers, not two: nothing configured is a *state*
+                            // the reader can act on, and calling it "loading" left a
+                            // fresh install saying 正在加载模型 for ever — the report
+                            // was a first launch with no model that never stopped
+                            // loading.
+                            ?: if (config.profiles.isEmpty()) text.chat.noModel else text.chat.loadingModel,
                         onClick = { onOpenSheet(ComposerSheet.Model) },
                     ) {
                         OverlayListPopup(
@@ -5566,7 +5571,9 @@ private fun ContextMenu(session: PiAgentSession, text: Strings) {
 
     val rows = buildList {
         add(text.chat.detailModel to when {
-            model == null -> text.chat.loadingModel
+            // The same three answers as the chip: with nothing configured there is
+            // nothing to wait for.
+            model == null -> if (config.profiles.isEmpty()) text.chat.noModel else text.chat.loadingModel
             !model.isUsable -> text.chat.noModel
             else -> model.id.ifBlank { model.name }
         })
@@ -5575,7 +5582,8 @@ private fun ContextMenu(session: PiAgentSession, text: Strings) {
             // pi's own word for "no profile is configured". Both have a translated
             // sentence rather than pi's identifier, which a reader who has not
             // configured anything reads as a fault.
-            model == null -> text.chat.loadingModel
+            model == null ->
+                if (config.profiles.isEmpty()) text.chat.noModel else text.chat.loadingModel
             model.provider == "unknown" -> text.chat.noModel
             else -> model.provider.ifBlank { text.settings.none }
         })
