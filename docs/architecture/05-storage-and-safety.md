@@ -328,8 +328,16 @@ clean first launch.
 ## What the farm costs, now that it is only a convenience
 
 Nothing in the write path. The farm is created while the grant holds and removed when it
-does not (`StorageAccess.syncFarm`, called at install, before every launch and from
-`termux-setup-storage`'s broadcast), and its one measurement survives: the links must not be
-duplicated, because `/sdcard/Download` reachable as both `~/storage/downloads` and
-`~/storage/shared/Download` is a duplicate Downloads folder rather than two conveniences.
-`StorageFarmTest` pins the one name and the property; the self-test probes it for real.
+does not (`StorageAccess.syncFarm`, called at install, before every launch, from
+`termux-setup-storage`'s broadcast, and whenever the terminal page opens), and its one
+measurement survives: the links must not be duplicated, because `/sdcard/Download` reachable
+as both `~/storage/downloads` and `~/storage/shared/Download` is a duplicate Downloads
+folder rather than two conveniences. `StorageFarmTest` pins the one name and the property;
+the self-test probes it for real.
+
+The terminal page's call is what makes a grant given *after* launch reach `~/storage`: the
+system page returns to a running process and nothing else re-runs the reconcile, so a
+reader who grants "all files access" from the first-launch dialog now finds the link on
+their next visit to the terminal instead of at the next launch. It is also the app's answer
+to the banner's `termux-setup-storage` line — the command still works (its broadcast lands
+in `StorageSetupReceiver`), but nothing needs to run it.

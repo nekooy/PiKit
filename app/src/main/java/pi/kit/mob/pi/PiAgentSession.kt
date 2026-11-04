@@ -334,6 +334,13 @@ class PiAgentSession internal constructor(
      */
     fun syncStorageLinks(): Boolean = host.syncStorageLinks()
 
+    /**
+     * The setup a fresh shell does by hand, run the first time the terminal page opens:
+     * the storage farm re-reconciled, and one silent package-mirror check. See
+     * [PiHost.ensureTerminalSetup].
+     */
+    fun ensureTerminalSetup() = host.ensureTerminalSetup()
+
     // ------------------------------------------------------------- workspace
 
     /**

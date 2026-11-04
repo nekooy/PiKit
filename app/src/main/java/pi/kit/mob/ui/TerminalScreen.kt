@@ -169,7 +169,14 @@ fun TerminalScreen(session: PiAgentSession,
 
     // If every session is gone we are one blank page away from being unable to
     // type anything at all, so make sure one exists before the first frame.
-    LaunchedEffect(Unit) { manager.begin() }
+    LaunchedEffect(Unit) {
+        manager.begin()
+        // The two setup commands the banner lists are the app's job on the first
+        // visit: the storage farm follows Android's grant, and the apt mirror is
+        // probed and chosen once, silently, so the first `pkg install` is not the
+        // first thing that tries the network. See `PiHost.ensureTerminalSetup`.
+        session.ensureTerminalSetup()
+    }
 
     // The bar's modes. `ctrlOn`/`altOn` are latches on the old two-row bar; the hardware
     // switch below is the one that survived it.

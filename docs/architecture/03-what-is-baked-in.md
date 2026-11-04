@@ -427,4 +427,40 @@ extracts it **once**, only when `$PREFIX` is missing or empty — app updates ne
 prefix, and every environment update goes through `pkg upgrade`. PiKit holds the same rule
 for the seed layer, which is exactly what the shape-only stamp above buys.
 
+## The apt mirror is measured on the phone, once
+
+The bootstrap ships Termux's own `sources.list`, which points at the Cloudflare-cached
+repository — the right default for an image built once and downloaded everywhere, because a
+mirror is a property of the network the phone is on and not of the APK. The choice is made
+on the device instead: the first time the terminal page opens,
+`PiHost.ensureTerminalSetup()` races every mirror the bundled termux-tools lists, off the
+page's thread, and pins the fastest.
+
+**The race is a real one, because `termux-change-repo`'s is not.** Its "Mirror group" path
+ends in `pkg --check-mirror update`, and that command tests mirrors for *reachability* and
+then picks one of the reachable ones **at random, weighted by each mirror file's
+`WEIGHT`** — `packages-cf.termux.dev` carries 10. On a phone in China that can land on a
+mirror on another continent that merely answered: measured on the emulator, with all
+mirrors reachable, one run of the command picked `mirrors.in.sahilister.net` and a later
+one picked a different host. So `PackageMirror` reads the same `MAIN=` lines and sends each
+mirror the request `apt update` begins with — `dists/stable/InRelease`, about 14 KB — ten
+mirrors at a time, four seconds each, and the lowest latency wins.
+
+Measured on the emulator: **70 mirrors tested in about 15 s**, and the winner was
+`mirror.sjtu.edu.cn`; the pin was written and `sources.list` became one line in `pkg`'s own
+shape, from which a following `pkg update` fetched in about a second. **The fastest three
+are pinned**, not only written down, and the pin is a group rather than a single mirror:
+`chosen_mirrors` points at `mirrors/pikit`, a directory of the three mirror files with
+their `WEIGHT` rewritten — **10** for the measured fastest, **1** for each fallback. `pkg`
+tests every file in a group and picks a reachable one at random *weighted by that number*,
+so its own six-hour check keeps landing on the fastest ten times in twelve while a dead
+one falls straight through to a fallback; a *single* pinned mirror has no fallback at all
+and `pkg` answers "None of the mirrors are accessible" instead. All three were fast in the
+same race, so the fallback is not a slow mirror, and the group is the shape
+`termux-change-repo` writes for one. A mirror the reader **chose** is never touched — a
+`chosen_mirrors` link or file already there makes the check mark itself done without
+testing. A failed attempt records its timestamp and is retried after six hours; a success
+is recorded as `ok` in `$HOME/.pikit/package-mirror`, so the race happens once per install,
+and `pkg`'s own six-hour index check keeps a dead candidate from coming back.
+
 ---

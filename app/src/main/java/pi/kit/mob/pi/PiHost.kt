@@ -3,6 +3,7 @@ package pi.kit.mob.pi
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -23,6 +24,7 @@ import pi.kit.mob.data.SettingsStore
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.catalogueRefreshEnvironment
 import pi.kit.mob.env.BootstrapInstaller
+import pi.kit.mob.env.PackageMirror
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.env.TermuxEnv
 import pi.kit.mob.locales.stringsFor
@@ -89,6 +91,14 @@ class PiHost private constructor(context: Context) {
      * conversation that asked for it was closed.
      */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Whether this process already ran [ensureTerminalSetup]'s one-shot work.
+     *
+     * The marker in `$HOME` is what makes the mirror check once per install; this flag
+     * only saves the file reads on every visit to the terminal page.
+     */
+    private val terminalSetupStarted = AtomicBoolean(false)
 
     // ----------------------------------------------------------- environment
 
@@ -196,6 +206,74 @@ class PiHost private constructor(context: Context) {
             .getOrDefault(false)
         Log.i(TAG, "shared storage: granted=$granted farm=$synced")
         return synced
+    }
+
+    /**
+     * The two setup steps a fresh Termux shell otherwise does by hand, run the first
+     * time the terminal page is opened.
+     *
+     *  - **`termux-setup-storage`** is already this app's job: `~/storage/shared` is a
+     *    link the app creates whenever Android's all-files grant exists, and
+     *    [syncStorageLinks] is what keeps it in step. Calling it here as well is what
+     *    makes a grant given *after* launch — the system page returns to a running app —
+     *    reach the farm without restarting.
+     *  - **`termux-change-repo`** is how a phone in China gets an apt mirror it can
+     *    actually reach. The measurement is [PackageMirror]'s: every mirror the bundled
+     *    termux-tools lists is raced against the same index request, and the fastest few
+     *    are pinned as a `chosen_mirrors` group — the shape `termux-change-repo` itself
+     *    writes, so `pkg` keeps the group and can fall back inside it instead of
+     *    re-choosing globally on its next check. Output is not involved: nothing is
+     *    printed into the terminal. A mirror the reader already chose is left alone.
+     *
+     * Runs off the page's thread and at most once per install — the marker lives in
+     * `$HOME`, so an app update does not repeat it. A failed attempt (offline, every
+     * mirror failing) is retried no sooner than [MIRROR_RETRY_MS].
+     */
+    fun ensureTerminalSetup() {
+        val first = terminalSetupStarted.compareAndSet(false, true)
+        scope.launch {
+            syncStorageLinks()
+            if (!first) return@launch
+            runCatching { selectPackageMirrorOnce() }
+                .onFailure { Log.w(TAG, "The package mirror check failed", it) }
+        }
+    }
+
+    /**
+     * The one-shot half of [ensureTerminalSetup]. See there for what the measurement is
+     * and why the marker is in `$HOME` rather than in the APK's data directory.
+     */
+    private suspend fun selectPackageMirrorOnce() = withContext(Dispatchers.IO) {
+        val stamp = File(env.home, PACKAGE_MIRROR_MARKER)
+        val recorded = runCatching { stamp.readText().trim() }.getOrNull()
+        if (recorded == MIRROR_DONE) return@withContext
+        val prefix = File(env.prefixPath)
+        // An explicit answer from `termux-change-repo` is a group or a single mirror in
+        // `chosen_mirrors`; re-testing would replace it, which is the one thing that
+        // command exists to prevent. A hand-edited `sources.list` has no such marker and
+        // is not protected — `pkg` rewrites it the same way on its own check.
+        if (PackageMirror.hasChosen(prefix)) {
+            stamp.parentFile?.mkdirs()
+            runCatching { stamp.writeText(MIRROR_DONE) }
+            return@withContext
+        }
+        val lastAttempt = recorded?.toLongOrNull()
+        if (lastAttempt != null && System.currentTimeMillis() - lastAttempt < MIRROR_RETRY_MS) {
+            return@withContext
+        }
+        val mirrors = PackageMirror.bundled(prefix)
+        val winners = PackageMirror.fastest(mirrors)
+        val succeeded = winners.isNotEmpty() && PackageMirror.apply(prefix, winners)
+        stamp.parentFile?.mkdirs()
+        runCatching {
+            stamp.writeText(if (succeeded) MIRROR_DONE else System.currentTimeMillis().toString())
+        }
+        Log.i(
+            TAG,
+            "package mirror: tested ${mirrors.size}, " +
+                "fastest=${winners.firstOrNull()?.main ?: "none"} " +
+                "(${winners.size} pinned), applied=$succeeded",
+        )
     }
 
     /**
@@ -882,6 +960,15 @@ class PiHost private constructor(context: Context) {
         private const val KEY_CATALOGUE_DUE_AT = "due_at"
 
         private const val KEY_LAST_SESSION = "last_session"
+
+        /** The file under `$HOME` that records the one-time package-mirror check. */
+        private const val PACKAGE_MIRROR_MARKER = ".pikit/package-mirror"
+
+        /** The marker's value once a mirror has been pinned. */
+        private const val MIRROR_DONE = "ok"
+
+        /** How long a failed mirror check waits before the next terminal open retries it. */
+        private const val MIRROR_RETRY_MS = 6L * 60 * 60 * 1000
 
         @Volatile
         private var instance: PiHost? = null
