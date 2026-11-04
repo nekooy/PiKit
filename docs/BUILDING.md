@@ -300,7 +300,7 @@ it has no `adb root`, which is why `tools/dns-pin.cjs` exists for testing. And
 
 ### Driving a device from Git Bash
 
-Four traps, each of which produces a plausible-looking wrong answer rather than an
+Five traps, each of which produces a plausible-looking wrong answer rather than an
 error:
 
 - **`MSYS_NO_PATHCONV=1` on every `adb` path argument.** Git Bash rewrites a leading
@@ -326,6 +326,13 @@ error:
   the picture scales by **1.2**. `uiautomator dump` bounds are already device pixels and
   are the source to use; match a node by its `text`/`content-desc` and read its
   `bounds` instead of estimating.
+- **Do not resize the AVD's display to make a capture cheaper.** `wm size 540x1200` plus
+  `wm density 210` on the Medium_Phone AVD wedged the window manager: every `wm` and
+  `screencap` call hung for ten minutes, while `adb shell echo` kept answering — so the
+  device looked alive and the display looked broken, and no amount of waiting helped. A
+  reboot cleared it, and the overrides survived the reboot until `wm size reset`. Capture
+  at the native 1080x2400 and scale the PNG afterwards (`Image.LANCZOS`), which is what
+  the README strip does anyway.
 
 Starting the AVD is worth one more line: `emulator -avd <name> -gpu host
 -no-snapshot-save -no-boot-anim`, backgrounded. A **snapshot load can hang** — the AVD
