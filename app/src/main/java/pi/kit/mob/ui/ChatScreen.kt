@@ -102,6 +102,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1567,6 +1568,11 @@ private fun ChatPage(
     // The colour the band's own surface, its rank and the strip under the field are
     // painted with. Read inside the draws and nowhere else.
     val bandSurface = MiuixTheme.colorScheme.surface
+    // The band's own coordinates and the field's top edge inside them: the rank's anchor.
+    // Positions rather than a sum of heights — every earlier version tried to *compute*
+    // where the field began and got it wrong by exactly the padding it forgot.
+    var bandCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var fieldTopPx by remember { mutableFloatStateOf(0f) }
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val headerSpace = topInset + HEADER_CLEARANCE
     // The message menu, and the one message that is in selection mode.
@@ -2104,14 +2110,30 @@ private fun ChatPage(
                     // the size of the *content*, so the strip the inset adds was outside
                     // it and the transcript showed through under the field. Declared
                     // first, this node spans content and inset together.
+                    .onGloballyPositioned { bandCoords = it }
                     .drawBehind {
-                        val inset = bandInset(imeInsets, barInsets, scaffoldBottom)
-                            .coerceAtMost(size.height.toInt())
-                        if (inset > 0) {
+                        val surface = bandSurface
+                        val top = fieldTopPx
+                        if (top > 0f) {
+                            val rampTop = (top - BAND_FADE.toPx()).coerceAtLeast(0f)
+                            if (top > rampTop) {
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        0f to surface.copy(alpha = 0f),
+                                        1f to surface,
+                                        startY = rampTop,
+                                        endY = top,
+                                    ),
+                                    topLeft = Offset(0f, rampTop),
+                                    size = Size(size.width, top - rampTop),
+                                )
+                            }
+                            // Solid from the field's top edge to the bottom of the band,
+                            // inset included.
                             drawRect(
-                                color = bandSurface,
-                                topLeft = Offset(0f, size.height - inset),
-                                size = Size(size.width, inset.toFloat()),
+                                color = surface,
+                                topLeft = Offset(0f, top),
+                                size = Size(size.width, size.height - top),
                             )
                         }
                     }
@@ -2168,6 +2190,14 @@ private fun ChatPage(
 
             Composer(
                 session = session,
+                onFieldTop = { coords ->
+                    // Keep the last value when the band has not been laid out yet: writing
+                    // 0 would drop the whole background for a frame, which reads as a
+                    // flash under the field.
+                    bandCoords?.let { band ->
+                        fieldTopPx = band.localPositionOf(coords, Offset.Zero).y
+                    }
+                },
                 text = text,
                 value = input,
                 onValueChange = onInputChange,
@@ -3255,34 +3285,29 @@ private fun Modifier.bandBottom(
     }
 }
 
-/** The band's bottom inset in px, for a measure or a draw. */
-private fun Density.bandInset(ime: WindowInsets, bars: WindowInsets, scaffoldBottom: Int): Int {
-    val imeBottom = ime.getBottom(this)
-    val air = if (imeBottom > 0) BAND_AIR_ABOVE_KEYBOARD else BAND_AIR_ABOVE_BAR
-    return maxOf(imeBottom, bars.getBottom(this), scaffoldBottom) + air.roundToPx()
-}
+/**
+ * The band's bottom inset in px, for a measure or a draw.
+ *
+ * **One air, not two.** The band used to add 10dp above a keyboard and 15dp above the
+ * gesture strip, so a close ended with a 5dp hop after the last inset step — on a phone
+ * whose keyboard animation is short that reads as the field jumping on its own. The air is
+ * the same on both edges now, and the only thing that changes during a close is the inset
+ * itself, which falls in one direction and never turns back.
+ */
+private fun Density.bandInset(ime: WindowInsets, bars: WindowInsets, scaffoldBottom: Int): Int =
+    maxOf(ime.getBottom(this), bars.getBottom(this), scaffoldBottom) + BAND_AIR.roundToPx()
 
 /**
- * The air above the keyboard, and above the window's own bottom edge.
+ * The air between the composer's field and whatever is below it.
  *
- * **Zero above the keyboard**, because the band already has a 10dp foot below the field
- * ([COMPOSER_FOOT]) and that foot *is* the gap the reader sees there — a second helping on
- * top of it measured 23dp and was reported as too far from the keys. Above the window's own
- * bottom the gesture strip supplies most of the gap, and 15dp on top of it measures 38dp of
- * total clearance — which is the quarter less the reader asked for, against the 51dp the
- * 28dp foot gave.
+ * **One value for both edges.** Ten above a keyboard and fifteen above the gesture strip
+ * were two answers to one question, and the difference between them was a hop at the end of
+ * every close: the band tracked the keyboard's inset down to nothing and then moved another
+ * 5dp as the air changed, which reads as the field jumping after the keyboard has gone.
+ * Twelve on top of the 10dp foot measures 22dp of gap — near enough to the ten the keys
+ * asked for and the fifteen the strip asked for that one number is the honest answer.
  */
-private val BAND_AIR_ABOVE_KEYBOARD = 10.dp
-private val BAND_AIR_ABOVE_BAR = 15.dp
-
-/**
- * How far above the chip row the band is already fully opaque.
- *
- * Sixty-four dp, and it is the answer to "how much text may be readable near the
- * composer": none. The fade begins above *this*, not at the chips' own edge, so the
- * thumb's reach is over a solid surface.
- */
-private val BAND_OPAQUE_ABOVE_CHIPS = 64.dp
+private val BAND_AIR = 12.dp
 
 /**
  * How far the transcript fades above the composer's field.
@@ -4098,6 +4123,8 @@ private val COMPOSER_IME_GAP = 10.dp
 @Composable
 private fun Composer(
     session: PiAgentSession,
+    /** Where the field's top edge sits, so the band can anchor its rank there. */
+    onFieldTop: (LayoutCoordinates) -> Unit,
     text: Strings,
     value: String,
     onValueChange: (String) -> Unit,
@@ -4300,38 +4327,6 @@ private fun Composer(
                 state = chipState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    // The band's background starts **here**: solid behind the chips, and a
-                    // ramp of [BAND_FADE] above them. Painted on the chip row instead of on
-                    // a box that has to find the field's top edge by measuring it — that
-                    // measurement is what kept going wrong with the keyboard up, and a
-                    // background that needs to know where two other children are is a
-                    // background that can be missing.
-                    .drawBehind {
-                        val surface = bandColor
-                        val opaque = BAND_OPAQUE_ABOVE_CHIPS.toPx()
-                        val fade = BAND_FADE.toPx()
-                        // Solid **through** the chip row and a band above it, ramp above
-                        // that. A gradient that begins at the chips' own top edge leaves
-                        // text one thumb-width above it at 90% contrast, which is still
-                        // readable — and readable is what the reader kept seeing.
-                        if (fade > 0f) {
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    0f to surface.copy(alpha = 0f),
-                                    1f to surface,
-                                    startY = -opaque - fade,
-                                    endY = -opaque,
-                                ),
-                                topLeft = Offset(0f, -opaque - fade),
-                                size = Size(size.width, fade),
-                            )
-                        }
-                        drawRect(
-                            color = surface,
-                            topLeft = Offset(0f, -opaque),
-                            size = Size(size.width, size.height + opaque),
-                        )
-                    }
                     .drawWithContent {
                         drawContent()
                         val fade = CHIP_FADE_WIDTH.toPx()
@@ -4580,10 +4575,11 @@ private fun Composer(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    // Solid from the field's top edge down: nothing behind the band is
-                    // readable under the input box, which is what the reader asked for
-                    // twice and what a transparent wrapper could not do.
-                    .background(bandColor)
+                    // **The fade's anchor is the field's top edge**, and this box's top edge
+                    // *is* that edge. Its position is reported up to the band, which paints
+                    // the rank and the solid *behind* the chips — painted here instead, the
+                    // rank would land over the chip row and wash the chips themselves out.
+                    .onGloballyPositioned { onFieldTop(it) },
             ) {
             Surface(
                 color = MiuixTheme.colorScheme.surfaceContainer,
