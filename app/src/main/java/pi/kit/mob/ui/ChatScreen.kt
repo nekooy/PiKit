@@ -1977,10 +1977,10 @@ private fun ChatPage(
                                         ),
                                     ) {
                                         // The long press is the message's gesture: the menu
-                                        // that opens from it carries the actions that used
-                                        // to live under the bubble, and the bubble answers
-                                        // the finger while it is held (see `TranscriptCardView`'s
-                                        // `pressed`).
+                                        // that opens from it carries the actions that used to
+                                        // live under the bubble, and the bubble it belongs to
+                                        // is lit for as long as the menu is open — see
+                                        // `TranscriptCardView`'s `pressed`.
                                         val menuTarget = card.rows
                                             .filterIsInstance<TranscriptRow.Message>()
                                             .lastOrNull {
@@ -1993,7 +1993,7 @@ private fun ChatPage(
                                                     (row.item is ChatItem.User || row.item is ChatItem.Assistant)
                                             }
                                         }
-                                        val cardBody: @Composable (Boolean) -> Unit = { held ->
+                                        val cardBody: @Composable () -> Unit = {
                                             TranscriptCardView(
                                                 card = card,
                                                 text = text,
@@ -2001,30 +2001,19 @@ private fun ChatPage(
                                                 onToggleTurn = onToggleTurn,
                                                 avatars = avatars,
                                                 onShowExtras = onShowPromptExtras,
-                                                pressed = held,
+                                                // Lit exactly while this card's menu is
+                                                // open: the fill is the answer to "which
+                                                // bubble are these actions about", and it
+                                                // appears only when a long press has been
+                                                // recognised. A tap never lights anything —
+                                                // the transcript's most frequent touch would
+                                                // otherwise flash on every one of them.
+                                                pressed = menuCardKey == card.key,
                                             )
                                         }
-                                        // Whether the bubble under this finger is held.
-                                        // Per item rather than at the page: a press has to
-                                        // recompose one card, not every card on screen.
-                                        var held by remember(card.key) { mutableStateOf(false) }
                                         Box(
                                             Modifier.pointerInput(card.key, menuTarget) {
                                                 detectTapGestures(
-                                                    // The pressed fill lasts for the whole
-                                                    // hold — including the 500 ms before a
-                                                    // long press is recognised — so touching
-                                                    // a bubble is acknowledged at once and the
-                                                    // menu that follows is not the first sign
-                                                    // that anything happened.
-                                                    onPress = {
-                                                        held = true
-                                                        try {
-                                                            tryAwaitRelease()
-                                                        } finally {
-                                                            held = false
-                                                        }
-                                                    },
                                                     onLongPress = { press ->
                                                         messageHaptics.performHapticFeedback(
                                                             HapticFeedbackType.LongPress,
@@ -2044,9 +2033,9 @@ private fun ChatPage(
                                             // rest of the transcript is not selectable, which
                                             // is what keeps a long press meaning "actions".
                                             if (selectionKey == card.key) {
-                                                SelectionContainer { cardBody(held) }
+                                                SelectionContainer { cardBody() }
                                             } else {
-                                                cardBody(held)
+                                                cardBody()
                                             }
                                             // The menu, emitted inside the card that owns
                                             // it: a Miuix popup is positioned from its
@@ -3211,7 +3200,7 @@ private fun TranscriptCardView(
     onToggleTurn: (Int) -> Unit,
     avatars: ChatAvatars?,
     onShowExtras: (PromptExtras) -> Unit,
-    /** Whether the finger is down on this card; the bubble paints [PiTone.pressed]. */
+    /** Whether this card's actions are open; the bubble paints [PiTone.pressed]. */
     pressed: Boolean,
 ) {
     when (card) {

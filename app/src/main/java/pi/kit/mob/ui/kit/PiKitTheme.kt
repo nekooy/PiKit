@@ -289,16 +289,17 @@ object PiTone {
     fun liveContainer(): Color = MiuixTheme.colorScheme.tertiaryContainer
 
     /**
-     * The fill a card takes while the reader is holding it down.
+     * The fill a card takes while its actions are open.
      *
      * A long press is the one gesture on the transcript that has to wait — half a
-     * second before the menu appears — and a hold that paints nothing for that long
-     * reads as a tap that missed, followed by a panel that arrived on its own. The
-     * fill is [base] moved toward the scheme's ink by [PRESSED_SHARE], the same kind
-     * of wash [inset] uses and for the same reason: it is a *contrast*, so the blue
-     * prompt and the grey answer both lighten by the same relative step instead of one
-     * of them flickering. The share is larger than the inset's 10% because a press is
-     * a state that lasts a moment rather than a colour that lives on the page.
+     * second before the menu appears — and the bubble the menu is about has to answer
+     * for it somehow. It is lit for as long as the menu is open, which is a state that
+     * starts only once the hold has been recognised: a fill that flashed on every tap
+     * would be the transcript's most frequent touch announcing itself, which is noise
+     * rather than feedback. The fill is [base] moved toward the scheme's ink by
+     * [PRESSED_SHARE], the same kind of wash [inset] uses and for the same reason: it
+     * is a *contrast*, so the blue prompt and the grey answer both lighten by the same
+     * relative step instead of one of them flickering.
      */
     @Composable
     fun pressed(base: Color): Color =
@@ -431,12 +432,12 @@ private const val GLASS_SHADOW_ALPHA = 0.20f
 private const val INSET_ALPHA = 0.10f
 
 /**
- * How far a held card moves toward the ink while the finger is down.
+ * How far a card with its actions open moves toward the ink.
  *
  * 12% over the dark scheme's #242424 card lands at #3E3E3E — a step the eye reads
  * without the card looking selected — and the same 12% over the blue prompt keeps its
- * hue. It is one number for both cards rather than one per role: the press is the same
- * state whatever the card's colour is.
+ * hue. It is one number for both cards rather than one per role: the state is the same
+ * whatever the card's colour is.
  */
 private const val PRESSED_SHARE = 0.12f
 
