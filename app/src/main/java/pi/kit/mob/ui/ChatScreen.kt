@@ -401,6 +401,8 @@ internal fun ChatScreen(
     val density = LocalDensity.current
     var pageWidth by remember { mutableIntStateOf(0) }
     var drawerWidth by remember { mutableIntStateOf(0) }
+    // Used by the drawer's gestures: opening it drops the composer's keyboard.
+    val focus = LocalFocusManager.current
     var drawerOffset by remember { mutableFloatStateOf(0f) }
     var drawerJob by remember { mutableStateOf<Job?>(null) }
     // Whether the list is composed at all: it scans the session directory, so it is put
@@ -878,7 +880,10 @@ internal fun ChatScreen(
                     // thumb is, and dragging it left is the same gesture that closes it.
                     .pageDrag(
                         width = drawerWidth,
-                        onStart = { drawerJob?.cancel() },
+                        onStart = {
+                            drawerJob?.cancel()
+                            focus.clearFocus()
+                        },
                         onDrag = { delta ->
                             drawerOffset =
                                 (drawerOffset + delta).coerceIn(0f, drawerWidth.toFloat())
@@ -937,6 +942,11 @@ internal fun ChatScreen(
                     onStart = {
                         drawerJob?.cancel()
                         historyReachable = true
+                        // The drawer takes the screen, so the composer gives up the
+                        // keyboard on the first frame of the gesture: a keyboard that
+                        // stayed up would resize the page the drawer is sliding over, and
+                        // its focus belongs to a field that is no longer reachable.
+                        focus.clearFocus()
                         // The root's caption hides from the first frame of the gesture
                         // rather than at its end: it is composed above the drawer, and a
                         // caption left floating over a panel being pulled out is the one
@@ -1554,6 +1564,10 @@ private fun ChatPage(
     // modifier, so a keyboard animation is a layout and not a recomposition.
     val imeInsets = WindowInsets.ime
     val barInsets = WindowInsets.navigationBars
+    // The field block's height, reported by the composer, and the colour the band fades
+    // into. Both are read inside the band's draw and nowhere else.
+    var fieldBlockPx by remember { mutableIntStateOf(0) }
+    val bandSurface = MiuixTheme.colorScheme.surface
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val headerSpace = topInset + HEADER_CLEARANCE
     // The message menu, and the one message that is in selection mode.
@@ -2087,7 +2101,39 @@ private fun ChatPage(
                     // keyboard — measured, 5px of it — which is the "输入框和键盘之间没有
                     // 间距" report, and on a phone whose gesture strip reports zero it put
                     // the field on the screen's edge.
-                    .bandBottom(imeInsets, barInsets, scaffoldBottom, MiuixTheme.colorScheme.surface)
+                    .bandBottom(imeInsets, barInsets, scaffoldBottom)
+                    // **One** background for the whole band, painted here rather than in
+                    // the composer: the composer's box stops at its own content, so the
+                    // inset strip below it and the fade above it were drawn by two
+                    // different nodes and disagreed — with the keyboard up the fade was
+                    // missing and the strip showed the transcript through it. This box
+                    // spans content *and* inset, so one draw covers both.
+                    .drawBehind {
+                        val inset = bandInset(imeInsets, barInsets, scaffoldBottom)
+                            .coerceAtMost(size.height.toInt())
+                        val surface = bandSurface
+                        val fieldTop = (size.height - inset - fieldBlockPx).coerceAtLeast(0f)
+                        val rampTop = (fieldTop - BAND_FADE.toPx()).coerceAtLeast(0f)
+                        if (fieldBlockPx > 0 && fieldTop > rampTop) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    0f to Color.Transparent,
+                                    1f to surface,
+                                    startY = rampTop,
+                                    endY = fieldTop,
+                                ),
+                                topLeft = Offset(0f, rampTop),
+                                size = Size(size.width, fieldTop - rampTop),
+                            )
+                        }
+                        if (fieldBlockPx > 0) {
+                            drawRect(
+                                color = surface,
+                                topLeft = Offset(0f, fieldTop),
+                                size = Size(size.width, size.height - fieldTop),
+                            )
+                        }
+                    }
                     .onSizeChanged { bottomStackPx = it.height },
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
@@ -2140,6 +2186,7 @@ private fun ChatPage(
 
             Composer(
                 session = session,
+                onFieldBlockSize = { fieldBlockPx = it },
                 text = text,
                 value = input,
                 onValueChange = onInputChange,
@@ -3198,24 +3245,21 @@ private val PAGE_CARD_CORNER = 24.dp
 private val PAGE_CARD_LIFT = 20.dp
 
 /**
- * The composer band's bottom inset, and the surface that fills it.
+ * The composer band's bottom inset. The surface that fills it is the band's own
+ * background (see `ChatPage`), which spans this padding as well as the content.
  *
  * Two airs, because the two edges are not the same edge: above a keyboard the reader wants
  * the field *close* to the keys (10dp), and above the window's own bottom the gesture strip
  * already provides most of the gap (15dp on top of it). The keyboard's is smaller on
  * purpose — a keyboard is a wall the field should nearly touch, a gesture strip is not.
  *
- * Both inset heights are read **in the measure pass**, and the surface is painted in the
- * draw: a window in `adjustResize` mode reports no bottom inset at all, so in that mode the
- * air *is* the whole gap. Painting it here rather than in the band's own `drawBehind` is
- * what stops the transcript showing through the gap — that background covers the band's
- * content and nothing else, and the inset sits below it.
+ * Both inset heights are read **in the measure pass**: a window in `adjustResize` mode
+ * reports no bottom inset at all, so in that mode the air *is* the whole gap.
  */
 private fun Modifier.bandBottom(
     ime: WindowInsets,
     bars: WindowInsets,
     scaffoldBottom: Int,
-    surface: Color,
 ): Modifier = layout { measurable, constraints ->
     val applied = bandInset(ime, bars, scaffoldBottom)
         .let { if (constraints.hasBoundedHeight) it.coerceAtMost(constraints.maxHeight) else 0 }
@@ -3227,15 +3271,6 @@ private fun Modifier.bandBottom(
     val placeable = measurable.measure(inner)
     layout(placeable.width, placeable.height + applied) {
         placeable.placeRelative(0, 0)
-    }
-}.drawBehind {
-    val applied = bandInset(ime, bars, scaffoldBottom).coerceAtMost(size.height.toInt())
-    if (applied > 0) {
-        drawRect(
-            color = surface,
-            topLeft = Offset(0f, size.height - applied),
-            size = Size(size.width, applied.toFloat()),
-        )
     }
 }
 
@@ -4097,6 +4132,8 @@ private fun Composer(
     onOpenWorkspacePicker: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    /** The field block's height, for the band's own background. */
+    onFieldBlockSize: (Int) -> Unit,
 ) {
     // The saved configuration, collected so the model chip follows a change made
     // on the settings page. A plain read of the store here was the report that
@@ -4180,9 +4217,6 @@ private fun Composer(
     // Measured here, read in the band's own draw: the field block's height is what puts
     // the solid part of the background exactly at the frame's top edge, without a second
     // layout pass and without the ramp being painted over the chip row.
-    var fieldBlockPx by remember { mutableIntStateOf(0) }
-    val fieldSurface = MiuixTheme.colorScheme.surface
-
     // The band: full bleed over the transcript, and **not a surface of its own**.
     //
     // The chips float on the page with nothing behind them — the conversation stays at
@@ -4194,34 +4228,7 @@ private fun Composer(
     // strip minus whatever the keyboard has already taken. Two inset reads in composition
     // — `isImeVisible` and a conditional padding — were what made a keyboard close
     // recompose this subtree on every step of its animation.
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .drawBehind {
-                if (fieldBlockPx <= 0) return@drawBehind
-                val surface = fieldSurface
-                val top = (size.height - fieldBlockPx).coerceAtLeast(0f)
-                val fade = BAND_FADE.toPx()
-                val rampTop = (top - fade).coerceAtLeast(0f)
-                if (top > rampTop) {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            1f to surface,
-                            startY = rampTop,
-                            endY = top,
-                        ),
-                        topLeft = Offset(0f, rampTop),
-                        size = Size(size.width, top - rampTop),
-                    )
-                }
-                drawRect(
-                    color = surface,
-                    topLeft = Offset(0f, top),
-                    size = Size(size.width, size.height - top),
-                )
-            },
-    ) {
+    Box(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
                 LazyRow(
@@ -4553,7 +4560,7 @@ private fun Composer(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .onSizeChanged { fieldBlockPx = it.height },
+                    .onSizeChanged { onFieldBlockSize(it.height) },
             ) {
             Surface(
                 color = MiuixTheme.colorScheme.surfaceContainer,
