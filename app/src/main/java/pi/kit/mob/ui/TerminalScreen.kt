@@ -535,11 +535,17 @@ private fun ScreenRepaintAnchor(
     holders: TerminalHolders,
     selectedId: String?,
 ) {
-    val revision by manager.screenRevision.collectAsState()
-    LaunchedEffect(revision, selectedId) {
-        holders.view?.let { view ->
-            view.updateSize()
-            view.onScreenUpdated()
+    // A single collector rather than `collectAsState()` plus a `LaunchedEffect(revision…)`:
+    // the revision is bumped once per PTY read — hundreds of times a second for `yes` or an
+    // unpacking archive — and the old shape paid, per chunk, a snapshot read, a
+    // recomposition of this anchor, and a cancelled-and-relaunched coroutine before the
+    // same repaint it makes below. The flow is conflated by `collect`, which is all this
+    // needs: one repaint of the latest screen state. `updateSize()` is deliberately not
+    // here — the `AndroidView`'s own update block calls `applyViewSize()`, which is where
+    // the geometry is applied.
+    LaunchedEffect(manager, selectedId) {
+        manager.screenRevision.collect {
+            holders.view?.onScreenUpdated()
         }
     }
 }
