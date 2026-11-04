@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,6 +92,21 @@ fun PiPage(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    /**
+     * The colour a page whose own surface reaches the window's last pixel paints under
+     * the navigation strip, or null for the scaffold's.
+     *
+     * The scaffold owns the strip below [body]'s padding: it is the page's own
+     * `containerColor`, so a page drawn on `surface` needs nothing and gets nothing.
+     * The terminal is the one page that is not: its shell, its key bar and its banner
+     * are the terminal's black in both schemes, and the strip the scaffold painted
+     * under them was the app's #F7F7F7 in the light one — a white band under a black
+     * page, with the gesture handle on it. This parameter lets such a page hand the
+     * strip the colour its own bottom edge already has. The status bar is not included:
+     * the top bar keeps its own surface, which is what puts the terminal's header in
+     * the app's light chrome and its body in the shell's black.
+     */
+    bottomBarColor: Color? = null,
     actions: @Composable RowScope.() -> Unit = {},
     body: @Composable (PaddingValues) -> Unit,
 ) {
@@ -143,11 +160,32 @@ fun PiPage(
             }
         },
     ) { padding ->
-        // No wrapper `Box`: the body is the page. The `floating` slot this used to
-        // draw into was passed by no caller, and its `Box` sat outside `body`'s
-        // padding — a control placed there would have landed under the root
-        // navigation bar.
-        body(padding)
+        // No wrapper `Box` when the page has nothing to paint: the body *is* the page.
+        // The `floating` slot this used to draw into was passed by no caller, and its
+        // `Box` sat outside `body`'s padding — a control placed there would have landed
+        // under the root navigation bar.
+        if (bottomBarColor == null) {
+            body(padding)
+        } else {
+            // The strip is a sibling *behind* the body rather than a background on it:
+            // the body applies `padding` itself, so a fill declared here would paint the
+            // whole page, including the header, and the top bar's own surface would be
+            // the only thing keeping it out. Drawn first, it is covered by the body
+            // everywhere the body draws and shows only in the inset the scaffold left.
+            Box(Modifier.fillMaxSize()) {
+                val inset = padding.calculateBottomPadding()
+                if (inset > 0.dp) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(inset)
+                            .background(bottomBarColor),
+                    )
+                }
+                body(padding)
+            }
+        }
     }
 }
 

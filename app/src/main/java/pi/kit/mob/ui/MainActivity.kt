@@ -1,8 +1,11 @@
 package pi.kit.mob.ui
 
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -24,7 +27,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Edge-to-edge, with **no scrim of the system's own** on the navigation bar.
+        //
+        // `enableEdgeToEdge`'s default navigation style is a translucent scrim rather
+        // than a transparent bar, and it leaves `isNavigationBarContrastEnforced` on:
+        // the platform is then free to draw a band of its own along the bottom edge,
+        // which on a light page is the "white strip" that does not match the page and
+        // on the terminal's black one is a light band under a black screen. The app
+        // paints every pixel it needs — the terminal page hands its strip the shell's
+        // colour, every other page's is the scaffold's surface — and it sets the bar
+        // icons' ink itself from the theme (`PiKitMiuixTheme`), so both the scrim and
+        // the enforcement are removed here rather than worked around per page.
+        enableEdgeToEdge(
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
+        // The platform's contrast enforcement is the other half of the same scrim, and
+        // it is a property of the *window* rather than of the bar controller; it exists
+        // from API 29 and is a no-op below, where the transparent bar is the whole job.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
 
         val host = PiHost.of(applicationContext)
 

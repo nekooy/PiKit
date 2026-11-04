@@ -78,6 +78,7 @@ import pi.kit.mob.R
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
+import pi.kit.mob.ui.kit.DarkNavigationBar
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
@@ -106,7 +107,6 @@ import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Messages
-import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.LocalContentColor
@@ -239,6 +239,15 @@ fun TerminalScreen(session: PiAgentSession,
     // a `TextMeasurer` pass before the first layout (see `rememberKeySize`).
     val keys = rememberKeySize(t, LocalDensity.current.fontScale)
 
+    // The strip under the key bar is the terminal's black rather than the app's
+    // surface, and the gesture handle on it is light in both schemes: the page is a
+    // black rectangle from the header down, and a #F7F7F7 band under it — measured on
+    // the 1080 px emulator, 63 px tall — was the one place the app's light chrome met
+    // the shell's black along a straight line. `PiPage` paints the strip; this effect
+    // owns the handle's ink, and it is a composition rather than a page body effect so
+    // a theme change while the page is open cannot leave the two disagreeing.
+    DarkNavigationBar()
+
     PiPage(
         // The library's bar, like every other pushed page: the settings pages behind
         // the drawer put their back arrow at the library's inset, and a second arrow
@@ -261,6 +270,10 @@ fun TerminalScreen(session: PiAgentSession,
         } else {
             t.header.terminalSubtitleIdle
         },
+        // The page's own bottom edge is the shell's black; the strip the scaffold
+        // leaves under the key bar is painted the same colour rather than the app's
+        // surface. See `PiPage`'s `bottomBarColor`.
+        bottomBarColor = TERMINAL_BACKGROUND,
         // The header's height is the terminal's: the PTY is sized from the rectangle
         // under it, so anything that grew the header while the reader watched would
         // resize the shell under them. The bar is Miuix's small bar at its fixed
@@ -274,27 +287,13 @@ fun TerminalScreen(session: PiAgentSession,
         // idle sentence and the roster count without moving anything, because it is
         // always one line. §9.2 has the measurement.
         actions = {
-            IconButton(
-                onClick = { selected?.write("clear\n") },
-                // Nothing to clear when the page has no shell to clear: the close
-                // button beside it is gated on the same condition, and a button that
-                // takes a tap and does nothing is worse than one that refuses it.
-                enabled = selected != null,
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Refresh,
-                    contentDescription = t.terminal.clear,
-                    // `IconButton` refuses the tap without drawing the refusal —
-                    // Miuix's `IconButton` has no disabled appearance at all — so a
-                    // gated button looked live. The disabled ink is the scheme's own
-                    // role for exactly this, applied at the glyph.
-                    tint = if (selected != null) {
-                        LocalContentColor.current
-                    } else {
-                        MiuixTheme.colorScheme.disabledOnSurface
-                    },
-                )
-            }
+            // No clear-screen button. It was one of four marks in this row, and the
+            // shell has its own two ways to clear (the `clear` command and the one the
+            // banner prints in its command table); a button for it spent the row's
+            // first slot on the only action here that changes nothing on the phone's
+            // display after the reader has scrolled, which made "new terminal" and the
+            // roster — the two controls this page is reached for — start further from
+            // the thumb. The banner lists `clear` beside the other commands instead.
             IconButton(onClick = { manager.create() }) {
                 Icon(
                     imageVector = MiuixIcons.Add,
@@ -303,9 +302,9 @@ fun TerminalScreen(session: PiAgentSession,
             }
             // There is deliberately **no close button here.**
             //
-            // Closing a shell is the one destructive thing this page can do, and as the
-            // third icon in this action row it sat one thumb-width from "clear" and
-            // "new" — the three were 40dp apart — so the wrong tap cost a whole
+            // Closing a shell is the one destructive thing this page can do, and as a
+            // sibling of "new" and the roster in this action row it sat one thumb-width
+            // from both — the three were 40dp apart — so the wrong tap cost a whole
             // session's scrollback. The close control lives in the roster instead
             // ([TerminalSessionMenu]'s trailing delete), where every row already names
             // the shell it is about and the action cannot be ambiguous; the roster's

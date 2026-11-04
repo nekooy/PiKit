@@ -271,7 +271,6 @@ internal object ChineseStrings : Strings {
     }
 
     override val terminal = object : Strings.Terminal {
-        override val clear = "清屏"
         override val newTerminal = "新建终端"
         override val closeTerminal = "关闭当前终端"
         override val switchTerminal = "切换终端"

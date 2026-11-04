@@ -726,7 +726,6 @@ interface Strings {
     }
 
     interface Terminal {
-        val clear: String
         val newTerminal: String
         val closeTerminal: String
         val switchTerminal: String

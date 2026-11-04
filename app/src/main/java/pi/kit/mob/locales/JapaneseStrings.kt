@@ -272,7 +272,6 @@ internal object JapaneseStrings : Strings {
     }
 
     override val terminal = object : Strings.Terminal {
-        override val clear = "画面を消去"
         override val newTerminal = "新しいターミナル"
         override val closeTerminal = "このターミナルを閉じる"
         override val switchTerminal = "ターミナルを切り替え"

@@ -277,7 +277,6 @@ internal object EnglishStrings : Strings {
     }
 
     override val terminal = object : Strings.Terminal {
-        override val clear = "Clear the screen"
         override val newTerminal = "New terminal"
         override val closeTerminal = "Close this terminal"
         override val switchTerminal = "Switch terminal"

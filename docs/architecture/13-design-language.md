@@ -137,11 +137,12 @@ know nothing about it.
 
 ## A page is a scaffold, a bar and a one-line subtitle
 
-`PiPage(title, subtitle, onBack, actions, floating)` is the frame every destination
-and every settings page uses. It is a Miuix `Scaffold` with a pinned
-`SmallTopAppBar`, a `BackHandler` that exists only when `onBack` does (a tab root has
-no back arrow and does not swallow the system gesture), and a body that receives the
-scaffold's `PaddingValues`.
+`PiPage(title, subtitle, onBack, bottomBarColor, actions, body)` is the frame every
+destination and every settings page uses. It is a Miuix `Scaffold` with a pinned
+`SmallTopAppBar`, a `BackHandler` that exists only when `onBack` does (a page with no parent
+has no back arrow and does not swallow the system gesture), and a body that receives the
+scaffold's `PaddingValues`. The `floating` slot this signature used to take was passed by no
+caller and is gone; `bottomBarColor` is the one addition since, and it is described below.
 
 The subtitle is drawn by the kit, not passed to the bar, and that is a measured rule:
 `SmallTopAppBar` renders its `subtitle` with **no line limit**, so a sentence wider
@@ -152,6 +153,28 @@ itself, one line with an ellipsis, and distinguishes `null` ("this page has no
 subtitle") from `""` ("reserve the line while the value is being read") — the files
 page's item count is null while a folder is listed, and a line that appeared and
 disappeared once per folder moved the whole page by its height twice.
+
+### The window's last pixels are a page's, not the system's
+
+The app asks for edge-to-edge with **no scrim of the platform's own**:
+`enableEdgeToEdge` is given transparent scrims for the navigation bar and
+`window.isNavigationBarContrastEnforced` is cleared, because the alternative is a band the
+app did not paint — a white one under a light page is the "not immersive" strip, and the
+same enforcement under the terminal's black page is a light band under a black screen. The
+navigation strip is then whatever the page's own bottom edge is, and the bar icons' ink is
+the theme's (`PiKitMiuixTheme`): light icons on a dark palette, dark icons on a light one.
+
+A page whose own bottom edge is **not** the scaffold's `surface` hands its strip a colour:
+`PiPage`'s `bottomBarColor` paints a sibling box behind the body in exactly the inset the
+scaffold leaves, so the body's own padding is unchanged and the strip is covered only where
+nothing else draws. The terminal is the only caller today — its shell, key bar and banner are
+black in both schemes — and it also raises `DarkNavigationBar()`, which flips the
+`isAppearanceLightNavigationBars` flag for as long as the page is composed. The flag is a
+composition (`LocalDarkNavigationBars` holds it, the theme's `SideEffect` reads it) rather
+than an imperative write into the window controller, because a theme change while the page
+is open must not leave the icons and the strip disagreeing. The status bar is deliberately
+not included: the top bar keeps its own surface, which is what puts the terminal's header in
+the app's light chrome and its body in the shell's black.
 
 ## Sections, rows, and the one thing a row may not do
 
@@ -220,27 +243,28 @@ required `show` and the caller holds the last value — `pendingDialog != null` 
 the held copy is what it draws while it leaves. The sessions page's three dialogs and
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
-**Transient messages are the platform's toast**, raised through `LocalPiToast` and
-drawn by the system. The app drew its own for two generations — a pill, then Miuix's
-snackbar with a host remembered at the root — and the host was a small framework of
-this app's own for one sentence: a `SnackbarHostState`, a scope, a
-dismiss-the-previous rule, and a `snackbarHost` slot in the root scaffold. None of
-that is the app's to decide. The platform already queues messages, places them where
-its own navigation bar and display say, honours the user's accessibility settings and
-text scale and per-app notification choice, and on 13+ draws the app's icon beside the
-text. So the whole of it was removed for `Toast.makeText(...).show()` behind the same
-`LocalPiToast` interface, and the screens were not touched: a page asks for a short
+**Transient messages were the platform's toast for one release**, raised through
+`LocalPiToast` and drawn by the system. The app drew its own for two generations before
+that — a pill, then Miuix's snackbar with a host remembered at the root — and the host was
+a small framework of this app's own for one sentence: a `SnackbarHostState`, a scope, a
+dismiss-the-previous rule, and a `snackbarHost` slot in the root scaffold. The platform
+already queues messages, places them where its own navigation bar and display say, honours
+the user's accessibility settings and text scale and per-app notification choice, and on
+13+ draws the app's icon beside the text, so the whole of it was removed for
+`Toast.makeText(...).show()` behind the same `LocalPiToast` interface. That swap was
+reversed for the reason the later paragraph gives — the system's card in the system's
+colours with the launcher icon reads as a notification landing on the page — and the app
+draws the capsule itself again. The interface outlived both swaps: a page asks for a short
 sentence and never learns which framebuffer it lands in.
 
-What is given up is Miuix's styling for this one element and the app's own queue; what
-is kept is the split against an in-page notice, by tense — a *moment* ("Saved", "Agent
-restarted") is a toast, a *condition* ("the agent failed to start", "this folder cannot
-be read") stays on the page in the error role, because a message that disappears after
-a couple of seconds is the wrong shape for something that is still true. A failure the
-reader has to *read* is a dialog with a bounded, scrolling body (the maintenance runs,
-the model catalogue's discovery problems); a field's own validation error is a line
-under the box. The platform's own two-line limit is the cost of the swap: a sentence
-that needs more than two lines was already the wrong message for a toast.
+What the platform toast settled, and what the app's own capsule keeps, is the split against
+an in-page notice, by tense — a *moment* ("Saved", "Agent restarted") is a toast, a
+*condition* ("the agent failed to start", "this folder cannot be read") stays on the page
+in the error role, because a message that disappears after a couple of seconds is the wrong
+shape for something that is still true. A failure the reader has to *read* is a dialog with
+a bounded, scrolling body (the maintenance runs, the model catalogue's discovery problems);
+a field's own validation error is a line under the box. One message at a time, held for a
+couple of seconds and never interactive, is the queue's whole shape.
 
 ## Navigation
 
@@ -295,15 +319,17 @@ because the strip version was worse:
 band that *floats over* the transcript rather than a row under it: the list's bottom
 content padding is the band's measured height, so the end of the conversation still
 scrolls clear of it, while a row in the middle of the list passes *behind* the band and
-dissolves from the field's top edge down. The chips above the field sit on the page itself,
-with nothing behind them — a conversation at full contrast behind a floating chip — which
-is what the reference's own composer does.
+dissolves from the field's top edge down. The chips above the field sit on the transparent
+part of the band, with the page's own content visible behind them — a conversation at full
+contrast behind a floating chip — which is what the reference's own composer does.
 
-Two consequences follow. The gradient is drawn on the field's wrapper rather than on the
-band, because that wrapper's top edge *is* the line where the fade begins. And the
-transcript has no fade of its own any more: the one it had ended where the band began,
-which is now above the chips rather than above the field, and two ramps with a gap between
-them would have been visible as a seam.
+Two consequences follow. The ramp is drawn by the band's own `drawBehind`, anchored at the
+field's top edge measured *in the band's coordinates* (`onGloballyPositioned`, not a sum of
+heights), and it runs `BAND_FADE` upward from that edge; solid `surface` covers everything
+from the edge down, through the band's foot and the inset, so a row never shows through the
+strip below the field. And the transcript has no fade of its own any more: the one it had
+ended where the band began, which is now above the chips rather than above the field, and
+two ramps with a gap between them would have been visible as a seam.
 
 **The agent's state is not on the page at all.** It was a 10sp caption on the window's
 bottom edge for a while — the size the reference gives its own "内容由AI生成" hint — and it
@@ -325,11 +351,12 @@ object everywhere.
 **The four-tab bar came first, and its costs are what retired it.** A Miuix
 `NavigationBar` at the root with one item per destination kept every page one tap away,
 and it also spent 48dp of every screen on the same four words for the whole life of the
-app, while the chat page drew a second bar of its own above the transcript. It was also
-the only reason the composer had to be hoisted above the destination: a crossfade
-destroyed the page that left, and `ChatComposerState` existed to survive that. With one
-root page and three pushed ones the draft survives because the page is not destroyed, and
-the terminal and the files are still one tap from the conversation.
+app, while the chat page drew a second bar of its own above the transcript. The composer
+still has to be hoisted above the destination even without it: the root's `AnimatedContent`
+removes the page that left, and a draft, the attached images and the transcript's scroll
+position would go with it on a look at the terminal — `ChatComposerState` is the scope that
+survives, and `rememberSaveable` is not a substitute for it. The terminal and the files are
+still one tap from the conversation, from the trailing capsule rather than from a strip.
 
 **The drawer is behind the page, and the page is the thing that moves.** The conversation
 list is the second thing a chat app is used for, and the reference screens are unambiguous

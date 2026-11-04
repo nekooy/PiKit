@@ -5,8 +5,12 @@ import android.graphics.BlurMaskFilter
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
@@ -87,17 +91,57 @@ fun PiKitMiuixTheme(
         ThemeMode.DARK -> true
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
+    // A page whose own bottom edge is dark in both schemes — the terminal is the one —
+    // needs the light navigation-bar icons even in the light theme, or the handle is
+    // drawn in the app's dark ink on the shell's black. The flag is a preference rather
+    // than an imperative call into the window controller so that the theme stays the
+    // one owner of that controller: a page raises it while it is composed, and the
+    // `SideEffect` below combines it with the palette's own answer on every pass,
+    // including a pass caused by a theme change while the page is still on screen.
+    val darkBars = remember { mutableStateOf(false) }
+    val barsForPage = darkBars.value
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
             val bars = WindowCompat.getInsetsController(window, view)
             bars.isAppearanceLightStatusBars = !dark
-            bars.isAppearanceLightNavigationBars = !dark
+            bars.isAppearanceLightNavigationBars = !dark && !barsForPage
         }
     }
 
-    MiuixTheme(controller = controller, content = content)
+    CompositionLocalProvider(LocalDarkNavigationBars provides darkBars) {
+        MiuixTheme(controller = controller, content = content)
+    }
+}
+
+/**
+ * Whether the page on screen paints its own navigation strip dark, so the theme can
+ * choose light bar icons.
+ *
+ * Held by the theme rather than written by a page into the window controller: the
+ * controller is one object for the window, and two owners of it — the theme and every
+ * page — cannot both be right after a theme change. A page creates its effect:
+ * [DarkNavigationBar].
+ */
+private val LocalDarkNavigationBars = staticCompositionLocalOf { mutableStateOf(false) }
+
+/**
+ * Takes the light navigation-bar icons for as long as this page is composed.
+ *
+ * The terminal page is the only caller: its shell, its key bar and its banner are black
+ * in both schemes, and the strip under the key bar is painted black (see `PiPage`'s
+ * `bottomBarColor`), so the gesture handle has to be light there even in the light
+ * theme. On leaving, the theme's own answer is applied again by the same `SideEffect`
+ * that read the flag.
+ */
+@Composable
+fun DarkNavigationBar() {
+    val dark = LocalDarkNavigationBars.current
+    DisposableEffect(dark) {
+        dark.value = true
+        onDispose { dark.value = false }
+    }
 }
 
 /**
