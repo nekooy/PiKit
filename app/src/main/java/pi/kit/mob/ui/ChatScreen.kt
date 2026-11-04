@@ -957,6 +957,7 @@ internal fun ChatScreen(
         ) {
             ChatPage(
                 session = session,
+                scaffoldBottom = scaffoldBottom,
                 agent = agent,
                 state = state,
                 text = text,
@@ -1422,6 +1423,8 @@ private fun ChatPage(
     agent: AgentStatus,
     state: ConversationState,
     text: Strings,
+    /** The scaffold's bottom inset in px — the root consumes the insets this page reads. */
+    scaffoldBottom: Int,
     rows: List<TranscriptRow>,
     listState: LazyListState,
     follow: FollowTailController,
@@ -1542,6 +1545,10 @@ private fun ChatPage(
         listState.scrollToItem(0)
     }
 
+    // The composer band's insets: the objects here, their heights inside the layout
+    // modifier, so a keyboard animation is a layout and not a recomposition.
+    val imeInsets = WindowInsets.ime
+    val barInsets = WindowInsets.navigationBars
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val headerSpace = topInset + HEADER_CLEARANCE
     // The message menu, and the one message that is in selection mode.
@@ -2070,13 +2077,12 @@ private fun ChatPage(
                     // what the list pads its end by is the band's own content height and
                     // not the keyboard's — which is what keeps a keyboard close from
                     // re-measuring every row of the conversation on each step of it.
-                    // The union, not the two added: with the keyboard up the gesture
-                    // strip is behind it, and stacking both left a 48px hole.
-                    .windowInsetsPadding(
-                        WindowInsets.ime
-                            .union(WindowInsets.navigationBars)
-                            .only(WindowInsetsSides.Bottom),
-                    )
+                    // The larger of the two insets plus [BAND_BOTTOM_AIR], resolved in
+                    // layout: the union alone put the field's bottom edge *on* the
+                    // keyboard — measured, 5px of it — which is the "输入框和键盘之间没有
+                    // 间距" report, and on a phone whose gesture strip reports zero it put
+                    // the field on the screen's edge.
+                    .bandBottom(imeInsets, barInsets, scaffoldBottom)
                     .onSizeChanged { bottomStackPx = it.height },
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
