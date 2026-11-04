@@ -906,6 +906,16 @@ internal fun ChatScreen(
     Box(
         Modifier
             .fillMaxSize()
+            // The ground the drawer and the card are drawn on, and it is the panel's own
+            // colour rather than the scaffold's `surface`. The card does not cover the
+            // window while it is a card — it shrinks about its centre by [CHAT_SHRINK] —
+            // so a strip of this box shows above, below and at its trailing edge, and
+            // that strip used to be `surface`: black in the dark scheme beside a
+            // `background` panel (#242424), which drew a seam down the panel's edge and a
+            // black notch at each corner of the card. One colour behind everything except
+            // the card is the arrangement the reference draws: the panel and the ground
+            // are one field, and the conversation is the only card on it.
+            .background(MiuixTheme.colorScheme.background)
             .onSizeChanged {
                 val was = drawer.width
                 // Capped as well as shared out: on a tablet a panel of 79% of the window
@@ -955,6 +965,9 @@ internal fun ChatScreen(
                     // one. `background` is #242424 there and white in the light scheme,
                     // so the panel is a step away from the card in both and the drawer
                     // reads as a layer instead of as one page split by a gesture.
+                    // The box this panel is drawn in paints the same role, so the strips
+                    // of ground around the card belong to the same field: the panel is
+                    // not a second colour, it is where that field is widest.
                     .background(MiuixTheme.colorScheme.background)
 
                     // The way out, from the page the drawer is next to as well as from the
