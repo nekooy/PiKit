@@ -379,6 +379,8 @@ internal fun ChatScreen(
     historyOpen: Boolean,
     /** The drawer's own scroll position, held by the root so a conversation change keeps it. */
     historyListState: LazyListState,
+    /** The scaffold's bottom inset in px; the root consumes the insets this page would read. */
+    scaffoldBottom: Int,
     onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -914,6 +916,11 @@ internal fun ChatScreen(
                     // and a corner radius there would cut the screen.
                     shape = RoundedCornerShape(PAGE_CARD_CORNER)
                     clip = drawerPos > 0f
+                    // Back to an elevation shadow, and a deeper one: the hand-drawn strip
+                    // at the seam was even, but it read as a line rather than as the page
+                    // being *above* the list. The elevation grows with the gesture so the
+                    // page lifts as it comes out.
+                    shadowElevation = PAGE_CARD_LIFT.toPx() * drawerPos
                 }
                 // After the layer, so the fill travels with the card. Before it, the
                 // background is painted at the layer's *untranslated* position: measured
@@ -1035,35 +1042,6 @@ internal fun ChatScreen(
                 },
                 onOpenTerminal = onOpenTerminal,
                 onOpenFiles = onOpenFiles,
-            )
-        }
-
-        // The depth between the two layers, drawn over both: an elevation shadow leans
-        // away from the light, so its underside is darker (the report was "the shadow
-        // between the pages is deeper at the bottom"), and a shadow drawn under the card
-        // would be hidden by the card's own surface. This is a horizontal gradient
-        // anchored at the card's edge — the same from top to bottom by construction, and
-        // it travels with the card because the card's edge is what it is drawn at.
-        if (drawerPos > 0f) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .drawBehind {
-                        val edge = drawerOffset
-                        val width = SEAM_SHADOW_WIDTH.toPx() * drawerPos
-                        if (width > 0f) {
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    0f to Color.Transparent,
-                                    1f to Color.Black.copy(alpha = SEAM_SHADOW_ALPHA * drawerPos),
-                                    startX = edge,
-                                    endX = edge + width,
-                                ),
-                                topLeft = Offset(edge, 0f),
-                                size = Size(width, size.height),
-                            )
-                        }
-                    },
             )
         }
 
@@ -1345,9 +1323,9 @@ private fun HeaderMark(
             imageVector = glyph,
             contentDescription = description,
             tint = MiuixTheme.colorScheme.onSurface,
-            // 18dp in a 38dp capsule, the same proportion the 22dp glyph had in 48: the
-            // capsules shrank to the reference's size and the marks shrank with them.
-            modifier = Modifier.size(18.dp),
+            // 20dp in a 42dp capsule: between the original 22/48 and the 18/38 that was a
+            // step too small, and still the same proportion.
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -1433,7 +1411,7 @@ private const val FADE_SOLID = 0.80f
 private val FADE_TAIL = 96.dp
 
 /** One mark's box in the header, capsule and glyph alike. */
-private val HEADER_MARK_SIZE = 38.dp
+private val HEADER_MARK_SIZE = 42.dp
 
 /** How long a first back press stays armed. */
 private const val EXIT_ARM_MILLIS = 2000L
@@ -3198,9 +3176,15 @@ private const val CHAT_SHRINK = 0.05f
 /** The radius the conversation is cut with while it is a card over the drawer. */
 private val PAGE_CARD_CORNER = 24.dp
 
-/** How far the seam shadow reaches from the card's edge, and how dark it is there. */
-private val SEAM_SHADOW_WIDTH = 28.dp
-private const val SEAM_SHADOW_ALPHA = 0.20f
+/**
+ * How high the page rides over the drawer while the drawer is out.
+ *
+ * The elevation shadow is the style the reference uses for the card; 6dp was the first
+ * value and read as a hairline at the seam, so it is doubled and then some. Only the
+ * *edge* is visible — the panel is what the shadow lands on — which is why this is a lift
+ * rather than a border.
+ */
+private val PAGE_CARD_LIFT = 20.dp
 
 /**
  * The composer band's bottom inset: the bigger of the keyboard and the gesture strip, plus
@@ -3210,9 +3194,14 @@ private const val SEAM_SHADOW_ALPHA = 0.20f
  * subscribe the page to every step of a keyboard animation, which is the stutter this page
  * spent a round removing.
  */
-private fun Modifier.bandBottom(ime: WindowInsets, bars: WindowInsets): Modifier =
+private fun Modifier.bandBottom(
+    ime: WindowInsets,
+    bars: WindowInsets,
+    scaffoldBottom: Int,
+): Modifier =
     layout { measurable, constraints ->
-        val inset = maxOf(ime.getBottom(this), bars.getBottom(this)) + BAND_BOTTOM_AIR.roundToPx()
+        val inset = maxOf(ime.getBottom(this), bars.getBottom(this), scaffoldBottom) +
+            BAND_BOTTOM_AIR.roundToPx()
         val applied = if (constraints.hasBoundedHeight) {
             inset.coerceAtMost(constraints.maxHeight)
         } else {
@@ -3229,8 +3218,23 @@ private fun Modifier.bandBottom(ime: WindowInsets, bars: WindowInsets): Modifier
         }
     }
 
-/** The air between the composer's field and the bottom of the window, or the keyboard. */
-private val BAND_BOTTOM_AIR = 12.dp
+/**
+ * The air between the composer's field and the bottom of the window, or the keyboard.
+ *
+ * Sixteen rather than twelve: a phone whose gesture strip reports no inset at all — some
+ * ROMs answer zero — left the field's bottom edge on the screen's edge with only a hint of
+ * air, which reads as the input box being cut off.
+ */
+private val BAND_BOTTOM_AIR = 16.dp
+
+/**
+ * How far the transcript fades above the composer's field.
+ *
+ * The fade's solid edge is the field's top: everything below it is the page, and the
+ * conversation dissolves over this distance above it — the same shape the top of the page
+ * uses at the status bar.
+ */
+private val BAND_FADE = 88.dp
 
 /** The message menu's width. Wide enough for "分叉出新对话" on one line. */
 private val MENU_WIDTH = 176.dp
@@ -4141,6 +4145,12 @@ private fun Composer(
     // used to shrink after the keyboard had gone.
 
 
+    // Measured here, read in the band's own draw: the field block's height is what puts
+    // the solid part of the background exactly at the frame's top edge, without a second
+    // layout pass and without the ramp being painted over the chip row.
+    var fieldBlockPx by remember { mutableIntStateOf(0) }
+    val fieldSurface = MiuixTheme.colorScheme.surface
+
     // The band: full bleed over the transcript, and **not a surface of its own**.
     //
     // The chips float on the page with nothing behind them — the conversation stays at
@@ -4152,7 +4162,34 @@ private fun Composer(
     // strip minus whatever the keyboard has already taken. Two inset reads in composition
     // — `isImeVisible` and a conditional padding — were what made a keyboard close
     // recompose this subtree on every step of its animation.
-    Box(Modifier.fillMaxWidth()) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                if (fieldBlockPx <= 0) return@drawBehind
+                val surface = fieldSurface
+                val top = (size.height - fieldBlockPx).coerceAtLeast(0f)
+                val fade = BAND_FADE.toPx()
+                val rampTop = (top - fade).coerceAtLeast(0f)
+                if (top > rampTop) {
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            1f to surface,
+                            startY = rampTop,
+                            endY = top,
+                        ),
+                        topLeft = Offset(0f, rampTop),
+                        size = Size(size.width, top - rampTop),
+                    )
+                }
+                drawRect(
+                    color = surface,
+                    topLeft = Offset(0f, top),
+                    size = Size(size.width, size.height - top),
+                )
+            },
+    ) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
                 LazyRow(
@@ -4471,19 +4508,15 @@ private fun Composer(
             // band itself is now the tab strip's own colour rather than a step above it
             // (§7.1), so the foot of the page is one surface from the transcript to the
             // navigation bar and the two no longer meet at a seam.
-            // The fade, from the field's top edge down to `surface` by its bottom: the
-            // conversation dissolves where it meets the field and nowhere above it.
+            // The band's own background is drawn behind *everything* it holds (see the
+            // `drawBehind` on the band's box): solid at the frame's top edge and below it,
+            // and a ramp upward from there. Drawn here instead, the ramp would have to be
+            // painted over the chip row — this box is a sibling *after* it, so its ink
+            // lands on top of the chips.
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.42f to MiuixTheme.colorScheme.surface.copy(alpha = 0.55f),
-                            0.72f to MiuixTheme.colorScheme.surface,
-                            1f to MiuixTheme.colorScheme.surface,
-                        ),
-                    ),
+                    .onSizeChanged { fieldBlockPx = it.height },
             ) {
             Surface(
                 color = MiuixTheme.colorScheme.surfaceContainer,

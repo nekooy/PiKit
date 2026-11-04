@@ -400,7 +400,16 @@ private fun RootContent(
     // already what was asked for, and a `Failed` one is the reader's to retry from the
     // Agent page rather than something to relaunch under them on every recomposition.
     LaunchedEffect(session) {
-        if (session.agent.value is AgentStatus.Stopped) session.startAgent()
+        // **Not** for a conversation that already has a transcript: one opened from
+        // history is on screen from its session file, and a process is only needed once
+        // something is sent. Starting one to read a file was the "看历史要毛的 pi 进程"
+        // complaint, and it is also what made every switch cost two seconds.
+        //
+        // Read inside the effect rather than in the key or the condition above it: the
+        // conversation flow changes on every token, and reading it in composition would
+        // recompose this page for each one.
+        val hasHistory = session.conversation.value.items.isNotEmpty()
+        if (!hasHistory && session.agent.value is AgentStatus.Stopped) session.startAgent()
     }
 
     when (val status = runtime) {
@@ -505,6 +514,9 @@ private fun RootContent(
                     agent = agent,
                     composer = composer,
                     historyListState = historyListState,
+                    scaffoldBottom = with(LocalDensity.current) {
+                        padding.calculateBottomPadding().roundToPx()
+                    },
                     historyOpen = historyOpen,
                     onHistoryOpenChange = { historyOpen = it },
                     onOpenTerminal = { destination = Destination.Terminal },
@@ -616,6 +628,14 @@ private fun ChatTab(
     /** Whether the conversation drawer is out; owned by [RootContent] — see there. */
     historyOpen: Boolean,
     historyListState: androidx.compose.foundation.lazy.LazyListState,
+    /**
+     * The scaffold's bottom inset in pixels.
+     *
+     * The root *consumes* the window insets above this page (`consumeWindowInsets`), so
+     * reading `WindowInsets.navigationBars` here answers zero and the composer band sat on
+     * the gesture strip. The consumed value is handed down instead.
+     */
+    scaffoldBottom: Int,
     onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -663,6 +683,7 @@ private fun ChatTab(
             onNewConversation = openNew,
             historyOpen = historyOpen,
             historyListState = historyListState,
+            scaffoldBottom = scaffoldBottom,
             onHistoryOpenChange = onHistoryOpenChange,
             onOpenTerminal = onOpenTerminal,
             onOpenFiles = onOpenFiles,
