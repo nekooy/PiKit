@@ -24,7 +24,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -101,8 +100,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Brush
@@ -115,6 +112,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -128,7 +126,7 @@ import androidx.compose.ui.platform.Clipboard
 import kotlinx.coroutines.CoroutineScope
 import pi.kit.mob.ui.kit.PiToast
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -214,9 +212,9 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
 import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -235,7 +233,6 @@ import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Share
-import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Sidebar
 import top.yukonga.miuix.kmp.icon.extended.Lock
@@ -1698,76 +1695,27 @@ private fun ChatPage(
     // The message menu, and the one message that is in selection mode.
     var menuFor by remember { mutableStateOf<ChatItem?>(null) }
     var menuCardKey by remember { mutableStateOf<String?>(null) }
-    var menuMessages by remember { mutableIntStateOf(0) }
     var selectionKey by remember { mutableStateOf<String?>(null) }
-    // Where the finger was, in window coordinates: the menu opens *there*, not at the
-    // corner of the card and not at the bottom of the screen.
+    // Where the finger went down, in the pressed card's own coordinates. The menu is
+    // emitted inside that card (see the transcript's item scope) because Miuix positions
+    // a popup from its parent's bounds, and the parent there is a one-pixel anchor placed
+    // at this point. A menu belongs where the finger was, not at the card's corner and
+    // not at the bottom edge of the screen.
     var menuAt by remember { mutableStateOf(Offset.Zero) }
     // The message whose Markdown source is open in the reader sheet.
     var sourceFor by remember { mutableStateOf<ChatItem?>(null) }
     ExitBackHandler()
     // The message menu's actions live at the page; the menu itself is emitted at the
-    // message (see the transcript's item scope), because a menu belongs where the finger
-    // was rather than at the bottom edge of the screen.
+    // message (see the transcript's item scope), because Miuix anchors a popup to its own
+    // parent's bounds.
     val messageClipboard = LocalClipboard.current
     val messageToasts = LocalPiToast.current
     val messageScope = rememberCoroutineScope()
-
-    // The message menu: a small panel at the finger, dismissed by a tap anywhere else.
-    val menuDensity = LocalDensity.current
-    val menuWidthPx = with(menuDensity) { MENU_WIDTH.roundToPx() }
-    val menuMarginPx = with(menuDensity) { 12.dp.roundToPx() }
-    val screenWidthPx = with(menuDensity) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
-    val menuTarget = menuFor
-    if (menuTarget != null) {
-        Popup(
-            alignment = Alignment.TopStart,
-            // Kept off the screen's edges: a menu that opens under a thumb at the right
-            // edge would have half of itself outside the window.
-            offset = IntOffset(
-                // Kept a margin clear of the window's edges: a menu opened with a thumb
-                // near the right edge would otherwise draw half of itself outside.
-                menuAt.x.roundToInt().coerceIn(
-                    menuMarginPx,
-                    (screenWidthPx - menuWidthPx - menuMarginPx).coerceAtLeast(menuMarginPx),
-                ),
-                menuAt.y.roundToInt(),
-            ),
-            onDismissRequest = { menuFor = null },
-            properties = PopupProperties(focusable = true),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(PiCorner.radius),
-                color = MiuixTheme.colorScheme.surfaceContainer,
-                modifier = Modifier
-                    .width(MENU_WIDTH)
-                    .solidLift(RoundedCornerShape(PiCorner.radius), 10.dp),
-            ) {
-                Column(Modifier.padding(vertical = 6.dp)) {
-                    MessageAction(text.chat.copyMessage, icon = MiuixIcons.Copy) {
-                        menuFor = null
-                        messageScope.launch {
-                            messageClipboard.setClipEntry(clipEntryFor(itemSource(menuTarget)))
-                        }
-                    }
-                    MessageAction(text.chat.selectText, painter = painterResource(R.drawable.ic_text_cursor)) {
-                        menuFor = null
-                        sourceFor = menuTarget
-                    }
-                    if (!state.isStreaming && menuMessages > 0) {
-                        MessageAction(text.chat.fork, icon = MiuixIcons.Share) {
-                            menuFor = null
-                            val path = session.forkAt(menuMessages)
-                            val opened = path?.let {
-                                session.host.openConversation(it, currentWorkspace)
-                            }
-                            if (opened == null) messageToasts?.show(text.chat.forkFailed)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // The long press answers with a haptic *before* the panel appears. Every other
+    // control on this page acknowledges the finger, and 500 ms of holding followed by a
+    // silent menu reads as a delayed tap rather than as a recognised gesture; the
+    // platform's own long-press type is what a held row in the drawer already uses.
+    val messageHaptics = LocalHapticFeedback.current
 
     // The Markdown source of the message, in a sheet of its own: what the reader asked
     // for when they chose "select text" is the *text*, not a selection mode they then have
@@ -2015,9 +1963,11 @@ private fun ChatPage(
                                             ),
                                         ),
                                     ) {
-                                        // The long press is the message's gesture now: the
-                                        // menu that opens from it carries the actions that
-                                        // used to live under the bubble.
+                                        // The long press is the message's gesture: the menu
+                                        // that opens from it carries the actions that used
+                                        // to live under the bubble, and the bubble answers
+                                        // the finger while it is held (see `TranscriptCardView`'s
+                                        // `pressed`).
                                         val menuTarget = card.rows
                                             .filterIsInstance<TranscriptRow.Message>()
                                             .lastOrNull {
@@ -2030,7 +1980,7 @@ private fun ChatPage(
                                                     (row.item is ChatItem.User || row.item is ChatItem.Assistant)
                                             }
                                         }
-                                        val cardBody: @Composable () -> Unit = {
+                                        val cardBody: @Composable (Boolean) -> Unit = { held ->
                                             TranscriptCardView(
                                                 card = card,
                                                 text = text,
@@ -2038,34 +1988,96 @@ private fun ChatPage(
                                                 onToggleTurn = onToggleTurn,
                                                 avatars = avatars,
                                                 onShowExtras = onShowPromptExtras,
+                                                pressed = held,
                                             )
                                         }
-                                        var origin by remember { mutableStateOf(Offset.Zero) }
+                                        // Whether the bubble under this finger is held.
+                                        // Per item rather than at the page: a press has to
+                                        // recompose one card, not every card on screen.
+                                        var held by remember(card.key) { mutableStateOf(false) }
                                         Box(
-                                            Modifier
-                                                .onGloballyPositioned { origin = it.localToWindow(Offset.Zero) }
-                                                .pointerInput(card.key, menuTarget) {
-                                                    detectTapGestures(
-                                                        onLongPress = { press ->
-                                                            if (menuTarget != null) {
-                                                                menuFor = menuTarget
-                                                                menuCardKey = card.key
-                                                                menuMessages = counted
-                                                                menuAt = origin + press
-                                                                selectionKey = null
-                                                            }
-                                                        },
-                                                    )
-                                                },
+                                            Modifier.pointerInput(card.key, menuTarget) {
+                                                detectTapGestures(
+                                                    // The pressed fill lasts for the whole
+                                                    // hold — including the 500 ms before a
+                                                    // long press is recognised — so touching
+                                                    // a bubble is acknowledged at once and the
+                                                    // menu that follows is not the first sign
+                                                    // that anything happened.
+                                                    onPress = {
+                                                        held = true
+                                                        try {
+                                                            tryAwaitRelease()
+                                                        } finally {
+                                                            held = false
+                                                        }
+                                                    },
+                                                    onLongPress = { press ->
+                                                        messageHaptics.performHapticFeedback(
+                                                            HapticFeedbackType.LongPress,
+                                                        )
+                                                        if (menuTarget != null) {
+                                                            menuFor = menuTarget
+                                                            menuCardKey = card.key
+                                                            menuAt = press
+                                                            selectionKey = null
+                                                        }
+                                                    },
+                                                )
+                                            },
                                         ) {
                                             // Selecting is a *mode*: the message the reader
                                             // asked to select wears the container, and the
                                             // rest of the transcript is not selectable, which
                                             // is what keeps a long press meaning "actions".
                                             if (selectionKey == card.key) {
-                                                SelectionContainer { cardBody() }
+                                                SelectionContainer { cardBody(held) }
                                             } else {
-                                                cardBody()
+                                                cardBody(held)
+                                            }
+                                            // The menu, emitted inside the card that owns
+                                            // it: a Miuix popup is positioned from its
+                                            // parent's bounds, so the anchor is a one-pixel
+                                            // box where the finger went down — which is what
+                                            // opens the panel at the press rather than at the
+                                            // card's corner. `show`, not composition, is what
+                                            // closes it: the panel animates out with its own
+                                            // rows still on it.
+                                            if (menuCardKey == card.key && menuTarget != null) {
+                                                Box(
+                                                    Modifier
+                                                        .offset {
+                                                            IntOffset(
+                                                                menuAt.x.roundToInt(),
+                                                                menuAt.y.roundToInt(),
+                                                            )
+                                                        }
+                                                        .size(1.dp),
+                                                ) {
+                                                    OverlayDropdownPopup(
+                                                        entry = DropdownEntry(
+                                                            items = messageMenuItems(
+                                                                target = menuTarget,
+                                                                counted = counted,
+                                                                streaming = state.isStreaming,
+                                                                text = text,
+                                                                session = session,
+                                                                workspace = currentWorkspace,
+                                                                clipboard = messageClipboard,
+                                                                scope = messageScope,
+                                                                toasts = messageToasts,
+                                                                onDismiss = { menuFor = null },
+                                                                onSelectSource = { sourceFor = it },
+                                                            ),
+                                                        ),
+                                                        show = menuFor != null,
+                                                        onDismiss = { menuFor = null },
+                                                        onDismissFinished = { menuCardKey = null },
+                                                        maxHeight = null,
+                                                        dropdownColors = DropdownDefaults.dropdownColors(),
+                                                        renderInRootScaffold = true,
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -3186,6 +3198,8 @@ private fun TranscriptCardView(
     onToggleTurn: (Int) -> Unit,
     avatars: ChatAvatars?,
     onShowExtras: (PromptExtras) -> Unit,
+    /** Whether the finger is down on this card; the bubble paints [PiTone.pressed]. */
+    pressed: Boolean,
 ) {
     when (card) {
         // The prompt is measured against the transcript's own width so the cap can
@@ -3238,7 +3252,11 @@ private fun TranscriptCardView(
                         // themselves. Their words are the one thing on this page that
                         // must never be muted, so both halves are explicit.
                         colors = CardDefaults.defaultColors(
-                            color = PiTone.prompt(),
+                            // Held: the same blue, one step toward the ink. The bubble is
+                            // the object the finger is on, so it is the object that answers
+                            // the press — a menu that appears with nothing before it reads
+                            // as a delayed tap.
+                            color = if (pressed) PiTone.pressed(PiTone.prompt()) else PiTone.prompt(),
                             contentColor = MiuixTheme.colorScheme.onSurface,
                         ),
                     ) {
@@ -3291,8 +3309,14 @@ private fun TranscriptCardView(
                 // The answer's card is the palette's standard surface step — one step
                 // off the page behind it — because it is *the page's* content rather
                 // than a bubble, and the reader's own half is the one that wears a
-                // container.
-                colors = CardDefaults.defaultColors(),
+                // container. Held, it takes the same step toward the ink the prompt does.
+                colors = CardDefaults.defaultColors(
+                    color = if (pressed) {
+                        PiTone.pressed(MiuixTheme.colorScheme.surfaceContainer)
+                    } else {
+                        MiuixTheme.colorScheme.surfaceContainer
+                    },
+                ),
             ) {
                 card.rows.forEachIndexed { index, row ->
                     Column(Modifier.padding(top = rowGap(card.rows.getOrNull(index - 1), row))) {
@@ -3455,9 +3479,6 @@ private val BAND_AIR = 12.dp
  * uses at the status bar.
  */
 private val BAND_FADE = 88.dp
-
-/** The message menu's width. Wide enough for "分叉出新对话" on one line. */
-private val MENU_WIDTH = 176.dp
 
 private const val PROMPT_MAX_SHARE = 0.86f
 
@@ -3969,16 +3990,22 @@ private fun itemSource(item: ChatItem): String = when (item) {
 }
 
 /**
- * The rows a message's menu offers.
+ * The rows a message's menu offers, as Miuix dropdown items.
  *
- * Built here rather than inline in the transcript's item scope so the three actions read as
- * one list: copy the source, select the text, or branch the conversation from this message.
- * The branch needs the *count* of message records up to the card, which is what the item
- * scope knows and the item itself does not.
+ * One list rather than three `MessageAction`s drawn by hand: a menu is a library
+ * component — its container, row height, press indication, dividers and dismissal are
+ * Miuix's — and the same `OverlayDropdownPopup` the drawer's row actions open. The three
+ * actions read as one list: copy the source, open it in a sheet to select text from, or
+ * branch the conversation from this message. The branch needs the *count* of message
+ * records up to the card, which is what the item scope knows and the item itself does
+ * not.
+ *
+ * The copy ends with a toast. The panel closes on the tap, so there is no glyph left to
+ * turn into a check the way the meta row's copy button does — a copy that says nothing
+ * is indistinguishable from a tap that missed.
  */
 private fun messageMenuItems(
     target: ChatItem,
-    cardKey: String,
     counted: Int,
     streaming: Boolean,
     text: Strings,
@@ -3988,7 +4015,7 @@ private fun messageMenuItems(
     scope: CoroutineScope,
     toasts: PiToast?,
     onDismiss: () -> Unit,
-    onSelect: (String) -> Unit,
+    onSelectSource: (ChatItem) -> Unit,
 ): List<DropdownItem> = buildList {
     add(
         DropdownItem(
@@ -3997,19 +4024,23 @@ private fun messageMenuItems(
             onClick = {
                 onDismiss()
                 scope.launch { clipboard.setClipEntry(clipEntryFor(itemSource(target))) }
+                toasts?.show(text.chat.copied)
             },
         ),
     )
     add(
         DropdownItem(
             text = text.chat.selectText,
-            icon = { modifier -> Icon(MiuixIcons.SelectAll, contentDescription = null, modifier = modifier) },
+            icon = { modifier ->
+                Icon(
+                    painter = painterResource(R.drawable.ic_text_cursor),
+                    contentDescription = null,
+                    modifier = modifier,
+                )
+            },
             onClick = {
                 onDismiss()
-                onSelect(cardKey)
-                // Compose cannot select text for the reader: the container it needs is
-                // what this turns on, and the long press that picks characters is theirs.
-                toasts?.show(text.chat.selectHint)
+                onSelectSource(target)
             },
         ),
     )

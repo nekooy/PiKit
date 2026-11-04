@@ -289,6 +289,22 @@ object PiTone {
     fun liveContainer(): Color = MiuixTheme.colorScheme.tertiaryContainer
 
     /**
+     * The fill a card takes while the reader is holding it down.
+     *
+     * A long press is the one gesture on the transcript that has to wait — half a
+     * second before the menu appears — and a hold that paints nothing for that long
+     * reads as a tap that missed, followed by a panel that arrived on its own. The
+     * fill is [base] moved toward the scheme's ink by [PRESSED_SHARE], the same kind
+     * of wash [inset] uses and for the same reason: it is a *contrast*, so the blue
+     * prompt and the grey answer both lighten by the same relative step instead of one
+     * of them flickering. The share is larger than the inset's 10% because a press is
+     * a state that lasts a moment rather than a colour that lives on the page.
+     */
+    @Composable
+    fun pressed(base: Color): Color =
+        lerp(base, MiuixTheme.colorScheme.onSurface, PRESSED_SHARE)
+
+    /**
      * The ink of a finished-and-unread dot.
      *
      * The palette has an accent, an error pair and greys, and no green: "done" was never
@@ -413,6 +429,16 @@ private const val GLASS_SHADOW_ALPHA = 0.20f
  * (#3D3D3D) is the same one, which is the point of a wash.
  */
 private const val INSET_ALPHA = 0.10f
+
+/**
+ * How far a held card moves toward the ink while the finger is down.
+ *
+ * 12% over the dark scheme's #242424 card lands at #3E3E3E — a step the eye reads
+ * without the card looking selected — and the same 12% over the blue prompt keeps its
+ * hue. It is one number for both cards rather than one per role: the press is the same
+ * state whatever the card's colour is.
+ */
+private const val PRESSED_SHARE = 0.12f
 
 /**
  * The corner radius every surface in the app is cut with.

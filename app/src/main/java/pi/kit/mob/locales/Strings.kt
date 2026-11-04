@@ -191,27 +191,14 @@ interface Strings {
         /** The copy button under a message, which copies the message's source text. */
         val copyMessage: String
 
-        /**
-         * The title of the sheet a long press on a message opens.
-         *
-         * The menu holds what a message can do rather than what can be done to it:
-         * copy its source, select its text, or branch the conversation from it.
-         */
-        val messageActions: String
-
-        /** Said after a message's text has been copied from the source sheet. */
+        /** Said after a message's source has been copied, from the menu or the sheet. */
         val copied: String
 
-        /** The menu's row that enters text selection for the pressed message. */
-        val selectText: String
-
         /**
-         * What the toast says after that row is chosen.
-         *
-         * Compose cannot select text on the app's behalf — the container the row turns on
-         * is the whole of what it can do — so the sentence hands the gesture back.
+         * The menu's row that opens the pressed message's Markdown source, where its text
+         * can be selected and copied.
          */
-        val selectHint: String
+        val selectText: String
 
         /** The menu's row that writes the conversation up to this message as a new one. */
         val fork: String
