@@ -15,7 +15,8 @@ Every document in this repository, and the rule for adding one.
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass, the README preview strip — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
 | [assets/icon.svg](assets/icon.svg) | The launcher icon, as the README shows it — **generated** | Never by hand |
-| [assets/preview-0.6.2.webp](assets/preview-0.6.2.webp) | The four pages — conversation, terminal, files, settings — as the README shows them; a screenshot of the running app, compressed and not generated, and of the navigation before 0.6.5's drawer | When the interface it shows changes, and only after the repository's owner has asked for it |
+| [assets/preview-0.7.0.webp](assets/preview-0.7.0.webp) | The five panels — the conversation list, a conversation, the terminal, the files page, the settings — as the README shows them; screenshots of the running app, compressed and not generated | When the interface it shows changes, and only after the repository's owner has asked for it |
+| [assets/preview-0.6.2.webp](assets/preview-0.6.2.webp) | The same strip as it looked in 0.6.2 — four panels, and the navigation before the drawer | Never — it is a record, not the preview |
 | [assets/preview-0.6.0.webp](assets/preview-0.6.0.webp) | The same strip as it looked in 0.6.0, kept rather than overwritten | Never — it is a record, not the preview |
 | [assets/preview-0.5.0.webp](assets/preview-0.5.0.webp) | The same strip as it looked before the Miuix rewrite, kept rather than overwritten | Never — it is a record, not the preview |
 | [assets/preview-0.2.0.webp](assets/preview-0.2.0.webp) | The same strip as it looked in 0.2.0, kept rather than overwritten | Never — it is a record, not the preview |
@@ -53,7 +54,7 @@ nothing parses them: the repository **description** is the tagline and has to ma
 both `<strong>` lines, a feature bullet that names a technology is grounded in a pin
 (`Miuix` is true because of `miuix 0.9.4` and the `MiuixTheme` the app is wrapped in),
 and the preview strip shows the interface the README describes — the current strip is
-`preview-0.6.2.webp`, and the versioned ones below it are records of what it looked like
+`preview-0.7.0.webp`, and the versioned ones below it are records of what it looked like
 before, never the current preview.
 `LICENSING.md` and the in-app credits name Miuix in the licence table, because there
 it is an artifact's name rather than a design argument.

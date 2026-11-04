@@ -118,18 +118,23 @@ storage, real network and the ARM translation trap. Both are described in
 
 ## The README preview strip
 
-Four phone screenshots — the conversation, the terminal, the files page and the settings —
-butted together with no frames and no captions, saved as
-`docs/assets/preview-<version>.webp`. The file is named for the version whose interface it
-shows, so replacing one adds a file rather than overwriting it: the strip before it keeps its
-own name as a record (`preview-0.5.0.webp`, `preview-0.2.0.webp`), and nothing generates the
+Five phone screenshots — the conversation list, a conversation, the terminal, the files page
+and the settings — butted together with no frames and no captions, saved as
+`docs/assets/preview-<version>.webp`. The list leads because it is the app's navigation: a
+strip that means to say what the app *is* starts at the drawer that switches between
+conversations. The file is named for the version whose interface it shows, so replacing one
+adds a file rather than overwriting it: the strip before it keeps its own name as a record
+(`preview-0.6.2.webp`, `preview-0.5.0.webp`, `preview-0.2.0.webp`), and nothing generates the
 file, so this is the whole recipe:
 
-1. **Capture four full-bleed screenshots** at 1080x2400 — the conversation, the terminal, the
-   files page and the settings — on the interface language the strip is written for (简体中文 for
-   the one the README ships). Since 0.6.5 the terminal and the files pages are opened by the top
-   bar's two marks, the settings by the drawer's foot, and the drawer itself is a fifth panel
-   worth adding to a strip that is meant to show the app's navigation. Tap by the bounds
+1. **Bump the version first, and capture five full-bleed screenshots** at 1080x2400 from a
+   build of the version the strip is named for: the settings panel's *About* row prints it,
+   so a strip shot before the bump carries the previous number under a file named for this
+   one. On the interface language the strip is written for (简体中文 for the one the README
+   ships) and in the scheme it is shot in (深色 for this one: the capsules, the drawer's field
+   and the terminal are drawn *around* the dark palette, and that is where they read). The
+   drawer and the conversation are the page itself; the terminal and the files page are opened
+   by the top bar's two marks, the settings by the drawer's foot. Tap by the bounds
    `adb shell uiautomator dump` reports rather than by eye off a screenshot: the PNG reaches a
    reader at whatever width the window has, while the tree is in device pixels.
 2. **Give the chat panel a transcript.** The emulator has no provider, so a real turn cannot be
@@ -137,13 +142,18 @@ file, so this is the whole recipe:
    `files/pi-sessions/` with `run-as`: a `{"type":"session",…}` line, then one record per
    message — `{"type":"message",…,"message":{"role":"user"…}}`, assistant messages whose
    `content` carries `toolCall` blocks, a `toolResult` record per call, and a last assistant
-   message carrying `usage`. Two traps, both hit while shooting 0.5.0: the records must form a
-   **linear `parentId` chain**, because pi stores messages as a tree and `get_messages` returns
-   only the branch that reaches the last record — five tool calls hanging off one prompt
-   collapse to one step — and the file only reaches the screen if the app *opens* it, which
-   needs `open_new_on_launch=false` at launch (or a tap on its row in the drawer). The file
-   is written to `.tooling/seed.jsonl` first — the ignored scratch directory, so it is never
-   a commit — and `adb push` from there needs `MSYS_NO_PATHCONV=1` in Git Bash, or the
+   message carrying `usage`. Three traps, one hit per strip so far:
+   - the records must form a **linear `parentId` chain**, because pi stores messages as a tree
+     and `get_messages` returns only the branch that reaches the last record — five tool calls
+     hanging off one prompt collapse to one step;
+   - the file only reaches the screen if the app *opens* it, which needs
+     `open_new_on_launch=false` at launch (or a tap on its row in the drawer);
+   - **the header line has to be written compact**, `{"type":"session"` with no space after the
+     colon, because that is the literal text `SessionMetadata` finds a session's workspace by
+     (`SESSION_HEADER_MARK`). A pretty-printed record parses as a conversation with no
+     directory: it lists under `未记录工作区`, at the bottom, whatever its timestamp.
+   The file is written to `.tooling/seed.jsonl` first — the ignored scratch directory, so it is
+   never a commit — and `adb push` from there needs `MSYS_NO_PATHCONV=1` in Git Bash, or the
    destination arrives as a drive-rooted path instead of `/data/local/tmp/seed.jsonl`.
 3. **Make the chips read something.** With no profile configured, `get_state` reports the model
    as `unknown`, so the composer's chips say `unknown` and `0%`. A `files/pikit-config.json`
@@ -154,11 +164,22 @@ file, so this is the whole recipe:
    `✓` row per tool with its name and argument — above a Markdown answer with a heading and a
    table. The collapsed band is the same control in its other state and hides the point; a turn
    with no tool calls at all draws no count, which is how the first attempt shipped an answer
-   that said nothing about tools.
-5. **Compose**: each screenshot scaled to 480px wide (Pillow, `Image.LANCZOS`) and pasted left
-   to right with no gap, saved as WebP at quality 88 — 1920 wide for four panels, which is what
-   the previous strips are.
-6. **Reference it**: both READMEs (they are mirrors), and the asset rows in
+   that said nothing about tools. An opened fold makes the turn taller than the viewport, so
+   swipe the transcript to its tail before shooting: not at the tail, the page draws its
+   jump-to-tail arrow over the answer's last row. Keep the turn short enough that the fold, the
+   answer and its table fit one panel — a paragraph line and a table row are both panel height.
+5. **The terminal panel is typed, not seeded.** The banner prints itself, but a terminal that
+   prints nothing else is a black rectangle with a prompt. Tap inside the view to raise the soft
+   keyboard, type a few short commands (`node --version`, `npm --version`, `du -sh ~/workspace`),
+   then **leave the page and come back** — the session outlives the page, and that is what hides
+   the keyboard for the shot. Two things to know: keystrokes do not reach the terminal until it
+   has been tapped (an `adb shell input text` before that goes to whichever view holds focus),
+   and a tap on the terminal *after* it has printed selects text, which lands in the strip as a
+   coloured band over a word.
+6. **Compose**: each screenshot scaled to 480px wide (Pillow, `Image.LANCZOS`) and pasted left
+   to right with no gap, saved as WebP at quality 88 — 2400 wide for five panels, which is what
+   every strip since 0.7.0 is.
+7. **Reference it**: both READMEs (they are mirrors), and the asset rows in
    [README.md](README.md) — the new strip takes the row that was the current preview, and
    the file it replaces moves to a record row. The caption under the image is the version:
    `PiKit <version> interface preview`（简中 `PiKit <version> 界面预览`）, matching the
