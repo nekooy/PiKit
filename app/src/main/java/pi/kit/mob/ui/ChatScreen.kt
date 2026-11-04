@@ -1741,7 +1741,7 @@ private fun ChatPage(
                 color = MiuixTheme.colorScheme.surfaceContainer,
                 modifier = Modifier
                     .width(MENU_WIDTH)
-                    .glassLift(RoundedCornerShape(PiCorner.radius), 10.dp),
+                    .solidLift(RoundedCornerShape(PiCorner.radius), 10.dp),
             ) {
                 Column(Modifier.padding(vertical = 6.dp)) {
                     MessageAction(text.chat.copyMessage, icon = MiuixIcons.Copy) {
@@ -4744,9 +4744,12 @@ private fun Composer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    // The same hand-drawn lift as the capsules: an elevation shadow
-                    // leans downward and made the field's underside heavier than its top.
-                    .glassLift(RoundedCornerShape(PiCorner.radius)),
+                    // The opaque variant of the lift, not the hand-drawn one: this
+                    // surface paints `surfaceContainer` (there is nothing translucent
+                    // for a shadow silhouette to show through), and the field is on
+                    // screen through every keyboard frame and every keystroke — the
+                    // blur was re-rasterised on every one of them.
+                    .solidLift(RoundedCornerShape(PiCorner.radius)),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(

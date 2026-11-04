@@ -69,7 +69,7 @@ import pi.kit.mob.pi.TurnInFlightException
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
-import pi.kit.mob.ui.kit.glassLift
+import pi.kit.mob.ui.kit.solidLift
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
@@ -1460,10 +1460,10 @@ private fun SettingsPill(
     val shape = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
-            // The same lift the page's capsules use, and for the same reason: see
-            // `glassLift`. The library's `Modifier.shadow` does not follow the shape it
-            // is given on this stack.
-            .glassLift(shape, 8.dp)
+            // The opaque variant of the lift: this pill paints `surfaceContainer`, so
+            // there is no translucent fill for a silhouette to show through, and the
+            // hand-drawn blur is re-rasterised on every frame the list scrolls under it.
+            .solidLift(shape, 8.dp)
             .clip(shape)
             .background(MiuixTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick)

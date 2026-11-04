@@ -318,14 +318,20 @@ because the strip version was worse:
   of the clock's own line. That is also why the leading capsule is a circle and the
   trailing one a pill: two objects at the ends, with the name standing between them on the
   page.
-- **The lift is a `graphicsLayer`, not `Modifier.shadow`.** On this Compose version the
-  modifier's shadow does not follow the shape it is given: a circle's shadow was drawn as
-  a squircle, so the shadow's own silhouette showed *inside* the capsule while its fill was
-  translucent — a white block with grey corners, measured at the leading capsule and read as
-  "the button has a white block in it". `Modifier.glassLift(shape)` sets the same two
-  properties on a layer directly, and the shadow then matches the shape; the fill being
-  opaque now hides the silhouette, but the shadow outside the shape is still the squircle's
-  until it is drawn this way.
+- **The lift is drawn, not `Modifier.shadow`, and there are two of them.** On this Compose
+  version the modifier's shadow does not follow the shape it is given: a circle's shadow was
+  drawn as a squircle, and while the capsules' fill was translucent that silhouette showed
+  *inside* the capsule — a white block with grey corners, measured at the leading capsule and
+  read as "the button has a white block in it". `solidLift` is a `graphicsLayer` with
+  `shadowElevation` for a surface that paints an opaque fill: the fill hides the squircle, so
+  the platform's silhouette cannot betray the shape, and the shadow is the layer it already
+  rides on. `glassLift` draws a blurred fill of the shape's *own* outline with a `MaskFilter`,
+  which is the exact silhouette and is re-rasterised on every frame it is drawn — the right
+  trade for the 42dp header capsules, the composer's chips and the toast, and the wrong one
+  for a surface as wide as the window: measured while the keyboard closed, the blur under the
+  composer's field was a **48 ms frame**. The field, the message menu and the drawer's
+  Settings pill therefore take `solidLift`; the small floating marks keep `glassLift` for its
+  exact outline.
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
