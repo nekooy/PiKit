@@ -453,20 +453,22 @@ motion a list of conversations should have on the way back to one, and the row t
 drawn filled on the new page's first frame. Publishing the *answer* early and keeping the
 *motion* alive are two different owners, and both are needed.
 
-**A list row never paints its own press.** The fill a row carries says one thing — *this is
-the conversation behind the drawer* — and colour is the whole of how the list says it. The
-library's press indication is the other kind of mark: a light that follows the finger, which
-is right on a button and wrong on a row whose gesture *opens a panel over itself*. A hold
-lights the row, the row's menu arrives at 500 ms with a dim over the list, and the light is
-then the only thing on screen that is about a finger that has stopped being the subject —
-and it leaves when the press ends, which is before the menu does. Measured on the medium
-phone at density 2.625, holding a row until its menu opened: the held row read rgb(22)
-against rgb(14) for the rows beside it under the panel's dim, and fell back to 14 as soon
-as the long press was accepted, so the panel was accompanied by a highlight for part of its
-own opening and by none for the rest. The row now carries no indication at all and the hold
-answers with the platform's long-press haptic — the same answer the transcript settled on
-(§7.3) — because a state that belongs to the finger cannot be a state that says "this menu
-is about this conversation".
+**A list row never paints its own press; the menu it opens lights it instead.** The fill a
+row carries says *which row is in question*, and this list has two causes for that — the
+conversation the page behind the drawer is showing, and the row whose action menu is open.
+One wash answers both (`PiTone.inset()`), because a list has one answer to "which
+conversation" and two shades of it would be two highlights. The library's press indication
+is the other kind of mark: a light that follows the finger, which is right on a button and
+wrong on a row whose gesture *opens a panel over itself*. Measured on the medium phone at
+density 2.625, holding a row until its menu opened, in the dark scheme: the held row read
+rgb(22) against rgb(14) for the rows beside it under the panel's dim, and fell back to 14 as
+soon as the long press was accepted — the panel was accompanied by a highlight for part of
+its own opening and by none for the rest, which is both wrong and unstable. The row carries
+no indication at all now, and the hold answers with the platform's long-press haptic, the
+same answer the transcript settled on (§7.3). What is lit instead is the row itself, for as
+long as its menu is open: measured in the light scheme under the same dim, that row reads
+rgb(160) where its neighbours read rgb(178), which is `inset`'s 10% of the ink with the
+scrim over it.
 
 The drawer's travel is kept in pixels, so a window that changes size has to re-anchor it:
 after one rotation an open drawer kept the portrait width and drew about 170px off the

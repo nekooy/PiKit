@@ -675,10 +675,13 @@ fun SessionsScreen(
  *
  * A row is a flat run of text on the panel's own surface. The pinned run used to be
  * tinted in the scheme's secondary container to say where it began, and that tint is
- * gone with the outlines: the one fill in the list now belongs to the conversation on
- * screen, and a second meaning for the same colour is a list with two highlights.
+ * gone with the outlines: the list's one fill says **which row is in question**, and it
+ * has two causes rather than two colours — the conversation the page behind the drawer
+ * is showing, and the row whose action menu is open. Two shades of "this one" would be
+ * a list with two highlights where it only ever has one answer; the menu's own dim and
+ * its position over the row are what say which cause is the live one.
  *
- * **A row paints no state while it is held, and that is the same rule read from the
+ * **A row paints no state while it is *held*, and that is the same rule read from the
  * other end.** The library's press indication is a light that follows the *finger*, and
  * the finger is not what this list is about: a hold opens a menu that stays after the
  * finger leaves, with a dim over the list, so the light it painted lit nothing and said
@@ -910,10 +913,11 @@ internal fun sessionGroups(
  * actions. Both are on the box, and the hold is labelled with [Strings.Sessions.actions]
  * rather than left an unnamed gesture, which is what a screen reader reads out for it.
  *
- * The box carries **no** press indication: the fill on this row says "this is the
- * conversation behind the drawer", not "this row is under a finger", and a hold that
- * opens a menu leaves the finger behind while the menu stays. [ConversationList]'s KDoc
- * has the measurement; the hold answers with the long-press haptic instead.
+ * The box carries **no** press indication: the fill on this row means "this is the row in
+ * question" — the conversation behind the drawer, or the row whose menu is open — and not
+ * "this row is under a finger", because a hold that opens a menu leaves the finger behind
+ * while the menu stays. [ConversationList]'s KDoc has the measurement; the hold answers
+ * with the long-press haptic instead.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -960,7 +964,14 @@ private fun ConversationRow(
                 .padding(horizontal = 8.dp)
                 .clip(RoundedCornerShape(ROW_CORNER))
                 .background(
-                    if (current) PiTone.inset() else Color.Transparent,
+                    // Two ways to be "the row in question", and one fill for both: the
+                    // conversation the page behind is showing, and the row whose actions
+                    // are open. The second is the one the menu needs — a panel that
+                    // covers the list with a dim and does not say which row it came from
+                    // is a menu with no subject — and it is the same wash rather than a
+                    // second one, because a list has one answer to "which conversation"
+                    // and it must not have two shades of it.
+                    if (current || actionsUp) PiTone.inset() else Color.Transparent,
                 )
                 .semantics {
                     onLongClick(label = text.sessions.actions) {
@@ -972,10 +983,9 @@ private fun ConversationRow(
                     }
                 }
                 // No press indication, on purpose — [ConversationList]'s KDoc has the
-                // measurement. A fill here can only mean "this is the conversation
-                // behind the drawer"; a light that follows the finger is the one thing
-                // the row must not wear when a menu has just opened over it, because it
-                // is painted by the touch and ends when the touch does, while the menu
+                // measurement. The fill is a state of the *row* (the conversation on
+                // screen, or this row's open menu), never of the finger that got there;
+                // a light painted by the touch ends when the touch does, while the menu
                 // is what is on screen. The hold is acknowledged by the haptic.
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
