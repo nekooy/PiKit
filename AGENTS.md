@@ -102,8 +102,9 @@ a document is exactly the change that forgets them.
   - **anything a change has to obey** — a layout invariant, a modifier order, a
     version that lives in one file, the command that has to follow an edit, a design
     that was tried and rejected — goes where the rule is already written: a chapter
-    under `docs/architecture/`, the *Hard constraints* above, or
-    `docs/MAINTAINING.md` for a recurring chore;
+    under `docs/architecture/`, the *Hard constraints* above, `docs/MAINTAINING.md` for
+    a recurring chore, or the document that chore already owns (`docs/PREVIEW.md` for
+    the preview-strip shoot);
   - **anything about working here** — how to drive a device, the emulator's traps,
     the checker that fails over a hand-wrapped manual — goes in `docs/BUILDING.md`,
     which is the document a person on a new machine reads.

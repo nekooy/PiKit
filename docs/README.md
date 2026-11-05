@@ -12,11 +12,12 @@ Every document in this repository, and the rule for adding one.
 | [architecture/](architecture/) | The chapters themselves, one file per topic | When a comment in the code cites a chapter |
 | [BUILDING.md](BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device — including the Git Bash and emulator traps | Before the first build, on a new machine |
 | [RELEASING.md](RELEASING.md) | The version, the tag, the workflows, and the signing that has to happen first | When publishing a build |
-| [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass, the README preview strip — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
+| [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
+| [PREVIEW.md](PREVIEW.md) | The README preview strip: five pages in 浅色, the emulator state the shoot needs, and what it has cost | When the interface it shows changes, and only after the repository's owner has asked for it |
 | [LICENSING.md](LICENSING.md) | Why GPLv3, what the APK carries, and where the credits are named | Before distributing anything |
 | [assets/icon.svg](assets/icon.svg) | The launcher icon, as the README shows it — **generated** | Never by hand |
-| [assets/preview-0.7.0.webp](assets/preview-0.7.0.webp) | The five panels — the conversation list, a conversation, the terminal, the files page, the settings — as the README shows them; screenshots of the running app, compressed and not generated | When the interface it shows changes, and only after the repository's owner has asked for it |
-| [assets/preview-0.6.2.webp](assets/preview-0.6.2.webp) | The same strip as it looked in 0.6.2 — four panels, and the navigation before the drawer | Never — it is a record, not the preview |
+| [assets/preview-0.7.0.webp](assets/preview-0.7.0.webp) | The five panels — a conversation, the conversation list, the terminal, the files page, the settings — as the README shows them, shot in 浅色; screenshots of the running app, compressed and not generated | When the interface it shows changes, and only after the repository's owner has asked for it |
+| [assets/preview-0.6.2.webp](assets/preview-0.6.2.webp) | The same strip as it looked in 0.6.2 — four panels in 深色, and the navigation before the drawer | Never — it is a record, not the preview |
 | [assets/preview-0.6.0.webp](assets/preview-0.6.0.webp) | The same strip as it looked in 0.6.0, kept rather than overwritten | Never — it is a record, not the preview |
 | [assets/preview-0.5.0.webp](assets/preview-0.5.0.webp) | The same strip as it looked before the Miuix rewrite, kept rather than overwritten | Never — it is a record, not the preview |
 | [assets/preview-0.2.0.webp](assets/preview-0.2.0.webp) | The same strip as it looked in 0.2.0, kept rather than overwritten | Never — it is a record, not the preview |

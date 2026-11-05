@@ -354,8 +354,8 @@ on its empty state — which is no use for anything the transcript draws. The wa
 seeded session file, written to the tree's own scratch directory first:
 
 ```bash
-# .tooling/seed.jsonl — the records are described in MAINTAINING.md, step 2 of
-# "The README preview strip": a session line, then one record per message.
+# .tooling/seed.jsonl — the records are described in PREVIEW.md, step 2 of
+# "The shoot": a session line, then one record per message.
 MSYS_NO_PATHCONV=1 adb push .tooling/seed.jsonl /data/local/tmp/seed.jsonl
 MSYS_NO_PATHCONV=1 adb shell \
   "run-as pi.kit.mob sh -c 'cp /data/local/tmp/seed.jsonl files/pi-sessions/seed.jsonl'"
@@ -366,7 +366,7 @@ leading edge opens. The
 records and the two traps — a **linear `parentId` chain**, because pi stores messages as a
 tree and `get_messages` returns only the branch reaching the last record, and the profile
 file that makes the composer's chips read a real model instead of `unknown` — are written
-out in [MAINTAINING.md](MAINTAINING.md)'s *The README preview strip*, steps 2 and 3,
+out in [PREVIEW.md](PREVIEW.md)'s *The shoot*, steps 2 and 3,
 which is the recipe for exactly this. Delete the seed file from the app afterwards: it
 lands in its real session directory. Nothing here is committed — `.tooling/` is ignored,
 and a seeded transcript is scaffolding for a screenshot, not a fixture.
