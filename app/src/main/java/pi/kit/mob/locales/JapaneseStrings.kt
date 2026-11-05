@@ -904,6 +904,7 @@ internal object JapaneseStrings : Strings {
             "数式の組版：JLaTeXMath（Android 移植版 jlatexmath-android。" +
                 "GPL-2.0、上流はリンク例外付き GPL-2.0）",
             "モデルのアイコン：Lucide（ISC）",
+            "テキスト選択のアイコン：Material Symbols（Apache-2.0）",
         ).joinToString("\n")
     }
     override val root = object : Strings.Root {

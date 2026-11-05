@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The select-text mark, from Material Symbols' `text_select_start` (outlined).
+
+    An I-beam caret with the selection's extent beside it: the gesture the menu's row
+    opens — pick characters out of this message's own source — drawn as the set draws it.
+
+    ## Provenance
+
+    Google's Material Symbols,
+    `symbols/web/text_select_start/materialsymbolsoutlined/text_select_start_24px.svg`,
+    Apache-2.0. The `d` attribute below is that file's own, character for character.
+
+    The one mechanical edit is the viewport, not the path: a Symbols SVG is authored on
+    `viewBox="0 0 -960 960 960"` — the y axis runs *upwards* from -960 — and an Android
+    vector has no origin offset, so the figure is moved down by the whole viewport in a
+    `<group android:translateY="960">` rather than by rewriting any coordinate. Moving a
+    path by arithmetic is how `ic_copy.xml`'s back sheet ended up 85.333 units too high;
+    a group asks the renderer to do the same addition, and the numbers stay Google's.
+    (`translateY`, not the `translationY` of a layout modifier: a vector group's own
+    attributes are floats on the viewport's grid, and the dimension attribute AAPT binds
+    that name to is rejected — `'960' is incompatible with attribute translationY`.)
+
+    ## The name that was asked for, and does not exist
+
+    The request was `format_select_text`. There is no such glyph: the variable font's own
+    codepoints file lists 4304 names and none of them is that, the classic Material Icons
+    metadata's 2122 do not have it either, and Iconify's `material-symbols` collection
+    answers `not_found` for the same string. The set's own vocabulary for this idea is
+    the `text_select_*` family, and `text_select_start` is the one that means "begin
+    selecting text" — see ARCHITECTURE §12.3 for the candidates that were rendered at
+    21dp before this one was chosen.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+
+    <group android:translateY="960">
+
+        <path
+            android:pathData="M440-120v-80h80v80h-80Zm0-640v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-640v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80ZM120-120v-80h80v-560h-80v-80h240v80h-80v560h80v80H120Z"
+            android:fillColor="#FF000000" />
+    </group>
+</vector>

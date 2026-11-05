@@ -4022,12 +4022,19 @@ private fun messageMenuItems(
     add(
         DropdownItem(
             text = text.chat.selectText,
+            // A borrowed glyph's size is a call-site decision (§12.3): this menu's ink sits
+            // at about 19.5dp, and Material Symbols' figure fills three quarters of its
+            // own box, so it is drawn in a [SELECT_TEXT_GLYPH] box — larger than the 24dp
+            // cell, whose transparent spare dp are what keep this row's label on the same
+            // column as the other two.
             icon = { modifier ->
-                Icon(
-                    painter = painterResource(R.drawable.ic_text_cursor),
-                    contentDescription = null,
-                    modifier = modifier,
-                )
+                Box(modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_select_text),
+                        contentDescription = null,
+                        modifier = Modifier.size(SELECT_TEXT_GLYPH),
+                    )
+                }
             },
             onClick = {
                 onDismiss()
@@ -4050,6 +4057,23 @@ private fun messageMenuItems(
         )
     }
 }
+
+/**
+ * The box the select-text figure is drawn in, inside the menu's 24dp icon cell.
+ *
+ * A borrowed glyph's size is a call-site decision (ARCHITECTURE §12.3), and the number is
+ * chosen from what the two marks beside it *draw*, not from the box they are given:
+ * measured on the medium phone at density 2.625, the copy mark's ink is 51×51 px (19.4dp
+ * square) and the share mark's is 41×53 (15.6 by 20.2dp) — this menu's set sits at about
+ * 19.5dp of ink, whatever the vectors' own viewports say. Material Symbols'
+ * `text_select_start` keeps its ink inside 720 of its 960 grid units, so 26dp is what
+ * lands it there: at 24 the figure measured 38×38 px, a quarter smaller than the copy
+ * mark above it, and at 26 it measures 49×47 — two pixels off in both axes, which is the
+ * closest a 960-unit grid gets to a 1024-unit one at this size. The box is wider than the
+ * 24dp cell it sits in on purpose: the spare dp are transparent, so all three labels still
+ * line up on one column.
+ */
+private val SELECT_TEXT_GLYPH = 26.dp
 
 /**
  * One assistant message: its reasoning control, its answer, its failure.

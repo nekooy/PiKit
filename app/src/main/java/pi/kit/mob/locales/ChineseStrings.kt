@@ -880,6 +880,7 @@ internal object ChineseStrings : Strings {
             "公式排版：JLaTeXMath，即 Android 移植版 jlatexmath-android" +
                 "（GPL-2.0，上游为 GPL-2.0 附链接例外）",
             "模型图标：Lucide（ISC）",
+            "选取文字图标：Material Symbols（Apache-2.0）",
         ).joinToString("\n")
     }
     override val root = object : Strings.Root {

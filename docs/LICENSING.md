@@ -63,6 +63,7 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
 | Miuix (the interface: theme, components, icons, navigation) | Apache-2.0 | [compose-miuix-ui/miuix](https://github.com/compose-miuix-ui/miuix) |
 | `ru.noties:jlatexmath-android` (formula typesetting) | GPL-2.0, over upstream JLaTeXMath's GPL-2.0 **with a linking exception** | [noties/jlatexmath-android](https://github.com/noties/jlatexmath-android), [opencollab/jlatexmath](https://github.com/opencollab/jlatexmath) |
 | Lucide (the model, thinking, command and check marks) | ISC | [lucide.dev](https://lucide.dev) |
+| Material Symbols (the select-text mark, `ic_select_text.xml`) | Apache-2.0 | [google/material-design-icons](https://github.com/google/material-design-icons) |
 
 The web-access extension resolves a further set of MIT/Apache-licensed packages
 (`turndown`, `@mozilla/readability`, `defuddle`, `linkedom`, `unpdf`, `undici`,

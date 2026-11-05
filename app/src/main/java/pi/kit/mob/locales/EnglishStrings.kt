@@ -959,6 +959,7 @@ internal object EnglishStrings : Strings {
             "Formula typesetting: JLaTeXMath, as the Android port jlatexmath-android " +
                 "(GPL-2.0, and GPL-2.0 with a linking exception upstream)",
             "Model mark: Lucide (ISC)",
+            "Select-text mark: Material Symbols (Apache-2.0)",
         ).joinToString("\n")
     }
 
