@@ -453,6 +453,21 @@ motion a list of conversations should have on the way back to one, and the row t
 drawn filled on the new page's first frame. Publishing the *answer* early and keeping the
 *motion* alive are two different owners, and both are needed.
 
+**A list row never paints its own press.** The fill a row carries says one thing — *this is
+the conversation behind the drawer* — and colour is the whole of how the list says it. The
+library's press indication is the other kind of mark: a light that follows the finger, which
+is right on a button and wrong on a row whose gesture *opens a panel over itself*. A hold
+lights the row, the row's menu arrives at 500 ms with a dim over the list, and the light is
+then the only thing on screen that is about a finger that has stopped being the subject —
+and it leaves when the press ends, which is before the menu does. Measured on the medium
+phone at density 2.625, holding a row until its menu opened: the held row read rgb(22)
+against rgb(14) for the rows beside it under the panel's dim, and fell back to 14 as soon
+as the long press was accepted, so the panel was accompanied by a highlight for part of its
+own opening and by none for the rest. The row now carries no indication at all and the hold
+answers with the platform's long-press haptic — the same answer the transcript settled on
+(§7.3) — because a state that belongs to the finger cannot be a state that says "this menu
+is about this conversation".
+
 The drawer's travel is kept in pixels, so a window that changes size has to re-anchor it:
 after one rotation an open drawer kept the portrait width and drew about 170px off the
 leading edge, cutting its own title in half. The size callback now re-derives the offset

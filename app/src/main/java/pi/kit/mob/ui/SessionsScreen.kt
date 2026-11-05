@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +47,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
@@ -675,6 +678,19 @@ fun SessionsScreen(
  * gone with the outlines: the one fill in the list now belongs to the conversation on
  * screen, and a second meaning for the same colour is a list with two highlights.
  *
+ * **A row paints no state while it is held, and that is the same rule read from the
+ * other end.** The library's press indication is a light that follows the *finger*, and
+ * the finger is not what this list is about: a hold opens a menu that stays after the
+ * finger leaves, with a dim over the list, so the light it painted lit nothing and said
+ * the wrong thing — it made the row the subject of the press at the moment the press
+ * stopped being the subject. Measured on a hold that opened a menu, sampled from a
+ * `screencap` at density 2.625: the held row read rgb(22) where its neighbours read
+ * rgb(14) under the panel's dim, and fell back to 14 when the long press was accepted,
+ * so the panel was lit for part of its own opening and dark for the rest. The hold is
+ * acknowledged where the transcript acknowledges one (§7.3): by the platform's
+ * long-press haptic, at the moment the menu is decided. A plain tap is answered by the
+ * conversation it opens, which is a whole page of feedback rather than a flash.
+ *
  * The unpinned heading appears only when something above it is pinned. Without that
  * break a mixed list has no way to say where the pinned group ends, and with it on an
  * all-unpinned list the page would open under a heading that states the obvious.
@@ -893,6 +909,11 @@ internal fun sessionGroups(
  * card is exactly its two gestures — a tap to open and a hold for the three per-row
  * actions. Both are on the box, and the hold is labelled with [Strings.Sessions.actions]
  * rather than left an unnamed gesture, which is what a screen reader reads out for it.
+ *
+ * The box carries **no** press indication: the fill on this row says "this is the
+ * conversation behind the drawer", not "this row is under a finger", and a hold that
+ * opens a menu leaves the finger behind while the menu stays. [ConversationList]'s KDoc
+ * has the measurement; the hold answers with the long-press haptic instead.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -921,6 +942,14 @@ private fun ConversationRow(
     // The menu is the row's own state: it is anchored on this row, it dies with the row,
     // and a row that scrolls out of the list with its menu open takes the menu with it.
     var actionsUp by remember(item.path) { mutableStateOf(false) }
+    // The hold's own acknowledgement. The row paints no press state (see below), so
+    // without this the 500 ms before the menu appears is a hold with no answer at all —
+    // the same reason the transcript answers with this haptic (§7.3).
+    val haptics = LocalHapticFeedback.current
+    val hold = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        actionsUp = true
+    }
 
     Box {
         Box(
@@ -938,13 +967,21 @@ private fun ConversationRow(
                         // Nothing to hold for while the list is in selection mode: the
                         // tap is already the checkbox, and a second way to reach the same
                         // three actions there would be a menu over a multi-select.
-                        if (!selecting) actionsUp = true
+                        if (!selecting) hold()
                         true
                     }
                 }
+                // No press indication, on purpose — [ConversationList]'s KDoc has the
+                // measurement. A fill here can only mean "this is the conversation
+                // behind the drawer"; a light that follows the finger is the one thing
+                // the row must not wear when a menu has just opened over it, because it
+                // is painted by the touch and ends when the touch does, while the menu
+                // is what is on screen. The hold is acknowledged by the haptic.
                 .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
                     onClick = { if (selecting) onToggleChecked() else onOpen() },
-                    onLongClick = if (selecting) null else ({ actionsUp = true }),
+                    onLongClick = if (selecting) null else hold,
                 )
                 .padding(horizontal = 14.dp, vertical = 13.dp),
         ) {
