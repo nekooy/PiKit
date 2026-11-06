@@ -47,7 +47,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -56,9 +55,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.termux.terminal.TerminalColors
@@ -67,7 +64,6 @@ import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -235,10 +231,6 @@ fun TerminalScreen(session: PiAgentSession,
     // claims. A single live shell keeps the idle line, which is the hint about
     // what this page is rather than a count.
     val running = sessions.count { it.running }
-
-    // Measured here rather than inside the bar: one key size for every cap in it, from
-    // a `TextMeasurer` pass before the first layout (see `rememberKeySize`).
-    val keys = rememberKeySize(t, LocalDensity.current.fontScale)
 
     // The strip under the key bar is the terminal's black rather than the app's
     // surface, and the gesture handle on it is light in both schemes: the page is a
@@ -483,7 +475,6 @@ fun TerminalScreen(session: PiAgentSession,
             ExtraKeysRow(
                 modifier = Modifier.fillMaxWidth(),
                 text = t,
-                size = keys,
                 autoScroll = autoScroll,
                 keyboardPanel = keyboardPanel,
                 onToggleAutoScroll = { autoScroll = !autoScroll },
@@ -701,7 +692,7 @@ private fun ShellStateRow(
         cornerRadius = PiCorner.radius,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = KEY_BAR_SIDE_PADDING, vertical = 6.dp),
+            .padding(horizontal = SHELL_CARD_SIDE_PADDING, vertical = 6.dp),
         colors = CardDefaults.defaultColors(
             color = MiuixTheme.colorScheme.errorContainer,
             contentColor = MiuixTheme.colorScheme.onErrorContainer,
@@ -744,52 +735,10 @@ private fun ShellStateRow(
 }
 
 /**
- * The bar's height, derived from the keys in it.
- *
- * The arrow cluster is two keys deep — up has to sit above down for the pad to mean
- * anything — and it is the tallest thing in the bar, so the bar is that cluster plus
- * the padding of the group it sits in and the bar's own padding. The groups beside
- * it are one key deep and are centred on that.
- *
- * It is a function of [KeySize] rather than a constant, and that is a fix rather than
- * tidiness. It used to be a flat 76dp derived from 30dp chips, and the chips grew without
- * it: the bar was shorter than its own contents, so the second row sat on the bar's
- * bottom edge and at font scale 1.8 the whole bar overflowed — measured on the emulator,
- * the labels of the row underneath were drawn over by the tab strip. Nothing about the
- * bar is a fixed size: the keys scale with the interface, so the space holding two of
- * them has to.
+ * The shell error card's gutter: the same inset the terminal's own text starts at, so the
+ * card and the lines under it read as one column rather than as a banner dropped in.
  */
-private fun barHeight(size: KeySize): Dp =
-    size.height * 2 + KEY_GAP + GROUP_PADDING * 2 + KEY_BAR_PADDING * 2
-
-/** One chip's height floor, and the gap between chips in both directions. */
-// 24dp with the label style. The bar's keys sat at the composer's 34dp so the two
-// tappable pill families matched, and at that size they read as oversized against
-// the terminal's own text; a second pass took them further down — the type as well
-// as the padding — because the label's line box alone kept the chips near 28dp
-// however tight the padding got. A floor rather than the height: the type is still
-// scaled by the system font size, so the chip is the larger of this and its own
-// label's line box.
-private val KEY_HEIGHT = 24.dp
-private val KEY_GAP = 5.dp
-
-/**
- * The padding inside the bar's one group's track.
- *
- * A group is what makes the bar readable at a glance — every key in the strip sits on
- * one raised track — and the track is Miuix's own card: `surfaceContainer`, the one
- * step of the library's surface ramp that a group of controls sits on, with the keys
- * themselves back on `surface` so a key reads as raised out of its group.
- *
- * There used to be a second constant beside this one — the gap *between* two groups,
- * more than three times the gap between two keys — and both went with the second
- * frame (see [ExtraKeysRow] for what the reader saw of it).
- */
-private val GROUP_PADDING = 4.dp
-
-/** The bar's padding around its contents, on each side of each axis. */
-private val KEY_BAR_PADDING = 5.dp
-private val KEY_BAR_SIDE_PADDING = 6.dp
+private val SHELL_CARD_SIDE_PADDING = 6.dp
 
 /**
  * One arrow: the escape sequence it sends, and the glyph it shows.
@@ -805,199 +754,6 @@ private val ARROW_UP = ArrowKey("\u001b[A", "\u2191")
 private val ARROW_DOWN = ArrowKey("\u001b[B", "\u2193")
 private val ARROW_RIGHT = ArrowKey("\u001b[C", "\u2192")
 private val ARROW_LEFT = ArrowKey("\u001b[D", "\u2190")
-
-/**
- * Every key in the bar is this size.
- *
- * ## Why uniform, and why measured rather than a constant
- *
- * Three earlier versions sized the chips to their own labels, and every one of them
- * produced a bar that looked like a mistake: the arrows came out 32dp wide against
- * `PGUP`'s 44, and the padding between them was whatever fell out. Worse, the two
- * rows of the arrow pad could not be made to line up, because the cell above a chip
- * and the chip itself wanted different widths — the last attempt at fixing that
- * squeezed `换行` into `换`.
- *
- * One size for every key removes the whole class of problem: the pad's cells are
- * trivially the same width because everything is, `↑` and `↓` share a column by
- * construction, and no label can be clipped by a neighbour's width.
- *
- * ## How the size is found
- *
- * The **widest label's natural width plus the chip padding**, measured with a
- * [TextMeasurer] before the first layout rather than by measuring laid-out chips.
- * Measuring the chips works, but it costs a frame in which the whole bar is drawn
- * too narrow and then reflows; measuring the text costs nothing and is exact,
- * because a chip contains nothing but its text. The padding is no longer one
- * constant on both axes: a round key's cap curves into the label's box by an amount
- * that grows with the key, so the horizontal inset is solved against the height
- * rather than written down (see [rememberKeySize]).
- *
- * The measurement is taken in the same type the keys are drawn in — Miuix's
- * `footnote2` in the monospace face — so the number is the chips' real width rather
- * than a proportional face's estimate of it. The figures this bar was first tuned
- * against (the widest label `PGUP`/`PGDN` at 77px, every key about 44dp wide) were
- * taken from a proportional label style, and the shape they settled on is the one
- * that survived: a uniform key, smaller than the 50dp/34dp figures an earlier
- * revision drew, which read as oversized for the terminal's chrome.
- *
- * ## The one cost, and its ceiling
- *
- * Eleven keys of the widest label plus the pad and the gaps exceed a 1080px bar, so
- * the row scrolls at font scale 1.0 rather than fitting. The ceiling exists for
- * exactly that reason: past it the bar would scroll *more*, not fit more, so a long
- * translation is better served by a bound than by a wider key.
- *
- * The bound is where the longest shipped label ends, not a round number below it.
- * `Scroll` is 6 characters and `滚动` two, but `スクロール` is five full-width glyphs —
- * measured at 184px, 70dp, against an earlier 64dp ceiling — so the Japanese bar drew
- * `スク` and cut the rest of the word off mid-glyph. At [MAX_KEY_WIDTH] the bar takes
- * that label in full and the ones it shipped with are unaffected, because the width
- * every key is given is still the *widest* label's: a language whose labels are short
- * pays nothing for the ceiling being high.
- */
-private data class KeySize(val width: Dp, val height: Dp)
-
-/**
- * Measures the widest label in the bar and returns the size every key should be.
- *
- * `remember`ed on the labels, so it runs once per language and font scale rather
- * than once per composition.
- */
-@Composable
-private fun rememberKeySize(
-    text: pi.kit.mob.locales.Strings,
-    fontScale: Float,
-): KeySize {
-    // The keys' own type, family included: a measurement in a different face is a
-    // measurement of a different bar (see [KeySize]). Built from the style set the
-    // theme handed down rather than on every recomposition, so the `remember`s
-    // below are keyed on something that only changes with the theme.
-    val typography = MiuixTheme.textStyles
-    val style = remember(typography) {
-        typography.footnote2.copy(fontFamily = FontFamily.Monospace)
-    }
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val labels = remember(text) {
-        buildList {
-            add(text.terminal.ctrl)
-            add(text.terminal.alt)
-            addAll(barLabels(text))
-            ARROW_GLYPHS.forEach(::add)
-        }
-    }
-    val widest = remember(labels, style, fontScale) {
-        labels.maxOf { measurer.measure(it, style).size.width }
-    }
-    val tallest = remember(labels, style, fontScale) {
-        labels.maxOf { measurer.measure(it, style).size.height }
-    }
-    // The height follows the label for the same reason the width does, and it is the
-    // half that was missed: the type's line box is scaled by the system font size
-    // while the chip was once a flat 34dp, so at 1.8 every key in the bar clipped
-    // its own label top and bottom. Measured on the emulator in Japanese at 1.8:
-    // the labels were cut to the height of the chip, `スクロール` to `スク`, and the
-    // second row of the bar ended up under the tab strip.
-    //
-    // The floor keeps a one-glyph label's key from being a sliver, so it is applied
-    // here: the inset below is a function of the height, and the height it has to be
-    // solved against is this one.
-    val height = (with(density) { tallest.toDp() } + KEY_VERTICAL_PADDING)
-        .coerceAtLeast(KEY_HEIGHT)
-
-    // A round key's own cap eats into the label's box, and how much it eats grows
-    // with the key. The label sits [KEY_VERTICAL_PADDING]/2 from the top and the
-    // bottom of the key, so its top-left corner is inside the pill only while the
-    // horizontal inset clears `r - sqrt(2rv - v²)` — with `r` the key's half-height
-    // and `v` the vertical inset. Worked out at both ends: 3.06dp at the 24dp key of
-    // font scale 1.0, which the 6dp the label already had covers, and 9.35dp at a
-    // 44dp one, which it does not. So the inset is solved rather than fixed, and it
-    // is the same shape of fix as the height above: the number that was a constant
-    // is a constant only where the key is short.
-    val radius = height.value / 2f
-    val halfVerticalInset = KEY_VERTICAL_PADDING.value / 2f
-    val capInset = radius -
-        sqrt((2f * radius * halfVerticalInset - halfVerticalInset * halfVerticalInset).coerceAtLeast(0f))
-    val sidePadding = maxOf(KEY_TEXT_PADDING / 2, capInset.dp)
-    // The ceiling keeps a long translation from making the row scroll further than
-    // it has to.
-    return KeySize(
-        width = (with(density) { widest.toDp() } + sidePadding * 2)
-            .coerceIn(MIN_KEY_WIDTH, MAX_KEY_WIDTH),
-        height = height,
-    )
-}
-
-/** The four arrow glyphs, named once so the size measurement and the pad agree. */
-private val ARROW_GLYPHS = listOf("\u2190", "\u2191", "\u2193", "\u2192")
-
-/** A chip's own padding, on both axes together: 6dp beside the label, 4dp above it. */
-private val KEY_TEXT_PADDING = 12.dp
-private val KEY_VERTICAL_PADDING = 8.dp
-
-private val MIN_KEY_WIDTH = 24.dp
-
-/**
- * The widest a key may be drawn, whatever its label measures.
- *
- * 72dp is `スクロール` — the longest label the bar ships, five full-width glyphs —
- * plus the chip's own padding, rounded up. See [KeySize] for why the bound is
- * worth having and why this is where it sits.
- */
-private val MAX_KEY_WIDTH = 72.dp
-
-@Composable
-private fun ScrollToggle(
-    label: String,
-    hint: String,
-    following: Boolean,
-    size: KeySize,
-    onClick: () -> Unit,
-) {
-    KeyButton(
-        label = label,
-        size = size,
-        // The key's tint is the whole state: the fill, the word and the size are the
-        // same in both positions, so nothing about the bar moves when it is tapped.
-        labelColor = if (following) {
-            MiuixTheme.colorScheme.primary
-        } else {
-            MiuixTheme.colorScheme.error
-        },
-        onClick = onClick,
-        // The full phrase, not the two-glyph label: the visible word names the
-        // thing, and the spoken one has to say what tapping it does.
-        spokenLabel = hint,
-    )
-}
-
-/**
- * Every label the bar draws, in the order the rows read it.
- *
- * One list, two consumers: the bar renders these strings and [rememberKeySize] measures
- * them, so a key cannot be drawn at a size the measurement did not consider. The order is
- * the rows' own rule — the line-editing keys first, then the session keys and the symbols
- * — and the arrows are glyphs rather than words, so they are measured from [ARROW_GLYPHS].
- */
-private fun barLabels(text: pi.kit.mob.locales.Strings): List<String> = listOf(
-    text.terminal.tab,
-    text.terminal.escape,
-    text.terminal.interrupt,
-    text.terminal.eof,
-    text.terminal.home,
-    text.terminal.end,
-    text.terminal.ctrl,
-    text.terminal.alt,
-    text.terminal.pageUp,
-    text.terminal.pageDown,
-    text.terminal.scrollShort,
-    "/",
-    "-",
-    "|",
-    "~",
-    "*",
-)
 
 /**
  * The extra-keys bar: one row of keys and three round actions, on the terminal's own dark.
@@ -1046,7 +802,6 @@ private fun barLabels(text: pi.kit.mob.locales.Strings): List<String> = listOf(
 private fun ExtraKeysRow(
     modifier: Modifier = Modifier,
     text: pi.kit.mob.locales.Strings,
-    size: KeySize,
     autoScroll: Boolean,
     keyboardPanel: Boolean,
     onToggleAutoScroll: () -> Unit,
@@ -1151,10 +906,8 @@ private fun ExtraKeysRow(
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
-                        // `this.size` and not `size`: this composable's own `size: KeySize`
-                        // parameter shadows the draw scope's, and reading it answers a `Dp`
-                        // — the compiler reported "actual type is 'Dp', but 'Float' was
-                        // expected" against a line that looked entirely correct.
+                        // The draw scope's size, in pixels: the strip is exactly as wide
+                        // as the viewport it erases.
                         val end = this.size.width
                         // Sixteen dp, except where less than that is left past the edge. The
                         // strip is masked by what can still come through for the same reason
@@ -1303,9 +1056,9 @@ private fun ExtraKeysRow(
 /**
  * One key of the bar: the terminal's dark, a lighter rectangle, and the sequence's name.
  *
- * Its width is the widest label's ([KeySize]), not its own: the whole row reads as one
- * instrument that way, and the reason the arrows have always been aligned by construction
- * survives into a row that is not a pad.
+ * Its width is a floor ([BAR_KEY_MIN_WIDTH]) that the label grows past, and the four
+ * arrows come out the same width because one glyph and the same padding do: a key reads as
+ * a key whatever it says, without a measurement pass deciding it.
  */
 @Composable
 private fun BarKey(
@@ -1421,185 +1174,6 @@ private fun barFadeBrush(startX: Float, endX: Float): Brush = Brush.horizontalGr
     startX = startX,
     endX = endX,
 )
-
-/**
- * One run of keys, on its own track.
- *
- * The track is what makes a group legible: the keys of a group sit on one container —
- * Miuix's card, `surfaceContainer`, one step of the library's surface ramp up from the
- * bar, with the keys themselves back on `surface` — so a group reads as one object and a
- * key reads as raised out of it. That is the same relationship a settings group has to its
- * rows, which is why it needs no new vocabulary.
- *
- * It takes a modifier now: the bar's grid is one card that holds two scrolling rows, so it
- * is the *remaining* width rather than its content's, and `weight` has to reach the card
- * for the rows inside to have bounds to scroll within.
- */
-@Composable
-private fun KeyGroup(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Card(
-        modifier = modifier,
-        cornerRadius = PiCorner.radius,
-        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
-        insideMargin = PaddingValues(GROUP_PADDING),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            content()
-        }
-    }
-}
-
-/**
- * A key that carries a glyph rather than a word, for the bar's own two actions.
- *
- * The same [Button] the key chips use, with an icon where the label would be, so the
- * cluster at the right is the same family as the grid beside it rather than a second kind
- * of control dropped into the bar. Its spoken label is the sentence, because a glyph says
- * nothing to a screen reader.
- */
-@Composable
-private fun GlyphKey(
-    glyph: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-    size: KeySize,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .size(size.width, size.height)
-            .clearAndSetSemantics { contentDescription = description },
-        cornerRadius = size.height / 2,
-        minWidth = 0.dp,
-        minHeight = 0.dp,
-        colors = ButtonDefaults.buttonColors(
-            color = MiuixTheme.colorScheme.surfaceContainer,
-            contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        ),
-        insideMargin = PaddingValues(0.dp),
-    ) {
-        Icon(
-            imageVector = glyph,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-/**
- * How many of [EXTRA_KEYS] share the modifiers' row, so the rest fall under them.
- *
- * Six: with `CTRL` and `ALT` at the head of the row that is eight keys, against seven
- * on the row below — the two rows are within one key of each other in every shipped
- * language, which is what "the space is used" means here. The symbols are the seven
- * that end up on the second row, and they are the ones a reader reaches for least.
- */
-private const val EXTRA_KEYS_PER_ROW = 6
-
-/**
- * One of the bar's keys, at the bar's uniform size and fully round.
- *
- * The width comes from [size] rather than from the label, which is the point: a
- * key is a key whatever it says, and the single glyph keys and the four-letter ones
- * line up because they are the same rectangle.
- *
- * A Miuix [Button] rather than a bare clickable box, because the library's button is
- * what carries the tap: the press indication, the button role for a screen reader,
- * and the squircle corner (whose radius is the key's half-height, so the two things
- * that have to agree on the shape — the fill and the touch area — are one value).
- * The active key is the theme's primary, which is the only thing that changes when a
- * modifier latches.
- */
-@Composable
-private fun ExtraKeyChip(
-    label: String,
-    active: Boolean,
-    size: KeySize,
-    onClick: () -> Unit,
-) {
-    KeyButton(
-        label = label,
-        size = size,
-        color = if (active) {
-            MiuixTheme.colorScheme.primary
-        } else {
-            MiuixTheme.colorScheme.surface
-        },
-        labelColor = if (active) {
-            MiuixTheme.colorScheme.onPrimary
-        } else {
-            MiuixTheme.colorScheme.onSurfaceVariantSummary
-        },
-        onClick = onClick,
-    )
-}
-
-/**
- * The bar's key: one shape, one size, one label style.
- *
- * Written once because the scroll toggle and the lettered keys have to be
- * indistinguishable but for their word and tint — that is the whole argument in
- * [ScrollToggle] — and two composables that draw the same key would drift apart.
- *
- * [color] is the fill, and it is passed rather than derived: the toggle changes only
- * its tint, and the latched modifiers keep a fill of their own, so the one thing that
- * differs between them is a parameter.
- *
- * [spokenLabel] replaces the visible word for a screen reader, which is what a short
- * label on a stateful control needs: "滚动" names the thing, and the spoken sentence
- * has to say what tapping it does. It is null for the lettered keys, whose label is
- * already the whole truth.
- */
-@Composable
-private fun KeyButton(
-    label: String,
-    size: KeySize,
-    color: Color = MiuixTheme.colorScheme.surface,
-    labelColor: Color,
-    onClick: () -> Unit,
-    spokenLabel: String? = null,
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.size(size.width, size.height),
-        // Half of the key's own height, which is what makes a wide key a pill and a
-        // short one a circle; a fixed dp would be one shape at font scale 1.0 and
-        // another at 1.8.
-        cornerRadius = size.height / 2,
-        // The key's size is its modifier, not a floor: Miuix's button minimums are
-        // for a word on a page, and a 58dp key would not fit eleven to a bar.
-        minWidth = 0.dp,
-        minHeight = 0.dp,
-        colors = ButtonDefaults.buttonColors(color = color, contentColor = labelColor),
-        insideMargin = PaddingValues(0.dp),
-    ) {
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.footnote2,
-            // The bar is a terminal's chrome and its labels are sequences, so the
-            // face is the terminal's own; the measurement in [rememberKeySize] uses
-            // the same style so the two agree on how wide a key has to be.
-            fontFamily = FontFamily.Monospace,
-            color = labelColor,
-            maxLines = 1,
-            // A label past the ceiling is marked as truncated rather than cut
-            // mid-glyph: `TextOverflow.Clip` is the default, and it is what drew
-            // `スクロール` as `スク` with nothing to say the word was longer.
-            overflow = TextOverflow.Ellipsis,
-            modifier = if (spokenLabel == null) {
-                Modifier
-            } else {
-                // Replaces the visible word rather than adding to it, so the control
-                // is read as the sentence a reader needs once, not as a word followed
-                // by a sentence about it.
-                Modifier.clearAndSetSemantics { contentDescription = spokenLabel }
-            },
-        )
-    }
-}
 
 /** Mirrors the terminal's own default background so the screen has no seam. */
 private val TERMINAL_BACKGROUND = Color(
