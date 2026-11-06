@@ -334,8 +334,9 @@ because the strip version was worse:
   had 2dp above and below as well, which made the pill 46dp against the circle's 42dp, and
   the two ends of one row differing by 4dp does not read as two objects of a kind: measured
   on the 1080 px emulator the circle was 110 px tall and the pill 120 px, now 110 and 110.
-  The touch targets are independent of this — every mark keeps the platform's 48dp target —
-  so the rule costs nothing to obey.
+  The touch target is the mark's own box — 42dp, two above the library's `IconButton`
+  floor of 40dp — and not the platform's 48dp. The drawer's selection controls go one
+  step smaller still (36dp with 20dp glyphs), for the width reason further down.
 - **The lift is drawn, not `Modifier.shadow`, and there are two of them.** On this Compose
   version the modifier's shadow does not follow the shape it is given: a circle's shadow was
   drawn as a squircle, and while the capsules' fill was translucent that silhouette showed
@@ -525,7 +526,7 @@ reader watched it arrive.
 mixed list with a "Recent" heading under the pinned shelf; the workspace headings already
 say where a run of rows came from, and "Recent" was the only label in the panel that
 described nothing — the list is all recent. The selection controls are 36dp with 20dp
-glyphs rather than the library's 48dp: three full-size icon buttons beside the app's name
+glyphs rather than the library's 40dp: three full-size icon buttons beside the app's name
 were wider than the name, and the panel's heading is not the place to spend that.
 
 ## Shapes, motion, icons
@@ -536,12 +537,14 @@ passed at every `Card`, `Button`, `TextButton` and `TextField` call site, so the
 whole interface is cut with the same corner and no surface is one radius while its
 neighbour is another. It is a single number and not a scale on purpose: a second
 step would need a rule for which surface is which, and there is no such rule to
-state. Three deliberate exceptions keep the library's own figure — the terminal key
-bar's keys (half of each key's height, so a wide key is a pill), a tool output's copy
-button and the code block's `CornerRadius(min(radius, height/2))`, which are round by
-their own geometry — and the two 40dp composer discs (send and stop) state
-`cornerRadius = 20.dp` explicitly so the shape does not depend on the button staying
-40dp. There is no theme-level shape local in Miuix 0.9.4 to hang this on, which is
+state. The surfaces that are not cut with it are the ones drawn by their own geometry:
+a copy button and the composer's two discs are half their own size — 14dp on a 28dp
+button, `cornerRadius = 20.dp` on a 40dp disc — so the shape does not depend on the
+control staying that size, and an inline code chip clamps to `min(radius, height / 2)`
+where a tall box would otherwise cut into its text. The terminal is a family of its
+own and keeps the library's smaller figure throughout: its key bar is a 26dp pill with
+10dp keys on a 32dp cap, and the on-screen keyboard a 14dp panel with 7dp keys on 34dp.
+There is no theme-level shape local in Miuix 0.9.4 to hang this on, which is
 why it is per-call-site.
 
 **Motion is the library's**, except for the one page-level move a page has to spell
@@ -638,7 +641,7 @@ a list of ids.
 
 `components/CopyButton.kt` is the one survivor of the old `ui/components/` package,
 and only because its content was rewritten to Miuix while keeping the two call sites:
-the transcript's meta row and a tool card's output still use the same control.
+a code block's header and a tool card's output still use the same control.
 
 ## What is still the app's, not the library's
 
