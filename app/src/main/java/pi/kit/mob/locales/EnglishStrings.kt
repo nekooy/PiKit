@@ -16,8 +16,6 @@ internal object EnglishStrings : Strings {
         override val newConversation = "New conversation"
         override val loadingModel = "Loading model…"
         override val noModel = "No model configured"
-        override val agentReady = "Agent ready"
-        override val agentStarting = "Starting…"
         override val agentFailed = "Agent failed"
         override val agentStopped = "Agent stopped"
         override val removeAttachment = "Remove"
@@ -145,7 +143,6 @@ internal object EnglishStrings : Strings {
         override val workspacePickerGrant = "Allow file access"
         override val workspacePickerUnreadable = "This folder cannot be read. Phone storage needs \"all files access\"."
         override val workspacePickerAdded = "Added"
-        override val workspacePickerFolders = "Folders"
         override val workspacePickerNewFolder = "New"
         override val workspacePickerNewFolderTitle = "New folder"
         override val workspacePickerNewFolderName = "Folder name"
@@ -276,35 +273,15 @@ internal object EnglishStrings : Strings {
 
     override val terminal = object : Strings.Terminal {
         override val newTerminal = "New terminal"
-        override val closeTerminal = "Close this terminal"
         override val switchTerminal = "Switch terminal"
         override fun exited(code: Int?) = "exited ($code)"
         override fun closeSession(label: String) = "Close $label"
         override val closeAllTerminals = "Close all terminals"
-        override val ctrl = "CTRL"
-        override val alt = "ALT"
         override val escape = "ESC"
-        override val tab = "TAB"
-        override val home = "HOME"
-        override val end = "END"
-        override val pageUp = "PGUP"
-        override val pageDown = "PGDN"
-        override val interrupt = "C-C"
-        override val eof = "C-D"
         override val scrollToggleHint =
             "Auto-scroll: paused, new output will not pull the view back to the bottom"
         override val scrollShort = "Scroll"
 
-        /**
-         * The key that inserts a line break into the line being typed.
-         *
-         * One word, and deliberately not "Line break": the bar sizes every key to
-         * its widest label and caps that width (`MAX_KEY_WIDTH` in
-         * `TerminalScreen.kt`), so a two-word label was the one label in the bar
-         * that the cap clipped — `Line brea`, in English, which is the report that
-         * came back. "Newline" is the same fact in the width the bar has.
-         */
-        override val newline = "Newline"
         override val keysMessage = "Send text"
         override val keysMessageLabel = "Text to type into the terminal"
         override val keysMessageSend = "Send to terminal"
@@ -446,7 +423,6 @@ internal object EnglishStrings : Strings {
         override val agentContextHistoryBody =
             "This session, tool calls and results included, sent with every message and " +
                 "written to the session file."
-        override val agentContextInstructions = "Global AGENTS.md"
         override val agentContextAuthorTitle = "Default instructions"
         override val agentContextAuthorSubtitle = "Maintained by PiKit — the environment, the tiers and the rules, rewritten from each build"
         override val agentContextUserTitle = "User instructions"
@@ -530,7 +506,6 @@ internal object EnglishStrings : Strings {
         override val fromProvider = "Reported by the provider, so this key can use them."
         override val fromCatalog = "From pi's catalog; not checked against your key"
         override val save = "Save"
-        override val cancel = "Cancel"
         override val needProvider = "Choose a provider before saving."
         override val needProviderSubtitle =
             "Choose a provider first — a model id means nothing without one."

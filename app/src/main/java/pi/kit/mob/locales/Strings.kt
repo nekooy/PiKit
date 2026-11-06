@@ -112,8 +112,6 @@ interface Strings {
         val newConversation: String
         val loadingModel: String
         val noModel: String
-        val agentReady: String
-        val agentStarting: String
         val agentFailed: String
         val agentStopped: String
         val removeAttachment: String
@@ -484,9 +482,6 @@ interface Strings {
         /** The badge on a row whose folder is already a workspace. */
         val workspacePickerAdded: String
 
-        /** The label above the folder listing, under the navigation rows. */
-        val workspacePickerFolders: String
-
         /** The row that makes a directory inside the one being shown. */
         val workspacePickerNewFolder: String
 
@@ -714,7 +709,6 @@ interface Strings {
 
     interface Terminal {
         val newTerminal: String
-        val closeTerminal: String
         val switchTerminal: String
         fun exited(code: Int?): String
 
@@ -731,16 +725,7 @@ interface Strings {
 
         /** The action row under the session picker: closes every session. */
         val closeAllTerminals: String
-        val ctrl: String
-        val alt: String
         val escape: String
-        val tab: String
-        val home: String
-        val end: String
-        val pageUp: String
-        val pageDown: String
-        val interrupt: String
-        val eof: String
 
         /**
          * The extra-keys bar's scroll-follow toggle.
@@ -755,15 +740,12 @@ interface Strings {
         /**
          * The toggle's own label, as short as the concept allows.
          *
-         * It has to fit one key: the key bar sizes every key to its widest label,
-         * and "auto-scroll" spelled out in two Han glyphs is three times what `↑`
-         * needs. The full phrase is [scrollToggleHint], so nothing is lost to a
-         * screen reader.
+         * A key is as wide as its own label now, so the cost is not fitting inside
+         * one: it is that `自动滚动` is four glyphs where `↑` is one, at the leading
+         * edge of a row that already scrolls. The full phrase is [scrollToggleHint],
+         * so nothing is lost to a screen reader.
          */
         val scrollShort: String
-
-        /** The key that sends a bare newline, i.e. Return. */
-        val newline: String
 
         /** The button that opens the send-text sheet: the word for one message. */
         val keysMessage: String
@@ -1051,17 +1033,6 @@ interface Strings {
         val agentContextHistoryBody: String
 
         /**
-         * The one editable part: `$HOME/.pi/agent/AGENTS.md`.
-         *
-         * Named for what the file *is* — the global instructions pi reads, as against
-         * the copy a project keeps in its own directory — rather than for what it
-         * contains: "environment notes" described one section of it, and a reader
-         * looking for the file the agent is actually told to follow would not have
-         * recognised it.
-         */
-        val agentContextInstructions: String
-
-        /**
          * The app's own instructions, which the reader reads but does not edit.
          *
          * The document is maintained by PiKit: it names this build's prefix, its three
@@ -1229,7 +1200,6 @@ interface Strings {
         val fromProvider: String
         val fromCatalog: String
         val save: String
-        val cancel: String
         val needProvider: String
 
         /**

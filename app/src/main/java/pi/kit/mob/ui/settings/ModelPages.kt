@@ -235,7 +235,7 @@ internal fun ModelPage(
         title = text.settings.deleteProfileTitle,
         text = text.settings.deleteProfileBody(deleting?.displayName.orEmpty()),
         confirm = text.settings.deleteProfile,
-        dismiss = text.settings.cancel,
+        dismiss = text.common.cancel,
         destructive = true,
         onConfirm = {
             val target = deleting ?: return@PiConfirm
@@ -1275,7 +1275,7 @@ internal fun ModelEditPage(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SettingsButton(
-                    text = text.settings.cancel,
+                    text = text.common.cancel,
                     onClick = ::requestLeave,
                     modifier = Modifier.weight(1f),
                 )
@@ -1468,7 +1468,7 @@ internal fun ModelEditPage(
         title = text.settings.removeModelTitle,
         text = text.settings.removeModelBody(removing.orEmpty()),
         confirm = text.settings.removeModel,
-        dismiss = text.settings.cancel,
+        dismiss = text.common.cancel,
         destructive = true,
         onConfirm = {
             removing?.let { removeModel(it) }
