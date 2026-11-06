@@ -35,12 +35,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * infinity arrives. A `BasicComponent` *without* either slot survives the same
  * measurement, which is why the command menu did not crash before it was converted.
  *
- * The metrics are `DropdownImpl`'s own popup-mode ones, read out of the library at
- * `0.9.4`: `body1` at medium weight for the title, `body2` for the summary, 20dp at
- * the sides, 20dp above the first row and below the last, 12dp between them, and
- * `12dp` between a leading mark and the title. Copying them rather than inventing a
- * row is what lets a menu of these sit beside a menu of `DropdownImpl`s without a
- * seam — the two are used in the same app, sometimes in the same screen.
+ * The metrics are `DropdownImpl`'s own popup-mode ones where this row can carry them,
+ * read out of the library at `0.9.4`: `body1` at medium weight for the title, `body2`
+ * for the summary, 20dp at the sides, and `12dp` between a leading mark and the title.
+ * Copying them rather than inventing a row is what lets a menu of these sit beside a
+ * menu of `DropdownImpl`s without a seam — the two are used in the same app, sometimes
+ * in the same screen.
+ *
+ * The vertical rhythm is deliberately not the library's: every row here is 10dp above
+ * and below with a 56dp floor, where `DropdownImpl` opens and closes its menu with 20dp
+ * and puts 12dp between rows. This row has a second caller — the terminal's session
+ * roster, which is a list rather than a menu — and there it has to be one height for
+ * every row.
  *
  * ## Three kinds of row, and the one parameter that tells them apart
  *

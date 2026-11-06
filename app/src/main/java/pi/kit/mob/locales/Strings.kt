@@ -1373,7 +1373,7 @@ interface Strings {
          * a model pi's catalogue contains it is the catalogue's own, and for one it does not
          * it is the fallback model's. The line therefore points at the value the row is
          * already showing rather than naming either source, which is also what the muted
-         * colour on that value means (`SettingsRow.valueEmphasised`).
+         * colour on that value means (`SettingsValue`'s non-emphasised ink).
          */
         val modelNumbersNote: String
 

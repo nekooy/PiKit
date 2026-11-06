@@ -44,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -95,7 +94,6 @@ import top.yukonga.miuix.kmp.icon.extended.Rename
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
-import top.yukonga.miuix.kmp.icon.extended.Tasks
 import top.yukonga.miuix.kmp.icon.extended.Unpin
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.squircle.squircleSurface
@@ -1477,7 +1475,8 @@ private const val DIALOG_BODY_SHARE = 0.45f
  *
  * The drawer's own furniture: it has to be tall enough for the settings pill, which
  * floats over the end of the list — 16dp put the pill on top of the last conversation
- * and made the final row unreadable, and the pill plus its own margin is about 72dp.
+ * and made the final row unreadable. The pill is 44dp (a 20dp glyph with 12dp above and
+ * below) and its own margin 40dp, so 84dp clears it; the remaining 28dp is scroll slack.
  */
 private val LIST_BOTTOM = 112.dp
 

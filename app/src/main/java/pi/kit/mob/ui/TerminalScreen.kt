@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -102,17 +99,11 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
-import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.ExpandLess
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
-import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
-import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
-import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Pinch-to-zoom bounds, in sp. */
@@ -1013,11 +1004,11 @@ private fun barLabels(text: pi.kit.mob.locales.Strings): List<String> = listOf(
  *
  * ## The row
  *
- * `滚动` first, then the four arrows, then `Ctrl+C`, `Ctrl+V`, `Ctrl+X` and `Esc`. The
- * order is the order of use on a phone: follow-the-output is the one key that is a *state*
- * and belongs at the leading edge where the thumb already is, the arrows are what a soft
- * keyboard does badly, the three Ctrl combinations are what a terminal is for, and `Esc`
- * ends the row because it is the one a shell asks for least.
+ * `滚动` first, then the four arrows, then `Esc`. The order is the order of use on a phone:
+ * follow-the-output is the one key that is a *state* and belongs at the leading edge where
+ * the thumb already is, the arrows are what a soft keyboard does badly, and `Esc` ends the
+ * row because it is the one a shell asks for least. The rest of a desk keyboard is the
+ * on-screen panel behind the laptop mark.
  *
  * ## Why it is one row again
  *
@@ -1027,14 +1018,14 @@ private fun barLabels(text: pi.kit.mob.locales.Strings): List<String> = listOf(
  * thumb's reach for a bar that exists to save taps. The keys that went with the second row
  * — `CTRL`, `ALT`, `TAB`, `PGUP`, `PGDN`, `HOME`, `END`, `C-D` and the five symbols — are
  * all reachable another way (`TAB` from the soft keyboard, the rest through the send-text
- * field or a typed command), and the eight that stayed are the ones that were pressed.
+ * field or a typed command), and the six that stayed are the ones that were pressed.
  *
  * ## The three round buttons
  *
  * They are not keys: they act on the sheet or on the input path rather than sending a byte.
- * **Send text** opens a field, and what is typed there goes to the terminal as one piece
- * followed by a carriage return — the answer to a `git commit -m` message or a multi-line
- * command. **Hardware keys** switches the input path: on, the soft keyboard is put away and
+ * **Send text** opens a field, and what is typed there goes to the terminal exactly as
+ * typed, with no carriage return appended — the answer to a `git commit -m` message or a
+ * multi-line command, where the reader presses Return where they want one. **Hardware keys** switches the input path: on, the soft keyboard is put away and
  * the terminal stops raising it on a tap, so a Bluetooth or USB keyboard owns the input; off,
  * the IME is the input again. It is a *mode* and stays set, which is what separates it from
  * the third button. **Keyboard** raises or lowers the IME on the spot.
@@ -1110,9 +1101,10 @@ private fun ExtraKeysRow(
                 // the *pill's* rounded clip is what hides a half-scrolled key there. An
                 // inner inset put a straight vertical cut five dp inside the arc, which is
                 // what read as a rendering fault. The trailing side is the other way
-                // round: the last action is a 34dp circle in a 44dp pill, so a 5dp inset
-                // puts it *concentric* with the pill's end cap — the same 5dp margin the
-                // keys have above and below — and anything smaller lets the arc cut the
+                // round: the last action is a 34dp circle in a 42dp pill (a 32dp key and
+                // this padding above and below it), so 4dp would centre it exactly on the
+                // cap's arc. The 5dp the keys' own margin asks for puts it one dp inside
+                // that, which is the side to err on: anything smaller lets the arc cut the
                 // circle's right side off, which is what "the keyboard button is flush
                 // against the edge" was.
                 .padding(

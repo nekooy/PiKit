@@ -1240,9 +1240,9 @@ private val LIVE_DOT_SIZE = 6.dp
 /**
  * The radius of an inset panel inside a card — a tool's output, a message's reasoning.
  *
- * Miuix's [top.yukonga.miuix.kmp.basic.Card] is 16dp and its buttons are 16dp, so a
- * panel that sits *inside* a card takes one step in. Two expanded blocks in one turn
- * are this one shape.
+ * The app's cards are cut at [pi.kit.mob.ui.kit.PiCorner.radius] (20dp), so a panel that
+ * sits *inside* one takes a step in: 12dp, which is the shape both of a turn's expanded
+ * blocks use.
  */
 internal val ROW_SHAPE = RoundedCornerShape(12.dp)
 

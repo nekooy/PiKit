@@ -236,8 +236,8 @@ private val CODE_CHIP_PAD_Y = 1.dp
  * corners are nearly half its height and the fill stops reading as a rounded
  * rectangle. That
  * measurement is right and it says *less*, not *more*: 4dp is inside the one-line
- * constraint with room to spare and is a quarter of the code well's own 16dp, which
- * is Miuix's card radius, so the inline span and the block it belongs to cannot be
+ * constraint with room to spare and is a fifth of the code well's own 20dp
+ * (`PiCorner.radius`), so the inline span and the block it belongs to cannot be
  * mistaken for one another.
  *
  * The value is written as a dp here rather than read off a component because the fill

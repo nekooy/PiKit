@@ -11,11 +11,14 @@
  * The page's shape, top to bottom, is the one a listing needs and a settings page
  * does not:
  *
- *  - **A location bar** under the header: the path as Miuix's own breadcrumb trail —
+ *  - **A toolbar**: a filter field and a sort menu at the top of the page, in the shape
+ *    a page's own tools take rather than a settings group. It sits above the path
+ *    because the filter is the control the reader came to use, while the path is the
+ *    thing they already know — the header above names the folder.
+ *  - **A location bar** under it: the path as Miuix's own breadcrumb trail —
  *    capsules that scroll sideways instead of collapsing. A path is navigation, not
- *    a subtitle, and a path you can tap is worth more than one you can only read.
- *  - **A toolbar**: a filter field and a sort menu, directly above the rows they act
- *    on, in the shape a page's own tools take rather than a settings group.
+ *    a subtitle, and a path you can tap is worth more than one you can only read; it
+ *    stays directly above the rows it describes.
  *  - **A listing**: one card per entry — a glyph tile, the name, the kind and date
  *    under it, and one right-aligned column holding the number the row is about
  *    (bytes for a file, how many entries for a folder).
@@ -49,9 +52,9 @@
  *
  * ## Back walks up the filesystem, to its root
  *
- * The tab is a root, so it draws no back arrow in its bar (`PiPage`'s arrow belongs
- * to a pushed page) — the location bar and the up button are its visible navigation,
- * and the back gesture follows them.
+ * The page is pushed from the chat bar, so its bar carries `PiPage`'s arrow back to the
+ * chat at the library's own inset; the up button and the back gesture walk up the tree
+ * instead, and the Home button is the way to this page's own root.
  *
  * The walk ends at the filesystem's root, not at `$HOME`. It used to stop at `$HOME`:
  * the home directory's parent is the app's private data directory, and the argument for

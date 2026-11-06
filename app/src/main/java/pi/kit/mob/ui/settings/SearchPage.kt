@@ -95,9 +95,10 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
  * the stored value, so a number that does not parse yet is left alone in the field
  * rather than rounded into something else. An added option is written on its own
  * button, from a sheet that is dismissed by it: it is a deliberate act with a value
- * the user typed, and it is not something to do on a keystroke. The restart note at
- * the end of the page is what says a change does not apply to the running agent —
- * the extension registers its tools when pi starts.
+ * the user typed, and it is not something to do on a keystroke. The restart is the
+ * write's own consequence rather than a sentence telling the reader to make one: the
+ * extension registers its tools when pi starts, so each write schedules it (the trade
+ * `WebSearchConfigOptions` records).
  */
 @Composable
 internal fun SearchPage(

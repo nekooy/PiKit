@@ -19,14 +19,12 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -75,7 +73,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -644,11 +641,14 @@ private fun ChatTab(
     drawerScope: kotlinx.coroutines.CoroutineScope,
     historyListState: androidx.compose.foundation.lazy.LazyListState,
     /**
-     * The scaffold's bottom inset in pixels.
+     * The scaffold's bottom inset in pixels — zero today.
      *
-     * The root *consumes* the window insets above this page (`consumeWindowInsets`), so
-     * reading `WindowInsets.navigationBars` here answers zero and the composer band sat on
-     * the gesture strip. The consumed value is handed down instead.
+     * The root asks for no content insets (`contentWindowInsets = WindowInsets(0, 0, 0, 0)`)
+     * and has no bar of its own, so the `padding` it hands down is empty and
+     * `.consumeWindowInsets(padding)` consumes nothing: every page owns its insets through
+     * `PiPage`. The value is passed on because the chat page's `bandInset` takes it as one
+     * of the edge cases, and it is the one place a root-level strip would arrive from if
+     * the root ever asks for one again.
      */
     scaffoldBottom: Int,
     onHistoryOpenChange: (Boolean) -> Unit,

@@ -233,23 +233,11 @@ fun SettingsParagraph(
 }
 
 /**
- * A settings field: Miuix's own, with its supporting line under it.
+ * How far a field's box is pulled in from the card's edge — the number the field's own
+ * KDoc means when it says the label's 4dp is the price.
  *
- * The field carries 4dp above and below and no horizontal padding of its own, so a run
- * of fields sits inside the group rather than edge to edge and two stacked fields stay
- * 8dp apart (their own outlines separate them, and a hairline beside a field would be a
- * boundary too many). [supporting] is the sentence under the box: Miuix's `TextField`
- * has a floating label and no supporting slot, and that sentence is help for *this*
- * field, so it stays with it.
- *
- * [placeholder] is drawn under the box while the field is empty, beside [supporting]
- * rather than instead of it: a call site that passes both wants the sentence about the
- * field *and* an example of what goes in it, and the version that drew one or the other
- * silently dropped every example the model form passes.
- *
- * [password] exists because an API key must not be drawn in the clear; everything else
- * about the two fields is the same, which is why this is a parameter rather than a
- * second field at each call site.
+ * The section below is why this is about the outline rather than the text, and it is the
+ * record of the first attempt; the wrapper's own doc has the current geometry.
  *
  * ## The gutter is the library's, not this wrapper's
  *

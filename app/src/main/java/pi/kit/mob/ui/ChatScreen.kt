@@ -13,11 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.activity.compose.BackHandler
@@ -26,25 +21,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.systemBars
@@ -79,7 +70,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -116,8 +106,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -171,7 +159,6 @@ import pi.kit.mob.pi.ConversationState
 import pi.kit.mob.pi.ImageAttachment
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiLaunchOptions
-import pi.kit.mob.pi.SessionMetadata
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.thinkingLevelsFor
 import pi.kit.mob.ui.WorkspacePickerSheet
@@ -187,7 +174,6 @@ import pi.kit.mob.ui.chat.TurnSummaryData
 import pi.kit.mob.ui.chat.TurnSummaryRow
 import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
-import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiToast
@@ -302,7 +288,7 @@ internal class ChatComposerState {
     /** Images and documents picked but not sent. */
     var attachments by mutableStateOf<List<PendingImage>>(emptyList())
 
-    /** What the composer's one-line warning under the field is saying, if anything. */
+    /** The warning strip above the composer, when one is showing. */
     var notice by mutableStateOf<String?>(null)
 
     /** The transcript's scroll position. */
@@ -395,12 +381,12 @@ private const val THUMBNAIL_EDGE = 160
 /**
  * Which of the composer's menus or sheets is being asked for.
  *
- * One name for all six rather than six booleans: they are mutually exclusive by
+ * One name for all nine rather than nine booleans: they are mutually exclusive by
  * construction (each is modal, and each covers the others), and a name per one keeps
- * the six bodies one `when` apart from the controls that open them.
+ * each surface one comparison away from the control that opens it.
  *
  * The *state* lives in [ChatScreen] and this enum is passed down to the composer,
- * because two of the six are not the composer's: the context sheet is opened from
+ * because two of the nine are not the composer's: the context sheet is opened from
  * two chips, and the shell sheet is opened from the command menu. A sheet the
  * composer owned privately would be a second answer to "which one is open" — the
  * question the app's one sheet host used to answer for every screen.
@@ -1299,9 +1285,9 @@ internal fun ChatScreen(
  *
  * ## The header
  *
- * The page frame is [PiPage] with the shell's one fixed header: this page's title is
- * the first thing the reader asked, and the whole of it is a line the header
- * ellipsises rather than a band that grows and shrinks with it. The header used to be
+ * The page frame is [PiPage] with the shell's one fixed header: this page's title is the
+ * app's own name, one line the header ellipsises rather than a band that grows and
+ * shrinks with it. The header used to be
  * the large *collapsing* bar, on the argument that a moving title should give its
  * height back to the transcript as the reader scrolled — the price was that this page's
  * chrome was 36dp taller than the settings pages' and moved while the others did not,
@@ -1348,9 +1334,9 @@ internal fun ChatScreen(
  * [FADE_TAIL]'s gradient — which is the whole of the difference between this and the
  * opaque strip a `PiPage` would draw.
  *
- * The capsules are `surfaceContainer`, the same raised role the composer's field and the
- * answer cards use: a control that floats over the page is the same object whether it
- * holds text or a glyph.
+ * The capsules are `PiGlass.fill()`, the fill the composer's field and its chips use: a
+ * control that floats over the page is the same object whether it holds text or a glyph,
+ * and it is filled rather than tinted so what scrolls underneath cannot show through.
  */
 @Composable
 private fun ChatHeader(
@@ -3383,7 +3369,7 @@ private val DRAWER_MAX_WIDTH = 420.dp
 /**
  * How much the card shrinks as the drawer comes out.
  *
- * Two percent: enough to put its edges inside the window's, which is what reads as "this
+ * Five percent: enough to put its edges inside the window's, which is what reads as "this
  * is a card now"; not enough to be noticed as a zoom.
  */
 private const val CHAT_SHRINK = 0.05f
@@ -3716,9 +3702,9 @@ private fun PromptBody(
                 // draws an answer in: the question and its answer are one block of
                 // text, and a prompt a size smaller than its reply reads as a caption.
                 //
-                // No colour: the card provides its own content colour
-                // (`onSecondaryContainer`), and the reader's own words are the one
-                // thing on this page that must never be muted.
+                // No colour: the card provides its own content colour (`onSurface`,
+                // stated explicitly rather than inherited), and the reader's own words
+                // are the one thing on this page that must never be muted.
                 style = MiuixTheme.textStyles.paragraph,
             )
         }
@@ -3922,7 +3908,9 @@ private fun MessageMeta(
         Text(
             text = stamp,
             style = MiuixTheme.textStyles.footnote2,
-            // Grey, not the accent: the accent is for what is live (a streaming turn's
+            // Grey, and deliberately not the accent even though the request that made a
+            // turn's `Worked 47s · 5 steps` line accent named the timestamp among the
+            // things to colour: the accent is for what is live (a streaming turn's
             // working line), and a finished message's time is furniture.
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             maxLines = 1,
@@ -3995,7 +3983,7 @@ private fun itemSource(item: ChatItem): String = when (item) {
  * not.
  *
  * The copy ends with a toast. The panel closes on the tap, so there is no glyph left to
- * turn into a check the way the meta row's copy button does — a copy that says nothing
+ * turn into a check the way a code block's copy button does — a copy that says nothing
  * is indistinguishable from a tap that missed.
  */
 private fun messageMenuItems(
@@ -4211,12 +4199,6 @@ private fun AssistantBlock(
 
 /** How many lines the field grows to before it scrolls inside itself. */
 private const val COMPOSER_MAX_LINES = 8
-
-/** How much of the composer band is solid before the fade begins, as a share of it. */
-private const val BAND_SOLID = 0.22f
-
-/** Where the band's ramp is already mostly solid. */
-private const val BAND_MID = 0.56f
 
 /**
  * The room under the composer's frame: the agent's state line and its margins.
@@ -5475,9 +5457,10 @@ private fun cacheHitPercent(state: ConversationState): Int {
  * That is a luminance test at the call site to answer a question the palette should
  * answer.
  *
- * Miuix's palette already answers it: the band is `surface`, and `surfaceContainerHigh`
- * is a step above it in both schemes (#E8E8E8 on the light band's #F7F7F7, #242424 on
- * the dark one's black) — visible without asking the colour anything. The pill is a
+ * The answer that survived is `PiGlass.fill()` — the same opaque floating fill the
+ * header's capsules and the composer's field use — rather than a step of the surface
+ * ramp: `surfaceContainerHigh` was a step *into* the page, not above it, and the chip
+ * read as shading on the band rather than as an object over it. The pill is a
  * Miuix [Surface] at a full round, so the clip, the fill and the press feedback are the
  * library's, and its height is 32dp — the composer's own control height, which is a
  * size larger than the transcript's 28dp pills on purpose: a tool row is read at a
@@ -5575,10 +5558,10 @@ private fun ControlChipBase(
             // value rather than as a caption, it has to be the same ink as the sentence
             // in the field below it, which is `onSurface`.
             //
-            // Measured against the #E8E8E8 fill it is drawn on, #A2A2A2 is a 2.5:1
-            // contrast — below the 3:1 floor for anything a reader has to read — while
-            // `onSurface` is 12.6:1. That is the whole of the change: the chips were not
-            // "a strange colour", they were grey on grey.
+            // Against the white fill it is drawn on in the light scheme, #A2A2A2 is a
+            // 2.5:1 contrast — below the 3:1 floor for anything a reader has to read —
+            // while `onSurface` is 12.6:1. That is the whole of the change: the chips
+            // were not "a strange colour", they were grey on grey.
             contentColor = MiuixTheme.colorScheme.onSurface,
         ) {
             Row(

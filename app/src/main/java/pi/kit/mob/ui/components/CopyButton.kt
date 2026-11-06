@@ -1,8 +1,9 @@
 /*
  * The copy control, in one place.
  *
- * Three callers draw it — the meta row under a message, a code block's header and a tool card's
- * output — and they are the same action on the same page: put this text on the clipboard.
+ * Two callers draw it — a code block's header and a tool card's output — and they are the same
+ * action on the same page: put this text on the clipboard. A message's meta row was the third
+ * until the message menu took that action over; the ink override that row needed went with it.
  *
  * ## What it is
  *
@@ -60,18 +61,6 @@ internal fun CopyButton(
     onClick: () -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    // The app's secondary ink by default, which is what a code block's header wants: the button
-    // there sits among the block's own furniture — the language label, the same grey — and is body
-    // content rather than the reader's own.
-    //
-    // The default used to be `LocalContentColor`, so the two call sites disagreed by accident: the
-    // code block inherited whatever the bubble's `Surface` had set while the meta row asked for a
-    // variant ink. The default is now stated here — Miuix's summary ink, which is its role for
-    // text that is furniture rather than content — and the meta row passes the **accent** on
-    // purpose, because that row is a finished turn's furniture: the same accent as the
-    // `工作 X 秒 · N 个步骤` line above it and the message's own timestamp beside it. See
-    // `MessageMeta`.
-    tint: Color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
 ) {
     var copied by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -86,10 +75,9 @@ internal fun CopyButton(
             }
         },
         // 28dp rather than the 40dp Miuix's IconButton defaults to: this sits in a row of 12sp
-        // text, under a message or across a code block's header, and a full-size disc would be a
-        // second bubble. Note that `Modifier.size` *replaces* IconButton's minimum rather than
-        // growing out of it, so the drawn box is also the touch target; the meta row compensates
-        // by pulling the row out to the glyph's ink (see `CopyButtonInkInset`).
+        // text, across a code block's header or a tool call's first line, and a full-size disc
+        // would be a second bubble. Note that `Modifier.size` *replaces* IconButton's minimum
+        // rather than growing out of it, so the drawn box is also the touch target.
         modifier = modifier.size(COPY_BUTTON_SIZE),
         // Nothing painted: `Transparent` rather than Miuix's default `Color.Unspecified`, because
         // this button is deliberately shapeless — the radius is here so that the press overlay the
@@ -111,7 +99,10 @@ internal fun CopyButton(
                 // own stroke, which thins as the icon shrinks, so it needs the size more than a
                 // filled glyph would.
                 modifier = Modifier.size(COPY_GLYPH_SIZE),
-                tint = tint,
+                // Miuix's summary ink: the button sits among the block's own furniture — the
+                // language label, the same grey — and is body content rather than the reader's
+                // own.
+                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
     }
@@ -120,20 +111,6 @@ internal fun CopyButton(
 /** The button's drawn size, and the glyph inside it. */
 private val COPY_BUTTON_SIZE = 28.dp
 private val COPY_GLYPH_SIZE = 18.dp
-
-/**
- * How far the glyph's ink sits inside the button, per side.
- *
- * The button is [COPY_BUTTON_SIZE] with a [COPY_GLYPH_SIZE] glyph centred in it, so this is the
- * box the *reader* does not see. It is part of the button's geometry rather than a detail of its
- * drawing, because a caller that has to line the button up with something else has to line up the
- * **ink**: `MessageMeta` pulls its row out by this much so the glyph — not the invisible box —
- * lands on the column the message's own text starts at.
- *
- * Declared after the two sizes it is derived from: a top-level property reads the ones above it
- * and this one would otherwise compute from their not-yet-assigned values.
- */
-internal val CopyButtonInkInset = (COPY_BUTTON_SIZE - COPY_GLYPH_SIZE) / 2
 
 /** Long enough to be seen, short enough not to become a state the reader has to undo. */
 private const val COPIED_MILLIS = 1400L

@@ -471,8 +471,9 @@ private fun AvatarSheet(
             // sheet on a 360dp phone (the sheet supplies 24dp a side and the card 16dp
             // more), so the last two colours sat past the edge behind a scroll gesture
             // nothing announced. A palette that has to be dragged to be seen is not read
-            // as a palette. 34dp instead: 8 x 34dp + 7 x 4dp = 300dp, inside the 312dp
-            // the narrowest phone leaves, and still a 34dp touch target.
+            // as a palette. 34dp instead: 8 x 34dp + 7 x 4dp = 300dp against the 312dp a
+            // 360dp phone gives the sheet's card, and this row's own 16dp gutters take
+            // 32dp of that. A 34dp disc is still a 34dp touch target.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -523,7 +524,7 @@ private fun AvatarSheet(
     }
 }
 
-/** The swatch's diameter: eight of them plus four 6dp gaps is 298dp, inside 312dp. */
+/** The swatch's diameter: eight of them and the seven 4dp gaps between them are 300dp. */
 private val SWATCH_SIZE = 34.dp
 
 /** Anything the system picker can hand back as an image. */

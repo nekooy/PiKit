@@ -440,15 +440,14 @@ object PiCorner {
     /**
      * The seam between two cards in a list.
      *
-     * Two lists draw rows as cards — the conversation history and the file listing —
-     * and both used 2dp, which is less than the gap *inside* one of those rows and
-     * therefore reads as one panel with a line drawn through it rather than as a
-     * column of separate objects. 6dp is still a seam and not a space between
-     * sections: the grouping is carried by the row's own fill and outline, and the
-     * gap only has to be wide enough that two outlines are seen as two.
+     * The file listing draws one card per entry, and two adjacent cards need a gap wider
+     * than the gap *inside* a row or the column reads as one panel with a line drawn
+     * through it. 6dp is still a seam and not a space between sections: the grouping is
+     * carried by the row's own fill and outline, and the gap only has to be wide enough
+     * that two outlines are seen as two.
      *
-     * Stated once because the two lists are read one after the other in the same
-     * app and were spaced by the same wrong number independently.
+     * The conversation history is the other list beside it and is *not* this: its rows are
+     * flat rather than cards, so it spaces them at 2dp — there is no outline to separate.
      */
     val rowGap: Dp = 6.dp
 }
