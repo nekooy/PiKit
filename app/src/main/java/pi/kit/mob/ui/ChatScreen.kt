@@ -1504,9 +1504,6 @@ private val DrawerGlyph: ImageVector by lazy {
 /** The chat page's bar height, without the status bar: 30dp above, 48dp of capsule, 8dp below, and the air the first row keeps. */
 private val HEADER_CLEARANCE = 86.dp
 
-/** How much of the fade is solid, as a share of the whole: enough to hide the bar's row. */
-private const val FADE_SOLID = 0.80f
-
 /** How far the fade reaches below the bar before it is fully transparent. */
 private val FADE_TAIL = 96.dp
 

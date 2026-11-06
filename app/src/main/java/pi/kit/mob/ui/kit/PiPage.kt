@@ -197,6 +197,3 @@ val LocalPiNavigationInset: ProvidableCompositionLocal<Dp> = compositionLocalOf 
  * column.
  */
 private val TITLE_GUTTER = TopAppBarDefaults.TitlePadding
-
-/** The air between a left-aligned title and the first action icon. */
-private val ACTION_GAP = 8.dp
