@@ -441,8 +441,6 @@ internal fun ChatScreen(
     currentPath: String?,
     /** The drawer's own scroll position, held by the root so a conversation change keeps it. */
     historyListState: LazyListState,
-    /** The scaffold's bottom inset in px; the root consumes the insets this page would read. */
-    scaffoldBottom: Int,
     onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -1048,7 +1046,6 @@ internal fun ChatScreen(
         ) {
             ChatPage(
                 session = session,
-                scaffoldBottom = scaffoldBottom,
                 agent = agent,
                 state = state,
                 text = text,
@@ -1519,8 +1516,6 @@ private fun ChatPage(
     agent: AgentStatus,
     state: ConversationState,
     text: Strings,
-    /** The scaffold's bottom inset in px — the root consumes the insets this page reads. */
-    scaffoldBottom: Int,
     rows: List<TranscriptRow>,
     listState: LazyListState,
     /** Whether the transcript has been put at its end for this conversation. */
@@ -2266,7 +2261,7 @@ private fun ChatPage(
                     // chip row, and the transcript's tail padded by 95 px too little.
                     // Declared here, it spans content and inset together.
                     .onSizeChanged { bottomStackPx = it.height }
-                    .bandBottom(imeInsets, barInsets, scaffoldBottom),
+                    .bandBottom(imeInsets, barInsets),
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
             if (failure != null) {
@@ -3409,9 +3404,8 @@ private val PAGE_CARD_LIFT = 20.dp
 private fun Modifier.bandBottom(
     ime: WindowInsets,
     bars: WindowInsets,
-    scaffoldBottom: Int,
 ): Modifier = layout { measurable, constraints ->
-    val applied = bandInset(ime, bars, scaffoldBottom)
+    val applied = bandInset(ime, bars)
         .let { if (constraints.hasBoundedHeight) it.coerceAtMost(constraints.maxHeight) else 0 }
     val inner = if (applied > 0) {
         constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - applied)
@@ -3433,8 +3427,8 @@ private fun Modifier.bandBottom(
  * the same on both edges now, and the only thing that changes during a close is the inset
  * itself, which falls in one direction and never turns back.
  */
-private fun Density.bandInset(ime: WindowInsets, bars: WindowInsets, scaffoldBottom: Int): Int =
-    maxOf(ime.getBottom(this), bars.getBottom(this), scaffoldBottom) + BAND_AIR.roundToPx()
+private fun Density.bandInset(ime: WindowInsets, bars: WindowInsets): Int =
+    maxOf(ime.getBottom(this), bars.getBottom(this)) + BAND_AIR.roundToPx()
 
 /**
  * The air between the composer's field and whatever is below it.

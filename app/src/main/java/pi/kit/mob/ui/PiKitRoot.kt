@@ -518,9 +518,6 @@ private fun RootContent(
                     drawer = drawer,
                     drawerScope = scope,
                     historyListState = historyListState,
-                    scaffoldBottom = with(LocalDensity.current) {
-                        padding.calculateBottomPadding().roundToPx()
-                    },
                     historyOpen = historyOpen,
                     onHistoryOpenChange = { historyOpen = it },
                     onOpenTerminal = { destination = Destination.Terminal },
@@ -640,17 +637,6 @@ private fun ChatTab(
     /** The root's scope: the settle animation outlives the page it was started from. */
     drawerScope: kotlinx.coroutines.CoroutineScope,
     historyListState: androidx.compose.foundation.lazy.LazyListState,
-    /**
-     * The scaffold's bottom inset in pixels — zero today.
-     *
-     * The root asks for no content insets (`contentWindowInsets = WindowInsets(0, 0, 0, 0)`)
-     * and has no bar of its own, so the `padding` it hands down is empty and
-     * `.consumeWindowInsets(padding)` consumes nothing: every page owns its insets through
-     * `PiPage`. The value is passed on because the chat page's `bandInset` takes it as one
-     * of the edge cases, and it is the one place a root-level strip would arrive from if
-     * the root ever asks for one again.
-     */
-    scaffoldBottom: Int,
     onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -738,7 +724,6 @@ private fun ChatTab(
             drawerScope = drawerScope,
             currentPath = state.sessionFile ?: openedPath,
             historyListState = historyListState,
-            scaffoldBottom = scaffoldBottom,
             onHistoryOpenChange = onHistoryOpenChange,
             onOpenTerminal = onOpenTerminal,
             onOpenFiles = onOpenFiles,
