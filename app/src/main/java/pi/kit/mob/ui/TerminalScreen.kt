@@ -80,6 +80,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.ui.kit.DarkNavigationBar
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
@@ -1072,6 +1073,14 @@ private fun ExtraKeysRow(
     // is padding *inside* it, so the shell's black reaches the window's last pixel and the
     // keys stay above the gesture handle rather than being cut by it.
     val inset = LocalPiNavigationInset.current
+    // Every key the bar draws sends a byte to the pty, so each press answers with the
+    // key tick. The panel supplies its own tick and keeps `onSend`, or a key there would
+    // sound twice; the scroll toggle and the panel action below are not keys.
+    val haptics = LocalPiHaptics.current
+    val sendKey: (String) -> Unit = { sequence ->
+        haptics.key()
+        onSend(sequence)
+    }
 
     Column(
         modifier = modifier
@@ -1193,13 +1202,18 @@ private fun ExtraKeysRow(
                         // following, the error ink while paused, so it reads as a mode
                         // rather than as a button.
                         labelColor = if (autoScroll) TERMINAL_ACCENT else TERMINAL_ERROR,
-                        onClick = onToggleAutoScroll,
+                        onClick = {
+                            // A mode rather than a key: following stays off until it is
+                            // turned back on, and `!autoScroll` is the value applied.
+                            haptics.toggle(on = !autoScroll)
+                            onToggleAutoScroll()
+                        },
                     )
-                    ArrowKey(ARROW_UP, onSend)
-                    ArrowKey(ARROW_DOWN, onSend)
-                    ArrowKey(ARROW_LEFT, onSend)
-                    ArrowKey(ARROW_RIGHT, onSend)
-                    BarKey(label = text.terminal.escape, onClick = { onSend("\u001b") })
+                    ArrowKey(ARROW_UP, sendKey)
+                    ArrowKey(ARROW_DOWN, sendKey)
+                    ArrowKey(ARROW_LEFT, sendKey)
+                    ArrowKey(ARROW_RIGHT, sendKey)
+                    BarKey(label = text.terminal.escape, onClick = { sendKey("\u001b") })
                     Spacer(Modifier.width(BAR_INNER_PADDING))
                 }
             }
@@ -1208,6 +1222,8 @@ private fun ExtraKeysRow(
                 modifier = Modifier.padding(start = BAR_INNER_PADDING),
                 description = text.terminal.keysMessage,
             ) {
+                // The sheet is the answer: this raises a window rather than sending a
+                // byte, so it is navigation and stays silent.
                 draft = ""
                 sending = true
             }
@@ -1221,7 +1237,13 @@ private fun ExtraKeysRow(
                     text.terminal.keysPanelShow
                 },
                 active = keyboardPanel,
-                onClick = { onToggleKeyboardPanel(!keyboardPanel) },
+                onClick = {
+                    // The mode the comment above describes: the action flips it rather
+                    // than pressing a key, and `!keyboardPanel` is the value applied.
+                    val next = !keyboardPanel
+                    haptics.toggle(on = next)
+                    onToggleKeyboardPanel(next)
+                },
             )
             BarAction(
                 painter = painterResource(R.drawable.ic_keyboard),
@@ -1230,7 +1252,12 @@ private fun ExtraKeysRow(
                 } else {
                     text.terminal.keysKeyboardShow
                 },
-                onClick = { onToggleKeyboard(!keyboardUp) },
+                onClick = {
+                    // A key, not a mode: it raises or lowers the phone's IME, whose
+                    // state the bar only mirrors.
+                    haptics.key()
+                    onToggleKeyboard(!keyboardUp)
+                },
             )
         }
     }

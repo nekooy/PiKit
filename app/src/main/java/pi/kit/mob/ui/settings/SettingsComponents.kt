@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiSection
@@ -498,6 +499,7 @@ fun SettingsSwatch(
     modifier: Modifier = Modifier,
     size: Dp = 38.dp,
 ) {
+    val haptics = LocalPiHaptics.current
     Box(
         modifier = modifier
             .size(size)
@@ -505,7 +507,12 @@ fun SettingsSwatch(
             .background(
                 if (selected) MiuixTheme.colorScheme.primary else Color.Transparent,
             )
-            .clickable(onClick = onClick)
+            .clickable(onClick = {
+                // `choose()`: a set's member becoming the chosen one, which a Miuix radio
+                // would buzz for itself. The circle already chosen changes nothing.
+                if (!selected) haptics.choose()
+                onClick()
+            })
             .padding(3.dp),
         contentAlignment = Alignment.Center,
     ) {

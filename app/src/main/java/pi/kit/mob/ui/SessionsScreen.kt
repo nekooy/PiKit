@@ -47,9 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
@@ -69,6 +67,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.TurnInFlightException
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
@@ -949,9 +948,9 @@ private fun ConversationRow(
     // The hold's own acknowledgement. The row paints no press state (see below), so
     // without this the 500 ms before the menu appears is a hold with no answer at all —
     // the same reason the transcript answers with this haptic (§7.3).
-    val haptics = LocalHapticFeedback.current
+    val haptics = LocalPiHaptics.current
     val hold = {
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        haptics.hold()
         actionsUp = true
     }
 
@@ -990,7 +989,16 @@ private fun ConversationRow(
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = { if (selecting) onToggleChecked() else onOpen() },
+                    onClick = {
+                        if (selecting) {
+                            // A tick that stays ticked is a mode flip; the box beside it
+                            // buzzes inside `Checkbox`, and its taps never reach here.
+                            haptics.toggle(on = !checked)
+                            onToggleChecked()
+                        } else {
+                            onOpen()
+                        }
+                    },
                     onLongClick = if (selecting) null else hold,
                 )
                 .padding(horizontal = 14.dp, vertical = 13.dp),

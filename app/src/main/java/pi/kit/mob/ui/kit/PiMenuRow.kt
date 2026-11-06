@@ -58,6 +58,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *   *readings* (the context report), and the library's disabled ink made a page of
  *   true numbers look like a page of unavailable choices. Nothing consumes a tap, so
  *   the row is not a control and does not pretend to be one.
+ *
+ * A choice also *sounds* like the library's: `RadioButton` and `RadioButtonPreference`
+ * perform the toggle haptic inside themselves, so a hand-built radio row that stayed
+ * silent would make one act buzz on a settings page and not in the terminal's roster.
+ * The row therefore calls [PiHaptics.choose], on the tap that changes the answer — a
+ * second tap on the chosen row leaves the set exactly as it was, and the library buzzes
+ * there only because a control that knows nothing but its own state cannot tell the two
+ * taps apart. Actions and facts stay silent: their effect is the answer.
  */
 @Composable
 fun PiMenuRow(
@@ -95,6 +103,9 @@ fun PiMenuRow(
     startAction: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    // The library's radio rows buzz inside themselves (see the KDoc); this row stands
+    // in for them in a popup, so it owes the same answer.
+    val haptics = LocalPiHaptics.current
     // A set's row is `selectable` and a command's is `clickable`; the two differ in
     // the role they report and in whether the node carries a checked state, which is
     // the whole of what a screen reader hears. A fact carries no gesture at all.
@@ -104,7 +115,12 @@ fun PiMenuRow(
             selected = selected,
             enabled = enabled,
             role = Role.RadioButton,
-            onClick = onClick,
+            onClick = {
+                // Only a tap that changes the answer: one on the row already chosen
+                // leaves the set as it was, so there is no choice to announce.
+                if (!selected) haptics.choose()
+                onClick()
+            },
         )
 
         else -> Modifier.clickable(

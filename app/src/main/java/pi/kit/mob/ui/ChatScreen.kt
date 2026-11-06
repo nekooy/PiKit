@@ -112,7 +112,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -126,7 +125,6 @@ import androidx.compose.ui.platform.Clipboard
 import kotlinx.coroutines.CoroutineScope
 import pi.kit.mob.ui.kit.PiToast
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -191,6 +189,7 @@ import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.kit.AvatarSpeaker
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
@@ -1731,11 +1730,11 @@ private fun ChatPage(
     val messageClipboard = LocalClipboard.current
     val messageToasts = LocalPiToast.current
     val messageScope = rememberCoroutineScope()
-    // The long press answers with a haptic *before* the panel appears. Every other
-    // control on this page acknowledges the finger, and 500 ms of holding followed by a
-    // silent menu reads as a delayed tap rather than as a recognised gesture; the
-    // platform's own long-press type is what a held row in the drawer already uses.
-    val messageHaptics = LocalHapticFeedback.current
+    // The long press answers with the kit's hold *before* the panel appears. Every
+    // other control on this page acknowledges the finger, and 500 ms of holding
+    // followed by a silent menu reads as a delayed tap rather than as a recognised
+    // gesture — the same moment a held conversation row in the drawer answers.
+    val haptics = LocalPiHaptics.current
 
     // The Markdown source of the message, in a sheet of its own: what the reader asked
     // for when they chose "select text" is the *text*, not a selection mode they then have
@@ -2016,10 +2015,14 @@ private fun ChatPage(
                                             Modifier.pointerInput(card.key, menuTarget) {
                                                 detectTapGestures(
                                                     onLongPress = { press ->
-                                                        messageHaptics.performHapticFeedback(
-                                                            HapticFeedbackType.LongPress,
-                                                        )
+                                                        // Inside the test, not above it: a card
+                                                        // whose rows are only tool calls and
+                                                        // notices has no menu target, and a hold
+                                                        // that raises nothing must not buzz —
+                                                        // `hold()` is "a surface is about to
+                                                        // appear" (§16), not "a finger rested here".
                                                         if (menuTarget != null) {
+                                                            haptics.hold()
                                                             menuFor = menuTarget
                                                             menuCardKey = card.key
                                                             menuAt = press
@@ -5652,6 +5655,7 @@ private fun ThinkingMenu(
     val available = levelsFor(live, saved, config.activeProfile, catalogueLevels)
     val current = thinkingLevelOf(live, saved, config.activeProfile, catalogueLevels)
     val options = available.takeIf { it.isNotEmpty() } ?: PiLaunchOptions.THINKING_LEVELS
+    val haptics = LocalPiHaptics.current
     ListPopupColumn {
         options.forEachIndexed { index, level ->
             DropdownImpl(
@@ -5666,8 +5670,12 @@ private fun ThinkingMenu(
                 index = index,
                 onSelectedIndexChange = {
                     if (show) {
+                        // A level already ticked is already the answer, so only a
+                        // different one is a choice worth announcing.
+                        val picked = level != current
+                        if (picked) haptics.choose()
                         onDismiss()
-                        if (level != current) {
+                        if (picked) {
                             // Applied to the running process immediately: pi
                             // accepts the change over RPC, so unlike the provider and
                             // model it needs no restart.
@@ -5746,6 +5754,7 @@ private fun ModelMenu(
         }
     }
 
+    val haptics = LocalPiHaptics.current
     ListPopupColumn {
         if (!hasModels) {
             DropdownImpl(
@@ -5776,6 +5785,9 @@ private fun ModelMenu(
                     // for the length of its exit, so a second tap aimed at the page
                     // behind a menu that is already leaving must not pick a model.
                     if (show && row.enabled) {
+                        // The row already ticked is the model in effect: reopening a
+                        // menu and choosing it again changes nothing, so it is silent.
+                        if (!row.selected) haptics.choose()
                         onDismiss()
                         row.onPick()
                     }
@@ -6359,8 +6371,12 @@ private fun WorkspaceMenu(
     onAdd: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    fun pick(action: () -> Unit) {
+    val haptics = LocalPiHaptics.current
+    // `chosen` separates the menu's two kinds of row: a workspace that becomes the
+    // current one is a choice, while the one already in force and the "add" row are not.
+    fun pick(chosen: Boolean, action: () -> Unit) {
         if (show) {
+            if (chosen) haptics.choose()
             onDismiss()
             action()
         }
@@ -6377,7 +6393,9 @@ private fun WorkspaceMenu(
                 optionSize = count,
                 isSelected = workspace.path == current,
                 index = index,
-                onSelectedIndexChange = { pick { onPick(workspace.path) } },
+                onSelectedIndexChange = {
+                    pick(workspace.path != current) { onPick(workspace.path) }
+                },
             )
         }
         DropdownImpl(
@@ -6385,7 +6403,7 @@ private fun WorkspaceMenu(
             optionSize = count,
             isSelected = false,
             index = workspaces.size,
-            onSelectedIndexChange = { pick(onAdd) },
+            onSelectedIndexChange = { pick(false, onAdd) },
         )
     }
 }
@@ -6405,8 +6423,12 @@ private fun PermissionMenu(
     onPick: (PermissionMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    fun pick(action: () -> Unit) {
+    val haptics = LocalPiHaptics.current
+    // The tier already in force is already the answer, so only a different one is a
+    // choice — the menu's row for it is ticked and a tap on it changes nothing.
+    fun pick(chosen: Boolean, action: () -> Unit) {
         if (show) {
+            if (chosen) haptics.choose()
             onDismiss()
             action()
         }
@@ -6423,7 +6445,7 @@ private fun PermissionMenu(
                 optionSize = modes.size,
                 isSelected = mode == current,
                 index = index,
-                onSelectedIndexChange = { pick { onPick(mode) } },
+                onSelectedIndexChange = { pick(mode != current) { onPick(mode) } },
             )
         }
     }

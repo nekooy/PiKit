@@ -132,6 +132,7 @@ import pi.kit.mob.ui.files.humanSize
 import pi.kit.mob.ui.files.openExternally
 import pi.kit.mob.ui.files.readDirectory
 import pi.kit.mob.ui.files.stampFor
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
@@ -519,6 +520,16 @@ private fun ListToolbar(
     onSortChange: (FileSort) -> Unit,
     text: Strings,
 ) {
+    // The sort is one of three answers, not a command, and the menu's row does not tick
+    // itself (§16): a pick is where the listing's order becomes that answer. A tap on
+    // the order already in effect changes nothing and stays silent.
+    val haptics = LocalPiHaptics.current
+    fun pick(order: FileSort) {
+        if (sort != order) {
+            haptics.choose()
+            onSortChange(order)
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -563,17 +574,17 @@ private fun ListToolbar(
                     DropdownItem(
                         text = text.files.sortName,
                         selected = sort == FileSort.Name,
-                        onClick = { onSortChange(FileSort.Name) },
+                        onClick = { pick(FileSort.Name) },
                     ),
                     DropdownItem(
                         text = text.files.sortModified,
                         selected = sort == FileSort.Modified,
-                        onClick = { onSortChange(FileSort.Modified) },
+                        onClick = { pick(FileSort.Modified) },
                     ),
                     DropdownItem(
                         text = text.files.sortSize,
                         selected = sort == FileSort.Size,
-                        onClick = { onSortChange(FileSort.Size) },
+                        onClick = { pick(FileSort.Size) },
                     ),
                 ),
             ),
@@ -656,6 +667,14 @@ private fun FileRow(
     // with it (a screen-level "which row is open" would survive the scroll and reopen
     // on the way back).
     var actionsUp by remember(entry.file) { mutableStateOf(false) }
+    // The hold's acknowledgement: the card's sink follows the finger and ends with it,
+    // while the menu it raises stays. The pointer's long press and the screen reader's
+    // long-click open the same menu, so both go through this one lambda.
+    val haptics = LocalPiHaptics.current
+    val hold = {
+        haptics.hold()
+        actionsUp = true
+    }
     val (tileColor, glyphColor) = tileToneOf(entry)
 
     Box {
@@ -669,7 +688,7 @@ private fun FileRow(
                 // for — the row's actions, said out loud.
                 .semantics {
                     onLongClick(label = text.files.actions) {
-                        actionsUp = true
+                        hold()
                         true
                     }
                 },
@@ -677,7 +696,7 @@ private fun FileRow(
             pressFeedbackType = PressFeedbackType.Sink,
             showIndication = true,
             onClick = onOpen,
-            onLongPress = { actionsUp = true },
+            onLongPress = hold,
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

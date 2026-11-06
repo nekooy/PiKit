@@ -634,6 +634,12 @@ def run_tests() -> bool:
         # picture at the top of the README is now wrong. Cheap (it reads two files)
         # and it exists for the same reason as the checks above it.
         ("the README icon", lambda: python_tool("render-icon.py", "--check")),
+        # The haptic vocabulary is one file (`ui/kit/PiHaptics.kt`) and a standard of
+        # four moments. A direct `performHapticFeedback` at a call site compiles, looks
+        # like every other line and is a fifth moment nobody documented — and the
+        # moments that must stay *silent* are only as good as the one door they all
+        # come through. Cheap: it reads the module's Kotlin sources and two regexes.
+        ("the haptic vocabulary", lambda: python_tool("check-haptics.py")),
     ]
     runnable: list[tuple[str, object]] = []
     for name, check in checks:

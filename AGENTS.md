@@ -295,6 +295,16 @@ measured it in English where the Chinese fits. `PiPage` draws the subtitle itsel
 an ellipsis, and reads `null` as "no subtitle" and `""` as "reserve the line while the value is
 being read". Do not bypass it with `SmallTopAppBar(subtitle = …)`.
 
+**Every buzz goes through `ui/kit/PiHaptics.kt`, and the silences are part of the rule.** The
+app's haptics are four moments — a hold that raises something, a mode that flips and stays
+flipped, one row of a set becoming the chosen one, a key on a keyboard this app draws — and
+everything else (navigation, press states, typing, scrolling, a result the same frame shows)
+is deliberately silent (ARCHITECTURE §16). A `performHapticFeedback` or a `HapticFeedbackType`
+anywhere else is refused by `tools/check-haptics.py`, which `build-apks.py` runs; a fifth
+moment is an edit to the chapter and to that checker's list in the same change, not a line at a
+call site. And Miuix's own `Switch`, `Checkbox`, `RadioButton`, `Slider`, `RangeSlider`,
+`NumberPicker` and `PullToRefresh` already perform haptics — wrapping one must not add a second.
+
 **When the question is how something should look, ask for a picture of the thing wanted — not for a
 menu.** The copy button took four rounds — six *containers*, then six glyphs from other icon sets,
 then five more sets — before an SVG pasted into the conversation (`ic_copy.xml`) worked;

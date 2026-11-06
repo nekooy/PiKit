@@ -37,6 +37,7 @@ import pi.kit.mob.pi.ModelSource
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.anyProviderModelFacts
 import pi.kit.mob.pi.modelDefinitionFacts
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
@@ -415,6 +416,7 @@ internal fun ModelEditPage(
     val discovery = remember(context, session.env) { ModelDiscoveryClient(context, session.env) }
     val isNew = existing == null
     val text = strings
+    val haptics = LocalPiHaptics.current
     // A custom endpoint is the one provider pi has no catalogue for, which changes both
     // questions this section asks: there is nothing to check the ids against, and there is
     // no fallback model to fill the three controls from.
@@ -1302,6 +1304,9 @@ internal fun ModelEditPage(
             providerPicker = false
             val entry = PiProvider.entries.firstOrNull { it.id == id }
             if (entry != null && entry != provider) {
+                // The sheet draws Miuix radios once a provider is chosen and arrow rows
+                // before that, and only the radio buzzes itself — so the first pick buzzes here.
+                if (provider == null) haptics.choose()
                 provider = entry
                 // Model ids are provider-specific: a list built for one provider is not a
                 // list for another, and pi would reject every entry in it. The list is

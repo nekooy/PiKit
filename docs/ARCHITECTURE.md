@@ -9,8 +9,9 @@ and Pi's RPC protocol.
 Chapters 1–6 are those constraints. 7–9 are the interface, where several designs
 were tried and rejected and the number that settled each one is recorded. 10–12 are
 ownership, vendored code and rendering, 13 is the Miuix interface the app is now
-drawn from — the theme, the page frame, the rows, and the rules a screen obeys — and
-14 and 15 are the permission tiers and the conversation pool.
+drawn from — the theme, the page frame, the rows, and the rules a screen obeys —
+14 and 15 are the permission tiers and the conversation pool, and 16 is the touch
+feedback: the four moments that buzz and the longer list that must not.
 [AGENTS.md](../AGENTS.md) has the commands
 and the hard rules this document explains; [docs/README.md](README.md) is the index
 of everything under `docs/`.
@@ -42,6 +43,7 @@ of everything under `docs/`.
 | 13 | [The interface, drawn by Miuix](architecture/13-design-language.md) | Miuix as the rule for what a page may look like: why the app's own design system was removed, the seed-to-palette theme, the fourteen text styles, the page and its one-line subtitle, the rows, the window dialogs and sheets, the toast every transient message goes through, the one root and its drawer, and the `ListPopupColumn` and subtitle traps a change has to obey |
 | 14 | [Permissions: three tiers](architecture/14-permissions.md) | Read-only, workspace-write and full-access: what each refuses, why the mode is a file read on every tool call, the control in the composer, and what the change cost the storage page it retired |
 | 15 | [Many conversations](architecture/15-many-conversations.md) | Why a conversation is a process rather than a `switch_session`, which facts became the host's, the bounded pool and its eviction rule, and the shade entry that now exists only while an answer is being written |
+| 16 | [Touch](architecture/16-touch.md) | The four moments that buzz — a hold, a mode, a choice, a key — the library's own haptics and the drop-down gap, and the silences that are the design |
 
 ## How to read it
 

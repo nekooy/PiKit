@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -161,11 +162,17 @@ private fun RowScope.KeyboardKey(
     control: Char? = null,
     onPress: () -> Unit,
 ) {
+    // The panel is not an IME — every tap is a byte sequence handed to the pty — so
+    // nothing else acknowledges a key; the latch a press releases is part of that tap.
+    val haptics = LocalPiHaptics.current
     KeyCap(
         label = label,
         weight = weight,
         small = small,
-        onPress = onPress,
+        onPress = {
+            haptics.key()
+            onPress()
+        },
     )
 }
 
@@ -176,12 +183,18 @@ private fun RowScope.ModifierKey(
     weight: Float,
     onPress: () -> Unit,
 ) {
+    // The three latches are *modes* — down until the next key — so a tap flips one
+    // rather than pressing it, and `!on` is the value the caller's flip gives it.
+    val haptics = LocalPiHaptics.current
     KeyCap(
         label = label,
         weight = weight,
         small = true,
         active = on,
-        onPress = onPress,
+        onPress = {
+            haptics.toggle(on = !on)
+            onPress()
+        },
     )
 }
 

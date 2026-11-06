@@ -111,7 +111,12 @@ fun PiKitMiuixTheme(
     }
 
     CompositionLocalProvider(LocalDarkNavigationBars provides darkBars) {
-        MiuixTheme(controller = controller, content = content)
+        // The haptics are provided by the theme rather than by a page, because a window
+        // dialog is a second composition: a value the page provided would be missing in
+        // exactly the window whose buttons need it. See `PiHaptics.kt`.
+        PiHapticHost {
+            MiuixTheme(controller = controller, content = content)
+        }
     }
 }
 
