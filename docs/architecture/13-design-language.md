@@ -261,28 +261,27 @@ required `show` and the caller holds the last value — `pendingDialog != null` 
 the held copy is what it draws while it leaves. The sessions page's three dialogs and
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
-**Transient messages were the platform's toast for one release**, raised through
-`LocalPiToast` and drawn by the system. The app drew its own for two generations before
-that — a pill, then Miuix's snackbar with a host remembered at the root — and the host was
-a small framework of this app's own for one sentence: a `SnackbarHostState`, a scope, a
-dismiss-the-previous rule, and a `snackbarHost` slot in the root scaffold. The platform
-already queues messages, places them where its own navigation bar and display say, honours
-the user's accessibility settings and text scale and per-app notification choice, and on
-13+ draws the app's icon beside the text, so the whole of it was removed for
-`Toast.makeText(...).show()` behind the same `LocalPiToast` interface. That swap was
-reversed for the reason the later paragraph gives — the system's card in the system's
-colours with the launcher icon reads as a notification landing on the page — and the app
-draws the capsule itself again. The interface outlived both swaps: a page asks for a short
-sentence and never learns which framebuffer it lands in.
+**Transient messages are the platform's toast**, raised through `LocalPiToast`. The app
+has drawn its own before — a pill, then Miuix's snackbar with a host remembered at the
+root, then a glass capsule above the composer — and each meant this app owned a
+small framework for one sentence: a state holder, a scope, a dismiss-the-previous rule, a
+timer, and a placement constant. The platform already owns all of it: it queues messages,
+places them where its own navigation bar and display say, and honours the user's
+accessibility settings, text scale and per-app notification choice.
+`Toast.makeText(...).show()` is the whole implementation now; the interface
+(`LocalPiToast.show`) outlived every swap, so a page asks for a short sentence and never
+learns which framebuffer it lands in. The cost is the system's card in the system's
+colours, a visual that belongs to the platform rather than to the page's glass; a moment
+is allowed to look like the system's.
 
-What the platform toast settled, and what the app's own capsule keeps, is the split against
-an in-page notice, by tense — a *moment* ("Saved", "Agent restarted") is a toast, a
-*condition* ("the agent failed to start", "this folder cannot be read") stays on the page
-in the error role, because a message that disappears after a couple of seconds is the wrong
-shape for something that is still true. A failure the reader has to *read* is a dialog with
-a bounded, scrolling body (the maintenance runs, the model catalogue's discovery problems);
-a field's own validation error is a line under the box. One message at a time, held for a
-couple of seconds and never interactive, is the queue's whole shape.
+What the platform toast settles is the split against an in-page notice, by tense — a
+*moment* ("Saved", "Agent restarted") is a toast, a *condition* ("the agent failed to
+start", "this folder cannot be read") stays on the page in the error role, because a
+message that disappears after a couple of seconds is the wrong shape for something that
+is still true. A failure the reader has to *read* is a dialog with a bounded, scrolling
+body (the maintenance runs, the model catalogue's discovery problems); a field's own
+validation error is a line under the box. One message at a time, held for a couple of
+seconds and never interactive, is the queue's whole shape.
 
 ## Navigation
 
@@ -346,7 +345,7 @@ because the strip version was worse:
   the platform's silhouette cannot betray the shape, and the shadow is the layer it already
   rides on. `glassLift` draws a blurred fill of the shape's *own* outline with a `MaskFilter`,
   which is the exact silhouette and is re-rasterised on every frame it is drawn — the right
-  trade for the 42dp header capsules, the composer's chips and the toast, and the wrong one
+  trade for the 42dp header capsules and the composer's chips, and the wrong one
   for a surface as wide as the window: measured while the keyboard closed, the blur under the
   composer's field was a **48 ms frame**. The composer's field therefore takes `solidLift`,
   and the small floating marks keep `glassLift` for its exact outline.
@@ -387,14 +386,13 @@ mostly read "Agent 已就绪" was the interface telling the reader that nothing 
 The state that matters is the one that is *not* the happy path, and that one already has a
 place.
 
-**A toast is part of the page, not a visit from the system.** The app's ephemeral messages
-were the platform's `Toast` for a while — the system owns the queue, the placement and the
-text scale, and that is a real bargain — but it draws its own card in the system's colours
-with the launcher icon beside the text, which on this page reads as a notification that
-happened to land on it. They are opaque capsules now, drawn above the composer in the same
-fill as the bar's, and the interface (`LocalPiToast.show`) did not change. The cost is
-the system's queue and its per-app notification choice; the gain is one kind of floating
-object everywhere.
+**A toast is a visit from the system, not a part of the page.** The app drew its own glass
+capsule for a while, and it matched the bar's fill; it also made the app own the queue, the
+placement and the timer for a sentence that is never interacted with. The platform's
+`Toast` owns those three, and it brings its own card and colours. That is the cost: a toast
+no longer looks like the page's floating objects. The gain is that a moment no longer has
+a framework of its own, and the interface (`LocalPiToast.show`) did not change. A
+transient message is allowed to look like the system, because it is one.
 
 **The four-tab bar came first, and its costs are what retired it.** A Miuix
 `NavigationBar` at the root with one item per destination kept every page one tap away,
