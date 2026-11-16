@@ -16,6 +16,20 @@ package pi.kit.mob.terminal
 internal object TerminalSelection {
 
     /**
+     * The shell already standing in [cwd], or null when that workspace has none.
+     *
+     * The manager uses this to answer "the terminal of this conversation": opening the
+     * page from a workspace returns to the shell that was already running there, and a
+     * workspace with no shell gets one rather than stealing another workspace's. A
+     * shell's directory never changes, so this is a plain lookup rather than a search
+     * of each shell's live process state.
+     *
+     * @param roster each shell's id paired with the directory it was spawned in
+     */
+    fun forDirectory(roster: List<Pair<String, String>>, cwd: String): String? =
+        roster.firstOrNull { (_, directory) -> directory == cwd }?.first
+
+    /**
      * The id to select after the session at [closedIndex] is closed.
      *
      * A selection that survives the close is kept as it is: closing one shell of

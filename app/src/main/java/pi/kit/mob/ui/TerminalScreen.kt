@@ -148,6 +148,12 @@ fun TerminalScreen(session: PiAgentSession,
     val manager = session.terminalSessions
     val sessions by manager.sessions.collectAsState()
     val selectedId by manager.selectedId
+    // The directory the page was opened from. A conversation whose agent has not
+    // launched yet has no workspace resolved, and the built-in one is the honest
+    // answer there rather than `$HOME`: `$HOME` holds pi's configuration and every
+    // session, not the project the reader is looking at.
+    val workspace by session.workspace.collectAsState()
+    val shellCwd = workspace.ifBlank { session.env.workspacePath }
 
     // Used to defer a resize until the layout stops changing, so the keyboard
     // animation does not resize the PTY once per frame. Scoped to this composable,
@@ -155,14 +161,20 @@ fun TerminalScreen(session: PiAgentSession,
     // it rather than running against a detached view.
     val scope = rememberCoroutineScope()
 
-    // If every session is gone we are one blank page away from being unable to
-    // type anything at all, so make sure one exists before the first frame.
+    // The shell on screen is the one the conversation's workspace owns; opening the
+    // page again in the same workspace returns to the shell already running there
+    // rather than starting another, and opening it from another workspace starts the
+    // shell that belongs to that one. See [TerminalSessionManager.begin].
+    LaunchedEffect(shellCwd) {
+        manager.begin(shellCwd)
+    }
+
+    // The two setup commands the banner lists are the app's job on the first visit:
+    // the storage farm follows Android's grant, and the apt mirror is probed and
+    // chosen once, silently, so the first `pkg install` is not the first thing that
+    // tries the network. See `PiHost.ensureTerminalSetup`. Once per page lifetime,
+    // not once per workspace: the setup is the environment's, not a shell's.
     LaunchedEffect(Unit) {
-        manager.begin()
-        // The two setup commands the banner lists are the app's job on the first
-        // visit: the storage farm follows Android's grant, and the apt mirror is
-        // probed and chosen once, silently, so the first `pkg install` is not the
-        // first thing that tries the network. See `PiHost.ensureTerminalSetup`.
         session.ensureTerminalSetup()
     }
 
@@ -284,7 +296,7 @@ fun TerminalScreen(session: PiAgentSession,
             // display after the reader has scrolled, which made "new terminal" and the
             // roster — the two controls this page is reached for — start further from
             // the thumb. The banner lists `clear` beside the other commands instead.
-            IconButton(onClick = { manager.create() }) {
+            IconButton(onClick = { manager.create(shellCwd) }) {
                 Icon(
                     imageVector = MiuixIcons.Add,
                     contentDescription = t.terminal.newTerminal,
@@ -366,7 +378,7 @@ fun TerminalScreen(session: PiAgentSession,
             ShellStateRow(
                 text = t,
                 selected = selected,
-                onNewTerminal = { manager.create() },
+                onNewTerminal = { manager.create(shellCwd) },
             )
 
             Box(

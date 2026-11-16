@@ -591,10 +591,14 @@ one decision each makes that the shared vocabulary does not:
   out of the way: a `PiPage` bar with the shell's name and the session roster, and a
   key bar of Miuix buttons on a `surfaceContainer` track. The keys are the same glyph
   weight as everything else, a latched modifier takes `primary`, and the bar scrolls
-  horizontally because English labels need more room than Chinese ones.
+  horizontally because English labels need more room than Chinese ones. The page opens
+  in the conversation's workspace and keeps one shell per directory (see §10), so the
+  directory the reader sees in the files page is the one the prompt in the terminal
+  already stands in.
 - **Files** — a directory is a list of objects, and it is drawn as one: a
   `BreadcrumbBar` location trail, a filter field with a sort menu, and a `LazyColumn`
-  of Miuix `Card` rows with press feedback and a hold menu (copy path, open with). A
+  of Miuix `Card` rows with press feedback and a hold menu (copy path, open with). It
+  opens in the conversation's workspace, and `$HOME` is one step up via the `~` crumb. A
   row's glyph is **by what the file is** — folder, link, code, image, archive, video,
   audio, sheet, document — because a listing where every file wears the same sheet of
   paper asks the reader to read names to tell anything apart. The preview is a sheet

@@ -1,5 +1,5 @@
 /*
- * The Files tab: a file manager over the agent's home directory.
+ * The Files tab: a file manager rooted in the conversation's workspace.
  *
  * ## What this page is, and what it deliberately is not
  *
@@ -56,16 +56,22 @@
  * chat at the library's own inset; the up button and the back gesture walk up the tree
  * instead, and the Home button is the way to this page's own root.
  *
- * The walk ends at the filesystem's root, not at `$HOME`. It used to stop at `$HOME`:
- * the home directory's parent is the app's private data directory, and the argument for
- * refusing that step was that this page is a view of the agent's home rather than of the
- * whole filesystem. The argument does not survive the listing it produces — `$HOME`
- * holds `~/.pi` and the agent's workspace, and a reader who has just been shown
- * `~/.pi` cannot be told that the directory containing it is not their business. The
- * gate is therefore `parentFile != null`: the walk goes up until there is nothing
- * above it, and the Home button and the `~` crumb are the way back to the page's own
- * root, which is where a page that wants to be rooted can be rooted without lying
- * about the tree.
+ * **The page opens in the conversation's workspace**, not in `$HOME`. The reader
+ * reaches this page from a conversation to see what the agent changed, and a listing
+ * of pi's configuration directory answers a question nobody asked; the workspace is
+ * the directory every relative path in that conversation resolved against. `$HOME`
+ * is still one step up — the page is a browser of the filesystem, not a gated view —
+ * and the `~` crumb goes straight there.
+ *
+ * The walk ends at the filesystem's root, not at the page's own root. It used to stop
+ * at `$HOME`: the home directory's parent is the app's private data directory, and the
+ * argument for refusing that step was that this page is a view of the agent's home
+ * rather than of the whole filesystem. The argument does not survive the listing it
+ * produces — `$HOME` holds `~/.pi` and the agent's workspace, and a reader who has
+ * just been shown `~/.pi` cannot be told that the directory containing it is not their
+ * business. The gate is therefore `parentFile != null`: the walk goes up until there
+ * is nothing above it, and the Home button returns to the workspace the page was
+ * opened in.
  *
  * [`crumbs`] has the matching rule for a path that is not under `$HOME`: it draws the
  * absolute trail from `/`, because one unscrollable crumb per directory above the root
@@ -119,6 +125,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
+import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
@@ -201,7 +208,23 @@ fun FilesScreen(session: PiAgentSession,
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var current by remember { mutableStateOf(home) }
+    // The page's own root: the workspace this conversation works in. A conversation
+    // whose agent has not launched yet has no workspace resolved, and the saved
+    // default is the directory its first launch will use; a path that no longer
+    // exists falls back there rather than opening an empty listing.
+    val root = remember(session) {
+        // The saved default is only read when the conversation's workspace is not known
+        // yet: `WorkspaceStore.default` reads SharedPreferences, and doing that on every
+        // open even when the answer is already in hand was a main-thread read on the
+        // first frame of the page's transition.
+        val known = File(session.workspace.value)
+        if (session.workspace.value.isNotBlank() && known.isDirectory) {
+            known
+        } else {
+            File(WorkspaceStore.default(context, session.env).path)
+        }
+    }
+    var current by remember { mutableStateOf(root) }
     // Which way the last move went. A child is deeper than its parent by definition,
     // so comparing two depths is the whole rule; going home from three levels down is
     // one long slide backwards, which is what it is.
@@ -259,9 +282,9 @@ fun FilesScreen(session: PiAgentSession,
     // The tab root draws no bar arrow; the gesture follows the up button instead. Both
     // walk until there is nowhere left to go — the filesystem's root — rather than
     // stopping at `$HOME`. The page's own root is still one tap away, on the Home
-    // button and the `~` segment of the location bar, so the reader can leave and come
-    // back; refusing the step *up* only meant a directory above the home directory was
-    // unreachable from a listing that had just shown its contents.
+    // button, so the reader can leave and come back; refusing the step *up* only meant
+    // a directory above the home directory was unreachable from a listing that had
+    // just shown its contents.
     BackHandler(enabled = current.parentFile != null) {
         current.parentFile?.let(::navigate)
     }
@@ -276,7 +299,7 @@ fun FilesScreen(session: PiAgentSession,
         // The folder's own name, not the tab's: on a file manager the title is the
         // place you are standing in, and "Files" over a folder called `workspace` is
         // the one fact the page already knows better.
-        title = if (current == home) text.header.files else current.name,
+        title = if (current == root) text.header.files else current.name,
         // `orEmpty()` rather than letting the null through: the count is unknown while
         // a folder is being listed, and a subtitle line that appeared and disappeared
         // once per folder moved the whole page by its height twice. A blank subtitle
@@ -285,8 +308,8 @@ fun FilesScreen(session: PiAgentSession,
         subtitle = itemCount?.let { text.files.itemCount(it) }.orEmpty(),
         actions = {
             IconButton(
-                onClick = { navigate(home) },
-                enabled = current != home,
+                onClick = { navigate(root) },
+                enabled = current != root,
             ) {
                 Icon(MiuixIcons.Home, contentDescription = text.files.home)
             }

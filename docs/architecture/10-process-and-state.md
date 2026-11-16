@@ -93,6 +93,15 @@ The terminal's sessions are process state for the same reason. A shell created i
 by its back arrow, so a look at the conversation killed a `pkg upgrade` or a running build;
 `TerminalSessionManager` holds them beside the agent and the page only displays one of them.
 
+**A shell carries the directory it was started in.** The manager is the host's — a long build
+must survive a conversation switch — but the directory is the conversation's: opening the
+terminal from a workspace shows the shell already running there, and opening it from another
+workspace opens that workspace's own shell instead of moving a running one. The reader reaches
+for the terminal to inspect what the agent did, and a shell standing in `$HOME` makes every
+relative path a question. This is also why the Files page opens in the same directory: both
+pages are views of the workspace the conversation is working in, and `$HOME` — pi's
+configuration and every session — is one step up rather than the page's root.
+
 Which one it displays is a rule of its own, `TerminalSelection.afterClose` — a pure function
 over the roster's ids, tested on the JVM, because a screenshot cannot tell the two answers
 apart: the page shows one shell either way. The wrong answer showed up only in *which* one.
@@ -101,7 +110,8 @@ row, so with three shells open, ending `Terminal 1` while reading `Terminal 3` l
 `Terminal 2`. A close now moves the page only when the closed shell was the one on screen, and
 then to the session that took its row — the row the reader was looking at — else to the last
 one, because there is nothing below the last row. Closing every shell (`closeAll`) is the same
-invariant taken to the whole list: one replacement, selected, since every candidate is gone.
+invariant taken to the whole list: one replacement, selected, since every candidate is gone,
+and it opens where the selected shell stood rather than in `$HOME`.
 
 The roster is never emptied. A close that would leave none opens a replacement and selects it,
 rather than being refused: the terminal is a page the reader opened on purpose, and the one

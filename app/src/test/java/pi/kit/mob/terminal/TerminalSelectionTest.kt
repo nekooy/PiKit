@@ -1,6 +1,7 @@
 package pi.kit.mob.terminal
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -18,6 +19,19 @@ import org.junit.Test
  * replacement instead — the page is never left with zero sessions.
  */
 class TerminalSelectionTest {
+
+    @Test
+    fun `a workspace shows the shell already running there`() {
+        val roster = listOf(
+            "one" to "/home/one",
+            "two" to "/home/two",
+        )
+        assertEquals("two", TerminalSelection.forDirectory(roster, "/home/two"))
+        assertNull(
+            "a workspace with no shell starts a new one",
+            TerminalSelection.forDirectory(roster, "/home/three"),
+        )
+    }
 
     private fun afterClose(
         roster: List<String>,

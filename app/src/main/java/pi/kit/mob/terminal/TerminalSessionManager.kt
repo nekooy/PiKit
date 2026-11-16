@@ -35,7 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class TerminalSessionManager(
     context: Context,
-    env: TermuxEnv,
+    private val env: TermuxEnv,
     /**
      * The active profile's credential, read at spawn time. A lambda rather than a
      * value because the profile can change while a shell is open; a session that
@@ -50,6 +50,8 @@ class TerminalSessionManager(
     class Entry internal constructor(
         val id: String,
         val label: String,
+        /** The directory this shell was started in — the workspace that asked for it. */
+        val cwd: String,
         val session: TerminalSession,
     ) {
         /**
@@ -112,22 +114,43 @@ class TerminalSessionManager(
         notifyFinished = ::onSessionFinished,
     )
 
-    /** Opens the first session if there is none, so the page always has one. */
-    fun begin() {
-        if (_sessions.value.isEmpty()) create()
+    /**
+     * Shows the shell that belongs to [cwd], opening one when there is none.
+     *
+     * The terminal is the app's, not one conversation's: a `pkg upgrade` must survive
+     * a switch of conversation. But the directory a shell starts in belongs to the
+     * conversation that opened the page — the reader reaches for the terminal to see
+     * what the agent did, and a shell standing in `$HOME` makes every relative path a
+     * question. One shell per directory answers both: returning to a workspace shows
+     * the shell already running there, and opening the terminal from another
+     * workspace opens its own rather than moving a running shell out from under its
+     * output.
+     */
+    fun begin(cwd: String = env.workspacePath) {
+        val workingDir = cwd.ifBlank { env.workspacePath }
+        val sessions = _sessions.value
+        val existing = TerminalSelection
+            .forDirectory(sessions.map { it.id to it.cwd }, workingDir)
+            ?.let { id -> sessions.firstOrNull { it.id == id } }
+        if (existing != null) {
+            _selectedId.value = existing.id
+        } else {
+            create(workingDir)
+        }
     }
 
     /**
-     * Spawns a login shell in `$HOME`.
+     * Spawns a login shell in [cwd], or in the built-in workspace when it is blank.
      *
      * The title is the session's index rather than anything the shell reports, so
      * a user with three shells can tell them apart before any of them has printed
      * a directory or a command name; a title the shell does report takes over it
      * (see [Entry.displayTitle]).
      */
-    fun create(): Entry {
+    fun create(cwd: String = env.workspacePath): Entry {
+        val workingDir = cwd.ifBlank { env.workspacePath }
         val label = "Terminal ${_sessions.value.size + 1}"
-        val entry = sessionFactory.spawn(label)
+        val entry = sessionFactory.spawn(label, workingDir)
         _sessions.value = _sessions.value + entry
         _selectedId.value = entry.id
         return entry
@@ -172,8 +195,9 @@ class TerminalSessionManager(
             closedIndex = index,
             selectedId = _selectedId.value,
             // The roster is already the remaining one, so `create()` labels the
-            // replacement "Terminal 1" and selects it on its own.
-            openReplacement = { create().id },
+            // replacement "Terminal 1" and selects it on its own. It opens where the
+            // closed shell stood: the last shell carried its workspace with it.
+            openReplacement = { create(entry.cwd).id },
         )
     }
 
@@ -191,9 +215,14 @@ class TerminalSessionManager(
     fun closeAll() {
         val closing = _sessions.value
         if (closing.isEmpty()) return
+        // The replacement stands where the reader was: the selected shell's directory,
+        // else the last one's. A terminal that reopened in `$HOME` after "close all"
+        // would put every shell the reader opens next in the wrong tree.
+        val replacementCwd = closing.firstOrNull { it.id == _selectedId.value }?.cwd
+            ?: closing.last().cwd
         _sessions.value = emptyList()
         closing.forEach { it.finishIfRunning() }
-        _selectedId.value = create().id
+        _selectedId.value = create(replacementCwd).id
     }
 
     /**
@@ -279,7 +308,7 @@ class TerminalSessionManager(
         private val clipboard: ClipboardManager?
             get() = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
 
-        fun spawn(label: String): Entry {
+        fun spawn(label: String, cwd: String): Entry {
             val shell = when {
                 env.login.isFile -> env.login.absolutePath
                 else -> env.bash.absolutePath
@@ -298,13 +327,13 @@ class TerminalSessionManager(
 
             val created = TerminalSession(
                 shell,
-                env.homePath,
+                cwd,
                 arguments,
                 environment,
                 TRANSCRIPT_ROWS,
                 client(),
             )
-            return Entry(created.mHandle, label, created)
+            return Entry(created.mHandle, label, cwd, created)
         }
 
         /**
