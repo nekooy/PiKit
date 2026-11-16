@@ -66,6 +66,7 @@ import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMe
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -1566,6 +1567,12 @@ private fun ChatPage(
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val toasts = LocalPiToast.current
+    // The toast capsule is anchored to this page's composer band while it is on
+    // screen; once the page leaves, the provider's own window-inset fallback applies.
+    DisposableEffect(toasts) {
+        onDispose { toasts?.setAnchor(0f) }
+    }
 
     // The two avatars the transcript draws, rebuilt only when one of the settings
     // behind them moves. Collected here rather than passed in so a change on the
@@ -2299,7 +2306,10 @@ private fun ChatPage(
                     // 95 px lower than the band's top, its disc half hidden behind the
                     // chip row, and the transcript's tail padded by 95 px too little.
                     // Declared here, it spans content and inset together.
-                    .onSizeChanged { bottomStackPx = it.height }
+                    .onSizeChanged {
+                        bottomStackPx = it.height
+                        toasts?.setAnchor(it.height.toFloat())
+                    }
                     .bandBottom(imeInsets, barInsets),
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message

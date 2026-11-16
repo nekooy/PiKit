@@ -29,7 +29,7 @@ sheets, snackbars, icons and navigation are the furniture. What is left for this
 is *no colour decision at all* — the palette is the library's, both schemes of it —
 and a small set of compositions the library does not have: the page frame, the
 section, the popup row, the avatar circle, the window-level dialog phrasing, the
-snackbar host, and the content rendering (Markdown, formulas, the terminal).
+toast host, and the content rendering (Markdown, formulas, the terminal).
 
 **A wrapper approach was rejected.** Keeping the `Pi*` API and re-implementing its
 internals with Miuix would have compiled the same screens with less churn, but it
@@ -261,18 +261,20 @@ required `show` and the caller holds the last value — `pendingDialog != null` 
 the held copy is what it draws while it leaves. The sessions page's three dialogs and
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
-**Transient messages are Miuix's snackbar**, raised through `LocalPiToast`. The platform's
-`Toast` was tried twice, and both times its card — grey, in the system's colours, with the
-launcher icon beside the text on 13+ — read as a notification that happened to land on the
-page rather than as part of the interface. Miuix *has* a snackbar, and this app is made of
-Miuix components: the message is that card, one short sentence in the page's own palette,
-with the host remembered once above every page so the message survives the page that
-raised it. What is paid for it is the small framework the platform would have owned — a
-`SnackbarHostState`, a scope, a dismiss-the-previous rule — held once at the root rather
-than once per call site. The interface (`LocalPiToast.show`) outlived every swap, so a
-page asks for a short sentence and never learns which host draws it.
+**Transient messages are the app's glass capsule**, raised through `LocalPiToast`. It is
+the same fill and lift as the bar's capsules — a `PiGlass.fill()` pill on `glassLift` —
+placed above the composer rather than over it. Three other implementations were tried:
+the platform's `Toast` twice, whose card in the system's colours with the launcher icon
+beside the text reads as a notification that landed on the page, and Miuix's snackbar
+once, which is a full-width bar pinned to the window's bottom edge where the composer
+already lives. Both read as something that arrived over the page rather than as one of
+its floating objects. The host is remembered once above every page, so the message
+survives the page that raised it; its bottom anchor is the chat composer's measured
+band, which is why a keyboard that is up lifts the capsule with it instead of covering
+it. A second message replaces the first rather than queueing behind it — an ephemeral
+message that arrives five seconds late is about a state the reader has already left.
 
-What a snackbar settles is the split against an in-page notice, by tense — a
+What a toast settles is the split against an in-page notice, by tense — a
 *moment* ("Saved", "Agent restarted") is a toast, a *condition* ("the agent failed to
 start", "this folder cannot be read") stays on the page in the error role, because a
 message that disappears after a couple of seconds is the wrong shape for something that
@@ -343,7 +345,7 @@ because the strip version was worse:
   the platform's silhouette cannot betray the shape, and the shadow is the layer it already
   rides on. `glassLift` draws a blurred fill of the shape's *own* outline with a `MaskFilter`,
   which is the exact silhouette and is re-rasterised on every frame it is drawn — the right
-  trade for the 42dp header capsules and the composer's chips, and the wrong one
+  trade for the 42dp header capsules, the composer's chips and the toast, and the wrong one
   for a surface as wide as the window: measured while the keyboard closed, the blur under the
   composer's field was a **48 ms frame**. The composer's field therefore takes `solidLift`,
   and the small floating marks keep `glassLift` for its exact outline.
@@ -384,13 +386,15 @@ mostly read "Agent 已就绪" was the interface telling the reader that nothing 
 The state that matters is the one that is *not* the happy path, and that one already has a
 place.
 
-**A toast is part of the page, not a visit from the system.** The platform's `Toast` held
-the implementation twice, and both times its card in the system's colours with the
-launcher icon beside the text read as a notification that had landed on the page. Miuix's
-snackbar is the same kind of object as the rest of the interface — its card, its radius,
-its palette — and the host it needs is one piece of the root rather than a framework at
-every call site. The interface (`LocalPiToast.show`) did not change through any of the
-swaps; a page still asks for a short sentence.
+**A toast is part of the page, not a visit from the system.** The app draws the capsule
+itself: `PiGlass.fill()` on `glassLift`, the same pair the bar's marks use, so it reads
+as one of the page's floating objects. The platform's `Toast` held the implementation
+twice, and Miuix's snackbar once; the first brought its own card in the system's colours
+with the launcher icon beside the text, and the second was a full-width bar on the
+window's bottom edge. Both read as a notification that had landed on the page. The host
+is one piece of the root rather than a framework at every call site, and the interface
+(`LocalPiToast.show`) did not change through any of the swaps; a page still asks for a
+short sentence.
 
 **The four-tab bar came first, and its costs are what retired it.** A Miuix
 `NavigationBar` at the root with one item per destination kept every page one tap away,
