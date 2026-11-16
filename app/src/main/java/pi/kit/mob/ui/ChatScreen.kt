@@ -12,7 +12,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.activity.compose.BackHandler
@@ -67,9 +66,11 @@ import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMe
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -157,6 +158,7 @@ import pi.kit.mob.pi.ChatItem
 import pi.kit.mob.pi.ChatTurn
 import pi.kit.mob.pi.ConversationState
 import pi.kit.mob.pi.ImageAttachment
+import pi.kit.mob.pi.ModelInfo
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiLaunchOptions
 import pi.kit.mob.pi.clampThinkingLevel
@@ -181,6 +183,7 @@ import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
+import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiGlass
@@ -461,7 +464,13 @@ internal fun ChatScreen(
     val density = LocalDensity.current
     // Used by the drawer's gestures: opening it drops the composer's keyboard.
     val focus = LocalFocusManager.current
-    val drawerPos = drawer.progress
+    // Whether the touch-blocking layer over the card exists at all. A composition read
+    // of `drawer.progress` here would make every pixel of a drag recompose the whole
+    // conversation page — the transcript, the composer and the drawer — sixty times a
+    // second. `derivedStateOf` only invalidates this body when the answer crosses zero,
+    // which is the one frame the layer has to appear or disappear; the motion itself is
+    // read inside the `graphicsLayer` lambdas below, in the draw phase.
+    val drawerVisible by remember { derivedStateOf { drawer.progress > 0f } }
 
     // Arrives with the drawer already out when the page is rebuilt on the way back from
     // the settings page, which is where `historyOpen` came from; the width is only known
@@ -474,7 +483,8 @@ internal fun ChatScreen(
         }
     }
 
-    // Settles at [target], from wherever the thumb left it.
+    // Settles at [target], from wherever the thumb left it, continuing at [velocity]
+    // pixels a second when the caller has one.
     //
     // The open/closed *answer* is published before the animation runs rather than after
     // it, because the rebuild that follows a tap reads it and a page that still believed
@@ -483,7 +493,12 @@ internal fun ChatScreen(
     // it at offset zero and the drawer would vanish between two frames instead of sliding
     // out over the conversation the tap opened. Published answer, surviving motion —
     // both halves are needed, and they are two different owners.
-    val settlePage: (Float) -> Unit = { target ->
+    //
+    // The release velocity is handed to the spring rather than dropped: a `tween` from
+    // rest made every flick stop dead for a frame and then start again, which is the
+    // hitch a drawer shows most clearly because the finger has just been moving at
+    // 1000+ px a second. A tap passes zero; a drag passes the tracker's own number.
+    val settlePage: (Float, Float) -> Unit = { target, velocity ->
         drawer.job?.cancel()
         onHistoryOpenChange(target > 0f)
         // The panel is **never dropped once it has been opened**. Letting it leave the
@@ -497,7 +512,8 @@ internal fun ChatScreen(
             animate(
                 initialValue = drawer.offset,
                 targetValue = target * drawer.width,
-                animationSpec = tween(PAGE_SLIDE_MILLIS),
+                initialVelocity = velocity,
+                animationSpec = PiMotion.drawerSettle,
             ) { value, _ -> drawer.offset = value }
         }
     }
@@ -521,7 +537,7 @@ internal fun ChatScreen(
             travelled >= 0.5f || (flung && velocity > 0) -> 1f
             travelled <= -0.5f || (flung && velocity < 0) -> 0f
             // Neither: settle to whichever side is nearer.
-            else -> if (drawerPos >= 0.5f) 1f else 0f
+            else -> if (drawer.progress >= 0.5f) 1f else 0f
         }
     }
 
@@ -940,7 +956,7 @@ internal fun ChatScreen(
                     // on every frame of the drag. Measured on the emulator, the drawer's
                     // open/close animation was 90-100% janky frames; a graphics layer only
                     // moves what was already rasterised.
-                    .graphicsLayer { translationX = (-1f + drawerPos) * drawer.width }
+                    .graphicsLayer { translationX = (-1f + drawer.progress) * drawer.width }
                     // `background`, not `surface`: the card over this panel is `surface`
                     // and the dark scheme's `surface` is black, so a surface panel made
                     // the two halves of the screen one colour — the seam the shadow was
@@ -967,15 +983,15 @@ internal fun ChatScreen(
                                 (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
                         },
                         onRelease = { distance, velocity, minFling ->
-                            settlePage(commitPage(distance, velocity, minFling))
+                            settlePage(commitPage(distance, velocity, minFling), velocity)
                         },
                     ),
             ) {
                 SessionsScreen(
                     session = session,
                     listState = historyListState,
-                    onBack = { settlePage(0f) },
-                    onOpened = { settlePage(0f) },
+                    onBack = { settlePage(0f, 0f) },
+                    onOpened = { settlePage(0f, 0f) },
                     onOpenConversation = onOpenConversation,
                     onOpenSettings = onOpenSettings,
                     currentPath = currentPath,
@@ -991,20 +1007,21 @@ internal fun ChatScreen(
                     // The card travels exactly the drawer's width, so its leading edge
                     // lands on the panel's: the reveal is the same distance the page
                     // moved, which is what makes the pair read as one gesture.
+                    val progress = drawer.progress
                     translationX = drawer.offset
-                    val scale = 1f - CHAT_SHRINK * drawerPos
+                    val scale = 1f - CHAT_SHRINK * progress
                     scaleX = scale
                     scaleY = scale
                     transformOrigin = TransformOrigin(0.5f, 0.5f)
                     // Rounded only while it is a card. At rest the page is the window,
                     // and a corner radius there would cut the screen.
                     shape = RoundedCornerShape(PAGE_CARD_CORNER)
-                    clip = drawerPos > 0f
+                    clip = progress > 0f
                     // Back to an elevation shadow, and a deeper one: the hand-drawn strip
                     // at the seam was even, but it read as a line rather than as the page
                     // being *above* the list. The elevation grows with the gesture so the
                     // page lifts as it comes out.
-                    shadowElevation = PAGE_CARD_LIFT.toPx() * drawerPos
+                    shadowElevation = PAGE_CARD_LIFT.toPx() * progress
                 }
                 // After the layer, so the fill travels with the card. Before it, the
                 // background is painted at the layer's *untranslated* position: measured
@@ -1040,7 +1057,7 @@ internal fun ChatScreen(
                             (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
                     },
                     onRelease = { distance, velocity, minFling ->
-                        settlePage(commitPage(distance, velocity, minFling))
+                        settlePage(commitPage(distance, velocity, minFling), velocity)
                     },
                 ),
         ) {
@@ -1081,7 +1098,7 @@ internal fun ChatScreen(
                 },
                 onOpenSessions = {
                     drawer.reachable = true
-                    settlePage(1f)
+                    settlePage(1f, 0f)
                 },
                 onNewSession = ::newSession,
                 currentWorkspace = currentWorkspace,
@@ -1139,13 +1156,13 @@ internal fun ChatScreen(
         // the drawer, and a leftward drag is the same gesture that closes it. Composed
         // over the card and starting where the card does, so the panel beside it keeps its
         // own rows, its own taps and its own drag.
-        if (drawerPos > 0f) {
+        if (drawerVisible) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer { translationX = drawer.offset }
                     .pointerInput(drawer.width) {
-                        detectTapGestures { settlePage(0f) }
+                        detectTapGestures { settlePage(0f, 0f) }
                     }
                     .pageDrag(
                         width = drawer.width,
@@ -1155,7 +1172,7 @@ internal fun ChatScreen(
                                 (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
                         },
                         onRelease = { distance, velocity, minFling ->
-                            settlePage(commitPage(distance, velocity, minFling))
+                            settlePage(commitPage(distance, velocity, minFling), velocity)
                         },
                     ),
             )
@@ -1596,6 +1613,21 @@ private fun ChatPage(
     // measures one item per turn instead of one per message. See [transcriptCards].
     val cards = remember(drawn) { transcriptCards(drawn) }
 
+    // What the composer shows, projected out of the state. The projection is keyed on
+    // the facts that can change it, so a streamed token that only grows `items` hands
+    // the composer an equal value and Compose skips its chip row, field and menus.
+    // `state.usage.context` is a key because the two percentage readings are derived
+    // from it; they round to whole numbers, so most tokens leave them alone.
+    val composerFacts = remember(
+        state.model,
+        state.requestedModel,
+        state.availableThinkingLevels,
+        state.availableThinkingLevelsFor,
+        state.usage.context,
+    ) {
+        state.composerFacts()
+    }
+
     // Follow the tail of the transcript, including while text streams into the
     // last item (whose identity does not change, only its length).
     //
@@ -1973,12 +2005,6 @@ private fun ChatPage(
                                                 it.item is ChatItem.User || it.item is ChatItem.Assistant
                                             }
                                             ?.item
-                                        val counted = cards.take(index + 1).sumOf { c ->
-                                            c.rows.count { row ->
-                                                row is TranscriptRow.Message &&
-                                                    (row.item is ChatItem.User || row.item is ChatItem.Assistant)
-                                            }
-                                        }
                                         val cardBody: @Composable () -> Unit = {
                                             TranscriptCardView(
                                                 card = card,
@@ -2028,6 +2054,19 @@ private fun ChatPage(
                                             // closes it: the panel animates out with its own
                                             // rows still on it.
                                             if (menuCardKey == card.key && menuTarget != null) {
+                                                // Computed here rather than beside the card's
+                                                // content: it is a scan of every earlier turn
+                                                // and every card paid for it on every token,
+                                                // whether or not a menu was open. The menu is
+                                                // the only reader, so the scan belongs to the
+                                                // frame that opens it.
+                                                val counted = cards.take(index + 1).sumOf { c ->
+                                                    c.rows.count { row ->
+                                                        row is TranscriptRow.Message &&
+                                                            (row.item is ChatItem.User ||
+                                                                row.item is ChatItem.Assistant)
+                                                    }
+                                                }
                                                 Box(
                                                     Modifier
                                                         .offset {
@@ -2338,7 +2377,7 @@ private fun ChatPage(
                 enabled = agent is AgentStatus.Running,
                 inputEnabled = agent is AgentStatus.Running || agent is AgentStatus.Starting,
                 agent = agent,
-                state = state,
+                facts = composerFacts,
                 openSheet = openSheet,
                 onOpenSheet = onOpenSheet,
                 onCloseSheet = onCloseSheet,
@@ -2506,6 +2545,38 @@ private fun ChatEmptyState(title: String, body: String) {
 private val EMPTY_MARK_SIZE = 64.dp
 
 /**
+ * The handful of conversation facts the composer displays.
+ *
+ * `ConversationState` is a data class whose `items` list is rebuilt for every streamed
+ * token, so passing the whole state into the composer made its chip row, its field and
+ * four menus re-run several times a second for values that had not changed. This type is
+ * the *answer* the composer needs rather than the state it was derived from: the model
+ * and its pending switch, that model's thinking levels, and the two whole-number
+ * readings the chips show. Compose sees an equal instance and skips the composer while
+ * the answer is the same; [contextPercent] and [cacheHitPercent] round to integers, so
+ * token growth moves them only when the displayed percentage does.
+ */
+@Immutable
+private data class ComposerFacts(
+    val model: ModelInfo? = null,
+    val requestedModel: String? = null,
+    val availableThinkingLevels: List<String> = emptyList(),
+    val availableThinkingLevelsFor: String? = null,
+    val contextPercent: Int = 0,
+    val cachePercent: Int = 0,
+)
+
+/** Projects a conversation's display state onto [ComposerFacts]. */
+private fun ConversationState.composerFacts(): ComposerFacts = ComposerFacts(
+    model = model,
+    requestedModel = requestedModel,
+    availableThinkingLevels = availableThinkingLevels,
+    availableThinkingLevelsFor = availableThinkingLevelsFor,
+    contextPercent = contextPercent(this),
+    cachePercent = cacheHitPercent(this),
+)
+
+/**
  * The thinking level to show: the reader's own choice, mapped onto the model in use.
  *
  * pi reports the level it is running (`get_state.thinkingLevel`), and that value is
@@ -2570,13 +2641,13 @@ private val EMPTY_MARK_SIZE = 64.dp
  * records the sequence that settled it.
  */
 private fun thinkingLevelOf(
-    state: ConversationState,
+    facts: ComposerFacts,
     saved: PiSettings,
     active: ModelProfile?,
     catalogued: Map<String, List<String>>,
 ): String = clampThinkingLevel(
     saved.thinkingLevel,
-    levelsFor(state, saved, active, catalogued),
+    levelsFor(facts, saved, active, catalogued),
 )
 
 /**
@@ -2588,15 +2659,15 @@ private fun thinkingLevelOf(
  * the frame the switch lands rather than two round trips later.
  */
 private fun levelsFor(
-    state: ConversationState,
+    facts: ComposerFacts,
     saved: PiSettings,
     active: ModelProfile?,
     catalogued: Map<String, List<String>>,
 ): List<String> {
-    val modelId = modelInUse(state, saved, active)
+    val modelId = modelInUse(facts, saved, active)
     return thinkingLevelsFor(
-        live = state.availableThinkingLevels,
-        liveFor = state.availableThinkingLevelsFor,
+        live = facts.availableThinkingLevels,
+        liveFor = facts.availableThinkingLevelsFor,
         modelId = modelId,
         remembered = saved.rememberedThinkingLevels(modelId),
         catalogued = modelId?.let { catalogued[it] }.orEmpty(),
@@ -2619,13 +2690,13 @@ private fun levelsFor(
  * before `get_state` has said anything.
  */
 private fun modelInUse(
-    state: ConversationState,
+    facts: ComposerFacts,
     saved: PiSettings,
     active: ModelProfile?,
 ): String? {
-    state.requestedModel?.takeIf { it.isNotBlank() }?.let { return it }
-    val live = state.model?.id?.takeIf { it.isNotBlank() }
-    if (live != null && live == state.availableThinkingLevelsFor) return live
+    facts.requestedModel?.takeIf { it.isNotBlank() }?.let { return it }
+    val live = facts.model?.id?.takeIf { it.isNotBlank() }
+    if (live != null && live == facts.availableThinkingLevelsFor) return live
     return active?.modelId?.takeIf { it.isNotBlank() }
         ?: live
         ?: saved.modelId.takeIf { it.isNotBlank() }
@@ -3325,19 +3396,6 @@ private fun metaItemOf(rows: List<TranscriptRow>): ChatItem? = rows
     ?.let { (it as TranscriptRow.Message).item }
 
 /**
- * The most of the transcript's width a prompt card may take.
- *
- * A share rather than a dp value so the cap survives a narrower phone and a tablet's
- * capped column: 0.86 leaves a visible strip of the page down the start edge, which is
- * what makes the *side* readable as a side rather than as a card that happens to be
- * short. It is measured against the transcript's own width — the row the card is laid
- * out in — so on a wide window the cap is a share of the prose measure and not of the
- * screen.
- */
-/** How long the pages take to settle after a drag is released. */
-private const val PAGE_SLIDE_MILLIS = 220
-
-/**
  * The drawer's width, as a share of the screen.
  *
  * The reference drawing leaves a strip of the conversation visible down the trailing
@@ -3451,6 +3509,16 @@ private val BAND_AIR = 12.dp
  */
 private val BAND_FADE = 88.dp
 
+/**
+ * The most of the transcript's width a prompt card may take.
+ *
+ * A share rather than a dp value so the cap survives a narrower phone and a tablet's
+ * capped column: 0.86 leaves a visible strip of the page down the start edge, which is
+ * what makes the *side* readable as a side rather than as a card that happens to be
+ * short. It is measured against the transcript's own width — the row the card is laid
+ * out in — so on a wide window the cap is a share of the prose measure and not of the
+ * screen.
+ */
 private const val PROMPT_MAX_SHARE = 0.86f
 
 /**
@@ -4315,7 +4383,7 @@ private fun Composer(
     /** Whether the text field takes input. True from the first frame. */
     inputEnabled: Boolean,
     agent: AgentStatus,
-    state: ConversationState,
+    facts: ComposerFacts,
     /** Which of the four menus is open, or null. Each chip asks whether it is the one. */
     openSheet: ComposerSheet?,
     onOpenSheet: (ComposerSheet) -> Unit,
@@ -4593,7 +4661,7 @@ private fun Composer(
                         // own text — measured from the code, 37dp of glyph and padding
                         // became ~89dp with "Medium". The same value the menu ticks
                         // and the settings row shows.
-                        label = thinkingLevelOf(state, saved, config.activeProfile, catalogueLevels),
+                        label = thinkingLevelOf(facts, saved, config.activeProfile, catalogueLevels),
                         onClick = { onOpenSheet(ComposerSheet.Thinking) },
                     ) {
                         OverlayListPopup(
@@ -4638,7 +4706,7 @@ private fun Composer(
                         // so the chip answers with the translated loading sentence
                         // instead of pi's identifier.
                         label = config.activeProfile?.modelId?.takeIf { it.isNotBlank() }
-                            ?: state.model?.takeIf { it.isUsable }?.id?.takeIf { it.isNotBlank() }
+                            ?: facts.model?.takeIf { it.isUsable }?.id?.takeIf { it.isNotBlank() }
                             // Three answers, not two: nothing configured is a *state*
                             // the reader can act on, and calling it "loading" left a
                             // fresh install saying 正在加载模型 for ever — the report
@@ -4668,7 +4736,7 @@ private fun Composer(
                 item {
                     ControlChip(
                         glyph = MiuixIcons.Stopwatch,
-                        label = text.chat.cacheHit(cacheHitPercent(state)),
+                        label = text.chat.cacheHit(facts.cachePercent),
                         // The same menu the context ring beside the send opens, and the
                         // same one name in [ComposerSheet]: the two are two readings of
                         // one report, so opening either asks the same question.
@@ -5025,7 +5093,7 @@ private fun Composer(
                 // action that consumes it, and the two that add something keep the
                 // edge where the writing starts.
                 PopupAnchor {
-                    val percent = contextPercent(state)
+                    val percent = facts.contextPercent
                     ContextRing(
                         percent = percent,
                         description = text.chat.contextUsage(percent),
@@ -5626,8 +5694,9 @@ private fun ThinkingMenu(
     // pi's live answer when it is an answer for this model, then the list remembered for
     // it, then its own catalogue entry. The menu cannot offer a level the model does not
     // have.
-    val available = levelsFor(live, saved, config.activeProfile, catalogueLevels)
-    val current = thinkingLevelOf(live, saved, config.activeProfile, catalogueLevels)
+    val facts = live.composerFacts()
+    val available = levelsFor(facts, saved, config.activeProfile, catalogueLevels)
+    val current = thinkingLevelOf(facts, saved, config.activeProfile, catalogueLevels)
     val options = available.takeIf { it.isNotEmpty() } ?: PiLaunchOptions.THINKING_LEVELS
     val haptics = LocalPiHaptics.current
     ListPopupColumn {
@@ -5823,7 +5892,7 @@ private fun ContextMenu(session: PiAgentSession, text: Strings) {
     val saved by session.settingsStore.settings.collectAsState()
     val config by session.settingsStore.profiles.snapshots.collectAsState()
     val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
-    val thinking = thinkingLevelOf(state, saved, config.activeProfile, catalogueLevels)
+    val thinking = thinkingLevelOf(state.composerFacts(), saved, config.activeProfile, catalogueLevels)
     val usage = state.usage
     val context = usage.context
     val window = state.model?.contextWindow ?: 0

@@ -8,10 +8,6 @@ import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -95,6 +91,7 @@ import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
+import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiToastProvider
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -492,11 +489,12 @@ private fun RootContent(
                 .padding(padding)
                 .consumeWindowInsets(padding),
             transitionSpec = {
+                // The chat is the leading page and every pushed destination is to its
+                // trailing side, so the direction is the destination's identity rather
+                // than a history stack. `PiMotion` owns the distances, the curve and the
+                // fade; see its KDoc for why the whole app now shares one page move.
                 val incoming = if (targetState == Destination.Chat) -1 else 1
-                (
-                    fadeIn(animationSpec = tween(220)) +
-                        slideInHorizontally(animationSpec = tween(260)) { it * incoming / 10 }
-                    ) togetherWith fadeOut(animationSpec = tween(140))
+                PiMotion.rootPage(incoming)
             },
             label = "page",
         ) { shown ->

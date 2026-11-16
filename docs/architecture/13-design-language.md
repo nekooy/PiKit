@@ -545,11 +545,15 @@ own and keeps the library's smaller figure throughout: its key bar is a 26dp pil
 There is no theme-level shape local in Miuix 0.9.4 to hang this on, which is
 why it is per-call-site.
 
-**Motion is the library's**, except for the one page-level move a page has to spell
-out (the settings stack's forward/back slide, the files page's folder transition, the
-chat history swap). There is no app-level spring scale: the library's dialogs, sheets,
-switches, sliders and navigation bar carry their own animation, and a page that adds a
-spring of its own is a page that will move differently the next time the library does.
+**Motion is the library's**, except for the one page-level move every page has to
+spell out (the root's destinations, the settings stack's forward/back slide, the files
+page's folder transition). Those moves are defined in `PiMotion`, from the library's
+own `folmeSpring` and `SinOutEasing`: the root's incoming page travels a short 12% on a
+240 ms sine-out tween and the outgoing page fades, while inside a stack both pages move
+on a critically damped spring, a quarter in and an eighth out. There is no app-level
+spring *scale*: the library's dialogs, sheets, switches, sliders and navigation bar
+carry their own animation, and a page that adds a spring of its own is a page that will
+move differently the next time the library does.
 
 **Icons are Miuix's**, at the library's 24-unit weight and tinted by the component
 drawing them. The exceptions are four glyphs the reader chose at the size the app

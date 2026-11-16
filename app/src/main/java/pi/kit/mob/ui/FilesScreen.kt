@@ -81,11 +81,6 @@ package pi.kit.mob.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -146,6 +141,7 @@ import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
@@ -381,12 +377,11 @@ fun FilesScreen(session: PiAgentSession,
                     .fillMaxWidth()
                     .weight(1f),
                 transitionSpec = {
-                    // A third of the width, not the whole of it: the page's furniture
-                    // above the listing does not move, so the incoming rows slide under
-                    // it rather than pushing a whole screen across.
+                    // The listing slides on the app's one page move; the page's furniture
+                    // above it stays put, so what travels is the rows rather than a whole
+                    // screen. The direction is decided by the two directories' depths.
                     val step = if (forward) 1 else -1
-                    (slideInHorizontally { width -> step * width / 3 } + fadeIn()) togetherWith
-                        (slideOutHorizontally { width -> -step * width / 3 } + fadeOut())
+                    PiMotion.page(step)
                 },
                 label = "folder",
             ) { directory ->

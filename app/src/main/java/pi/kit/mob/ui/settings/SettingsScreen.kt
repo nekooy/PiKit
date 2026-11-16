@@ -1,12 +1,6 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +37,7 @@ import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.StorageSelfTest
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiDialogAnswers
+import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
@@ -236,24 +231,16 @@ fun SettingsScreen(session: PiAgentSession, onBack: () -> Unit) {
     // not the page on screen. Comparing the page we are actually showing is the only
     // answer that stays right.
     //
-    // A fade with a short horizontal slide: a page arrives from the trailing edge and
-    // gives back an eighth of its width when it leaves. The old `PiPageSwap` did the
-    // same thing with the design system's motion constants; the numbers here are the
-    // short ones on purpose, because these are settings pages — a row list a reader
-    // moves through quickly — and a 300ms slide on every tap is a page that feels slow
-    // to open.
+    // The app's one page move (`PiMotion`): a Miuix spring carries the incoming page
+    // a quarter of the width while the outgoing one gives back an eighth the other
+    // way. The old local `tween`s here were the settings stack's own copy of a move
+    // the root and the files page also had, and the three copies disagreed.
     AnimatedContent(
         targetState = page,
         modifier = Modifier.fillMaxSize(),
         transitionSpec = {
             val direction = if (forward) 1 else -1
-            (
-                slideInHorizontally(animationSpec = tween(220)) { full -> direction * full / 4 } +
-                    fadeIn(animationSpec = tween(160))
-                ).togetherWith(
-                slideOutHorizontally(animationSpec = tween(220)) { full -> -direction * full / 8 } +
-                    fadeOut(animationSpec = tween(140)),
-            )
+            PiMotion.page(direction)
         },
         label = "settings-page",
     ) { current ->
