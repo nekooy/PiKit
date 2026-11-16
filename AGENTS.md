@@ -175,6 +175,11 @@ a document is exactly the change that forgets them.
   visible from the run's own output, while the release itself is public the moment the run
   ends: a body invented from the previous release's shape is published before anyone can
   catch it.
+- **Reading the checklist is not doing it.** The *Before you dispatch* boxes are executed,
+  not skimmed: the dependency/component sweep, the device half, the layout pass and the
+  local build must all be green before a publish request is acted on. A publish request
+  puts the checklist in scope; it is not permission to skip it, and a report that does not
+  name which checks were run is not evidence that they were.
 - **Nothing here pushes, tags or branches unasked.** A request to publish is the
   asking; see *Commits* above.
 
@@ -381,9 +386,11 @@ slice by hunks. The rule now is the opposite shape:
   turn that ends with committed-but-unpushed work says so in its summary —
   which commits are on `main` locally, awaiting the user's own push. **A request
   to publish is that yes for the whole release sequence**: “发新版本”, “发布” or
-  “release <version>” means bump, commit, push `main`, dispatch `release.yml`,
-  then apply `.release/notes-<version>.md` with `gh release edit`. A local APK
-  plus an unpushed commit is a half-done release, not a release.
+  “release <version>” means do the entire *Before you dispatch* checklist to green,
+  bump, commit, push `main`, dispatch `release.yml`, then apply
+  `.release/notes-<version>.md` with `gh release edit`. A local APK plus an
+  unpushed commit is a half-done release, not a release — and so is a published
+  release whose dependency sweep and device pass were skipped.
 - **Everything else that rewrites state stays ask-first.** `git stash`,
   `git checkout`/`restore`, branch creation, tag creation, `git reset`, `git
   rebase`, `git init` — none of these is part of "finishing a task". Read-only

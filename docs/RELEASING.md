@@ -1,12 +1,17 @@
 # Releasing PiKit
 
-Publishing a build is: bump one version in one file, commit it, push, then run one
-workflow. Everything else is a check that the workflow does for you.
+Publishing a build is: walk the *Before you dispatch* checklist to green — dependency
+and component sweep, device half, layout pass and a local `build-apks.py` — then bump
+one version in one file, commit it, push, and run one workflow. Everything else is a
+check that the workflow does for you.
 
 **A local APK is not a release.** When the user asks to publish — “发新版本”, “发布” or
 “release <version>” — the whole sequence is the task: push the release commit, dispatch
 `release.yml`, and apply `.release/notes-<version>.md` after it publishes. Stopping at a
-locally built APK is the half-done result this paragraph exists to prevent.
+locally built APK is the half-done result this paragraph exists to prevent. The checklist
+is part of the task, not a preflight suggestion: a publish request puts the dependency
+sweep and the device pass in scope, and neither may be skipped or reported as done without
+being run.
 
 **The push itself starts nothing.** Both workflows are dispatch-only (AGENTS.md): what
 they cannot check for themselves is the hand-run checklist under *Before you dispatch*,
@@ -219,6 +224,10 @@ workflow stops and tells you why. Use it for a preview build that is not for rea
 users, never for a version people will install and keep.
 
 ## Before you dispatch
+
+This is the release gate, not a preflight suggestion. Every box is checked — and the
+checks are actually run, not inferred from a green local build — before a publish request
+is acted on.
 
 - [ ] **The sweep is done: everything in `MAINTAINING.md`'s *Periodically* table that has
       a newer upstream is upgraded in this release's own change, before the version
