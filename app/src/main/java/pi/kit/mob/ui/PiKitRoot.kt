@@ -514,7 +514,7 @@ private fun RootContent(
                     session = session,
                     composer = composer,
                     drawer = drawer,
-                    drawerScope = scope,
+                    rootScope = scope,
                     historyListState = historyListState,
                     historyOpen = historyOpen,
                     onHistoryOpenChange = { historyOpen = it },
@@ -632,8 +632,11 @@ private fun ChatTab(
      * started has to keep moving after the rebuild; see [ConversationDrawerState].
      */
     drawer: ConversationDrawerState,
-    /** The root's scope: the settle animation outlives the page it was started from. */
-    drawerScope: kotlinx.coroutines.CoroutineScope,
+    /**
+     * The root's scope: the drawer's settle and a conversation's launch outlive the
+     * page they were started from.
+     */
+    rootScope: kotlinx.coroutines.CoroutineScope,
     historyListState: androidx.compose.foundation.lazy.LazyListState,
     onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
@@ -660,7 +663,6 @@ private fun ChatTab(
     val agent by key(session) { session.agent.collectAsState() }
     val text = strings
     val toasts = LocalPiToast.current
-    val scope = rememberCoroutineScope()
     // The session file a drawer tap asked for, until the conversation on screen reports
     // a file of its own.
     //
@@ -684,22 +686,29 @@ private fun ChatTab(
     // leaves the answer running. What is refused — with a sentence rather than a silent
     // no-op — is starting one more while five are already answering, or while the process
     // budget is full of conversations that are all mid-turn.
-    val open: (PiAgentSession.SessionSummary) -> Unit = remember(host) {
+    //
+    // The launch runs on [rootScope], not on a scope of this page. `startAgent` waits on
+    // the environment and the handshake for seconds, and this page is disposed by a
+    // swipe long before that; a page-scoped launch was cancelled by Compose with
+    // `ForgottenCoroutineScopeException` and the cancellation was then reported as
+    // `AgentStatus.Failed` — "rememberCoroutineScope left the composition" over the
+    // composer. The conversation is what is starting, not the page that asked for it.
+    val open: (PiAgentSession.SessionSummary) -> Unit = remember(host, rootScope) {
         { summary ->
             openedPath = summary.path
             val opened = host.openConversation(summary.path, summary.workspace)
             if (opened == null) toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
-            scope.launch { opened?.startAgent() }
+            rootScope.launch { opened?.startAgent() }
         }
     }
-    val openNew: () -> Unit = remember(host) {
+    val openNew: () -> Unit = remember(host, rootScope) {
         {
             openedPath = null
             val opened = host.newConversation()
             if (opened == null) {
                 toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
             } else {
-                scope.launch { opened.startAgent() }
+                rootScope.launch { opened.startAgent() }
             }
         }
     }
@@ -719,7 +728,7 @@ private fun ChatTab(
             onNewConversation = openNew,
             historyOpen = historyOpen,
             drawer = drawer,
-            drawerScope = drawerScope,
+            rootScope = rootScope,
             currentPath = state.sessionFile ?: openedPath,
             historyListState = historyListState,
             onHistoryOpenChange = onHistoryOpenChange,

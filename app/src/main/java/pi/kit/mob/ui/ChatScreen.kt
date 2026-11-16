@@ -432,8 +432,8 @@ internal fun ChatScreen(
      * gives: a conversation switch must not cancel the close that switch started.
      */
     drawer: ConversationDrawerState,
-    /** The scope the settle animation runs on: the root's, which outlives the page. */
-    drawerScope: CoroutineScope,
+    /** The root's scope: the drawer's settle and a conversation's launch outlive the page. */
+    rootScope: CoroutineScope,
     /**
      * The saved conversation whose row is drawn filled.
      *
@@ -508,7 +508,7 @@ internal fun ChatScreen(
         // a scan it had already done. It now stays composed, parked off the leading edge
         // at progress zero, which is what makes the second open instant.
         drawer.reachable = true
-        drawer.job = drawerScope.launch {
+        drawer.job = rootScope.launch {
             animate(
                 initialValue = drawer.offset,
                 targetValue = target * drawer.width,

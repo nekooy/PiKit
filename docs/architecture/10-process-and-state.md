@@ -28,6 +28,18 @@ The reducer is a pure function over `(ConversationState, PiRecord)`, so the stat
 testable on the JVM against captured wire traffic — no device, no live model. The service owns no
 state, so the UI can bind and unbind freely and a turn keeps running when you leave the app.
 
+**A launch belongs to the conversation, not to the page that asked for it.** The chat
+page's own `rememberCoroutineScope` used to start the process when a conversation was
+opened from the drawer or the composer's `+`; `startAgent` spends seconds preparing the
+environment files and the handshake, and a quick swipe to another destination disposed
+that scope first. Compose cancels the caller with `ForgottenCoroutineScopeException` —
+"rememberCoroutineScope left the composition" — and the launch's catch-all turned that
+`CancellationException` into `AgentStatus.Failed`, so the composer reported an agent
+failure for a page that had simply been left. The launch now runs on the root's scope,
+which outlives every destination, and `startAgent` treats cancellation as an abandoned
+attempt: it closes anything it had already spawned and leaves the conversation `Stopped`
+rather than raising a failure.
+
 ## The entry exists while an answer is being written, and not otherwise
 
 A foreground service exists *because* of its notification: that is the deal Android offers. What

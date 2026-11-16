@@ -28,9 +28,11 @@ import pi.kit.mob.env.TermuxEnv
 import pi.kit.mob.locales.stringsFor
 import pi.kit.mob.pi.NoticeKind
 import pi.kit.mob.terminal.TerminalSessionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -78,6 +80,21 @@ sealed interface AgentStatus {
     data object Running : AgentStatus
     data class Failed(val message: String) : AgentStatus
 }
+
+/**
+ * The failure a launch's throwable describes, or null when it is not a failure at all.
+ *
+ * A `CancellationException` is the coroutine machinery telling a launch that its caller
+ * has gone away — most often Compose's `ForgottenCoroutineScopeException`
+ * ("rememberCoroutineScope left the composition") after the page that asked was swiped
+ * out while the environment was still being prepared. Turning that into
+ * `AgentStatus.Failed` put the sentence in the composer's notice as though pi had
+ * refused to start. The launch was abandoned, not refused; [PiAgentSession.startAgent]
+ * releases what it spawned and leaves the conversation stopped so the next visit can
+ * try again.
+ */
+internal fun agentStartFailure(t: Throwable): AgentStatus.Failed? =
+    if (t is CancellationException) null else AgentStatus.Failed(t.message ?: t.toString())
 
 /**
  * A session command was refused because the agent is mid-turn.
@@ -485,7 +502,29 @@ class PiAgentSession internal constructor(
      * as the host's environment lock and must not be: `ensureEnvironment()` takes that one, and
      * nesting them in the other order somewhere else would be the deadlock.
      */
-    suspend fun startAgent(): Boolean = startLock.withLock { startAgentLocked() }
+    suspend fun startAgent(): Boolean {
+        // Whether *this* call got past the guard and owns the `Starting` it may have
+        // written. A caller that is cancelled while waiting for the mutex must not
+        // clear the state of the start it was waiting behind.
+        var claimed = false
+        return try {
+            startLock.withLock {
+                claimed = _agent.value !is AgentStatus.Running &&
+                    _agent.value !is AgentStatus.Starting
+                startAgentLocked()
+            }
+        } catch (c: CancellationException) {
+            // The caller is often a page's own coroutine, and a swipe disposes that
+            // page while the launch is still unpacking the environment or waiting for
+            // the handshake. The inner catch has already released anything it spawned;
+            // what is left here is the state — `Starting` would otherwise outlive the
+            // abandoned attempt and keep every later start from running.
+            if (claimed && _agent.value is AgentStatus.Starting) {
+                _agent.value = AgentStatus.Stopped
+            }
+            throw c
+        }
+    }
 
     private suspend fun startAgentLocked(): Boolean {
         if (_agent.value is AgentStatus.Running || _agent.value is AgentStatus.Starting) return true
@@ -586,6 +625,7 @@ class PiAgentSession internal constructor(
             return false
         }
 
+        var launched: Process? = null
         return try {
             val process = host.launchFileLock.withLock {
                 withContext(Dispatchers.IO) {
@@ -611,7 +651,7 @@ class PiAgentSession internal constructor(
                                 settingsStore.profiles.snapshots.value,
                             ),
                         ),
-                    )
+                    ).also { launched = it }
                 }
             }
             val newClient = PiRpcClient.from(process).also { it.start() }
@@ -703,8 +743,28 @@ class PiAgentSession internal constructor(
             detach()
             false
         } catch (t: Throwable) {
+            val failure = agentStartFailure(t)
+            if (failure == null) {
+                // Cancelled, not refused. Release what this attempt had already
+                // spawned: `detach` only forgets the client, and a process that had
+                // answered the spawn but not the handshake would otherwise outlive the
+                // launch with no reader. `NonCancellable` because the caller's job is
+                // already cancelled — a suspending close would be cancelled at its
+                // first suspension point.
+                val pending = client
+                val orphan = launched
+                detach()
+                withContext(NonCancellable) {
+                    if (pending != null) {
+                        runCatching { pending.close() }
+                    } else if (orphan != null) {
+                        runCatching { orphan.destroyForcibly() }
+                    }
+                }
+                throw t
+            }
             Log.e(TAG, "Starting the agent failed", t)
-            _agent.value = AgentStatus.Failed(t.message ?: t.toString())
+            _agent.value = failure
             detach()
             false
         }
