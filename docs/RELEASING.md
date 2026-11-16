@@ -217,8 +217,8 @@ users, never for a version people will install and keep.
 
 - [ ] **The sweep is done: everything in `MAINTAINING.md`'s *Periodically* table that has
       a newer upstream is upgraded in this release's own change, before the version
-      bump.** Gradle, AGP, Kotlin and its Compose compiler plugin, AndroidX and the BOM
-      first; then `pi` and the extension in `tools/image-versions.json`, and the
+      bump.** Gradle, AGP, Kotlin and its Compose compiler plugin, AndroidX, the BOM and
+      Miuix first; then `pi` and the extension in `tools/image-versions.json`, and the
       bootstrap's tag and package set in `tools/build-runtime-image.py`; then
       `npm audit --omit=dev` in both vendored trees; then a full
       `python tools/build-apks.py`. Minors and patches in one batch, a major on its own
