@@ -261,20 +261,18 @@ required `show` and the caller holds the last value — `pendingDialog != null` 
 the held copy is what it draws while it leaves. The sessions page's three dialogs and
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
-**Transient messages are the platform's toast**, raised through `LocalPiToast`. The app
-has drawn its own before — a pill, then Miuix's snackbar with a host remembered at the
-root, then a glass capsule above the composer — and each meant this app owned a
-small framework for one sentence: a state holder, a scope, a dismiss-the-previous rule, a
-timer, and a placement constant. The platform already owns all of it: it queues messages,
-places them where its own navigation bar and display say, and honours the user's
-accessibility settings, text scale and per-app notification choice.
-`Toast.makeText(...).show()` is the whole implementation now; the interface
-(`LocalPiToast.show`) outlived every swap, so a page asks for a short sentence and never
-learns which framebuffer it lands in. The cost is the system's card in the system's
-colours, a visual that belongs to the platform rather than to the page's glass; a moment
-is allowed to look like the system's.
+**Transient messages are Miuix's snackbar**, raised through `LocalPiToast`. The platform's
+`Toast` was tried twice, and both times its card — grey, in the system's colours, with the
+launcher icon beside the text on 13+ — read as a notification that happened to land on the
+page rather than as part of the interface. Miuix *has* a snackbar, and this app is made of
+Miuix components: the message is that card, one short sentence in the page's own palette,
+with the host remembered once above every page so the message survives the page that
+raised it. What is paid for it is the small framework the platform would have owned — a
+`SnackbarHostState`, a scope, a dismiss-the-previous rule — held once at the root rather
+than once per call site. The interface (`LocalPiToast.show`) outlived every swap, so a
+page asks for a short sentence and never learns which host draws it.
 
-What the platform toast settles is the split against an in-page notice, by tense — a
+What a snackbar settles is the split against an in-page notice, by tense — a
 *moment* ("Saved", "Agent restarted") is a toast, a *condition* ("the agent failed to
 start", "this folder cannot be read") stays on the page in the error role, because a
 message that disappears after a couple of seconds is the wrong shape for something that
@@ -386,13 +384,13 @@ mostly read "Agent 已就绪" was the interface telling the reader that nothing 
 The state that matters is the one that is *not* the happy path, and that one already has a
 place.
 
-**A toast is a visit from the system, not a part of the page.** The app drew its own glass
-capsule for a while, and it matched the bar's fill; it also made the app own the queue, the
-placement and the timer for a sentence that is never interacted with. The platform's
-`Toast` owns those three, and it brings its own card and colours. That is the cost: a toast
-no longer looks like the page's floating objects. The gain is that a moment no longer has
-a framework of its own, and the interface (`LocalPiToast.show`) did not change. A
-transient message is allowed to look like the system, because it is one.
+**A toast is part of the page, not a visit from the system.** The platform's `Toast` held
+the implementation twice, and both times its card in the system's colours with the
+launcher icon beside the text read as a notification that had landed on the page. Miuix's
+snackbar is the same kind of object as the rest of the interface — its card, its radius,
+its palette — and the host it needs is one piece of the root rather than a framework at
+every call site. The interface (`LocalPiToast.show`) did not change through any of the
+swaps; a page still asks for a short sentence.
 
 **The four-tab bar came first, and its costs are what retired it.** A Miuix
 `NavigationBar` at the root with one item per destination kept every page one tap away,

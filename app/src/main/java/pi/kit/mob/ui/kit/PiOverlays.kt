@@ -1,7 +1,5 @@
 package pi.kit.mob.ui.kit
 
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,13 +12,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.SnackbarDuration
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
@@ -188,48 +191,58 @@ fun PiSheet(
 }
 
 /**
- * The app's ephemeral messages, drawn by the platform.
+ * The app's ephemeral messages, drawn by Miuix's snackbar.
  *
  * A toast is a moment: one short sentence, gone after a couple of seconds, never
- * interacted with. The platform already owns that component — its queue, the placement
- * its navigation bar and display dictate, the accessibility settings and the text
- * scale. The app kept its own glass capsule for a while; keeping it meant keeping a
- * second copy of all of that for one sentence.
- * The message now goes through `Toast.makeText(...).show()` behind [LocalPiToast], the
- * interface a page already used, so no screen learned which framebuffer it lands in.
+ * interacted with. The platform owns that component and the platform's version was
+ * tried twice; on 13+ it draws its own grey card with the launcher icon beside the
+ * text, which reads as a notification that happened to land on the page rather than
+ * as part of the interface. Miuix has a snackbar, and this app is made of Miuix
+ * components, so the moment is Miuix's card in the page's own colours.
+ *
+ * The host is remembered once at the root, above every page, so the message survives
+ * the page that raised it. A second message takes the slot rather than queueing behind
+ * the first — an ephemeral message that arrives five seconds late is about a state the
+ * reader has already left — and Miuix's host draws every visible entry, so the previous
+ * one is dismissed before the new one is shown.
  */
 @Stable
-class PiToast internal constructor(private val context: Context) {
+class PiToast internal constructor(
+    private val scope: CoroutineScope,
+    internal val state: SnackbarHostState,
+) {
 
-    /**
-     * One message, now.
-     *
-     * The platform owns the queue: a second toast replaces the one on screen on most
-     * versions and queues behind it on some, and both are the system's rule rather
-     * than this app's to re-implement. A blank message is dropped — a toast with no
-     * text is a rectangle.
-     */
+    /** One message, now. A blank message is dropped — a card with no text is a rectangle. */
     fun show(message: String) {
         if (message.isBlank()) return
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        scope.launch {
+            state.newestSnackbarData()?.dismiss()
+            state.showSnackbar(message = message, duration = SnackbarDuration.Short)
+        }
     }
 }
 
 /** The toast, provided once at the root. A page that has no provider gets none. */
 val LocalPiToast = staticCompositionLocalOf<PiToast?> { null }
 
-/**
- * Provides a [PiToast] to everything below and draws nothing itself.
- *
- * The context is the composition's, taken once: `Toast` holds it only long enough to
- * post the message to the window manager, so the application context is the right one
- * to keep and the one that cannot leak an Activity.
- */
+/** Creates the host and the scope it shows from; call once, at the root. */
 @Composable
-fun PiToastProvider(content: @Composable () -> Unit) {
-    val context = LocalContext.current.applicationContext
-    val toast = remember(context) { PiToast(context) }
-    CompositionLocalProvider(LocalPiToast provides toast, content = content)
+fun rememberPiToastHost(): PiToast {
+    val scope = rememberCoroutineScope()
+    val state = remember { SnackbarHostState() }
+    return remember(scope, state) { PiToast(scope, state) }
+}
+
+/** Provides [host] to everything below and draws nothing itself. */
+@Composable
+fun PiToastProvider(host: PiToast, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalPiToast provides host, content = content)
+}
+
+/** The snackbar slot: goes in the root scaffold's `snackbarHost`. */
+@Composable
+fun PiToastHostLayer(host: PiToast, modifier: Modifier = Modifier) {
+    SnackbarHost(state = host.state, modifier = modifier)
 }
 
 /**
