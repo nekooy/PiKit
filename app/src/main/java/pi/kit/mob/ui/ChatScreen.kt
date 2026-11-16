@@ -410,6 +410,24 @@ private enum class ComposerSheet {
 
 
 
+/**
+ * The release velocity a drawer settle may start with.
+ *
+ * A spring at a boundary with the thumb's velocity still attached does not know the
+ * edge is the end of the range: it travels past it and comes back, which is the bounce
+ * a leftward pull on the closed page and a rightward pull on the fully open drawer both
+ * showed. No travel means no velocity; a velocity pointing away from the target is not
+ * a reason to go there either.
+ */
+internal fun drawerSettleVelocity(fromPx: Float, targetPx: Float, velocity: Float): Float {
+    val delta = targetPx - fromPx
+    return when {
+        abs(delta) < 0.5f -> 0f
+        delta * velocity <= 0f -> 0f
+        else -> velocity
+    }
+}
+
 @Composable
 internal fun ChatScreen(
     session: PiAgentSession,
@@ -499,6 +517,14 @@ internal fun ChatScreen(
     // rest made every flick stop dead for a frame and then start again, which is the
     // hitch a drawer shows most clearly because the finger has just been moving at
     // 1000+ px a second. A tap passes zero; a drag passes the tracker's own number.
+    //
+    // **A velocity that points away from the target is not a reason to travel.** A drag
+    // that ended against an edge — leftward on the closed page, rightward on the fully
+    // open drawer — has nowhere the gesture can move it, but the spring used to take the
+    // release speed anyway and shoot past the edge before coming back, which is the
+    // bounce the reader saw on both sides. The boundary case gets no travel at all, and
+    // every animated frame is clamped to the drawer's own `[0, width]` range so a fast
+    // settle can never paint outside it.
     val settlePage: (Float, Float) -> Unit = { target, velocity ->
         drawer.job?.cancel()
         onHistoryOpenChange(target > 0f)
@@ -509,13 +535,25 @@ internal fun ChatScreen(
         // a scan it had already done. It now stays composed, parked off the leading edge
         // at progress zero, which is what makes the second open instant.
         drawer.reachable = true
-        drawer.job = rootScope.launch {
-            animate(
-                initialValue = drawer.offset,
-                targetValue = target * drawer.width,
-                initialVelocity = velocity,
-                animationSpec = PiMotion.drawerSettle,
-            ) { value, _ -> drawer.offset = value }
+        val from = drawer.offset
+        val targetPx = target * drawer.width
+        val delta = targetPx - from
+        if (abs(delta) < 0.5f) {
+            // Already there: no animation, and in particular no velocity to overshoot
+            // a boundary the gesture never actually crossed.
+            drawer.offset = targetPx
+        } else {
+            val launchVelocity = drawerSettleVelocity(from, targetPx, velocity)
+            drawer.job = rootScope.launch {
+                animate(
+                    initialValue = from,
+                    targetValue = targetPx,
+                    initialVelocity = launchVelocity,
+                    animationSpec = PiMotion.drawerSettle,
+                ) { value, _ ->
+                    drawer.offset = value.coerceIn(0f, drawer.width.toFloat())
+                }
+            }
         }
     }
 
