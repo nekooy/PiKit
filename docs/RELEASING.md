@@ -3,6 +3,11 @@
 Publishing a build is: bump one version in one file, commit it, push, then run one
 workflow. Everything else is a check that the workflow does for you.
 
+**A local APK is not a release.** When the user asks to publish — “发新版本”, “发布” or
+“release <version>” — the whole sequence is the task: push the release commit, dispatch
+`release.yml`, and apply `.release/notes-<version>.md` after it publishes. Stopping at a
+locally built APK is the half-done result this paragraph exists to prevent.
+
 **The push itself starts nothing.** Both workflows are dispatch-only (AGENTS.md): what
 they cannot check for themselves is the hand-run checklist under *Before you dispatch*,
 and the release job runs every test and checker `tools/build-apks.py` runs.

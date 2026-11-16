@@ -175,7 +175,8 @@ a document is exactly the change that forgets them.
   visible from the run's own output, while the release itself is public the moment the run
   ends: a body invented from the previous release's shape is published before anyone can
   catch it.
-- **Nothing here pushes, tags or branches on its own.** See *Commits* above.
+- **Nothing here pushes, tags or branches unasked.** A request to publish is the
+  asking; see *Commits* above.
 
 ## Hard constraints — do not "fix" these
 
@@ -378,7 +379,11 @@ slice by hunks. The rule now is the opposite shape:
 - **`git push` still needs an explicit yes, every time.** Local commits are
   cheap to rewrite and invisible to anyone else; a pushed one is neither. A
   turn that ends with committed-but-unpushed work says so in its summary —
-  which commits are on `main` locally, awaiting the user's own push.
+  which commits are on `main` locally, awaiting the user's own push. **A request
+  to publish is that yes for the whole release sequence**: “发新版本”, “发布” or
+  “release <version>” means bump, commit, push `main`, dispatch `release.yml`,
+  then apply `.release/notes-<version>.md` with `gh release edit`. A local APK
+  plus an unpushed commit is a half-done release, not a release.
 - **Everything else that rewrites state stays ask-first.** `git stash`,
   `git checkout`/`restore`, branch creation, tag creation, `git reset`, `git
   rebase`, `git init` — none of these is part of "finishing a task". Read-only
