@@ -996,8 +996,9 @@ internal fun ChatScreen(
                     // `background`, not `surface`: the card over this panel is `surface`
                     // and the dark scheme's `surface` is black, so a surface panel made
                     // the two halves of the screen one colour. `background` is #242424
-                    // there and white in the light scheme, a step from the #F0F0F0 card,
-                    // so the panel is one field and the page is still the object on it.
+                    // there and #F7F7F7 in the light scheme, a step from the #F0F0F0
+                    // card, so the panel is one field and the page is still the object
+                    // on it.
                     // The box this panel is drawn in paints the same role, so the strips
                     // of ground around the card belong to the same field: the panel is
                     // not a second colour, it is where that field is widest.
