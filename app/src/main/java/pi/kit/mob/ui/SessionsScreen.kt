@@ -3,6 +3,7 @@ package pi.kit.mob.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -1507,7 +1508,9 @@ private val ROW_CORNER = 14.dp
  * container: a fill alone was the pill's own answer to "a fill alone reads as a
  * highlighted row", and with the glass pair it reads as the header's kind of object,
  * which is what a reader who has just left that page expects a floating control to look
- * like.
+ * like. The one difference is the hairline `outline`: its ground is the drawer's
+ * `background`, white in the light scheme, so a white fill with no shadow has no edge
+ * there. The header's capsules sit on `surface` and need none.
  */
 @Composable
 private fun SettingsPill(
@@ -1519,6 +1522,7 @@ private fun SettingsPill(
     val shape = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
+            .border(1.dp, MiuixTheme.colorScheme.outline, shape)
             .clip(shape)
             .background(PiGlass.fill())
             .clickable {

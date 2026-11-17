@@ -309,7 +309,10 @@ otherwise.
 panel — the way into the settings — is a `PiGlass.fill()` pill, the fill the bar's marks are
 drawn with, because it is the same kind of object: a control floating over a page rather
 than a row on it. It used to be an opaque `surfaceContainer` pill, and that made it a
-different kind of object from the capsules one panel away.
+different kind of object from the capsules one panel away. Its one difference from the
+header's capsules is a hairline `outline`: the drawer's `background` is white in the light
+scheme, so a white fill with no shadow would have no edge there, while the header's
+capsules sit on the grey `surface`.
 
 **A bar with no bar in it.** The reference drawing the page follows has no strip across
 the top: the content scrolls *under* the marks, fades out as it reaches them, and the
