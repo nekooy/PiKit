@@ -71,7 +71,6 @@ import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiGlass
-import pi.kit.mob.ui.kit.glassLift
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
@@ -1503,12 +1502,12 @@ private val ROW_CORNER = 14.dp
  * `Settings` both fit without a fixed measure and without the label touching either end.
  *
  * **The same object as the chat page's capsules**, because it is the same kind of thing:
- * a control that floats over a page rather than a row on it. It carries [PiGlass.fill]
- * and [glassLift] — the raised near-black the header's circle and pill wear, and the
- * hand-drawn blurred shadow under them — instead of an opaque container and an elevation
- * shadow. Those two were the pill's own answer to "a fill alone reads as a highlighted
- * row"; with the glass pair it reads as the header's kind of object, which is what a
- * reader who has just left that page expects a floating control to look like.
+ * a control that floats over a page rather than a row on it. It carries [PiGlass.fill],
+ * the raised near-black the header's circle and pill wear, rather than an opaque
+ * container: a fill alone was the pill's own answer to "a fill alone reads as a
+ * highlighted row", and with the glass pair it reads as the header's kind of object,
+ * which is what a reader who has just left that page expects a floating control to look
+ * like.
  */
 @Composable
 private fun SettingsPill(
@@ -1519,10 +1518,6 @@ private fun SettingsPill(
     val shape = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
-            // After the lift, so the blurred silhouette is drawn *under* the fill and
-            // clipped to nothing of its own: the same order the header's capsules use
-            // (`glassLift`, `clip`, `background`).
-            .glassLift(shape)
             .clip(shape)
             .background(PiGlass.fill())
             .clickable(onClick = onClick)

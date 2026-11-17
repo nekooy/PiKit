@@ -1,7 +1,5 @@
 package pi.kit.mob.ui.kit
 
-import android.graphics.Paint
-import android.graphics.BlurMaskFilter
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -11,16 +9,8 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.asAndroidPath
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -173,7 +163,7 @@ fun DarkNavigationBar() {
  *
  * The reference drawing's top bar is two capsules and its composer is a row of chips,
  * and all four are *white* objects on a grey page in the light scheme — the same raised
- * step an answer card takes — and a lifted near-black in the dark one. The first attempt
+ * step an answer card takes — and a raised near-black in the dark one. The first attempt
  * used [PiTone.inset], which is a *wash of the ink*: right for quoted material and wrong
  * here, because a control that floats reads as a surface of its own rather than as
  * shading on the page.
@@ -191,8 +181,8 @@ fun DarkNavigationBar() {
  * light scheme gets from white on #F7F7F7. It is a palette role rather than a second
  * literal so a theme change moves it with everything else.
  *
- * The lift stays: an opaque fill still needs its shadow to read as an object, and the
- * shadow is what separates a capsule from a card whose fill is close to it.
+ * The fill alone carries the separation from the page: no shadow is drawn under a
+ * floating control, so the raise is the colour step and nothing else.
  *
  * ## What it is not
  *
@@ -207,83 +197,13 @@ object PiGlass {
     @Composable
     fun fill(): Color {
         val dark = MiuixTheme.colorScheme.surface.luminance() < DARK_BASE_LUMINANCE
-        // A near-white lift, not white: #2D2D2D is visible against both the black page
+        // A near-white step, not white: #2D2D2D is visible against both the black page
         // and the #242424 card, while white would make every capsule the brightest
         // object on screen.
         return if (dark) MiuixTheme.colorScheme.surfaceContainerHighest else Color.White
     }
 
-    /** The lift under a floating control, which is what makes its fill read as raised. */
-    val elevation: Dp = 5.dp
-
 }
-
-/**
- * The lift under a floating control, drawn by hand.
- *
- * **Not a shadow elevation.** Both routes to one — `Modifier.shadow` and a
- * `graphicsLayer { shadowElevation }` — draw a *squircle* whatever shape they are given:
- * a circle's shadow came out with flat corners, and because the glass fill is translucent
- * that silhouette showed *through* it as a white block with grey corners. Measured at the
- * chat bar's leading capsule, and reported as "why is there a white block in the two-line
- * button".
- *
- * So the shadow is a blurred fill of the shape's own outline, drawn behind the content
- * and **not offset downward**: an elevation shadow leans away from the light, and on a
- * floating control that reads as a heavier underside — the report "the dialog's shadow is
- * not even, the bottom is darker". This one is concentric.
- * `MaskFilter` is the platform's blur — the one thing here that Compose's own draw API
- * cannot do without a render effect per frame — and it follows any outline: a circle, a
- * pill, a rounded rectangle.
- */
-fun Modifier.glassLift(
-    shape: Shape,
-    elevation: Dp = PiGlass.elevation,
-    alpha: Float = GLASS_SHADOW_ALPHA,
-): Modifier = drawBehind {
-    val outline = shape.createOutline(size, layoutDirection, this)
-    val blur = elevation.toPx() * 1.4f
-    drawIntoCanvas { canvas ->
-        val paint = Paint().apply {
-            color = android.graphics.Color.BLACK
-            this.alpha = (alpha * 255).toInt()
-            maskFilter = BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL)
-            isAntiAlias = true
-        }
-        val native = canvas.nativeCanvas
-        native.save()
-        when (outline) {
-            is Outline.Rectangle -> {
-                val r = outline.rect
-                native.drawRect(r.left, r.top, r.right, r.bottom, paint)
-            }
-            is Outline.Rounded -> {
-                val r = outline.roundRect
-                val radius = r.topLeftCornerRadius.x
-                native.drawRoundRect(r.left, r.top, r.right, r.bottom, radius, radius, paint)
-            }
-            is Outline.Generic -> native.drawPath(outline.path.asAndroidPath(), paint)
-        }
-        native.restore()
-    }
-}
-
-/**
- * The same lift for a surface that paints its own opaque fill.
- *
- * The hand-drawn version blurs the outline with a `MaskFilter`, and a blur that wide on a
- * thousand-pixel capsule is re-rasterised on every frame it is drawn — measured while the
- * keyboard closed, that was a 48 ms frame. An opaque fill hides the silhouette a shadow
- * elevation gets wrong, so an opaque surface can have the cheap one: same depth, no
- * per-frame blur, and no white block because there is nothing translucent to show it
- * through.
- */
-fun Modifier.solidLift(shape: Shape, elevation: Dp = PiGlass.elevation): Modifier =
-    graphicsLayer {
-        this.shape = shape
-        clip = false
-        shadowElevation = elevation.toPx()
-    }
 
 object PiTone {
 
@@ -404,9 +324,6 @@ private const val PROMPT_SHARE_DARK = 0.34f
  * how far apart two roles were, this one asks how much accent a base can absorb.
  */
 private const val DARK_BASE_LUMINANCE = 0.2f
-
-/** How dark the blurred shadow under a floating control is drawn. */
-private const val GLASS_SHADOW_ALPHA = 0.20f
 
 /**
  * How much of the surface's own ink a quotation's fill is washed with.

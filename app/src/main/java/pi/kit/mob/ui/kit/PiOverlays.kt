@@ -217,9 +217,9 @@ fun PiSheet(
  * the system's colours with the launcher icon beside the text read as a notification
  * that had landed on the page. Miuix's snackbar was also tried; it is a full-width bar
  * pinned to the bottom edge, which is the wrong shape for a remark that belongs beside
- * the composer. The message is therefore the app's own glass capsule: the same fill and
- * lift as the bar's capsules, above the composer rather than over it, and read as one
- * floating object among the page's other floating objects.
+ * the composer. The message is therefore the app's own glass capsule: the same fill as
+ * the bar's capsules, above the composer rather than over it, and read as one floating
+ * object among the page's other floating objects.
  *
  * The host is remembered once at the root, above every page, so the message survives
  * the page that raised it. A second message takes the slot rather than queueing behind
@@ -321,7 +321,6 @@ fun PiToastProvider(content: @Composable () -> Unit) {
             Box(
                 Modifier
                     .widthIn(max = TOAST_MAX_WIDTH)
-                    .glassLift(RoundedCornerShape(percent = 50), 8.dp)
                     .clip(RoundedCornerShape(percent = 50))
                     .background(PiGlass.fill())
                     .padding(horizontal = 18.dp, vertical = 10.dp),

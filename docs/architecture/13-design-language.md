@@ -262,8 +262,8 @@ the held copy is what it draws while it leaves. The sessions page's three dialog
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
 **Transient messages are the app's glass capsule**, raised through `LocalPiToast`. It is
-the same fill and lift as the bar's capsules — a `PiGlass.fill()` pill on `glassLift` —
-placed above the composer rather than over it. Three other implementations were tried:
+the same fill as the bar's capsules — a `PiGlass.fill()` pill — placed above the composer
+rather than over it. Three other implementations were tried:
 the platform's `Toast` twice, whose card in the system's colours with the launcher icon
 beside the text reads as a notification that landed on the page, and Miuix's snackbar
 once, which is a full-width bar pinned to the window's bottom edge where the composer
@@ -294,14 +294,10 @@ conversation is what the app is for; a bar of four equally weighted destinations
 otherwise.
 
 **The drawer's foot wears the same capsule.** The one control at the bottom of the history
-panel — the way into the settings — is a `PiGlass.fill()` pill on `glassLift`, the pair the
-bar's marks are drawn with, because it is the same kind of object: a control floating over
-a page rather than a row on it. It used to be an opaque `surfaceContainer` pill on
-`solidLift` — the cheap lift, chosen for a control that floats over a scrolling list — and
-that made it a different kind of object from the capsules one panel away. The blur is
-redrawn as the list scrolls under it; the header's capsules accept the same cost on a page
-that scrolls under them, and a way out of the list that looks like the bar it was reached
-from is worth more than the frames.
+panel — the way into the settings — is a `PiGlass.fill()` pill, the fill the bar's marks are
+drawn with, because it is the same kind of object: a control floating over a page rather
+than a row on it. It used to be an opaque `surfaceContainer` pill, and that made it a
+different kind of object from the capsules one panel away.
 
 **A bar with no bar in it.** The reference drawing the page follows has no strip across
 the top: the content scrolls *under* the marks, fades out as it reaches them, and the
@@ -309,7 +305,7 @@ marks are the only opaque objects there. That is three decisions, and each was m
 because the strip version was worse:
 
 - **The marks sit in opaque capsules** (`PiGlass.fill()`: white in the light scheme and
-  `surfaceContainerHighest`, #2D2D2D, in the dark one) with a 5dp lift under them. The first
+  `surfaceContainerHighest`, #2D2D2D, in the dark one). The first
   attempt used `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong for
   a control, because the capsule then read as shading on the page instead of as an object
   above it. The fill was white at an alpha for a while — 80%, then 90%, then 100% over the
@@ -320,8 +316,7 @@ because the strip version was worse:
   the white an answer card would use, and the dark scheme paints the palette's top container
   role — one step above the card (`surfaceContainer`, #242424) and two above the page
   (black) — which is the same "raised by one step" the light scheme gets from white on
-  #F7F7F7. The lift stays: an opaque fill still needs its shadow to read as an object, and
-  that shadow is what separates a capsule from a card whose fill is close to it.
+  #F7F7F7. The fill alone is the raise: no shadow is drawn around it.
 - **The row sits a little lower than a bar's.** The capsules' top edge is 22dp under the
   status bar — a bar's row would start at 0 — because the reference keeps the handle clear
   of the clock's own line. That is also why the leading capsule is a circle and the
@@ -336,19 +331,16 @@ because the strip version was worse:
   The touch target is the mark's own box — 42dp, two above the library's `IconButton`
   floor of 40dp — and not the platform's 48dp. The drawer's selection controls go one
   step smaller still (36dp with 20dp glyphs), for the width reason further down.
-- **The lift is drawn, not `Modifier.shadow`, and there are two of them.** On this Compose
-  version the modifier's shadow does not follow the shape it is given: a circle's shadow was
-  drawn as a squircle, and while the capsules' fill was translucent that silhouette showed
-  *inside* the capsule — a white block with grey corners, measured at the leading capsule and
-  read as "the button has a white block in it". `solidLift` is a `graphicsLayer` with
-  `shadowElevation` for a surface that paints an opaque fill: the fill hides the squircle, so
-  the platform's silhouette cannot betray the shape, and the shadow is the layer it already
-  rides on. `glassLift` draws a blurred fill of the shape's *own* outline with a `MaskFilter`,
-  which is the exact silhouette and is re-rasterised on every frame it is drawn — the right
-  trade for the 42dp header capsules, the composer's chips and the toast, and the wrong one
-  for a surface as wide as the window: measured while the keyboard closed, the blur under the
-  composer's field was a **48 ms frame**. The composer's field therefore takes `solidLift`,
-  and the small floating marks keep `glassLift` for its exact outline.
+- **No floating object carries a shadow.** Its fill is the whole of the raise: a capsule,
+  a chip and the composer's field are separated from the page by `PiGlass.fill()`'s colour
+  step alone. Two lifts were drawn here once, and both are gone: `glassLift` blurred the
+  shape's *own* outline with a `MaskFilter`, and `solidLift` gave an opaque surface a
+  `graphicsLayer` elevation. What they settled is kept — `Modifier.shadow` draws a squircle
+  whatever shape it is given (a circle's shadow came out with flat corners, and against a
+  translucent capsule that silhouette showed through as a white block with grey corners),
+  and the hand-drawn blur was re-rasterised on every frame (measured under the composer's
+  field while the keyboard closed, a **48 ms frame**). Neither is needed for a filled
+  surface, so the fill now carries the separation by itself.
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
@@ -387,8 +379,8 @@ The state that matters is the one that is *not* the happy path, and that one alr
 place.
 
 **A toast is part of the page, not a visit from the system.** The app draws the capsule
-itself: `PiGlass.fill()` on `glassLift`, the same pair the bar's marks use, so it reads
-as one of the page's floating objects. The platform's `Toast` held the implementation
+itself: `PiGlass.fill()`, the fill the bar's marks use, so it reads as one of the page's
+floating objects. The platform's `Toast` held the implementation
 twice, and Miuix's snackbar once; the first brought its own card in the system's colours
 with the launcher icon beside the text, and the second was a full-width bar on the
 window's bottom edge. Both read as a notification that had landed on the page. The host

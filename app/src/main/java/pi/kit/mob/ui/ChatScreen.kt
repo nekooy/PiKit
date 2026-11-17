@@ -88,7 +88,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -188,8 +187,6 @@ import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiGlass
-import pi.kit.mob.ui.kit.glassLift
-import pi.kit.mob.ui.kit.solidLift
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
@@ -1414,7 +1411,6 @@ private fun ChatHeader(
         Box(
             modifier = Modifier
                 .size(HEADER_MARK_SIZE)
-                .glassLift(CircleShape)
                 .clip(CircleShape)
                 .background(PiGlass.fill())
                 .clickable(onClick = onOpenSessions),
@@ -1440,7 +1436,6 @@ private fun ChatHeader(
         val trailingShape = RoundedCornerShape(percent = 50)
         Row(
             modifier = Modifier
-                .glassLift(trailingShape)
                 .clip(trailingShape)
                 .background(PiGlass.fill())
                 // **No vertical padding**, and the height is the reason: a capsule's
@@ -2232,13 +2227,7 @@ private fun ChatPage(
                             // 40dp pill by default, so the two controls the thumb reaches
                             // for are the same shape without either of them stating a
                             // radius of its own.
-                            .size(40.dp)
-                            // **After** the size and the padding: the lift is a drawing
-                            // layer, and one declared ahead of them is the size of
-                            // everything that follows it. Measured, the shadow was a
-                            // 40dp circle drawn around a box 10dp larger and 10dp higher
-                            // — the "the jump button's shadow is broken" report.
-                            .glassLift(CircleShape),
+                            .size(40.dp),
                         backgroundColor = PiGlass.fill(),
                     ) {
                         Icon(
@@ -4882,13 +4871,7 @@ private fun Composer(
                 shape = RoundedCornerShape(PiCorner.radius),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    // The opaque variant of the lift, not the hand-drawn one: this
-                    // surface paints `surfaceContainer` (there is nothing translucent
-                    // for a shadow silhouette to show through), and the field is on
-                    // screen through every keyboard frame and every keystroke — the
-                    // blur was re-rasterised on every one of them.
-                    .solidLift(RoundedCornerShape(PiCorner.radius)),
+                    .padding(horizontal = 12.dp),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
@@ -5648,9 +5631,6 @@ private fun ControlChipBase(
             // rectangle behind a pill.
             modifier = Modifier
                 .heightIn(min = CHIP_HEIGHT)
-                // The same lift as the header's capsules, so the page has one kind of
-                // floating object rather than two depths of it.
-                .glassLift(RoundedCornerShape(percent = 50))
                 .clip(RoundedCornerShape(percent = 50))
                 .clickable(onClick = onClick),
             shape = RoundedCornerShape(percent = 50),
