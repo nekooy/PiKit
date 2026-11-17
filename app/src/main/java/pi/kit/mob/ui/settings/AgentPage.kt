@@ -735,8 +735,10 @@ private fun InstructionsEditor(
  * when chat mode is the mode in force, asks the current conversation to restart — pi
  * reads its system prompt once, at process start.
  *
- * The default is a bare placeholder. A blank save is normalised back to it by the
- * store, which is also why the button says "restore default" rather than "clear".
+ * The default is the `{{time}}` token, so an untouched install injects the current
+ * time and nothing else. Empty is still a real answer — the runtime's chat-prompt
+ * extension turns it into no system prompt — and "Restore default" restores the time
+ * token rather than an unremovable example.
  */
 @Composable
 private fun ChatPromptEditor(

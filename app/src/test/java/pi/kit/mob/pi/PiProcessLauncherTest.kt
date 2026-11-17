@@ -29,6 +29,7 @@ class PiProcessLauncherTest {
         noSession: Boolean = false,
         mode: AgentMode = AgentMode.WORK,
         systemPromptFile: String? = null,
+        chatPromptExtension: String? = null,
     ) = PiLaunchOptions(
         nodePath = "/prefix/bin/node",
         cliEntry = "/prefix/cli.js",
@@ -43,6 +44,7 @@ class PiProcessLauncherTest {
         noSession = noSession,
         mode = mode,
         systemPromptFile = systemPromptFile,
+        chatPromptExtension = chatPromptExtension,
     )
 
     private fun List<String>.valueOf(flag: String): String? {
@@ -141,6 +143,7 @@ class PiProcessLauncherTest {
             options(
                 mode = AgentMode.CHAT,
                 systemPromptFile = "/home/.pikit/chat-system-prompt.txt",
+                chatPromptExtension = "/prefix/share/pikit/pikit-chat-prompt.ts",
             ),
         )
 
@@ -157,6 +160,13 @@ class PiProcessLauncherTest {
         assertEquals(
             "/home/.pikit/chat-system-prompt.txt",
             command.valueOf("--system-prompt"),
+        )
+        // `--no-extensions` closes discovery, not an explicit file: pi 1.5.0 loads
+        // the CLI extension paths regardless, and this is the one extension that
+        // makes the system prompt exact (no pi `<cwd>` block, and empty means none).
+        assertEquals(
+            "/prefix/share/pikit/pikit-chat-prompt.ts",
+            command.valueOf("--extension"),
         )
         assertTrue(
             "the old coding prompt append must not leak into chat mode",
@@ -178,6 +188,7 @@ class PiProcessLauncherTest {
             "--no-context-files",
             "--no-mcp",
             "--system-prompt",
+            "--extension",
         )) {
             assertTrue("$flag belongs to chat mode only", command.none { it == flag })
         }

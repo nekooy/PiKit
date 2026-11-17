@@ -96,13 +96,13 @@ class SettingsStoreTest {
     }
 
     @Test
-    fun `a blank chat prompt falls back to the current-time default`() {
+    fun `a blank chat prompt is kept as no prompt`() {
         val store = newStore()
 
         val resolved = store.update { it.copy(chatSystemPrompt = "   ") }
 
-        assertEquals(DEFAULT_CHAT_SYSTEM_PROMPT, resolved.chatSystemPrompt)
-        assertEquals(DEFAULT_CHAT_SYSTEM_PROMPT, store.read().chatSystemPrompt)
+        assertEquals("   ", resolved.chatSystemPrompt)
+        assertEquals("   ", store.read().chatSystemPrompt)
     }
 
     @Test

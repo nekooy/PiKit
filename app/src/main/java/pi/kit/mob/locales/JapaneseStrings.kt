@@ -396,13 +396,13 @@ internal object JapaneseStrings : Strings {
         override val chatMode = "会話モード"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "引き出しの切り替えで「会話」を選ぶと、ツール・拡張・スキル・AGENTS.md を読み込まず、下のシステムプロンプトだけを送ります"
+            "引き出しの切り替えで「会話」を選ぶと、ツール・拡張・スキル・AGENTS.md を読み込まず、下のシステムプロンプトだけを送ります。空なら何も送りません"
         override val chatSystemPromptTitle = "システムプロンプト"
         override val chatSystemPromptSubtitle =
-            "{{time}} は現在時刻に置き換わります。保存するとエージェントを再起動します"
+            "{{time}} は現在時刻に置き換わります。空ならシステムプロンプトを送りません。保存するとエージェントを再起動します"
         override val chatSystemPromptEditorHint =
-            "{{time}} を時刻を入れたい位置に置いてください。起動時に現在時刻へ置き換わります。" +
-                "空のまま保存すると既定に戻ります。"
+            "ここに書いた内容が会話モード唯一のシステムプロンプトです。既定は {{time}}（現在時刻）だけで、" +
+                "空なら何も送りません。{{time}} を時刻を入れたい位置に置いてください。起動時に現在時刻へ置き換わります。"
         override val chatSystemPromptRestore = "既定に戻す"
         override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
         override val agentContextLeadTitle = "コンテキストの説明"

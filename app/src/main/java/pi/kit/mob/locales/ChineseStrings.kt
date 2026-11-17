@@ -398,11 +398,13 @@ internal object ChineseStrings : Strings {
         override val chatMode = "聊天模式"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "抽屉底部切到「聊天」后，不加载工具、扩展、技能和 AGENTS.md，只发送下面这份系统提示词"
+            "抽屉底部切到「聊天」后，不加载工具、扩展、技能和 AGENTS.md；系统提示词只发送下面这一份，留空就完全不发"
         override val chatSystemPromptTitle = "系统提示词"
-        override val chatSystemPromptSubtitle = "{{time}} 替换为当前时间；保存后重启 Agent"
+        override val chatSystemPromptSubtitle =
+            "{{time}} 替换为当前时间；留空则不发送系统提示词；保存后重启 Agent"
         override val chatSystemPromptEditorHint =
-            "把 {{time}} 放在想注入时间的位置；启动时会替换成当前时间。留空保存会恢复默认。"
+            "这里写的内容就是聊天模式唯一的系统提示词。默认只有 {{time}}（当前时间）；留空表示完全不发送。" +
+                "把 {{time}} 放在想注入时间的位置；启动时会替换成当前时间。"
         override val chatSystemPromptRestore = "恢复默认"
         override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
         override val agentContextLeadTitle = "上下文说明"

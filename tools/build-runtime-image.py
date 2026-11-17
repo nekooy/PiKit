@@ -24,9 +24,9 @@ The three archives are two layers, and the split is the update model:
     Termux way, through `pkg upgrade`; an app update that does not change
     these bytes never re-extracts them.
   * The **content layer** (`content.zip`) is what this app owns: pi, the
-    web-access extension, the permission extension, the relocator and their wrappers
-    ([CONTENT_PATHS]). An app update replaces these paths point-wise in
-    place, in seconds, without touching a single installed package.
+    web-access extension, the permission extension, the chat-prompt extension, the
+    relocator and their wrappers ([CONTENT_PATHS]). An app update replaces these paths
+    point-wise in place, in seconds, without touching a single installed package.
 
 Each layer carries its own revision digest so one can move without the
 other; see [compute_seed_revision] and [compute_content_revision].
@@ -269,10 +269,11 @@ WEB_ACCESS_METADATA = "share/pikit/web-access.json"
 #:
 #: `CONTENT_PATHS` is the update boundary. Everything here is written by this
 #: build rather than by a dpkg package — pi and its dependencies, the bundled
-#: web-access extension, the permission extension, the package relocator and the
-#: wrappers that reach them — so an app update may replace exactly these paths
-#: and must not touch anything else in the prefix: what lives beside them is a
-#: registered package's file, and dpkg is the only thing allowed to move those.
+#: web-access extension, the permission extension, the chat-prompt extension, the
+#: package relocator and the wrappers that reach them — so an app update may replace
+#: exactly these paths and must not touch anything else in the prefix: what lives
+#: beside them is a registered package's file, and dpkg is the only thing allowed to
+#: move those.
 #:
 #: Roots, not files: a root is replaced wholesale (deleted and re-created from
 #: the archive), so a file a new pi version *drops* cannot survive the update
@@ -1694,6 +1695,7 @@ def install_relocator(overlay_root: Path) -> None:
     )
 
     install_permissions_extension(overlay_root)
+    install_chat_prompt_extension(overlay_root)
 
     apt_conf = overlay_root / "etc" / "apt" / "apt.conf.d"
     apt_conf.mkdir(parents=True, exist_ok=True)
@@ -1836,6 +1838,32 @@ def install_permissions_extension(overlay_root: Path) -> None:
     log("staged the permission extension (share/pikit)")
 
     install_storage_self_test(overlay_root)
+
+
+def install_chat_prompt_extension(overlay_root: Path) -> None:
+    """
+    Installs the extension that makes chat mode's system prompt exact.
+
+    pi appends a `<cwd>` block to every `--system-prompt` document, and an empty
+    document makes it fall back to the coding-assistant preamble. Chat mode's
+    promise is the reader's document and nothing else, including no document at
+    all, so this extension overrides the whole prompt in `before_agent_start`.
+    It stays inert unless `PIKIT_CHAT_PROMPT_FILE` is set, which only a chat launch
+    does.
+
+    It lives in the content layer rather than in `$HOME` because it is part of the
+    app's launch behaviour, not a user resource: an app update replaces it with the
+    APK that knows how to pass `--extension`, and a hand-run `pi` never sees it
+    unless someone names the file.
+    """
+    source = REPO_ROOT / "tools" / "pikit-chat-prompt.ts"
+    if not source.is_file():
+        raise SystemExit(f"missing {source}; it is part of the build, not generated")
+
+    destination = overlay_root / "share" / "pikit" / "pikit-chat-prompt.ts"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+    log("staged the chat-prompt extension (share/pikit)")
 
 
 def install_storage_self_test(overlay_root: Path) -> None:

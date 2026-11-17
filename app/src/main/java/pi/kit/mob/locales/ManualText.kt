@@ -568,13 +568,15 @@ nothing else.
   loads no tools, extensions, skills, prompt
   templates or `AGENTS.md`; before its first
   message the only leading context is the system
-  prompt below.
+  prompt below — by default just the current
+  time — and if that document is empty, there is
+  no leading context at all.
 - **System prompt**: the one editable
-  document. Its default is only the current
-  time. `{{time}}` in the editor is where the
-  time goes — move it to move the injection
-  point; the actual timestamp is filled in at
-  launch.
+  document. It starts with `{{time}}`, the
+  current time; an empty document sends nothing.
+  `{{time}}` in the editor is where the time
+  goes — move it to move the injection point;
+  the actual timestamp is filled in at launch.
 - **Switching** changes this conversation's
   mode; it does not open a new one. Its messages
   and session file stay, and the relaunched

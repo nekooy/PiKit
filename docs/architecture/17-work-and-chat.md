@@ -6,8 +6,8 @@ PiKit has two agents, and the choice is a launch mode rather than a skin over on
 process. **Work mode** is the agent this app has always had: pi's coding-assistant
 prompt, `AGENTS.md`, the bundled web-access extension, and the seven built-in tools.
 **Chat mode** is a plain conversation: before its first message the only instruction text
-is one editable system-prompt document, and pi starts with every source of ambient
-resources switched off.
+is one editable system-prompt document — or nothing at all when that document is empty —
+and pi starts with every source of ambient resources switched off.
 
 The mode belongs to a **conversation**, not to the app. `SessionModeStore` keeps one
 entry per session file; a conversation opened from the drawer reads its own record,
@@ -58,6 +58,12 @@ agent is started with:
 | `--no-mcp` | the built-in MCP support, restated because it is itself an extension |
 | `--system-prompt <file>` | pi's coding-assistant preamble |
 
+The flags leave exactly one extension loadable: `--extension
+share/pikit/pikit-chat-prompt.ts`. pi honours an explicit `--extension` even beside
+`--no-extensions` (`loadCurrentExtensionSet` uses the CLI paths when discovery is
+off), and that file is what makes the prompt exact; see the section below. It is the
+one door chat mode keeps open because the alternative is a prompt pi has decorated.
+
 The flags are a single launch's, not a second settings file: the next work launch is
 ordinary again without undoing anything. `--system-prompt` is passed a file rather
 than text because the prompt is a document the reader may make long, and argv is
@@ -70,6 +76,33 @@ controls for an agent with tools; a chat process has none, so offering them woul
 control that cannot honour its label. Camera and picture attachments stay — they are
 part of the message, not a tool the model calls.
 
+## The prompt is exact, including empty
+
+`--system-prompt` is not enough on its own, and both failure modes were measured
+against the bundled pi 1.5.0 through a local OpenAI-compatible capture:
+
+- pi appends a `<cwd>` block to every custom prompt. A one-line document arrived at
+  the provider as that line, a blank line, and
+  `<cwd>/data/user/0/pi.kit.mob/files/home/workspace</cwd>` in the same `developer`
+  message. It is true of a coding agent and it is context a chat reader did not write.
+- An empty `--system-prompt` file is read as "no custom prompt", and pi restores its
+  whole coding-assistant preamble — the exact thing chat mode exists to replace.
+
+The mode therefore ships `share/pikit/pikit-chat-prompt.ts`, loaded by that explicit
+`--extension`. Its `before_agent_start` returns
+`{ systemPrompt: <the file's text> }`, which replaces the complete prompt for the
+turn. Measured with the same capture: the one-line document then arrived alone, and an
+empty document produced a request with no system or developer message at all. The
+extension reads `PIKIT_CHAT_PROMPT_FILE`, set only by a chat launch, so work mode
+never activates it. `writeChatPrompt` writes a single space for an empty document —
+pi reads a truly empty `--system-prompt` as "no custom prompt", and the space keeps
+the fallback on a blank prompt rather than on the coding preamble if the extension
+ever fails to load; the extension trims that space back to an empty system prompt.
+
+Patching pi's bundle to remove the `<cwd>` append was rejected: the bundle is a
+pinned upstream artifact, the patch would have to be re-derived on every pi bump, and
+an extension hook is pi's supported way to replace a prompt.
+
 ## The prompt is a template, never a timestamp
 
 The editor stores the text the reader writes, including `{{time}}`. That token is
@@ -77,11 +110,10 @@ replaced at launch with `yyyy-MM-dd HH:mm:ss XXX` in the device's zone. Storing 
 rendered timestamp instead was rejected twice over: it would be stale by the next
 process, and the reader could not say where in their document the time belongs.
 
-The default is the token alone, so an untouched install injects only the current time.
-Saving a blank field normalises back to that default instead of writing an empty
-string: pi reads an empty custom prompt as "no custom prompt" and would restore its
-coding-assistant preamble, which is exactly what chat mode is replacing. The editor
-therefore offers **Restore default**, not **Clear**.
+The default is the token alone, so an untouched install injects only the current
+time. Empty is a real answer too: saving a blank field keeps it blank, and the
+extension sends no system prompt at all. The editor therefore offers **Restore
+default**, which restores the time token rather than an unremovable example.
 
 Saving while chat mode is in force calls `scheduleRestart`, not `restartAgent`: pi reads
 its prompt once at process start, and an answer that is being written must not be cut

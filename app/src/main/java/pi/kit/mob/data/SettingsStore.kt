@@ -568,9 +568,9 @@ enum class FontSize(val code: String, val scale: Float) {
      * The system-prompt template chat mode sends.
      *
      * It is a *template*, not a snapshot: [CHAT_TIME_PLACEHOLDER] is replaced with the
-     * current time on every launch. Blank is normalised back to
-     * [DEFAULT_CHAT_SYSTEM_PROMPT], because an empty string would make pi fall back to
-     * its coding-assistant prompt — the one thing chat mode exists to replace.
+     * current time on every launch. Blank is a valid choice and means "no system
+     * prompt at all": the chat-prompt extension replaces pi's whole prompt, and an
+     * empty document sends nothing. ARCHITECTURE §17 has the measurement.
      */
     val chatSystemPrompt: String = DEFAULT_CHAT_SYSTEM_PROMPT,
     /** Interface language. Persisted here because it is not part of a profile. */
@@ -849,14 +849,7 @@ class SettingsStore(context: Context) {
      */
     fun update(transform: (PiSettings) -> PiSettings): PiSettings {
         val currentSettings = current.get()
-        val next = transform(currentSettings).let { edited ->
-            // A blank prompt would make pi restore its coding-assistant preamble, the
-            // exact fallback chat mode exists to remove. Normalise here as well as on
-            // read, so the value the UI receives is the value the next launch renders.
-            edited.copy(
-                chatSystemPrompt = edited.chatSystemPrompt.ifBlank { DEFAULT_CHAT_SYSTEM_PROMPT },
-            )
-        }
+        val next = transform(currentSettings)
 
         val active = profiles.activeProfile
         if (active != null) {
@@ -957,17 +950,14 @@ class SettingsStore(context: Context) {
         prefs.getString(KEY_THINKING, DEFAULT_THINKING_LEVEL).orEmpty().ifBlank { DEFAULT_THINKING_LEVEL }
 
     /**
-     * The chat prompt template, or the one-line default.
+     * The chat prompt template, or the current-time default.
      *
-     * A blank value is not a valid template: pi reads an empty custom prompt as "no
-     * custom prompt" and falls back to its coding-assistant preamble, which is the
-     * opposite of what chat mode promises. The same normalisation runs in
-     * [PiSettings]'s default and in [update], so every reader sees one answer.
+     * A stored blank is a real value: chat mode's extension turns it into no system
+     * prompt, and the editor's Restore default writes the time token back. Only a
+     * preference that was never written takes [DEFAULT_CHAT_SYSTEM_PROMPT].
      */
     private fun chatSystemPrompt(): String =
-        prefs.getString(KEY_CHAT_SYSTEM_PROMPT, DEFAULT_CHAT_SYSTEM_PROMPT)
-            .orEmpty()
-            .ifBlank { DEFAULT_CHAT_SYSTEM_PROMPT }
+        prefs.getString(KEY_CHAT_SYSTEM_PROMPT, DEFAULT_CHAT_SYSTEM_PROMPT).orEmpty()
 
     /**
      * Re-reads preferences and the profile file and publishes the result.

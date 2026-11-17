@@ -19,9 +19,8 @@ import java.util.Locale
  * every source of ambient context disabled — tools, extensions, skills, prompt
  * templates, `AGENTS.md` — and replaces pi's own coding-assistant prompt with one
  * short document held in [PiSettings.chatSystemPrompt]. The point is a request whose
- * leading context is only that document, which is what makes the mode useful for an
- * ordinary conversation rather than a coding task. ARCHITECTURE §17 has the launch
- * flags and the prompt template's editor.
+ * leading context is only that document — and an empty document is no leading context
+ * at all. ARCHITECTURE §17 has the launch flags and the prompt template's editor.
  */
 enum class AgentMode(val code: String) {
     WORK("work"),
@@ -48,12 +47,13 @@ enum class AgentMode(val code: String) {
 const val CHAT_TIME_PLACEHOLDER = "{{time}}"
 
 /**
- * What chat mode sends before the reader has edited anything: only the current time.
+ * What chat mode sends before the reader has edited anything: the current time.
  *
- * A bare placeholder is deliberate. It is the smallest prompt that is still a
- * prompt, it is the same in every interface language, and anything the reader wants
- * the model to be can be written around it without first deleting an example
- * paragraph that was never theirs.
+ * A bare placeholder is deliberate. It is the smallest useful prompt — the model
+ * knows "now" without being told who it is — and anything the reader wants can be
+ * written around it without first deleting an example paragraph that was never
+ * theirs. An empty document is still a valid choice and sends no system prompt at
+ * all; the extension is what makes that empty case clean (ARCHITECTURE §17).
  */
 const val DEFAULT_CHAT_SYSTEM_PROMPT = CHAT_TIME_PLACEHOLDER
 

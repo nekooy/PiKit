@@ -39,8 +39,12 @@ class AgentModeTest {
     }
 
     @Test
-    fun `the default is only the current time`() {
+    fun `the default is the current time token`() {
         assertEquals(CHAT_TIME_PLACEHOLDER, DEFAULT_CHAT_SYSTEM_PROMPT)
+        assertEquals(
+            "2026-11-17 21:00:38 +08:00",
+            renderChatSystemPrompt(DEFAULT_CHAT_SYSTEM_PROMPT, now, shanghai),
+        )
     }
 
     @Test

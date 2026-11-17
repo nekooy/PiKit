@@ -135,6 +135,7 @@ IMAGE_INPUTS = (
     "tools/pikit-relocate.js",
     "tools/pikit-dpkg.sh",
     "tools/pikit-permissions.ts",
+    "tools/pikit-chat-prompt.ts",
     "tools/storage-self-test.sh",
 )
 
@@ -244,11 +245,11 @@ def python_tool(script: str, *args: str, capture: bool = True) -> tuple[int, str
     return run([sys.executable, str(REPO_ROOT / "tools" / script), *args], capture=capture)
 
 
-def node_tool(script: str, *args: str) -> tuple[int, str]:
+def node_tool(script: str, *args: str, flags: tuple[str, ...] = ()) -> tuple[int, str]:
     node = shutil.which("node")
     if node is None:
         return 127, "node is not on PATH"
-    return run([node, str(REPO_ROOT / "tools" / script), *args], capture=True)
+    return run([node, *flags, str(REPO_ROOT / "tools" / script), *args], capture=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -629,6 +630,15 @@ def run_tests() -> bool:
         # refusal and its full-access escape cannot drift apart. It runs the same
         # `checkToolCall()` the extension runs, from the file the image ships.
         ("the permission tiers", lambda: node_tool("test-permissions.mjs")),
+        # The chat-prompt extension is the difference between "a system prompt" and
+        # chat mode's actual promise: exact text, and no message at all when the
+        # document is empty. It has no UI to exercise; this drives its one handler.
+        # The extension is TypeScript (pi loads it through jiti), so Node 22 needs its
+        # type-stripping flag; Node 26 accepts the same flag.
+        (
+            "the chat prompt extension",
+            lambda: node_tool("test-chat-prompt.mjs", flags=("--experimental-strip-types",)),
+        ),
         # The README's icon is a second copy of the launcher icon, which is a thing
         # that drifts: nothing about editing the vector would remind anyone that the
         # picture at the top of the README is now wrong. Cheap (it reads two files)

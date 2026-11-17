@@ -369,13 +369,14 @@ The image is therefore two layers, each with its own revision stamp:
   set, a fix to the `dpkg` wrapper or the prefix rewriter. Package *versions* are
   deliberately not in it; the paragraph below says why.
 - The **content layer** — `content.zip` — is what this app owns: pi and its dependency
-  tree, the bundled web-access extension, the permission extension, the package relocator and
-  the wrappers that reach them. Its revision moves on a pi bump, an extension bump or a
-  permission-rule fix, and the update replaces exactly the paths its manifest
-  (`CONTENT-PATHS.txt`, inside the archive) names: each root is deleted and re-created
-  from the archive, so a file a new pi version *dropped* cannot survive the update
-  inside a stale directory. No installed package is touched, no dpkg transaction runs,
-  and the swap of one archive is seconds rather than the seed's minutes.
+  tree, the bundled web-access extension, the permission extension, the chat-prompt
+  extension, the package relocator and the wrappers that reach them. Its revision moves
+  on a pi bump, an extension bump or a prompt-rule fix, and the update replaces exactly
+  the paths its manifest (`CONTENT-PATHS.txt`, inside the archive) names: each root is
+  deleted and re-created from the archive, so a file a new pi version *dropped* cannot
+  survive the update inside a stale directory. No installed package is touched, no dpkg
+  transaction runs, and the swap of one archive is seconds rather than the seed's
+  minutes.
 
 The two stamps live beside each other in `files/` (`runtime-revision.txt`,
 `content-revision.txt`) and are written seed-first, so a run that dies between them costs

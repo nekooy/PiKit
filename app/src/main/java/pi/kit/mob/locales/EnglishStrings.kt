@@ -405,12 +405,14 @@ internal object EnglishStrings : Strings {
         override val chatMode = "Chat mode"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "With the drawer's switch on Chat, no tools, extensions, skills or AGENTS.md load — only the system prompt below"
+            "With the drawer's switch on Chat, no tools, extensions, skills or AGENTS.md load — the prompt below is the only system text sent, and an empty one sends nothing"
         override val chatSystemPromptTitle = "System prompt"
-        override val chatSystemPromptSubtitle = "{{time}} becomes the current time; saving restarts the agent"
+        override val chatSystemPromptSubtitle =
+            "{{time}} becomes the current time; leave empty to send no system prompt; saving restarts the agent"
         override val chatSystemPromptEditorHint =
-            "Put {{time}} where the time should be injected; it becomes the current time at launch. " +
-                "Saving an empty field restores the default."
+            "What you write here is chat mode's only system prompt. It starts with {{time}}, " +
+                "the current time; leave it empty to send none. Put {{time}} where the time should " +
+                "be injected; it becomes the current time at launch."
         override val chatSystemPromptRestore = "Restore default"
         override val agentContextLead = "With every request, pi sends the model:"
         override val agentContextLeadTitle = "What the context holds"

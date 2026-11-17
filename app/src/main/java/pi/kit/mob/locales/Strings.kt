@@ -1044,11 +1044,18 @@ interface Strings {
          *
          * It is the reader's one-line answer to "why does this conversation not know
          * my project?", so it names the four things that disappear rather than saying
-         * "clean context" and leaving them to guess.
+         * "clean context" and leaving them to guess. It also says the prompt below is
+         * the only system text and that an empty one sends nothing — the honest
+         * version of "clean" this mode now implements.
          */
         val chatModeSubtitle: String
 
-        /** The editable chat system prompt: its row and the editor's explanation. */
+        /**
+         * The editable chat system prompt: its row and the editor's explanation.
+         *
+         * Empty is a valid value and means no system prompt at all; the hint says so
+         * because the field looks like a required document.
+         */
         val chatSystemPromptTitle: String
         val chatSystemPromptSubtitle: String
         val chatSystemPromptEditorHint: String

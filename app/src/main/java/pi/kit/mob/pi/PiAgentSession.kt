@@ -692,6 +692,22 @@ class PiAgentSession internal constructor(
                     } else {
                         null
                     }
+                    val chatPromptExtension = if (_mode.value == AgentMode.CHAT) {
+                        File(env.prefix, CHAT_PROMPT_EXTENSION_SOURCE)
+                            .takeIf { it.isFile }
+                            ?.absolutePath
+                            .also { found ->
+                                if (found == null) {
+                                    Log.w(
+                                        TAG,
+                                        "chat prompt extension is missing from the runtime; " +
+                                            "chat mode's prompt will carry pi's cwd block",
+                                    )
+                                }
+                            }
+                    } else {
+                        null
+                    }
                     PiProcessLauncher.launch(
                         context = appContext,
                         env = env,
@@ -714,6 +730,7 @@ class PiAgentSession internal constructor(
                                 settingsStore.profiles.snapshots.value,
                             ),
                             chatPromptFile = chatPromptFile,
+                            chatPromptExtension = chatPromptExtension,
                             mode = _mode.value,
                         ),
                     ).also { launched = it }
@@ -2934,13 +2951,17 @@ class PiAgentSession internal constructor(
     private fun writeChatPrompt(settings: PiSettings): File {
         val target = File(env.home, CHAT_PROMPT_FILE_RELATIVE)
         target.parentFile?.mkdirs()
-        target.writeText(
-            renderChatSystemPrompt(
-                template = settings.chatSystemPrompt,
-                now = Instant.now(),
-                zone = ZoneId.systemDefault(),
-            ),
+        val rendered = renderChatSystemPrompt(
+            template = settings.chatSystemPrompt,
+            now = Instant.now(),
+            zone = ZoneId.systemDefault(),
         )
+        // pi reads an empty custom prompt as "none" and falls back to its coding
+        // preamble. The extension is what turns an empty document into "no system
+        // prompt"; this one space is the fallback for a launch whose extension could
+        // not be loaded, so the failure lands on a blank prompt plus pi's cwd block
+        // rather than on the coding prompt this mode exists to remove.
+        target.writeText(rendered.ifBlank { " " })
         Log.i(TAG, "wrote $CHAT_PROMPT_FILE_RELATIVE for chat mode")
         return target
     }
@@ -2964,6 +2985,14 @@ class PiAgentSession internal constructor(
          * the path is passed to the child only for a chat launch.
          */
         private const val CHAT_PROMPT_FILE_RELATIVE = ".pikit/chat-system-prompt.txt"
+
+        /**
+         * The extension staged by the runtime image that makes the chat prompt exact.
+         *
+         * `share/pikit` is the image's app-owned directory; the file is loaded by an
+         * explicit `--extension`, not discovery. See [PiLaunchOptions.chatPromptExtension].
+         */
+        internal const val CHAT_PROMPT_EXTENSION_SOURCE = "share/pikit/pikit-chat-prompt.ts"
 
         /** Long enough that typing a model id does not restart per keystroke. */
         private const val SETTINGS_RESTART_DEBOUNCE_MS = 1_500L
@@ -4099,6 +4128,8 @@ internal fun PiSettings.toLaunchOptions(
     credentials: Map<String, String>,
     /** The rendered chat prompt, or null for a work launch. */
     chatPromptFile: String? = null,
+    /** The extension that makes [chatPromptFile] exact, or null when the image lacks it. */
+    chatPromptExtension: String? = null,
     /** This launch's mode; [PiSettings.agentMode] is only a new conversation's default. */
     mode: AgentMode = agentMode,
 ): PiLaunchOptions = PiLaunchOptions(
@@ -4117,4 +4148,5 @@ internal fun PiSettings.toLaunchOptions(
     apiKey = apiKey.takeIf { it.isNotBlank() },
     mode = mode,
     systemPromptFile = chatPromptFile,
+    chatPromptExtension = chatPromptExtension,
 )

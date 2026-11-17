@@ -51,6 +51,18 @@ data class PiLaunchOptions(
      */
     val systemPromptFile: String? = null,
     /**
+     * The pi extension that makes [systemPromptFile] the *whole* prompt for chat mode.
+     *
+     * `--system-prompt` alone is not enough: pi appends a `<cwd>` block to any custom
+     * prompt, and it reads an empty custom prompt as "none" and restores its own
+     * coding-assistant preamble. The extension's `before_agent_start` returns the
+     * file's text as `systemPrompt`, which replaces the complete prompt for the turn;
+     * an empty document therefore sends no system prompt at all. It is passed as an
+     * explicit `--extension` even beside `--no-extensions`, which pi still loads —
+     * measured on 1.5.0's `loadCurrentExtensionSet`.
+     */
+    val chatPromptExtension: String? = null,
+    /**
      * The directory pi should treat as its agent directory, when a launch must not see
      * PiKit's own files in the real one. Null — every launch but one — uses pi's default,
      * `$HOME/.pi/agent`, which is where PiKit writes pi's settings, extensions and
@@ -432,6 +444,14 @@ object PiProcessLauncher {
         if (options.extraEnv.isNotEmpty()) {
             environment.putAll(options.extraEnv)
         }
+        // The chat-prompt extension reads this, and only a chat launch sets it. The
+        // path is the same file `--system-prompt` names; the extension is what makes
+        // its text exact, including an empty document.
+        if (options.mode == AgentMode.CHAT) {
+            options.systemPromptFile?.takeIf { it.isNotBlank() }?.let {
+                environment[CHAT_PROMPT_FILE_VAR] = it
+            }
+        }
         if (options.apiKeyEnvVar != null && !options.apiKey.isNullOrEmpty()) {
             environment[options.apiKeyEnvVar] = options.apiKey
         }
@@ -504,6 +524,15 @@ object PiProcessLauncher {
             add("--no-prompt-templates")
             add("--no-context-files")
             add("--no-mcp")
+            // The one extension chat mode does load, and not through discovery:
+            // `--no-extensions` still honours an explicit `--extension`, and this file
+            // is what replaces pi's whole prompt with the reader's document (or with
+            // nothing) instead of the document plus pi's `<cwd>` block. ARCHITECTURE
+            // §17 has the measurement.
+            options.chatPromptExtension?.takeIf { it.isNotBlank() }?.let {
+                add("--extension")
+                add(it)
+            }
             // `--system-prompt` replaces pi's coding-assistant preamble. Together
             // with the flags above, the leading prompt is the reader's document rather
             // than a tool catalogue and coding rules wrapped around it.
@@ -595,6 +624,13 @@ object PiProcessLauncher {
     }
 
     private const val TAG = "PiKit"
+
+    /**
+     * The environment variable `tools/pikit-chat-prompt.ts` reads: the rendered chat
+     * prompt's file. Set for chat launches only, so a work launch never activates the
+     * extension even if it were discovered.
+     */
+    private const val CHAT_PROMPT_FILE_VAR = "PIKIT_CHAT_PROMPT_FILE"
 
     /**
      * The variable pi builds its agent directory from.
