@@ -46,15 +46,17 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
  * costs is the one thing a seed gave — a hue of one's own — and the app no longer
  * has a reason to want it.
  *
- * ## The one role the app moves
+ * ## The two page roles the app moves
  *
- * The light scheme's page is [LIGHT_PAGE] (`#F0F0F0`), not the library's `#F7F7F7`.
- * Miuix's light palette paints `background`, `surfaceVariant` and `surfaceContainer`
- * all white, so a white card on a `#F7F7F7` page is only a three-percent step and the
- * boundary disappears once the lift is gone: the composer, the reply cards and the
- * drawer all read as one white field. The dark scheme already separates black
- * (`surface`) from `#242424` (`surfaceContainer`), so only the light page moves. Every
- * other role is still the library's own.
+ * The light scheme steps both page roles down once: `surface` moves from the library's
+ * `#F7F7F7` to [LIGHT_PAGE] (`#F0F0F0`), and `background` moves from white to
+ * [LIGHT_BACKGROUND] (`#F7F7F7`). Miuix's light palette paints `surfaceVariant` and
+ * `surfaceContainer` white, so a white card on either old value is a zero or
+ * three-percent step and the boundary disappears once the lift is gone: the composer,
+ * the reply cards and the drawer all read as one white field. The two moved roles keep
+ * the order the library gives them — the drawer ground lighter than the page — while
+ * giving every white object an edge. The dark scheme already separates black (`surface`)
+ * from `#242424` (`surfaceContainer`), so it is untouched.
  *
  * ## Mode
  *
@@ -78,7 +80,10 @@ fun PiKitMiuixTheme(
     val controller = remember(mode) {
         ThemeController(
             colorSchemeMode = ColorSchemeMode.System,
-            lightColors = lightColorScheme(surface = LIGHT_PAGE),
+            lightColors = lightColorScheme(
+                surface = LIGHT_PAGE,
+                background = LIGHT_BACKGROUND,
+            ),
             isDark = mode,
         )
     }
@@ -338,15 +343,25 @@ private const val PROMPT_SHARE_DARK = 0.34f
 private const val DARK_BASE_LUMINANCE = 0.2f
 
 /**
- * The light scheme's page: `#F0F0F0`, one step below Miuix's `#F7F7F7`.
+ * The light scheme's page: `#F0F0F0`, one step below Miuix's `#F7F7F7` page.
  *
- * The library's light palette paints `background`, `surfaceVariant` and
- * `surfaceContainer` white, so a white card on `#F7F7F7` is a three-percent step that
- * disappears once no shadow separates it. `#F0F0F0` gives every white object an edge
- * while staying a page rather than a panel. The dark scheme already has that step —
- * black (`surface`) against `#242424` (`surfaceContainer`) — so it is untouched.
+ * The library's light palette paints `surfaceVariant` and `surfaceContainer` white,
+ * so a white card on `#F7F7F7` is a three-percent step that disappears once no shadow
+ * separates it. `#F0F0F0` gives every white object an edge while staying a page rather
+ * than a panel. The dark scheme already has that step — black (`surface`) against
+ * `#242424` (`surfaceContainer`) — so it is untouched.
  */
 private val LIGHT_PAGE = Color(0xFFF0F0F0)
+
+/**
+ * The light scheme's drawer ground: `#F7F7F7`, one step below the library's white
+ * `background`.
+ *
+ * The drawer panel and the strips around the conversation card share this role. One
+ * step below white keeps them lighter than the `#F0F0F0` page, the same order the dark
+ * scheme gets from `#242424` against black.
+ */
+private val LIGHT_BACKGROUND = Color(0xFFF7F7F7)
 
 /**
  * How much of the surface's own ink a quotation's fill is washed with.

@@ -50,7 +50,7 @@ like, and Miuix is an experimental library — a bump can move the interface. Th
 the trade: one coherent idiom owned by a library, against a hand-kept design system
 maintained alongside every screen.
 
-## The palette: the library's own, with one page step
+## The palette: the library's own, with a page step
 
 `PiKitMiuixTheme(settings)` is the one place the theme is assembled. It decides the
 light/dark mode and nothing else about colour:
@@ -61,22 +61,25 @@ light/dark mode and nothing else about colour:
 | `ThemeMode.LIGHT` / `DARK` | the same mode with `isDark = false` / `true` — one controller, one override |
 
 The controller's dark scheme is Miuix's `darkColorScheme()` untouched, and every role
-of the light scheme is `lightColorScheme()`'s own except `surface`: the blue
-`#3482FF` primary, the white card, the `#E0E0E0` divider, the disabled pairs, the
-slider's track. The light page is `#F0F0F0` rather than the library's `#F7F7F7`, and
-that is the one colour decision this app makes.
+of the light scheme is `lightColorScheme()`'s own except `surface` and `background`:
+the blue `#3482FF` primary, the white card, the `#E0E0E0` divider, the disabled pairs,
+the slider's track. The light page is `#F0F0F0` rather than the library's `#F7F7F7`,
+and the drawer ground is `#F7F7F7` rather than its white; those are the one colour
+decision this app makes.
 
 **Why the page moved: the library's light palette has no step.** `background`,
 `surfaceVariant` and `surfaceContainer` are all `#FFFFFF` in `lightColorScheme()`, so
-a white card on a `#F7F7F7` page is a three-percent step — about 1.07:1. The floating
-controls used to lean on their shadows for that edge; with the shadows removed, the
-composer's field, its chips, the reply cards and the drawer all read as one white
-field. `#F0F0F0` gives every white object an edge while staying a page rather than a
-panel. The dark scheme needs no such move: its `surface` is black and its
+a white card has no step at all against `background` and only a three-percent one
+(about 1.07:1) against the `#F7F7F7` page. The floating controls used to lean on their
+shadows for that edge; with the shadows removed, the composer's field, its chips, the
+reply cards and the drawer all read as one white field. Stepping the page to `#F0F0F0`
+and the drawer ground to `#F7F7F7` gives every white object an edge while keeping the
+drawer lighter than the page, the order the dark scheme gets from `#242424` against
+black. The dark scheme needs no such move: its `surface` is black and its
 `surfaceContainer` `#242424`, so the step is already there.
 
 A page assembled from the library's components is still drawn in the colours those
-components were drawn for; the one page step is the price of removing the shadows
+components were drawn for; the two page roles are the price of removing the shadows
 without losing the layers.
 
 **An accent picker and a wallpaper switch were tried and removed.** The rewrite
@@ -309,10 +312,7 @@ otherwise.
 panel — the way into the settings — is a `PiGlass.fill()` pill, the fill the bar's marks are
 drawn with, because it is the same kind of object: a control floating over a page rather
 than a row on it. It used to be an opaque `surfaceContainer` pill, and that made it a
-different kind of object from the capsules one panel away. Its one difference from the
-header's capsules is a hairline `outline`: the drawer's `background` is white in the light
-scheme, so a white fill with no shadow would have no edge there, while the header's
-capsules sit on the grey `surface`.
+different kind of object from the capsules one panel away.
 
 **A bar with no bar in it.** The reference drawing the page follows has no strip across
 the top: the content scrolls *under* the marks, fades out as it reaches them, and the
