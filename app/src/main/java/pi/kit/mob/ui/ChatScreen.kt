@@ -1398,6 +1398,7 @@ private fun ChatHeader(
     text: Strings,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalPiHaptics.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -1413,7 +1414,10 @@ private fun ChatHeader(
                 .size(HEADER_MARK_SIZE)
                 .clip(CircleShape)
                 .background(PiGlass.fill())
-                .clickable(onClick = onOpenSessions),
+                .clickable {
+                    haptics.tap()
+                    onOpenSessions()
+                },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -1466,7 +1470,14 @@ private fun HeaderMark(
     description: String,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(HEADER_MARK_SIZE)) {
+    val haptics = LocalPiHaptics.current
+    IconButton(
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
+        modifier = Modifier.size(HEADER_MARK_SIZE),
+    ) {
         Icon(
             imageVector = glyph,
             contentDescription = description,

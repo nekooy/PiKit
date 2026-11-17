@@ -10,7 +10,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
- * The app's haptics: four moments, one vocabulary, one file.
+ * The app's haptics: five moments, one vocabulary, one file.
  *
  * ## Why a kit and not a call at the control
  *
@@ -23,11 +23,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * the two comments that matter — which moments buzz and which deliberately do not —
  * are written once instead of at forty call sites.
  *
- * ## The four moments
+ * ## The five moments
  *
  * The vocabulary is Miuix's own, extended by the two gestures the library has no
- * component for. That is the whole rule: **PiKit buzzes where the library buzzes, plus
- * a hold, plus a key**.
+ * component for and by one control family it draws without feedback. That is the
+ * whole rule: **PiKit buzzes where the library buzzes, plus a hold, a key, and a tap
+ * on one of its floating capsules**.
  *
  * | Moment | Call | Platform type | On API < 34 | On API < 30 |
  * | --- | --- | --- | --- | --- |
@@ -35,6 +36,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * | a control's mode flipped and stays flipped | [toggle] | `ToggleOn` / `ToggleOff` | `CONTEXT_CLICK` / `CLOCK_TICK` | |
  * | a row that is one of a set became the chosen one | [choose] | `ToggleOn` | `CONTEXT_CLICK` | |
  * | a key on a keyboard PiKit draws was pressed | [key] | `KeyboardTap` | | |
+ * | a floating capsule button was tapped | [tap] | `VirtualKey` | | |
  *
  * The fallbacks are not guesses: they are `HapticFeedbackConstantsCompat`'s answer in
  * AndroidX core 1.19.1, which maps a constant the device does not have onto the nearest
@@ -59,14 +61,17 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  *
  * Named here because the restraint is the design, not an omission:
  *
- * - **Navigation.** A page push, the drawer, a tab, the back arrow, a sheet or a
- *   window opening or closing. The transition is the acknowledgement, and a page
- *   change that also buzzes makes the app feel nervous rather than solid.
+ * - **Navigation, except the floating capsules.** A page push, the drawer's own swipe,
+ *   a tab, the back arrow, a sheet or a window opening or closing. The transition is
+ *   the acknowledgement, and a page change that also buzzes makes the app feel nervous
+ *   rather than solid. The [tap] family is the one exception: those capsules are
+ *   objects on the page rather than a destination bar.
  * - **A control whose only answer is the press.** Buttons, icon buttons, plain rows,
  *   chips: the fill under the finger is the answer, and it is drawn at touch-down
- *   before a buzz could arrive. A control that *changes state* is not this case — a
- *   radio row paints a press and buzzes, because the press says "you touched me" and
- *   the buzz says "and I am the answer now".
+ *   before a buzz could arrive. The five floating capsules covered by [tap] are the
+ *   exception — they float over a scrolling page with no bar behind them. A control
+ *   that *changes state* is not this case — a radio row paints a press and buzzes,
+ *   because the press says "you touched me" and the buzz says "and I am the answer now".
  * - **Typing into a text field.** The soft keyboard's own keypress feedback is a user
  *   setting in the IME, and the composer's field is the IME's client — a second buzz
  *   per character from the app would double it and honour neither setting.
@@ -142,6 +147,20 @@ class PiHaptics internal constructor(
      */
     fun key() {
         feedback?.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+    }
+
+    /**
+     * A tap on one of the app's floating chrome capsules: the four at the top of the
+     * conversation page and the settings pill at the drawer's foot.
+     *
+     * This is the one button family that buzzes. Every other button, icon button, row
+     * and chip stays silent — its fill is the answer. A capsule is different: it
+     * floats over a scrolling page with no bar behind it, and the fill is the only
+     * press feedback it has. `VirtualKey` is the platform's light button tick. The
+     * family is named at its five controls, never inferred from "it has an onClick".
+     */
+    fun tap() {
+        feedback?.performHapticFeedback(HapticFeedbackType.VirtualKey)
     }
 }
 

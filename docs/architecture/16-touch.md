@@ -1,11 +1,11 @@
-# Touch: the four moments PiKit buzzes
+# Touch: the five moments PiKit buzzes
 
 The interface is Miuix's (§13), and Miuix's components already buzz where the
 library decided they should. What this app drew itself — a message card, a
 conversation row, a file row, a terminal bar, an on-screen keyboard, twelve menus —
 had no rule at all: two long-press buzzes were placed by hand, in two screens, and
 everything else was silent. That is the state this chapter replaces. It is not "add
-haptics", it is **four moments and a longer list of silences**.
+haptics", it is **five moments and a longer list of silences**.
 
 **A buzz is a control's acknowledgement, not the outcome's notification.** The screen
 already tells the reader what happened; a vibration that repeats it is noise. What a
@@ -30,7 +30,7 @@ other, and two light ticks together are one heavy buzz — the opposite of the e
 
 ## The vocabulary
 
-Four moments, four platform types, one file: `ui/kit/PiHaptics.kt`.
+Five moments, five platform types, one file: `ui/kit/PiHaptics.kt`.
 
 | Moment | Call | Type | API < 34 | API < 30 |
 | --- | --- | --- | --- | --- |
@@ -38,6 +38,7 @@ Four moments, four platform types, one file: `ui/kit/PiHaptics.kt`.
 | a control's mode flipped and stays flipped | `toggle(on)` | `ToggleOn` / `ToggleOff` | `CONTEXT_CLICK` / `CLOCK_TICK` | — |
 | a row that is one of a set became the chosen one | `choose()` | `ToggleOn` | `CONTEXT_CLICK` | — |
 | a key on a keyboard this app draws | `key()` | `KeyboardTap` | — | — |
+| a floating capsule button was tapped | `tap()` | `VirtualKey` | — | — |
 
 The fallbacks are `HapticFeedbackConstantsCompat`'s, from AndroidX core 1.19.1, which
 is what `HapticFeedback` calls through: an effect the device does not have is replaced
@@ -58,12 +59,20 @@ IME's own keypress setting cannot speak for them. The text field is not this cas
 keys are the platform's, and a second tick from the app would double them and honour
 neither the user's setting nor the theme.
 
+**`tap()` is the one button family that buzzes**, and the exception is narrow: the
+four capsules at the top of the conversation page — the drawer's mark and the three
+marks in the trailing pill — and the settings pill at the drawer's foot. They float
+over a scrolling page with no bar behind them, so the fill is the only press feedback
+they have; `VirtualKey` is the platform's light button tick. Every other button, icon
+button, row and chip stays silent for the reason below. The family is named at its
+five controls, never inferred from "it has an onClick".
+
 **There is no `reject()` and no `confirm()`.** Both were considered and dropped: every
 refusal this app can produce (an invalid path, a failed restore, a refused
 `pkg install`) already arrives as a sentence in the error role or a toast, and every
 completion already shows its result — a message in the transcript, a row that
 disappears, a count that moves. A vocabulary with two moments nobody can name a caller
-for is a vocabulary that grows a fifth moment at the first ambiguous call site.
+for is a vocabulary that grows a sixth moment at the first ambiguous call site.
 
 ### Placement
 
@@ -90,16 +99,19 @@ a second tap aimed at the page behind a menu that is already leaving must not bu
 Named here, because the restraint is the design and an omission would be
 indistinguishable from an oversight:
 
-- **Navigation.** A page push, the drawer, a tab, the back arrow, a sheet or a window
-  opening or closing. The transition is the acknowledgement. An app that buzzes on
-  every page change reads as nervous rather than solid, and the same motion that tells
-  the reader where they are already has their attention.
+- **Navigation, except the floating capsules.** A page push, the drawer's own swipe, a
+  tab, the back arrow, a sheet or a window opening or closing. The transition is the
+  acknowledgement. An app that buzzes on every page change reads as nervous rather than
+  solid, and the same motion that tells the reader where they are already has their
+  attention. The `tap()` family is the one exception: those capsules are objects on the
+  page rather than a destination bar.
 - **A control whose only answer is the press.** Buttons, icon buttons, plain rows, chips:
   the fill under the finger is drawn at touch-down, which is before any buzz could
-  arrive, and it is more precise than a vibration — it says *which* control. A control
-  that *changes state* is not this case: a radio row paints a press **and** buzzes,
-  because the press says "you touched me" and the buzz says "and I am the answer now".
-  The line is what the control does, not whether it has a ripple.
+  arrive, and it is more precise than a vibration — it says *which* control. The five
+  floating capsules covered by `tap()` are the exception, because they float over a
+  scrolling page with no bar behind them. A control that *changes state* is not this
+  case: a radio row paints a press **and** buzzes, because the press says "you touched
+  me" and the buzz says "and I am the answer now".
 - **Typing into the text field.** The IME owns key feedback, as a user setting.
 - **Scrolling, page swipes, the elastic over-scroll.** Motion is the answer. (Miuix adds
   its own soft one at the ends of a bounce; that is the library's.)
@@ -150,9 +162,9 @@ the page's were not. The default outside the theme is a no-op, so a preview or a
 screenshot harness composes a screen without a window and does not crash on a buzz.
 
 `tools/check-haptics.py` fails the build when anything outside the kit calls
-`performHapticFeedback` or names a `HapticFeedbackType` — a fifth moment invented at a
+`performHapticFeedback` or names a `HapticFeedbackType` — a sixth moment invented at a
 call site compiles, reads like any other line, and is exactly the drift this chapter
-exists to stop — and when the kit's set of moments is not the four in the table above.
+exists to stop — and when the kit's set of moments is not the five in the table above.
 Adding a moment is therefore a change to this file and to the checker's list in the
 same commit.
 

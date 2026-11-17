@@ -1515,12 +1515,16 @@ private fun SettingsPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalPiHaptics.current
     val shape = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
             .clip(shape)
             .background(PiGlass.fill())
-            .clickable(onClick = onClick)
+            .clickable {
+                haptics.tap()
+                onClick()
+            }
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
