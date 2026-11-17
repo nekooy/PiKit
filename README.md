@@ -14,10 +14,10 @@ first launch — no repository to reach, no package to fetch. The only connectio
 needed is one that can reach the model provider.
 
 <p align="center">
-  <img src="docs/assets/preview-0.7.0.webp" width="90%" alt="PiKit 0.7.0 — the conversation list, a conversation, the terminal, the files page and the settings">
+  <img src="docs/assets/preview-0.8.0.webp" width="90%" alt="PiKit 0.8.0 — the conversation list, a conversation, the terminal, the files page and the settings">
 </p>
 
-<p align="center"><sub>PiKit 0.7.0 interface preview</sub></p>
+<p align="center"><sub>PiKit 0.8.0 interface preview</sub></p>
 
 ## Features
 
@@ -36,7 +36,7 @@ needed is one that can reach the model provider.
   page, the keys a phone keyboard lacks, and a read-only file manager over `$HOME`: a
   tappable path, a filter and three orders, a size or entry count per row, image previews
   and copy-path.
-- **Providers on pi's terms.** The 34 single-key providers pi's own key table lists, plus
+- **Providers on pi's terms.** The 35 single-key providers pi's own key table lists, plus
   a custom endpoint; a model's context window, output limit, thinking levels and image
   support come from pi's catalogue.
 - **Storage is scoped and safe.** The workspace a conversation starts in is its write
