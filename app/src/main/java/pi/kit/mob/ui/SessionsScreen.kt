@@ -3,6 +3,7 @@ package pi.kit.mob.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
@@ -51,7 +53,6 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +62,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.Workspace
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -72,11 +74,11 @@ import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiDialogAnswers
+import pi.kit.mob.ui.kit.PiModeSwitch
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
-import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
 import top.yukonga.miuix.kmp.basic.DropdownEntry
@@ -88,6 +90,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Rename
 import top.yukonga.miuix.kmp.icon.extended.Search
@@ -140,6 +143,10 @@ fun SessionsScreen(
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
     /** Leaves the drawer for the settings page, which is reached from its foot. */
     onOpenSettings: () -> Unit,
+    /** The launch mode of the conversation this drawer belongs to. */
+    mode: AgentMode,
+    /** Flips this conversation's launch mode; persistence and the relaunch are the session's. */
+    onModeChange: (AgentMode) -> Unit,
     /**
      * The session file the conversation on screen is writing to.
      *
@@ -163,6 +170,10 @@ fun SessionsScreen(
     var query by remember { mutableStateOf("") }
     var selecting by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // A mode switch asked for while an answer is streaming: the process reads its
+    // launch flags only at startup, so applying it would abort the turn. The same
+    // question the workspace chip asks, held here because this is where the switch is.
+    var pendingMode by remember { mutableStateOf<AgentMode?>(null) }
     // The page needs one string from the live conversation — the file the agent is
     // writing to — and nothing else. Collecting the whole state here would rebuild this
     // page on every streamed token (`ChatScreen` collects it for the transcript, where
@@ -566,30 +577,56 @@ fun SessionsScreen(
             }
         }
 
-        // The one control at the drawer's foot, and the only way into the settings now
-        // that the bar that carried four destinations is gone. A pill rather than an icon:
-        // it floats over a list it does not belong to, and the word is what keeps a
-        // floating gear from reading as another row action. Its width follows the word —
-        // `設定` and `Settings` are not the same length, and a fixed width would make one
-        // language's label touch the edges.
-        //
-        // **Centred on the panel, not hung at its gutter.** At the leading edge the pill
-        // shared a column with the row marks under it, so it read as the last row's
-        // action rather than as the drawer's own footer; the foot of a panel is a
-        // centred control, and the list's gutter is the rows' rule. The list's own
-        // end padding is unchanged, so the centred pill still clears the last row when
-        // the list is scrolled to its end.
-        SettingsPill(
-            label = text.settings.title,
-            onClick = onOpenSettings,
+        // The drawer's foot is the conversation's two permanent choices, one at each
+        // edge: the launch mode it belongs to on the leading side, where a profile
+        // strip used to stand, and the way into the settings on the trailing side as a
+        // disc with no word under it. Both float over the list rather than being rows
+        // of it, which is what keeps the last conversation scrollable clear of them.
+        Row(
             modifier = Modifier
+                .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                // The pill floats over the panel's foot, so the strip is its own margin:
-                // it keeps the control above the gesture handle now that the panel
-                // reaches the window's last pixel.
-                .padding(bottom = 40.dp + navigationInset),
-        )
+                // The strip is the controls' own margin, not the panel's: it keeps
+                // them above the gesture handle now that the panel reaches the
+                // window's last pixel.
+                .padding(
+                    start = HEADING_GUTTER,
+                    end = HEADING_GUTTER,
+                    bottom = 40.dp + navigationInset,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PiModeSwitch(
+                mode = mode,
+                onModeChange = { wanted ->
+                    if (session.turnInFlight) pendingMode = wanted else onModeChange(wanted)
+                },
+                text = text,
+            )
+            Spacer(Modifier.weight(1f))
+            SettingsDisc(
+                description = text.settings.title,
+                onClick = onOpenSettings,
+            )
+        }
     }
+
+    // The mode switch's interruption question, in the same shape as the workspace
+    // chip's: the switch cannot be applied to a running process without ending the
+    // turn, so the reader is told and decides.
+    InterruptTurnDialog(
+        show = pendingMode != null,
+        text = text,
+        title = text.sessions.modeSwitchInterruptTitle,
+        body = text.sessions.modeSwitchInterruptBody,
+        confirm = text.sessions.modeSwitchInterruptConfirm,
+        onDismiss = { pendingMode = null },
+        onConfirm = {
+            val wanted = pendingMode
+            pendingMode = null
+            if (wanted != null) session.switchMode(wanted, interrupt = true)
+        },
+    )
 
     // All three are composed for as long as the page is; `show` is what changes, so the
     // panel animates out with its subject still on screen (see the state block above).
@@ -1079,15 +1116,19 @@ private fun ConversationRow(
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,
                 )
-                // The selection box is the row's *trailing* control, not its leading
+                // The selection mark is the row's *trailing* control, not its leading
                 // one: on the leading edge it displaces every title by its own width the
                 // moment selection begins, which re-flows the whole list under the
                 // reader's finger.
+                //
+                // It is drawn rather than taken from the library, and the size is the
+                // whole reason: `Checkbox` carries a 48dp touch target, which is taller
+                // than this row's text column, so turning selection on grew every row
+                // by 12px and the list's height visibly stepped. The row itself is the
+                // target (its `onClick` is the toggle in selection mode), so the mark
+                // only has to show the state; 20dp stays inside the line box.
                 if (selecting) {
-                    Checkbox(
-                        state = ToggleableState(checked),
-                        onClick = { onToggleChecked() },
-                    )
+                    SelectionMark(checked = checked)
                 }
             }
         }
@@ -1432,12 +1473,15 @@ internal fun InterruptTurnDialog(
     text: Strings,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
+    title: String = text.sessions.switchInterruptTitle,
+    body: String = text.sessions.switchInterruptBody,
+    confirm: String = text.sessions.switchInterruptConfirm,
 ) {
     PiConfirm(
         show = show,
-        title = text.sessions.switchInterruptTitle,
-        text = text.sessions.switchInterruptBody,
-        confirm = text.sessions.switchInterruptConfirm,
+        title = title,
+        text = body,
+        confirm = confirm,
         dismiss = text.common.cancel,
         onConfirm = onConfirm,
         onDismiss = onDismiss,
@@ -1472,10 +1516,10 @@ private const val DIALOG_BODY_SHARE = 0.45f
 /**
  * The gap under the last row.
  *
- * The drawer's own furniture: it has to be tall enough for the settings pill, which
- * floats over the end of the list — 16dp put the pill on top of the last conversation
- * and made the final row unreadable. The pill is 44dp (a 20dp glyph with 12dp above and
- * below) and its own margin 40dp, so 84dp clears it; the remaining 28dp is scroll slack.
+ * The drawer's own furniture: it has to be tall enough for the foot's controls, which
+ * float over the end of the list — 16dp put them on top of the last conversation and
+ * made the final row unreadable. The tallest is the mode switch at 42dp and its own
+ * margin is 40dp, so 84dp clears it; the remaining 28dp is scroll slack.
  */
 private val LIST_BOTTOM = 112.dp
 
@@ -1493,54 +1537,73 @@ private val SELECTION_GLYPH = 20.dp
 private val ROW_CORNER = 14.dp
 
 /**
- * The one control at the drawer's foot: a pill with the gear and the word.
+ * The way into the settings, at the drawer's trailing foot.
  *
- * The reader's way into the settings, and the only one now that the four-destination bar
- * is gone. It is a pill rather than a floating icon because it sits over a list of rows
- * that are themselves tappable: a bare disc there is a fourth row action with no label,
- * while a word says "this leaves the list". Its width follows the word, so `設定` and
- * `Settings` both fit without a fixed measure and without the label touching either end.
+ * A disc and no word: the drawer's foot already has a labelled control on its leading
+ * side, and a second label there made the two read as one wide footer rather than as the
+ * two different scopes they are — the mode belongs to this conversation, the gear belongs
+ * to the whole app. The gear is the app's own settings mark, and its spoken description
+ * is still the settings page's name.
  *
- * **The same object as the chat page's capsules**, because it is the same kind of thing:
- * a control that floats over a page rather than a row on it. It carries [PiGlass.fill],
- * the raised near-black the header's circle and pill wear, rather than an opaque
- * container: a fill alone was the pill's own answer to "a fill alone reads as a
- * highlighted row", and with the glass pair it reads as the header's kind of object,
- * which is what a reader who has just left that page expects a floating control to look
- * like.
+ * **The same object as the chat page's capsules**: a control that floats over a page
+ * rather than a row on it, in [PiGlass.fill], so it reads as the header's kind of object
+ * rather than as another row action.
  */
 @Composable
-private fun SettingsPill(
-    label: String,
+private fun SettingsDisc(
+    description: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val haptics = LocalPiHaptics.current
-    val shape = RoundedCornerShape(percent = 50)
-    Row(
-        modifier = modifier
-            .clip(shape)
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
             .background(PiGlass.fill())
             .clickable {
                 haptics.tap()
                 onClick()
-            }
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            },
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = MiuixIcons.Settings,
-            contentDescription = null,
+            contentDescription = description,
             tint = MiuixTheme.colorScheme.onSurface,
             modifier = Modifier.size(20.dp),
         )
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.body1,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface,
-            maxLines = 1,
-        )
+    }
+}
+
+/**
+ * The checked/unchecked mark a row wears in multi-select.
+ *
+ * No touch target of its own: the whole row is the target in this mode, so this is
+ * state and not a control. 20dp keeps it inside the title's line box, which is what
+ * stops selection from making every conversation taller.
+ */
+@Composable
+private fun SelectionMark(checked: Boolean) {
+    val accent = MiuixTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .clip(CircleShape)
+            .background(if (checked) accent else Color.Transparent)
+            .border(
+                width = 1.5.dp,
+                color = if (checked) accent else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                shape = CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (checked) {
+            Icon(
+                imageVector = MiuixIcons.Ok,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(13.dp),
+            )
+        }
     }
 }

@@ -210,6 +210,20 @@ class PiAgentSession internal constructor(
     private val _agent = MutableStateFlow<AgentStatus>(AgentStatus.Stopped)
     val agent: StateFlow<AgentStatus> = _agent.asStateFlow()
 
+    /**
+     * This conversation's launch mode.
+     *
+     * A conversation opened from history takes the mode recorded for its session file;
+     * a conversation with no file yet takes the app's default, which is the mode the
+     * last switch selected. It is a state of the conversation rather than of the app
+     * because two conversations with different histories can be open at once: opening a
+     * work conversation while chat mode was the last choice must answer work.
+     */
+    private val _mode = MutableStateFlow(
+        boundSession?.let { host.sessionModes.modeFor(it) } ?: settingsStore.read().agentMode,
+    )
+    val mode: StateFlow<AgentMode> = _mode.asStateFlow()
+
     private val _conversation = MutableStateFlow(ConversationState())
     val conversation: StateFlow<ConversationState> = _conversation.asStateFlow()
 
@@ -326,6 +340,9 @@ class PiAgentSession internal constructor(
             .copy(loadingSession = false)
         restoreTarget = path
         restoredFrom = path
+        // A row's mode is its own: this is the file's record even when the app's
+        // default has moved on since the conversation was last opened.
+        _mode.value = host.sessionModes.modeFor(path)
         return true
     }
 
@@ -463,6 +480,40 @@ class PiAgentSession internal constructor(
             restartAgent()
         } else {
             scope.launch { startAgent() }
+        }
+    }
+
+    /**
+     * Switches this conversation between the work and chat launch modes.
+     *
+     * The mode belongs to the conversation, not to the app, so this edits *this*
+     * transcript's status rather than opening a second conversation beside it. The
+     * process reads its command line once at startup, so a live child is restarted in
+     * place; [restoreTarget] still names this conversation's session file, and
+     * [restoreAfterLaunch] rebinds the fresh child to it, which is what keeps the
+     * transcript and the model's history unchanged across the switch. A conversation
+     * opened from disk but not yet started only records the mode: its first prompt
+     * launches with it.
+     *
+     * @param interrupt false refuses the switch while an answer is streaming, which is
+     *   the same rule [selectWorkspace] and [newSession] follow; the caller asks first.
+     */
+    fun switchMode(mode: AgentMode, interrupt: Boolean = false) {
+        if (mode == _mode.value) return
+        if (turnInFlight && !interrupt) return
+        _mode.value = mode
+        // The path can be known before the process is: a history row, or a conversation
+        // whose first launch is still starting. Record both spellings so the mapping is
+        // there whether the file came from the drawer or from the handshake.
+        sessionPath?.let { host.sessionModes.setMode(it, mode) }
+        restoreTarget?.let { host.sessionModes.setMode(it, mode) }
+        // The next *new* conversation starts in the mode just chosen. This is only a
+        // default; the conversation on screen is already answered by [_mode].
+        settingsStore.update { it.copy(agentMode = mode) }
+        when (_agent.value) {
+            is AgentStatus.Stopped -> Unit
+            is AgentStatus.Starting, is AgentStatus.Running, is AgentStatus.Failed ->
+                restartAgent()
         }
     }
 
@@ -636,7 +687,7 @@ class PiAgentSession internal constructor(
                     // Written under the launch lock immediately before the child that
                     // reads it, so another launch cannot replace the file between the
                     // write and the spawn. Work mode leaves it null.
-                    val chatPromptFile = if (settings.agentMode == AgentMode.CHAT) {
+                    val chatPromptFile = if (_mode.value == AgentMode.CHAT) {
                         writeChatPrompt(settings).absolutePath
                     } else {
                         null
@@ -663,6 +714,7 @@ class PiAgentSession internal constructor(
                                 settingsStore.profiles.snapshots.value,
                             ),
                             chatPromptFile = chatPromptFile,
+                            mode = _mode.value,
                         ),
                     ).also { launched = it }
                 }
@@ -1278,6 +1330,7 @@ class PiAgentSession internal constructor(
         }
         for (target in targets) {
             if (target.pinned) setPinned(target, false)
+            if (!File(target.path).exists()) host.sessionModes.forget(target.path)
         }
         if (deletedActive) newSession()
         return Result.success(removed)
@@ -1316,10 +1369,13 @@ class PiAgentSession internal constructor(
             adoptSessionPath(_conversation.value.sessionFile)
             return
         }
-        // A transcript read from **this** file on disk is already the answer: clearing it
-        // and asking the process for the same messages again is what made a conversation
-        // flash empty when its agent finally started.
-        val alreadyLoaded = restoredFrom == path && _conversation.value.items.isNotEmpty()
+        // A transcript already belonging to **this** file is the answer: clearing it and
+        // asking the process for the same messages again is what made a conversation
+        // flash empty when its agent finally started. `sessionFile` covers a live
+        // transcript being rebound by a mode switch; `restoredFrom` covers one opened
+        // from disk. Both are the same fact — the screen is already showing this file.
+        val alreadyLoaded = (_conversation.value.sessionFile == path || restoredFrom == path) &&
+            _conversation.value.items.isNotEmpty()
         if (!alreadyLoaded) _conversation.value = ConversationState(loadingSession = true)
         try {
             val state = live.request("get_state") { PiCommand.getState(it) }
@@ -1353,6 +1409,10 @@ class PiAgentSession internal constructor(
     private fun adoptSessionPath(path: String?) {
         if (path.isNullOrBlank()) return
         restoreTarget = path
+        // The file is this conversation's identity from here on, so the mode record
+        // belongs to it: a chat conversation that just wrote its first file would
+        // otherwise reopen as work after the app restarts.
+        host.sessionModes.setMode(path, _mode.value)
         if (host.active.value === this) host.rememberLastSession(path)
     }
 
@@ -1389,6 +1449,10 @@ class PiAgentSession internal constructor(
         // A remembered path whose file is gone is a stale key: clear it so the next
         // launch does not chase a deleted conversation.
         if (wanted != null && !File(wanted).isFile) restoreTarget = null
+        // The conversation being restored may not be in the mode the app's default now
+        // says: the last visible conversation decides the switch, not the last switch
+        // that happened in another conversation.
+        if (target != null) _mode.value = host.sessionModes.modeFor(target)
         return target
     }
 
@@ -1563,6 +1627,10 @@ class PiAgentSession internal constructor(
                 "${System.currentTimeMillis()}-fork-${UUID.randomUUID().toString().take(8)}.jsonl",
             )
             target.writeText(kept.joinToString("\n", postfix = "\n"))
+            // A fork is a conversation of the same kind as its source: its file is new,
+            // so without this record it would reopen as work even when the branch came
+            // from a chat conversation.
+            host.sessionModes.setMode(target.absolutePath, _mode.value)
             target.absolutePath
         }.getOrNull()
     }
@@ -4031,6 +4099,8 @@ internal fun PiSettings.toLaunchOptions(
     credentials: Map<String, String>,
     /** The rendered chat prompt, or null for a work launch. */
     chatPromptFile: String? = null,
+    /** This launch's mode; [PiSettings.agentMode] is only a new conversation's default. */
+    mode: AgentMode = agentMode,
 ): PiLaunchOptions = PiLaunchOptions(
     nodePath = nodePath,
     cliEntry = cliEntry,
@@ -4045,6 +4115,6 @@ internal fun PiSettings.toLaunchOptions(
     extraEnv = credentials,
     apiKeyEnvVar = provider?.envVar,
     apiKey = apiKey.takeIf { it.isNotBlank() },
-    mode = agentMode,
+    mode = mode,
     systemPromptFile = chatPromptFile,
 )

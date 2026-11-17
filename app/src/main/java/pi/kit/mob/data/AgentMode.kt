@@ -8,11 +8,12 @@ import java.util.Locale
 /**
  * Which agent a conversation starts: the work agent, or the plain chat agent.
  *
- * The mode is a preference rather than a property of a transcript. It decides how the
- * *next* process is launched; a conversation that is already answering keeps the
- * process it was born with until it is restarted. [WORK] is the default and the
- * behaviour every install had before chat mode existed, so an install that never
- * touches the switch keeps exactly the agent it had.
+ * The mode belongs to a conversation: [SessionModeStore] keeps one record per saved
+ * session, and [PiSettings.agentMode] only supplies the starting mode for a conversation
+ * that has no file yet. It decides how the *next* process is launched; a conversation
+ * that is already answering keeps the process it was born with until it is restarted.
+ * [WORK] is the default and the behaviour every install had before chat mode existed,
+ * so an install that never touches the switch keeps exactly the agent it had.
  *
  * [CHAT] is not the work agent with some switches turned off. It launches pi with
  * every source of ambient context disabled — tools, extensions, skills, prompt

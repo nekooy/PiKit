@@ -269,6 +269,12 @@ internal object JapaneseStrings : Strings {
             "この会話ではエージェントがまだ応答中です。pi はセッション切り替え時に実行中の" +
                 "ターンを中止するため、この応答はすぐに止まり、あとから続きは得られません。"
         override val switchInterruptConfirm = "中断して切り替え"
+        override val modeSwitchInterruptTitle = "モードを切り替えて再起動しますか？"
+        override val modeSwitchInterruptBody =
+            "エージェントがこの会話で応答中です。モードを切り替えるとこの会話のプロセスを" +
+                "再起動するため、いまの回答はそこで止まり、続きはありません。" +
+                "メッセージと履歴は残ります。"
+        override val modeSwitchInterruptConfirm = "切り替えて再起動"
     }
 
     override val terminal = object : Strings.Terminal {
@@ -390,7 +396,7 @@ internal object JapaneseStrings : Strings {
         override val chatMode = "会話モード"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "バーで「会話」を選ぶと、ツール・拡張・スキル・AGENTS.md を読み込まず、下のシステムプロンプトだけを送ります"
+            "引き出しの切り替えで「会話」を選ぶと、ツール・拡張・スキル・AGENTS.md を読み込まず、下のシステムプロンプトだけを送ります"
         override val chatSystemPromptTitle = "システムプロンプト"
         override val chatSystemPromptSubtitle =
             "{{time}} は現在時刻に置き換わります。保存するとエージェントを再起動します"

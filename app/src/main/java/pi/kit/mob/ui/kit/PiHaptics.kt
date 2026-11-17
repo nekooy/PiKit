@@ -150,8 +150,9 @@ class PiHaptics internal constructor(
     }
 
     /**
-     * A tap on one of the app's floating chrome capsules: the four at the top of the
-     * conversation page and the settings pill at the drawer's foot.
+     * A tap on one of the app's floating chrome capsules: the drawer disc and the
+     * action pill at the top of the conversation page, and the two controls at the
+     * drawer's foot.
      *
      * This is the one button family that buzzes. Every other button, icon button, row
      * and chip stays silent — its fill is the answer. A capsule is different: it

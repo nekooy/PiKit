@@ -20,6 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import pi.kit.mob.data.ProfileAddressing
+import pi.kit.mob.data.SessionModeStore
 import pi.kit.mob.data.SettingsStore
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.catalogueRefreshEnvironment
@@ -82,6 +83,15 @@ class PiHost private constructor(context: Context) {
     val env: TermuxEnv = TermuxEnv.of(appContext)
 
     val settingsStore: SettingsStore = SettingsStore(appContext)
+
+    /**
+     * Which launch mode each saved conversation belongs to.
+     *
+     * App-wide because the same session file can be opened by any conversation and the
+     * drawer lists all of them, but per *path* because two live conversations may be in
+     * different modes at once. See [SessionModeStore].
+     */
+    internal val sessionModes: SessionModeStore by lazy { SessionModeStore(appContext) }
 
     /**
      * The host's own scope, for work that must outlive a conversation.
@@ -816,6 +826,13 @@ class PiHost private constructor(context: Context) {
         _active.value = session
         // Whatever it finished while it was not on screen has now been seen.
         session.markSeen()
+        // A new conversation starts in the mode of the one the reader was just looking
+        // at: the switch is a property of the conversation, and opening a work row from
+        // a chat screen is also a statement that work is what is wanted next.
+        val shownMode = session.mode.value
+        if (settingsStore.read().agentMode != shownMode) {
+            settingsStore.update { it.copy(agentMode = shownMode) }
+        }
         session.rememberAsLastConversation()
     }
 

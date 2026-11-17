@@ -715,6 +715,17 @@ interface Strings {
 
         /** The dialog's confirm button: it says what it does, not `OK`. */
         val switchInterruptConfirm: String
+
+        /**
+         * The same question for a launch-mode switch.
+         *
+         * The process reads its command line only at startup, so a mode change on a
+         * conversation that is answering is a restart of *this* conversation rather
+         * than a move to another one; the session file and its messages stay.
+         */
+        val modeSwitchInterruptTitle: String
+        val modeSwitchInterruptBody: String
+        val modeSwitchInterruptConfirm: String
     }
 
     interface Terminal {
@@ -1012,12 +1023,13 @@ interface Strings {
         val agentContextSection: String
 
         /**
-         * The two launch modes: the short labels in the conversation header, and the
+         * The two launch modes: the short labels in the drawer's switch, and the
          * full names the Agent page's groups use.
          *
-         * They are separate on purpose. The header has room for one two-character
+         * They are separate on purpose. The switch has room for one two-character
          * word per segment; the settings page names the same choice in full, and a
-         * single "工作模式" in the header would be too wide beside the drawer disc.
+         * single "工作模式" in a two-segment switch would make the two halves
+         * different widths.
          */
         val modeWork: String
         val modeChat: String

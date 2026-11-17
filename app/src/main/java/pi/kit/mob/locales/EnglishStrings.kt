@@ -274,6 +274,12 @@ internal object EnglishStrings : Strings {
                 "when it changes session, so this answer stops immediately and cannot be " +
                 "resumed afterwards."
         override val switchInterruptConfirm = "Interrupt and switch"
+        override val modeSwitchInterruptTitle = "Switch mode and restart?"
+        override val modeSwitchInterruptBody =
+            "The agent is answering in this conversation. Switching mode restarts this " +
+                "conversation's process, so the answer stops here and cannot continue; " +
+                "the messages and history stay."
+        override val modeSwitchInterruptConfirm = "Switch and restart"
     }
 
     override val terminal = object : Strings.Terminal {
@@ -399,7 +405,7 @@ internal object EnglishStrings : Strings {
         override val chatMode = "Chat mode"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "With the top bar on Chat, no tools, extensions, skills or AGENTS.md load — only the system prompt below"
+            "With the drawer's switch on Chat, no tools, extensions, skills or AGENTS.md load — only the system prompt below"
         override val chatSystemPromptTitle = "System prompt"
         override val chatSystemPromptSubtitle = "{{time}} becomes the current time; saving restarts the agent"
         override val chatSystemPromptEditorHint =

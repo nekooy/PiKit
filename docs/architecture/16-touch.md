@@ -60,12 +60,12 @@ keys are the platform's, and a second tick from the app would double them and ho
 neither the user's setting nor the theme.
 
 **`tap()` is the one button family that buzzes**, and the exception is narrow: the
-four capsules at the top of the conversation page — the drawer's mark and the three
-marks in the trailing pill — and the settings pill at the drawer's foot. They float
-over a scrolling page with no bar behind them, so the fill is the only press feedback
-they have; `VirtualKey` is the platform's light button tick. Every other button, icon
-button, row and chip stays silent for the reason below. The family is named at its
-five controls, never inferred from "it has an onClick".
+drawer disc and the action pill at the top of the conversation page, and the mode
+switch and settings disc at the drawer's foot. They float over a scrolling page with
+no bar behind them, so the fill is the only press feedback they have; `VirtualKey` is
+the platform's light button tick. Every other button, icon button, row and chip stays
+silent for the reason below. The family is named at its controls, never inferred from
+"it has an onClick".
 
 **There is no `reject()` and no `confirm()`.** Both were considered and dropped: every
 refusal this app can produce (an invalid path, a failed restore, a refused
@@ -134,10 +134,10 @@ stays silent when it is an *action* (`onClick` with no `selected`) or a *fact*
 follows the declaration. Without this the same act ticked in one menu and not in
 another, which is the inconsistency this chapter removes.
 
-**The conversation row that flips a checkbox.** In selection mode the trailing Miuix
-`Checkbox` buzzes when it is tapped, and the row does not — so the same act had two
-feels depending on where the thumb landed. The row buzzes too, and the checkbox keeps
-its own; the two hit regions are exclusive, so nothing double-buzzes.
+**The conversation row in multi-select.** The row is the only target: in selection
+mode its trailing mark is drawn (a 20dp circle, not the library's 48dp `Checkbox`, whose
+touch target grew every row by 12px), and a tap anywhere on the row — mark included —
+calls `toggle()` once. There is no second control to buzz on its own.
 
 **A dropdown menu's chosen row.** `DropdownImpl` does not tick — measured, above —
 although the same question in a settings list is a radio row that does. The app calls

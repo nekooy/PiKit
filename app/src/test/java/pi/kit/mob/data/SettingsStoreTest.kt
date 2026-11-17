@@ -173,7 +173,7 @@ class SettingsStoreTest {
  * directory the profile document lives in. Everything else on the wrapper is
  * never reached by the store's constructor or `update`.
  */
-private class FakeContext(
+internal class FakeContext(
     private val preferences: SharedPreferences,
     private val filesDir: File,
 ) : ContextWrapper(null) {
@@ -187,7 +187,7 @@ private class FakeContext(
  * its own `PreferenceStore`, here for the platform interface so the real
  * `SettingsStore` runs against it unchanged.
  */
-private class FakeSharedPreferences : SharedPreferences {
+internal class FakeSharedPreferences : SharedPreferences {
     private val values = mutableMapOf<String, Any?>()
 
     override fun getAll(): MutableMap<String, *> = values.toMutableMap()

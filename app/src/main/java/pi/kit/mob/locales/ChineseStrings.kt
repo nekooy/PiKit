@@ -268,6 +268,11 @@ internal object ChineseStrings : Strings {
             "Agent 正在这个对话里输出。pi 在切换会话时会中止正在进行的回合，" +
                 "这次回答会立刻停止，停下来之后无法继续。"
         override val switchInterruptConfirm = "中断并切换"
+        override val modeSwitchInterruptTitle = "切换模式并重启？"
+        override val modeSwitchInterruptBody =
+            "Agent 正在这个对话里输出。切换模式会重新启动这个对话的进程，" +
+                "当前回答会立刻停止且无法继续；消息和历史都会保留。"
+        override val modeSwitchInterruptConfirm = "切换并重启"
     }
 
     override val terminal = object : Strings.Terminal {
@@ -393,7 +398,7 @@ internal object ChineseStrings : Strings {
         override val chatMode = "对话模式"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "顶栏切到「对话」后，不加载工具、扩展、技能和 AGENTS.md，只发送下面这份系统提示词"
+            "抽屉底部切到「对话」后，不加载工具、扩展、技能和 AGENTS.md，只发送下面这份系统提示词"
         override val chatSystemPromptTitle = "系统提示词"
         override val chatSystemPromptSubtitle = "{{time}} 替换为当前时间；保存后重启 Agent"
         override val chatSystemPromptEditorHint =

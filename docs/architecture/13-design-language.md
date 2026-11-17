@@ -301,18 +301,19 @@ seconds and never interactive, is the queue's whole shape.
 ## Navigation
 
 The app has one root page — the conversation — and everything else is reached from it.
-Its top is the app's own arrangement rather than a library bar: two floating capsules and
-the **Work / Chat** switch between them. The leading capsule holds the mark that opens the
-conversation drawer, the trailing one holds the terminal, the files and a new conversation
-in that order, and the mode switch stands on the page itself instead of in a frame. The
-conversation is what the app is for; a bar of four equally weighted destinations said
-otherwise.
+Its top is the app's own arrangement rather than a library bar: two floating capsules. The
+leading capsule holds the mark that opens the conversation drawer, and the trailing one
+holds the terminal, the files and a new conversation in that order. The conversation is
+what the app is for; a bar of four equally weighted destinations said otherwise. The
+**Work / Chat** switch left the header for the drawer's foot, where it shares the panel's
+footer with the settings disc.
 
-**The drawer's foot wears the same capsule.** The one control at the bottom of the history
-panel — the way into the settings — is a `PiGlass.fill()` pill, the fill the bar's marks are
-drawn with, because it is the same kind of object: a control floating over a page rather
-than a row on it. It used to be an opaque `surfaceContainer` pill, and that made it a
-different kind of object from the capsules one panel away.
+**The drawer's foot wears the same capsules.** The mode switch and the settings disc at the
+bottom of the history panel are `PiGlass.fill()`, the fill the bar's marks are drawn with,
+because they are the same kind of object: controls floating over a page rather than rows
+on it. The settings control used to be an opaque `surfaceContainer` pill with a word; it is
+a disc now, since the mode switch beside it already names the only other thing the footer
+does.
 
 **A bar with no bar in it.** The reference drawing the page follows has no strip across
 the top: the content scrolls *under* the marks, fades out as it reaches them, and the
@@ -486,12 +487,11 @@ Two marks are drawn for this app rather than borrowed, because Miuix's set has n
 the terminal's (a chevron and an underscore) and the drawer's (a long rule over a short
 one, left-aligned, which is the reference's own handle mark). Both are *navigation*
 marks — two strokes at the library's line weight on a 24-unit grid, no fill — and neither
-is the app's mark, which is the launcher glyph. The footer's settings pill is the
-library's `Settings` at 20dp inside a 48dp capsule. It is **centred on the panel**, not
-hung at the list's gutter: at the leading edge it shared a column with the row marks above
-it, so it read as the last row's action rather than as the drawer's foot, and a control
-that belongs to the panel is centred on the panel. The list's end padding is unchanged, so
-a list scrolled to its last conversation still stops above the pill.
+is the app's mark, which is the launcher glyph. The footer's settings control is the
+library's `Settings` at 20dp inside a 42dp disc at the panel's trailing gutter, opposite
+the mode switch: the foot has two ends, and each holds the choice that belongs to it. The
+list's end padding is unchanged, so a list scrolled to its last conversation still stops
+above both controls.
 
 **Back at the root loses the app, on the second press.** The conversation is the root, so
 a back press has nowhere to go, and the platform's left-edge gesture is exactly where a
@@ -626,7 +626,7 @@ one decision each makes that the shared vocabulary does not:
   unframed rows had none.
 - **History** — a list of conversations is a list of *questions the reader asked*, so
   a row is the reader's own words, ellipsised to one line, beside when it was and how
-  much followed, with selection as a checkbox and actions on a hold. The pinned group
+  much followed, with selection as a drawn mark and actions on a hold. The pinned group
   is tinted with the secondary container under its own `SmallTitle`, not one lift per
   row, so a run of pinned conversations reads as a group rather than a stack of
   separate selections.

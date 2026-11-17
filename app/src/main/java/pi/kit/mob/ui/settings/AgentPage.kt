@@ -823,7 +823,7 @@ private fun ChatPromptEditor(
                     // next launch reads the old prompt is worse than no toast.
                     val written = runCatching {
                         session.settingsStore.update { it.copy(chatSystemPrompt = draft) }
-                        if (session.settingsStore.read().agentMode == AgentMode.CHAT) {
+                        if (session.mode.value == AgentMode.CHAT) {
                             // The current process has the old prompt; schedule rather
                             // than restart now, so an answer being written is not cut.
                             session.scheduleRestart()

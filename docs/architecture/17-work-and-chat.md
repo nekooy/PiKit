@@ -9,29 +9,34 @@ prompt, `AGENTS.md`, the bundled web-access extension, and the seven built-in to
 is one editable system-prompt document, and pi starts with every source of ambient
 resources switched off.
 
-The mode is a preference (`PiSettings.agentMode`), not a property of a transcript. A
-process reads it only when it is spawned, so changing it affects the next launch; the
-UI handles that by restarting an empty conversation in place and opening a fresh one
-when the current conversation already has messages. The old transcript is never
-rewritten into another mode.
+The mode belongs to a **conversation**, not to the app. `SessionModeStore` keeps one
+entry per session file; a conversation opened from the drawer reads its own record,
+and a conversation with no file yet takes `PiSettings.agentMode` — the mode the last
+visible conversation had — as its starting point. The fallback for a path with no
+record is **Work**, which is what every conversation written before chat mode existed
+is. A global switch could not answer "which mode is this conversation" when a work
+conversation is opened from a chat screen, and that is exactly the bug that moved the
+state into the store: the toggle showed chat while the work transcript was on screen.
 
-## The switch is in the title slot
+## The switch is at the drawer's foot
 
-The chat page's bar used to print the app's name. The name is now the two-segment
-**Work / Chat** control, in the same glass capsule as the drawer disc and the trailing
-action pill. Both answers are visible because the question is binary and a reader
-should be able to see which agent they are talking to without opening a menu.
+The chat page's bar used to hold the two-segment **Work / Chat** control. It now holds
+only the drawer disc and the trailing action pill. The switch shares the drawer's
+foot with the settings gear — mode on the leading side where a profile strip used to
+stand, the gear on the trailing side as a disc with no word — because both are
+choices about the whole conversation rather than about the page behind it. The switch
+is a `selectableGroup` of two `Role.Tab` segments with a thumb that travels between
+them: a tap animates the thumb, and a horizontal drag moves it under the finger and
+settles on the nearer side.
 
-The control is a `selectableGroup` of two `Role.Tab` segments. Selecting a mode calls
-`PiSettings.update`, then:
-
-- an empty conversation is restarted in place — there is nothing to preserve;
-- a conversation with messages keeps its process and transcript, and a new empty
-  conversation is opened beside it in the new mode. A clean context is the point of
-  chat mode, so inheriting a work conversation's tool history would defeat it;
-- a full conversation pool falls back to restarting the current one. That is the one
-  case where the click cannot make the ideal switch, and it is better than silently
-  leaving the old process in force.
+Switching does not open a second conversation. It records the mode for the session
+file and, when the process is live, restarts it in place; `restoreTarget` still names
+the same file, so the fresh child rebinds to it and the transcript and model history
+are unchanged. A conversation opened from disk but not yet started only records the
+mode — its first prompt launches with it. Switching an empty conversation therefore
+changes nothing about its history; switching one with messages keeps every message.
+While an answer is streaming the switch asks first, because the relaunch ends the
+turn, the same question the workspace chip asks.
 
 A mode that flips is one of the app's five haptic moments, so the switch calls
 `PiHaptics.toggle` rather than `tap` (ARCHITECTURE §16).

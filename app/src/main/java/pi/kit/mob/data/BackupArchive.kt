@@ -838,6 +838,9 @@ internal class BackupArchive(
             // under [EXTRA_WORKSPACES_DIR].
             PreferenceFile(WorkspaceStore.PREFS, BackupCategory.SETTINGS),
             PreferenceFile("pikit_session_pins", BackupCategory.CONVERSATIONS),
+            // The mode each conversation was started in travels with the transcripts:
+            // without it every restored chat conversation would reopen as work.
+            PreferenceFile(SessionModeStore.PREFS, BackupCategory.CONVERSATIONS),
         )
     }
 }

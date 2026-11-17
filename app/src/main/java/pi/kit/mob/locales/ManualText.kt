@@ -187,9 +187,10 @@ red stop button.
 - **Below the field's right**: the context
   ring and the send button; the ring opens the
   same report the cache chip does.
-- **The top bar**: the **Work / Chat** switch;
-  a conversation is named in the drawer, where
-  the one on screen is highlighted.
+- **The drawer's foot**: the **Work / Chat**
+  switch on the left and the gear into settings
+  on the right; a conversation is named in the
+  list, where the one on screen is highlighted.
 
 ### Commands
 
@@ -562,23 +563,26 @@ nothing else.
 
 ### Chat mode
 
-- **What it is**: the switch in the top bar. A
-  conversation started in chat mode loads no
-  tools, extensions, skills, prompt templates or
-  `AGENTS.md`; before its first message the only
-  leading context is the system prompt below.
+- **What it is**: the switch at the drawer's
+  foot. A conversation started in chat mode
+  loads no tools, extensions, skills, prompt
+  templates or `AGENTS.md`; before its first
+  message the only leading context is the system
+  prompt below.
 - **System prompt**: the one editable
   document. Its default is only the current
   time. `{{time}}` in the editor is where the
   time goes — move it to move the injection
   point; the actual timestamp is filled in at
   launch.
-- **Switching** with messages already on
-  screen keeps that conversation and opens a
-  fresh one beside it, so a chat never inherits
-  a work conversation's tool history. Saving the
-  prompt restarts the agent, because pi reads it
-  only when the process starts.
+- **Switching** changes this conversation's
+  mode; it does not open a new one. Its messages
+  and session file stay, and the relaunched
+  process continues from the same history, so if
+  nothing has been sent after the switch the
+  context is unchanged. Saving the prompt
+  restarts the agent, because pi reads it only
+  when the process starts.
 
 ### Process and keep-alive
 

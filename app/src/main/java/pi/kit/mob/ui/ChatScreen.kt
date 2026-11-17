@@ -58,8 +58,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -121,7 +119,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -472,6 +469,12 @@ internal fun ChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val toasts = LocalPiToast.current
+    // The launch mode belongs to the *conversation*, not to the app: opening a work
+    // conversation while a chat conversation is on screen has to show work in the
+    // drawer's switch, and switching it has to relaunch this conversation rather than
+    // open another one. Collected here because both the drawer and the page below it
+    // ask the same question.
+    val mode by session.mode.collectAsState()
     // Owned by `RootContent`, above the page crossfade, so a page switch does not destroy
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
@@ -814,27 +817,6 @@ internal fun ChatScreen(
     }
 
     /**
-     * Switches the launch mode without turning the conversation on screen into a
-     * different agent halfway through.
-     *
-     * The process reads its mode only when it starts. An empty conversation can be
-     * restarted in place with nothing lost; a conversation that already has messages
-     * keeps its transcript and its process, and a fresh empty one is opened beside it
-     * in the new mode. That is what makes "chat mode starts clean" true even when the
-     * switch is tapped after an hour of work — the old conversation is in the drawer,
-     * not rewritten under the reader.
-     *
-     * A full pool is the one case the new conversation cannot be opened; the current
-     * agent is restarted instead, which still applies the mode to the next launch.
-     */
-    fun switchMode(mode: AgentMode) {
-        if (mode == session.settingsStore.read().agentMode) return
-        session.settingsStore.update { it.copy(agentMode = mode) }
-        val opened = if (state.items.isNotEmpty()) onNewConversation() else false
-        if (!opened) session.restartAgent()
-    }
-
-    /**
      * Switches this conversation's workspace, asking first when an answer is running.
      *
      * The composer's chip is the control; the switch itself is the session's, because
@@ -1053,6 +1035,8 @@ internal fun ChatScreen(
                     onOpened = { settlePage(0f, 0f) },
                     onOpenConversation = onOpenConversation,
                     onOpenSettings = onOpenSettings,
+                    mode = mode,
+                    onModeChange = { session.switchMode(it) },
                     currentPath = currentPath,
                 )
             }
@@ -1155,7 +1139,7 @@ internal fun ChatScreen(
                     settlePage(1f, 0f)
                 },
                 onNewSession = ::newSession,
-                onSwitchMode = ::switchMode,
+                mode = mode,
                 currentWorkspace = currentWorkspace,
                 onSelectWorkspace = ::selectWorkspace,
                 onOpenWorkspacePicker = { showWorkspacePicker = true },
@@ -1354,20 +1338,15 @@ internal fun ChatScreen(
  *
  * ## The header
  *
- * The page frame is the shell's one fixed header: where the app's name used to stand,
- * the **Work / Chat** switch now sits, one line the header ellipsises rather than a band
- * that grows and shrinks with it. The header used to be
- * the large *collapsing* bar, on the argument that a moving title should give its
- * height back to the transcript as the reader scrolled — the price was that this page's
- * chrome was 36dp taller than the settings pages' and moved while the others did not,
- * and §9.2 has the tokens that made the two heights unequal. Miuix's small bar is
- * pinned by construction, which is the same decision the rest of the app already made.
- *
- * The title is drawn in the one size every Miuix page's title is drawn in — the top
- * bar owns that decision, and a page that styled its own title was how the chat page
- * ended up with a header a size smaller than the Terminal's, Files' and Settings'
- * when its title was derived from the reader's first sentence rather than from a
- * session name.
+ * The page frame is not a `PiPage` bar: the leading drawer disc and the trailing action
+ * pill float over the transcript, which fades out under them. The app's name used to be
+ * here, then the **Work / Chat** switch; the switch now belongs to the drawer's foot,
+ * where it sits beside the settings disc. The header used to be the large *collapsing*
+ * bar, on the argument that a moving title should give its height back to the transcript
+ * as the reader scrolled — the price was that this page's chrome was 36dp taller than the
+ * settings pages' and moved while the others did not, and §9.2 has the tokens that made
+ * the two heights unequal. The floating capsules are pinned by construction, which is the
+ * same decision the rest of the app already made.
  *
  * The **agent's mark** used to stand in the header's action row, drawn by a component
  * of the old design system that nothing else used; it is gone, because to the reader
@@ -1375,9 +1354,9 @@ internal fun ChatScreen(
  * subtitle does not already say in words. The compress button followed it: what it
  * did is `/compact` on the command list now that the list is a page rather than a
  * menu, and a header whose second action is one row of another screen's list is a
- * header with one action. What remains is two — history, then new — left to right as
- * "look at the others, start another", which is also the order of how much each
- * disturbs what is on screen.
+ * header with one action. What remains is three — terminal, files, then new — left to
+ * right as "look at the others, start another", which is also the order of how much
+ * each disturbs what is on screen.
  *
  * ## The composer sits under the transcript
  *
@@ -1388,20 +1367,19 @@ internal fun ChatScreen(
  * replaced was an overlay with a measured height; §7.1 has the whole of why it is a
  * band again and where the field's frame came back from.
  *
- * The *mode* is passed as a small enum rather than as the settings snapshot, for the
- * same performance reason the old title was a string: `ConversationState` changes
- * several times a second while an answer streams, and the header's mode changes once
- * per choice.
+ * The *mode* is a property of the conversation, read once here as a small enum rather
+ * than as the settings snapshot: `ConversationState` changes several times a second
+ * while an answer streams, and the mode changes once per choice.
  */
 /**
- * The chat page's bar, as the reference draws it: two floating capsules and the
- * **Work / Chat** switch.
+ * The chat page's bar: a drawer disc at the leading edge and one action pill at the
+ * trailing edge.
  *
- * A circle at the leading edge holds the drawer's mark; the mode switch stands on the
- * page itself, not in a frame; and the three marks at the trailing edge share one pill.
- * None of them has a bar behind it — what is behind them is the transcript, faded out by
- * [FADE_TAIL]'s gradient — which is the whole of the difference between this and the
- * opaque strip a `PiPage` would draw.
+ * The mode switch used to stand between them; it belongs to the drawer's foot now,
+ * beside the settings disc, because both are choices about the conversation rather than
+ * about the page. Neither capsule has a bar behind it — what is behind them is the
+ * transcript, faded out by [FADE_TAIL]'s gradient — which is the whole of the difference
+ * between this and the opaque strip a `PiPage` would draw.
  *
  * The capsules are `PiGlass.fill()`, the fill the composer's chips and the jump-to-latest
  * button use: a control that floats over the page is the same object whether it holds a
@@ -1410,8 +1388,6 @@ internal fun ChatScreen(
  */
 @Composable
 private fun ChatHeader(
-    mode: AgentMode,
-    onModeChange: (AgentMode) -> Unit,
     onOpenSessions: () -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -1448,8 +1424,6 @@ private fun ChatHeader(
                 modifier = Modifier.size(22.dp),
             )
         }
-        Spacer(Modifier.width(14.dp))
-        ModeSwitch(mode = mode, onModeChange = onModeChange, text = text)
         Spacer(Modifier.weight(1f))
         val trailingShape = RoundedCornerShape(percent = 50)
         Row(
@@ -1476,94 +1450,6 @@ private fun ChatHeader(
         }
     }
 }
-
-/**
- * The app's two launch modes, as one floating segment.
- *
- * A segmented control rather than a title with a menu: the choice is binary, it is
- * the first thing a reader changes when they want a different kind of conversation,
- * and both answers being visible makes "which agent am I talking to" a glance rather
- * than a tap. The pill is the header's own glass so it belongs with the drawer disc
- * and the action capsule on the same line.
- *
- * [AgentMode.CHAT] is the "on" state of the toggle for haptics; the platform's two
- * constants are direction, not semantics, and this is one control flipping between two
- * stable modes.
- */
-@Composable
-private fun ModeSwitch(
-    mode: AgentMode,
-    onModeChange: (AgentMode) -> Unit,
-    text: Strings,
-) {
-    val haptics = LocalPiHaptics.current
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(PiGlass.fill())
-            .padding(3.dp)
-            .selectableGroup(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ModeSegment(
-            label = text.settings.modeWork,
-            selected = mode == AgentMode.WORK,
-            onClick = {
-                if (mode != AgentMode.WORK) {
-                    haptics.toggle(false)
-                    onModeChange(AgentMode.WORK)
-                }
-            },
-        )
-        ModeSegment(
-            label = text.settings.modeChat,
-            selected = mode == AgentMode.CHAT,
-            onClick = {
-                if (mode != AgentMode.CHAT) {
-                    haptics.toggle(true)
-                    onModeChange(AgentMode.CHAT)
-                }
-            },
-        )
-    }
-}
-
-/** One half of [ModeSwitch]. */
-@Composable
-private fun ModeSegment(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .heightIn(min = MODE_SEGMENT_HEIGHT)
-            .clip(RoundedCornerShape(percent = 50))
-            .background(if (selected) MiuixTheme.colorScheme.primary else Color.Transparent)
-            .selectable(
-                selected = selected,
-                role = Role.Tab,
-                onClick = onClick,
-            )
-            .padding(horizontal = 13.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.title3,
-            fontWeight = FontWeight.Medium,
-            color = if (selected) {
-                MiuixTheme.colorScheme.onPrimary
-            } else {
-                MiuixTheme.colorScheme.onSurface
-            },
-            maxLines = 1,
-        )
-    }
-}
-
-/** The header segment's height: 36dp plus the pill's 3dp inset is the 42dp capsule beside it. */
-private val MODE_SEGMENT_HEIGHT = 36.dp
 
 /** One mark inside the trailing pill. */
 @Composable
@@ -1703,8 +1589,8 @@ private fun ChatPage(
     onShowPromptExtras: (PromptExtras) -> Unit,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
-    /** Switches the launch mode; the page decides whether a new conversation is due. */
-    onSwitchMode: (AgentMode) -> Unit,
+    /** This conversation's launch mode: what the empty-state tips and the composer follow. */
+    mode: AgentMode,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
     /** The workspace this conversation runs in, as an absolute path. */
@@ -1941,7 +1827,7 @@ private fun ChatPage(
     // The page, and the layer its bar floats on.
     //
     // The reference draws the top of the screen as a *surface* the conversation runs
-    // under: two capsules holding the marks, the Work / Chat switch between them, and the top of
+    // under: two capsules holding the marks, and the top of
     // the transcript fading into the background behind them. A `PiPage` bar is the
     // opposite of that — an opaque strip that pushes the content down — so this page
     // draws its own frame: the transcript fills the window, a gradient covers its first
@@ -2064,8 +1950,8 @@ private fun ChatPage(
                             } else {
                                 ChatEmptyState(
                                     title = text.chat.newConversation,
-                                    body = remember(cards, saved.agentMode) {
-                                        val tips = if (saved.agentMode == AgentMode.CHAT) {
+                                    body = remember(cards, mode) {
+                                        val tips = if (mode == AgentMode.CHAT) {
                                             text.chat.chatTips
                                         } else {
                                             text.chat.tips
@@ -2537,6 +2423,7 @@ private fun ChatPage(
                 inputEnabled = agent is AgentStatus.Running || agent is AgentStatus.Starting,
                 agent = agent,
                 facts = composerFacts,
+                mode = mode,
                 openSheet = openSheet,
                 onOpenSheet = onOpenSheet,
                 onCloseSheet = onCloseSheet,
@@ -2592,8 +2479,6 @@ private fun ChatPage(
         )
 
         ChatHeader(
-            mode = saved.agentMode,
-            onModeChange = onSwitchMode,
             onOpenSessions = onOpenSessions,
             onOpenTerminal = onOpenTerminal,
             onOpenFiles = onOpenFiles,
@@ -4535,6 +4420,8 @@ private fun Composer(
     inputEnabled: Boolean,
     agent: AgentStatus,
     facts: ComposerFacts,
+    /** This conversation's launch mode; chat mode hides the controls that need tools. */
+    mode: AgentMode,
     /** Which of the four menus is open, or null. Each chip asks whether it is the one. */
     openSheet: ComposerSheet?,
     onOpenSheet: (ComposerSheet) -> Unit,
@@ -4585,7 +4472,7 @@ private fun Composer(
     // agent with hands are not drawn: a workspace is where tools act, and the
     // permission tier is the rule they are judged by. Leaving them on screen would
     // offer settings that the process they configure cannot honour.
-    val chatMode = saved.agentMode == AgentMode.CHAT
+    val chatMode = mode == AgentMode.CHAT
 
     // Read here rather than taken as a parameter: it is only this card's own
     // dismissal that needs it, and the page's `focusManager` is the same object
