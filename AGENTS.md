@@ -5,6 +5,22 @@ the project is; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) says why the design
 shaped the way it is, chapter by chapter, and [docs/README.md](docs/README.md) is
 the index of every document. This file is the practical part.
 
+## Before you change anything
+
+**Read the document that owns the area, then the code it describes.** `docs/README.md`
+says which file owns which topic, and `docs/ARCHITECTURE.md`'s table resolves a §
+number to exactly one chapter. Read that chapter first — it carries the measurement
+that settled the design and the alternative that lost — then read the code around the
+change: the call sites, the tests and the neighbouring files, not only the line you
+intend to edit. A comment that cites `ARCHITECTURE §…` is a pointer to read before
+touching the line under it, not decoration.
+
+**When something is unclear, read the documentation before deciding it is wrong.** An
+odd-looking call site, a magic constant or a redundant-looking wrapper usually has a
+reason written down in the chapter that owns it; search `docs/` and the code around it
+first. If the chapter and the code disagree, one of them is stale — settle it in the
+same change instead of silently following one and leaving the other behind.
+
 ## Build and test
 
 ```bash
