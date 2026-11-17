@@ -914,6 +914,9 @@ private fun PiProvider.modelsEndpoint(): ModelsEndpoint? = when (this) {
     PiProvider.QWEN_TOKEN_PLAN_INDIVIDUAL -> bearer(
         "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/models",
     )
+    PiProvider.QWEN_TOKEN_PLAN_INDIVIDUAL_CN -> bearer(
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/models",
+    )
     PiProvider.QWEN_TOKEN_PLAN_CN ->
         bearer("https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/models")
 

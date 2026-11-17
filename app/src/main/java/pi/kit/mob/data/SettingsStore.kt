@@ -84,6 +84,11 @@ enum class PiProvider(val id: String, val envVar: String, val label: String) {
         "QWEN_TOKEN_PLAN_API_KEY",
         "Qwen Token Plan Individual",
     ),
+    QWEN_TOKEN_PLAN_INDIVIDUAL_CN(
+        "qwen-token-plan-individual-cn",
+        "QWEN_TOKEN_PLAN_CN_API_KEY",
+        "Qwen Token Plan Individual CN",
+    ),
     NVIDIA("nvidia", "NVIDIA_API_KEY", "NVIDIA"),
     TOGETHER("together", "TOGETHER_API_KEY", "Together"),
     FIREWORKS("fireworks", "FIREWORKS_API_KEY", "Fireworks"),

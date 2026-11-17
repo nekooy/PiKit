@@ -101,7 +101,7 @@ STAGING_ROOT = BUILD_ROOT / "staging"
 #: Bootstrap release pinned by this project. A newer tag is a periodic bump —
 #: MAINTAINING's table carries the apt-index comparison and the device pass that
 #: go with one — then rebuild.
-BOOTSTRAP_TAG = "bootstrap-2026.11.01-r1+apt.android-7"
+BOOTSTRAP_TAG = "bootstrap-2026.11.15-r1+apt.android-7"
 
 #: Termux apt repository. `Packages.xz` does not exist; `.bz2` is the smallest.
 APT_BASE = "https://packages.termux.dev/apt/termux-main"
@@ -256,6 +256,11 @@ PACKAGE_OVERRIDES = {
     # (GHSA-w74x-v6f9-jxgq &c) through pi-web-access 0.42.0's express/ajv.
     "body-parser": "^2.4.0",
     "fast-uri": "^3.1.9",
+    # GHSA-qv5m-9pm6-hqp3 and GHSA-jpvv-r467-5p4w on @hono/node-server through
+    # 2.1.5, and five Hono advisories through 4.13.15, both reached through
+    # pi-web-access 0.48.0's @modelcontextprotocol/sdk 1.32.1.
+    "@hono/node-server": "^2.1.6",
+    "hono": "^4.13.16",
 }
 
 #: What the app reads to find the extension and to describe it on the settings
