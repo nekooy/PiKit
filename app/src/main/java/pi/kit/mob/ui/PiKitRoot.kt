@@ -701,14 +701,16 @@ private fun ChatTab(
             rootScope.launch { opened?.startAgent() }
         }
     }
-    val openNew: () -> Unit = remember(host, rootScope) {
+    val openNew: () -> Boolean = remember(host, rootScope) {
         {
             openedPath = null
             val opened = host.newConversation()
             if (opened == null) {
                 toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
+                false
             } else {
                 rootScope.launch { opened.startAgent() }
+                true
             }
         }
     }

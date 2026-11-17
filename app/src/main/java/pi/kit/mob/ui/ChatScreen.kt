@@ -58,6 +58,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -119,6 +121,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -142,6 +145,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
+import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.PiSettings
@@ -184,7 +188,6 @@ import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiMotion
-import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiTone
@@ -438,7 +441,7 @@ internal fun ChatScreen(
      */
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
     /** Opens an empty conversation beside this one, which keeps running. */
-    onNewConversation: () -> Unit,
+    onNewConversation: () -> Boolean,
     /** Whether the conversation drawer is out; owned by `RootContent`. */
     historyOpen: Boolean,
     /**
@@ -811,6 +814,27 @@ internal fun ChatScreen(
     }
 
     /**
+     * Switches the launch mode without turning the conversation on screen into a
+     * different agent halfway through.
+     *
+     * The process reads its mode only when it starts. An empty conversation can be
+     * restarted in place with nothing lost; a conversation that already has messages
+     * keeps its transcript and its process, and a fresh empty one is opened beside it
+     * in the new mode. That is what makes "chat mode starts clean" true even when the
+     * switch is tapped after an hour of work — the old conversation is in the drawer,
+     * not rewritten under the reader.
+     *
+     * A full pool is the one case the new conversation cannot be opened; the current
+     * agent is restarted instead, which still applies the mode to the next launch.
+     */
+    fun switchMode(mode: AgentMode) {
+        if (mode == session.settingsStore.read().agentMode) return
+        session.settingsStore.update { it.copy(agentMode = mode) }
+        val opened = if (state.items.isNotEmpty()) onNewConversation() else false
+        if (!opened) session.restartAgent()
+    }
+
+    /**
      * Switches this conversation's workspace, asking first when an answer is running.
      *
      * The composer's chip is the control; the switch itself is the session's, because
@@ -1131,6 +1155,7 @@ internal fun ChatScreen(
                     settlePage(1f, 0f)
                 },
                 onNewSession = ::newSession,
+                onSwitchMode = ::switchMode,
                 currentWorkspace = currentWorkspace,
                 onSelectWorkspace = ::selectWorkspace,
                 onOpenWorkspacePicker = { showWorkspacePicker = true },
@@ -1329,9 +1354,9 @@ internal fun ChatScreen(
  *
  * ## The header
  *
- * The page frame is [PiPage] with the shell's one fixed header: this page's title is the
- * app's own name, one line the header ellipsises rather than a band that grows and
- * shrinks with it. The header used to be
+ * The page frame is the shell's one fixed header: where the app's name used to stand,
+ * the **Work / Chat** switch now sits, one line the header ellipsises rather than a band
+ * that grows and shrinks with it. The header used to be
  * the large *collapsing* bar, on the argument that a moving title should give its
  * height back to the transcript as the reader scrolled — the price was that this page's
  * chrome was 36dp taller than the settings pages' and moved while the others did not,
@@ -1363,18 +1388,18 @@ internal fun ChatScreen(
  * replaced was an overlay with a measured height; §7.1 has the whole of why it is a
  * band again and where the field's frame came back from.
  *
- * The *title* is passed as a `String` rather than as the state it came from, and
- * that is a performance decision: `ConversationState` is a new object for every
- * record pi sends — several times a second while an answer streams — so a header that
- * took the state could never be skipped and would re-run for every token, while the
- * two things it draws change once per conversation and once per process lifecycle.
+ * The *mode* is passed as a small enum rather than as the settings snapshot, for the
+ * same performance reason the old title was a string: `ConversationState` changes
+ * several times a second while an answer streams, and the header's mode changes once
+ * per choice.
  */
 /**
- * The chat page's bar, as the reference draws it: two floating capsules and a name.
+ * The chat page's bar, as the reference draws it: two floating capsules and the
+ * **Work / Chat** switch.
  *
- * A circle at the leading edge holds the drawer's mark; the app's name stands on the page
- * itself, not in a frame; and the three marks at the trailing edge share one pill. None of
- * them has a bar behind it — what is behind them is the transcript, faded out by
+ * A circle at the leading edge holds the drawer's mark; the mode switch stands on the
+ * page itself, not in a frame; and the three marks at the trailing edge share one pill.
+ * None of them has a bar behind it — what is behind them is the transcript, faded out by
  * [FADE_TAIL]'s gradient — which is the whole of the difference between this and the
  * opaque strip a `PiPage` would draw.
  *
@@ -1385,7 +1410,8 @@ internal fun ChatScreen(
  */
 @Composable
 private fun ChatHeader(
-    title: String,
+    mode: AgentMode,
+    onModeChange: (AgentMode) -> Unit,
     onOpenSessions: () -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -1423,14 +1449,7 @@ private fun ChatHeader(
             )
         }
         Spacer(Modifier.width(14.dp))
-        Text(
-            text = title,
-            style = MiuixTheme.textStyles.title3,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        ModeSwitch(mode = mode, onModeChange = onModeChange, text = text)
         Spacer(Modifier.weight(1f))
         val trailingShape = RoundedCornerShape(percent = 50)
         Row(
@@ -1457,6 +1476,94 @@ private fun ChatHeader(
         }
     }
 }
+
+/**
+ * The app's two launch modes, as one floating segment.
+ *
+ * A segmented control rather than a title with a menu: the choice is binary, it is
+ * the first thing a reader changes when they want a different kind of conversation,
+ * and both answers being visible makes "which agent am I talking to" a glance rather
+ * than a tap. The pill is the header's own glass so it belongs with the drawer disc
+ * and the action capsule on the same line.
+ *
+ * [AgentMode.CHAT] is the "on" state of the toggle for haptics; the platform's two
+ * constants are direction, not semantics, and this is one control flipping between two
+ * stable modes.
+ */
+@Composable
+private fun ModeSwitch(
+    mode: AgentMode,
+    onModeChange: (AgentMode) -> Unit,
+    text: Strings,
+) {
+    val haptics = LocalPiHaptics.current
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(PiGlass.fill())
+            .padding(3.dp)
+            .selectableGroup(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ModeSegment(
+            label = text.settings.modeWork,
+            selected = mode == AgentMode.WORK,
+            onClick = {
+                if (mode != AgentMode.WORK) {
+                    haptics.toggle(false)
+                    onModeChange(AgentMode.WORK)
+                }
+            },
+        )
+        ModeSegment(
+            label = text.settings.modeChat,
+            selected = mode == AgentMode.CHAT,
+            onClick = {
+                if (mode != AgentMode.CHAT) {
+                    haptics.toggle(true)
+                    onModeChange(AgentMode.CHAT)
+                }
+            },
+        )
+    }
+}
+
+/** One half of [ModeSwitch]. */
+@Composable
+private fun ModeSegment(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = MODE_SEGMENT_HEIGHT)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (selected) MiuixTheme.colorScheme.primary else Color.Transparent)
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                onClick = onClick,
+            )
+            .padding(horizontal = 13.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.title3,
+            fontWeight = FontWeight.Medium,
+            color = if (selected) {
+                MiuixTheme.colorScheme.onPrimary
+            } else {
+                MiuixTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+        )
+    }
+}
+
+/** The header segment's height: 36dp plus the pill's 3dp inset is the 42dp capsule beside it. */
+private val MODE_SEGMENT_HEIGHT = 36.dp
 
 /** One mark inside the trailing pill. */
 @Composable
@@ -1596,6 +1703,8 @@ private fun ChatPage(
     onShowPromptExtras: (PromptExtras) -> Unit,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
+    /** Switches the launch mode; the page decides whether a new conversation is due. */
+    onSwitchMode: (AgentMode) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
     /** The workspace this conversation runs in, as an absolute path. */
@@ -1832,7 +1941,7 @@ private fun ChatPage(
     // The page, and the layer its bar floats on.
     //
     // The reference draws the top of the screen as a *surface* the conversation runs
-    // under: two capsules holding the marks, the app's name between them, and the top of
+    // under: two capsules holding the marks, the Work / Chat switch between them, and the top of
     // the transcript fading into the background behind them. A `PiPage` bar is the
     // opposite of that — an opaque strip that pushes the content down — so this page
     // draws its own frame: the transcript fills the window, a gradient covers its first
@@ -1955,7 +2064,14 @@ private fun ChatPage(
                             } else {
                                 ChatEmptyState(
                                     title = text.chat.newConversation,
-                                    body = remember(cards) { text.chat.tips.random() },
+                                    body = remember(cards, saved.agentMode) {
+                                        val tips = if (saved.agentMode == AgentMode.CHAT) {
+                                            text.chat.chatTips
+                                        } else {
+                                            text.chat.tips
+                                        }
+                                        tips.random()
+                                    },
                                 )
                             }
                         } else {
@@ -2476,7 +2592,8 @@ private fun ChatPage(
         )
 
         ChatHeader(
-            title = text.root.appName,
+            mode = saved.agentMode,
+            onModeChange = onSwitchMode,
             onOpenSessions = onOpenSessions,
             onOpenTerminal = onOpenTerminal,
             onOpenFiles = onOpenFiles,
@@ -4464,6 +4581,11 @@ private fun Composer(
         attachments.isNotEmpty() -> text.chat.placeholderAttachment
         else -> text.chat.placeholder
     }
+    // Chat mode has no tools, so the two controls that only mean something to an
+    // agent with hands are not drawn: a workspace is where tools act, and the
+    // permission tier is the rule they are judged by. Leaving them on screen would
+    // offer settings that the process they configure cannot honour.
+    val chatMode = saved.agentMode == AgentMode.CHAT
 
     // Read here rather than taken as a parameter: it is only this card's own
     // dismissal that needs it, and the page's `focusManager` is the same object
@@ -4642,45 +4764,51 @@ private fun Composer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                item {
-                    // The workspace, first in the row and the only chip on this page
-                    // that is not about the next message's request: it decides which
-                    // folder the agent is standing in, so it is what every other value on
-                    // the row applies *to*. Drawn as the folder's own name and nothing
-                    // else: `（默认）` is a fact about the *list* — which one a new
-                    // conversation starts in — so it belongs where the list is, in the
-                    // menu and in the settings dialog, and a chip that carried it would be
-                    // saying the same thing on every conversation forever.
-                    ControlChip(
-                        glyph = MiuixIcons.Folder,
-                        label = workspaceLabel,
-                        onClick = { onOpenSheet(ComposerSheet.Workspace) },
-                    ) {
-                        // Keyed on the list's size: the popup's content is its own
-                        // composition, and a workspace that arrived while the popup was
-                        // closed did not reach it — measured on the history page adopting
-                        // a `pi` that had been run by hand, where the settings dialog
-                        // listed the folder and this menu did not. A new key is a new
-                        // composition, which is the cheapest honest fix for a slot the
-                        // library does not re-read.
-                        key(workspaces.size) {
-                            OverlayListPopup(
-                            popupPositionProvider = aboveAnchorPositionProvider(),
-                            show = openSheet == ComposerSheet.Workspace,
-                            maxHeight = MENU_MAX_HEIGHT,
-                            onDismissRequest = onCloseSheet,
+                if (!chatMode) {
+                    item {
+                        // The workspace, first in the row and the only chip on this page
+                        // that is not about the next message's request: it decides which
+                        // folder the agent is standing in, so it is what every other value on
+                        // the row applies *to*. Drawn as the folder's own name and nothing
+                        // else: `（默认）` is a fact about the *list* — which one a new
+                        // conversation starts in — so it belongs where the list is, in the
+                        // menu and in the settings dialog, and a chip that carried it would be
+                        // saying the same thing on every conversation forever.
+                        //
+                        // Chat mode omits it: with no tools there is no folder for the
+                        // agent to act in, and the chip would be the first control on the
+                        // page promising something the process cannot do.
+                        ControlChip(
+                            glyph = MiuixIcons.Folder,
+                            label = workspaceLabel,
+                            onClick = { onOpenSheet(ComposerSheet.Workspace) },
                         ) {
-                            WorkspaceMenu(
+                            // Keyed on the list's size: the popup's content is its own
+                            // composition, and a workspace that arrived while the popup was
+                            // closed did not reach it — measured on the history page adopting
+                            // a `pi` that had been run by hand, where the settings dialog
+                            // listed the folder and this menu did not. A new key is a new
+                            // composition, which is the cheapest honest fix for a slot the
+                            // library does not re-read.
+                            key(workspaces.size) {
+                                OverlayListPopup(
+                                popupPositionProvider = aboveAnchorPositionProvider(),
                                 show = openSheet == ComposerSheet.Workspace,
-                                text = text,
-                                workspaces = workspaces,
-                                current = currentWorkspace,
-                                defaultPath = defaultWorkspacePath,
-                                home = session.env.homePath,
-                                onPick = onSelectWorkspace,
-                                onAdd = onOpenWorkspacePicker,
-                                onDismiss = onCloseSheet,
-                            )
+                                maxHeight = MENU_MAX_HEIGHT,
+                                onDismissRequest = onCloseSheet,
+                            ) {
+                                WorkspaceMenu(
+                                    show = openSheet == ComposerSheet.Workspace,
+                                    text = text,
+                                    workspaces = workspaces,
+                                    current = currentWorkspace,
+                                    defaultPath = defaultWorkspacePath,
+                                    home = session.env.homePath,
+                                    onPick = onSelectWorkspace,
+                                    onAdd = onOpenWorkspacePicker,
+                                    onDismiss = onCloseSheet,
+                                )
+                                }
                             }
                         }
                     }
@@ -5015,6 +5143,7 @@ private fun Composer(
                             onRun = onRunCommand,
                             onShell = { onOpenSheet(ComposerSheet.Shell) },
                             onDismiss = onCloseSheet,
+                            chatMode = chatMode,
                         )
                     }
                 }
@@ -5029,36 +5158,41 @@ private fun Composer(
                 // allows. The mark carries the tier in colour as well as in shape:
                 // `unlock` in the accent is the one setting on this row with no refusals
                 // behind it.
-                PopupAnchor {
-                    val mode = saved.permissionMode
-                    IconButton(
-                        onClick = { onOpenSheet(ComposerSheet.Permission) },
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            imageVector = permissionGlyph(mode),
-                            contentDescription = text.chat.permissionChip(mode),
-                            modifier = Modifier.size(17.dp),
-                            tint = if (mode == PermissionMode.FULL_ACCESS) {
-                                MiuixTheme.colorScheme.primary
-                            } else {
-                                MiuixTheme.colorScheme.onSurfaceVariantSummary
-                            },
-                        )
-                    }
-                    OverlayListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
-                        show = openSheet == ComposerSheet.Permission,
-                        maxHeight = MENU_MAX_HEIGHT,
-                        onDismissRequest = onCloseSheet,
-                    ) {
-                        PermissionMenu(
+                //
+                // Chat mode does not draw it. The tier judges tool calls, and chat mode
+                // has no tools; a lock beside a chat field is a rule for nothing.
+                if (!chatMode) {
+                    PopupAnchor {
+                        val permission = saved.permissionMode
+                        IconButton(
+                            onClick = { onOpenSheet(ComposerSheet.Permission) },
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                imageVector = permissionGlyph(permission),
+                                contentDescription = text.chat.permissionChip(permission),
+                                modifier = Modifier.size(17.dp),
+                                tint = if (permission == PermissionMode.FULL_ACCESS) {
+                                    MiuixTheme.colorScheme.primary
+                                } else {
+                                    MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                },
+                            )
+                        }
+                        OverlayListPopup(
+                            popupPositionProvider = aboveAnchorPositionProvider(),
                             show = openSheet == ComposerSheet.Permission,
-                            text = text,
-                            current = mode,
-                            onPick = { session.setPermissionMode(it) },
-                            onDismiss = onCloseSheet,
-                        )
+                            maxHeight = MENU_MAX_HEIGHT,
+                            onDismissRequest = onCloseSheet,
+                        ) {
+                            PermissionMenu(
+                                show = openSheet == ComposerSheet.Permission,
+                                text = text,
+                                current = permission,
+                                onPick = { session.setPermissionMode(it) },
+                                onDismiss = onCloseSheet,
+                            )
+                        }
                     }
                 }
                 // The `+`, immediately after the command list and in the same plain
@@ -5099,6 +5233,7 @@ private fun Composer(
                             text = text,
                             onPick = onPickAttachment,
                             onDismiss = onCloseSheet,
+                            chatMode = chatMode,
                         )
                     }
                 }
@@ -6041,6 +6176,8 @@ private fun CommandMenu(
     onRun: (BuiltInCommand) -> Unit,
     onShell: () -> Unit,
     onDismiss: () -> Unit,
+    /** Chat mode has no shell-as-a-message escape hatch; see `CommandMenu`'s shell row. */
+    chatMode: Boolean = false,
 ) {
     // Each row dismisses before it acts, the gate every menu row carries: the panel
     // is drawn for the length of its exit and a second tap aimed at the page behind
@@ -6053,33 +6190,40 @@ private fun CommandMenu(
     }
 
     val rows = BUILT_IN_COMMANDS
+    // The shell row is the one command that puts process output into the transcript.
+    // It is not a tool the model can call, but it is still the escape hatch of a
+    // coding conversation rather than a chat one; chat mode keeps only the commands
+    // that operate on the conversation itself.
+    val leading = if (chatMode) 0 else 1
     ListPopupColumn {
-        DropdownImpl(
-            // The one row whose label is a sigil rather than a command id, and it
-            // carries a summary like every row under it: `!` states the *shape* of
-            // the line it wants, not what happens when it is tapped, and a menu of
-            // rows that each explain themselves with one sentence leaves the one
-            // punctuation mark in it as the only entry a reader has to already know.
-            // The sentence is the catalog's own — the shell field it opens says the
-            // same thing under its title.
-            item = DropdownItem(text = SHELL_SIGIL, summary = text.chat.shellCommandHint),
-            optionSize = rows.size + 1,
-            isSelected = false,
-            index = 0,
-            onSelectedIndexChange = { pick(onShell) },
-        )
+        if (!chatMode) {
+            DropdownImpl(
+                // The one row whose label is a sigil rather than a command id, and it
+                // carries a summary like every row under it: `!` states the *shape* of
+                // the line it wants, not what happens when it is tapped, and a menu of
+                // rows that each explain themselves with one sentence leaves the one
+                // punctuation mark in it as the only entry a reader has to already know.
+                // The sentence is the catalog's own — the shell field it opens says the
+                // same thing under its title.
+                item = DropdownItem(text = SHELL_SIGIL, summary = text.chat.shellCommandHint),
+                optionSize = rows.size + leading,
+                isSelected = false,
+                index = 0,
+                onSelectedIndexChange = { pick(onShell) },
+            )
+        }
         rows.forEachIndexed { index, command ->
             DropdownImpl(
                 item = DropdownItem(
                     text = command.id,
                     summary = command.description(text),
                 ),
-                optionSize = rows.size + 1,
+                optionSize = rows.size + leading,
                 // A command list has no current answer, so no row is ticked — the
                 // difference between this menu and the model one is the whole reason
                 // the library's row takes `isSelected` rather than deriving it.
                 isSelected = false,
-                index = index + 1,
+                index = index + leading,
                 onSelectedIndexChange = { pick { onRun(command) } },
             )
         }
@@ -6114,6 +6258,8 @@ private fun AttachMenu(
     text: Strings,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Chat mode can carry pictures, but a file path needs a `read` tool it does not have. */
+    chatMode: Boolean = false,
 ) {
     fun pick(kind: String) {
         if (show) {
@@ -6122,11 +6268,13 @@ private fun AttachMenu(
         }
     }
 
-    val rows = listOf(
-        AttachRow(text.chat.attachCamera, text.chat.attachCameraHint, MiuixIcons.Scan, "camera"),
-        AttachRow(text.chat.attachImage, text.chat.attachImageHint, MiuixIcons.Photos, "image"),
-        AttachRow(text.chat.attachFile, text.chat.attachFileHint, MiuixIcons.File, "file"),
-    )
+    val rows = buildList {
+        add(AttachRow(text.chat.attachCamera, text.chat.attachCameraHint, MiuixIcons.Scan, "camera"))
+        add(AttachRow(text.chat.attachImage, text.chat.attachImageHint, MiuixIcons.Photos, "image"))
+        if (!chatMode) {
+            add(AttachRow(text.chat.attachFile, text.chat.attachFileHint, MiuixIcons.File, "file"))
+        }
+    }
     ListPopupColumn {
         rows.forEachIndexed { index, row ->
             DropdownImpl(

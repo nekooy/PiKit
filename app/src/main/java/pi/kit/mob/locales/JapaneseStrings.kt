@@ -42,6 +42,11 @@ internal object JapaneseStrings : Strings {
             "ヒント：右にスワイプしても開き、左に戻すと閉じます。",
             "ヒント：入力欄の右下のリングで使用量とコストを確認できます。",
         )
+        override val chatTips = listOf(
+            "会話モードはツールもワークスペースのファイルも読みません。気軽に話しかけてください。",
+            "会話モードでも、この会話の履歴は引き継がれます。",
+            "人物設定や時刻の位置は、設定 → エージェントのプロセス → 会話モードで変えられます。",
+        )
         override val loadingConversation = "会話を開いています…"
         override val placeholderAttachment = "この画像についての指示を入力…"
         override val send = "送信"
@@ -379,6 +384,20 @@ internal object JapaneseStrings : Strings {
         override val storageAskLater = "あとで"
 
         override val agentContextSection = "コンテキスト"
+        override val modeWork = "仕事"
+        override val modeChat = "会話"
+        override val workMode = "仕事モード"
+        override val chatMode = "会話モード"
+        override fun workModeSection(title: String) = "$workMode · $title"
+        override val chatModeSubtitle =
+            "バーで「会話」を選ぶと、ツール・拡張・スキル・AGENTS.md を読み込まず、下のシステムプロンプトだけを送ります"
+        override val chatSystemPromptTitle = "システムプロンプト"
+        override val chatSystemPromptSubtitle =
+            "{{time}} は現在時刻に置き換わります。保存するとエージェントを再起動します"
+        override val chatSystemPromptEditorHint =
+            "{{time}} を時刻を入れたい位置に置いてください。起動時に現在時刻へ置き換わります。" +
+                "空のまま保存すると既定に戻ります。"
+        override val chatSystemPromptRestore = "既定に戻す"
         override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
         override val agentContextLeadTitle = "コンテキストの説明"
         override val agentContextSystemTitle = "システムプロンプト"

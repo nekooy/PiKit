@@ -159,6 +159,16 @@ interface Strings {
          */
         val tips: List<String>
 
+        /**
+         * The empty-state tips for chat mode.
+         *
+         * The work tips name `!` and the workspace, which chat mode deliberately does
+         * not have; showing them over a chat would describe controls that are not on
+         * the page. These are the same shape — whole sentences, shown one at a time —
+         * and say what the mode is instead.
+         */
+        val chatTips: List<String>
+
         /** While a conversation is being opened: the transcript's place is not empty. */
         val loadingConversation: String
 
@@ -1000,6 +1010,37 @@ interface Strings {
         val storageAskLater: String
 
         val agentContextSection: String
+
+        /**
+         * The two launch modes: the short labels in the conversation header, and the
+         * full names the Agent page's groups use.
+         *
+         * They are separate on purpose. The header has room for one two-character
+         * word per segment; the settings page names the same choice in full, and a
+         * single "工作模式" in the header would be too wide beside the drawer disc.
+         */
+        val modeWork: String
+        val modeChat: String
+        val workMode: String
+        val chatMode: String
+
+        /** "工作模式 · 工作区" — one group of the work half of the Agent page. */
+        fun workModeSection(title: String): String
+
+        /**
+         * The sentence under the Chat mode group: what the mode does *not* load.
+         *
+         * It is the reader's one-line answer to "why does this conversation not know
+         * my project?", so it names the four things that disappear rather than saying
+         * "clean context" and leaving them to guess.
+         */
+        val chatModeSubtitle: String
+
+        /** The editable chat system prompt: its row and the editor's explanation. */
+        val chatSystemPromptTitle: String
+        val chatSystemPromptSubtitle: String
+        val chatSystemPromptEditorHint: String
+        val chatSystemPromptRestore: String
 
         /** The lead over the numbered points. */
         val agentContextLead: String

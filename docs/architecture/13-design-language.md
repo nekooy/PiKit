@@ -302,9 +302,9 @@ seconds and never interactive, is the queue's whole shape.
 
 The app has one root page — the conversation — and everything else is reached from it.
 Its top is the app's own arrangement rather than a library bar: two floating capsules and
-a name between them. The leading capsule holds the mark that opens the conversation
-drawer, the trailing one holds the terminal, the files and a new conversation in that
-order, and the app's name stands on the page itself instead of in a frame. The
+the **Work / Chat** switch between them. The leading capsule holds the mark that opens the
+conversation drawer, the trailing one holds the terminal, the files and a new conversation
+in that order, and the mode switch stands on the page itself instead of in a frame. The
 conversation is what the app is for; a bar of four equally weighted destinations said
 otherwise.
 

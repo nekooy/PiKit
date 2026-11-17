@@ -41,6 +41,11 @@ internal object EnglishStrings : Strings {
             "Tip: swiping right does the same, and swiping left closes it.",
             "Tip: the ring at the field's corner shows window use, cost and the session file.",
         )
+        override val chatTips = listOf(
+            "Chat mode loads no tools or workspace files — just talk.",
+            "Chat mode still carries this conversation's history.",
+            "To change the persona or where the time goes, open Settings → Agent process → Chat mode.",
+        )
         override val loadingConversation = "Opening the conversation…"
         override val placeholderAttachment = "Add a message for these images…"
         override val send = "Send"
@@ -388,6 +393,19 @@ internal object EnglishStrings : Strings {
         override val storageAskLater = "Not now"
 
         override val agentContextSection = "Context"
+        override val modeWork = "Work"
+        override val modeChat = "Chat"
+        override val workMode = "Work mode"
+        override val chatMode = "Chat mode"
+        override fun workModeSection(title: String) = "$workMode · $title"
+        override val chatModeSubtitle =
+            "With the top bar on Chat, no tools, extensions, skills or AGENTS.md load — only the system prompt below"
+        override val chatSystemPromptTitle = "System prompt"
+        override val chatSystemPromptSubtitle = "{{time}} becomes the current time; saving restarts the agent"
+        override val chatSystemPromptEditorHint =
+            "Put {{time}} where the time should be injected; it becomes the current time at launch. " +
+                "Saving an empty field restores the default."
+        override val chatSystemPromptRestore = "Restore default"
         override val agentContextLead = "With every request, pi sends the model:"
         override val agentContextLeadTitle = "What the context holds"
         override val agentContextSystemTitle = "System prompt"

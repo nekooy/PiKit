@@ -556,6 +556,23 @@ enum class FontSize(val code: String, val scale: Float) {
      * the composer picks among them, and this is the one the list calls the default.
      */
     val defaultWorkspace: String = "",
+    /**
+     * Whether new conversations launch the work agent or the plain chat agent.
+     *
+     * Persisted rather than held in memory because it decides how every later process
+     * is spawned. [AgentMode.WORK] is the default so an install that never switches
+     * keeps the agent it had; see [AgentMode] for what [AgentMode.CHAT] removes.
+     */
+    val agentMode: AgentMode = AgentMode.DEFAULT,
+    /**
+     * The system-prompt template chat mode sends.
+     *
+     * It is a *template*, not a snapshot: [CHAT_TIME_PLACEHOLDER] is replaced with the
+     * current time on every launch. Blank is normalised back to
+     * [DEFAULT_CHAT_SYSTEM_PROMPT], because an empty string would make pi fall back to
+     * its coding-assistant prompt — the one thing chat mode exists to replace.
+     */
+    val chatSystemPrompt: String = DEFAULT_CHAT_SYSTEM_PROMPT,
     /** Interface language. Persisted here because it is not part of a profile. */
     val language: Lang = Lang.DEFAULT,
     /**
@@ -764,6 +781,8 @@ class SettingsStore(context: Context) {
             // preferences; the model fields arrive with the active profile.
             thinkingLevel = thinkingLevel(),
             defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
+            agentMode = AgentMode.fromCode(prefs.getString(KEY_AGENT_MODE, null)),
+            chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
@@ -829,7 +848,14 @@ class SettingsStore(context: Context) {
      */
     fun update(transform: (PiSettings) -> PiSettings): PiSettings {
         val currentSettings = current.get()
-        val next = transform(currentSettings)
+        val next = transform(currentSettings).let { edited ->
+            // A blank prompt would make pi restore its coding-assistant preamble, the
+            // exact fallback chat mode exists to remove. Normalise here as well as on
+            // read, so the value the UI receives is the value the next launch renders.
+            edited.copy(
+                chatSystemPrompt = edited.chatSystemPrompt.ifBlank { DEFAULT_CHAT_SYSTEM_PROMPT },
+            )
+        }
 
         val active = profiles.activeProfile
         if (active != null) {
@@ -847,6 +873,8 @@ class SettingsStore(context: Context) {
             .putString(KEY_LEVELS, next.availableThinkingLevels.joinToString(","))
             .putString(KEY_LEVELS_FOR, next.availableThinkingLevelsFor)
             .putString(KEY_WORKSPACE, next.defaultWorkspace)
+            .putString(KEY_AGENT_MODE, next.agentMode.code)
+            .putString(KEY_CHAT_SYSTEM_PROMPT, next.chatSystemPrompt)
             .putString(KEY_PERMISSION, next.permissionMode.code)
             .putString(KEY_LANGUAGE, next.language.code)
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
@@ -872,6 +900,8 @@ class SettingsStore(context: Context) {
             availableThinkingLevels = next.availableThinkingLevels,
             availableThinkingLevelsFor = next.availableThinkingLevelsFor,
             defaultWorkspace = next.defaultWorkspace,
+            agentMode = next.agentMode,
+            chatSystemPrompt = next.chatSystemPrompt,
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
@@ -926,6 +956,19 @@ class SettingsStore(context: Context) {
         prefs.getString(KEY_THINKING, DEFAULT_THINKING_LEVEL).orEmpty().ifBlank { DEFAULT_THINKING_LEVEL }
 
     /**
+     * The chat prompt template, or the one-line default.
+     *
+     * A blank value is not a valid template: pi reads an empty custom prompt as "no
+     * custom prompt" and falls back to its coding-assistant preamble, which is the
+     * opposite of what chat mode promises. The same normalisation runs in
+     * [PiSettings]'s default and in [update], so every reader sees one answer.
+     */
+    private fun chatSystemPrompt(): String =
+        prefs.getString(KEY_CHAT_SYSTEM_PROMPT, DEFAULT_CHAT_SYSTEM_PROMPT)
+            .orEmpty()
+            .ifBlank { DEFAULT_CHAT_SYSTEM_PROMPT }
+
+    /**
      * Re-reads preferences and the profile file and publishes the result.
      *
      * The restore path needs this and nothing else does. This store is the only
@@ -947,6 +990,8 @@ class SettingsStore(context: Context) {
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
+            agentMode = AgentMode.fromCode(prefs.getString(KEY_AGENT_MODE, null)),
+            chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
@@ -973,6 +1018,8 @@ class SettingsStore(context: Context) {
         availableThinkingLevels: List<String> = current.get().availableThinkingLevels,
         availableThinkingLevelsFor: String = current.get().availableThinkingLevelsFor,
         defaultWorkspace: String = current.get().defaultWorkspace,
+        agentMode: AgentMode = current.get().agentMode,
+        chatSystemPrompt: String = current.get().chatSystemPrompt,
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
@@ -997,6 +1044,8 @@ class SettingsStore(context: Context) {
                 availableThinkingLevels = availableThinkingLevels,
                 availableThinkingLevelsFor = availableThinkingLevelsFor,
                 defaultWorkspace = defaultWorkspace,
+                agentMode = agentMode,
+                chatSystemPrompt = chatSystemPrompt,
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
@@ -1081,6 +1130,13 @@ class SettingsStore(context: Context) {
         private const val KEY_LEVELS = "thinking_levels"
         private const val KEY_LEVELS_FOR = "thinking_levels_for"
         private const val KEY_WORKSPACE = "working_dir"
+
+        /** [AgentMode.code]; absent means [AgentMode.DEFAULT]. */
+        private const val KEY_AGENT_MODE = "agent_mode"
+
+        /** The chat prompt template; see [PiSettings.chatSystemPrompt]. */
+        private const val KEY_CHAT_SYSTEM_PROMPT = "chat_system_prompt"
+
         private const val KEY_LANGUAGE = "language"
 
         /** True unless the user asked for a cold start to continue the last talk. */

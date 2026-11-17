@@ -1,5 +1,6 @@
 package pi.kit.mob.pi
 
+import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.PiProvider
 import pi.kit.mob.data.catalogueRefreshEnvironment
 import org.junit.Assert.assertEquals
@@ -26,6 +27,8 @@ class PiProcessLauncherTest {
         thinkingLevel: String? = "medium",
         offline: Boolean = false,
         noSession: Boolean = false,
+        mode: AgentMode = AgentMode.WORK,
+        systemPromptFile: String? = null,
     ) = PiLaunchOptions(
         nodePath = "/prefix/bin/node",
         cliEntry = "/prefix/cli.js",
@@ -38,6 +41,8 @@ class PiProcessLauncherTest {
         apiKey = apiKey,
         offline = offline,
         noSession = noSession,
+        mode = mode,
+        systemPromptFile = systemPromptFile,
     )
 
     private fun List<String>.valueOf(flag: String): String? {
@@ -125,6 +130,57 @@ class PiProcessLauncherTest {
         val command = PiProcessLauncher.buildCommand(options())
         assertTrue("--tools would filter out extension tools", command.none { it == "--tools" })
         assertTrue("and no bare list either", command.none { it.contains("read,bash,edit") })
+    }
+
+    @Test
+    fun `chat mode disables every ambient context source and replaces the prompt`() {
+        // Chat mode is not a UI filter: pi itself has to start without tools,
+        // extensions, skills, templates or AGENTS.md. Each flag closes one source, and
+        // the prompt file is the document that replaces pi's own coding preamble.
+        val command = PiProcessLauncher.buildCommand(
+            options(
+                mode = AgentMode.CHAT,
+                systemPromptFile = "/home/.pikit/chat-system-prompt.txt",
+            ),
+        )
+
+        for (flag in listOf(
+            "--no-tools",
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-context-files",
+            "--no-mcp",
+        )) {
+            assertTrue("$flag must be passed in chat mode", command.contains(flag))
+        }
+        assertEquals(
+            "/home/.pikit/chat-system-prompt.txt",
+            command.valueOf("--system-prompt"),
+        )
+        assertTrue(
+            "the old coding prompt append must not leak into chat mode",
+            command.none { it == "--append-system-prompt" },
+        )
+    }
+
+    @Test
+    fun `work mode keeps pi's own prompt and tools`() {
+        val command = PiProcessLauncher.buildCommand(
+            options(systemPromptFile = "/home/.pikit/chat-system-prompt.txt"),
+        )
+
+        for (flag in listOf(
+            "--no-tools",
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-context-files",
+            "--no-mcp",
+            "--system-prompt",
+        )) {
+            assertTrue("$flag belongs to chat mode only", command.none { it == flag })
+        }
     }
 
     @Test

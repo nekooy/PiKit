@@ -82,6 +82,12 @@ node $PREFIX/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js
      --session-dir <app files>/pi-sessions ...
 ```
 
+A **chat-mode** launch is the same command with every ambient resource switched off
+and a system-prompt file replacing pi's own preamble: `--no-tools`, `--no-extensions`,
+`--no-skills`, `--no-prompt-templates`, `--no-context-files`, `--no-mcp` and
+`--system-prompt <rendered prompt file>`. §17 has the mode's design and the editor behind
+the template; the work launch keeps exactly the command above.
+
 `--offline` used to be passed here, and is not any more. It sets `PI_OFFLINE=1` and
 `PI_SKIP_VERSION_CHECK=1` for the whole process, and pi reads the first as **the model
 catalogue has no network** (`ModelRuntime`'s constructor: `modelNetworkEnabled =

@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import pi.kit.mob.data.AgentMode
+import pi.kit.mob.data.CHAT_TIME_PLACEHOLDER
+import pi.kit.mob.data.DEFAULT_CHAT_SYSTEM_PROMPT
 import pi.kit.mob.data.RefusedWorkspace
 import pi.kit.mob.data.WorkspaceRefusal
 import pi.kit.mob.env.StorageAccess
@@ -78,8 +81,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * bottom sheet the AGENTS.md row uses — a window over the page, not a wall of
  * prose above the one control the section is for.
  *
- * The three sections are three Miuix cards under one pinned bar: this page's body
- * is the page, so the bar keeps its two lines and gives the groups the height (§13).
+ * The page is split by launch mode. The work half keeps its three groups — workspace,
+ * the context documents and the process — under `Work mode · …` titles; the chat half
+ * is one card holding the system prompt chat launches read. The split is two sets of
+ * cards rather than a tab, so changing a workspace does not first ask which mode is
+ * being edited.
  *
  * ## The two sheets are windows, not views
  *
@@ -124,6 +130,7 @@ internal fun AgentPage(
     // announce a restart that had not started.
     var restartMoved by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
+    var showChatPrompt by remember { mutableStateOf(false) }
     // Which of the two documents the sheet is editing, or null for none. `null` is also
     // what the sheet keeps drawing with while it animates out — a Miuix window is driven
     // by `show`, and a value that vanished with the flag would return to the other
@@ -186,7 +193,7 @@ internal fun AgentPage(
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
-            PiSection(title = text.settings.workspace) {
+            PiSection(title = text.settings.workModeSection(text.settings.workspace)) {
                 // The row that used to be a text field for the agent's working directory.
                 // It is a choice now, because the directory is one of a *list* of
                 // workspaces: the composer picks which one a conversation runs in, and
@@ -208,7 +215,7 @@ internal fun AgentPage(
                 )
             }
 
-            PiSection(title = text.settings.agentContextSection) {
+            PiSection(title = text.settings.workModeSection(text.settings.agentContextSection)) {
                 // The five parts live in a sheet, the same panel shape as the AGENTS.md
                 // editor under them. They used to sit open as numbered points of prose,
                 // which is a page of reading before the rows this section is actually
@@ -258,7 +265,7 @@ internal fun AgentPage(
                 )
             }
 
-            PiSection(title = text.settings.process) {
+            PiSection(title = text.settings.workModeSection(text.settings.process)) {
                 BasicComponent(
                     title = text.settings.agentProcess,
                     summary = agentDescription(agent, text),
@@ -295,6 +302,24 @@ internal fun AgentPage(
                 }
 
                 KeepAliveRow(text = text)
+            }
+
+            PiSection(title = text.settings.chatMode) {
+                // A sentence, not a row: this is the answer to "what changes?" and
+                // there is no control to attach it to. It stays inside the group
+                // because it explains the one row under it.
+                SettingsNote(text = text.settings.chatModeSubtitle)
+                ArrowPreference(
+                    title = text.settings.chatSystemPromptTitle,
+                    summary = text.settings.chatSystemPromptSubtitle,
+                    endActions = {
+                        SettingsValue(
+                            text.settings.agentContextInstructionsEditable,
+                            emphasised = true,
+                        )
+                    },
+                    onClick = { showChatPrompt = true },
+                )
             }
         }
     }
@@ -349,6 +374,14 @@ internal fun AgentPage(
         onDismiss = { editingDocument = null },
     ) {
         InstructionsEditor(document = lastDocument, session = session, text = text)
+    }
+
+    PiSheet(
+        show = showChatPrompt,
+        title = text.settings.chatSystemPromptTitle,
+        onDismiss = { showChatPrompt = false },
+    ) {
+        ChatPromptEditor(session = session, text = text)
     }
 
     WorkspaceDialog(
@@ -689,6 +722,119 @@ private fun InstructionsEditor(
             }
         } else {
             Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/**
+ * The chat mode's system prompt, as a template.
+ *
+ * The field holds [CHAT_TIME_PLACEHOLDER], never a rendered timestamp: the same
+ * document is used by every later launch, and a literal time would both go stale and
+ * make the placeholder's position impossible to move. Saving writes the template and,
+ * when chat mode is the mode in force, asks the current conversation to restart — pi
+ * reads its system prompt once, at process start.
+ *
+ * The default is a bare placeholder. A blank save is normalised back to it by the
+ * store, which is also why the button says "restore default" rather than "clear".
+ */
+@Composable
+private fun ChatPromptEditor(
+    session: PiAgentSession,
+    text: Strings,
+) {
+    val toasts = LocalPiToast.current
+    val settings by session.settingsStore.settings.collectAsState()
+    var draft by remember(session, settings.chatSystemPrompt) {
+        mutableStateOf(settings.chatSystemPrompt)
+    }
+    var saved by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .piOverScroll()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Text(
+            text = text.settings.chatSystemPromptEditorHint,
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
+        TextField(
+            cornerRadius = PiCorner.radius,
+            value = draft,
+            onValueChange = {
+                draft = it
+                saved = false
+                failed = false
+            },
+            textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                // Braces and line breaks are syntax here; an autocorrected token is a
+                // placeholder that silently stops being one.
+                autoCorrectEnabled = false,
+            ),
+            maxLines = Int.MAX_VALUE,
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = EDITOR_MIN_HEIGHT, max = EDITOR_MAX_HEIGHT),
+        )
+
+        LaunchedEffect(failed, saved) {
+            if (failed || saved) {
+                toasts?.show(
+                    if (failed) {
+                        text.settings.agentContextFailed
+                    } else {
+                        text.settings.agentContextSaved
+                    },
+                )
+                failed = false
+                saved = false
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            SettingsButton(
+                text = text.settings.chatSystemPromptRestore,
+                onClick = {
+                    draft = DEFAULT_CHAT_SYSTEM_PROMPT
+                    saved = false
+                    failed = false
+                },
+                modifier = Modifier.weight(1f),
+            )
+            SettingsButton(
+                text = text.settings.agentContextSave,
+                onClick = {
+                    // Written first, reported after: a toast that says saved while the
+                    // next launch reads the old prompt is worse than no toast.
+                    val written = runCatching {
+                        session.settingsStore.update { it.copy(chatSystemPrompt = draft) }
+                        if (session.settingsStore.read().agentMode == AgentMode.CHAT) {
+                            // The current process has the old prompt; schedule rather
+                            // than restart now, so an answer being written is not cut.
+                            session.scheduleRestart()
+                        }
+                    }.isSuccess
+                    failed = !written
+                    saved = written
+                },
+                modifier = Modifier.weight(1f),
+                primary = true,
+            )
         }
     }
 }

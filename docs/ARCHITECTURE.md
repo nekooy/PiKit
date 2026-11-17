@@ -10,8 +10,9 @@ Chapters 1–6 are those constraints. 7–9 are the interface, where several des
 were tried and rejected and the number that settled each one is recorded. 10–12 are
 ownership, vendored code and rendering, 13 is the Miuix interface the app is now
 drawn from — the theme, the page frame, the rows, and the rules a screen obeys —
-14 and 15 are the permission tiers and the conversation pool, and 16 is the touch
-feedback: the five moments that buzz and the longer list that must not.
+14 and 15 are the permission tiers and the conversation pool, 16 is the touch
+feedback: the five moments that buzz and the longer list that must not, and 17 is
+the second launch profile, where chat mode switches off everything but one prompt.
 [AGENTS.md](../AGENTS.md) has the commands
 and the hard rules this document explains; [docs/README.md](README.md) is the index
 of everything under `docs/`.
@@ -44,6 +45,7 @@ of everything under `docs/`.
 | 14 | [Permissions: three tiers](architecture/14-permissions.md) | Read-only, workspace-write and full-access: what each refuses, why the mode is a file read on every tool call, the control in the composer, and what the change cost the storage page it retired |
 | 15 | [Many conversations](architecture/15-many-conversations.md) | Why a conversation is a process rather than a `switch_session`, which facts became the host's, the bounded pool and its eviction rule, and the shade entry that now exists only while an answer is being written |
 | 16 | [Touch](architecture/16-touch.md) | The five moments that buzz — a hold, a mode, a choice, a key, a tap on a floating capsule — the library's own haptics and the drop-down gap, and the silences that are the design |
+| 17 | [Work and chat](architecture/17-work-and-chat.md) | The two launch modes, the clean conversation's command-line flags, the system-prompt template and its `{{time}}` placeholder |
 
 ## How to read it
 

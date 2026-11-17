@@ -54,6 +54,8 @@ class SettingsStoreTest {
             availableThinkingLevels = listOf("low", "high"),
             availableThinkingLevelsFor = "deepseek-v4-pro",
             defaultWorkspace = "/tmp/work",
+            agentMode = AgentMode.CHAT,
+            chatSystemPrompt = "Be brief.\nCurrent time: {{time}}",
             language = Lang.JAPANESE,
             openNewOnLaunch = false,
             themeMode = ThemeMode.DARK,
@@ -74,6 +76,33 @@ class SettingsStoreTest {
         assertEquals(wanted, resolved)
         assertEquals(wanted, store.read())
         assertEquals(wanted, store.settings.value)
+    }
+
+    @Test
+    fun `the mode and chat prompt survive a store rebuild`() {
+        val preferences = FakeSharedPreferences()
+        val files = tempDir()
+
+        SettingsStore(FakeContext(preferences, files)).update {
+            it.copy(
+                agentMode = AgentMode.CHAT,
+                chatSystemPrompt = "Talk plainly. Now: {{time}}",
+            )
+        }
+        val rebuilt = SettingsStore(FakeContext(preferences, files))
+
+        assertEquals(AgentMode.CHAT, rebuilt.read().agentMode)
+        assertEquals("Talk plainly. Now: {{time}}", rebuilt.read().chatSystemPrompt)
+    }
+
+    @Test
+    fun `a blank chat prompt falls back to the current-time default`() {
+        val store = newStore()
+
+        val resolved = store.update { it.copy(chatSystemPrompt = "   ") }
+
+        assertEquals(DEFAULT_CHAT_SYSTEM_PROMPT, resolved.chatSystemPrompt)
+        assertEquals(DEFAULT_CHAT_SYSTEM_PROMPT, store.read().chatSystemPrompt)
     }
 
     @Test

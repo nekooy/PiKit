@@ -49,6 +49,11 @@ internal object ChineseStrings : Strings {
             "提示：向右滑动也能打开对话列表，向左滑回去",
             "提示：点输入框右下角的圆环可以查看窗口占用、花费和会话文件",
         )
+        override val chatTips = listOf(
+            "对话模式不加载工具和工作区文件，直接聊就好",
+            "对话模式也会把这段对话的历史一起带上",
+            "想改人设或时间位置，可以去设置 → Agent 进程 → 对话模式",
+        )
         override val loadingConversation = "正在打开对话…"
         override val placeholderAttachment = "给这些图片补充说明…"
         override val send = "发送"
@@ -382,6 +387,18 @@ internal object ChineseStrings : Strings {
         override val storageAskLater = "稍后再说"
 
         override val agentContextSection = "上下文"
+        override val modeWork = "工作"
+        override val modeChat = "对话"
+        override val workMode = "工作模式"
+        override val chatMode = "对话模式"
+        override fun workModeSection(title: String) = "$workMode · $title"
+        override val chatModeSubtitle =
+            "顶栏切到「对话」后，不加载工具、扩展、技能和 AGENTS.md，只发送下面这份系统提示词"
+        override val chatSystemPromptTitle = "系统提示词"
+        override val chatSystemPromptSubtitle = "{{time}} 替换为当前时间；保存后重启 Agent"
+        override val chatSystemPromptEditorHint =
+            "把 {{time}} 放在想注入时间的位置；启动时会替换成当前时间。留空保存会恢复默认。"
+        override val chatSystemPromptRestore = "恢复默认"
         override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
         override val agentContextLeadTitle = "上下文说明"
         override val agentContextSystemTitle = "系统提示"

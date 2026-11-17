@@ -3,6 +3,7 @@ package pi.kit.mob.pi
 import android.content.Context
 import android.os.PowerManager
 import android.util.Log
+import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
@@ -17,6 +18,7 @@ import pi.kit.mob.data.apiName
 import pi.kit.mob.data.baseUrlName
 import pi.kit.mob.data.catalogueRefreshEnvironment
 import pi.kit.mob.data.normalizeApiBaseUrl
+import pi.kit.mob.data.renderChatSystemPrompt
 import pi.kit.mob.env.BootstrapInstaller
 import pi.kit.mob.env.BundledExtension
 import pi.kit.mob.env.BundledImage
@@ -62,6 +64,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -629,6 +633,14 @@ class PiAgentSession internal constructor(
         return try {
             val process = host.launchFileLock.withLock {
                 withContext(Dispatchers.IO) {
+                    // Written under the launch lock immediately before the child that
+                    // reads it, so another launch cannot replace the file between the
+                    // write and the spawn. Work mode leaves it null.
+                    val chatPromptFile = if (settings.agentMode == AgentMode.CHAT) {
+                        writeChatPrompt(settings).absolutePath
+                    } else {
+                        null
+                    }
                     PiProcessLauncher.launch(
                         context = appContext,
                         env = env,
@@ -650,6 +662,7 @@ class PiAgentSession internal constructor(
                             credentials = ProfileAddressing.providerEnvironment(
                                 settingsStore.profiles.snapshots.value,
                             ),
+                            chatPromptFile = chatPromptFile,
                         ),
                     ).also { launched = it }
                 }
@@ -2841,6 +2854,29 @@ class PiAgentSession internal constructor(
         }.onFailure { Log.w(TAG, "could not write $TOOL_DEFAULTS_FILE_RELATIVE", it) }
     }
 
+    /**
+     * Writes the rendered chat prompt for the child that is about to read it.
+     *
+     * The stored value is the template (`{{time}}` and all); rendering here is what
+     * makes the placeholder's position meaningful and keeps the editor from having to
+     * show a timestamp that would be stale by the next launch. A failure is not
+     * swallowed: without the file `--system-prompt` would name nothing, so the launch
+     * must fail rather than quietly fall back to pi's coding-assistant prompt.
+     */
+    private fun writeChatPrompt(settings: PiSettings): File {
+        val target = File(env.home, CHAT_PROMPT_FILE_RELATIVE)
+        target.parentFile?.mkdirs()
+        target.writeText(
+            renderChatSystemPrompt(
+                template = settings.chatSystemPrompt,
+                now = Instant.now(),
+                zone = ZoneId.systemDefault(),
+            ),
+        )
+        Log.i(TAG, "wrote $CHAT_PROMPT_FILE_RELATIVE for chat mode")
+        return target
+    }
+
     companion object {
         private const val TAG = "PiKit"
 
@@ -2851,6 +2887,15 @@ class PiAgentSession internal constructor(
          * so this is `$HOME/.pi/agent/settings.json`.
          */
         private const val TOOL_DEFAULTS_FILE_RELATIVE = ".pi/agent/settings.json"
+
+        /**
+         * The chat prompt's file, beside pi's permission file in `.pikit`.
+         *
+         * Outside `$HOME/.pi/agent` because it is PiKit's document rather than pi's
+         * settings: a backup or a restore of pi's own directory must not lose it, and
+         * the path is passed to the child only for a chat launch.
+         */
+        private const val CHAT_PROMPT_FILE_RELATIVE = ".pikit/chat-system-prompt.txt"
 
         /** Long enough that typing a model id does not restart per keystroke. */
         private const val SETTINGS_RESTART_DEBOUNCE_MS = 1_500L
@@ -3984,6 +4029,8 @@ internal fun PiSettings.toLaunchOptions(
     providerId: String?,
     /** Every saved profile's credential, by variable — see [ProfileAddressing]. */
     credentials: Map<String, String>,
+    /** The rendered chat prompt, or null for a work launch. */
+    chatPromptFile: String? = null,
 ): PiLaunchOptions = PiLaunchOptions(
     nodePath = nodePath,
     cliEntry = cliEntry,
@@ -3998,4 +4045,6 @@ internal fun PiSettings.toLaunchOptions(
     extraEnv = credentials,
     apiKeyEnvVar = provider?.envVar,
     apiKey = apiKey.takeIf { it.isNotBlank() },
+    mode = agentMode,
+    systemPromptFile = chatPromptFile,
 )

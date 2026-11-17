@@ -1,6 +1,7 @@
 package pi.kit.mob.pi
 
 import android.content.Context
+import pi.kit.mob.data.AgentMode
 import pi.kit.mob.env.ShellEnvironment
 import pi.kit.mob.env.TermuxEnv
 import java.io.File
@@ -30,6 +31,25 @@ data class PiLaunchOptions(
     val apiKeyEnvVar: String? = null,
     val apiKey: String? = null,
     val systemPromptAppend: String? = null,
+    /**
+     * Which launch profile this process gets.
+     *
+     * [AgentMode.WORK] is the existing agent: pi's own prompt, `AGENTS.md`, the bundled
+     * extensions and PiKit's built-in tools. [AgentMode.CHAT] is the plain one: every
+     * discovered resource and every tool is disabled at the command line, and
+     * [systemPromptFile] replaces pi's own coding-assistant prompt.
+     */
+    val mode: AgentMode = AgentMode.WORK,
+    /**
+     * A file whose contents replace pi's system prompt, for [AgentMode.CHAT].
+     *
+     * The contents are the rendered chat template, written by `PiAgentSession` just
+     * before the launch. A file rather than argv because the prompt is a document the
+     * reader may make long, and argv is visible to anything that can read `/proc`; the
+     * path is the only part that reaches the command line. Ignored in work mode, which
+     * must keep pi's own prompt.
+     */
+    val systemPromptFile: String? = null,
     /**
      * The directory pi should treat as its agent directory, when a launch must not see
      * PiKit's own files in the real one. Null — every launch but one — uses pi's default,
@@ -470,6 +490,28 @@ object PiProcessLauncher {
         // (it has no UI), so leaving this to the default silently ignores the
         // user's project settings.
         add("--approve")
+        if (options.mode == AgentMode.CHAT) {
+            // Chat mode's whole promise is that the first request has no ambient
+            // context. Each flag closes one door pi would otherwise open by itself:
+            // tools (built-in, extension and MCP), extension discovery, skills,
+            // prompt templates, and project/global AGENTS.md. `--no-extensions`
+            // also removes the bundled web-access package; `--no-mcp` is restated
+            // because MCP is a built-in extension and a future default must not
+            // quietly bring a tool back. ARCHITECTURE §17 has the mode's design.
+            add("--no-tools")
+            add("--no-extensions")
+            add("--no-skills")
+            add("--no-prompt-templates")
+            add("--no-context-files")
+            add("--no-mcp")
+            // `--system-prompt` replaces pi's coding-assistant preamble. Together
+            // with the flags above, the leading prompt is the reader's document rather
+            // than a tool catalogue and coding rules wrapped around it.
+            options.systemPromptFile?.takeIf { it.isNotBlank() }?.let {
+                add("--system-prompt")
+                add(it)
+            }
+        }
         // No `--tools`, deliberately: it is not a list of tools to *add*. pi applies
         // it as a strict allowlist to built-in, extension and SDK tools alike, so it
         // removed every tool an installed extension registered — the extension

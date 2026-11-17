@@ -187,9 +187,9 @@ red stop button.
 - **Below the field's right**: the context
   ring and the send button; the ring opens the
   same report the cache chip does.
-- **The top bar**: always **PiKit**; a
-  conversation is named in the drawer, where the
-  one on screen is highlighted.
+- **The top bar**: the **Work / Chat** switch;
+  a conversation is named in the drawer, where
+  the one on screen is highlighted.
 
 ### Commands
 
@@ -510,7 +510,7 @@ tab: five rows in **Essentials** and four in
 | Personalization | launch, text size, theme, icon, avatars |
 | Language | English, 简体中文, 日本語 |
 | User manual | this page |
-| Agent process | restart, workspace, instructions, keep alive |
+| Agent process | restart, workspace, instructions, chat prompt, keep alive |
 | Backup & restore | one archive out, and back in |
 | Maintenance & repair | models, packages, rebuild, storage check |
 | About PiKit | versions, package id, paths, update check |
@@ -530,11 +530,13 @@ tab: five rows in **Essentials** and four in
 
 ## 10. The agent process
 
-This page owns the folder a new conversation
-starts in, what the model is told, and the
-process that carries both.
+This page has two halves. **Work mode** owns the
+folder a new conversation starts in, what the
+model is told, and the process that carries
+both. **Chat mode** owns one system prompt and
+nothing else.
 
-### What the model is given
+### What work mode gives the model
 
 | Part | What it holds |
 | --- | --- |
@@ -557,6 +559,26 @@ process that carries both.
 - **A project's own `AGENTS.md`** in its
   folder is read as well, and the closest one
   wins.
+
+### Chat mode
+
+- **What it is**: the switch in the top bar. A
+  conversation started in chat mode loads no
+  tools, extensions, skills, prompt templates or
+  `AGENTS.md`; before its first message the only
+  leading context is the system prompt below.
+- **System prompt**: the one editable
+  document. Its default is only the current
+  time. `{{time}}` in the editor is where the
+  time goes — move it to move the injection
+  point; the actual timestamp is filled in at
+  launch.
+- **Switching** with messages already on
+  screen keeps that conversation and opens a
+  fresh one beside it, so a chat never inherits
+  a work conversation's tool history. Saving the
+  prompt restarts the agent, because pi reads it
+  only when the process starts.
 
 ### Process and keep-alive
 
