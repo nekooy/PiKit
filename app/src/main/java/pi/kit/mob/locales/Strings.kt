@@ -1023,8 +1023,8 @@ interface Strings {
         val agentContextSection: String
 
         /**
-         * The two launch modes: the short labels in the drawer's switch, and the
-         * full names the Agent page's groups use.
+         * The two launch modes: the short labels in the drawer's switch and beside the
+         * conversation page's drawer disc, and the full names the Agent page's groups use.
          *
          * They are separate on purpose. The switch has room for one two-character
          * word per segment; the settings page names the same choice in full, and a

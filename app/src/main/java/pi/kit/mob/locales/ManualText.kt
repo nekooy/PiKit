@@ -61,10 +61,10 @@ launch: no Termux and no root.
 
 The conversation is the whole app. Its top bar
 holds a mark at the left that opens the
-conversation list, the name **PiKit** beside it,
-and the terminal, files and new-conversation
-marks on the right; **Settings** sits at the
-foot of the drawer.
+conversation list, the current mode — **Work**
+or **Chat** — beside it, and the terminal, files
+and new-conversation marks on the right;
+**Settings** sits at the foot of the drawer.
 
 > **Tip:** the drawer's foot is the only way into
 > Settings, and a rightward swipe anywhere on the

@@ -302,11 +302,12 @@ seconds and never interactive, is the queue's whole shape.
 
 The app has one root page — the conversation — and everything else is reached from it.
 Its top is the app's own arrangement rather than a library bar: two floating capsules. The
-leading capsule holds the mark that opens the conversation drawer, and the trailing one
-holds the terminal, the files and a new conversation in that order. The conversation is
-what the app is for; a bar of four equally weighted destinations said otherwise. The
-**Work / Chat** switch left the header for the drawer's foot, where it shares the panel's
-footer with the settings disc.
+leading capsule holds the mark that opens the conversation drawer, and the current mode's
+name stands beside it where the app's name used to; the trailing one holds the terminal,
+the files and a new conversation in that order. The conversation is what the app is for;
+a bar of four equally weighted destinations said otherwise. The **Work / Chat** switch
+left the header for the drawer's foot, where it shares the panel's footer with the
+settings disc.
 
 **The drawer's foot wears the same capsules.** The mode switch and the settings disc at the
 bottom of the history panel are `PiGlass.fill()`, the fill the bar's marks are drawn with,

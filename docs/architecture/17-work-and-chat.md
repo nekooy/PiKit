@@ -21,13 +21,15 @@ state into the store: the toggle showed chat while the work transcript was on sc
 ## The switch is at the drawer's foot
 
 The chat page's bar used to hold the two-segment **Work / Chat** control. It now holds
-only the drawer disc and the trailing action pill. The switch shares the drawer's
-foot with the settings gear — mode on the leading side where a profile strip used to
-stand, the gear on the trailing side as a disc with no word — because both are
-choices about the whole conversation rather than about the page behind it. The switch
-is a `selectableGroup` of two `Role.Tab` segments with a thumb that travels between
-them: a tap animates the thumb, and a horizontal drag moves it under the finger and
-settles on the nearer side.
+the drawer disc, the current mode's name beside it, and the trailing action pill. The
+name stands where the app's own name used to and follows the conversation: a work
+conversation says Work, a chat one says Chat, so the page answers "which mode is this"
+without opening the drawer. The switch itself shares the drawer's foot with the settings
+gear — mode on the leading side where a profile strip used to stand, the gear on the
+trailing side as a disc with no word — because both are choices about the whole
+conversation rather than about the page behind it. The switch is a `selectableGroup` of
+two `Role.Tab` segments with a thumb that travels between them: a tap animates the thumb,
+and a horizontal drag moves it under the finger and settles on the nearer side.
 
 Switching does not open a second conversation. It records the mode for the session
 file and, when the process is live, restarts it in place; `restoreTarget` still names

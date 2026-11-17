@@ -1338,10 +1338,12 @@ internal fun ChatScreen(
  *
  * ## The header
  *
- * The page frame is not a `PiPage` bar: the leading drawer disc and the trailing action
- * pill float over the transcript, which fades out under them. The app's name used to be
- * here, then the **Work / Chat** switch; the switch now belongs to the drawer's foot,
- * where it sits beside the settings disc. The header used to be the large *collapsing*
+ * The page frame is not a `PiPage` bar: the leading drawer disc, the current mode's name
+ * beside it and the trailing action pill float over the transcript, which fades out under
+ * them. The app's name used to stand beside the disc and the **Work / Chat** switch
+ * followed it; the switch now belongs to the drawer's foot, where it sits beside the
+ * settings disc, and the space it left names the mode the conversation is in. The header
+ * used to be the large *collapsing*
  * bar, on the argument that a moving title should give its height back to the transcript
  * as the reader scrolled — the price was that this page's chrome was 36dp taller than the
  * settings pages' and moved while the others did not, and §9.2 has the tokens that made
@@ -1372,14 +1374,15 @@ internal fun ChatScreen(
  * while an answer streams, and the mode changes once per choice.
  */
 /**
- * The chat page's bar: a drawer disc at the leading edge and one action pill at the
- * trailing edge.
+ * The chat page's bar: a drawer disc at the leading edge, the current mode's name beside
+ * it, and one action pill at the trailing edge.
  *
- * The mode switch used to stand between them; it belongs to the drawer's foot now,
- * beside the settings disc, because both are choices about the conversation rather than
- * about the page. Neither capsule has a bar behind it — what is behind them is the
- * transcript, faded out by [FADE_TAIL]'s gradient — which is the whole of the difference
- * between this and the opaque strip a `PiPage` would draw.
+ * The mode's name stands where the app's name used to, so the page answers "which mode
+ * is this conversation in" without opening the drawer. The switch itself belongs to the
+ * drawer's foot now, beside the settings disc, because both are choices about the
+ * conversation rather than about the page. Neither capsule has a bar behind it — what is
+ * behind them is the transcript, faded out by [FADE_TAIL]'s gradient — which is the whole
+ * of the difference between this and the opaque strip a `PiPage` would draw.
  *
  * The capsules are `PiGlass.fill()`, the fill the composer's chips and the jump-to-latest
  * button use: a control that floats over the page is the same object whether it holds a
@@ -1388,6 +1391,7 @@ internal fun ChatScreen(
  */
 @Composable
 private fun ChatHeader(
+    title: String,
     onOpenSessions: () -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -1424,6 +1428,15 @@ private fun ChatHeader(
                 modifier = Modifier.size(22.dp),
             )
         }
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MiuixTheme.textStyles.title3,
+            fontWeight = FontWeight.Medium,
+            color = MiuixTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Spacer(Modifier.weight(1f))
         val trailingShape = RoundedCornerShape(percent = 50)
         Row(
@@ -2479,6 +2492,7 @@ private fun ChatPage(
         )
 
         ChatHeader(
+            title = if (mode == AgentMode.WORK) text.settings.modeWork else text.settings.modeChat,
             onOpenSessions = onOpenSessions,
             onOpenTerminal = onOpenTerminal,
             onOpenFiles = onOpenFiles,
