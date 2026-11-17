@@ -40,6 +40,16 @@ changes nothing about its history; switching one with messages keeps every messa
 While an answer is streaming the switch asks first, because the relaunch ends the
 turn, the same question the workspace chip asks.
 
+The relaunch also has to repair pi's recorded tool loadout. pi stores the active tools
+in a session's system messages, and a conversation that began in chat mode records
+none; restoring that file in work mode otherwise keeps the empty set while extension
+tools reappear as newly registered ones. Measured on the emulator: after chat → work
+the model's `bash` call returned `Tool bash not found` while `web_search` was still
+declared. A work launch therefore passes `--tools +read,+bash,+edit,+write,+grep,
++find,+ls`: a list of only `+name` entries is applied to the restored loadout, whereas
+plain names are an allowlist that would hide every extension tool. A fresh work
+session gets the same seven from `defaultTools`, so this changes nothing there.
+
 A mode that flips is one of the app's six haptic moments, so the switch calls
 `PiHaptics.toggle` rather than `tap` (ARCHITECTURE §16).
 

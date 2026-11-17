@@ -130,10 +130,11 @@ data class PiLaunchOptions(
          * write` by default; we bake `rg` and `fd` into the image, so `grep` and
          * `find` are worth enabling too, and `ls` is pure JS and always works.
          *
-         * These reach pi as `defaultTools` in `$HOME/.pi/agent/settings.json` and
-         * **not** as `--tools`: `--tools` is a strict allowlist over built-in,
-         * extension and SDK tools, so passing it hid every tool an installed
-         * extension registered.
+         * These reach pi as `defaultTools` in `$HOME/.pi/agent/settings.json`.
+         * Work launches also pass them as `--tools +name,…` modifiers: a plain
+         * `--tools` list is a strict allowlist over built-in, extension and SDK
+         * tools (and hid every extension tool), while `+name` entries are what pi
+         * applies to the loadout restored from a chat-mode transcript.
          */
         val DEFAULT_TOOLS = listOf("read", "bash", "edit", "write", "grep", "find", "ls")
 
@@ -540,14 +541,25 @@ object PiProcessLauncher {
                 add("--system-prompt")
                 add(it)
             }
+        } else if (!options.noSession) {
+            // pi records a session's whole tool loadout in its system messages, and a
+            // conversation that began in chat mode records none. `--tools` with plain
+            // names is a strict allowlist (which hid every extension tool and is why
+            // this app does not use it), but a list of only `+name` entries is applied
+            // *to the restored loadout*. Adding the seven built-ins back here is what
+            // makes chat → work switch with its history intact: without it the fresh
+            // work child keeps the chat transcript's empty tool set, while extension
+            // tools reappear as newly registered ones — measured as `Tool bash not
+            // found` beside a working `web_search` after a mode switch (ARCHITECTURE
+            // §17).
+            add("--tools")
+            add(PiLaunchOptions.DEFAULT_TOOLS.joinToString(",+", prefix = "+"))
         }
-        // No `--tools`, deliberately: it is not a list of tools to *add*. pi applies
-        // it as a strict allowlist to built-in, extension and SDK tools alike, so it
-        // removed every tool an installed extension registered — the extension
-        // loaded and the model never saw its tool. The built-ins this app wants on
-        // are written to `$HOME/.pi/agent/settings.json`'s `defaultTools` instead,
-        // which selects built-ins only and leaves extension tools enabled (see
-        // `PiAgentSession.writePiDefaults`).
+        // The built-ins this app wants on are also written to
+        // `$HOME/.pi/agent/settings.json`'s `defaultTools`, which selects built-ins
+        // only and leaves extension tools enabled (see
+        // `PiAgentSession.writePiDefaults`). The `--tools` entries above are only the
+        // restore path's correction; fresh sessions already get this list there.
 
         options.sessionDir?.let {
             add("--session-dir")

@@ -123,15 +123,18 @@ class PiProcessLauncherTest {
     }
 
     @Test
-    fun `never passes --tools`() {
-        // `--tools` is not a list of tools to add: pi applies it as a strict
-        // allowlist over built-in, extension and SDK tools alike, so passing the
-        // seven built-ins here hid every tool an installed extension registered —
-        // the extension loaded and the model never saw its tool. The built-ins are
-        // written to `$HOME/.pi/agent/settings.json` instead.
+    fun `work mode re-adds its built-ins after a chat transcript`() {
+        // pi records a session's tool loadout in its system messages. A conversation
+        // that began in chat mode records no built-ins, so a plain allowlist here
+        // would hide extension tools and a no-op would leave bash missing. A list of
+        // only `+name` entries is the form pi applies to the *restored* loadout.
         val command = PiProcessLauncher.buildCommand(options())
-        assertTrue("--tools would filter out extension tools", command.none { it == "--tools" })
-        assertTrue("and no bare list either", command.none { it.contains("read,bash,edit") })
+        assertEquals(
+            "+read,+bash,+edit,+write,+grep,+find,+ls",
+            command.valueOf("--tools"),
+        )
+        // A bare allowlist would filter out every extension tool.
+        assertTrue("--tools must not be a bare list", command.valueOf("--tools")?.startsWith("+") == true)
     }
 
     @Test
@@ -168,6 +171,7 @@ class PiProcessLauncherTest {
             "/prefix/share/pikit/pikit-chat-prompt.ts",
             command.valueOf("--extension"),
         )
+        assertTrue("chat mode has no tools to name", command.none { it == "--tools" })
         assertTrue(
             "the old coding prompt append must not leak into chat mode",
             command.none { it == "--append-system-prompt" },
