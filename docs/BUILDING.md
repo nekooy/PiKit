@@ -277,6 +277,14 @@ environment variable did not reach the process that resolves it.
 
 ## Working on a device
 
+**A connected device is not a prerequisite: start the AVD yourself.** `emulator -list-avds`
+names the installed images; start one in the background with
+`emulator -avd <name> -gpu host -no-snapshot-save -no-boot-anim`, adding `-no-window` when
+the check should not take the screen. Wait for `adb shell getprop sys.boot_completed` to
+answer `1`, not for `adb devices` to list the device: a snapshot load can hang with the
+entry `offline` and then vanish from the list, while `-no-snapshot` cold-boots in about
+30 s. An empty `adb devices` is a prompt to start one, not a reason to stop.
+
 ```bash
 mkdir -p .tooling/shots
 adb install -r -d app/build/outputs/apk/x64/debug/app-x64-debug.apk
@@ -333,12 +341,6 @@ error:
   reboot cleared it, and the overrides survived the reboot until `wm size reset`. Capture
   at the native 1080x2400 and scale the PNG afterwards (`Image.LANCZOS`), which is what
   the README strip does anyway.
-
-Starting the AVD is worth one more line: `emulator -avd <name> -gpu host
--no-snapshot-save -no-boot-anim`, backgrounded. A **snapshot load can hang** — the AVD
-sits `offline` and then vanishes from `adb devices` — and `-no-snapshot` cold-boots in
-about 30 s, which is faster than waiting for a load that never finishes. Poll
-`adb shell getprop sys.boot_completed` for `1` rather than the device list.
 
 **A Compose `Switch`'s `checked` in the uiautomator tree can lag the stored value**, so
 a switch that reads `checked="false"` after three dumps may still have flipped. The two

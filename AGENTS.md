@@ -530,12 +530,15 @@ prompt, which billed the idle gap to a turn that had already finished.
 
 ## Things that will waste your time if you do not know them
 
-- **Start the AVD with `-gpu host`, not `-gpu swiftshader_indirect`.** On software
-  rasterisation the GPU context times out (`dumpsys gfxinfo`: `GPU Context timeout:
-  10`, frames at 4950 ms) and the app's window never finishes its first draw, while
-  `dumpsys window` calls it visible and `dumpsys input` calls it `NOT_VISIBLE,
-  alpha=0` with a blank `screencap` — and `uiautomator dump` still returns a correct
-  tree, so it looks like a broken instrument rather than a broken backend.
+- **An empty `adb devices` means start the AVD, not report a missing device.** Start it
+  with `emulator -avd <name> -gpu host -no-snapshot-save -no-boot-anim` (add `-no-window`
+  for a headless check) and wait for `adb shell getprop sys.boot_completed` to answer `1`.
+  On software rasterisation (`-gpu swiftshader_indirect`) the GPU context times out
+  (`dumpsys gfxinfo`: `GPU Context timeout: 10`, frames at 4950 ms) and the app's window
+  never finishes its first draw, while `dumpsys window` calls it visible and
+  `dumpsys input` calls it `NOT_VISIBLE, alpha=0` with a blank `screencap` — and
+  `uiautomator dump` still returns a correct tree, so it looks like a broken instrument
+  rather than a broken backend.
 - **A tier's refusal is a sentence the model can act on, not a wall.** The extension
   matches paths in a command's *text*; a path built at runtime is not caught. Say
   "checked on every tool call", never "prevented" — the interface and the manual use the
