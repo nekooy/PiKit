@@ -25,10 +25,11 @@ import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 /**
- * The interface's theme: the library's palette, whole, and the reader's light/dark
- * choice.
+ * The interface's theme: the library's palette, one page step deeper, and the reader's
+ * light/dark choice.
  *
  * ## Why there is no accent here
  *
@@ -38,13 +39,22 @@ import top.yukonga.miuix.kmp.theme.ThemeController
  * was still the wrong thing to own — the palette a Miuix screen is designed against
  * is *this* palette, the one the library ships, and a derived scheme is a different
  * one wearing its component shapes. The accent picker and the wallpaper switch are
- * therefore gone, and this function passes no seed and no colour spec: the
- * controller's own `lightColorScheme()` and `darkColorScheme()` are the interface.
+ * therefore gone, and this function passes no seed and no colour spec.
  *
  * What that buys is the thing the rewrite was for: a page assembled from library
  * components is drawn in the colours those components were drawn for. What it
  * costs is the one thing a seed gave — a hue of one's own — and the app no longer
  * has a reason to want it.
+ *
+ * ## The one role the app moves
+ *
+ * The light scheme's page is [LIGHT_PAGE] (`#F0F0F0`), not the library's `#F7F7F7`.
+ * Miuix's light palette paints `background`, `surfaceVariant` and `surfaceContainer`
+ * all white, so a white card on a `#F7F7F7` page is only a three-percent step and the
+ * boundary disappears once the lift is gone: the composer, the reply cards and the
+ * drawer all read as one white field. The dark scheme already separates black
+ * (`surface`) from `#242424` (`surfaceContainer`), so only the light page moves. Every
+ * other role is still the library's own.
  *
  * ## Mode
  *
@@ -68,6 +78,7 @@ fun PiKitMiuixTheme(
     val controller = remember(mode) {
         ThemeController(
             colorSchemeMode = ColorSchemeMode.System,
+            lightColors = lightColorScheme(surface = LIGHT_PAGE),
             isDark = mode,
         )
     }
@@ -178,7 +189,7 @@ fun DarkNavigationBar() {
  * light scheme therefore paints the white an answer card would use, and the dark scheme
  * paints [surfaceContainerHighest] (#2D2D2D): one step above the card (`surfaceContainer`,
  * #242424) and two above the page (black), which is the same "raised by one step" the
- * light scheme gets from white on #F7F7F7. It is a palette role rather than a second
+ * light scheme gets from white on #F0F0F0. It is a palette role rather than a second
  * literal so a theme change moves it with everything else.
  *
  * The fill alone carries the separation from the page: no shadow is drawn under a
@@ -241,17 +252,17 @@ object PiTone {
      *
      * A code block and an inline code span are drawn on *three* different
      * backgrounds — the answer card's `surfaceContainer`, the manual's page
-     * `background`, and the reader's own `secondaryContainer` prompt — and a single
+     * `surface`, and the reader's own `secondaryContainer` prompt — and a single
      * palette role cannot be a step away from all three. Measured on the library's
      * own light scheme, `secondaryContainer` (#F0F0F0) is a 15-point step away from
-     * the white card and a 7-point step away from the #F7F7F7 page, so the same
-     * block read as a well in the transcript and as a smudge in the manual; in the
+     * the white card and the same colour as the app's `#F0F0F0` page, so the same
+     * block read as a well in the transcript and disappeared in the manual; in the
      * dark scheme `surfaceContainerHigh` *is* the card's own #242424 and the block
      * disappeared outright.
      *
      * A wash of `onSurface` at one alpha answers all three at once, because it is
      * not a colour but a *contrast*: black at 10% over white is #E6E6E6, over the
-     * #F7F7F7 page it is #DEDEDE, and over the tinted prompt #D8D8D8 — the same
+     * `#F0F0F0` page it is #D8D8D8, and over the tinted prompt #D8D8D8 — the same
      * relative step in each case, which is what "the same depth everywhere" means.
      * In the dark scheme the same 10% of a near-white ink lightens #242424 to
      * #3D3D3D and black to #181818, again by the same step. The library's palette
@@ -283,7 +294,7 @@ object PiTone {
      * ## Why not a translucent wash
      *
      * It was `primary.copy(alpha = 0.14f)` — the same mechanism as [inset] — and it is
-     * transparent over *the page*, which is `surface`: #F7F7F7 in the light scheme and
+     * transparent over *the page*, which is `surface`: #F0F0F0 in the light scheme and
      * **black** in the dark one. 14% of #277AF7 over black is #061122, a shade that is
      * not blue at all until it is beside something blacker; the bubble disappeared into
      * the page it was drawn on. A fill has to be relative to its *content* colour rather
@@ -317,19 +328,31 @@ private const val PROMPT_SHARE_DARK = 0.34f
 /**
  * Where a base counts as dark, for the two shares above.
  *
- * 0.2 is between the light scheme's white card (1.0) and its #F7F7F7 page (0.93) on one
- * side, and the dark scheme's #242424 card (0.017) on the other — no base the palette
- * offers is near the boundary, so this is a test of *which scheme* rather than a taste
- * threshold. It is not the luminance comparison the chip's KDoc rejects: that one asked
- * how far apart two roles were, this one asks how much accent a base can absorb.
+ * 0.2 is between the light scheme's white card (1.0) and its `#F0F0F0` page (0.87) on
+ * one side, and the dark scheme's #242424 card (0.017) on the other — no base the
+ * palette offers is near the boundary, so this is a test of *which scheme* rather than
+ * a taste threshold. It is not the luminance comparison the chip's KDoc rejects: that
+ * one asked how far apart two roles were, this one asks how much accent a base can
+ * absorb.
  */
 private const val DARK_BASE_LUMINANCE = 0.2f
+
+/**
+ * The light scheme's page: `#F0F0F0`, one step below Miuix's `#F7F7F7`.
+ *
+ * The library's light palette paints `background`, `surfaceVariant` and
+ * `surfaceContainer` white, so a white card on `#F7F7F7` is a three-percent step that
+ * disappears once no shadow separates it. `#F0F0F0` gives every white object an edge
+ * while staying a page rather than a panel. The dark scheme already has that step —
+ * black (`surface`) against `#242424` (`surfaceContainer`) — so it is untouched.
+ */
+private val LIGHT_PAGE = Color(0xFFF0F0F0)
 
 /**
  * How much of the surface's own ink a quotation's fill is washed with.
  *
  * 10% is the smallest step that reads as a *well* on the lightest surface the app
- * draws (the #F7F7F7 page, where it lands at #DEDEDE) rather than as a JPEG
+ * draws (the `#F0F0F0` page, where it lands at `#D8D8D8`) rather than as a JPEG
  * artifact, and it is still light enough that a code block does not become a dark
  * panel in the light scheme. The step it leaves on the dark scheme's #242424 card
  * (#3D3D3D) is the same one, which is the point of a wash.

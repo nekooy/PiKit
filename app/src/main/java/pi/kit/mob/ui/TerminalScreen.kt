@@ -246,7 +246,7 @@ fun TerminalScreen(session: PiAgentSession,
 
     // The strip under the key bar is the terminal's black rather than the app's
     // surface, and the gesture handle on it is light in both schemes: the page is a
-    // black rectangle from the header down, and a #F7F7F7 band under it — measured on
+    // black rectangle from the header down, and a #F0F0F0 band under it — measured on
     // the 1080 px emulator, 63 px tall — was the one place the app's light chrome met
     // the shell's black along a straight line. The key bar paints the strip itself now
     // (see [ExtraKeysRow]); this effect owns the handle's ink, and it is a composition
@@ -808,7 +808,7 @@ private val ARROW_LEFT = ArrowKey("\u001b[D", "\u2190")
  * Its background also carries the navigation strip: the black is painted first and the
  * strip's height is padding *inside* it, so the shell reaches the window's last pixel while
  * the keys stay above the gesture handle. A strip painted by the page instead — the app's
- * #F7F7F7 in the light scheme — was the one straight line where the two surfaces met.
+ * #F0F0F0 in the light scheme — was the one straight line where the two surfaces met.
  */
 @Composable
 private fun ExtraKeysRow(

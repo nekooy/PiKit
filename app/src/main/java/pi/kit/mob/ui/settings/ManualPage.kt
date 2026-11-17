@@ -546,7 +546,7 @@ private fun ManualContents(
                     shape = RoundedCornerShape(percent = 50),
                     // The composer's chip fill, for the same reason it is there: the bar is
                     // the page's `surface`, and this is the palette's step above it in both
-                    // schemes (#E8E8E8 on #F7F7F7, #242424 on black). A wash would have
+                    // schemes (#E8E8E8 on #F0F0F0, #242424 on black). A wash would have
                     // been the other candidate and is too faint on the dark band.
                     color = MiuixTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MiuixTheme.colorScheme.onSurface,

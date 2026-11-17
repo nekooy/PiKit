@@ -4846,7 +4846,7 @@ private fun Composer(
             // where the original composer had them — and the frame is what makes them
             // read as belonging to the text rather than floating under it.
             //
-            // `surfaceContainer` (white) against the band's `surface` (#F7F7F7) is the
+            // `surfaceContainer` (white) against the band's `surface` (#F0F0F0) is the
             // same step the answer cards take against the page, so the composer and the
             // transcript are one vocabulary: a raised white object on a grey field. The
             // band itself is now the tab strip's own colour rather than a step above it

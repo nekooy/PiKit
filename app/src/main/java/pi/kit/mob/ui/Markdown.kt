@@ -374,8 +374,8 @@ internal data class InlineStyle(
  * The fill is `PiTone.inset()` — a wash of the surface's own ink, not one of Miuix's
  * container roles — because the same renderer draws on three different backgrounds and
  * no single role can be a step away from all of them. `secondaryContainer` was the last
- * attempt: it is a fixed #F0F0F0, so on the answer card's white it read as a well, on
- * the manual's #F7F7F7 page as a 7-point smudge, and in the dark scheme
+ * attempt: it is a fixed #F0F0F0, so on the answer card's white it read as a well, it
+ * disappeared on the manual's #F0F0F0 page, and in the dark scheme
  * `surfaceContainerHigh` (the role before it) *is* the card's own #242424 and the fill
  * disappeared outright. A 10% wash is the same relative step everywhere, in both
  * schemes; `PiTone.inset`'s KDoc has the arithmetic.

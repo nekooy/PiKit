@@ -50,22 +50,34 @@ like, and Miuix is an experimental library — a bump can move the interface. Th
 the trade: one coherent idiom owned by a library, against a hand-kept design system
 maintained alongside every screen.
 
-## The palette: the library's own, both schemes
+## The palette: the library's own, with one page step
 
-`PiKitMiuixTheme(settings)` is the one place the theme is assembled, and it makes
-exactly one decision:
+`PiKitMiuixTheme(settings)` is the one place the theme is assembled. It decides the
+light/dark mode and nothing else about colour:
 
 | Preference | What it becomes |
 | --- | --- |
 | `ThemeMode.SYSTEM` | `ColorSchemeMode.System` with `isDark = null` — the library reads the platform's setting |
 | `ThemeMode.LIGHT` / `DARK` | the same mode with `isDark = false` / `true` — one controller, one override |
 
-Nothing else is passed. The controller's default `lightColors` and `darkColors` are
-Miuix's `lightColorScheme()` and `darkColorScheme()`, and those are the interface:
-the blue `#3482FF` primary, the `#F7F7F7` page against a white card, the `#E0E0E0`
-divider, the disabled pairs, the slider's track. A page assembled from the library's
-components is drawn in the colours those components were drawn for, which is what
-"the interface is Miuix" has to mean.
+The controller's dark scheme is Miuix's `darkColorScheme()` untouched, and every role
+of the light scheme is `lightColorScheme()`'s own except `surface`: the blue
+`#3482FF` primary, the white card, the `#E0E0E0` divider, the disabled pairs, the
+slider's track. The light page is `#F0F0F0` rather than the library's `#F7F7F7`, and
+that is the one colour decision this app makes.
+
+**Why the page moved: the library's light palette has no step.** `background`,
+`surfaceVariant` and `surfaceContainer` are all `#FFFFFF` in `lightColorScheme()`, so
+a white card on a `#F7F7F7` page is a three-percent step — about 1.07:1. The floating
+controls used to lean on their shadows for that edge; with the shadows removed, the
+composer's field, its chips, the reply cards and the drawer all read as one white
+field. `#F0F0F0` gives every white object an edge while staying a page rather than a
+panel. The dark scheme needs no such move: its `surface` is black and its
+`surfaceContainer` `#242424`, so the step is already there.
+
+A page assembled from the library's components is still drawn in the colours those
+components were drawn for; the one page step is the price of removing the shadows
+without losing the layers.
 
 **An accent picker and a wallpaper switch were tried and removed.** The rewrite
 first kept both: a `ThemeColor` seed went in as `keyColor` and the library's
@@ -316,7 +328,7 @@ because the strip version was worse:
   the white an answer card would use, and the dark scheme paints the palette's top container
   role — one step above the card (`surfaceContainer`, #242424) and two above the page
   (black) — which is the same "raised by one step" the light scheme gets from white on
-  #F7F7F7. The fill alone is the raise: no shadow is drawn around it.
+  #F0F0F0. The fill alone is the raise: no shadow is drawn around it.
 - **The row sits a little lower than a bar's.** The capsules' top edge is 22dp under the
   status bar — a bar's row would start at 0 — because the reference keeps the handle clear
   of the clock's own line. That is also why the leading capsule is a circle and the
@@ -660,7 +672,7 @@ a code block's header and a tool card's output still use the same control.
   rather than with a palette role, because the same renderer draws on three different
   backgrounds (the answer card, the manual page, the reader's own prompt card) and no
   single role is a step away from all of them. `secondaryContainer` was the last
-  attempt: a fixed #F0F0F0 read as a well on white and as a smudge on the #F7F7F7
+  attempt: a fixed #F0F0F0 read as a well on white and disappeared on the #F0F0F0
   manual, and in the dark scheme `surfaceContainerHigh` *is* the card's own #242424.
   A wash of the surface's own ink is the same relative step everywhere, which is what
   "the same depth" has to mean here.
