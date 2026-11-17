@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The Pi mark as a plain white glyph, for in-app use at any size.
+    PiKit's compact mark: the P from the launcher's pixel wordmark, for in-app use
+    wherever one figure has to stay legible.
 
-    This is the compact glyph rather than the launcher icon's PiKit wordmark: a
-    thirteen-cell wordmark cannot survive the 34dp avatar or the empty-state mark,
-    where a single large glyph is the thing that stays legible. The viewport is
-    the glyph's own tight bounding box, so the caller decides its size; the
-    launcher foreground uses a separate vector centred in its adaptive-icon layer.
+    The path is the wordmark's first letter, translated to its own tight bounding
+    box and nothing else: three cells wide by four high at the wordmark's 4.2-unit
+    cell, so the notch, the bowl and the pixel edge keep the approved geometry
+    rather than being redrawn at a smaller scale. The full wordmark is thirteen
+    cells wide and cannot survive the 28-34dp avatar or the 56dp setup mark; the
+    launcher foreground remains the one place the whole name is drawn.
 
     **White, like the launcher icon.** It was amber until the first-launch screen was
     looked at next to the icon it comes from: the tap and the screen it opens are the
@@ -15,17 +17,12 @@
     and the interface's own accents — not on the logo.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="37.6dp"
-    android:height="37.6dp"
-    android:viewportWidth="37.6"
-    android:viewportHeight="37.6">
-    <group android:translateX="-29.9" android:translateY="-40">
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:fillType="evenOdd"
-            android:pathData="M29.9,40 L58.1,40 L58.1,58.8 L48.7,58.8 L48.7,68.2 L39.3,68.2 L39.3,77.6 L29.9,77.6 Z M39.3,49.4 L39.3,58.8 L48.7,58.8 L48.7,49.4 Z" />
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M58.1,58.8 L67.5,58.8 L67.5,77.6 L58.1,77.6 Z" />
-    </group>
+    android:width="12.6dp"
+    android:height="16.8dp"
+    android:viewportWidth="12.6"
+    android:viewportHeight="16.8">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M0,0 L0,16.8 L4.2,16.8 L4.2,12.6 L8.4,12.6 L8.4,8.4 L12.6,8.4 L12.6,0 Z M8.4,8.4 L4.2,8.4 L4.2,4.2 L8.4,4.2 Z" />
 </vector>

@@ -1626,7 +1626,7 @@ private fun ChatPage(
         } else {
             ChatAvatars(
                 // Blank is the mark, not a word: the agent's fallback is the app's own
-                // Pi mark, drawn by `PiAvatar` for `AvatarSpeaker.AGENT`.
+                // PiKit mark, drawn by `PiAvatar` for `AvatarSpeaker.AGENT`.
                 aiName = saved.aiAvatarName.ifBlank { null },
                 aiImage = saved.aiAvatarImage.ifBlank { null },
                 aiColor = saved.aiAvatarColor.seed,
@@ -1926,9 +1926,9 @@ private fun ChatPage(
                     ) {
                         // A conversation nothing has been sent to is not a blank
                         // area: it is the one place the page can say what it is for.
-                        // The mark is the app's own logo, and the line under the
-                        // title is a tip from the catalog's set rather than the same
-                        // sentence every time — see `Strings.Chat.tips`.
+                        // The title does that and the line under it is a tip from the
+                        // catalog's set rather than the same sentence every time —
+                        // see `Strings.Chat.tips`.
                         //
                         // A conversation that is *being opened* is neither: it is
                         // empty for the length of one round trip to pi, and drawing
@@ -2548,13 +2548,15 @@ private fun ChatNotice(
 }
 
 /**
- * The page with nothing in it yet: the app's own mark, what this page is, and one
- * tip out of the catalog's set.
+ * The page with nothing in it yet: what this page is, and one tip out of the
+ * catalog's set.
  *
  * A conversation nothing has been sent to is not a blank area — it is the one place
- * the page can say what it is for, which is why the mark here is the app's compact
- * Pi glyph rather than a generic speech bubble; the home-screen wordmark is too
- * wide to read at this size.
+ * the page can say what it is for. It says it in the title and the tip, without a
+ * mark above them: the new-conversation page is a page the reader is about to fill,
+ * and the app's mark has already done its job on the launcher and the setup screen.
+ * The old 64dp mark made the page read as a splash screen rather than as an empty
+ * conversation, and it repeated what the title and the app's own icon already said.
  */
 @Composable
 private fun ChatEmptyState(title: String, body: String) {
@@ -2565,15 +2567,8 @@ private fun ChatEmptyState(title: String, body: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_pi_mark),
-            contentDescription = null,
-            modifier = Modifier.size(EMPTY_MARK_SIZE),
-            tint = MiuixTheme.colorScheme.primary,
-        )
         Text(
             text = title,
-            modifier = Modifier.padding(top = 20.dp),
             style = MiuixTheme.textStyles.title3,
             color = MiuixTheme.colorScheme.onSurface,
         )
@@ -2586,9 +2581,6 @@ private fun ChatEmptyState(title: String, body: String) {
         )
     }
 }
-
-/** How large the mark is on an empty conversation. */
-private val EMPTY_MARK_SIZE = 64.dp
 
 /**
  * The handful of conversation facts the composer displays.
@@ -3184,7 +3176,7 @@ private fun noticeLines(message: String): String {
  * The two avatars the transcript draws over its cards, or null when they are off.
  *
  * A null label (and no image) is the built-in mark rather than a word: the agent's is
- * the app's own Pi mark and the reader's is the person figure — [PiAvatar] holds both
+ * the app's own PiKit mark and the reader's is the person figure — [PiAvatar] holds both
  * and is the one place that decides which is drawn, so this transcript and the
  * personalization page cannot disagree about the reader's own avatar. The colours are
  * the two `AvatarColor` seeds that page offers, and an image is a file path the
@@ -3378,7 +3370,7 @@ private fun TranscriptCardView(
             // rather than per row: the card *is* the turn, and the folded steps inside
             // it are the same speaker.
             avatars?.let { marks ->
-                // The agent's fallback is the app's own Pi mark ([PiAvatar]), so the
+                // The agent's fallback is the app's own PiKit mark ([PiAvatar]), so the
                 // speaker answering is named by the product's logo rather than by two
                 // letters standing in for one.
                 Row(

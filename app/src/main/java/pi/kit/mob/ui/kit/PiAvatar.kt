@@ -43,7 +43,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * new call site cannot pick a third answer.
  */
 enum class AvatarSpeaker {
-    /** The agent: the app's own Pi mark when the reader has not named it. */
+    /** The agent: the app's own PiKit mark when the reader has not named it. */
     AGENT,
 
     /** The reader: the person figure when they have not named themselves. */
@@ -71,14 +71,15 @@ enum class AvatarSpeaker {
  *
  * ## The two shares, and why they differ
  *
- * They were one number (0.62) until the Pi mark was looked at beside the silhouette
- * it shares a slot with: a framework icon's box is not its ink. A person glyph draws
+ * They were one number (0.62) until the mark was looked at beside the silhouette it
+ * shares a slot with: a framework icon's box is not its ink. A person glyph draws
  * between 4 and 20 of its 24 units, so at 62% of the circle its *ink* is
  * 0.62 × 16/24 = **41%** of the diameter; `ic_pi_mark.xml`'s viewport **is** the
- * glyph's bounding box — the path runs 29.9→67.5 in x and 40→77.6 in y of a 37.6-unit
- * viewport — so the same 62% drew an ink twice the silhouette's and the agent's
- * avatar read as a logo with a ring of colour around it rather than as a mark in a
- * circle.
+ * glyph's bounding box — the launcher wordmark's P, three cells wide by four high,
+ * 12.6 × 16.8 units — so a square icon box is filled to its height and the mark is
+ * three quarters as wide. The same 62% therefore drew the agent's mark at half again
+ * the silhouette's weight, so its circle read as a logo with a ring of colour around
+ * it rather than as a mark in a circle.
  *
  * [AVATAR_MARK_SHARE] is therefore set to the silhouette's *ink* (0.46 × 34dp = about
  * 16dp of a 34dp circle) rather than to its box. It is still the heavier of the two at
@@ -169,7 +170,7 @@ private const val LABEL_SHARE = 0.38f
 /** How much of the circle the person figure takes; see [PiAvatar]'s KDoc. */
 private const val AVATAR_GLYPH_SHARE = 0.62f
 
-/** And how much the Pi mark takes: the same *ink*, not the same box. */
+/** And how much the PiKit mark takes: the same *ink*, not the same box. */
 private const val AVATAR_MARK_SHARE = 0.46f
 
 /** The longest side a decoded avatar is allowed to be, in pixels. */

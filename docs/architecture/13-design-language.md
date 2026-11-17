@@ -567,8 +567,8 @@ drawing them. The exceptions are four glyphs the reader chose at the size the ap
 draws them — the model mark, the thinking mark, ⌘ and the copy/check pair — which
 predate the rewrite and are kept: a glyph chosen that way is not replaced because the
 container around it changed. They are drawn through Miuix's `Icon`, from the same
-drawables. The Pi mark is the compact in-app glyph, drawn from `ic_pi_mark.xml`; the launcher
-icon itself is the PiKit wordmark.
+drawables. The app's in-app mark is the wordmark's P, drawn from `ic_pi_mark.xml`; the launcher
+icon itself is the full PiKit wordmark.
 
 Two glyph rules survive from the previous interface because they are still true: a
 glyph from another set has another weight, so **its size is a call-site decision** (⌘
@@ -597,8 +597,8 @@ one decision each makes that the shared vocabulary does not:
   model, cache) are values drawn in normal ink, and each opens its dropdown menu at
   the control rather than as a bottom sheet, for the reason §7.1 gives: a menu that
   answers one question belongs at the control that asks it. A conversation with
-  nothing in it draws the Pi mark and the page's hint instead of a blank area,
-  because the blank is the first thing the app ever shows.
+  nothing in it draws the page's title and hint instead of a blank area, because
+  the blank is the first thing the app ever shows.
 - **Terminal** — a black rectangle with its own sixteen colours, so the chrome stays
   out of the way: a `PiPage` bar with the shell's name and the session roster, and a
   key bar of Miuix buttons on a `surfaceContainer` track. The keys are the same glyph

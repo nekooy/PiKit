@@ -635,8 +635,8 @@ enum class FontSize(val code: String, val scale: Float) {
      * The agent's avatar: a short label, a picture, and the colour of its circle.
      *
      * Three things, and the order they are tried in is in `PiAvatar`: the picture
-     * wins, then the speaker's own figure — the app's Pi mark for the agent, a person
-     * for the reader — so a fresh install shows the logo without this field having to
+     * wins, then the speaker's own figure — the app's PiKit mark for the agent, a person
+     * for the reader — so a fresh install shows the mark without this field having to
      * hold anything.
      *
      * [aiAvatarName] is **not** drawn inside the disc: it is the name shown beside the
