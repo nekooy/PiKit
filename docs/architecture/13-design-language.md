@@ -61,26 +61,25 @@ light/dark mode and nothing else about colour:
 | `ThemeMode.LIGHT` / `DARK` | the same mode with `isDark = false` / `true` — one controller, one override |
 
 The controller's dark scheme is Miuix's `darkColorScheme()` untouched, and every role
-of the light scheme is `lightColorScheme()`'s own except `surface` and `background`:
-the blue `#3482FF` primary, the white card, the `#E0E0E0` divider, the disabled pairs,
-the slider's track. The light page is `#F0F0F0` rather than the library's `#F7F7F7`,
-and the drawer ground is `#F7F7F7` rather than its white; those are the one colour
-decision this app makes.
+of the light scheme is `lightColorScheme()`'s own except `surface`: the blue `#3482FF`
+primary, the white card, the `#E0E0E0` divider, the disabled pairs, the slider's track.
+The light page is `#F0F0F0` rather than the library's `#F7F7F7`; `background` stays the
+library's white, which is the drawer ground's clear step above the page card. That is
+the one colour decision this app makes.
 
 **Why the page moved: the library's light palette has no step.** `background`,
 `surfaceVariant` and `surfaceContainer` are all `#FFFFFF` in `lightColorScheme()`, so
 a white card has no step at all against `background` and only a three-percent one
 (about 1.07:1) against the `#F7F7F7` page. The floating controls used to lean on their
-shadows for that edge; with the shadows removed, the composer's field, its chips, the
-reply cards and the drawer all read as one white field. Stepping the page to `#F0F0F0`
-and the drawer ground to `#F7F7F7` gives every white object an edge while keeping the
-drawer lighter than the page, the order the dark scheme gets from `#242424` against
-black. The dark scheme needs no such move: its `surface` is black and its
-`surfaceContainer` `#242424`, so the step is already there.
+shadows for that edge; with the shadows removed, the composer's field, the reply cards
+and the drawer all read as one white field. Stepping the page to `#F0F0F0` gives every
+white object on it an edge, while the drawer keeps the library's white `background` — a
+clear step above the `#F0F0F0` card. The dark scheme needs no such move: its `surface`
+is black and its `surfaceContainer` `#242424`, so the step is already there.
 
 A page assembled from the library's components is still drawn in the colours those
-components were drawn for; the two page roles are the price of removing the shadows
-without losing the layers.
+components were drawn for; the page step is the price of removing the shadows without
+losing the layers.
 
 **An accent picker and a wallpaper switch were tried and removed.** The rewrite
 first kept both: a `ThemeColor` seed went in as `keyColor` and the library's
@@ -319,19 +318,19 @@ the top: the content scrolls *under* the marks, fades out as it reaches them, an
 marks are the only opaque objects there. That is three decisions, and each was made
 because the strip version was worse:
 
-- **The marks sit in opaque capsules** (`PiGlass.fill()`: white in the light scheme and
-  `surfaceContainerHighest`, #2D2D2D, in the dark one). The first
+- **The marks sit in opaque capsules** (`PiGlass.fill()`: `surfaceContainerHighest`,
+  #E8E8E8 in the light scheme and #2D2D2D in the dark one). The first
   attempt used `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong for
   a control, because the capsule then read as shading on the page instead of as an object
   above it. The fill was white at an alpha for a while — 80%, then 90%, then 100% over the
   light page, and 14%, 20%, 24% of white over the black one — and the dark half of that pair
   never became opaque, so the same control was a solid object by day and a tinted pane by
   night: a row scrolled under the capsule showed through it, and the page stopped reading as
-  one object per theme. **A floating control is filled, not tinted.** The light scheme paints
-  the white an answer card would use, and the dark scheme paints the palette's top container
-  role — one step above the card (`surfaceContainer`, #242424) and two above the page
-  (black) — which is the same "raised by one step" the light scheme gets from white on
-  #F0F0F0. The fill alone is the raise: no shadow is drawn around it.
+  one object per theme. **A floating control is filled, not tinted.** White would have been
+  the answer card's own `surfaceContainer`, and a white chip or capsule on a white card has
+  no edge; the highest container is a control colour in both schemes — a step down from the
+  light card and a step up from the dark one. The fill alone is the raise: no shadow is
+  drawn around it.
 - **The row sits a little lower than a bar's.** The capsules' top edge is 22dp under the
   status bar — a bar's row would start at 0 — because the reference keeps the handle clear
   of the clock's own line. That is also why the leading capsule is a circle and the

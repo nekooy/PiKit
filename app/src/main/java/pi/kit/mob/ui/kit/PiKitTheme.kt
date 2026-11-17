@@ -46,17 +46,16 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
  * costs is the one thing a seed gave — a hue of one's own — and the app no longer
  * has a reason to want it.
  *
- * ## The two page roles the app moves
+ * ## The one page role the app moves
  *
- * The light scheme steps both page roles down once: `surface` moves from the library's
- * `#F7F7F7` to [LIGHT_PAGE] (`#F0F0F0`), and `background` moves from white to
- * [LIGHT_BACKGROUND] (`#F7F7F7`). Miuix's light palette paints `surfaceVariant` and
- * `surfaceContainer` white, so a white card on either old value is a zero or
- * three-percent step and the boundary disappears once the lift is gone: the composer,
- * the reply cards and the drawer all read as one white field. The two moved roles keep
- * the order the library gives them — the drawer ground lighter than the page — while
- * giving every white object an edge. The dark scheme already separates black (`surface`)
- * from `#242424` (`surfaceContainer`), so it is untouched.
+ * The light scheme's page is [LIGHT_PAGE] (`#F0F0F0`), not the library's `#F7F7F7`.
+ * Miuix's light palette paints `surfaceVariant` and `surfaceContainer` white, so a
+ * white card on a `#F7F7F7` page is only a three-percent step and the boundary
+ * disappears once the lift is gone: the composer, the reply cards and the drawer all
+ * read as one white field. The `background` role stays the library's white, so the
+ * drawer ground is a clear step lighter than the `#F0F0F0` page card. The dark scheme
+ * already separates black (`surface`) from `#242424` (`surfaceContainer`), so it is
+ * untouched.
  *
  * ## Mode
  *
@@ -80,10 +79,7 @@ fun PiKitMiuixTheme(
     val controller = remember(mode) {
         ThemeController(
             colorSchemeMode = ColorSchemeMode.System,
-            lightColors = lightColorScheme(
-                surface = LIGHT_PAGE,
-                background = LIGHT_BACKGROUND,
-            ),
+            lightColors = lightColorScheme(surface = LIGHT_PAGE),
             isDark = mode,
         )
     }
@@ -175,14 +171,15 @@ fun DarkNavigationBar() {
  *   a wash rather than a pair, for the reason its own KDoc gives.
  */
 /**
- * The fill of a control that floats over the page: an opaque raised surface.
+ * The fill of a control that floats over the page: an opaque surface of its own.
  *
- * The reference drawing's top bar is two capsules and its composer is a row of chips,
- * and all four are *white* objects on a grey page in the light scheme — the same raised
- * step an answer card takes — and a raised near-black in the dark one. The first attempt
- * used [PiTone.inset], which is a *wash of the ink*: right for quoted material and wrong
- * here, because a control that floats reads as a surface of its own rather than as
- * shading on the page.
+ * The reference drawing's top bar is two capsules and its composer is a row of chips.
+ * They are [surfaceContainerHighest] in both schemes — `#E8E8E8` in the light one and
+ * `#2D2D2D` in the dark one. White would have made them the same object as an answer
+ * card: `surfaceContainer` is white in the light scheme, so a white chip, capsule or
+ * jump button had no edge against the reply card it sits beside. The highest container
+ * is a step down from the light page and a step up from the dark card; in both it is a
+ * control colour rather than another card.
  *
  * ## Why it is opaque, and why it took three tries
  *
@@ -190,12 +187,8 @@ fun DarkNavigationBar() {
  * 20% then 24% of white in the dark one. The light one ended at opaque and the dark one
  * did not, so the same control was a solid object by day and a tinted pane by night — a
  * row scrolled underneath showed through the capsule and the chip, and the page stopped
- * reading as one object per theme. **A floating control is filled, not tinted.** The
- * light scheme therefore paints the white an answer card would use, and the dark scheme
- * paints [surfaceContainerHighest] (#2D2D2D): one step above the card (`surfaceContainer`,
- * #242424) and two above the page (black), which is the same "raised by one step" the
- * light scheme gets from white on #F0F0F0. It is a palette role rather than a second
- * literal so a theme change moves it with everything else.
+ * reading as one object per theme. **A floating control is filled, not tinted.** It is
+ * a palette role in both schemes, so a theme change moves it with everything else.
  *
  * The fill alone carries the separation from the page: no shadow is drawn under a
  * floating control, so the raise is the colour step and nothing else.
@@ -211,13 +204,7 @@ object PiGlass {
 
     /** The fill a floating control is painted with. */
     @Composable
-    fun fill(): Color {
-        val dark = MiuixTheme.colorScheme.surface.luminance() < DARK_BASE_LUMINANCE
-        // A near-white step, not white: #2D2D2D is visible against both the black page
-        // and the #242424 card, while white would make every capsule the brightest
-        // object on screen.
-        return if (dark) MiuixTheme.colorScheme.surfaceContainerHighest else Color.White
-    }
+    fun fill(): Color = MiuixTheme.colorScheme.surfaceContainerHighest
 
 }
 
@@ -348,20 +335,11 @@ private const val DARK_BASE_LUMINANCE = 0.2f
  * The library's light palette paints `surfaceVariant` and `surfaceContainer` white,
  * so a white card on `#F7F7F7` is a three-percent step that disappears once no shadow
  * separates it. `#F0F0F0` gives every white object an edge while staying a page rather
- * than a panel. The dark scheme already has that step — black (`surface`) against
- * `#242424` (`surfaceContainer`) — so it is untouched.
+ * than a panel. Its `background` stays white: that is the drawer ground, one clear step
+ * lighter than the page card. The dark scheme already has that step — black (`surface`)
+ * against `#242424` (`surfaceContainer`) — so it is untouched.
  */
 private val LIGHT_PAGE = Color(0xFFF0F0F0)
-
-/**
- * The light scheme's drawer ground: `#F7F7F7`, one step below the library's white
- * `background`.
- *
- * The drawer panel and the strips around the conversation card share this role. One
- * step below white keeps them lighter than the `#F0F0F0` page, the same order the dark
- * scheme gets from `#242424` against black.
- */
-private val LIGHT_BACKGROUND = Color(0xFFF7F7F7)
 
 /**
  * How much of the surface's own ink a quotation's fill is washed with.

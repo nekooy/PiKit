@@ -996,9 +996,8 @@ internal fun ChatScreen(
                     // `background`, not `surface`: the card over this panel is `surface`
                     // and the dark scheme's `surface` is black, so a surface panel made
                     // the two halves of the screen one colour. `background` is #242424
-                    // there and #F7F7F7 in the light scheme, a step from the #F0F0F0
-                    // card, so the panel is one field and the page is still the object
-                    // on it.
+                    // there and white in the light scheme, a step from the #F0F0F0 card,
+                    // so the panel is one field and the page is still the object on it.
                     // The box this panel is drawn in paints the same role, so the strips
                     // of ground around the card belong to the same field: the panel is
                     // not a second colour, it is where that field is widest.
@@ -1384,9 +1383,10 @@ internal fun ChatScreen(
  * [FADE_TAIL]'s gradient — which is the whole of the difference between this and the
  * opaque strip a `PiPage` would draw.
  *
- * The capsules are `PiGlass.fill()`, the fill the composer's field and its chips use: a
- * control that floats over the page is the same object whether it holds text or a glyph,
- * and it is filled rather than tinted so what scrolls underneath cannot show through.
+ * The capsules are `PiGlass.fill()`, the fill the composer's chips and the jump-to-latest
+ * button use: a control that floats over the page is the same object whether it holds a
+ * label or a glyph, and it is filled rather than tinted so what scrolls underneath cannot
+ * show through.
  */
 @Composable
 private fun ChatHeader(
@@ -5560,12 +5560,13 @@ private fun cacheHitPercent(state: ConversationState): Int {
  * answer.
  *
  * The answer that survived is `PiGlass.fill()` — the same opaque floating fill the
- * header's capsules and the composer's field use — rather than a step of the surface
- * ramp: `surfaceContainerHigh` was a step *into* the page, not above it, and the chip
- * read as shading on the band rather than as an object over it. The pill is a
- * Miuix [Surface] at a full round, so the clip, the fill and the press feedback are the
- * library's, and its height is 32dp — the composer's own control height, which is a
- * size larger than the transcript's 28dp pills on purpose: a tool row is read at a
+ * header's capsules and the jump-to-latest button use — rather than a chip-local step
+ * of the surface ramp: a chip is a floating control, so it wears the control fill
+ * wherever it sits rather than a role chosen by the surface beneath it. The answer card
+ * stays `surfaceContainer` (white), so the chip still reads as a separate object. The
+ * pill is a Miuix [Surface] at a full round, so the clip, the fill and the press feedback
+ * are the library's, and its height is 32dp — the composer's own control height, which is
+ * a size larger than the transcript's 28dp pills on purpose: a tool row is read at a
  * glance, while these three are the settings the next message goes with. It is a
  * minimum, so the label grows with the reader's text size.
  *
