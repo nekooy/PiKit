@@ -562,7 +562,8 @@ drawing them. The exceptions are four glyphs the reader chose at the size the ap
 draws them — the model mark, the thinking mark, ⌘ and the copy/check pair — which
 predate the rewrite and are kept: a glyph chosen that way is not replaced because the
 container around it changed. They are drawn through Miuix's `Icon`, from the same
-drawables. The Pi mark is the launcher icon's geometry, drawn from `ic_pi_mark.xml`.
+drawables. The Pi mark is the compact in-app glyph, drawn from `ic_pi_mark.xml`; the launcher
+icon itself is the PiKit wordmark.
 
 Two glyph rules survive from the previous interface because they are still true: a
 glyph from another set has another weight, so **its size is a call-site decision** (⌘

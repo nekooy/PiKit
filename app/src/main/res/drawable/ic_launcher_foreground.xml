@@ -1,54 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Launcher glyph: the Pi mark, drawn as pixels.
+    Launcher glyph: the PiKit wordmark, drawn as pixels.
 
-    This is the geometry of pi.dev's own logo (viewBox 800x800, two right-angle
-    polygons), scaled by 0.080. Everything is axis-aligned rectangles, which is
-    what gives it the pixel-face look at launcher size — the stem of the P, the
-    notch that forms the bowl, and the detached square that dots the i.
+    The mark is the approved pixel wordmark: thirteen cells wide and four cells
+    high, with half-cell gaps between the letters. The path is the union of the
+    occupied cells, not a redraw; the P's bowl is a real hole, so the path uses
+    evenOdd. At 2.1 units per cell the mark is 54.6 by 16.8 units in the 108-unit
+    adaptive-icon layer, with its bounding box on (54, 54). Those margins are
+    8.7 units left and right and 27.6 above and below; the launcher shows the
+    centre 72 units, so the wordmark keeps the proportions of the approved icon.
 
-    **The group's translation is what centres it, and it is not cosmetic.** The
-    mark is asymmetric: the bowl of the P ends at y 58.8 while the i's dot runs
-    down to y 77.6, so its bounding box is 37.6 wide by 37.6 tall with its centre
-    at (48.7, 58.8). The adaptive-icon viewport centres on (54, 54), so an
-    untranslated draw sits 5.3 units left and 4.8 units low — visible on a
-    launcher, where the mask makes the offset obvious. Translating the whole
-    group by (+5.3, -4.8) puts the bounding box exactly on the centre; the raw
-    path data is left alone so it still matches the source geometry one-to-one
-    and can be re-scaled without re-deriving it.
-
-    One path with evenOdd fill rather than two: the bowl of the P is a genuine
-    hole, and drawing it as a second filled path would leave a visible seam
-    wherever the two met on a low-density screen.
-
-    **White, on black, with no colour of its own.** The mark was pi's amber until
-    it was looked at on a launcher rather than in the source: at 48–64dp a single
-    flat shape is what reads, the icons around it are monochrome, and an amber
-    glyph is then the only tinted thing in the row. White has a second effect —
-    the themed-icon layer (`ic_launcher_monochrome`, which the system recolours)
-    is now the same picture as this one, so the icon is recognisable in either
-    mode. The amber is not gone, it moved to where it is an interface accent
-    rather than a logo: `ic_pi_mark.xml` and the setup screen's progress bar.
+    **White, on black, with no colour of its own.** The monochrome treatment is
+    deliberate: at 48-64dp a single flat shape is what reads, the icons around it
+    are monochrome, and a tinted glyph would be the only coloured thing in the
+    row. The themed-icon layer (`ic_launcher_monochrome`, which the system
+    recolours) is the same picture as this one, so the icon is recognisable in
+    either mode. Amber remains an interface accent rather than a logo: the setup
+    screen's progress bar is the place it still appears.
 
     `tools/render-icon.py` derives the README's copy of this icon from this file
     and `values/colors.xml`, and `tools/build-apks.py` runs it in check mode, so
     the picture at the top of the README cannot drift away from the app's icon.
     (No double hyphen in an XML comment: the check flag's name is spelled out in
     that script's own docstring instead, because `aapt2` refuses a comment
-    containing one — which is how this paragraph was written the second time.)
+    containing one.)
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:translateX="5.3" android:translateY="-4.8">
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:fillType="evenOdd"
-            android:pathData="M29.9,40 L58.1,40 L58.1,58.8 L48.7,58.8 L48.7,68.2 L39.3,68.2 L39.3,77.6 L29.9,77.6 Z M39.3,49.4 L39.3,58.8 L48.7,58.8 L48.7,49.4 Z" />
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M58.1,58.8 L67.5,58.8 L67.5,77.6 L58.1,77.6 Z" />
-    </group>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M26.7,45.6 L26.7,62.4 L30.9,62.4 L30.9,58.2 L35.1,58.2 L35.1,54 L39.3,54 L39.3,45.6 Z M35.1,54 L30.9,54 L30.9,49.8 L35.1,49.8 Z M41.4,45.6 L41.4,49.8 L45.6,49.8 L45.6,45.6 Z M47.7,45.6 L47.7,62.4 L51.9,62.4 L51.9,54 L54,54 L54,58.2 L56.1,58.2 L56.1,62.4 L60.3,62.4 L60.3,58.2 L58.2,58.2 L58.2,54 L56.1,54 L56.1,49.8 L51.9,49.8 L51.9,45.6 Z M41.4,54 L41.4,62.4 L45.6,62.4 L45.6,54 Z M60.3,49.8 L60.3,45.6 L56.1,45.6 L56.1,49.8 Z M66.6,49.8 L66.6,45.6 L62.4,45.6 L62.4,49.8 Z M62.4,54 L62.4,62.4 L66.6,62.4 L66.6,54 Z M68.7,49.8 L68.7,54 L72.9,54 L72.9,62.4 L81.3,62.4 L81.3,58.2 L77.1,58.2 L77.1,54 L81.3,54 L81.3,49.8 L77.1,49.8 L77.1,45.6 L72.9,45.6 L72.9,49.8 Z" />
 </vector>

@@ -198,6 +198,11 @@ def build_svg() -> str:
     group, blocks = _glyph(foreground)
     translate_x = group.get("translateX", "0")
     translate_y = group.get("translateY", "0")
+    transform = (
+        f' transform="translate({translate_x} {translate_y})"'
+        if translate_x != "0" or translate_y != "0"
+        else ""
+    )
 
     if not blocks:
         raise SystemExit(f"render-icon: no <path> in {SHIPPED_FOREGROUND}")
@@ -208,9 +213,9 @@ def build_svg() -> str:
             f"({', '.join(sorted(fills))}). This script writes one; a multi-colour "
             "glyph needs it taught about them."
         )
-    # One `<g fill=...>` rather than one fill per path: the two paths are one
-    # glyph, and a colour repeated per path is a colour that can be changed in one
-    # place and not the other.
+    # One `<g fill=...>` rather than one fill per path: the paths are one glyph,
+    # and a colour repeated per path is a colour that can be changed in one place
+    # and not the other.
     paths = [
         "        <path{} d=\"{}\" />".format(
             ' fill-rule="evenodd"' if block.get("fillType") == "evenOdd" else "",
@@ -236,7 +241,7 @@ def build_svg() -> str:
             f'    <rect x="{CROP + 0.5}" y="{CROP + 0.5}" width="{VIEWPORT - 1}"',
             f'        height="{VIEWPORT - 1}" rx="{CORNER_RADIUS - 0.5}"',
             f'        fill="none" stroke="{BORDER}" stroke-width="1" />',
-            f'    <g transform="translate({translate_x} {translate_y})" fill="{fill}">',
+            f'    <g{transform} fill="{fill}">',
             *paths,
             "    </g>",
             "</svg>",

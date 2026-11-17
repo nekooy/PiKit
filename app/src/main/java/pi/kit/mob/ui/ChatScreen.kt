@@ -2555,8 +2555,9 @@ private fun ChatNotice(
  * tip out of the catalog's set.
  *
  * A conversation nothing has been sent to is not a blank area — it is the one place
- * the page can say what it is for, which is why the mark here is the launcher icon's
- * own geometry rather than a generic speech bubble.
+ * the page can say what it is for, which is why the mark here is the app's compact
+ * Pi glyph rather than a generic speech bubble; the home-screen wordmark is too
+ * wide to read at this size.
  */
 @Composable
 private fun ChatEmptyState(title: String, body: String) {

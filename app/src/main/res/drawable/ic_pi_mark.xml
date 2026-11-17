@@ -2,10 +2,11 @@
 <!--
     The Pi mark as a plain white glyph, for in-app use at any size.
 
-    Same geometry as the launcher icon but *not* centred by translation: this one
-    is drawn from the origin with a tight viewport, because the caller decides
-    where it goes. The launcher variant needs its offsets to land on the adaptive
-    icon's centre; a `painterResource` in Compose does not.
+    This is the compact glyph rather than the launcher icon's PiKit wordmark: a
+    thirteen-cell wordmark cannot survive the 34dp avatar or the empty-state mark,
+    where a single large glyph is the thing that stays legible. The viewport is
+    the glyph's own tight bounding box, so the caller decides its size; the
+    launcher foreground uses a separate vector centred in its adaptive-icon layer.
 
     **White, like the launcher icon.** It was amber until the first-launch screen was
     looked at next to the icon it comes from: the tap and the screen it opens are the

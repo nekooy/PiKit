@@ -800,10 +800,10 @@ internal val TerminalGlyph: ImageVector by lazy {
  *  - **A dark surface with the app's own mark.** The window background is already
  *    near-black (it matches the launcher icon), so the very first frame is dark;
  *    painting the setup screen the same colour removes the light flash that used
- *    to happen as Compose took over, and the mark is the shape the user just
- *    tapped — in the same white, which is what a report asked for: the tap and the
- *    screen it opens are one moment, and a mark that changed colour between them
- *    read as a different logo. See `ic_pi_mark.xml`.
+ *    to happen as Compose took over, and the mark is the app's compact Pi glyph in
+ *    the same white the launcher icon uses — what a report asked for: the tap and
+ *    the screen it opens are one moment, and a mark that changed colour between
+ *    them read as a different logo. See `ic_pi_mark.xml`.
  *  - **The percentage is the headline.** The old layout put "Setting up PiKit" in
  *    the largest type and the number in the smallest. The number is the only
  *    thing that changes, so it is what the eye should land on.
