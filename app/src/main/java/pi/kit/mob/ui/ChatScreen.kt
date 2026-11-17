@@ -4479,6 +4479,7 @@ private fun Composer(
     // permission tier is the rule they are judged by. Leaving them on screen would
     // offer settings that the process they configure cannot honour.
     val chatMode = mode == AgentMode.CHAT
+    val haptics = LocalPiHaptics.current
 
     // Read here rather than taken as a parameter: it is only this card's own
     // dismissal that needs it, and the page's `focusManager` is the same object
@@ -5191,7 +5192,10 @@ private fun Composer(
                 // what a stop button is in every app that has one.
                 if (isStreaming) {
                     IconButton(
-                        onClick = onStop,
+                        onClick = {
+                            haptics.action()
+                            onStop()
+                        },
                         modifier = Modifier.size(40.dp),
                         cornerRadius = 20.dp,
                         backgroundColor = PiTone.error(),
@@ -5209,7 +5213,10 @@ private fun Composer(
                 } else {
                     val armed = enabled && (value.isNotBlank() || attachments.isNotEmpty())
                     IconButton(
-                        onClick = onSend,
+                        onClick = {
+                            haptics.action()
+                            onSend()
+                        },
                         enabled = armed,
                         modifier = Modifier.size(40.dp),
                         cornerRadius = 20.dp,

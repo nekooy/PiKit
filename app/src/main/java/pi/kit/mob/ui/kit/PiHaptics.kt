@@ -10,7 +10,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
- * The app's haptics: five moments, one vocabulary, one file.
+ * The app's haptics: six moments, one vocabulary, one file.
  *
  * ## Why a kit and not a call at the control
  *
@@ -23,12 +23,13 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * the two comments that matter — which moments buzz and which deliberately do not —
  * are written once instead of at forty call sites.
  *
- * ## The five moments
+ * ## The six moments
  *
  * The vocabulary is Miuix's own, extended by the two gestures the library has no
- * component for and by one control family it draws without feedback. That is the
- * whole rule: **PiKit buzzes where the library buzzes, plus a hold, a key, and a tap
- * on one of its floating capsules**.
+ * component for, the one control family it draws without feedback, and the two discs
+ * that carry the composer's whole answer. That is the whole rule: **PiKit buzzes where
+ * the library buzzes, plus a hold, a key, a tap on one of its floating capsules, and
+ * the page's one action button**.
  *
  * | Moment | Call | Platform type | On API < 34 | On API < 30 |
  * | --- | --- | --- | --- | --- |
@@ -37,6 +38,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * | a row that is one of a set became the chosen one | [choose] | `ToggleOn` | `CONTEXT_CLICK` | |
  * | a key on a keyboard PiKit draws was pressed | [key] | `KeyboardTap` | | |
  * | a floating capsule button was tapped | [tap] | `VirtualKey` | | |
+ * | the page's one action button was tapped | [action] | `VirtualKey` | | |
  *
  * The fallbacks are not guesses: they are `HapticFeedbackConstantsCompat`'s answer in
  * AndroidX core 1.19.1, which maps a constant the device does not have onto the nearest
@@ -161,6 +163,25 @@ class PiHaptics internal constructor(
      * family is named at its five controls, never inferred from "it has an onClick".
      */
     fun tap() {
+        feedback?.performHapticFeedback(HapticFeedbackType.VirtualKey)
+    }
+
+    /**
+     * The page's one action button: the composer's send disc and its stop disc.
+     *
+     * Sending is the one control whose result lands somewhere other than under the
+     * finger — the transcript above it — and stopping ends an answer that is already
+     * being written. Both are decisive, both are reached by a thumb without looking,
+     * and both sit in the corner where a chat app has trained that thumb to expect an
+     * answer. The light button tick is that answer; everything else in the composer
+     * (the chips, `+`, attach, the context ring) stays silent.
+     *
+     * This is deliberately the one exception to "a result the same frame already
+     * shows". The transcript is the result, but it is not under the finger, and the
+     * two discs are the only controls whose effect the reader can start or cut from a
+     * place the screen is not already looking at.
+     */
+    fun action() {
         feedback?.performHapticFeedback(HapticFeedbackType.VirtualKey)
     }
 }

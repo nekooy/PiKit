@@ -215,6 +215,7 @@ fun SessionsScreen(
     var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val toasts = LocalPiToast.current
+    val haptics = LocalPiHaptics.current
 
     LaunchedEffect(reload) {
         // Only a drawer with nothing to show draws the spinner. With a listing already
@@ -353,6 +354,11 @@ fun SessionsScreen(
                     IconButton(
                         modifier = Modifier.size(SELECTION_BUTTON),
                         onClick = {
+                            // Select-all is a mode flip too: from here every visible
+                            // row is either in the set or out of it, and the button's
+                            // tint says which answer the tap gave. The buzz belongs to
+                            // that transition, not to the redraw.
+                            haptics.toggle(on = !allVisibleSelected)
                             selected = if (allVisibleSelected) {
                                 selected - visiblePaths
                             } else {
@@ -397,7 +403,14 @@ fun SessionsScreen(
                     }
                     IconButton(
                         modifier = Modifier.size(SELECTION_BUTTON),
-                        onClick = { exitSelection() },
+                        onClick = {
+                            // Leaving selection is the same kind of answer as entering
+                            // it: a mode that was on is now off. `exitSelection` is also
+                            // called once a delete completes, which is a result rather
+                            // than a press, so the buzz stays at this tap.
+                            haptics.toggle(on = false)
+                            exitSelection()
+                        },
                     ) {
                         Icon(
                             MiuixIcons.Close,
@@ -408,7 +421,15 @@ fun SessionsScreen(
                 } else {
                     IconButton(
                         modifier = Modifier.size(SELECTION_BUTTON),
-                        onClick = { selecting = true },
+                        onClick = {
+                            // The entry into selection is the mode flip a reader feels
+                            // for: the whole list changes shape under the finger, and
+                            // the fill on an icon button is too small to carry that
+                            // alone. Select-all and the close button answer the same
+                            // way; the delete button is an action and stays silent.
+                            haptics.toggle(on = true)
+                            selecting = true
+                        },
                         enabled = summaries.isNotEmpty(),
                     ) {
                         Icon(

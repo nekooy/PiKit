@@ -40,7 +40,7 @@ changes nothing about its history; switching one with messages keeps every messa
 While an answer is streaming the switch asks first, because the relaunch ends the
 turn, the same question the workspace chip asks.
 
-A mode that flips is one of the app's five haptic moments, so the switch calls
+A mode that flips is one of the app's six haptic moments, so the switch calls
 `PiHaptics.toggle` rather than `tap` (ARCHITECTURE §16).
 
 ## What chat mode removes

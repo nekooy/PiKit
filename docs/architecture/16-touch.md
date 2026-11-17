@@ -1,11 +1,11 @@
-# Touch: the five moments PiKit buzzes
+# Touch: the six moments PiKit buzzes
 
 The interface is Miuix's (§13), and Miuix's components already buzz where the
 library decided they should. What this app drew itself — a message card, a
 conversation row, a file row, a terminal bar, an on-screen keyboard, twelve menus —
 had no rule at all: two long-press buzzes were placed by hand, in two screens, and
 everything else was silent. That is the state this chapter replaces. It is not "add
-haptics", it is **five moments and a longer list of silences**.
+haptics", it is **six moments and a longer list of silences**.
 
 **A buzz is a control's acknowledgement, not the outcome's notification.** The screen
 already tells the reader what happened; a vibration that repeats it is noise. What a
@@ -30,7 +30,7 @@ other, and two light ticks together are one heavy buzz — the opposite of the e
 
 ## The vocabulary
 
-Five moments, five platform types, one file: `ui/kit/PiHaptics.kt`.
+Six moments, five platform types, one file: `ui/kit/PiHaptics.kt`.
 
 | Moment | Call | Type | API < 34 | API < 30 |
 | --- | --- | --- | --- | --- |
@@ -39,6 +39,7 @@ Five moments, five platform types, one file: `ui/kit/PiHaptics.kt`.
 | a row that is one of a set became the chosen one | `choose()` | `ToggleOn` | `CONTEXT_CLICK` | — |
 | a key on a keyboard this app draws | `key()` | `KeyboardTap` | — | — |
 | a floating capsule button was tapped | `tap()` | `VirtualKey` | — | — |
+| the page's one action button was tapped | `action()` | `VirtualKey` | — | — |
 
 The fallbacks are `HapticFeedbackConstantsCompat`'s, from AndroidX core 1.19.1, which
 is what `HapticFeedback` calls through: an effect the device does not have is replaced
@@ -59,13 +60,21 @@ IME's own keypress setting cannot speak for them. The text field is not this cas
 keys are the platform's, and a second tick from the app would double them and honour
 neither the user's setting nor the theme.
 
-**`tap()` is the one button family that buzzes**, and the exception is narrow: the
-drawer disc and the action pill at the top of the conversation page, and the mode
-switch and settings disc at the drawer's foot. They float over a scrolling page with
-no bar behind them, so the fill is the only press feedback they have; `VirtualKey` is
-the platform's light button tick. Every other button, icon button, row and chip stays
-silent for the reason below. The family is named at its controls, never inferred from
-"it has an onClick".
+**`tap()` is the one *floating* button family that buzzes**, and the exception is
+narrow: the drawer disc and the action pill at the top of the conversation page, and
+the mode switch and settings disc at the drawer's foot. They float over a scrolling
+page with no bar behind them, so the fill is the only press feedback they have;
+`VirtualKey` is the platform's light button tick. Every other button, icon button,
+row and chip stays silent for the reason below. The family is named at its controls,
+never inferred from "it has an onClick".
+
+**`action()` is the composer's two discs, and only those two.** Send and stop are the
+page's one action: send is the control whose result lands in the transcript above the
+finger rather than under it, and stop ends an answer that is already being written.
+Both are decisive, both are reached without looking, and a chat app has trained the
+thumb to expect an answer from that corner. `VirtualKey` is the same light tick the
+floating capsules use; the chips, `+`, attach and the context ring beside them stay
+silent.
 
 **There is no `reject()` and no `confirm()`.** Both were considered and dropped: every
 refusal this app can produce (an invalid path, a failed restore, a refused
@@ -115,11 +124,12 @@ indistinguishable from an oversight:
 - **Typing into the text field.** The IME owns key feedback, as a user setting.
 - **Scrolling, page swipes, the elastic over-scroll.** Motion is the answer. (Miuix adds
   its own soft one at the ends of a bounce; that is the library's.)
-- **A result the same frame already shows.** Sending a message — the transcript is the
-  answer, and the send disc is the one control where an extra tick would fire dozens of
-  times per conversation; copying — the toast; deleting a conversation — the row
-  leaving. This is the largest group in the app, and it is why the count of call sites
-  is in the tens rather than the hundreds.
+- **A result the same frame already shows.** Copying — the toast; deleting a
+  conversation — the row leaving. Sending and stopping are the one exception, and it
+  is `action()`: the transcript is the result but it is not under the finger, where
+  the two composer discs are the only controls that can start or cut an answer from a
+  place the screen is not already looking. This is the largest group in the app, and
+  it is why the count of call sites is in the tens rather than the hundreds.
 
 ## Where the app buzzes for the library
 
@@ -162,9 +172,9 @@ the page's were not. The default outside the theme is a no-op, so a preview or a
 screenshot harness composes a screen without a window and does not crash on a buzz.
 
 `tools/check-haptics.py` fails the build when anything outside the kit calls
-`performHapticFeedback` or names a `HapticFeedbackType` — a sixth moment invented at a
+`performHapticFeedback` or names a `HapticFeedbackType` — a seventh moment invented at a
 call site compiles, reads like any other line, and is exactly the drift this chapter
-exists to stop — and when the kit's set of moments is not the five in the table above.
+exists to stop — and when the kit's set of moments is not the six in the table above.
 Adding a moment is therefore a change to this file and to the checker's list in the
 same commit.
 

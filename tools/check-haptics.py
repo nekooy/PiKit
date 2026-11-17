@@ -2,18 +2,19 @@
 """
 Checks that every buzz in the app comes through one door.
 
-`ui/kit/PiHaptics.kt` is the app's whole haptic vocabulary: five moments — a hold, a
+`ui/kit/PiHaptics.kt` is the app's whole haptic vocabulary: six moments — a hold, a
 mode that stays flipped, a row that becomes the chosen one, a key on a keyboard this
-app draws, a tap on a floating capsule — each mapped onto one platform constant, with
-the moments that must stay silent written down beside them. That standard survives
-exactly as long as nothing else in the tree calls `performHapticFeedback` directly: a
-sixth type invented at a call site is a moment nobody documented, and it is invisible
-in review because the line looks like any other.
+app draws, a tap on a floating capsule, and a tap on the page's one action button —
+each mapped onto one platform constant, with the moments that must stay silent
+written down beside them. That standard survives exactly as long as nothing else in
+the tree calls `performHapticFeedback` directly: a seventh type invented at a call
+site is a moment nobody documented, and it is invisible in review because the line
+looks like any other.
 
 The checker enforces the two halves that a machine can see:
 
   1. the platform's feedback API appears in `PiHaptics.kt` and nowhere else;
-  2. the kit declares exactly the five documented moments, so a sixth one has to be
+  2. the kit declares exactly the six documented moments, so a seventh one has to be
      argued for in `docs/architecture/16-touch.md` (and in this file) rather than
      added to the kit.
 
@@ -35,17 +36,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCES = REPO_ROOT / "app/src/main/java"
 KIT = SOURCES / "pi/kit/mob/ui/kit/PiHaptics.kt"
 
-#: The five moments, in the order the chapter table lists them. A function added to
+#: The six moments, in the order the chapter table lists them. A function added to
 #: the kit without a row here is a change to the standard, and this file is where
 #: that has to be said out loud.
-MOMENTS = ["hold", "toggle", "choose", "key", "tap"]
+MOMENTS = ["hold", "toggle", "choose", "key", "tap", "action"]
 
 #: The API a second door would use. `LocalHapticFeedback` alone is harmless — reading
 #: the local is how the kit is built — so the patterns name the performing half.
 DOORS = re.compile(r"performHapticFeedback|HapticFeedbackType\.")
 
 #: A call site, for the count printed at the end: the kit's own name in the tree.
-CALL_SITE = re.compile(r"\bhaptics\.(hold|toggle|choose|key|tap)\(")
+CALL_SITE = re.compile(r"\bhaptics\.(hold|toggle|choose|key|tap|action)\(")
 
 
 def kotlin_sources() -> list[Path]:

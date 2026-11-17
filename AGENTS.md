@@ -318,15 +318,16 @@ an ellipsis, and reads `null` as "no subtitle" and `""` as "reserve the line whi
 being read". Do not bypass it with `SmallTopAppBar(subtitle = …)`.
 
 **Every buzz goes through `ui/kit/PiHaptics.kt`, and the silences are part of the rule.** The
-app's haptics are five moments — a hold that raises something, a mode that flips and stays
-flipped, one row of a set becoming the chosen one, a key on a keyboard this app draws, and a
-tap on one of the conversation page's floating chrome capsules — and everything else (page
-navigation, press states, typing, scrolling, a result the same frame shows) is deliberately
-silent (ARCHITECTURE §16). A `performHapticFeedback` or a `HapticFeedbackType`
-anywhere else is refused by `tools/check-haptics.py`, which `build-apks.py` runs; another
-moment is an edit to the chapter and to that checker's list in the same change, not a line at a
-call site. And Miuix's own `Switch`, `Checkbox`, `RadioButton`, `Slider`, `RangeSlider`,
-`NumberPicker` and `PullToRefresh` already perform haptics — wrapping one must not add a second.
+app's haptics are six moments — a hold that raises something, a mode that flips and stays
+flipped, one row of a set becoming the chosen one, a key on a keyboard this app draws, a
+tap on one of the conversation page's floating chrome capsules, and the composer's
+send/stop disc — and everything else (page navigation, press states, typing, scrolling, a
+result the same frame shows) is deliberately silent (ARCHITECTURE §16). A
+`performHapticFeedback` or a `HapticFeedbackType` anywhere else is refused by
+`tools/check-haptics.py`, which `build-apks.py` runs; another moment is an edit to the
+chapter and to that checker's list in the same change, not a line at a call site. And
+Miuix's own `Switch`, `Checkbox`, `RadioButton`, `Slider`, `RangeSlider`, `NumberPicker`
+and `PullToRefresh` already perform haptics — wrapping one must not add a second.
 
 **When the question is how something should look, ask for a picture of the thing wanted — not for a
 menu.** The copy button took four rounds — six *containers*, then six glyphs from other icon sets,
