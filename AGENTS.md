@@ -25,7 +25,7 @@ same change instead of silently following one and leaving the other behind.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 576 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 587 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
