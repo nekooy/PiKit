@@ -995,11 +995,10 @@ internal fun ChatScreen(
                     .graphicsLayer { translationX = (-1f + drawer.progress) * drawer.width }
                     // `background`, not `surface`: the card over this panel is `surface`
                     // and the dark scheme's `surface` is black, so a surface panel made
-                    // the two halves of the screen one colour — the seam the shadow was
-                    // drawing in the light scheme had nothing left to draw in the dark
-                    // one. `background` is #242424 there and #F7F7F7 in the light scheme,
-                    // a step from the #F0F0F0 card, so the panel is one field and the
-                    // page is still the object on it.
+                    // the two halves of the screen one colour. `background` is #242424
+                    // there and #F7F7F7 in the light scheme, a step from the #F0F0F0
+                    // card, so the panel is one field and the page is still the object
+                    // on it.
                     // The box this panel is drawn in paints the same role, so the strips
                     // of ground around the card belong to the same field: the panel is
                     // not a second colour, it is where that field is widest.
@@ -1053,11 +1052,12 @@ internal fun ChatScreen(
                     // and a corner radius there would cut the screen.
                     shape = RoundedCornerShape(PAGE_CARD_CORNER)
                     clip = progress > 0f
-                    // Back to an elevation shadow, and a deeper one: the hand-drawn strip
-                    // at the seam was even, but it read as a line rather than as the page
-                    // being *above* the list. The elevation grows with the gesture so the
-                    // page lifts as it comes out.
+                    // An even halo, not a directional shadow: the platform's spot term
+                    // is offset down the light vector, which is what made the card's
+                    // bottom edge heavier than its sides. The ambient term alone is
+                    // concentric.
                     shadowElevation = PAGE_CARD_LIFT.toPx() * progress
+                    spotShadowColor = Color.Transparent
                 }
                 // After the layer, so the fill travels with the card. Before it, the
                 // background is painted at the layer's *untranslated* position: measured
@@ -3479,10 +3479,10 @@ private val PAGE_CARD_CORNER = 24.dp
 /**
  * How high the page rides over the drawer while the drawer is out.
  *
- * The elevation shadow is the style the reference uses for the card; 6dp was the first
- * value and read as a hairline at the seam, so it is doubled and then some. Only the
- * *edge* is visible — the panel is what the shadow lands on — which is why this is a lift
- * rather than a border.
+ * The shadow is the platform's ambient term only: the spot term is transparent because
+ * it is offset along the light vector and draws a heavier bottom edge than the sides.
+ * 20dp is the depth that reads as a card against the panel; the first value was 6dp
+ * and read as a hairline at the seam.
  */
 private val PAGE_CARD_LIFT = 20.dp
 

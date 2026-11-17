@@ -430,13 +430,14 @@ leading mark or by a rightward drag from anywhere on the page, and both drive on
 from where the thumb left it. While the card is out, a transparent target over it takes
 the touches: a tap closes the drawer, a leftward drag is the same gesture that closes it,
 and the panel beside it keeps its own rows, taps and drag. There is no dim any more, and
-the separation is not one mechanism: in the light scheme the card's shadow owns it, while in
-the dark scheme a black card's shadow is invisible, so the panel is painted
-`background` (#242424) under a `surface` card (black) — one palette step that a shadow
-would otherwise have had to draw. A panel painted `surface` in both schemes was the same
-colour as the card in the dark one, so the two halves of the screen were divided by a gesture
-with nothing to see at the division: the drawer read as one page split by a seam that was not
-there.
+the separation is a palette step plus the card's shadow: the panel is painted `background`
+— #242424 in the dark scheme and #F7F7F7 in the light one — under a `surface` card, black
+in dark and #F0F0F0 in light. The shadow is the platform's **ambient term only**; its spot
+term is transparent because the platform offsets the spot shadow down the light vector,
+which made the card's bottom edge heavier than its sides. A panel painted `surface` in both
+schemes was the same colour as the card in the dark one, so the two halves of the screen
+were divided by a gesture with nothing to see at the division: the drawer read as one page
+split by a seam that was not there.
 
 Two consequences of that order are worth naming. The card's corner and shadow are set on
 its `graphicsLayer` and only while `progress > 0`: at rest the page *is* the window, and a
