@@ -1052,12 +1052,6 @@ internal fun ChatScreen(
                     // and a corner radius there would cut the screen.
                     shape = RoundedCornerShape(PAGE_CARD_CORNER)
                     clip = progress > 0f
-                    // An even halo, not a directional shadow: the platform's spot term
-                    // is offset down the light vector, which is what made the card's
-                    // bottom edge heavier than its sides. The ambient term alone is
-                    // concentric.
-                    shadowElevation = PAGE_CARD_LIFT.toPx() * progress
-                    spotShadowColor = Color.Transparent
                 }
                 // After the layer, so the fill travels with the card. Before it, the
                 // background is painted at the layer's *untranslated* position: measured
@@ -3452,7 +3446,7 @@ private fun metaItemOf(rows: List<TranscriptRow>): ChatItem? = rows
  * edge — about a fifth of the screen at this share — and that strip is the whole reason
  * the panel reads as a layer rather than as a page: a drawer that covered the screen would
  * be a second screen. It was 0.86 when the drawer was first drawn; the wider strip is
- * deliberate, because the card's rounded edge and its shadow need to fit in the part of it
+ * deliberate, because the card's rounded edge needs to fit in the part of it
  * the reader can see. The prompt bubble's own cap is unrelated (0.86) and stays.
  */
 private const val DRAWER_SHARE = 0.79f
@@ -3476,16 +3470,6 @@ private const val CHAT_SHRINK = 0.05f
 
 /** The radius the conversation is cut with while it is a card over the drawer. */
 private val PAGE_CARD_CORNER = 24.dp
-
-/**
- * How high the page rides over the drawer while the drawer is out.
- *
- * The shadow is the platform's ambient term only: the spot term is transparent because
- * it is offset along the light vector and draws a heavier bottom edge than the sides.
- * 20dp is the depth that reads as a card against the panel; the first value was 6dp
- * and read as a hairline at the seam.
- */
-private val PAGE_CARD_LIFT = 20.dp
 
 /**
  * The composer band's bottom inset. The surface that fills it is the band's own
@@ -4858,11 +4842,11 @@ private fun Composer(
             // where the original composer had them — and the frame is what makes them
             // read as belonging to the text rather than floating under it.
             //
-            // `surfaceContainer` (white) against the band's `surface` (#F0F0F0) is the
-            // same step the answer cards take against the page, so the composer and the
-            // transcript are one vocabulary: a raised white object on a grey field. The
-            // band itself is now the tab strip's own colour rather than a step above it
-            // (§7.1), so the foot of the page is one surface from the transcript to the
+            // `PiGlass.fill()` (white in the light scheme, #2D2D2D in the dark one)
+            // against the band's `surface` (#F0F0F0) is the same step the chips above
+            // take, so the composer and the controls are one floating-object vocabulary.
+            // The band itself is now the tab strip's own colour rather than a step above
+            // it (§7.1), so the foot of the page is one surface from the transcript to the
             // navigation bar and the two no longer meet at a seam.
             // The band's own background is drawn behind *everything* it holds (see the
             // `drawBehind` on the band's box): solid at the frame's top edge and below it,
@@ -4879,7 +4863,7 @@ private fun Composer(
                     .onGloballyPositioned { onFieldTop(it) },
             ) {
             Surface(
-                color = MiuixTheme.colorScheme.surfaceContainer,
+                color = PiGlass.fill(),
                 shape = RoundedCornerShape(PiCorner.radius),
                 modifier = Modifier
                     .fillMaxWidth()

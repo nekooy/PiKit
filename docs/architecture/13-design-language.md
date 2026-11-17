@@ -416,7 +416,7 @@ still one tap from the conversation, from the trailing capsule rather than from 
 **The drawer is behind the page, and the page is the thing that moves.** The conversation
 list is the second thing a chat app is used for, and the reference screens are unambiguous
 about the layer order: the *conversation* is a card that slides right — rounded leading
-edge, a shadow, about 2% smaller — and the panel is what it uncovers. The first version
+edge, about 2% smaller — and the panel is what it uncovers. The first version
 had the other order (a panel sliding over a dimmed page, with a scrim between them), and
 one frame is enough to tell them apart: in one the conversation looks pushed aside, in the
 other it looks covered.
@@ -430,19 +430,16 @@ leading mark or by a rightward drag from anywhere on the page, and both drive on
 from where the thumb left it. While the card is out, a transparent target over it takes
 the touches: a tap closes the drawer, a leftward drag is the same gesture that closes it,
 and the panel beside it keeps its own rows, taps and drag. There is no dim any more, and
-the separation is a palette step plus the card's shadow: the panel is painted `background`
-— #242424 in the dark scheme and #F7F7F7 in the light one — under a `surface` card, black
-in dark and #F0F0F0 in light. The shadow is the platform's **ambient term only**; its spot
-term is transparent because the platform offsets the spot shadow down the light vector,
-which made the card's bottom edge heavier than its sides. A panel painted `surface` in both
-schemes was the same colour as the card in the dark one, so the two halves of the screen
-were divided by a gesture with nothing to see at the division: the drawer read as one page
-split by a seam that was not there.
+the separation is a palette step: the panel is painted `background` — #242424 in the dark
+scheme and #F7F7F7 in the light one — under a `surface` card, black in dark and #F0F0F0
+in light. A panel painted `surface` in both schemes was the same colour as the card in the
+dark one, so the two halves of the screen were divided by a gesture with nothing to see at
+the division: the drawer read as one page split by a seam that was not there.
 
-Two consequences of that order are worth naming. The card's corner and shadow are set on
-its `graphicsLayer` and only while `progress > 0`: at rest the page *is* the window, and a
-radius there would cut the screen's own corners. And the panel no longer has a shadow of
-its own: the depth belongs to the card's edge, where the reference puts it.
+Two consequences of that order are worth naming. The card's corner is set on its
+`graphicsLayer` and only while `progress > 0`: at rest the page *is* the window, and a
+radius there would cut the screen's own corners. And neither half carries a shadow: the
+palette step at the seam is the whole of the depth, in both schemes.
 
 Opening a conversation from the list closes the drawer *before* the page is rebuilt: the
 open/closed answer is published when the settle starts, not when it ends, because the
