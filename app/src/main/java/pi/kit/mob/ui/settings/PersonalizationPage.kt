@@ -55,9 +55,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * Five settings that are all "how the app feels when I open it" and none of which is
  * about the agent: which conversation a launch lands in, how large its text is,
- * whether the palette is light or dark, which of the two marks the home screen shows,
- * and whether the transcript draws who is talking. They share a page because a page
- * each would be five rows deep — the same mistake the old "Advanced" group made.
+ * whether the palette is light or dark, which of the two marks the launcher and
+ * recent tasks show, and whether the transcript draws who is talking. They share a
+ * page because a page each would be five rows deep — the same mistake the old
+ * "Advanced" group made.
  *
  * The *palette* is not on this page at all any more. The interface is drawn in
  * Miuix's own light and dark schemes, so "follow the system / light / dark" is the
@@ -86,10 +87,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * the drag stopped being delivered (nine `input motionevent MOVE`s advanced one step),
  * so the drag moves a draft and the store is written when the thumb stops.
  *
- * The icon's choice is the one on this page whose effect the app does not draw:
- * `applyLauncherIcon` turns a manifest alias on and the other off, and the system paints
- * what the launcher reads. Its footnote is about the home screen rather than about the
- * icon, because that is the part a user notices.
+ * The icon's choice is a system entry point rather than a Compose redraw:
+ * `applyLauncherIcon` turns a manifest alias on and the other off, and the system
+ * paints what the launcher reads. The recent-tasks card follows because its icon is
+ * the running task's own `TaskDescription`, written by `MainActivity` from the same
+ * enum; the application icon on the system settings page is the platform's fixed
+ * identity and cannot follow a preference.
  */
 @Composable
 internal fun PersonalizationPage(

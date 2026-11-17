@@ -1,5 +1,8 @@
 package pi.kit.mob.ui
 
+import android.app.ActivityManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -14,9 +17,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import pi.kit.mob.R
 import pi.kit.mob.data.TEXT_SCALE_BASELINE
+import pi.kit.mob.data.LauncherIcon
 import pi.kit.mob.data.applyLauncherIcon
 import pi.kit.mob.env.AgentContext
 import pi.kit.mob.pi.PiAgentService
@@ -68,6 +74,11 @@ class MainActivity : ComponentActivity() {
             // waiting for the image to unpack.
             LaunchedEffect(settings.launcherIcon) {
                 applyLauncherIcon(this@MainActivity, settings.launcherIcon)
+                // The task description is the one icon slot the recent-tasks card
+                // takes from the running task rather than from the package: the card
+                // is a live task, not an installed entry, so it can follow the
+                // preference even though the application icon cannot.
+                applyTaskDescription(settings.launcherIcon)
             }
 
             // The agent's instructions are two documents composed into the one file pi
@@ -147,6 +158,41 @@ class MainActivity : ComponentActivity() {
         PiAgentService.onUiVisible(this, false)
         super.onStop()
     }
+}
+
+/**
+ * Writes [icon] into the running task's description, which is what the recent-tasks
+ * card reads. The bitmap constructor is the only one that still carries an icon on
+ * current releases; the resource-id one is accepted but ignored, and the no-argument
+ * constructor has no setter.
+ */
+@Suppress("DEPRECATION")
+private fun MainActivity.applyTaskDescription(icon: LauncherIcon) {
+    setTaskDescription(
+        ActivityManager.TaskDescription(
+            getString(R.string.app_name),
+            launcherIconBitmap(icon),
+        ),
+    )
+}
+
+/**
+ * The chosen launcher icon rendered for the recent-tasks card.
+ *
+ * An adaptive icon is an XML drawable rather than a bitmap: inflate it, draw it on a
+ * transparent canvas at four times the launcher's 48dp size, and let the system
+ * downscale. The transparent surround is what the card's rounded plate expects.
+ */
+private fun MainActivity.launcherIconBitmap(icon: LauncherIcon): Bitmap {
+    val drawable = checkNotNull(ContextCompat.getDrawable(this, icon.iconRes)) {
+        "launcher icon ${icon.code} has no drawable"
+    }
+    val size = 192
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    drawable.setBounds(0, 0, size, size)
+    drawable.draw(canvas)
+    return bitmap
 }
 
 /**

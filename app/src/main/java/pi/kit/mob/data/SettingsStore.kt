@@ -603,12 +603,13 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val fontSize: FontSize = FontSize.DEFAULT,
     /**
-     * Which launcher icon the home screen shows. Persisted here for the same
-     * reason [themeMode] is: it is not part of a profile.
+     * Which launcher icon the home screen and recent tasks show. Persisted here for
+     * the same reason [themeMode] is: it is not part of a profile.
      *
-     * The app itself does not draw this — the system does, from the alias
-     * [applyLauncherIcon] enables — so the only thing this field decides is which
-     * alias it turns on.
+     * The home screen is the system's to draw, from the alias [applyLauncherIcon]
+     * enables; the recent-tasks card is the task's own icon, written by `MainActivity`
+     * from the same value. The app's page in system settings keeps the manifest's
+     * fixed application icon and cannot follow this field.
      */
     val launcherIcon: LauncherIcon = LauncherIcon.DEFAULT,
     /**

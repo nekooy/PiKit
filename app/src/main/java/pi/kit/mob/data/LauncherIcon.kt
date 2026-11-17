@@ -4,9 +4,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
+import androidx.annotation.DrawableRes
+import pi.kit.mob.R
 
 /**
- * Which of the app's two launcher icons the home screen shows.
+ * Which of the app's two icons the launcher entry and the recent-tasks card show.
  *
  * ## Why a choice of icon is a choice of entry point
  *
@@ -19,14 +21,16 @@ import android.util.Log
  * alias that is on. `AndroidManifest.xml` carries the aliases and the reasoning
  * behind their shape.
  *
- * ## What it does not move
+ * ## What does not move: the application icon
  *
  * The **application's** icon (`android:icon` on `<application>`) is fixed at build
- * time, so the recent-tasks card and the app's own page in system settings always
- * show the mark the manifest declares — which is the app's shipping identity rather
- * than this preference, and today that is the white field. Switching the preference
- * repaints the home-screen entry only; the alternative — repainting every other
- * surface too — is the app rewriting its own identity rather than offering a
+ * time, so the app's own page in system settings and the uninstall dialog always
+ * show the mark the manifest declares — the app's shipping identity rather than
+ * this preference, and today that is the white field. The recent-tasks card is a
+ * different surface: it reads the running task's `TaskDescription`, which
+ * `MainActivity` writes from [iconRes], so the card follows the preference with the
+ * launcher entry. A third-party app has no runtime API for the application icon
+ * itself; changing that one would need a system icon override rather than a
  * preference.
  *
  * [DEFAULT] is [LIGHT], which is also the alias the manifest declares enabled, so a
@@ -53,12 +57,14 @@ enum class LauncherIcon(
      * first launch of a fresh install would write the state it already has.
      */
     val declaredEnabled: Boolean,
+    /** The mipmap this icon is drawn from, for surfaces that take an icon id. */
+    @DrawableRes val iconRes: Int,
 ) {
     /** White field, black mark — the icon the app ships with. */
-    LIGHT("light", "ui.LauncherLight", declaredEnabled = true),
+    LIGHT("light", "ui.LauncherLight", declaredEnabled = true, iconRes = R.mipmap.ic_launcher_light),
 
     /** Black field, white mark. */
-    DARK("dark", "ui.LauncherDark", declaredEnabled = false),
+    DARK("dark", "ui.LauncherDark", declaredEnabled = false, iconRes = R.mipmap.ic_launcher),
     ;
 
     companion object {
