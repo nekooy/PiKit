@@ -30,6 +30,7 @@ class PiProcessLauncherTest {
         mode: AgentMode = AgentMode.WORK,
         systemPromptFile: String? = null,
         chatPromptExtension: String? = null,
+        chatWebExtension: String? = null,
     ) = PiLaunchOptions(
         nodePath = "/prefix/bin/node",
         cliEntry = "/prefix/cli.js",
@@ -45,6 +46,7 @@ class PiProcessLauncherTest {
         mode = mode,
         systemPromptFile = systemPromptFile,
         chatPromptExtension = chatPromptExtension,
+        chatWebExtension = chatWebExtension,
     )
 
     private fun List<String>.valueOf(flag: String): String? {
@@ -176,6 +178,42 @@ class PiProcessLauncherTest {
             "the old coding prompt append must not leak into chat mode",
             command.none { it == "--append-system-prompt" },
         )
+    }
+
+    @Test
+    fun `chat mode with web access names only the two network tools`() {
+        // The per-conversation switch lends chat mode the bundled extension. It is the
+        // second explicit `--extension` (the prompt's is the first), and the tool set is
+        // a *strict allowlist* of two names: the extension registers search, source-check,
+        // fetch and stored-result tools, and a chat reply is meant to look something up,
+        // not to run a research workflow.
+        val web = "/prefix/lib/node_modules/pikit-extensions/node_modules/pi-web-access/index.ts"
+        val command = PiProcessLauncher.buildCommand(
+            options(
+                mode = AgentMode.CHAT,
+                systemPromptFile = "/home/.pikit/chat-system-prompt.txt",
+                chatPromptExtension = "/prefix/share/pikit/pikit-chat-prompt.ts",
+                chatWebExtension = web,
+            ),
+        )
+
+        assertTrue(
+            "a tool allowlist and --no-tools cannot both be passed",
+            command.none { it == "--no-tools" },
+        )
+        assertEquals("web_search,fetch_content", command.valueOf("--tools"))
+        assertEquals(2, command.count { it == "--extension" })
+        assertTrue("the web-access entry is one of the two", command.contains(web))
+        // The ambient-context doors stay shut: the switch opens tools, not discovery.
+        for (flag in listOf(
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-context-files",
+            "--no-mcp",
+        )) {
+            assertTrue("$flag must still be passed with web access on", command.contains(flag))
+        }
     }
 
     @Test

@@ -16,7 +16,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -32,11 +31,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -75,6 +72,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import pi.kit.mob.R
+import pi.kit.mob.data.AgentMode
 import pi.kit.mob.env.BatteryOptimisation
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.locales.Lang
@@ -701,14 +699,21 @@ private fun ChatTab(
             rootScope.launch { opened?.startAgent() }
         }
     }
-    val openNew: () -> Boolean = remember(host, rootScope) {
-        {
+    val openNew: (AgentMode?) -> Boolean = remember(host, rootScope) {
+        { wanted ->
             openedPath = null
             val opened = host.newConversation()
             if (opened == null) {
                 toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
                 false
             } else {
+                // A new conversation's mode is decided **before** its process exists:
+                // `startAgent` reads the mode once, at the spawn, and a fresh session
+                // has no file yet for the per-session record to answer from. This is
+                // the drawer's switch — the one control that used to flip a live
+                // conversation's mode and therefore had to restart it — so what it
+                // creates is a conversation that is already the mode that was tapped.
+                if (wanted != null) opened.switchMode(wanted)
                 rootScope.launch { opened.startAgent() }
                 true
             }
@@ -727,7 +732,8 @@ private fun ChatTab(
             state = state,
             composer = composer,
             onOpenConversation = open,
-            onNewConversation = openNew,
+            onNewConversation = { openNew(null) },
+            onNewConversationInMode = { mode -> openNew(mode) },
             historyOpen = historyOpen,
             drawer = drawer,
             rootScope = rootScope,
@@ -847,23 +853,20 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
+            // The whole wordmark, not the compact P: the tap that opened this
+            // screen landed on the launcher icon, and that icon is the full name.
+            // The compact mark stays inside a 34dp avatar where thirteen cells have
+            // no room; at logo size the name is what the icon showed.
+            Image(
+                painter = painterResource(R.drawable.ic_pi_wordmark),
+                contentDescription = null,
                 modifier = Modifier
-                    .size(88.dp)
-                    .clip(CircleShape)
-                    .background(SETUP_MARK_FIELD),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_pi_mark),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(56.dp)
-                        // A slow breath between 88% and 100% opacity. Enough to say
-                        // "working" without pulling the eye off the number.
-                        .alpha(0.88f + pulse * 0.12f),
-                )
-            }
+                    .width(SETUP_WORDMARK_WIDTH)
+                    .height(SETUP_WORDMARK_WIDTH / WORDMARK_ASPECT)
+                    // A slow breath between 88% and 100% opacity. Enough to say
+                    // "working" without pulling the eye off the number.
+                    .alpha(0.88f + pulse * 0.12f),
+            )
 
             Spacer(Modifier.height(28.dp))
 
@@ -966,24 +969,18 @@ private fun SetupFailure(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-        Box(
+        Icon(
+            painter = painterResource(R.drawable.ic_pi_wordmark),
+            contentDescription = null,
             modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(SETUP_MARK_FIELD),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_pi_mark),
-                contentDescription = null,
-                modifier = Modifier.size(36.dp),
-                // The scheme's error role, not its container pair: this screen is
-                // always the dark setup field, so a container from a light scheme
-                // would be a near-white disc around the mark. The error ink is
-                // legible on both — it is the one role that reads as red either way.
-                tint = MiuixTheme.colorScheme.error,
-            )
-        }
+                .width(SETUP_FAILURE_MARK_WIDTH)
+                .height(SETUP_FAILURE_MARK_WIDTH / WORDMARK_ASPECT),
+            // The scheme's error role, not its container pair: this screen is
+            // always the dark setup field, so a container from a light scheme
+            // would be a near-white disc around the mark. The error ink is
+            // legible on both — it is the one role that reads as red either way.
+            tint = MiuixTheme.colorScheme.error,
+        )
         Spacer(Modifier.height(20.dp))
         Text(
             text = title,
@@ -1076,6 +1073,20 @@ private val SETUP_MARK_FIELD = Color(0xFF151A22)
 private val SETUP_PRIMARY = Color(0xFFF2F4F8)
 private val SETUP_SECONDARY = Color(0xFF9AA3B2)
 private val SETUP_TERTIARY = Color(0xFF69717F)
+
+/**
+ * The logo's width on the two screens that have no bar, in dp.
+ *
+ * The wordmark is 54.6 by 16.8 units, so its height is the width over
+ * [WORDMARK_ASPECT]; the setup screen draws it a good deal larger than an avatar
+ * because it is the *only* thing identifying the app on a cold start, and the
+ * failure screen a little smaller because its heading sits under it.
+ */
+private val SETUP_WORDMARK_WIDTH = 168.dp
+private val SETUP_FAILURE_MARK_WIDTH = 120.dp
+
+/** The wordmark's own ratio, `ic_pi_wordmark`'s 54.6 by 16.8. */
+private const val WORDMARK_ASPECT = 54.6f / 16.8f
 
 /**
  * The keyboard inset as bottom padding, with a floor under the tail of its close.

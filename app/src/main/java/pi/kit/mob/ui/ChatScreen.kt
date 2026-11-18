@@ -143,6 +143,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
 import pi.kit.mob.data.AgentMode
+import pi.kit.mob.data.ChatPreset
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.PiSettings
@@ -177,6 +178,8 @@ import pi.kit.mob.ui.chat.TurnSummaryData
 import pi.kit.mob.ui.chat.TurnSummaryRow
 import pi.kit.mob.ui.chat.rememberFollowTail
 import pi.kit.mob.ui.chat.scrollToEnd
+import pi.kit.mob.ui.components.chatPresetName
+import pi.kit.mob.ui.components.chatPresetSummary
 import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiToast
@@ -222,9 +225,11 @@ import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Sidebar
 import top.yukonga.miuix.kmp.icon.extended.Lock
+import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
 import top.yukonga.miuix.kmp.icon.extended.Unlock
@@ -402,6 +407,7 @@ private enum class ComposerSheet {
     Attach,
     Shell,
     Permission,
+    Preset,
 }
 
 
@@ -439,6 +445,16 @@ internal fun ChatScreen(
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
     /** Opens an empty conversation beside this one, which keeps running. */
     onNewConversation: () -> Boolean,
+    /**
+     * Opens an empty conversation in [mode], beside this one, which keeps running.
+     *
+     * The drawer's mode switch is this and nothing else: the switch used to flip the
+     * *current* conversation's mode, which relaunched its process and made the
+     * transcript of an idle conversation depend on a control that reads like a
+     * filter. A conversation's mode is now changed from the drawer's row menu, and
+     * the switch creates the conversation the reader asked for instead.
+     */
+    onNewConversationInMode: (AgentMode) -> Boolean,
     /** Whether the conversation drawer is out; owned by `RootContent`. */
     historyOpen: Boolean,
     /**
@@ -531,6 +547,17 @@ internal fun ChatScreen(
     val settlePage: (Float, Float) -> Unit = { target, velocity ->
         drawer.job?.cancel()
         onHistoryOpenChange(target > 0f)
+        // Every move of the drawer puts the keyboard away. The drawer is composed once
+        // and parked at progress zero, so its search field otherwise keeps the focus —
+        // and the platform keeps the IME up for a field that is still composed, three
+        // hundred pixels off the leading edge. Opening has the same problem from the
+        // other side: a focused composer keeps the keyboard up over a drawer that it
+        // covers — measured, the foot switch sat under the emoji row, so the drawer
+        // could not be switched without dismissing the keyboard by hand. Clearing the
+        // window's focus is the same call the drawer's own drag makes on its first
+        // frame, and it clears the composer too, which is what a page the drawer has
+        // just uncovered wants.
+        focus.clearFocus()
         // The panel is **never dropped once it has been opened**. Letting it leave the
         // composition on close threw away its rows and its scan, so a quick re-open
         // rebuilt the drawer from nothing — measured: swipe out, swipe back in within a
@@ -1036,8 +1063,17 @@ internal fun ChatScreen(
                     onOpenConversation = onOpenConversation,
                     onOpenSettings = onOpenSettings,
                     mode = mode,
-                    onModeChange = { session.switchMode(it) },
+                    onNewConversationInMode = { wanted ->
+                        onNewConversationInMode(wanted).also { created ->
+                            // The new conversation is on screen behind the drawer, so the
+                            // drawer closes exactly as a tapped row does. A refusal (the
+                            // pool is full) keeps the panel out, where the toast that
+                            // explains it can be read.
+                            if (created) settlePage(0f, 0f)
+                        }
+                    },
                     currentPath = currentPath,
+                    open = historyOpen,
                 )
             }
         }
@@ -1148,6 +1184,14 @@ internal fun ChatScreen(
                     val images = composer.attachments
                     composer.input = ""
                     composer.attachments = emptyList()
+                    // Sending is the end of the sentence, so the keyboard goes with it.
+                    // The field kept the focus after a send — the text was cleared but
+                    // the IME stayed up over a transcript the reader had just asked to
+                    // see more of, and the page below it stayed shortened by the
+                    // keyboard's inset. One `clearFocus` puts both away; the reader who
+                    // wants to send a second line taps the field again, which is the
+                    // same tap that puts the keyboard up in the first place.
+                    focus.clearFocus()
                     // The reader's own action overrides whatever the scroll was
                     // doing: a prompt is the one thing that always wants the tail.
                     follow.enable()
@@ -1625,6 +1669,18 @@ private fun ChatPage(
     // behind them moves. Collected here rather than passed in so a change on the
     // personalization page reaches this one without a restart.
     val saved by session.settingsStore.settings.collectAsState()
+    // A chat conversation's agent identity is its preset's, with every unset part
+    // answered by the personalization page — that is the "未设置时则沿用" half of the
+    // preset feature. Work mode has no preset, so the same identity the app has always
+    // drawn is used there and this whole read is inert.
+    val chatPresetId by session.chatPresetId.collectAsState()
+    val presets by session.chatPresets.collectAsState()
+    val activePreset = if (mode == AgentMode.CHAT) {
+        presets.firstOrNull { it.id == chatPresetId } ?: presets.firstOrNull()
+    } else {
+        null
+    }
+    val presetIdentity = activePreset?.identity(saved)
     val avatars = remember(
         saved.showAvatars,
         saved.aiAvatarName,
@@ -1633,16 +1689,21 @@ private fun ChatPage(
         saved.userAvatarName,
         saved.userAvatarImage,
         saved.userAvatarColor,
+        presetIdentity?.name,
+        presetIdentity?.image,
+        presetIdentity?.color,
     ) {
         if (!saved.showAvatars) {
             null
         } else {
             ChatAvatars(
                 // Blank is the mark, not a word: the agent's fallback is the app's own
-                // PiKit mark, drawn by `PiAvatar` for `AvatarSpeaker.AGENT`.
-                aiName = saved.aiAvatarName.ifBlank { null },
-                aiImage = saved.aiAvatarImage.ifBlank { null },
-                aiColor = saved.aiAvatarColor.seed,
+                // PiKit mark, drawn by `PiAvatar` for `AvatarSpeaker.AGENT`. A chat
+                // preset's own name and picture win when it has them, which is what
+                // makes a translator preset sign its answers as itself.
+                aiName = (presetIdentity?.name ?: saved.aiAvatarName).ifBlank { null },
+                aiImage = (presetIdentity?.image ?: saved.aiAvatarImage).ifBlank { null },
+                aiColor = (presetIdentity?.color ?: saved.aiAvatarColor).seed,
                 // The reader's blank is the person figure for the same reason: the two
                 // speakers must not fall back to the same figure, and the figure is the
                 // personalization page's — the page that lets the reader replace it is
@@ -4454,6 +4515,18 @@ private fun Composer(
     // chip never has to wait for pi to answer `get_state`.
     val saved by session.settingsStore.settings.collectAsState()
 
+    // The chat persona this conversation speaks with, and its identity after the
+    // personalization page answers whatever the preset left unset. Read here because the
+    // chip is the *first* control above the field in chat mode: the voice a message is
+    // sent in is chosen before the model and the thinking level are.
+    val presetId by session.chatPresetId.collectAsState()
+    val presets by session.chatPresets.collectAsState()
+    val chatPreset = presets.firstOrNull { it.id == presetId } ?: presets.firstOrNull()
+    val chatIdentity = chatPreset?.identity(saved)
+    // The network tools' switch, which stands where the work page's permission control
+    // does — the row's leading group is where "what this message may do" is answered.
+    val chatWeb by session.chatWebAccess.collectAsState()
+
     // What pi's catalogue on disk says each model's levels are, so a model switch shows
     // the new model's own list before pi has answered for it — see [levelsFor].
     val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
@@ -4658,6 +4731,60 @@ private fun Composer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (chatMode) {
+                    // The first chip in chat mode: whose voice the next message is in.
+                    // It leads the row because the preset is what the model and the
+                    // thinking level are *about* — a persona with a translation prompt
+                    // and a persona with a reasoning prompt do not want the same model —
+                    // and because choosing it is the one thing chat mode's reader does
+                    // before typing. The chip draws the persona's own avatar, which is
+                    // also the mark the transcript shows beside its answers, so the chip
+                    // and the reply are visibly the same speaker.
+                    item {
+                        val presetLabel = chatIdentity?.name?.ifBlank { null }
+                            ?: text.settings.modeChat
+                        ControlChipBase(
+                            label = presetLabel,
+                            onClick = { onOpenSheet(ComposerSheet.Preset) },
+                            menu = {
+                                OverlayListPopup(
+                                    popupPositionProvider = aboveAnchorPositionProvider(),
+                                    show = openSheet == ComposerSheet.Preset,
+                                    maxHeight = MENU_MAX_HEIGHT,
+                                    onDismissRequest = onCloseSheet,
+                                ) {
+                                    ChatPresetMenu(
+                                        show = openSheet == ComposerSheet.Preset,
+                                        text = text,
+                                        presets = presets,
+                                        selectedId = presetId,
+                                        settings = saved,
+                                        onPick = { id ->
+                                            onCloseSheet()
+                                            session.selectChatPreset(id)
+                                        },
+                                        onDismiss = onCloseSheet,
+                                    )
+                                }
+                            },
+                        ) {
+                            if (chatIdentity == null) {
+                                Icon(
+                                    imageVector = MiuixIcons.Messages,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(CHIP_GLYPH),
+                                )
+                            } else {
+                                PiAvatar(
+                                    speaker = AvatarSpeaker.AGENT,
+                                    color = chatIdentity.color.seed,
+                                    imagePath = chatIdentity.image.ifBlank { null },
+                                    size = CHIP_AVATAR,
+                                )
+                            }
+                        }
+                    }
+                }
                 if (!chatMode) {
                     item {
                         // The workspace, first in the row and the only chip on this page
@@ -5087,6 +5214,39 @@ private fun Composer(
                                 onDismiss = onCloseSheet,
                             )
                         }
+                    }
+                } else {
+                    // Chat mode's own answer to the same question, in the same slot: the
+                    // tier's control judges tool calls, and a chat conversation's tools
+                    // are the network ones, so this button is their switch. It is a plain
+                    // 40dp button like the tier's — the row's leading group is four
+                    // controls in one dress — and its tint carries the state, because a
+                    // second shape for "off" would be a second glyph to keep in step.
+                    //
+                    // The switch is per conversation and a launch flag: flipping it
+                    // restarts this conversation when the turn settles, so the tools it
+                    // promises are the ones the next request actually declares.
+                    IconButton(
+                        onClick = {
+                            haptics.toggle(on = !chatWeb)
+                            session.setChatWebAccess(!chatWeb)
+                        },
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Search,
+                            contentDescription = if (chatWeb) {
+                                text.chat.webAccessOn
+                            } else {
+                                text.chat.webAccessOff
+                            },
+                            modifier = Modifier.size(17.dp),
+                            tint = if (chatWeb) {
+                                MiuixTheme.colorScheme.primary
+                            } else {
+                                MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            },
+                        )
                     }
                 }
                 // The `+`, immediately after the command list and in the same plain
@@ -5715,6 +5875,15 @@ private val CHIP_FADE_WIDTH = 28.dp
 private val CHIP_HEIGHT = 32.dp
 private val CHIP_INSET = 10.dp
 private val CHIP_GLYPH = 14.dp
+
+/**
+ * The persona avatar inside a chip: larger than a glyph because it is a disc, not a mark.
+ *
+ * 20dp against the 14dp glyph beside it, and 16dp would read as a dot: the disc's own
+ * edge is its ink, while a glyph's box is mostly air, so equal boxes would make the
+ * avatar look half the size of the marks it sits beside.
+ */
+private val CHIP_AVATAR = 20.dp
 
 /**
  * A box whose only job is to be the bounds an [OverlayListPopup] opens against.
@@ -6532,6 +6701,67 @@ private fun WorkspaceMenu(
  * `full-access` are the names of three *policies*, and a reader who has to guess what the
  * middle one changes is a reader who leaves the tier on whatever it was.
  */
+/**
+ * The chat presets, as one menu at the chip that opened it.
+ *
+ * A choice, so the library's own `DropdownImpl` rows are the shape — the tick on the one
+ * in force is the "which of these" answer, and this is the same control as the model and
+ * permission menus beside it. The leading mark is the persona's own avatar rather than a
+ * glyph: it is the same disc the transcript draws beside an answer, which is what makes
+ * the choice read as "this conversation now speaks as that".
+ */
+@Composable
+private fun ChatPresetMenu(
+    show: Boolean,
+    text: Strings,
+    presets: List<ChatPreset>,
+    selectedId: String,
+    settings: PiSettings,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val haptics = LocalPiHaptics.current
+
+    // The preset already in force is already the answer, so only a different one is a
+    // choice. Dismiss-then-act, the same order every menu in this app uses: a second tap
+    // aimed at a panel that is already leaving must not land on one of its rows.
+    fun pick(chosen: Boolean, action: () -> Unit) {
+        if (show) {
+            if (chosen) haptics.choose()
+            onDismiss()
+            action()
+        }
+    }
+
+    ListPopupColumn {
+        presets.forEachIndexed { index, preset ->
+            val identity = preset.identity(settings)
+            DropdownImpl(
+                item = DropdownItem(
+                    text = chatPresetName(preset, settings, text),
+                    summary = chatPresetSummary(preset, text),
+                    icon = { modifier ->
+                        PiAvatar(
+                            speaker = AvatarSpeaker.AGENT,
+                            color = identity.color.seed,
+                            imagePath = identity.image.ifBlank { null },
+                            modifier = modifier,
+                            size = PRESET_MENU_AVATAR,
+                        )
+                    },
+                ),
+                optionSize = presets.size,
+                isSelected = preset.id == selectedId,
+                index = index,
+                onSelectedIndexChange = { pick(preset.id != selectedId) { onPick(preset.id) } },
+            )
+        }
+    }
+}
+
+/** The persona disc in a menu row: one step larger than the chip's, as menu marks are. */
+private val PRESET_MENU_AVATAR = 24.dp
+
 @Composable
 private fun PermissionMenu(
     show: Boolean,

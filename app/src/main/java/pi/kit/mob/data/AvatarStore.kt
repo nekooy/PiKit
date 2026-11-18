@@ -60,9 +60,9 @@ object AvatarStore {
      * The legacy fixed name is matched too: a picture stored by an older build is
      * replaced by the next one instead of sitting in the directory for ever.
      */
-    private fun files(filesDir: File, slot: AvatarSlot): List<File> =
+    private fun files(filesDir: File, slotId: String): List<File> =
         directory(filesDir).listFiles().orEmpty()
-            .filter { it.name.startsWith("${slot.id}-") || it.name == "${slot.id}.png" }
+            .filter { it.name.startsWith("$slotId-") || it.name == "$slotId.png" }
             .sortedBy { it.name }
 
     /**
@@ -145,16 +145,27 @@ object AvatarStore {
      * untouched when it already fits, so the only bitmap recycled here is one this
      * function made.
      */
-    fun storeSquare(filesDir: File, slot: AvatarSlot, square: Bitmap): String? = runCatching {
+    fun storeSquare(filesDir: File, slot: AvatarSlot, square: Bitmap): String? =
+        storeSquare(filesDir, slot.id, square)
+
+    /**
+     * [storeSquare] for a slot that is not one of the two speakers.
+     *
+     * A chat preset carries its own picture, and its slot is `preset-<preset id>`: the
+     * name a file is stored under is a *slot id* rather than an enum member, because the
+     * number of presets is the reader's. The two constants the enum holds are the two
+     * names the personalization page uses, and nothing about the storage depends on them.
+     */
+    fun storeSquare(filesDir: File, slotId: String, square: Bitmap): String? = runCatching {
         val scaled = scaleToFit(square, AVATAR_STORED_PX)
         val directory = directory(filesDir)
         directory.mkdirs()
-        val target = File(directory, "${slot.id}-${System.currentTimeMillis()}.png")
+        val target = File(directory, "$slotId-${System.currentTimeMillis()}.png")
         target.outputStream().use { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }
         if (scaled !== square) scaled.recycle()
-        // One picture per speaker: the one being replaced goes as soon as the new one is
+        // One picture per slot: the one being replaced goes as soon as the new one is
         // on disk, or the directory grows a file per crop and the backup carries them all.
-        files(filesDir, slot).forEach { if (it != target) it.delete() }
+        files(filesDir, slotId).forEach { if (it != target) it.delete() }
         target.absolutePath
     }.getOrNull()
 
@@ -166,7 +177,12 @@ object AvatarStore {
      * in place with the other slot's picture in it.
      */
     fun clear(filesDir: File, slot: AvatarSlot) {
-        files(filesDir, slot).forEach { runCatching { it.delete() } }
+        clear(filesDir, slot.id)
+    }
+
+    /** [clear] for a slot id that is not one of the two speakers; see [storeSquare]. */
+    fun clear(filesDir: File, slotId: String) {
+        files(filesDir, slotId).forEach { runCatching { it.delete() } }
     }
 
     /**

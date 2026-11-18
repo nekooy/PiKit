@@ -175,6 +175,8 @@ internal object JapaneseStrings : Strings {
             PermissionMode.FULL_ACCESS ->
                 "何も止めません。エージェントは権限のあるファイルを変更できます"
         }
+        override val webAccessOn = "ウェブ検索とページ取得はオンです。タップでオフにします"
+        override val webAccessOff = "ウェブ検索とページ取得はオフです。タップでオンにします"
 
         override val detailModel = "モデル"
         override val detailProvider = "プロバイダー"
@@ -275,6 +277,9 @@ internal object JapaneseStrings : Strings {
                 "再起動するため、いまの回答はそこで止まり、続きはありません。" +
                 "メッセージと履歴は残ります。"
         override val modeSwitchInterruptConfirm = "切り替えて再起動"
+        override val switchToChatMode = "会話モードに切り替える"
+        override val switchToWorkMode = "仕事モードに切り替える"
+        override fun modeSwitched(mode: String) = "「$mode」モードに切り替えました"
     }
 
     override val terminal = object : Strings.Terminal {
@@ -396,14 +401,32 @@ internal object JapaneseStrings : Strings {
         override val chatMode = "会話モード"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "引き出しの切り替えで「会話」を選ぶと、ツール・拡張・スキル・AGENTS.md を読み込まず、下のシステムプロンプトだけを送ります。空なら何も送りません"
-        override val chatSystemPromptTitle = "システムプロンプト"
-        override val chatSystemPromptSubtitle =
-            "{{time}} は現在時刻に置き換わります。空ならシステムプロンプトを送りません。保存するとエージェントを再起動します"
+            "引き出しの切り替えで「会話」を選ぶと、ツール・スキル・AGENTS.md を読み込みません。システムプロンプトはプリセットの一つだけで、空なら何も送りません" +
+                "——この会話のウェブ切り替えが入っている場合を除き、検索と取得のツールが加わります"
         override val chatSystemPromptEditorHint =
             "ここに書いた内容が会話モード唯一のシステムプロンプトです。既定は {{time}}（現在時刻）だけで、" +
                 "空なら何も送りません。{{time}} を時刻を入れたい位置に置いてください。起動時に現在時刻へ置き換わります。"
         override val chatSystemPromptRestore = "既定に戻す"
+        override val presetDefaultRow = "既定のプリセット"
+        override val presetDefaultSubtitle = "新しい会話を始めるときに使うプリセット"
+        override val presetDefaultBadge = "既定"
+        override val presetAdd = "プリセットを追加"
+        override val presetAddAction = "追加"
+        override val presetNewName = "新しいプリセット"
+        override val presetEditTitle = "プリセットを編集"
+        override val presetName = "名前"
+        override val presetNameHint =
+            "プリセットのアバターの横と、会話の応答者名として表示されます。空なら個人設定の名前を使います。"
+        override val presetAvatarInherit = "個人設定のアバターを使う"
+        override val presetAvatarInheritHint = "オンの間、画像と色は個人設定ページのものになります"
+        override val presetPrompt = "システムプロンプト"
+        override val presetPromptEmpty = "システムプロンプトを送りません"
+        override val presetPromptTime = "現在時刻だけを送ります"
+        override val presetDelete = "プリセットを削除"
+        override val presetDeleteHint = "プロンプトと画像も削除されます。使っていた会話は既定のプリセットに戻ります"
+        override val presetDeleteTitle = "このプリセットを削除しますか？"
+        override val presetDeleteBody =
+            "プロンプトと画像が削除されます。使っていた会話は既定のプリセットを使い始め、メッセージは残ります。"
         override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
         override val agentContextLeadTitle = "コンテキストの説明"
         override val agentContextSystemTitle = "システムプロンプト"
@@ -880,6 +903,23 @@ internal object JapaneseStrings : Strings {
 
         override val searchProxy = "プロキシ"
         override val searchProxySubtitle = "設定するとウェブアクセスのプロキシとして使われます"
+
+        override val searchAdvanced = "詳細"
+        override val searchAdvancedSubtitle =
+            "インライン内容の上限・取得タイムアウト・プロキシ・Fake-IP 互換"
+        override val searchFakeIpProxy = "Fake-IP プロキシ互換"
+        override val searchFakeIpProxySubtitle =
+            "TUN / fake-IP プロキシは DNS に 198.18.0.0/15 を返し、拡張のアドレス検査はこの範囲を" +
+                "拒否します。オンにすると PiKit がその除外設定（ssrf.allowRanges）を設定ファイルに" +
+                "書き込みます。"
+        override val searchProviderNeedsConfigTitle = "このプロバイダーには設定が必要です"
+        override fun searchProviderNeedsConfigBody(provider: String, keys: List<String>) =
+            "「$provider」を使うには ${keys.joinToString("・")} が必要です。同梱の拡張は自身の" +
+                "設定ファイルから読み取ります。検索設定ページに戻り、下の「設定項目またはキーを追加」を" +
+                "開いて項目名で検索し、値をそこで入力してください（このダイアログでは入力しません）。"
+        override val searchAdvancedUnreadable =
+            "web-search.json が JSON オブジェクトではないため、ここのコントロールは隠しています。" +
+                "検索設定ページに戻り、そちらのエディターでテキストを直してください。"
 
     }
 

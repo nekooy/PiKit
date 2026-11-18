@@ -523,6 +523,17 @@ interface Strings {
         /** One line under a tier's name in the menu, saying what it allows. */
         fun permissionSummary(mode: PermissionMode): String
 
+        /**
+         * The chat composer's network-tools switch, as its spoken description.
+         *
+         * One control, two states, and the state is a colour rather than a second glyph
+         * — so the description is where a screen reader hears which way it is. It says
+         * what the tap will do as well as what is true: a control that only named its
+         * state leaves the reader guessing whether it is a switch.
+         */
+        val webAccessOn: String
+        val webAccessOff: String
+
         // ---- the conversation-details sheet ------------------------------
 
         val detailModel: String
@@ -726,6 +737,26 @@ interface Strings {
         val modeSwitchInterruptTitle: String
         val modeSwitchInterruptBody: String
         val modeSwitchInterruptConfirm: String
+
+        /**
+         * The row menu's mode conversion, named by the mode the row *becomes*.
+         *
+         * The drawer's foot switch starts a new conversation in the tapped mode, so
+         * this row is the only control that converts an existing one. It says the
+         * target rather than "switch mode" because the row is about a specific
+         * conversation and the reader has to be able to tell what it will become.
+         */
+        val switchToChatMode: String
+        val switchToWorkMode: String
+
+        /**
+         * The conversion's confirmation, with the mode's own name inside it.
+         *
+         * Written as `mode` because the catalogs already name both modes for the
+         * settings page and the drawer's switch — a fourth and fifth spelling of
+         * "chat mode" would be five words for one thing.
+         */
+        fun modeSwitched(mode: String): String
     }
 
     interface Terminal {
@@ -1051,15 +1082,43 @@ interface Strings {
         val chatModeSubtitle: String
 
         /**
-         * The editable chat system prompt: its row and the editor's explanation.
+         * The editable chat system prompt's hint and its restore control.
          *
          * Empty is a valid value and means no system prompt at all; the hint says so
          * because the field looks like a required document.
          */
-        val chatSystemPromptTitle: String
-        val chatSystemPromptSubtitle: String
         val chatSystemPromptEditorHint: String
         val chatSystemPromptRestore: String
+
+        /**
+         * The chat presets: the list on the Agent page, the default, and one editor.
+         *
+         * A preset is a system prompt with a name and an identity, so the strings are
+         * grouped by what they name: the list's default and the add row, the three parts
+         * of an identity, the prompt, and the delete question. "Not set" is a real state
+         * for the name and the picture, which is why [presetNameHint] and the inherit
+         * switch say what happens instead rather than demanding a value.
+         */
+        val presetDefaultRow: String
+        val presetDefaultSubtitle: String
+        val presetDefaultBadge: String
+        val presetAdd: String
+        val presetAddAction: String
+        val presetNewName: String
+        val presetEditTitle: String
+        val presetName: String
+        val presetNameHint: String
+        val presetAvatarInherit: String
+        val presetAvatarInheritHint: String
+        val presetPrompt: String
+
+        /** A preset whose prompt sends nothing, and one that sends only the time. */
+        val presetPromptEmpty: String
+        val presetPromptTime: String
+        val presetDelete: String
+        val presetDeleteHint: String
+        val presetDeleteTitle: String
+        val presetDeleteBody: String
 
         /** The lead over the numbered points. */
         val agentContextLead: String
@@ -1972,6 +2031,52 @@ interface Strings {
 
         val searchProxy: String
         val searchProxySubtitle: String
+
+        /**
+         * The row that opens the Advanced sub-page: the inline-content limit, the
+         * fetch timeout, the proxy, and the fake-IP switch.
+         *
+         * The three fetch parameters were rows of the search page itself and are one
+         * level down now, because the page had become a list of everything the
+         * extension reads rather than a list of the choices a reader makes. The
+         * summary names what is behind the row, so opening it is not a guess.
+         */
+        val searchAdvanced: String
+        val searchAdvancedSubtitle: String
+
+        /**
+         * The Advanced page's switch over `ssrf.allowRanges`.
+         *
+         * Not "SSRF": the reader's problem is a TUN/fake-IP proxy the extension's
+         * address check refuses, and the switch's job is to say that in the words
+         * they know. The summary says what the range is, that the check refuses it,
+         * and that PiKit writes the exemption — that is the whole mechanism, and the
+         * key it writes can be named because the extension's own error names it.
+         */
+        val searchFakeIpProxy: String
+        val searchFakeIpProxySubtitle: String
+
+        /**
+         * The dialog raised after a provider that needs configuration is chosen.
+         *
+         * [provider] is the extension's own id (a product name, untranslated) and
+         * [keys] are the configuration keys its modules document for it; the body
+         * names them and says the value goes into the "add an option or key" editor,
+         * not into the dialog. The dialog appears *after* the choice lands, so the
+         * provider stays selected while the reader is told what it still needs.
+         */
+        val searchProviderNeedsConfigTitle: String
+        fun searchProviderNeedsConfigBody(provider: String, keys: List<String>): String
+
+        /**
+         * The Advanced page's answer to a file that is not a JSON object.
+         *
+         * The search page's note ([searchConfigUnreadable]) ends "fix the text below",
+         * because the editor is below it there; the Advanced page has no editor, so its
+         * note points back at the page that does rather than describing a box that is
+         * not on this page.
+         */
+        val searchAdvancedUnreadable: String
 
     }
 

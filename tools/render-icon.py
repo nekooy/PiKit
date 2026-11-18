@@ -53,6 +53,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FOREGROUND = Path("app/src/main/res/drawable/ic_launcher_foreground.xml")
 LIGHT_FOREGROUND = Path("app/src/main/res/drawable/ic_launcher_foreground_light.xml")
+#: The same mark for the two screens that show the app's logo in-app (§12.3).
+WORDMARK = Path("app/src/main/res/drawable/ic_pi_wordmark.xml")
 COLORS = Path("app/src/main/res/values/colors.xml")
 OUTPUT = Path("docs/assets/icon.svg")
 
@@ -120,6 +122,90 @@ def _named_colour(colors: str, name: str) -> str | None:
     """One opaque colour out of `colors.xml`, or None when the file does not name it."""
     match = re.search(rf'<color\s+name="{name}"\s*>([^<]+)</color>', colors)
     return _colour(match.group(1).strip()) if match else None
+
+
+def wordmark_problems() -> list[str]:
+    """Every way the in-app wordmark is not the launcher foreground's drawing.
+
+    `ic_pi_wordmark.xml` exists because the two screens without a bar draw the app's
+    *logo* rather than an avatar (§12.3), and a logo has to be the icon the reader
+    tapped. It is the launcher path moved to its own bounding box by one `<group>`:
+    that is the whole design, so the check is that the path data is literally the
+    foreground's, and that the translation is the negative of the mark's origin —
+    computed here from the path's own coordinates rather than copied, because a
+    foreground edit moves the origin and a copied number would then be the drift.
+
+    The viewport and the density-independent size are checked too: they are what
+    keeps the drawing's proportions, and a hand-rounded pair is a squashed wordmark.
+    """
+    foreground = (REPO_ROOT / FOREGROUND).read_text(encoding="utf-8")
+    wordmark_path = REPO_ROOT / WORDMARK
+    if not wordmark_path.is_file():
+        return [f"{WORDMARK} is missing — the two screens without a bar have no logo"]
+    wordmark = wordmark_path.read_text(encoding="utf-8")
+
+    _, dark_paths = _glyph(foreground)
+    group, paths = _glyph(wordmark)
+    problems: list[str] = []
+    if len(dark_paths) != 1 or len(paths) != 1:
+        return [
+            f"{WORDMARK} must be one <path>: the foreground has {len(dark_paths)}, "
+            f"the wordmark {len(paths)}"
+        ]
+    if paths[0].get("pathData") != dark_paths[0].get("pathData"):
+        problems.append(
+            f"{WORDMARK}'s path data is not {FOREGROUND}'s: the in-app logo and the "
+            "launcher icon are now two drawings"
+        )
+
+    points = [
+        (float(x), float(y))
+        for x, y in re.findall(r"[ML]\s*(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", dark_paths[0]["pathData"])
+    ]
+    if not points:
+        return problems + [f"{FOREGROUND}'s path has no absolute points to derive a box from"]
+    origin_x = min(x for x, _ in points)
+    origin_y = min(y for _, y in points)
+    width = max(x for x, _ in points) - origin_x
+    height = max(y for _, y in points) - origin_y
+    expected_group = {"translateX": _number(-origin_x), "translateY": _number(-origin_y)}
+    actual_group = {
+        key: group.get(key, "0")
+        for key in ("translateX", "translateY")
+        if key in group
+    }
+    if actual_group != {key: value for key, value in expected_group.items() if value != "0"}:
+        problems.append(
+            f"{WORDMARK} is drawn at {actual_group or 'no translation'} where the "
+            f"foreground's bounding box starts at ({origin_x:g}, {origin_y:g})"
+        )
+    vector = re.search(r"<vector\b([^>]*)>", wordmark)
+    attributes = _attributes(vector.group(1)) if vector else {}
+    for attribute, wanted in (
+        ("viewportWidth", width),
+        ("viewportHeight", height),
+        ("width", width),
+        ("height", height),
+    ):
+        value = attributes.get(attribute, "")
+        if value.endswith("dp"):
+            value = value[: -len("dp")]
+        try:
+            matches = abs(float(value) - wanted) < 0.0005
+        except ValueError:
+            matches = False
+        if not matches:
+            problems.append(
+                f"{WORDMARK}'s {attribute} is {attributes.get(attribute)!r} where the "
+                f"mark is {_number(wanted)}"
+            )
+    return problems
+
+
+def _number(value: float) -> str:
+    """A number the way the vector files write one: no trailing zeroes, no `.0`."""
+    text = f"{value:.4f}".rstrip("0").rstrip(".")
+    return "0" if text in ("", "-0") else text
 
 
 def light_ink_problems() -> list[str]:
@@ -277,6 +363,17 @@ def main() -> int:
             "the SVG nor anything else is written until they are"
         )
         return 1
+
+    # The third copy of the mark: the two screens that draw the app's logo in-app.
+    # Checked in both modes, for the same reason as the two foregrounds — a reader
+    # who taps the icon and lands on a different figure has been shown two apps.
+    wordmark = wordmark_problems()
+    if wordmark:
+        for problem in wordmark:
+            print(f"FAIL {problem}")
+        print("FAIL — the in-app logo is not the launcher icon; nothing is written")
+        return 1
+    print("ok   the in-app wordmark is the launcher icon's drawing, moved to its box")
 
     if arguments.check:
         if not output.is_file():

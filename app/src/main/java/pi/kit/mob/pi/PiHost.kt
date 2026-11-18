@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import pi.kit.mob.data.ChatPresetStore
 import pi.kit.mob.data.ProfileAddressing
 import pi.kit.mob.data.SessionModeStore
 import pi.kit.mob.data.SettingsStore
@@ -92,6 +93,22 @@ class PiHost private constructor(context: Context) {
      * different modes at once. See [SessionModeStore].
      */
     internal val sessionModes: SessionModeStore by lazy { SessionModeStore(appContext) }
+
+    /**
+     * The chat-mode system-prompt presets and which conversation uses which.
+     *
+     * App-wide for the same reason [sessionModes] is: the preset list is one document,
+     * and the drawer and the composer both read it. The *selection* is per session file,
+     * which the store keys itself.
+     *
+     * The legacy prompt is handed over for the one migration that matters: an install
+     * from before presets has its text in `pikit_settings`' `chat_system_prompt`, and the
+     * first preset has to be that text rather than the bare time placeholder, or the
+     * reader's document would be silently replaced by an update.
+     */
+    internal val chatPresets: ChatPresetStore by lazy {
+        ChatPresetStore(appContext, settingsStore.read().chatSystemPrompt)
+    }
 
     /**
      * The host's own scope, for work that must outlive a conversation.

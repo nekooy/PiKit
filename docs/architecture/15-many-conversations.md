@@ -154,6 +154,25 @@ The wake lock is split the same way as before: a turn lock per conversation
 (`holdCpuDuringTurn`, acquired on `agent_start`, released on `agent_settled`) and one
 "the reader left while something was being written" lock in the service.
 
+## A new conversation appears in the drawer when its file does
+
+A conversation has no row until pi has written its session file, and that moment is the
+first prompt, not the screen. The drawer is composed once and then parked at progress
+zero, so its listing — a scan of the session directory — runs when the drawer is first
+drawn and on an explicit reload, neither of which happens between a new conversation's
+first prompt and the reader pulling the drawer out. The row was therefore missing until
+the app was restarted or some other action bumped the reload, which is the report that a
+new conversation could not be found in history.
+
+The fix has two triggers, because the file and the opening are independent moments: the
+drawer refreshes when the conversation's path appears (a message sent while the drawer is
+out), and when the drawer opens with a path the listing does not carry (the file was
+written while the drawer was closed, and the scan had run before pi flushed it — the
+first attempt used only the first trigger and was measured stale in exactly that order).
+The membership test keeps a file the scan already found from starting a second scan on
+every recomposition, and a conversation opened from the drawer needs nothing here:
+`listSessions()` already ran when the drawer was built.
+
 ## What a cold start does now
 
 One conversation is restored, not the whole pool: the session path remembered by the

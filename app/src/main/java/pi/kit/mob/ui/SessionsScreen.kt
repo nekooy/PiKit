@@ -90,6 +90,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Rename
@@ -145,8 +146,18 @@ fun SessionsScreen(
     onOpenSettings: () -> Unit,
     /** The launch mode of the conversation this drawer belongs to. */
     mode: AgentMode,
-    /** Flips this conversation's launch mode; persistence and the relaunch are the session's. */
-    onModeChange: (AgentMode) -> Unit,
+    /**
+     * Opens a new conversation in the tapped mode, and reports whether it was created.
+     *
+     * The drawer's foot switch is this: tapping its other half starts the conversation
+     * the reader asked for rather than converting the one behind the drawer. A mode a
+     * *saved* conversation belongs to is changed from that conversation's row menu,
+     * where the subject is named and a conversion cannot be mistaken for a filter —
+     * the drawer's switch sits over a live transcript, and a tap there used to
+     * relaunch that conversation's process and leave its cache keyed on a mode it no
+     * longer ran in.
+     */
+    onNewConversationInMode: (AgentMode) -> Boolean,
     /**
      * The session file the conversation on screen is writing to.
      *
@@ -155,6 +166,17 @@ fun SessionsScreen(
      * no-op rather than opening a second process on the file that is already open.
      */
     currentPath: String?,
+    /**
+     * Whether the drawer is out.
+     *
+     * The listing is refreshed on the closing/opening transition rather than only when
+     * the conversation's file appears: a new conversation's file is written *by pi*
+     * after the first prompt, and the file's appearance and the reader opening the
+     * drawer are two moments that can arrive in either order. Checking on the way in is
+     * the one moment the file is certain to be on disk and the drawer is certain to be
+     * looked at.
+     */
+    open: Boolean,
 ) {
     val text = strings
     // The first frame comes from the last listing, not from an empty list. The drawer is
@@ -226,6 +248,26 @@ fun SessionsScreen(
         loading = false
     }
 
+    // A conversation that has just sent its first message gets its session file from
+    // pi at that moment, and the drawer has to show it without being reopened. The
+    // drawer is composed once and parked at progress zero, so the scan below runs
+    // when the drawer is first drawn and on an explicit reload — neither of which
+    // happens between a new conversation's first prompt and the reader pulling the
+    // drawer out. The row was therefore missing until the app was restarted or some
+    // other action bumped `reload`.
+    //
+    // Two triggers, because the file and the opening are independent moments: the path
+    // appearing (a message sent while the drawer is already out, or a relaunch that
+    // adopts a fresh file) and the drawer opening (the file was written while the
+    // drawer was closed, and the listing was scanned before pi flushed it). The
+    // membership test keeps a file the scan already found from starting a second scan
+    // on every recomposition.
+    LaunchedEffect(open, activeSessionFile) {
+        if (!open) return@LaunchedEffect
+        val path = activeSessionFile ?: return@LaunchedEffect
+        if (summaries.none { it.path == path }) reload++
+    }
+
     // The content scan is expensive (a parse per message line, on conversations
     // that can be megabytes), so it waits for a pause in typing: the effect is
     // cancelled and restarted on every keystroke, and the delay before the work is
@@ -286,6 +328,53 @@ fun SessionsScreen(
 
     fun togglePinned(item: PiAgentSession.SessionSummary) {
         session.setPinned(item, !item.pinned)
+        reload++
+    }
+
+    /** The mode a saved conversation belongs to; a file with no record is work. */
+    fun modeOf(path: String): AgentMode = session.host.sessionModes.modeFor(path)
+
+    /** The mode's own name, as the settings page and the drawer's switch spell it. */
+    fun modeName(value: AgentMode): String =
+        if (value == AgentMode.CHAT) text.settings.modeChat else text.settings.modeWork
+
+    /**
+     * Converts one saved conversation to the other launch mode.
+     *
+     * A mode is a launch flag, so the process a conversation owns is what carries it.
+     * The conversation **on screen** is converted by its own session, which records the
+     * mode against its file and relaunches in place — and asks first while a turn is
+     * running, because the relaunch ends that turn.
+     *
+     * Any other row is a file: its mode is recorded beside the session, and a live but
+     * idle process for it is closed so the next open starts in the mode just chosen.
+     * Closing rather than relaunching is the cheap answer — the transcript is on disk
+     * and the reader is not looking at that conversation — and a conversation that is
+     * *answering* is refused with the same sentence a delete is, because the process
+     * cannot be converted while it is mid-turn.
+     */
+    fun switchRowMode(item: PiAgentSession.SessionSummary) {
+        val target = if (modeOf(item.path) == AgentMode.CHAT) AgentMode.WORK else AgentMode.CHAT
+        if (item.path == activeSessionFile) {
+            if (session.turnInFlight) {
+                pendingMode = target
+                return
+            }
+            haptics.toggle(on = target == AgentMode.CHAT)
+            session.switchMode(target)
+            toasts?.show(text.sessions.modeSwitched(modeName(target)))
+            reload++
+            return
+        }
+        val live = session.host.sessionFor(item.path)
+        if (live?.turnInFlight == true) {
+            toasts?.show(text.sessions.switchWhileWorking)
+            return
+        }
+        live?.let { session.host.closeConversation(it, interrupt = false) }
+        session.host.sessionModes.setMode(item.path, target)
+        haptics.toggle(on = target == AgentMode.CHAT)
+        toasts?.show(text.sessions.modeSwitched(modeName(target)))
         reload++
     }
 
@@ -566,6 +655,8 @@ fun SessionsScreen(
                         renameUp = true
                     },
                     onTogglePin = ::togglePinned,
+                    modeOf = { path -> modeOf(path) },
+                    onSwitchMode = { item -> switchRowMode(item) },
                     onDelete = {
                         deleteTargets = listOf(it)
                         deleteUp = true
@@ -619,9 +710,14 @@ fun SessionsScreen(
         ) {
             PiModeSwitch(
                 mode = mode,
-                onModeChange = { wanted ->
-                    if (session.turnInFlight) pendingMode = wanted else onModeChange(wanted)
-                },
+                // A tap (or a drag's release) on the other half starts a *new*
+                // conversation in that mode. The switch is a starting point rather
+                // than a conversion: it sits over a live transcript, and the old
+                // behaviour — record the mode and relaunch this conversation's
+                // process — is what made an accidental tap rewrite the mode of a
+                // history entry. The conversation being read keeps its mode; its row
+                // menu is where it changes.
+                onModeChange = { wanted -> onNewConversationInMode(wanted) },
                 text = text,
             )
             Spacer(Modifier.weight(1f))
@@ -632,9 +728,10 @@ fun SessionsScreen(
         }
     }
 
-    // The mode switch's interruption question, in the same shape as the workspace
-    // chip's: the switch cannot be applied to a running process without ending the
-    // turn, so the reader is told and decides.
+    // The mode conversion's interruption question, in the same shape as the workspace
+    // chip's: a mode is a launch flag, so converting a conversation that is answering
+    // ends its turn. The only way here is the row menu's mode row — the drawer's foot
+    // switch starts a new conversation and never asks.
     InterruptTurnDialog(
         show = pendingMode != null,
         text = text,
@@ -645,7 +742,12 @@ fun SessionsScreen(
         onConfirm = {
             val wanted = pendingMode
             pendingMode = null
-            if (wanted != null) session.switchMode(wanted, interrupt = true)
+            if (wanted != null) {
+                haptics.toggle(on = wanted == AgentMode.CHAT)
+                session.switchMode(wanted, interrupt = true)
+                toasts?.show(text.sessions.modeSwitched(modeName(wanted)))
+                reload++
+            }
         },
     )
 
@@ -772,6 +874,10 @@ private fun ConversationList(
     onOpen: (PiAgentSession.SessionSummary) -> Unit,
     onRename: (PiAgentSession.SessionSummary) -> Unit,
     onTogglePin: (PiAgentSession.SessionSummary) -> Unit,
+    /** The launch mode a saved conversation belongs to, read from the per-file record. */
+    modeOf: (String) -> AgentMode,
+    /** Converts one conversation to the other mode; the menu row is the only caller. */
+    onSwitchMode: (PiAgentSession.SessionSummary) -> Unit,
     onDelete: (PiAgentSession.SessionSummary) -> Unit,
     /** The navigation strip the panel now draws through, as the list's own end padding. */
     bottomInset: Dp,
@@ -826,10 +932,12 @@ private fun ConversationList(
                     unread = item.path in unreadPaths,
                     pinned = true,
                     current = item.path == currentPath,
+                    mode = modeOf(item.path),
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
                     onRename = { onRename(item) },
                     onTogglePin = { onTogglePin(item) },
+                    onSwitchMode = { onSwitchMode(item) },
                     onDelete = { onDelete(item) },
                 )
             }
@@ -849,10 +957,12 @@ private fun ConversationList(
                     unread = item.path in unreadPaths,
                     pinned = false,
                     current = item.path == currentPath,
+                    mode = modeOf(item.path),
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
                     onRename = { onRename(item) },
                     onTogglePin = { onTogglePin(item) },
+                    onSwitchMode = { onSwitchMode(item) },
                     onDelete = { onDelete(item) },
                 )
             }
@@ -963,7 +1073,7 @@ internal fun sessionGroups(
  *
  * The row is a `combinedClickable` box rather than the library's `Card` because it has to
  * be: `Card` draws the container this design removes, and what the row still needs from a
- * card is exactly its two gestures — a tap to open and a hold for the three per-row
+ * card is exactly its two gestures — a tap to open and a hold for the per-row
  * actions. Both are on the box, and the hold is labelled with [Strings.Sessions.actions]
  * rather than left an unnamed gesture, which is what a screen reader reads out for it.
  *
@@ -988,10 +1098,13 @@ private fun ConversationRow(
     pinned: Boolean,
     /** Whether this is the conversation the page behind the drawer is showing. */
     current: Boolean,
+    /** The launch mode this row's conversation belongs to. */
+    mode: AgentMode,
     onToggleChecked: () -> Unit,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onTogglePin: () -> Unit,
+    onSwitchMode: () -> Unit,
     onDelete: () -> Unit,
 ) {
     // Locale.getDefault() follows the interface language because the root applies it,
@@ -1031,7 +1144,7 @@ private fun ConversationRow(
                     onLongClick(label = text.sessions.actions) {
                         // Nothing to hold for while the list is in selection mode: the
                         // tap is already the checkbox, and a second way to reach the same
-                        // three actions there would be a menu over a multi-select.
+                        // actions there would be a menu over a multi-select.
                         if (!selecting) hold()
                         true
                     }
@@ -1154,10 +1267,16 @@ private fun ConversationRow(
             }
         }
 
-        // The three things a conversation can have done to it, as a floating menu at
-        // the row that was held (§7.1): three short actions on one conversation do not
+        // The four things a conversation can have done to it, as a floating menu at
+        // the row that was held (§7.1): four short actions on one conversation do not
         // need a panel from the bottom edge, and the row is the thing the question is
         // about — the menu lands on it instead of covering the list it came from.
+        //
+        // The mode conversion is here rather than at the drawer's foot because the row
+        // names the conversation it acts on. The foot's switch starts a new conversation
+        // in the mode it is tapped toward; this row is the one control that changes what
+        // an *existing* conversation runs as, and it can therefore not be mistaken for a
+        // filter over the transcript behind the drawer.
         //
         // The label names what can be done; there is no title inside the menu and no
         // cancel row, because a menu is dismissed by the scrim, the back gesture or a
@@ -1191,6 +1310,31 @@ private fun ConversationRow(
                             if (actionsUp) {
                                 actionsUp = false
                                 onTogglePin()
+                            }
+                        },
+                    ),
+                    // The conversation's launch mode, converted here rather than by the
+                    // drawer's switch. The row names the mode it *starts*, so it reads as
+                    // a change of this conversation even before it is applied; the switch
+                    // at the drawer's foot used to write the very same record from over a
+                    // live transcript, where a stray tap converted what was on screen.
+                    DropdownItem(
+                        text = if (mode == AgentMode.CHAT) {
+                            text.sessions.switchToWorkMode
+                        } else {
+                            text.sessions.switchToChatMode
+                        },
+                        icon = { modifier ->
+                            Icon(
+                                imageVector = MiuixIcons.Messages,
+                                contentDescription = null,
+                                modifier = modifier,
+                            )
+                        },
+                        onClick = {
+                            if (actionsUp) {
+                                actionsUp = false
+                                onSwitchMode()
                             }
                         },
                     ),

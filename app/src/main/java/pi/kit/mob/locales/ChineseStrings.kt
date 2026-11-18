@@ -175,6 +175,8 @@ internal object ChineseStrings : Strings {
             PermissionMode.WORKSPACE_WRITE -> "能读任何地方，只能修改这次对话的工作区"
             PermissionMode.FULL_ACCESS -> "不做任何拦截，Agent 可以改动它有权改动的任何文件"
         }
+        override val webAccessOn = "联网搜索和网页抓取已开启，点按关闭"
+        override val webAccessOff = "联网搜索和网页抓取已关闭，点按开启"
 
         override val detailModel = "模型"
         override val detailProvider = "供应商"
@@ -273,6 +275,9 @@ internal object ChineseStrings : Strings {
             "Agent 正在这个对话里输出。切换模式会重新启动这个对话的进程，" +
                 "当前回答会立刻停止且无法继续；消息和历史都会保留。"
         override val modeSwitchInterruptConfirm = "切换并重启"
+        override val switchToChatMode = "切换为聊天模式"
+        override val switchToWorkMode = "切换为工作模式"
+        override fun modeSwitched(mode: String) = "已切换为${mode}模式"
     }
 
     override val terminal = object : Strings.Terminal {
@@ -398,14 +403,32 @@ internal object ChineseStrings : Strings {
         override val chatMode = "聊天模式"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "抽屉底部切到「聊天」后，不加载工具、扩展、技能和 AGENTS.md；系统提示词只发送下面这一份，留空就完全不发"
-        override val chatSystemPromptTitle = "系统提示词"
-        override val chatSystemPromptSubtitle =
-            "{{time}} 替换为当前时间；留空则不发送系统提示词；保存后重启 Agent"
+            "抽屉底部切到「聊天」后，不加载工具、技能和 AGENTS.md；系统提示词只有预设里的那一份，留空就完全不发" +
+                "——除非这个对话的联网开关把搜索和抓取工具借给它"
         override val chatSystemPromptEditorHint =
             "这里写的内容就是聊天模式唯一的系统提示词。默认只有 {{time}}（当前时间）；留空表示完全不发送。" +
                 "把 {{time}} 放在想注入时间的位置；启动时会替换成当前时间。"
         override val chatSystemPromptRestore = "恢复默认"
+        override val presetDefaultRow = "默认预设"
+        override val presetDefaultSubtitle = "新建聊天对话时使用的预设"
+        override val presetDefaultBadge = "默认"
+        override val presetAdd = "添加预设"
+        override val presetAddAction = "添加"
+        override val presetNewName = "新预设"
+        override val presetEditTitle = "编辑预设"
+        override val presetName = "名字"
+        override val presetNameHint =
+            "显示在预设头像旁，也作为对话里回答方的名字。留空则沿用个性化页里的名字。"
+        override val presetAvatarInherit = "沿用个性化头像"
+        override val presetAvatarInheritHint = "开启时，上面的图片和颜色都来自个性化页"
+        override val presetPrompt = "系统提示词"
+        override val presetPromptEmpty = "不发送系统提示词"
+        override val presetPromptTime = "只发送当前时间"
+        override val presetDelete = "删除预设"
+        override val presetDeleteHint = "提示词和头像会一并删除；用过它的对话回落到默认预设"
+        override val presetDeleteTitle = "删除这个预设？"
+        override val presetDeleteBody =
+            "它的提示词和头像会被删除。用过它的对话改用默认预设，消息和历史都保留。"
         override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
         override val agentContextLeadTitle = "上下文说明"
         override val agentContextSystemTitle = "系统提示"
@@ -857,6 +880,21 @@ internal object ChineseStrings : Strings {
 
         override val searchProxy = "代理"
         override val searchProxySubtitle = "填写后会作为联网访问的代理"
+
+        override val searchAdvanced = "高级"
+        override val searchAdvancedSubtitle = "内联内容上限、抓取超时、代理和 Fake-IP 兼容"
+        override val searchFakeIpProxy = "Fake-IP 代理兼容"
+        override val searchFakeIpProxySubtitle =
+            "TUN / fake-IP 代理会把域名解析到 198.18.0.0/15，扩展的地址检查默认会拒绝这段地址。" +
+                "开启后由 PiKit 把这项豁免（ssrf.allowRanges）写进配置文件。"
+        override val searchProviderNeedsConfigTitle = "这个服务还需要配置"
+        override fun searchProviderNeedsConfigBody(provider: String, keys: List<String>) =
+            "「$provider」要先有 ${keys.joinToString("、")} 才能用：内置扩展从它自己的配置文件里读取这些项。" +
+                "回到搜索设置页，打开下面的「添加配置项或 Key」并按名字搜索这一项，值填在那个编辑框里，" +
+                "不是在这个弹窗里输入。"
+        override val searchAdvancedUnreadable =
+            "web-search.json 不是 JSON 对象，所以这里的控件都隐藏了。回到搜索设置页，" +
+                "在那一页的编辑器里把文本改好即可。"
 
     }
 

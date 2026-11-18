@@ -1,7 +1,5 @@
 package pi.kit.mob.ui.settings
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,14 +14,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 import pi.kit.mob.data.AvatarColor
 import pi.kit.mob.data.AvatarSlot
 import pi.kit.mob.data.AvatarStore
@@ -241,7 +237,7 @@ internal fun PersonalizationPage(
     ) {
         when (shownSlot) {
             AvatarSlot.Ai -> AvatarSheet(
-                slot = AvatarSlot.Ai,
+                slotId = AvatarSlot.Ai.id,
                 label = settings.aiAvatarName,
                 imagePath = settings.aiAvatarImage,
                 speaker = AvatarSpeaker.AGENT,
@@ -259,7 +255,7 @@ internal fun PersonalizationPage(
             )
 
             AvatarSlot.User -> AvatarSheet(
-                slot = AvatarSlot.User,
+                slotId = AvatarSlot.User.id,
                 label = settings.userAvatarName,
                 imagePath = settings.userAvatarImage,
                 speaker = AvatarSpeaker.READER,
@@ -365,7 +361,7 @@ private fun FontSizeRow(
  */
 @Composable
 private fun AvatarSheet(
-    slot: AvatarSlot,
+    slotId: String,
     label: String,
     imagePath: String,
     speaker: AvatarSpeaker,
@@ -376,32 +372,16 @@ private fun AvatarSheet(
     text: Strings,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var failed by remember(slot) { mutableStateOf(false) }
     val filesDir = context.filesDir
 
-    // The picture goes no further until it has been cropped: a photo straight from the
-    // camera is not square, and a circle that silently kept the middle of it was the
-    // "上传图片似乎不能裁剪" this page used to answer by cropping on the reader's behalf.
-    //
-    // Two values rather than one: the crop window animates out through `show`, so the
-    // picture it is drawing has to outlive the answer that closes it — a null slot would
-    // remove the window from the hierarchy with its content already gone.
-    var cropping by remember(slot) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var cropShown by remember(slot) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    val pickImage = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val decoded = AvatarStore.decodeForCrop(context, uri)
-            failed = decoded == null
-            if (decoded != null) {
-                cropShown = decoded
-                cropping = decoded
-            }
-        }
-    }
+    // The pick, crop and store flow is shared with the chat preset editor: one picture's
+    // worth of platform work, stated once. See `rememberAvatarPicturePicker`.
+    val picker = rememberAvatarPicturePicker(
+        filesDir = filesDir,
+        slotId = slotId,
+        text = text,
+        onStored = onChangeImage,
+    )
 
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Box(
@@ -429,7 +409,7 @@ private fun AvatarSheet(
                         },
                     )
                 },
-                onClick = { pickImage.launch(IMAGE_MIME) },
+                onClick = picker.pick,
             )
             if (imagePath.isNotBlank()) {
                 ArrowPreference(
@@ -444,8 +424,7 @@ private fun AvatarSheet(
                         // a file the app would keep for ever, and the backup would carry
                         // it. `AvatarStore.clear` is a single-file delete rather than the
                         // recursive one `SafeDelete` exists for.
-                        AvatarStore.clear(filesDir, slot)
-                        failed = false
+                        AvatarStore.clear(filesDir, slotId)
                         onChangeImage("")
                     },
                 )
@@ -460,7 +439,7 @@ private fun AvatarSheet(
                 supporting = text.settings.avatarNameHint,
                 singleLine = true,
             )
-            if (failed) {
+            if (picker.failed) {
                 SettingsNote(text.settings.avatarPictureFailed, danger = true)
             }
             Text(
@@ -495,43 +474,10 @@ private fun AvatarSheet(
             }
         }
     }
-
-    // The crop step: its own window over the sheet, keyed on the decoded picture so a
-    // second pick starts from the new one rather than from the last drag. The bitmap is
-    // recycled only once the window has finished leaving, because it is still being
-    // drawn on the way out.
-    cropShown?.let { picture ->
-        AvatarCropDialog(
-            picture = picture,
-            show = cropping != null,
-            text = text,
-            onDismiss = { cropping = null },
-            onDismissFinished = {
-                picture.recycle()
-                cropShown = null
-            },
-            onConfirm = { square ->
-                val stored = AvatarStore.storeSquare(filesDir, slot, square)
-                failed = stored == null
-                cropping = null
-                // The crop is the caller's to release: `createBitmap` hands back the
-                // source itself when the crop is the whole picture, and that one is the
-                // window's — it is recycled once the window has finished leaving.
-                if (square !== picture) square.recycle()
-                // The old picture is replaced only once the new one is on disk: a crop
-                // that could not be written leaves the avatar as it was rather than
-                // blanking it.
-                if (stored != null) onChangeImage(stored)
-            },
-        )
-    }
 }
 
 /** The swatch's diameter: eight of them and the seven 4dp gaps between them are 300dp. */
 private val SWATCH_SIZE = 34.dp
-
-/** Anything the system picker can hand back as an image. */
-private const val IMAGE_MIME = "image/*"
 
 /** The most characters an avatar *name* holds before it is cut. */
 private const val AVATAR_NAME_MAX = 16

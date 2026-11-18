@@ -570,12 +570,15 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val agentMode: AgentMode = AgentMode.DEFAULT,
     /**
-     * The system-prompt template chat mode sends.
+     * The chat prompt the single-document editor stored before presets existed.
      *
-     * It is a *template*, not a snapshot: [CHAT_TIME_PLACEHOLDER] is replaced with the
-     * current time on every launch. Blank is a valid choice and means "no system
-     * prompt at all": the chat-prompt extension replaces pi's whole prompt, and an
-     * empty document sends nothing. ARCHITECTURE §17 has the measurement.
+     * **Read once, as a migration input.** The prompt is a [ChatPreset]'s now
+     * ([ChatPresetStore]); an install from before the presets has its text here, and the
+     * first preset is made from it so an update cannot silently replace the reader's
+     * document with the bare time token. The field is no longer edited anywhere and may
+     * be removed once no install is old enough to migrate; the value itself is still a
+     * *template* — [CHAT_TIME_PLACEHOLDER] was replaced at launch then and is rendered per
+     * preset now. ARCHITECTURE §17 has the preset model.
      */
     val chatSystemPrompt: String = DEFAULT_CHAT_SYSTEM_PROMPT,
     /** Interface language. Persisted here because it is not part of a profile. */

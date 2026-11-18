@@ -175,6 +175,8 @@ internal object EnglishStrings : Strings {
             PermissionMode.FULL_ACCESS ->
                 "Nothing is refused; the agent can change any file it has the right to"
         }
+        override val webAccessOn = "Web search and page fetching are on — tap to turn off"
+        override val webAccessOff = "Web search and page fetching are off — tap to turn on"
 
         override val detailModel = "Model"
         override val detailProvider = "Provider"
@@ -280,6 +282,9 @@ internal object EnglishStrings : Strings {
                 "conversation's process, so the answer stops here and cannot continue; " +
                 "the messages and history stay."
         override val modeSwitchInterruptConfirm = "Switch and restart"
+        override val switchToChatMode = "Switch to chat mode"
+        override val switchToWorkMode = "Switch to work mode"
+        override fun modeSwitched(mode: String) = "Switched to $mode mode"
     }
 
     override val terminal = object : Strings.Terminal {
@@ -405,15 +410,40 @@ internal object EnglishStrings : Strings {
         override val chatMode = "Chat mode"
         override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "With the drawer's switch on Chat, no tools, extensions, skills or AGENTS.md load — the prompt below is the only system text sent, and an empty one sends nothing"
-        override val chatSystemPromptTitle = "System prompt"
-        override val chatSystemPromptSubtitle =
-            "{{time}} becomes the current time; leave empty to send no system prompt; saving restarts the agent"
+            "With the drawer's switch on Chat, no tools, skills or AGENTS.md load. A preset's " +
+                "prompt is the only system text — an empty one sends nothing — unless this " +
+                "conversation's web switch lends it the search and fetch tools"
         override val chatSystemPromptEditorHint =
             "What you write here is chat mode's only system prompt. It starts with {{time}}, " +
                 "the current time; leave it empty to send none. Put {{time}} where the time should " +
                 "be injected; it becomes the current time at launch."
         override val chatSystemPromptRestore = "Restore default"
+        override val presetDefaultRow = "Default preset"
+        override val presetDefaultSubtitle =
+            "The preset a new chat conversation starts with"
+        override val presetDefaultBadge = "Default"
+        override val presetAdd = "Add preset"
+        override val presetAddAction = "Add"
+        override val presetNewName = "New preset"
+        override val presetEditTitle = "Edit preset"
+        override val presetName = "Name"
+        override val presetNameHint =
+            "Shown beside the preset's avatar and as the speaker in the transcript. " +
+                "Leave empty to use the personalization name."
+        override val presetAvatarInherit = "Use the personalization avatar"
+        override val presetAvatarInheritHint =
+            "While on, the picture and colour come from the personalization page"
+        override val presetPrompt = "System prompt"
+        override val presetPromptEmpty = "Sends no system prompt"
+        override val presetPromptTime = "Sends only the current time"
+        override val presetDelete = "Delete preset"
+        override val presetDeleteHint =
+            "The prompt and the picture are removed; conversations that used it fall back " +
+                "to the default"
+        override val presetDeleteTitle = "Delete this preset?"
+        override val presetDeleteBody =
+            "Its prompt and picture are removed. Conversations that used it start using the " +
+                "default preset; their messages stay."
         override val agentContextLead = "With every request, pi sends the model:"
         override val agentContextLeadTitle = "What the context holds"
         override val agentContextSystemTitle = "System prompt"
@@ -926,6 +956,24 @@ internal object EnglishStrings : Strings {
 
         override val searchProxy = "Proxy"
         override val searchProxySubtitle = "Sent as the web-access proxy, if set"
+
+        override val searchAdvanced = "Advanced"
+        override val searchAdvancedSubtitle =
+            "Inline content limit, fetch timeout, proxy and fake-IP compatibility"
+        override val searchFakeIpProxy = "Fake-IP proxy compatibility"
+        override val searchFakeIpProxySubtitle =
+            "A TUN or fake-IP proxy answers DNS with 198.18.0.0/15, which the extension's " +
+                "address check refuses. When on, PiKit writes that exemption " +
+                "(ssrf.allowRanges) into the file for you."
+        override val searchProviderNeedsConfigTitle = "This provider needs a key"
+        override fun searchProviderNeedsConfigBody(provider: String, keys: List<String>) =
+            "\"$provider\" needs ${keys.joinToString(", ")} before it can answer: the " +
+                "bundled extension reads that from its own configuration. On the Search " +
+                "page, open \"Add an option or key\" below and search for it there — the " +
+                "value is typed into that editor, not in this dialog."
+        override val searchAdvancedUnreadable =
+            "web-search.json is not a JSON object, so these controls are hidden. Go back to " +
+                "Search settings and fix the text in the editor there."
 
     }
 

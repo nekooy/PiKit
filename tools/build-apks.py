@@ -639,6 +639,15 @@ def run_tests() -> bool:
             "the chat prompt extension",
             lambda: node_tool("test-chat-prompt.mjs", flags=("--experimental-strip-types",)),
         ),
+        # What chat mode *sends* is the promise: the preset's text and nothing else, and
+        # the two network tools only while the conversation's switch is on. The flags
+        # are pi's interface, so this drives the vendored pi against a local endpoint
+        # that records the request — a fixture that agreed with our reading of
+        # `--tools` would be exactly the mistake. Skips without the build cache.
+        (
+            "the chat context",
+            lambda: node_tool("test-chat-context.mjs", flags=("--experimental-strip-types",)),
+        ),
         # The README's icon is a second copy of the launcher icon, which is a thing
         # that drifts: nothing about editing the vector would remind anyone that the
         # picture at the top of the README is now wrong. Cheap (it reads two files)
@@ -667,6 +676,15 @@ def run_tests() -> bool:
         ).is_dir():
             log(f"skip {name}: no pi bundle under .runtime-build/cache/pi, which the image "
                 "builder fills")
+            continue
+        # The chat-context audit needs the pid bundle *and* the vendored web-access tree,
+        # because the two are what a chat launch is made of.
+        if name == "the chat context" and not (
+            (REPO_ROOT / ".runtime-build" / "cache" / "pi").is_dir()
+            and (REPO_ROOT / ".runtime-build" / "cache" / "web-access").is_dir()
+        ):
+            log(f"skip {name}: no pi bundle or web-access tree under .runtime-build/cache, "
+                "which the image builder fills")
             continue
         runnable.append((name, check))
 

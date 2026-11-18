@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.PowerManager
 import android.util.Log
 import pi.kit.mob.data.AgentMode
+import pi.kit.mob.data.ChatPreset
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
@@ -224,6 +225,37 @@ class PiAgentSession internal constructor(
     )
     val mode: StateFlow<AgentMode> = _mode.asStateFlow()
 
+    /**
+     * Which chat-mode preset this conversation speaks with.
+     *
+     * A conversation opened from history takes the preset recorded for its session file;
+     * one with no file yet takes the app's default preset. Chat mode only — work mode
+     * reads no prompt, so the state is inert there and the composer does not draw the
+     * chip. Changing it is a relaunch, because pi reads the prompt once at process start.
+     */
+    private val _chatPresetId = MutableStateFlow(
+        boundSession?.let { host.chatPresets.selectedId(it) } ?: host.chatPresets.defaultId,
+    )
+    val chatPresetId: StateFlow<String> = _chatPresetId.asStateFlow()
+
+    /** Every preset, for the composer's chip and the settings page. */
+    val chatPresets: StateFlow<List<ChatPreset>> get() = host.chatPresets.presets
+
+    /**
+     * Whether this chat conversation may use the bundled extension's network tools.
+     *
+     * On by default, per conversation, and a launch flag rather than a runtime switch:
+     * the tools are registered when pi starts, so flipping it restarts this conversation
+     * the way a preset change does. `SessionModeStore` records it beside the mode.
+     */
+    private val _chatWebAccess = MutableStateFlow(
+        boundSession?.let { host.sessionModes.webAccessFor(it) } ?: true,
+    )
+    val chatWebAccess: StateFlow<Boolean> = _chatWebAccess.asStateFlow()
+
+    /** The preset in force, resolved: a deleted id falls back to the default. */
+    fun chatPreset(): ChatPreset = host.chatPresets.preset(_chatPresetId.value)
+
     private val _conversation = MutableStateFlow(ConversationState())
     val conversation: StateFlow<ConversationState> = _conversation.asStateFlow()
 
@@ -341,8 +373,12 @@ class PiAgentSession internal constructor(
         restoreTarget = path
         restoredFrom = path
         // A row's mode is its own: this is the file's record even when the app's
-        // default has moved on since the conversation was last opened.
+        // default has moved on since the conversation was last opened. The chat preset
+        // and the network-tools switch are the same kind of record, read from the same
+        // place so a restored chat conversation keeps its voice and its tools.
         _mode.value = host.sessionModes.modeFor(path)
+        _chatPresetId.value = host.chatPresets.selectedId(path)
+        _chatWebAccess.value = host.sessionModes.webAccessFor(path)
         return true
     }
 
@@ -530,6 +566,50 @@ class PiAgentSession internal constructor(
         PermissionPolicy.write(env, mode)
     }
 
+    /**
+     * Chooses the chat preset this conversation speaks with.
+     *
+     * Recorded against the session file and applied by a relaunch, for the same reason
+     * [switchMode] is: the prompt is read once, at process start. A conversation that has
+     * not started only records it — its first prompt launches with it — and one that is
+     * answering is *not* interrupted here: [scheduleRestart] waits for the turn to settle,
+     * which is the behaviour the prompt editor already had.
+     */
+    fun selectChatPreset(id: String) {
+        if (id == _chatPresetId.value) return
+        _chatPresetId.value = id
+        sessionPath?.let { host.chatPresets.setSelection(it, id) }
+        restoreTarget?.let { host.chatPresets.setSelection(it, id) }
+        if (_mode.value == AgentMode.CHAT) {
+            when (_agent.value) {
+                is AgentStatus.Stopped -> Unit
+                is AgentStatus.Starting, is AgentStatus.Running, is AgentStatus.Failed ->
+                    scheduleRestart()
+            }
+        }
+    }
+
+    /**
+     * Turns this chat conversation's network tools on or off.
+     *
+     * A launch flag, so the answer takes effect on the next process; [scheduleRestart]
+     * defers it rather than cutting an answer. The value is recorded per session exactly
+     * as the mode is, and is inert in work mode, where the tools come with the agent.
+     */
+    fun setChatWebAccess(enabled: Boolean) {
+        if (enabled == _chatWebAccess.value) return
+        _chatWebAccess.value = enabled
+        sessionPath?.let { host.sessionModes.setWebAccess(it, enabled) }
+        restoreTarget?.let { host.sessionModes.setWebAccess(it, enabled) }
+        if (_mode.value == AgentMode.CHAT) {
+            when (_agent.value) {
+                is AgentStatus.Stopped -> Unit
+                is AgentStatus.Starting, is AgentStatus.Running, is AgentStatus.Failed ->
+                    scheduleRestart()
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- agent
 
     /**
@@ -688,7 +768,7 @@ class PiAgentSession internal constructor(
                     // reads it, so another launch cannot replace the file between the
                     // write and the spawn. Work mode leaves it null.
                     val chatPromptFile = if (_mode.value == AgentMode.CHAT) {
-                        writeChatPrompt(settings).absolutePath
+                        writeChatPrompt().absolutePath
                     } else {
                         null
                     }
@@ -702,6 +782,29 @@ class PiAgentSession internal constructor(
                                         TAG,
                                         "chat prompt extension is missing from the runtime; " +
                                             "chat mode's prompt will carry pi's cwd block",
+                                    )
+                                }
+                            }
+                    } else {
+                        null
+                    }
+                    // The network tools a chat conversation may use, when its own switch
+                    // is on. Loaded by an explicit `--extension` beside `--no-extensions`
+                    // and narrowed to two tool names by `--tools` — see
+                    // `PiLaunchOptions.chatWebExtension` for what the two flags do together.
+                    // A runtime image without the extension is logged and dropped rather
+                    // than refused: the conversation still starts, with no tools, which is
+                    // the switch's own "off" state.
+                    val chatWebExtension = if (_mode.value == AgentMode.CHAT && _chatWebAccess.value) {
+                        env.webAccessExtension?.entryPoint
+                            ?.takeIf { it.isFile }
+                            ?.absolutePath
+                            .also { found ->
+                                if (found == null) {
+                                    Log.w(
+                                        TAG,
+                                        "chat mode's web access is on but the bundled " +
+                                            "web-access extension is missing from the runtime",
                                     )
                                 }
                             }
@@ -731,6 +834,7 @@ class PiAgentSession internal constructor(
                             ),
                             chatPromptFile = chatPromptFile,
                             chatPromptExtension = chatPromptExtension,
+                            chatWebExtension = chatWebExtension,
                             mode = _mode.value,
                         ),
                     ).also { launched = it }
@@ -1347,7 +1451,10 @@ class PiAgentSession internal constructor(
         }
         for (target in targets) {
             if (target.pinned) setPinned(target, false)
-            if (!File(target.path).exists()) host.sessionModes.forget(target.path)
+            if (!File(target.path).exists()) {
+                host.sessionModes.forget(target.path)
+                host.chatPresets.forget(target.path)
+            }
         }
         if (deletedActive) newSession()
         return Result.success(removed)
@@ -1430,6 +1537,11 @@ class PiAgentSession internal constructor(
         // belongs to it: a chat conversation that just wrote its first file would
         // otherwise reopen as work after the app restarts.
         host.sessionModes.setMode(path, _mode.value)
+        // The other two per-conversation records land in the same moment. A chat
+        // conversation's first file is also the first moment its preset and its
+        // network-tools answer can be keyed to anything.
+        host.chatPresets.setSelection(path, _chatPresetId.value)
+        host.sessionModes.setWebAccess(path, _chatWebAccess.value)
         if (host.active.value === this) host.rememberLastSession(path)
     }
 
@@ -1469,7 +1581,11 @@ class PiAgentSession internal constructor(
         // The conversation being restored may not be in the mode the app's default now
         // says: the last visible conversation decides the switch, not the last switch
         // that happened in another conversation.
-        if (target != null) _mode.value = host.sessionModes.modeFor(target)
+        if (target != null) {
+            _mode.value = host.sessionModes.modeFor(target)
+            _chatPresetId.value = host.chatPresets.selectedId(target)
+            _chatWebAccess.value = host.sessionModes.webAccessFor(target)
+        }
         return target
     }
 
@@ -1648,6 +1764,8 @@ class PiAgentSession internal constructor(
             // so without this record it would reopen as work even when the branch came
             // from a chat conversation.
             host.sessionModes.setMode(target.absolutePath, _mode.value)
+            host.chatPresets.setSelection(target.absolutePath, _chatPresetId.value)
+            host.sessionModes.setWebAccess(target.absolutePath, _chatWebAccess.value)
             target.absolutePath
         }.getOrNull()
     }
@@ -2605,6 +2723,10 @@ class PiAgentSession internal constructor(
      */
     suspend fun reloadAfterRestore() {
         settingsStore.reload()
+        // The presets are a document of their own, and one restore replaces it wholesale:
+        // the store read its list at startup, so without this the chat half would show the
+        // personas the backup replaced until the app was relaunched.
+        host.chatPresets.reload()
         // pi's own `web-search.json` travels with MODELS, and the store holds the
         // document it read at startup — the search page would otherwise keep
         // showing the old options while the file on disk was the restored one.
@@ -2948,11 +3070,15 @@ class PiAgentSession internal constructor(
      * swallowed: without the file `--system-prompt` would name nothing, so the launch
      * must fail rather than quietly fall back to pi's coding-assistant prompt.
      */
-    private fun writeChatPrompt(settings: PiSettings): File {
+    private fun writeChatPrompt(): File {
         val target = File(env.home, CHAT_PROMPT_FILE_RELATIVE)
         target.parentFile?.mkdirs()
+        // The conversation's own preset, not the settings page's one document: chat
+        // mode's prompt is a persona the reader chose for *this* conversation, and the
+        // launch is where that choice becomes the leading context.
+        val preset = chatPreset()
         val rendered = renderChatSystemPrompt(
-            template = settings.chatSystemPrompt,
+            template = preset.prompt,
             now = Instant.now(),
             zone = ZoneId.systemDefault(),
         )
@@ -2962,7 +3088,7 @@ class PiAgentSession internal constructor(
         // not be loaded, so the failure lands on a blank prompt plus pi's cwd block
         // rather than on the coding prompt this mode exists to remove.
         target.writeText(rendered.ifBlank { " " })
-        Log.i(TAG, "wrote $CHAT_PROMPT_FILE_RELATIVE for chat mode")
+        Log.i(TAG, "wrote $CHAT_PROMPT_FILE_RELATIVE for chat mode (preset ${preset.id})")
         return target
     }
 
@@ -4130,6 +4256,8 @@ internal fun PiSettings.toLaunchOptions(
     chatPromptFile: String? = null,
     /** The extension that makes [chatPromptFile] exact, or null when the image lacks it. */
     chatPromptExtension: String? = null,
+    /** The bundled web-access extension, when this chat conversation's switch is on. */
+    chatWebExtension: String? = null,
     /** This launch's mode; [PiSettings.agentMode] is only a new conversation's default. */
     mode: AgentMode = agentMode,
 ): PiLaunchOptions = PiLaunchOptions(
@@ -4149,4 +4277,5 @@ internal fun PiSettings.toLaunchOptions(
     mode = mode,
     systemPromptFile = chatPromptFile,
     chatPromptExtension = chatPromptExtension,
+    chatWebExtension = chatWebExtension,
 )

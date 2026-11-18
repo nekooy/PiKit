@@ -49,6 +49,13 @@ import kotlin.math.roundToInt
  * that was tapped, and a horizontal drag moves it under the finger and settles on
  * the nearer side — the control is small enough that a thumb expects to push it.
  *
+ * **What a change means is the caller's.** Today the drawer's foot uses it to *start* a
+ * conversation in the mode tapped and the history row's menu converts a saved one; the
+ * control draws the choice and reports it, and the page behind it decides whether that
+ * becomes a new process or a relaunch. That is why [onModeChange] is named for the
+ * answer rather than for a toggle: the switch has been both, and the shape of the
+ * control survived the change.
+ *
  * The labels are [MiuixTheme.textStyles.paragraph], the same running-prose size the
  * transcript's messages use. The first version used `title3`, which made a binary
  * switch taller and louder than the conversation it sits over; the switch is a

@@ -63,6 +63,21 @@ data class PiLaunchOptions(
      */
     val chatPromptExtension: String? = null,
     /**
+     * The bundled web-access extension, for a chat launch whose network-tools switch is on.
+     *
+     * Chat mode closes every extension with `--no-extensions`, and pi still honours one
+     * named by an explicit `--extension` (the same door [chatPromptExtension] uses). This
+     * is the second explicit door, and only the reader's per-conversation switch opens it.
+     * Null — the switch off, work mode, or a runtime image without the extension — keeps
+     * the conversation at `--no-tools`: no tool at all, which is chat mode's own promise.
+     *
+     * Two tool names are allowed beside it ([CHAT_WEB_TOOLS]): the extension registers
+     * search, source-check, fetch and stored-result tools, and chat mode offers the
+     * reader the two that mean "look something up" — a web search and the fetch of the
+     * page it found. The others are research machinery for the work agent.
+     */
+    val chatWebExtension: String? = null,
+    /**
      * The directory pi should treat as its agent directory, when a launch must not see
      * PiKit's own files in the real one. Null — every launch but one — uses pi's default,
      * `$HOME/.pi/agent`, which is where PiKit writes pi's settings, extensions and
@@ -137,6 +152,17 @@ data class PiLaunchOptions(
          * applies to the loadout restored from a chat-mode transcript.
          */
         val DEFAULT_TOOLS = listOf("read", "bash", "edit", "write", "grep", "find", "ls")
+
+        /**
+         * The tools a chat conversation may use, when its network-tools switch is on.
+         *
+         * The bundled `pi-web-access` extension's own names, and only the two that are
+         * about reaching something: `web_search` and `fetch_content`. They are passed to
+         * pi as a plain `--tools` list, which is a strict allowlist over built-in,
+         * extension and SDK tools — the form that hid every extension tool when the list
+         * did not name it, and the reason the entry has to name these at all.
+         */
+        val CHAT_WEB_TOOLS = listOf("web_search", "fetch_content")
 
         val THINKING_LEVELS = listOf("off", "minimal", "low", "medium", "high", "xhigh", "max")
     }
@@ -519,7 +545,17 @@ object PiProcessLauncher {
             // also removes the bundled web-access package; `--no-mcp` is restated
             // because MCP is a built-in extension and a future default must not
             // quietly bring a tool back. ARCHITECTURE §17 has the mode's design.
-            add("--no-tools")
+            //
+            // The tool door has two positions now, because the reader's per-conversation
+            // switch decides it: `--no-tools` when off (the promise exactly as it was),
+            // and the two network tools as a strict allowlist when on. The extension
+            // itself is loaded below by an explicit `--extension`, beside the chat prompt's.
+            if (options.chatWebExtension != null) {
+                add("--tools")
+                add(PiLaunchOptions.CHAT_WEB_TOOLS.joinToString(","))
+            } else {
+                add("--no-tools")
+            }
             add("--no-extensions")
             add("--no-skills")
             add("--no-prompt-templates")
@@ -531,6 +567,14 @@ object PiProcessLauncher {
             // nothing) instead of the document plus pi's `<cwd>` block. ARCHITECTURE
             // §17 has the measurement.
             options.chatPromptExtension?.takeIf { it.isNotBlank() }?.let {
+                add("--extension")
+                add(it)
+            }
+            // The second explicit door: the network tools, and only when the reader left
+            // them on for this conversation. It is loaded by path rather than by package
+            // because chat mode has discovery off; pi honours `--extension` beside
+            // `--no-extensions`, which is what the prompt extension already relies on.
+            options.chatWebExtension?.takeIf { it.isNotBlank() }?.let {
                 add("--extension")
                 add(it)
             }

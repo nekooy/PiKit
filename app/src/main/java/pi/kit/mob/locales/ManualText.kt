@@ -188,9 +188,11 @@ red stop button.
   ring and the send button; the ring opens the
   same report the cache chip does.
 - **The drawer's foot**: the **Work / Chat**
-  switch on the left and the gear into settings
-  on the right; a conversation is named in the
-  list, where the one on screen is highlighted.
+  switch on the left — tapping a side starts a
+  new conversation in that mode — and the gear
+  into settings on the right; a conversation is
+  named in the list, where the one on screen is
+  highlighted.
 
 ### Commands
 
@@ -468,16 +470,14 @@ with no key it searches through Exa's keyless
 endpoint, which may be rate-limited when it is
 busy.
 
-### The six controls
+### The controls
 
 | Row | What it sets |
 | --- | --- |
 | Web access | the master switch over searching and page reading |
 | Search workflow | raw results, a summary, or a curator page |
 | Search provider | which service is asked first; **Automatic** tries Exa, then a keyed one |
-| Inline content limit (characters) | how many characters of a page reach the model |
-| Fetch timeout (seconds) | how long a page fetch may take |
-| Proxy | the proxy the extension's requests carry |
+| Advanced | inline content limit, fetch timeout, proxy, fake-IP compatibility |
 
 ### The configuration file
 
@@ -534,8 +534,8 @@ tab: five rows in **Essentials** and four in
 This page has two halves. **Work mode** owns the
 folder a new conversation starts in, what the
 model is told, and the process that carries
-both. **Chat mode** owns one system prompt and
-nothing else.
+both. **Chat mode** owns its prompt presets, and
+the one optional tool the reader may lend them.
 
 ### What work mode gives the model
 
@@ -563,28 +563,36 @@ nothing else.
 
 ### Chat mode
 
-- **What it is**: the switch at the drawer's
-  foot. A conversation started in chat mode
-  loads no tools, extensions, skills, prompt
-  templates or `AGENTS.md`; before its first
-  message the only leading context is the system
-  prompt below — by default just the current
-  time — and if that document is empty, there is
+- **What it is**: a per-conversation mode. A
+  conversation in chat mode loads no tools,
+  skills, prompt templates or `AGENTS.md`;
+  before its first message the leading context
+  is its preset, by default just the current
+  time, and if that document is empty, there is
   no leading context at all.
-- **System prompt**: the one editable
-  document. It starts with `{{time}}`, the
-  current time; an empty document sends nothing.
-  `{{time}}` in the editor is where the time
-  goes — move it to move the injection point;
-  the actual timestamp is filled in at launch.
-- **Switching** changes this conversation's
-  mode; it does not open a new one. Its messages
-  and session file stay, and the relaunched
-  process continues from the same history, so if
-  nothing has been sent after the switch the
-  context is unchanged. Saving the prompt
-  restarts the agent, because pi reads it only
-  when the process starts.
+- **Presets**: the chat half of this page. A
+  preset is a system prompt with a name and an
+  avatar; whatever it leaves unset is taken from
+  the personalization page. The first chip above
+  the input switches this conversation's preset,
+  and the default preset is what a new chat
+  conversation starts with. `{{time}}` in a
+  prompt is where the current time goes; the
+  actual timestamp is filled in at launch.
+- **Web access**: the magnifier beside the
+  input, on by default and per conversation. On
+  lends the conversation `web_search` and
+  `fetch_content` and nothing else; off gives it
+  no tool at all.
+- **Mode**: the switch at the drawer's foot
+  starts a new conversation in the mode tapped.
+  It does not convert the one behind it. To
+  change a saved conversation's mode, hold its
+  row in the history list and choose the switch
+  row. Its messages stay, and its process is
+  relaunched. Saving a prompt restarts the
+  agent, because pi reads it only when the
+  process starts.
 
 ### Process and keep-alive
 

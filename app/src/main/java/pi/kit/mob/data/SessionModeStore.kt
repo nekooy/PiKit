@@ -34,14 +34,43 @@ internal class SessionModeStore(context: Context) {
         prefs.edit().putString(path, mode.code).apply()
     }
 
-    /** Drops a deleted conversation's entry so the preference file does not grow forever. */
+    /**
+     * Whether a chat conversation may use the bundled extension's network tools.
+     *
+     * A second record per session, in the same file and under a prefixed key, because the
+     * answer is the same kind of fact as the mode: a launch flag that belongs to the
+     * conversation. **True when there is no record**, which is both the default the
+     * composer's control shows and the behaviour every conversation written before the
+     * control existed has — chat mode with the extension loaded is the app's whole point
+     * of the switch being on by default.
+     *
+     * The prefix keeps the two maps apart in one preference file: a mode is stored under
+     * the bare path, and a boolean under `web:<path>`. One file rather than two because a
+     * backup entry per conversation kind is a list that grows, and both records already
+     * travel with the transcripts.
+     */
+    fun webAccessFor(path: String): Boolean {
+        if (path.isBlank()) return true
+        return prefs.getBoolean(KEY_WEB_PREFIX + path, true)
+    }
+
+    /** Records [enabled] for [path]; a blank path is a conversation with no file yet. */
+    fun setWebAccess(path: String, enabled: Boolean) {
+        if (path.isBlank()) return
+        prefs.edit().putBoolean(KEY_WEB_PREFIX + path, enabled).apply()
+    }
+
+    /** Drops a deleted conversation's entries so the preference file does not grow forever. */
     fun forget(path: String) {
         if (path.isBlank()) return
-        prefs.edit().remove(path).apply()
+        prefs.edit().remove(path).remove(KEY_WEB_PREFIX + path).apply()
     }
 
     companion object {
         /** Also listed in `BackupArchive.PREFERENCE_FILES` under conversations. */
         const val PREFS = "pikit_session_modes"
+
+        /** The key prefix the per-conversation web-access answer is stored under. */
+        private const val KEY_WEB_PREFIX = "web:"
     }
 }

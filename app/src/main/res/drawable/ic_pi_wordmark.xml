@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The whole PiKit pixel wordmark, for in-app use wherever the app draws its logo.
+
+    The path data is `ic_launcher_foreground`'s, character for character, moved so
+    its bounding box starts at the origin: the launcher's copy sits on (26.7, 45.6)
+    of the 108-unit adaptive-icon layer, and the group below subtracts exactly that.
+    That is why this file has no re-cut geometry — the app's logo and the icon a
+    reader taps are one drawing, so the tap and the screen it opens cannot read as
+    two different marks.
+
+    **The compact P is for the avatar and the shade only.** `ic_pi_mark.xml` is the
+    first letter alone, which is what survives a 28–34dp circle and a 24dp status
+    bar; at logo size the whole name is drawn instead, because a mark that is only a
+    letter is not the app's icon. The launcher foreground, this file, the avatar and
+    `ic_notification` are therefore four deliberate sizes of one drawing rather than
+    four logos.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="54.6dp"
+    android:height="16.8dp"
+    android:viewportWidth="54.6"
+    android:viewportHeight="16.8">
+    <group
+        android:translateX="-26.7"
+        android:translateY="-45.6">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M26.7,45.6 L26.7,62.4 L30.9,62.4 L30.9,58.2 L35.1,58.2 L35.1,54 L39.3,54 L39.3,45.6 Z M35.1,54 L30.9,54 L30.9,49.8 L35.1,49.8 Z M41.4,45.6 L41.4,49.8 L45.6,49.8 L45.6,45.6 Z M47.7,45.6 L47.7,62.4 L51.9,62.4 L51.9,54 L54,54 L54,58.2 L56.1,58.2 L56.1,62.4 L60.3,62.4 L60.3,58.2 L58.2,58.2 L58.2,54 L56.1,54 L56.1,49.8 L51.9,49.8 L51.9,45.6 Z M41.4,54 L41.4,62.4 L45.6,62.4 L45.6,54 Z M60.3,49.8 L60.3,45.6 L56.1,45.6 L56.1,49.8 Z M66.6,49.8 L66.6,45.6 L62.4,45.6 L62.4,49.8 Z M62.4,54 L62.4,62.4 L66.6,62.4 L66.6,54 Z M68.7,49.8 L68.7,54 L72.9,54 L72.9,62.4 L81.3,62.4 L81.3,58.2 L77.1,58.2 L77.1,54 L81.3,54 L81.3,49.8 L77.1,49.8 L77.1,45.6 L72.9,45.6 L72.9,49.8 Z" />
+    </group>
+</vector>

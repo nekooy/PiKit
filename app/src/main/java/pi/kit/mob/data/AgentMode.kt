@@ -18,9 +18,11 @@ import java.util.Locale
  * [CHAT] is not the work agent with some switches turned off. It launches pi with
  * every source of ambient context disabled — tools, extensions, skills, prompt
  * templates, `AGENTS.md` — and replaces pi's own coding-assistant prompt with one
- * short document held in [PiSettings.chatSystemPrompt]. The point is a request whose
+ * short document: the conversation's [ChatPreset]. The point is a request whose
  * leading context is only that document — and an empty document is no leading context
- * at all. ARCHITECTURE §17 has the launch flags and the prompt template's editor.
+ * at all. The one exception the reader controls is the two network tools, lent by the
+ * conversation's own switch. ARCHITECTURE §17 has the launch flags, the presets and the
+ * measured request.
  */
 enum class AgentMode(val code: String) {
     WORK("work"),
