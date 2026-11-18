@@ -76,6 +76,7 @@ The runtime images are generated rather than committed (~110 MB of archives per 
 first:
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — the design decisions and the constraints behind them.
+- [architecture/](docs/architecture/) — the chapters themselves, one topic per file.
 - [BUILDING.md](docs/BUILDING.md) — prerequisites, the image builder, artifacts, signing, the device workflow.
 - [RELEASING.md](docs/RELEASING.md) — the version, the tag, and the signing that comes first.
 - [MAINTAINING.md](docs/MAINTAINING.md) — the recurring chores: upstream pi, packages, dependencies.
