@@ -532,17 +532,20 @@ internal object EnglishStrings : Strings {
         override val baseUrlNote =
             "The base URL of the API, including any version segment the provider " +
                 "documents — for example https://relay.example.com/v1. The model id " +
-                "below is sent to this endpoint. A bare host gains /v1 automatically." +
-                " The provider list's `Custom endpoint` row is a self-configured " +
-                "endpoint for any compatible relay, and its API protocol can be " +
-                "changed."
+                "below is sent to this endpoint. Which way the version segment goes " +
+                "follows the API protocol, not the URL box: the OpenAI shapes gain /v1 " +
+                "on a bare host, and Anthropic Messages drops a trailing /v1 because its " +
+                "client adds that segment itself. The provider list's `Custom endpoint` " +
+                "row is a self-configured endpoint for any compatible relay, and its API " +
+                "protocol can be changed."
         override val baseUrlOptionalNote =
             "Optional. Leave empty to use the provider's own endpoint; fill it in to " +
                 "send requests through a proxy or relay (for example " +
-                "https://relay.example.com/v1). A bare host gains /v1 automatically." +
-                " The provider list's `Custom endpoint` row is a self-configured " +
-                "endpoint for any compatible relay, and its API protocol can be " +
-                "changed."
+                "https://relay.example.com/v1). The version segment follows the API " +
+                "protocol: a bare host gains /v1 for the OpenAI shapes, and Anthropic " +
+                "Messages drops a trailing /v1. The provider list's `Custom endpoint` " +
+                "row is a self-configured endpoint for any compatible relay, and its API " +
+                "protocol can be changed."
         override val needBaseUrl = "A custom endpoint needs its base URL."
         override val invalidBaseUrl =
             "The endpoint must be an http(s) URL with a host name, for example " +

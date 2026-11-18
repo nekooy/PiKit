@@ -2,7 +2,9 @@ package pi.kit.mob.pi
 
 import android.content.Context
 import android.util.Log
+import pi.kit.mob.data.CustomApi
 import pi.kit.mob.data.PiProvider
+import pi.kit.mob.data.apiName
 import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.env.SafeDelete
 import pi.kit.mob.env.TermuxEnv
@@ -195,11 +197,19 @@ class ModelDiscoveryClient(
      *   endpoint; for a built-in one it is a proxy in front of the real API and is
      *   asked first, falling back to pi's known URL (and then pi's catalogue) when
      *   it does not answer with a model list.
+     * @param api the wire protocol the endpoint speaks — the form's `CustomApi` value for
+     *   a custom endpoint, blank (meaning "read it from pi's catalogue, else assume the
+     *   OpenAI shape") for a built-in one. It decides two things the request cannot get
+     *   right by guessing: where `/models` sits under the base, and whether the key
+     *   travels as a bearer token or as `x-api-key`. An Anthropic-shaped endpoint
+     *   answers `401` to a bearer token, which this app would report as "the key was
+     *   rejected" for a key that is fine.
      */
     suspend fun discover(
         provider: PiProvider,
         apiKey: String,
         baseUrl: String = "",
+        api: String = "",
     ): ModelDiscovery {
         val key = apiKey.trim()
         val isCustom = provider in PiProvider.needsBaseUrl
@@ -211,7 +221,28 @@ class ModelDiscoveryClient(
         }
 
         val failures = mutableListOf<DiscoveryProblem>()
-        val override = normalizeApiBaseUrl(baseUrl)
+        // A custom endpoint's protocol is the form's answer; a built-in one's is what
+        // pi's own catalogue on disk says, read once and only when there is an endpoint
+        // to spell. Silence there leaves the OpenAI shape, which is what every release
+        // before this one assumed for every provider. The read is on the IO dispatcher
+        // because this function is called from a composable's scope: the store is pi's
+        // whole per-provider catalogue, and parsing it on the main thread would be a
+        // visible stall before a request that is about to wait on the network anyway.
+        val protocol = api.ifBlank {
+            if (!isCustom && baseUrl.isNotBlank()) {
+                withContext(Dispatchers.IO) {
+                    cataloguedApi(
+                        storeProviderModels(
+                            File(env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME),
+                            provider.id,
+                        ).values,
+                    )
+                }
+            } else {
+                ""
+            }
+        }
+        val override = normalizeApiBaseUrl(baseUrl, protocol)
 
         // A user-supplied endpoint is asked first: for a custom provider it is the only
         // one, and for a built-in it is the proxy the profile is pointed at. Several
@@ -219,7 +250,7 @@ class ModelDiscoveryClient(
         // `$base/models` and `$base/v1/models` are both real, and a bare host that this
         // app already normalised to `…/v1` is the common OpenAI-compatible case.
         val endpoints = if (override.isNotEmpty()) {
-            modelListEndpoints(provider, override)
+            modelListEndpoints(provider, override, protocol)
         } else if (!isCustom) {
             listOfNotNull(provider.modelsEndpoint())
         } else {
@@ -500,15 +531,29 @@ class ModelDiscoveryClient(
      * list at the parent. Each is a real layout this app has to be willing to
      * ask about once; 404 is what moves on to the next, and a rejected key stops
      * the walk ([ModelDiscovery.Failure.fatal]).
+     *
+     * [api] decides which of the two leads, and it is not a preference: an
+     * `anthropic-messages` base is the one its client appends `/v1/messages` to, so
+     * *its* list is at `<base>/v1/models` and asking `<base>/models` first costs a
+     * round trip on every press for a URL this app knows the shape of.
      */
-    private fun modelListEndpoints(provider: PiProvider, base: String): List<ModelsEndpoint> =
-        modelListUrls(base).map { url ->
+    private fun modelListEndpoints(provider: PiProvider, base: String, api: String): List<ModelsEndpoint> =
+        modelListUrls(base, api).map { url ->
             ModelsEndpoint(
                 provider = provider,
                 url = { url },
                 modelsPath = MODELS_RESPONSE_PATHS,
                 headers = { key ->
-                    if (key.isEmpty()) emptyMap() else mapOf("Authorization" to "Bearer $key")
+                    if (key.isEmpty()) {
+                        emptyMap()
+                    } else if (api == CustomApi.ANTHROPIC_MESSAGES.id) {
+                        // The Messages API's own credential header. A bearer token is
+                        // what an Anthropic-shaped gateway answers `401` to, and the
+                        // walk would report that as a rejected key.
+                        anthropicHeaders(key)
+                    } else {
+                        mapOf("Authorization" to "Bearer $key")
+                    }
                 },
                 isOverride = true,
             )
@@ -875,14 +920,7 @@ private fun PiProvider.modelsEndpoint(): ModelsEndpoint? = when (this) {
         provider = this,
         url = { "https://api.anthropic.com/v1/models" },
         modelsPath = listOf("data"),
-        headers = { key ->
-            mapOf(
-                "x-api-key" to key,
-                // Without this header the API rejects the request regardless of
-                // the key.
-                "anthropic-version" to "2023-06-01",
-            )
-        },
+        headers = { key -> anthropicHeaders(key) },
     )
 
     // Gemini authenticates with a query parameter rather than a header, and it
@@ -974,6 +1012,45 @@ private fun PiProvider.bearer(url: String): ModelsEndpoint = ModelsEndpoint(
 )
 
 /**
+ * The Messages API's credential headers.
+ *
+ * Not a bearer token, and not optional: an Anthropic-shaped endpoint reads the key from
+ * `x-api-key`, so a `Bearer` request is answered `401` — which the model page reports as
+ * a rejected key, for a key that is fine. `anthropic-version` is required by the same
+ * API: without it the request is refused whatever the credential says.
+ *
+ * One copy, shared by the provider's own endpoint and by a user-supplied endpoint whose
+ * protocol is `anthropic-messages`; two spellings of these two headers is how one of them
+ * ends up missing from the path that was added last.
+ */
+private fun anthropicHeaders(key: String): Map<String, String> = mapOf(
+    "x-api-key" to key,
+    "anthropic-version" to "2023-06-01",
+)
+
+/**
+ * The wire protocol every model of one provider speaks in pi's catalogue, or blank when
+ * the catalogue says nothing or the models disagree.
+ *
+ * This is what decides the *shape* of an endpoint override (`/v1` or not — see
+ * [normalizeApiBaseUrl]) and the model list's credential header, without this app
+ * keeping a second copy of pi's provider table that would rot the day pi adds a
+ * provider. The input is the raw entries of `models-store.json` ([storeProviderModels]),
+ * not the stripped [storeModelFacts]: `api` is one of the host fields that reader drops.
+ *
+ * Silence is the right answer for a mixed provider — OpenRouter lists
+ * `anthropic-messages`, `openai-completions` and others under one id, and its own
+ * entries carry a per-model `baseUrl` for exactly that reason. A single answer there
+ * would be a guess about which half the user's relay speaks.
+ */
+internal fun cataloguedApi(models: Collection<JsonObject>): String =
+    models.map { it.apiName() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .singleOrNull()
+        .orEmpty()
+
+/**
  * Candidate response envelopes a model list can arrive in, most common first.
  *
  * OpenAI and every relay that copies it answer `{"data":[…]}`; several gateways
@@ -988,20 +1065,29 @@ private val MODELS_RESPONSE_PATHS = listOf("data", "models")
  *
  * Top-level and pure so the path shapes are pinned by a test rather than by
  * whichever relay the next report happens to use. [normalizeApiBaseUrl] runs
- * first, so a bare host is already `…/v1` when the candidates are built — which
- * is why `$base/models` leads and `$base/v1/models` is the fallback for a base
- * that named some other path.
+ * first, so for the OpenAI shapes a bare host is already `…/v1` when the
+ * candidates are built — which is why `$base/models` leads there. An
+ * `anthropic-messages` base is the one its client appends `/v1/messages` to, so it
+ * leads with `$base/v1/models` instead; the order is only about which request is
+ * wasted first, since both are asked until one answers.
  */
-internal fun modelListUrls(rawBase: String): List<String> {
-    val base = normalizeApiBaseUrl(rawBase)
+internal fun modelListUrls(rawBase: String, api: String = CustomApi.DEFAULT_ID): List<String> {
+    val base = normalizeApiBaseUrl(rawBase, api)
     if (base.isEmpty()) return emptyList()
-    val candidates = linkedSetOf("$base/models")
+    // A base that already names the version lists at it and may also list at the
+    // parent; one that names some other path is asked as typed and one version under
+    // it; a version this app knows not to be OpenAI's (`/v1beta`) is asked only as typed.
     if (base.endsWith("/v1")) {
-        candidates += "${base.removeSuffix("/v1")}/models"
-    } else if (!base.endsWith("/v1beta") && !base.endsWith("/compatible-mode/v1")) {
-        candidates += "$base/v1/models"
+        return listOf("$base/models", "${base.removeSuffix("/v1")}/models")
     }
-    return candidates.toList()
+    if (base.endsWith("/v1beta") || base.endsWith("/compatible-mode/v1")) {
+        return listOf("$base/models")
+    }
+    return if (api == CustomApi.ANTHROPIC_MESSAGES.id) {
+        listOf("$base/v1/models", "$base/models")
+    } else {
+        listOf("$base/models", "$base/v1/models")
+    }
 }
 
 /**

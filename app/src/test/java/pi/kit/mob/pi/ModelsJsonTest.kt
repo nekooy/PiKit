@@ -13,6 +13,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import pi.kit.mob.data.CustomApi
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
@@ -246,7 +247,7 @@ class ModelsJsonTest {
                 ours = ours,
                 overrides = overrides,
                 baseUrl = baseUrl,
-                writtenBaseUrl = writtenBaseUrl,
+                writtenBaseUrls = listOf(writtenBaseUrl).filter { it.isNotEmpty() },
             ),
         )
 
@@ -1156,6 +1157,82 @@ class ModelsJsonTest {
             "https://api.deepseek.com",
             text(handwritten.provider("deepseek"), "baseUrl"),
         )
+    }
+
+    /**
+     * The endpoint's version segment is the protocol's, and a built-in provider's
+     * override goes through the same rule a custom endpoint does.
+     *
+     * pi hands an `anthropic-messages` model's `baseUrl` straight to `@anthropic-ai/sdk`,
+     * which posts `<base>/v1/messages`. A `/v1` in the override — the spelling a relay's
+     * dashboard documents for its *OpenAI* endpoint, and the one this app itself used to
+     * append — is therefore one segment too many: measured on a device as
+     * `404 {"error":{"message":"Invalid URL (POST /v1/v1/messages)"…}}` for a key and a
+     * model that were both correct.
+     */
+    @Test
+    fun `an anthropic override is written without the version its client adds`() {
+        val definitions = modelDefinitions(
+            provider = PiProvider.ANTHROPIC,
+            profile = ModelProfile(
+                id = "a",
+                provider = "anthropic",
+                apiKey = "sk-a",
+                modelId = "claude-sonnet-4-5",
+                baseUrl = "https://relay.example.com/v1",
+                writtenBaseUrl = "https://relay.example.com/v1",
+            ),
+            basis = "",
+            api = CustomApi.ANTHROPIC_MESSAGES.id,
+        )
+
+        val written = modelsJsonWith(
+            existing = JsonObject(emptyMap()),
+            entries = emptyMap(),
+            definitions = definitions,
+        )
+        assertEquals(
+            "https://relay.example.com",
+            text(written.provider("anthropic"), "baseUrl"),
+        )
+    }
+
+    /**
+     * A withdrawal still finds the spelling the build before this one wrote.
+     *
+     * The record in the profile is the raw field, and the file holds what the writer of
+     * the day produced: an `anthropic-messages` endpoint completed with `/v1`. Both are
+     * compared exactly — [ModelDefinitions.writtenBaseUrls] — so the stale override comes
+     * out while a `baseUrl` the user wrote by hand still survives.
+     */
+    @Test
+    fun `a withdrawal finds the spelling an earlier build wrote`() {
+        val definitions = modelDefinitions(
+            provider = PiProvider.ANTHROPIC,
+            profile = ModelProfile(
+                id = "a",
+                provider = "anthropic",
+                apiKey = "sk-a",
+                modelId = "claude-sonnet-4-5",
+                // The field was cleared; the record is what was typed before that.
+                writtenBaseUrl = "https://relay.example.com/v1",
+            ),
+            basis = "",
+            api = CustomApi.ANTHROPIC_MESSAGES.id,
+        )
+
+        val cleared = modelsJsonWith(
+            existing = json(
+                """{"providers":{"anthropic":{"name":"Proxy key","baseUrl":"https://relay.example.com/v1"}}}""",
+            ),
+            entries = emptyMap(),
+            definitions = definitions,
+        )
+        assertNull(
+            "the override this app wrote comes back out",
+            cleared.provider("anthropic")["baseUrl"],
+        )
+        assertEquals("Proxy key", text(cleared.provider("anthropic"), "name"))
     }
 
     /**

@@ -643,8 +643,15 @@ internal fun ModelEditPage(
             // it is, the launch path drops it and a custom endpoint dies with
             // `Unknown provider "pikit-custom"` — neither of which names the field.
             // The check is on the *normalised* value because that is what the writer
-            // stores; asking "is the field non-blank" is how the two disagree.
-            baseUrl.isNotBlank() && normalizeApiBaseUrl(baseUrl).isEmpty() ->
+            // stores; asking "is the field non-blank" is how the two disagree. Asked with
+            // the form's own protocol, so that "what Save will write" is one answer here
+            // and in the launch path rather than two that happen to agree on the URLs
+            // either of them was tried with.
+            baseUrl.isNotBlank() &&
+                normalizeApiBaseUrl(
+                    baseUrl,
+                    if (isCustomEndpoint) CustomApi.fromId(api).id else "",
+                ).isEmpty() ->
                 text.settings.invalidBaseUrl
             // A provider with a list but nothing ticked would launch with no model. The
             // row's mark is the choice, so this asks for one rather than picking for the
@@ -1054,6 +1061,13 @@ internal fun ModelEditPage(
                                         provider = chosen,
                                         apiKey = apiKey,
                                         baseUrl = baseUrl.trim(),
+                                        // The protocol the form says this endpoint speaks
+                                        // — the same value the launch writes into
+                                        // `models.json`. It decides where `/models` sits
+                                        // and whether the key travels as a bearer token
+                                        // or as `x-api-key`; a built-in provider leaves it
+                                        // to the catalogue.
+                                        api = if (isCustomEndpoint) CustomApi.fromId(api).id else "",
                                     )
                                 ) {
                                     is ModelDiscovery.Success -> {

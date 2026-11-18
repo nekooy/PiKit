@@ -12,6 +12,11 @@ import org.junit.Test
  * `/v1`, and a relay reached one segment short fails as three connection retries.
  * A URL that already names a path is left alone — `https://gateway.example.com/openai`
  * is a real shape and rewriting it would break the one endpoint that worked.
+ *
+ * Which way the version segment goes is the *protocol's* answer rather than this
+ * function's taste, and the other direction is the reported `404 … POST
+ * /v1/v1/messages`: `anthropic-messages` reaches the endpoint through
+ * `@anthropic-ai/sdk`, which appends `/v1/messages` to whatever base it is given.
  */
 class NormalizeApiBaseUrlTest {
 
@@ -47,6 +52,51 @@ class NormalizeApiBaseUrlTest {
             "https://generativelanguage.googleapis.com/v1beta",
             normalizeApiBaseUrl("https://generativelanguage.googleapis.com/v1beta"),
         )
+    }
+
+    @Test
+    fun `an anthropic base never carries the version its client appends`() {
+        // `@anthropic-ai/sdk` is handed this base and posts `<base>/v1/messages` itself,
+        // so a `/v1` here is the doubled path of the report:
+        // `404 {"error":{"message":"Invalid URL (POST /v1/v1/messages)"…}}`.
+        val anthropic = CustomApi.ANTHROPIC_MESSAGES.id
+        assertEquals("https://cf.api.fan", normalizeApiBaseUrl("https://cf.api.fan", anthropic))
+        assertEquals("https://cf.api.fan", normalizeApiBaseUrl("https://cf.api.fan/v1", anthropic))
+        assertEquals("https://cf.api.fan", normalizeApiBaseUrl("  https://cf.api.fan/v1/  ", anthropic))
+        // A gateway's own prefix is not the version segment: it stays, the `/v1` that a
+        // provider's dashboard documents for its OpenAI endpoint comes off.
+        assertEquals(
+            "https://api.minimax.io/anthropic",
+            normalizeApiBaseUrl("https://api.minimax.io/anthropic/v1", anthropic),
+        )
+        assertEquals(
+            "https://gateway.example.com/anthropic",
+            normalizeApiBaseUrl("https://gateway.example.com/anthropic", anthropic),
+        )
+        // A query is stripped the same way, and the shape survives it.
+        assertEquals(
+            "https://cf.api.fan",
+            normalizeApiBaseUrl("https://cf.api.fan/v1?token=abc", anthropic),
+        )
+        assertEquals(
+            "https://cf.api.fan",
+            normalizeApiBaseUrl("https://cf.api.fan?token=abc", anthropic),
+        )
+    }
+
+    @Test
+    fun `the reported request path is not doubled`() {
+        // The whole chain the report came through: a relay's OpenAI base pasted onto a
+        // profile whose protocol is Anthropic, written into `models.json` by this app.
+        val entry = CustomEndpoint.providerObject(
+            baseUrl = "https://cf.api.fan/v1",
+            modelIds = listOf("deepseek-flash"),
+            api = CustomApi.ANTHROPIC_MESSAGES.id,
+        )!!
+        val base = entry["baseUrl"]!!.toString().trim('"')
+        assertEquals("https://cf.api.fan", base)
+        // What pi's Anthropic client will ask for, `path` being `/v1/messages`.
+        assertEquals("https://cf.api.fan/v1/messages", "$base/v1/messages")
     }
 
     @Test

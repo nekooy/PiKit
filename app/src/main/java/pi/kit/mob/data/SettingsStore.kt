@@ -120,43 +120,81 @@ enum class PiProvider(val id: String, val envVar: String, val label: String) {
 }
 
 /**
- * The base URL PiKit hands pi, ready for an OpenAI-compatible request path.
+ * The base URL PiKit hands pi, completed for the request path of [api].
  *
- * Trailing slashes are trimmed, and `/v1` is appended when the URL names a bare
- * host. That second half is not politeness: pi's `openai-completions` path posts
- * to `<baseUrl>/chat/completions`, every documented example in pi's own
- * `docs/models.md` carries `/v1`, and a relay reached at `https://host` instead
- * of `https://host/v1` fails as three connection retries — the report of severe
- * lag and frequent disconnects on a custom endpoint that was one path segment
- * short. A URL that already names a path is left alone: relays differ on where
- * the version segment belongs, and `https://gateway.example.com/openai` is a
- * real shape this must not rewrite.
+ * Trailing slashes are trimmed, and the version segment is settled the way the
+ * **client that will post to it** builds its path:
+ *
+ *  * `openai-completions` and `openai-responses` post to `<baseUrl>/chat/completions`
+ *    and `<baseUrl>/responses` through the OpenAI SDK, whose base every one of pi's
+ *    documented examples puts `/v1` on. A bare host therefore gains `/v1`: a relay
+ *    reached at `https://host` instead of `https://host/v1` fails as three connection
+ *    retries — the report of severe lag and frequent disconnects on a custom endpoint
+ *    that was one path segment short. A URL that already names a path is left alone,
+ *    because relays differ on where the version belongs and
+ *    `https://gateway.example.com/openai` is a real shape this must not rewrite.
+ *  * `anthropic-messages` posts through `@anthropic-ai/sdk` with
+ *    `baseURL: model.baseUrl`, and the SDK appends **`/v1/messages` itself**
+ *    (`resources/messages`: `this._client.post('/v1/messages', …)`, `buildURL` being
+ *    `baseURL + path`). Its base is therefore the host — or the gateway's own prefix —
+ *    and never a `/v1`: pi's own catalogue states exactly that for every provider it
+ *    speaks this protocol to (`https://api.anthropic.com`,
+ *    `https://api.minimax.io/anthropic`, and OpenRouter's per-model
+ *    `https://openrouter.ai/api`). Completing one with `/v1` doubles the segment, which
+ *    is the reported `404 … Invalid URL (POST /v1/v1/messages)`: a 404 for the URL the
+ *    app wrote, not a verdict on the key or the model. A trailing `/v1` is removed for
+ *    the same reason — a relay's dashboard documents that spelling for its
+ *    *OpenAI*-shaped endpoint, and the same string pasted onto an Anthropic-shaped one
+ *    is one segment too long even though it looks right.
+ *
+ * Anything that is not an absolute http(s) URL is refused rather than completed:
+ * `localhost:11434` has a scheme-like colon and no host from `URI`'s point of view, and
+ * writing it into `models.json` produces a provider that cannot be reached and an error
+ * that names neither the field nor the missing scheme.
  */
-fun normalizeApiBaseUrl(raw: String): String {
+fun normalizeApiBaseUrl(raw: String, api: String = CustomApi.DEFAULT_ID): String {
     val base = raw.trim().trimEnd('/')
     if (base.isEmpty()) return base
     val uri = runCatching { java.net.URI(base) }.getOrNull() ?: return ""
-    // Anything that is not an absolute http(s) URL is refused rather than
-    // completed: `localhost:11434` has a scheme-like colon and no host from
-    // `URI`'s point of view, and writing it into `models.json` produces a
-    // provider that cannot be reached and an error that names neither the field
-    // nor the missing scheme.
     val scheme = uri.scheme?.lowercase() ?: return ""
     if (scheme != "http" && scheme != "https") return ""
     if (uri.host.isNullOrBlank()) return ""
     val path = uri.path ?: ""
-    val completed = if (path.isEmpty() || path == "/") "$base/v1" else base
+    if (uri.rawQuery == null && uri.fragment == null) return completeBasePath(base, path, api)
     // A query or fragment is not part of the API root. Left in place it is
     // *appended to* by every path this app builds — `https://h/v1?x=1/models`
     // is what `$base/models` becomes — and the request goes somewhere the
     // provider never named. Rebuilt without them rather than truncated at `?`,
     // so a base that legitimately carries userinfo or a port survives.
-    if (uri.rawQuery == null && uri.fragment == null) return completed
     return runCatching {
-        java.net.URI(uri.scheme, uri.userInfo, uri.host, uri.port, uri.path, null, null).toString()
-            .trimEnd('/')
-            .let { if (uri.path.isNullOrEmpty() || uri.path == "/") "$it/v1" else it }
+        java.net.URI(
+            uri.scheme,
+            uri.userInfo,
+            uri.host,
+            uri.port,
+            completeBasePath(path, path, api).ifEmpty { null },
+            null,
+            null,
+        ).toString().trimEnd('/')
     }.getOrDefault("")
+}
+
+/**
+ * [base] with its version segment settled for [api] — see [normalizeApiBaseUrl].
+ *
+ * [base] is the text to return and [path] is that text's parsed path, kept apart
+ * because `URI.path` is decoded while [base] is what the user typed, and a percent
+ * escape in a path must survive.
+ */
+private fun completeBasePath(base: String, path: String, api: String): String {
+    val trimmed = path.trimEnd('/')
+    return when {
+        api == CustomApi.ANTHROPIC_MESSAGES.id && trimmed.endsWith("/v1") ->
+            base.removeSuffix("/v1")
+        api == CustomApi.ANTHROPIC_MESSAGES.id -> base
+        trimmed.isEmpty() -> "$base/v1"
+        else -> base
+    }
 }
 
 /**
@@ -179,7 +217,13 @@ enum class CustomApi(val id: String) {
     /** OpenAI chat completions — `<baseUrl>/chat/completions`. The common case. */
     OPENAI_COMPLETIONS("openai-completions"),
 
-    /** Anthropic Messages API — the `/v1/messages` shape. */
+    /**
+     * Anthropic Messages API — the `/v1/messages` shape.
+     *
+     * The `/v1` is the *client's*: `@anthropic-ai/sdk` is handed the base and posts
+     * `<base>/v1/messages`, so the base this app writes must not carry it. See
+     * [normalizeApiBaseUrl], which is where that spelling is decided.
+     */
     ANTHROPIC_MESSAGES("anthropic-messages"),
 
     /** OpenAI Responses API — `/v1/responses`. */
@@ -255,10 +299,12 @@ object CustomEndpoint {
     /**
      * The document pi expects, or null when there is nothing to register.
      *
-     * A trailing slash is trimmed. A bare host also gains `/v1` — see
-     * [normalizeApiBaseUrl], which is what turns `https://relay.example.com` into
-     * the path pi's OpenAI client actually posts to. A user who copies
-     * `https://example.com/v1` from a provider's dashboard is left alone.
+     * A trailing slash is trimmed, and the version segment follows [api]: a bare host
+     * gains `/v1` for the OpenAI shapes, and an `anthropic-messages` base loses one
+     * because its client appends `/v1/messages` itself. See [normalizeApiBaseUrl],
+     * which is what turns `https://relay.example.com` into the path pi actually posts
+     * to. A user who copies `https://example.com/v1` from a provider's dashboard is
+     * left alone — unless the protocol says that segment is the client's to add.
      *
      * [modelIds] is *every* model the profile offers, not only the active one.
      * pi answers `set_model` by looking the model up in the catalog it built at
@@ -288,7 +334,12 @@ object CustomEndpoint {
          */
         apiKey: String = API_KEY_ENV,
     ): JsonObject? {
-        val base = normalizeApiBaseUrl(baseUrl)
+        val protocol = api.ifBlank { CustomApi.DEFAULT_ID }
+        // The protocol decides what the base URL looks like, and that is not a detail:
+        // pi hands `anthropic-messages`' `baseUrl` straight to `@anthropic-ai/sdk`,
+        // which appends `/v1/messages` itself, so a `/v1` completed here is the
+        // reported `404 … POST /v1/v1/messages`. See [normalizeApiBaseUrl].
+        val base = normalizeApiBaseUrl(baseUrl, protocol)
         val models = modelIds.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (base.isEmpty() || models.isEmpty()) return null
 
@@ -299,7 +350,7 @@ object CustomEndpoint {
         return buildJsonObject {
             put("name", "PiKit custom endpoint")
             put("baseUrl", base)
-            put("api", api.ifBlank { CustomApi.DEFAULT_ID })
+            put("api", protocol)
             put("apiKey", apiKey)
             put(
                 "models",

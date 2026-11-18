@@ -51,6 +51,21 @@ class ModelListShapeTest {
     }
 
     @Test
+    fun `an anthropic base is asked at the version its client appends, first`() {
+        // The base carries no `/v1` of its own (see `normalizeApiBaseUrl`), so the list
+        // lives one segment under it — and asking the parent first would spend a round
+        // trip on a 404 for a URL whose shape this app knows.
+        val anthropic = pi.kit.mob.data.CustomApi.ANTHROPIC_MESSAGES.id
+        assertEquals(
+            listOf(
+                "https://cf.api.fan/v1/models",
+                "https://cf.api.fan/models",
+            ),
+            modelListUrls("https://cf.api.fan/v1", anthropic),
+        )
+    }
+
+    @Test
     fun `empty base yields no candidates`() {
         assertEquals(emptyList<String>(), modelListUrls("   "))
     }

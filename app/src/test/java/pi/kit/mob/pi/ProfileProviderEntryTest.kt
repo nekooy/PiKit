@@ -105,6 +105,31 @@ class ProfileProviderEntryTest {
     }
 
     @Test
+    fun `an anthropic entry's endpoint carries no version of its own`() {
+        // The protocol is decided first, because it decides the shape. This entry's
+        // `api` hands its `baseUrl` to `@anthropic-ai/sdk`, which appends
+        // `/v1/messages`; a `/v1` here is the reported
+        // `404 … Invalid URL (POST /v1/v1/messages)`.
+        val entry = builtInProviderObject(
+            profile(
+                provider = "anthropic",
+                modelId = "claude-sonnet-4-5",
+                baseUrl = "https://relay.example.com/v1",
+            ),
+            mapOf(
+                "claude-sonnet-4-5" to fact(
+                    id = "claude-sonnet-4-5",
+                    baseUrl = "https://api.anthropic.com",
+                    api = "anthropic-messages",
+                ),
+            ),
+        )!!
+
+        assertEquals("anthropic-messages", entry["api"]!!.jsonPrimitive.content)
+        assertEquals("https://relay.example.com", entry["baseUrl"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `nothing to copy and no endpoint of its own is no entry`() {
         // Inventing a host here is the failure mode this refuses: pi would answer a `401`
         // from an address the user never named, which reads as a bad key.
@@ -239,8 +264,25 @@ class ProfileProviderEntryTest {
     }
 
     @Test
-    fun `the stripped reader and the whole one are not interchangeable`() {
-        val file = store(fact())
+    fun `the protocol is read from the catalogue only when every model agrees`() {
+        // A provider whose models disagree (OpenRouter types each model separately and
+        // gives the Anthropic-shaped ones their own `baseUrl`) must not be described by
+        // one protocol: the endpoint's shape would then be right for half of them.
+        assertEquals("anthropic-messages", cataloguedApi(listOf(fact(api = "anthropic-messages"))))
+        assertEquals(
+            "",
+            cataloguedApi(
+                listOf(
+                    fact(api = "anthropic-messages"),
+                    fact(id = "deepseek-v4-pro", api = "openai-completions"),
+                ),
+            ),
+        )
+        assertEquals("", cataloguedApi(emptyList()))
+    }
+
+    @Test
+    fun `the stripped reader and the whole one are not interchangeable`() {        val file = store(fact())
 
         assertFalse(
             "the model half cannot name a host",

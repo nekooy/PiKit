@@ -5,6 +5,7 @@ import android.os.PowerManager
 import android.util.Log
 import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.ChatPreset
+import pi.kit.mob.data.CustomApi
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
@@ -2836,18 +2837,23 @@ class PiAgentSession internal constructor(
         // not run is not.
         val provider = settings.provider
         val customInUse = provider != null && provider in PiProvider.needsBaseUrl
+        // The store is read once here and answers two questions: which ids pi's catalogue
+        // knows *right now* (the routing widening below), and — from the same model
+        // objects, `api` included — which wire protocol this provider speaks, which is
+        // what the endpoint override has to be spelled for. Reading the stripped
+        // `storeModelFacts` would answer the first and not the second: it drops `api`
+        // because a relay must not inherit it.
+        val storeModels = if (provider != null && !customInUse) {
+            storeProviderModels(File(env.piConfigDir, CATALOGUE_STORE_NAME), provider.id)
+        } else {
+            emptyMap()
+        }
         val definitions = modelDefinitions(
             provider,
             profile,
             catalogueBasis(env, provider),
-            if (provider != null && !customInUse) {
-                storeModelFacts(
-                    File(env.piConfigDir, CATALOGUE_STORE_NAME),
-                    provider.id,
-                ).keys
-            } else {
-                emptySet()
-            },
+            currentCatalogueIds = storeModels.keys,
+            api = cataloguedApi(storeModels.values),
         )
         val required = customInUse || entries.isNotEmpty() || hasModelsJsonEntries(definitions)
 
@@ -2862,7 +2868,7 @@ class PiAgentSession internal constructor(
             // keys and not about withdrawals: the active provider is always in the
             // map so that an entry turned off — or one a previous build wrote — can
             // be withdrawn, and that is only worth doing to a file that exists.
-            // The same is true of a cleared `baseUrl`: `writtenBaseUrl` alone must
+            // The same is true of a cleared `baseUrl`: `writtenBaseUrls` alone must
             // not conjure a file. But a non-empty `baseUrl` *is* an entry to write
             // — the whole point of pointing a built-in provider at a relay — and
             // an `overrides` map is one too. Checking only `wanted` used to drop
@@ -3356,7 +3362,7 @@ internal fun settingsWithPiDefaults(
  * that does not exist yet.
  *
  * Withdrawals are deliberately absent: an id in [ModelDefinitions.ours], or a
- * [ModelDefinitions.writtenBaseUrl] with a blank [ModelDefinitions.baseUrl], are
+ * [ModelDefinitions.writtenBaseUrls] with a blank [ModelDefinitions.baseUrl], are
  * statements about a file that is already there, and conjuring a file to take
  * something back out of it is nonsense. What *is* present is the three things
  * the writer puts in: `models` entries, `modelOverrides` entries, and the
@@ -3514,17 +3520,19 @@ internal fun modelsJsonWith(
         val next = LinkedHashMap<String, JsonElement>(current.orEmpty())
         // The endpoint override is PiKit's statement about where this provider lives.
         // A non-empty field rewrites every model's `baseUrl`. An empty one withdraws a
-        // previous override *of this app's* — matched against `writtenBaseUrl`, so a
+        // previous override *of this app's* — matched against `writtenBaseUrls`, so a
         // `baseUrl` the user wrote into `models.json` by hand survives a profile that
         // has never named an endpoint. Leaving a stale override in place after the
         // field was cleared would keep routing the provider through a proxy the user
         // had turned off.
+        val storedBaseUrl = (next["baseUrl"] as? JsonPrimitive)?.contentOrNull
         when {
             definition.baseUrl.isNotEmpty() ->
                 next["baseUrl"] = JsonPrimitive(definition.baseUrl)
 
-            definition.writtenBaseUrl.isNotEmpty() &&
-                (next["baseUrl"] as? JsonPrimitive)?.contentOrNull == definition.writtenBaseUrl ->
+            definition.writtenBaseUrls.isNotEmpty() &&
+                storedBaseUrl != null &&
+                storedBaseUrl in definition.writtenBaseUrls ->
                 next.remove("baseUrl")
         }
         // A `models` value that is neither absent nor an array is left exactly as the
@@ -3588,9 +3596,13 @@ internal data class ModelEntry(
  *   every model of this provider to that URL (`applyModelsJson`:
  *   `config.baseUrl ?? model.baseUrl`) — the supported way to put a proxy in front of a
  *   built-in provider.
- * @param writtenBaseUrl the override PiKit last wrote, which is what an empty [baseUrl]
- *   withdraws. See [ModelProfile.writtenBaseUrl] for why withdrawal is keyed on the
- *   written value rather than on the blank field.
+ * @param writtenBaseUrls every spelling of the override PiKit may have written, which is
+ *   what an empty [baseUrl] withdraws. See [ModelProfile.writtenBaseUrl] for why
+ *   withdrawal is keyed on the written value rather than on the blank field. It is a list
+ *   rather than one string because the value in pi's file was produced by the spelling
+ *   rule of the build that wrote it: an `anthropic-messages` endpoint used to be completed
+ *   with `/v1`, and the file a user upgraded over still holds that shape. Each candidate
+ *   is compared exactly, so a `baseUrl` the user wrote by hand survives.
  *   A custom endpoint never comes through here: its whole provider object is rebuilt by
  *   [CustomEndpoint.providerObject].
  */
@@ -3599,7 +3611,7 @@ internal data class ModelDefinitions(
     val ours: List<String> = emptyList(),
     val overrides: Map<String, ModelSettings> = emptyMap(),
     val baseUrl: String = "",
-    val writtenBaseUrl: String = "",
+    val writtenBaseUrls: List<String> = emptyList(),
 )
 
 /**
@@ -3652,6 +3664,18 @@ internal fun modelDefinitions(
      * routing when the two disagree; see the body.
      */
     currentCatalogueIds: Set<String> = emptySet(),
+    /**
+     * The wire protocol this built-in provider's models speak, when the catalogue on
+     * disk says so unambiguously — see `cataloguedApi`.
+     *
+     * It is needed for exactly one decision, and it is the one that broke: the shape
+     * of the endpoint override. An `anthropic-messages` provider must not have `/v1`
+     * appended (or kept) in its `baseUrl`, because its client appends `/v1/messages`
+     * itself — the reported `404 … Invalid URL (POST /v1/v1/messages)`. Blank means
+     * "not known", and the endpoint is then completed for the OpenAI shapes, which is
+     * what every release before this one did for every provider.
+     */
+    api: String = "",
 ): Map<String, ModelDefinitions> {
     if (provider == null || profile == null) return emptyMap()
     if (provider in PiProvider.needsBaseUrl) return emptyMap()
@@ -3700,9 +3724,20 @@ internal fun modelDefinitions(
             overrides = overrides,
             // A custom endpoint is filtered out above; this is the built-in case, where a
             // non-empty field is a proxy override and an empty one means "pi's own URL".
-            // Normalised here so the file and the model-list probe agree on the path.
-            baseUrl = normalizeApiBaseUrl(profile.baseUrl),
-            writtenBaseUrl = normalizeApiBaseUrl(profile.writtenBaseUrl),
+            // Normalised here so the file and the model-list probe agree on the path, for
+            // the shape *this provider's* client posts to — see [api].
+            baseUrl = normalizeApiBaseUrl(profile.baseUrl, api),
+            // Two spellings, because the file may hold either. A build before the
+            // protocol decided this shape completed an endpoint with `/v1` for every
+            // api, so an `anthropic-messages` override already in `models.json` carries
+            // one and a withdrawal has to recognise it as this app's. Both are compared
+            // exactly: a value the user wrote by hand is not this app's to remove, and
+            // matching loosely (ignoring a `/v1`) would take one that differs from ours
+            // only by that segment.
+            writtenBaseUrls = listOf(api, CustomApi.OPENAI_COMPLETIONS.id)
+                .map { normalizeApiBaseUrl(profile.writtenBaseUrl, it) }
+                .filter { it.isNotEmpty() }
+                .distinct(),
         ),
     )
 }
@@ -3735,8 +3770,12 @@ internal fun builtInProviderObject(
     val models = profile.selectableModels.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
     if (models.isEmpty()) return null
     val known = models.firstNotNullOfOrNull { modelFacts[it] }
-    val baseUrl = normalizeApiBaseUrl(profile.baseUrl).ifBlank { known?.baseUrlName().orEmpty() }
+    // The protocol first: it decides what shape the endpoint has to be. An
+    // `anthropic-messages` entry must not carry a `/v1` — its client appends
+    // `/v1/messages` itself, and a completed one is the reported
+    // `404 … POST /v1/v1/messages`. See `normalizeApiBaseUrl`.
     val api = known?.apiName().orEmpty()
+    val baseUrl = normalizeApiBaseUrl(profile.baseUrl, api).ifBlank { known?.baseUrlName().orEmpty() }
     if (baseUrl.isEmpty() || api.isEmpty()) return null
     return buildJsonObject {
         put("name", profile.displayName)

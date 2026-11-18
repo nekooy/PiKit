@@ -84,12 +84,13 @@ root。
 
 ### 中转与自建端点
 
-供应商选 **Custom endpoint**，再填带版本段的接口
-地址，例如 `https://relay.example.com/v1`，以及
-它提供的模型 ID。调用走 OpenAI 兼容的
-`/chat/completions`；中转文档写的协议不一样，就
-在 **API 协议**那一行换。只讲 Anthropic 或
-Google 协议的端点用不了。
+供应商选 **Custom endpoint**，再填接口地址和它提
+供的模型 ID。OpenAI 两种协议的中转要带版本段，例
+如 `https://relay.example.com/v1`；Anthropic 形
+状的只填主机名，例如 `https://relay.example.com`，
+因为它的客户端自己会加 `/v1/messages`。协议在
+**API 协议**那一行选，这三种都能用；Google 自己
+的接口不在其中。
 
 > **警告：** 中转的 Key 还会出现在命令行上，
 > 能读本应用进程列表的东西都看得到。
@@ -621,14 +622,15 @@ PiKit は Pi コーディングエージェントをスマートフ
 
 ### 中継サーバーと自前のエンドポイント
 
-プロバイダーで **Custom endpoint** を選び、バー
-ジョンセグメント込みのベース URL（例
-`https://relay.example.com/v1`）と、そこで使える
-モデル ID を入れます。呼び出しは OpenAI 互換の
-`/chat/completions` です。中継が別のプロトコルを
-案内している場合は **API** の行で切り替えます。
-Anthropic 専用・Google 専用のエンドポイントは使
-えません。
+プロバイダーで **Custom endpoint** を選び、ベー
+ス URL とそこで使えるモデル ID を入れます。
+OpenAI 系のリレーは版セグメント込み（例
+`https://relay.example.com/v1`）、Anthropic 形状
+はホスト名だけ（例 `https://relay.example.com`）
+にします。そのクライアントが `/v1/messages` を自
+分で付けるためです。プロトコルは **API** の行で
+選べ、この三つはどれも使えます。Google 独自の
+API はその中にありません。
 
 > **警告：** 中継のキーはコマンドラインにも
 > 渡るので、このアプリのプロセス一覧を読め

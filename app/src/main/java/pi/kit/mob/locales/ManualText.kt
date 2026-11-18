@@ -134,13 +134,15 @@ answering model at once, and so does the
 ### Relays and endpoints
 
 Choose **Custom endpoint** as the provider, then
-give the base URL with its version segment, e.g.
-`https://relay.example.com/v1`, and a model id
-it serves. Calls use the OpenAI-compatible API
-at `/chat/completions`; the **API** row picks
-the protocol when the relay documents another
-one. Anthropic-only and Google-only endpoints do
-not work.
+give the base URL and a model id it serves. For
+an OpenAI-shaped relay the base carries its
+version segment, e.g.
+`https://relay.example.com/v1`; an
+Anthropic-shaped one takes the host alone, e.g.
+`https://relay.example.com`, because that client
+adds `/v1/messages` itself. The **API** row
+picks the protocol, so all three shapes work.
+Google's own API is not one of them.
 
 > **Warning:** a relay's key also reaches the
 > command line, where anything that can read this

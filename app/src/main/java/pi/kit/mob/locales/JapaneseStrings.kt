@@ -511,13 +511,17 @@ internal object JapaneseStrings : Strings {
         override val baseUrlNote =
             "API のベース URL です。プロバイダーのドキュメントにあるバージョン部分も含めて" +
                 "ください（例：https://relay.example.com/v1）。下のモデル ID がここに送られます。" +
-                "ホスト名のみの場合は /v1 が自動的につきます。" +
+                "バージョン部分の扱いは入力欄ではなく API プロトコルで決まります。" +
+                "OpenAI 系はホスト名のみなら /v1 が自動的につき、Anthropic Messages は" +
+                "末尾の /v1 を外します（そのクライアントが自分で付けるためです）。" +
                 "プロバイダー一覧の「Custom endpoint」は自前で設定するエンドポイントで、" +
                 "任意の互換リレーに繋げられ、API プロトコルも変更できます。"
         override val baseUrlOptionalNote =
             "任意です。空欄ならプロバイダー既定のエンドポイントを使います。" +
                 "埋めるとリクエストはこのアドレス（プロキシ／リレー）へ送られます" +
-                "（例：https://relay.example.com/v1）。ホスト名のみの場合は /v1 が自動的につきます。" +
+                "（例：https://relay.example.com/v1）。" +
+                "バージョン部分は API プロトコルに従い、OpenAI 系はホスト名のみなら /v1 が" +
+                "自動的につき、Anthropic Messages は末尾の /v1 を外します。" +
                 "プロバイダー一覧の「Custom endpoint」は自前で設定するエンドポイントで、" +
                 "任意の互換リレーに繋げられ、API プロトコルも変更できます。"
         override val needBaseUrl = "カスタムエンドポイントにはベース URL が必要です。"
