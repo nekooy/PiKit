@@ -187,7 +187,7 @@ internal fun ModelPage(
                                     Icon(
                                         imageVector = MiuixIcons.Delete,
                                         contentDescription = text.settings.deleteProfile,
-                                        tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     )
                                 }
                             },
