@@ -64,8 +64,7 @@ python tools/build-apks.py    # checks, tests, then all four APKs
 
 [docs/README.md](docs/README.md) 索引了每一份文档。最常打开的是这几份：
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md)——设计决策与背后的约束。
-- [architecture/](docs/architecture/)——各个章节本身，一个话题一份文件。
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md)——设计决策的地图；各章本身在 [architecture/](docs/architecture/)，一个话题一份文件。
 - [BUILDING.md](docs/BUILDING.md)——前置条件、运行时镜像构建、产物、签名、设备上的流程。
 - [RELEASING.md](docs/RELEASING.md)——版本号、tag，以及必须先完成的签名。
 - [MAINTAINING.md](docs/MAINTAINING.md)——周期性要做的事：跟进上游 pi、软件包、依赖。
