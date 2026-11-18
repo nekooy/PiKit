@@ -35,7 +35,7 @@ done, ask what else shares the mechanism and check it:
 - **the neighbours of a surface** — a page's sibling pages, a row's sibling rows, a
   gesture's other directions, a keyboard's other dismissal paths;
 - **the data half** — when the change touches anything that is stored, the backup and
-  restore must carry it (ARCHITECTURE §10), and a new file or preference file is a new
+  restore must carry it (ARCHITECTURE §10.2), and a new file or preference file is a new
   entry in that chapter's list and in `BackupArchive`.
 
 Fix what belongs to this change; when a sibling is real but outside its scope, write it

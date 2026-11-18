@@ -71,7 +71,7 @@ pattern), and a checker under `tools/` — listed in `tools/build-apks.py`'s `ch
 in the code says "ARCHITECTURE §4", not a file name, because files get split and reordered;
 §4 is `04-package-relocation.md` and the table in `ARCHITECTURE.md` is what resolves the
 number. A chapter that grew past one topic has numbered parts — `§6.1`–`§6.2`,
-`§7.1`–`§7.4`, `§9.1`–`§9.3`, `§12.1`–`§12.3` — and the part number is in the file name, so
+`§7.1`–`§7.4`, `§9.1`–`§9.4`, `§10.1`–`§10.2`, `§12.1`–`§12.3` — and the part number is in the file name, so
 **every § resolves to exactly one file**: a citation without a part is never written.
 
 **A measurement lives with the design it settled, not in a separate record.** Node bounds

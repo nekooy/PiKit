@@ -62,7 +62,7 @@ the model list, whose
 `Refresh` is the only way to see a just-released model before the release ships. The
 relocation row and the storage check are the two runs whose failure is a device fact
 rather than a build one; *The device pass* below has the rest. The page deliberately has
-no control that updates pi: pi moves only with a PiKit release (ARCHITECTURE §2, §9.3),
+no control that updates pi: pi moves only with a PiKit release (ARCHITECTURE §2, §9.4),
 which is why the sweep's second step is where a new pi enters.
 
 ## Periodically

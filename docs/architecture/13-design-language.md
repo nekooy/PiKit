@@ -605,7 +605,7 @@ one decision each makes that the shared vocabulary does not:
   key bar of Miuix buttons on a `surfaceContainer` track. The keys are the same glyph
   weight as everything else, a latched modifier takes `primary`, and the bar scrolls
   horizontally because English labels need more room than Chinese ones. The page opens
-  in the conversation's workspace and keeps one shell per directory (see §10), so the
+  in the conversation's workspace and keeps one shell per directory (see §10.1), so the
   directory the reader sees in the files page is the one the prompt in the terminal
   already stands in.
 - **Files** — a directory is a list of objects, and it is drawn as one: a

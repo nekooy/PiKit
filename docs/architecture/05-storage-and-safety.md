@@ -178,7 +178,7 @@ were gone after one launch, with `shared` untouched.
 ## What still decides what the agent may write
 
 `ShellEnvironment.build` publishes the workspace (`PIKIT_WORKSPACE`), the directory the
-conversation was started in — see §10 for the list of workspaces and how a conversation
+conversation was started in — see §10.1 for the list of workspaces and how a conversation
 picks one — and the tier file (`PIKIT_PERMISSION_FILE`). Nothing else about storage reaches
 the agent process. The bar is stated in the UI: the tier chip says what each level allows,
 and a refused write comes back to the agent as a tool error naming the tier.

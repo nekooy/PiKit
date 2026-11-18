@@ -314,7 +314,7 @@ private fun Categories(
  *
  * ## Why this is one component
  *
- * §9.3 records what the three runs looked like when each was written out at its
+ * §9.4 records what the three runs looked like when each was written out at its
  * call site, and the fix was a shared strip; this is that strip on Miuix. The button,
  * the optional dismiss and the indicator are one shape, the caller passes the wording,
  * and the backup page presses the same two buttons in the same order for the same
