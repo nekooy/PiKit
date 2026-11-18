@@ -13,8 +13,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -1265,6 +1267,69 @@ internal fun anyProviderModelFacts(store: File): Map<String, JsonObject> {
         }
     }
     return merged
+}
+
+/**
+ * The part of a catalogued entry that says **how this model's thinking is expressed**, for
+ * the models pi's store describes over [protocol], keyed by model id.
+ *
+ * ## Why this is not part of the facts a relay inherits
+ *
+ * `anyProviderModelFacts` is the id's window, price and `thinkingLevelMap` — facts that
+ * belong to the model whoever serves it — and it deliberately stops at the host, `api` and
+ * `baseUrl` included. `compat` is a mixed table: `thinkingFormat`, `maxTokensField`,
+ * `supportsStrictTools` and the mid-conversation flags describe what a **gateway** does with
+ * a request, and handing a relay a set of capabilities it may not forward is the mistake the
+ * whitelist exists to avoid. Two fields are not of that kind:
+ *
+ *  * `thinkingLevelMap` — the levels the model itself has, which is also what
+ *    `get_available_thinking_levels` answers from;
+ *  * `compat.forceAdaptiveThinking` — Anthropic's requirement that this model's request
+ *    carry `thinking: {type: "adaptive"}` and its effort in `output_config`, instead of the
+ *    budget-based `thinking: {type: "enabled", budget_tokens}` older models take.
+ *
+ * The second one is not cosmetic and not a preference: pi reads it to choose the request
+ * shape (`streamSimple`, `pi-ai/dist/api/anthropic-messages.js`), so an entry that omits it
+ * sends the older shape to a model that has dropped it. Measured through a relay fronting
+ * `claude-opus-5-5` — the pinned pi 1.5.2, a relay entry written from the profile alone:
+ *
+ * ```
+ * 400 {"error":{"type":"packy_invalid_request_error","message":"claude-opus-5-5 requires
+ * adaptive thinking; omit thinking or use type=adaptive and output_config.effort …"}}
+ * ```
+ *
+ * The relay does not need to be the model's host for the statement to hold: the thinking
+ * parameter is forwarded to the provider the relay fronts, which is why the *protocol* is
+ * part of the question rather than the host — an id reachable over another wire
+ * (`openai-completions`) is a different request shape and is left out. First writer wins on
+ * a duplicate id, as in [anyProviderModelFacts].
+ */
+internal fun cataloguedThinkingShapes(store: File, protocol: String): Map<String, JsonObject> {
+    if (protocol.isBlank()) return emptyMap()
+    val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
+    if (text.isNullOrBlank()) return emptyMap()
+    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+        ?: return emptyMap()
+    val shapes = LinkedHashMap<String, JsonObject>()
+    for (value in root.values) {
+        val models = (value as? JsonObject)?.get("models") as? JsonArray ?: continue
+        for (model in models) {
+            val entry = model as? JsonObject ?: continue
+            val id = entry["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: continue
+            if ((entry["api"] as? JsonPrimitive)?.contentOrNull != protocol) continue
+            val shape = LinkedHashMap<String, JsonElement>()
+            entry["thinkingLevelMap"]?.let { shape["thinkingLevelMap"] = it }
+            val compat = entry["compat"] as? JsonObject
+            if ((compat?.get("forceAdaptiveThinking") as? JsonPrimitive)?.booleanOrNull == true) {
+                shape["compat"] = JsonObject(
+                    mapOf("forceAdaptiveThinking" to JsonPrimitive(true)),
+                )
+            }
+            if (shape.isNotEmpty()) shapes.putIfAbsent(id, JsonObject(shape))
+        }
+    }
+    return shapes
 }
 
 /**

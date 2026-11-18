@@ -2,6 +2,7 @@ package pi.kit.mob.data
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -301,5 +302,114 @@ class ModelProfileTest {
 
         assertEquals("https://proxy.example.com/v1", decoded.baseUrl)
         assertEquals("", decoded.writtenBaseUrl)
+    }
+
+    /** What pi's store says about `claude-opus-5-5` over the Anthropic wire, in short. */
+    private val adaptiveShape = mapOf(
+        "claude-opus-5-5" to Json.parseToJsonElement(
+            """
+            {"thinkingLevelMap": {"off": null, "low": "low", "high": "high"},
+             "compat": {"forceAdaptiveThinking": true}}
+            """.trimIndent(),
+        ).jsonObject,
+    )
+
+    /**
+     * The launch path repairs a profile that carries none of the catalogue's thinking shape.
+     *
+     * That is the state a relay's `claude-opus-5-5` was in: the entry was built from the
+     * profile alone, pi read no `forceAdaptiveThinking` and sent `thinking: {type: "enabled",
+     * budget_tokens}`, and the relay answered `400 … requires adaptive thinking`. The record
+     * in [ModelSettings.inherited] is a copy of the catalogue taken when the model was added,
+     * so a copy that predates these fields — or one taken while the store was empty — is
+     * exactly the profile that has to be healed without the reader deleting the model.
+     */
+    @Test
+    fun `the catalogue's thinking shape is added where a profile carries none`() {
+        val saved = mapOf(
+            "claude-opus-5-5" to ModelSettings(images = true),
+            "relay-only" to ModelSettings(),
+        )
+
+        val merged = saved.withThinkingShapes(adaptiveShape)
+
+        val inherited = merged.getValue("claude-opus-5-5").inherited!!
+        assertEquals(
+            "the levels the model has",
+            "low",
+            (inherited["thinkingLevelMap"] as JsonObject)["low"]!!.jsonPrimitive.content,
+        )
+        assertEquals(
+            "and the request shape it requires",
+            "true",
+            (inherited["compat"] as JsonObject)["forceAdaptiveThinking"]!!.jsonPrimitive.content,
+        )
+        assertEquals("the switch is not what moved", true, merged.getValue("claude-opus-5-5").images)
+        assertEquals("an id the catalogue says nothing about is untouched", saved.getValue("relay-only"), merged.getValue("relay-only"))
+    }
+
+    /**
+     * A fact the profile recorded itself wins over the catalogue's fresh copy.
+     *
+     * Both are the same source, and re-stating an id from a catalogue that has moved since
+     * would make an entry the user never touched change under them. A `compat` table this app
+     * did not write is merged into rather than replaced, for the same reason the model page
+     * treats the file as the user's.
+     */
+    @Test
+    fun `what the profile recorded wins over a fresh catalogue copy`() {
+        val recorded = mapOf(
+            "claude-opus-5-5" to ModelSettings(
+                inherited = Json.parseToJsonElement(
+                    """
+                    {"thinkingLevelMap": {"off": null, "high": "high"},
+                     "compat": {"supportsStrictTools": true}}
+                    """.trimIndent(),
+                ).jsonObject,
+            ),
+        )
+
+        val inherited = recorded.withThinkingShapes(adaptiveShape).getValue("claude-opus-5-5").inherited!!
+
+        assertEquals(
+            listOf("off", "high"),
+            (inherited["thinkingLevelMap"] as JsonObject).keys.toList(),
+        )
+        assertEquals(
+            "true",
+            (inherited["compat"] as JsonObject)["supportsStrictTools"]!!.jsonPrimitive.content,
+        )
+        assertEquals(
+            "the missing key is still filled in",
+            "true",
+            (inherited["compat"] as JsonObject)["forceAdaptiveThinking"]!!.jsonPrimitive.content,
+        )
+    }
+
+    /**
+     * The provider document is where the fix has to land: pi reads the requirement from the
+     * model entry, and a relay has no catalogue entry of its own to inherit it from.
+     */
+    @Test
+    fun `a relay entry states the adaptive-thinking requirement of the id it fronts`() {
+        val provider = Json.parseToJsonElement(
+            CustomEndpoint.document(
+                baseUrl = "https://relay.example.com",
+                modelIds = listOf("claude-opus-5-5"),
+                settings = mapOf("claude-opus-5-5" to ModelSettings())
+                    .withThinkingShapes(adaptiveShape),
+                api = CustomApi.ANTHROPIC_MESSAGES.id,
+            )!!,
+        ).jsonObject
+        val entry = (provider["models"] as JsonArray).single().jsonObject
+
+        assertEquals(
+            "true",
+            (entry["compat"]!!.jsonObject["forceAdaptiveThinking"]!!).jsonPrimitive.content,
+        )
+        assertEquals(
+            "low",
+            (entry["thinkingLevelMap"]!!.jsonObject["low"]!!).jsonPrimitive.content,
+        )
     }
 }

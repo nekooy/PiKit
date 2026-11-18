@@ -21,6 +21,7 @@ import pi.kit.mob.data.baseUrlName
 import pi.kit.mob.data.catalogueRefreshEnvironment
 import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.data.renderChatSystemPrompt
+import pi.kit.mob.data.withThinkingShapes
 import pi.kit.mob.env.BootstrapInstaller
 import pi.kit.mob.env.BundledExtension
 import pi.kit.mob.env.BundledImage
@@ -2983,6 +2984,9 @@ class PiAgentSession internal constructor(
         val profiles = snapshot.profiles
         val entries = LinkedHashMap<String, JsonObject>()
         val factsByProvider = HashMap<String, Map<String, JsonObject>>()
+        // The catalogue's "how this model thinks" statement, per wire protocol, read once per
+        // launch and only when a relay needs it. See `cataloguedThinkingShapes`.
+        val thinkingShapes = HashMap<String, Map<String, JsonObject>>()
         for (profile in profiles) {
             val provider = profile.providerEntry ?: continue
             // A profile with no key cannot authenticate, and an entry that names a
@@ -2994,14 +2998,25 @@ class PiAgentSession internal constructor(
             if (profile.apiKey.isBlank()) continue
             val runtimeId = ProfileAddressing.runtimeProviderId(profile, profiles)
             val entry = if (provider in PiProvider.needsBaseUrl) {
+                // The protocol decides which catalogue entries can say anything about these
+                // ids: a relay's `claude-opus-5-5` is the catalogue's model only when the same
+                // request shape reaches it. See `cataloguedThinkingShapes`.
+                val protocol = profile.api.ifBlank { CustomApi.DEFAULT_ID }
                 CustomEndpoint.providerObject(
                     baseUrl = profile.baseUrl,
                     // Every model the profile offers: `set_model` can only reach a model
                     // that is in the entry, so a profile registered with one model is a
                     // profile that can only be switched *to* by relaunching.
                     modelIds = profile.selectableModels.ifEmpty { listOf(profile.modelId) },
-                    settings = profile.modelSettings,
-                    api = profile.api,
+                    settings = profile.modelSettings.withThinkingShapes(
+                        thinkingShapes.getOrPut(protocol) {
+                            cataloguedThinkingShapes(
+                                File(env.piConfigDir, CATALOGUE_STORE_NAME),
+                                protocol,
+                            )
+                        },
+                    ),
+                    api = protocol,
                     apiKey = ProfileAddressing.apiKeyReference(profile.id),
                 )
             } else if (runtimeId != provider.id) {

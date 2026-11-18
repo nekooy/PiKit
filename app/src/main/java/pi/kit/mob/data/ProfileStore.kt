@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import java.io.File
 
@@ -41,7 +42,10 @@ import java.io.File
  *   so without this a relay's `claude-sonnet-4-5` would lose the price table and the
  *   thinking levels of the id it shares ("自动匹配相同id，并填写" — every parameter, not
  *   just the three the page draws). `api` and `baseUrl` are never in here: those belong
- *   to the relay, not to the model.
+ *   to the relay, not to the model. A copy taken before `thinkingLevelMap` and
+ *   `compat.forceAdaptiveThinking` were written here is completed at launch by
+ *   [withThinkingShapes], which is what keeps an entry saved by an older build from sending
+ *   the wrong request shape (see ARCHITECTURE §6.2).
  */
 @Serializable
 data class ModelSettings(
@@ -50,6 +54,65 @@ data class ModelSettings(
     @SerialName("maxTokens") val maxTokens: Long? = null,
     @SerialName("inherited") val inherited: JsonObject? = null,
 )
+
+/**
+ * These settings with the catalogue's account of **how each model thinks**, where the
+ * profile does not already carry it.
+ *
+ * ## Why the launch path adds this rather than the model page
+ *
+ * A relay entry is rebuilt from the profile on every launch, so the launch path is the one
+ * place that can repair a profile saved by a build — or a catalogue state — that did not
+ * know these two fields. The record in [ModelSettings.inherited] is a *copy* of pi's
+ * catalogue taken when the model was added; a copy that predates the fields' arrival, or one
+ * taken while `models-store.json` was empty, is exactly the state whose entry then asks pi
+ * for the wrong request shape. Reading the catalogue here costs one file read per launch and
+ * heals that without the reader deleting and re-adding a model.
+ *
+ * The profile's own recorded facts win over the fresh ones: they are the same source, and
+ * re-stating an id's price or window from a catalogue that has since moved would make an
+ * untouched entry change under the user.
+ *
+ * What travels is only the two fields [cataloguedThinkingShapes] answers for — the levels the
+ * model has and Anthropic's adaptive-thinking requirement. The rest of `compat` is a
+ * gateway's capability table and is left to the host, which for a relay is the relay.
+ *
+ * Not persisted: this is a projection of the catalogue over the profile, computed wherever
+ * the entry is written. Nothing here changes what the page stored, so a catalogue that moves
+ * moves the entry with it rather than leaving a second, older copy in preferences.
+ */
+internal fun Map<String, ModelSettings>.withThinkingShapes(
+    shapes: Map<String, JsonObject>,
+): Map<String, ModelSettings> {
+    if (shapes.isEmpty()) return this
+    var changed = false
+    val merged = LinkedHashMap<String, ModelSettings>(this)
+    for ((id, settings) in this) {
+        val shape = shapes[id] ?: continue
+        val inherited = settings.inherited ?: JsonObject(emptyMap())
+        var next = inherited
+        val levels = shape["thinkingLevelMap"]
+        if (levels != null && next["thinkingLevelMap"] == null) {
+            next = JsonObject(next + ("thinkingLevelMap" to levels))
+        }
+        val flag = (shape["compat"] as? JsonObject)?.get("forceAdaptiveThinking")
+        if (flag != null) {
+            val compat = next["compat"] as? JsonObject
+            // A `compat` the user wrote by hand is merged into, not replaced: the flag is one
+            // key of a table this app does not own in that document.
+            if (compat?.get("forceAdaptiveThinking") == null) {
+                val table = LinkedHashMap<String, JsonElement>(compat ?: JsonObject(emptyMap()))
+                table["forceAdaptiveThinking"] = flag
+                next = JsonObject(next + ("compat" to JsonObject(table)))
+            }
+        }
+        if (next !== inherited) {
+            merged[id] = settings.copy(inherited = next)
+            changed = true
+        }
+    }
+    return if (changed) merged else this
+}
 
 /**
  * One saved model configuration.

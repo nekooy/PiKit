@@ -227,6 +227,59 @@ class CatalogueFactsTest {
     }
 
     @Test
+    fun `a model that has dropped budget thinking is found with the protocol it was written for`() {
+        // pi reads `compat.forceAdaptiveThinking` to choose the shape of the thinking
+        // parameter: `{type: "adaptive"}` plus `output_config.effort` when it is set, the
+        // older `{type: "enabled", budget_tokens}` when it is not. A relay entry is written
+        // from the profile alone, so without this the newer models answer `400 … requires
+        // adaptive thinking` — measured through a relay fronting `claude-opus-5-5`.
+        val document = """
+            {
+              "anthropic": {
+                "models": [
+                  {"id": "claude-opus-5-5", "api": "anthropic-messages", "reasoning": true,
+                   "thinkingLevelMap": {"off": null, "low": "low", "high": "high"},
+                   "compat": {"forceAdaptiveThinking": true, "supportsStrictTools": true}},
+                  {"id": "claude-sonnet-4-5", "api": "anthropic-messages", "reasoning": true,
+                   "compat": {"supportsStrictTools": true}},
+                  {"id": "claude-opus-4-5", "api": "openai-completions", "reasoning": true,
+                   "compat": {"forceAdaptiveThinking": true}}
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val shapes = cataloguedThinkingShapes(store(document), "anthropic-messages")
+
+        val opus = shapes.getValue("claude-opus-5-5")
+        assertEquals(
+            "the model's own levels travel",
+            listOf("off", "low", "high"),
+            (opus["thinkingLevelMap"] as JsonObject).keys.toList(),
+        )
+        assertEquals(
+            "and so does the request shape it requires",
+            "true",
+            ((opus["compat"] as JsonObject)["forceAdaptiveThinking"]!!).jsonPrimitive.content,
+        )
+        // Only the one field of `compat` travels; the rest describes what a gateway does with
+        // a request, and a relay is not the gateway the catalogue was written for.
+        assertNull("a gateway's other capabilities do not", (opus["compat"] as JsonObject)["supportsStrictTools"])
+
+        assertNull(
+            "a model that still takes budget thinking says nothing here",
+            shapes["claude-sonnet-4-5"],
+        )
+        // The id is reachable over another wire in the catalogue, and an entry under that
+        // protocol is a different request shape — so it is not this protocol's answer.
+        assertNull("another protocol is another model as far as this is concerned", shapes["claude-opus-4-5"])
+        assertEquals(
+            emptyMap<String, JsonObject>(),
+            cataloguedThinkingShapes(store(document), ""),
+        )
+    }
+
+    @Test
     fun `a store that is missing, blank or not an object answers nothing`() {
         // Each of these leaves the process as the only recourse, which is the behaviour
         // before there was a store to read at all. None of them may throw: this runs on the
