@@ -326,6 +326,14 @@ restored record agree without a decode), and changing it silently orphans every 
 A prompt whose copies are all gone draws the count line and a single missing one draws a
 placeholder tile — a cache miss is a state the page draws, never an error.
 
+**A picture is fitted to 3000 px before it is sent, and `models.json` declares the same
+number.** `SendImage.kt` scales and encodes anything above `SEND_IMAGE_MAX_EDGE` or
+`SEND_IMAGE_MAX_BYTES`, and every model entry PiKit writes names
+`inputLimits.images.resize.maxWidth/maxHeight` (`PIKIT_IMAGE_MAX_EDGE`). The two halves have
+to agree: pi only passes the bytes through when its own limit is at least as large, and a
+picture pi rescales is a second picture the transcript is not drawing. The copy in
+`files/chat-pictures` is then the sent bytes verbatim, not a re-encode of them.
+
 **A file attachment's copy lives in `files/attachments`, never in the cache and never in the
 workspace.** The absolute path of a `文件` attachment is written into the prompt and drawn again in
 the transcript for as long as the conversation exists, so a directory the platform may empty turns

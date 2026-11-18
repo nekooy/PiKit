@@ -517,7 +517,9 @@ class ModelsJsonTest {
         )
         assertNull(override["api"])
         assertNull(override["baseUrl"])
-        assertEquals(setOf("contextWindow"), override.keys)
+        // `inputLimits` is the one other key this app writes into every override — the
+        // image ceiling — and it is deliberately not a host field.
+        assertEquals(setOf("contextWindow", "inputLimits"), override.keys)
     }
 
     @Test
@@ -1300,5 +1302,71 @@ class ModelsJsonTest {
     @Test
     fun `a wanted entry is still enough`() {
         assertTrue(hasModelsJsonEntries(definitions(listOf(entry("vision-v1")))))
+    }
+
+    /**
+     * The image ceiling is every model's entry, not only the ones the page was opened on.
+     *
+     * `SendImage.kt` fits a picture to [PIKIT_IMAGE_MAX_EDGE] before the prompt is built,
+     * and pi only passes those bytes through when its own limit is at least as large. An
+     * override written only for the models the user had changed would leave pi's own 2000
+     * standing for every other one — the picture the model receives would then be a second
+     * picture again, which is the whole thing this pair of numbers exists to prevent.
+     */
+    @Test
+    fun `every catalogued model carries the image ceiling`() {
+        val profile = ModelProfile(
+            id = "p1",
+            provider = "deepseek",
+            modelId = "deepseek-flash",
+            models = listOf("deepseek-flash", "deepseek-chat"),
+            catalogueBasis = "basis",
+            knownCatalogueIds = listOf("deepseek-flash", "deepseek-chat"),
+        )
+
+        val definitions = modelDefinitions(PiProvider.DEEPSEEK, profile, "basis")["deepseek"]!!
+        assertEquals(
+            setOf("deepseek-flash", "deepseek-chat"),
+            definitions.overrides.keys,
+        )
+        val entry = modelOverrideFor(definitions.overrides.getValue("deepseek-chat"))
+        val resize = entry["inputLimits"]!!.jsonObject["images"]!!.jsonObject["resize"]!!.jsonObject
+        assertEquals("3000", resize["maxWidth"]!!.jsonPrimitive.content)
+        assertEquals("3000", resize["maxHeight"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a definition names the image ceiling`() {
+        val entry = pikitModelDefinition(
+            ModelEntry("custom-model", JsonObject(emptyMap()), ModelSettings()),
+        )
+        val resize = entry["inputLimits"]!!.jsonObject["images"]!!.jsonObject["resize"]!!.jsonObject
+        assertEquals("3000", resize["maxWidth"]!!.jsonPrimitive.content)
+        assertEquals("3000", resize["maxHeight"]!!.jsonPrimitive.content)
+    }
+
+    /**
+     * A hand-written limit survives the merge except for the two edges.
+     *
+     * pi's `mergeInputLimits` spreads the override over the resolved model, so naming only
+     * the edges is what lets this app set the size without taking away a byte budget or a
+     * per-message count the user put in the file themselves.
+     */
+    @Test
+    fun `an override keeps the limits the user wrote`() {
+        val override = modelOverrideFor(
+            ModelSettings(),
+            json(
+                """{"inputLimits":{"images":{"resize":{"maxBytes":1000000,"jpegQuality":70},"maxPerMessage":4}}}""",
+            ),
+        )
+        val limits = override["inputLimits"]!!.jsonObject
+        val images = limits["images"]!!.jsonObject
+        val resize = images["resize"]!!.jsonObject
+        assertEquals("3000", resize["maxWidth"]!!.jsonPrimitive.content)
+        assertEquals("3000", resize["maxHeight"]!!.jsonPrimitive.content)
+        assertEquals("1000000", resize["maxBytes"]!!.jsonPrimitive.content)
+        assertEquals("70", resize["jpegQuality"]!!.jsonPrimitive.content)
+        assertEquals("4", images["maxPerMessage"]!!.jsonPrimitive.content)
     }
 }

@@ -2,6 +2,7 @@ package pi.kit.mob.data
 
 import android.content.Context
 import pi.kit.mob.locales.Lang
+import pi.kit.mob.pi.imageLimitObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -431,6 +432,10 @@ object CustomEndpoint {
                         ?: (inherited["maxTokens"] as? JsonPrimitive)?.longOrNull
                         ?: 16_384L,
                 )
+                // The image ceiling, named rather than inherited: a relay's entry would
+                // otherwise keep whatever pi's default is, and a picture this app has
+                // already fitted to 3000 would be rescaled back to 2000 on the way in.
+                put("inputLimits", imageLimitObject())
             }
         }
 
@@ -442,6 +447,7 @@ object CustomEndpoint {
          */
         private val ENTRY_OWNED_KEYS = setOf(
             "id", "name", "input", "contextWindow", "maxTokens", "api", "baseUrl",
+            "inputLimits",
         )
 
     /**

@@ -174,6 +174,8 @@ import pi.kit.mob.ui.chat.FollowTailController
 import pi.kit.mob.ui.chat.NoticeCard
 import pi.kit.mob.ui.chat.PictureTarget
 import pi.kit.mob.ui.chat.PictureViewer
+import pi.kit.mob.ui.chat.SEND_IMAGE_MAX_EDGE
+import pi.kit.mob.ui.chat.prepareImageForSend
 import pi.kit.mob.ui.chat.PromptPictures
 import pi.kit.mob.ui.chat.ROW_SHAPE
 import pi.kit.mob.ui.chat.ReasoningBlock
@@ -6997,14 +6999,20 @@ private fun queryName(context: Context, uri: Uri): String? = runCatching {
  * otherwise put an unbounded array on the heap on the way to a base64 string twice
  * its size. Past the cap the attachment is dropped, which is the same answer the
  * pick would have given.
+ *
+ * The bytes are then fitted and encoded by [prepareImageForSend], which is what makes
+ * the picture pi forwards the same picture the transcript draws: above
+ * [SEND_IMAGE_MAX_EDGE] or [SEND_IMAGE_MAX_BYTES] it is scaled and re-encoded here,
+ * and below both it is sent exactly as picked.
  */
 private fun encodeImage(context: Context, image: PendingImage): ImageAttachment? = runCatching {
     val mime = context.contentResolver.getType(image.uri) ?: "image/jpeg"
     val bytes = context.contentResolver.openInputStream(image.uri)?.use { readAtMost(it) }
         ?: return@runCatching null
+    val prepared = prepareImageForSend(bytes, mime) ?: return@runCatching null
     ImageAttachment(
-        base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
-        mimeType = mime,
+        base64 = Base64.encodeToString(prepared.bytes, Base64.NO_WRAP),
+        mimeType = prepared.mimeType,
     )
 }.getOrNull()
 

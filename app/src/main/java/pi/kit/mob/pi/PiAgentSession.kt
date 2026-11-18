@@ -3510,8 +3510,10 @@ internal fun modelsJsonWith(
             val isPikits = input.mapNotNull { it.jsonPrimitive.contentOrNull } ==
                 listOf("text", "image")
             if (!isPikits) continue
-            val stripped = JsonObject(entry - "input")
-            if (stripped.isEmpty()) overrides.remove(id) else overrides[id] = stripped
+            val stripped = LinkedHashMap<String, JsonElement>(entry - "input")
+            val remaining = stripPikitImageLimits(stripped["inputLimits"])
+            if (remaining == null) stripped.remove("inputLimits") else stripped["inputLimits"] = remaining
+            if (stripped.isEmpty()) overrides.remove(id) else overrides[id] = JsonObject(stripped)
         }
         for ((id, settings) in definition.overrides) {
             overrides[id] = modelOverrideFor(settings, overrides[id] as? JsonObject)
@@ -3555,6 +3557,72 @@ internal fun modelsJsonWith(
 /** `["text", "image"]`, spelled once so the writer and the recogniser agree. */
 private fun imageInputArray(): JsonArray =
     JsonArray(listOf(JsonPrimitive("text"), JsonPrimitive("image")))
+
+/**
+ * The `inputLimits` object every entry PiKit writes carries.
+ *
+ * pi merges this field over whatever the model already had (`mergeInputLimits`), so a
+ * resize block naming only the two edges keeps a provider's own `maxBytes` and
+ * `jpegQuality`: this app has no opinion about either. The resize is the point — without
+ * it pi rescales above its own 2000, and a picture that reached the model at 2000 is not
+ * the 3000 one the transcript draws.
+ */
+internal fun imageLimitObject(): JsonObject = buildJsonObject {
+    put(
+        "images",
+        buildJsonObject {
+            put(
+                "resize",
+                buildJsonObject {
+                    put("maxWidth", PIKIT_IMAGE_MAX_EDGE)
+                    put("maxHeight", PIKIT_IMAGE_MAX_EDGE)
+                },
+            )
+        },
+    )
+}
+
+/** [imageLimitObject] merged over the `inputLimits` the user may have written by hand. */
+private fun withImageLimit(userWritten: JsonObject?): JsonObject {
+    val merged = LinkedHashMap<String, JsonElement>(userWritten.orEmpty())
+    val images = LinkedHashMap<String, JsonElement>(
+        (userWritten?.get("images") as? JsonObject).orEmpty(),
+    )
+    val resize = LinkedHashMap<String, JsonElement>(
+        (images["resize"] as? JsonObject).orEmpty(),
+    )
+    resize["maxWidth"] = JsonPrimitive(PIKIT_IMAGE_MAX_EDGE)
+    resize["maxHeight"] = JsonPrimitive(PIKIT_IMAGE_MAX_EDGE)
+    images["resize"] = JsonObject(resize)
+    merged["images"] = JsonObject(images)
+    return JsonObject(merged)
+}
+
+/**
+ * [limits] with this app's two edges taken out, or null when nothing else was in it.
+ *
+ * The withdrawal path has to tell an override this app wrote from one the user wrote, now
+ * that every entry carries `inputLimits`. An entry PiKit wrote is exactly the image ceiling
+ * plus the `input` it always wrote, so removing both is what makes it empty and removable —
+ * and a limit the user added (`maxBytes`, a per-message count) keeps the entry, because
+ * that entry is still theirs. A *hand-written* `maxWidth` of 3000 is indistinguishable
+ * from this app's, which is the one cost of not marking our own numbers.
+ */
+private fun stripPikitImageLimits(limits: JsonElement?): JsonObject? {
+    val root = limits as? JsonObject ?: return null
+    val rest = LinkedHashMap<String, JsonElement>(root)
+    val images = LinkedHashMap<String, JsonElement>((root["images"] as? JsonObject).orEmpty())
+    val resize = LinkedHashMap<String, JsonElement>((images["resize"] as? JsonObject).orEmpty())
+    if ((resize["maxWidth"] as? JsonPrimitive)?.longOrNull == PIKIT_IMAGE_MAX_EDGE.toLong()) {
+        resize.remove("maxWidth")
+    }
+    if ((resize["maxHeight"] as? JsonPrimitive)?.longOrNull == PIKIT_IMAGE_MAX_EDGE.toLong()) {
+        resize.remove("maxHeight")
+    }
+    if (resize.isEmpty()) images.remove("resize") else images["resize"] = JsonObject(resize)
+    if (images.isEmpty()) rest.remove("images") else rest["images"] = JsonObject(images)
+    return if (rest.isEmpty()) null else JsonObject(rest)
+}
 
 /** `["text"]`: what pi's schema defaults to, written out so an entry reads on its own. */
 private fun textInputArray(): JsonArray = JsonArray(listOf(JsonPrimitive("text")))
@@ -3714,9 +3782,15 @@ internal fun modelDefinitions(
     val wanted = declared.filterNot { (id, _) -> id in knownNow }.map { (id, settings) ->
         ModelEntry(id, facts ?: JsonObject(emptyMap()), settings)
     }
-    val overrides = declared
-        .filter { (id, _) -> id in knownNow }
-        .toMap()
+    // Every model the profile offers, not only the ones the user changed: the image
+    // ceiling is this app's statement about all of them, and an override written only for
+    // a changed model would leave pi's own 2000 in place for the rest.
+    val overrides = profile.selectableModels
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .filter { it in knownNow }
+        .associateWith { profile.modelSettings[it] ?: ModelSettings() }
     return mapOf(
         provider.id to ModelDefinitions(
             wanted = wanted,
@@ -3860,6 +3934,9 @@ internal fun pikitModelDefinition(entry: ModelEntry): JsonObject = buildJsonObje
         settings.contextWindow ?: facts.long("contextWindow") ?: PIKIT_MODEL_CONTEXT_WINDOW,
     )
     put("maxTokens", settings.maxTokens ?: facts.long("maxTokens") ?: PIKIT_MODEL_MAX_TOKENS)
+    // The image ceiling, last: it is this app's statement about every model it writes an
+    // entry for, and without it pi's own resize would still hold pictures above 2000.
+    put("inputLimits", imageLimitObject())
 }
 
 /** The `input` list [facts] carry, when pi reported one. */
@@ -3922,6 +3999,10 @@ internal fun modelOverrideFor(settings: ModelSettings, userWritten: JsonObject? 
     }
     settings.contextWindow?.let { merged["contextWindow"] = JsonPrimitive(it) }
     settings.maxTokens?.let { merged["maxTokens"] = JsonPrimitive(it) }
+    // Not conditional on the user having said anything: every model this profile offers
+    // gets the same image ceiling, or pi's own 2000 would stand for each model the page
+    // was never opened on. `mergeInputLimits` keeps any other limit the user wrote.
+    merged["inputLimits"] = withImageLimit(merged["inputLimits"] as? JsonObject)
     return JsonObject(merged)
 }
 
@@ -4038,6 +4119,18 @@ internal fun isPikitModelDefinition(entry: JsonObject): Boolean {
  */
 internal const val PIKIT_MODEL_CONTEXT_WINDOW = 128_000L
 internal const val PIKIT_MODEL_MAX_TOKENS = 16_384L
+
+/**
+ * The longest side of a picture this app sends, declared to pi as well as obeyed here.
+ *
+ * `SendImage.kt` fits every attachment to this edge before the prompt is built, and the
+ * same number is written into each model entry's `inputLimits.images.resize`, so pi's own
+ * rescale lands on the pass-through branch and the model receives exactly the bytes the
+ * app encoded — which is what makes the transcript's viewer and the model's picture one
+ * picture. The two halves are pinned equal by a test.
+ */
+internal const val PIKIT_IMAGE_MAX_EDGE = 3000
+
 
 /**
  * What a catalogue check was made against, as one comparable string.

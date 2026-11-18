@@ -13,10 +13,10 @@
  *
  * ## The three parts, and why they are three
  *
- *  - [ChatPictureCache] holds **one small copy** of every picture the app has sent,
- *    named by [ChatImages.keyOf] of the base64 pi echoes, decoded once to
- *    [ChatPictureCache.DISPLAY_EDGE] pixels. It is a cache in the app's own files
- *    directory rather than in the session file, which the app does not own.
+ *  - [ChatPictureCache] holds **the picture the model received** for every picture the
+ *    app has sent, named by [ChatImages.keyOf] of the base64 pi echoes and written from
+ *    that same base64. It is a cache in the app's own files directory rather than in the
+ *    session file, which the app does not own.
  *  - [PromptPictures] draws the keys a prompt carries: one picture at its own aspect,
  *    several as a grid, and the old count line when none of them can be read.
  *  - [PictureViewer] is the full window a tap opens: one picture at a time, swiped
@@ -38,7 +38,6 @@
  */
 package pi.kit.mob.ui.chat
 
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
@@ -113,13 +112,14 @@ internal data class PictureTarget(val keys: List<String>, val start: Int)
  * give back), it is pruned on a budget, and every read is `File`-shaped rather than a
  * promise — a missing entry draws the count line, never an error.
  *
- * ## One decode, one file
+ * ## The copy is the sent picture, not a thumbnail of it
  *
- * The copy is decoded to [DISPLAY_EDGE] on the longest side and written as JPEG: a
- * 4 MB photo becomes about 120 KB, which is what makes a hundred prompts of pictures
- * cost ten megabytes rather than four hundred. The tile and the viewer both read that
- * one file at their own sample size, so the phone never holds a twelve-megapixel
- * bitmap to draw a 96dp square.
+ * The bytes written here are the bytes the request carried. `SendImage.kt` has already
+ * fitted and encoded the picture, and pi's own resize is a pass-through at that size, so
+ * writing the payload verbatim is what keeps one picture instead of two approximations of
+ * it: the viewer shows the model's picture, not a differently scaled copy of the same
+ * source. A tile and the viewer both read that file at their own sample size, so the
+ * phone never holds a three-thousand-pixel bitmap to draw a small square.
  *
  * All of it runs off the main thread; the only main-thread work is a `File.exists()`
  * per visible tile, which is what decides between frames and the count line.
@@ -127,19 +127,13 @@ internal data class PictureTarget(val keys: List<String>, val start: Int)
 internal object ChatPictureCache {
 
     /**
-     * The longest side of the copy kept on disk, in pixels.
+     * The directory's budget: past it, the oldest copies are the ones that go.
      *
-     * 1024 is the archive of a 1080p phone's viewer: at that size a picture is sharp on
-     * the screen it is shown on, and the copy is small enough (120 KB) that keeping
-     * every picture of every conversation is a rounding error in the app's data.
+     * Entries are now up to 3000 px on the long side rather than 1024, which is roughly
+     * nine times the pixels; 256 MB holds about two hundred and fifty of them, and a
+     * pruned copy comes back from the session file (§7.3).
      */
-    const val DISPLAY_EDGE = 1024
-
-    /** What one copy is written at. 82 is where a downscaled photo stops showing JPEG. */
-    private const val QUALITY = 82
-
-    /** The directory's budget: past it, the oldest copies are the ones that go. */
-    private const val MAX_BYTES = 64L * 1024 * 1024
+    private const val MAX_BYTES = 256L * 1024 * 1024
 
     /**
      * Bumped whenever a file appears.
@@ -169,25 +163,25 @@ internal object ChatPictureCache {
     }
 
     /**
-     * Writes the copy for [key] unless it is already there.
+     * Writes the sent bytes for [key] unless they are already there.
      *
      * The existence check comes first and is the whole cost of a repeated send: the same
-     * screenshot attached twice is one file. A picture this device cannot decode — an
-     * HEIC on an old Android, a corrupt download — writes nothing, which the row draws
-     * as the count line rather than as an error.
+     * screenshot attached twice is one file. Nothing is decoded here — the bytes are
+     * already the request's own, and re-encoding them would put the cache back into the
+     * business of drawing a second picture. A picture this device cannot later decode
+     * still writes, and the row draws the count line when the tile cannot read it.
      */
     fun ensure(root: File, key: String, base64: String) {
         val target = file(root, key)
         if (target.isFile) return
         val bytes = runCatching { Base64.decode(base64, Base64.DEFAULT) }.getOrNull() ?: return
-        val copy = downscale(bytes) ?: return
         val written = runCatching {
             val folder = directory(root).apply { mkdirs() }
             // Written under a temporary name and moved into place: a tile decoding the
             // target while it is half-written would draw a broken picture, and the
             // rename is the only atomic step a plain directory offers.
             val staging = File(folder, "$key$STAGING_SUFFIX")
-            staging.outputStream().use { copy.compress(Bitmap.CompressFormat.JPEG, QUALITY, it) }
+            staging.outputStream().use { it.write(bytes) }
             if (staging.renameTo(target)) {
                 prune(root)
                 true
@@ -196,7 +190,6 @@ internal object ChatPictureCache {
                 false
             }
         }.getOrDefault(false)
-        copy.recycle()
         if (written) generation.update { it + 1 }
     }
 
@@ -259,37 +252,6 @@ internal object ChatPictureCache {
             if (oldest.delete()) total -= length
         }
     }
-
-    /**
-     * The decoded picture, no larger than [edge] on its longest side.
-     *
-     * Sampled on the way in and then scaled once: a phone camera's 12 megapixels is 48 MB
-     * as an `ARGB_8888` bitmap, and sampling alone lands between 1024 and 2048 — close
-     * enough that the exact scale is one cheap pass over a small bitmap rather than a
-     * second decode of a large one.
-     */
-    private fun downscale(bytes: ByteArray): Bitmap? = runCatching {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
-        val sampled = BitmapFactory.decodeByteArray(
-            bytes,
-            0,
-            bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sampleFor(bounds, DISPLAY_EDGE) },
-        ) ?: return@runCatching null
-        val longest = maxOf(sampled.width, sampled.height)
-        if (longest <= DISPLAY_EDGE) return@runCatching sampled
-        val share = DISPLAY_EDGE.toFloat() / longest
-        val scaled = Bitmap.createScaledBitmap(
-            sampled,
-            (sampled.width * share).toInt().coerceAtLeast(1),
-            (sampled.height * share).toInt().coerceAtLeast(1),
-            true,
-        )
-        if (scaled !== sampled) sampled.recycle()
-        scaled
-    }.getOrNull()
 
     /** A power of two that leaves [bounds] at or above [edge] pixels on its longest side. */
     private fun sampleFor(bounds: BitmapFactory.Options, edge: Int): Int {
@@ -643,8 +605,8 @@ private const val PICTURES_PER_ROW = 2
 /** The pixels a picture is decoded for in the transcript: a 150dp tile at 3.5x density. */
 private const val TILE_PIXELS = 512
 
-/** The pixels the viewer decodes for: a 1080p phone's long side. */
-private const val VIEW_PIXELS = 1280
+/** The pixels the viewer decodes for: the largest picture the app ever sends. */
+private const val VIEW_PIXELS = SEND_IMAGE_MAX_EDGE
 
 /** The one tag every log line in this app carries. */
 private const val TAG = "PiKit"
