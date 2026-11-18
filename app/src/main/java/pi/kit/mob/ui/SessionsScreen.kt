@@ -90,10 +90,10 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Rename
+import top.yukonga.miuix.kmp.icon.extended.Replace
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
@@ -1318,6 +1318,13 @@ private fun ConversationRow(
                     // a change of this conversation even before it is applied; the switch
                     // at the drawer's foot used to write the very same record from over a
                     // live transcript, where a stray tap converted what was on screen.
+                    //
+                    // The mark is `Replace`, Miuix's two arrows swapping places, and the
+                    // label says which way: the action is one *conversion* either way, so
+                    // the glyph does not change with the target. It used to be `Messages`
+                    // for both directions, which is the mark of the mode being left rather
+                    // than of the change — a filled bubble beside "switch to work mode"
+                    // named the thing the reader was converting away from.
                     DropdownItem(
                         text = if (mode == AgentMode.CHAT) {
                             text.sessions.switchToWorkMode
@@ -1326,7 +1333,7 @@ private fun ConversationRow(
                         },
                         icon = { modifier ->
                             Icon(
-                                imageVector = MiuixIcons.Messages,
+                                imageVector = MiuixIcons.Replace,
                                 contentDescription = null,
                                 modifier = modifier,
                             )

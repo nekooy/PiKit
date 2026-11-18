@@ -39,10 +39,15 @@ converted a history entry — its launch flags, its cache key, its tool loadout 
 the reader was doing something else. A conversation's mode is a fact about that
 conversation, so it is changed where the conversation is named: hold the row in the
 history list, and the row's menu offers **Switch to chat mode** or **Switch to work
-mode**, whichever the row is not. A tap there either converts the conversation on screen
-(through `switchMode`, which restarts it in place and asks first while an answer is
-streaming) or records the mode for a saved one — and closes that conversation's idle
-live process so its next open starts in the new mode. A saved conversation that is
+mode**, whichever the row is not. The row's mark is Miuix's `Replace` — two arrows
+swapping — and it does not change with the direction, because the action is one
+*conversion* either way and the label already names the target; it used to draw
+`Messages` in both directions, which is the mark of the mode being left and left the
+reader looking at a chat bubble beside "switch to work mode". A tap there either
+converts the conversation on screen (through `switchMode`, which restarts it in place
+and asks first while an answer is streaming) or records the mode for a saved one — and
+closes that conversation's idle live process so its next open starts in the new mode.
+A saved conversation that is
 mid-answer is refused with the sentence a delete is, because a launch flag cannot change
 under a live turn.
 
