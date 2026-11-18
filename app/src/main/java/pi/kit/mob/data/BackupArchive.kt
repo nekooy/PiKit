@@ -53,13 +53,20 @@ internal const val BACKUP_FORMAT = 1
  */
 enum class BackupCategory(val id: String) {
     /**
-     * The app's own preferences: theme, language, working directory, the guard switch,
-     * and which of the phone's folders the agent may reach.
+     * How this install behaves: the app's own preferences, and the agent's instructions.
      *
-     * The storage grant is one of these rather than a group of its own: it is a
-     * setting on a settings page, it lives in the same `SharedPreferences` store the
-     * rest of the app's preferences live in, and a group with one line in it is a
-     * tick box that costs a tap and answers nothing.
+     * The preferences are everything a settings page writes — theme, language, text size,
+     * launcher icon, the avatars' pictures and names, the chat personas, the default
+     * workspace and the list of added ones, the permission tier, the agent mode, the
+     * thinking levels, and the storage grant (a setting of the same store rather than a
+     * group of its own).
+     *
+     * The **two `AGENTS` halves** are here too, and they used to be a category of their own.
+     * That category was one switch for two small files, and a reinstall that skipped it
+     * restored an agent answering in a voice the reader never chose — the instructions are
+     * part of "this install", exactly like the theme. An archive written before the merge
+     * names `agent-prompt`, which [fromId] still resolves (`LEGACY_IDS`), so an old backup
+     * restores into this switch.
      */
     SETTINGS("settings"),
 
@@ -71,7 +78,8 @@ enum class BackupCategory(val id: String) {
      * The directory travels *whole*, minus the files the app or the runtime image
      * derives, because a whitelist of the four files this build knows is a backup that
      * silently drops the extension the user installed there or a config a newer pi reads
-     * (see [BackupArchive]).
+     * (see [BackupArchive]). That is also why the page calls it "models, keys and pi's
+     * config" rather than "model profiles": what is in it is not all the app's.
      */
     MODELS("models"),
 
@@ -89,9 +97,6 @@ enum class BackupCategory(val id: String) {
      * reopening a file from another install.
      */
     CONVERSATIONS("conversations"),
-
-    /** `AGENTS.md` — the one prompt file the user edits. */
-    AGENT_PROMPT("agent-prompt"),
 
     /**
      * The agent's working directory — the built-in `$HOME/workspace` and every directory
@@ -116,11 +121,24 @@ enum class BackupCategory(val id: String) {
          *
          * The rest are off by default, and not because they are unimportant: the
          * workspace alone can be a project tree of any size, and a backup is a file
-         * the user has to carry somewhere.
+         * the user has to carry somewhere. The agent's instructions ride in [SETTINGS]
+         * and are therefore on by default, which is the point of folding them in.
          */
         val DEFAULT: Set<BackupCategory> = setOf(SETTINGS, MODELS, CONVERSATIONS)
 
-        fun fromId(id: String): BackupCategory? = entries.firstOrNull { it.id == id }
+        /**
+         * Ids a released build wrote and this one no longer has, mapped to the category
+         * that now carries their entries.
+         *
+         * Read on the way *in*: a manifest is stored json, so the ids in an archive are
+         * whatever the build that wrote it knew. Dropping one would make an old backup
+         * restore without the agent's instructions and report success — the failure this
+         * map exists to prevent.
+         */
+        private val LEGACY_IDS: Map<String, BackupCategory> = mapOf("agent-prompt" to SETTINGS)
+
+        fun fromId(id: String): BackupCategory? =
+            entries.firstOrNull { it.id == id } ?: LEGACY_IDS[id]
     }
 }
 
@@ -383,8 +401,8 @@ internal class BackupArchive(
             File(paths.piConfigDir, WEB_SEARCH_FILE),
             Redaction.SECRETS,
         ),
-        FileItem(BackupCategory.AGENT_PROMPT, "agent/AGENTS.author.md", paths.agentsAuthorFile),
-        FileItem(BackupCategory.AGENT_PROMPT, "agent/AGENTS.user.md", paths.agentsUserFile),
+        FileItem(BackupCategory.SETTINGS, "agent/AGENTS.author.md", paths.agentsAuthorFile),
+        FileItem(BackupCategory.SETTINGS, "agent/AGENTS.user.md", paths.agentsUserFile),
     )
 
     /**

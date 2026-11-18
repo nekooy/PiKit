@@ -1582,18 +1582,39 @@ interface Strings {
          * string if it ever wants one.
          */
         val backupSubtitle: String
-        val backupExportSection: String
         val backupImportSection: String
 
-        /** The six tick boxes: what each group is, and what is inside it. */
+        /**
+         * The two halves the contents are drawn in.
+         *
+         * A backup's categories are not one list: the first group is what makes *this
+         * install* this install — the app's settings and the agent's instructions, the
+         * profiles and pi's own configuration — and the second is what the reader made
+         * with it. Two headings rather than six equal rows, because a workspace can weigh
+         * four orders of magnitude more than a prompt document.
+         */
+        val backupGroupConfig: String
+        val backupGroupContent: String
+
+        /** The group holding the one switch that is a property of the archive, not a row in it. */
+        val backupExportOptions: String
+
+        /**
+         * What a fresh page has ticked, and why the other two are not.
+         *
+         * The ticks are a policy ([BackupCategory.DEFAULT]); a reader who is not told why
+         * the workspace is unticked reads a tick list as arbitrary. One sentence, and it
+         * sits under the two groups it is about.
+         */
+        val backupDefaultNote: String
+
+        /** The five tick boxes: what each group is, and what is inside it. */
         val backupCategorySettings: String
         val backupCategorySettingsSubtitle: String
         val backupCategoryModels: String
         val backupCategoryModelsSubtitle: String
         val backupCategoryConversations: String
         val backupCategoryConversationsSubtitle: String
-        val backupCategoryAgentPrompt: String
-        val backupCategoryAgentPromptSubtitle: String
         val backupCategoryWorkspace: String
         val backupCategoryWorkspaceSubtitle: String
         val backupCategoryExports: String

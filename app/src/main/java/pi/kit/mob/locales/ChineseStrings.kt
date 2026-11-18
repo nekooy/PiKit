@@ -616,31 +616,30 @@ internal object ChineseStrings : Strings {
 
         override val backupTitle = "备份与恢复"
         override val backupSubtitle = "把数据打包导出，需要时倒回"
-        override val backupExportSection = "导出"
         override val backupImportSection = "导入"
-        override val backupCategorySettings = "基础设置"
+        override val backupGroupConfig = "应用与 Agent"
+        override val backupGroupContent = "你的内容"
+        override val backupExportOptions = "导出选项"
+        override val backupDefaultNote =
+            "默认勾选的是换机后必须恢复的部分：设置、模型与 pi 的配置、对话历史（附件随对话一起走）。" +
+                "工作区文件和导出的 HTML 往往很大，所以默认不勾。"
+        override val backupCategorySettings = "应用设置"
         override val backupCategorySettingsSubtitle =
-            "主题、语言、默认工作区、权限等级、聊天预设与头像，以及本应用保存的其他全部偏好"
-        override val backupCategoryModels = "模型与供应商配置"
+            "主题、语言与字号、启动图标、头像与称呼、聊天预设、默认工作区、权限与模式，" +
+                "以及 Agent 提示词的两份文档"
+        override val backupCategoryModels = "模型、密钥与 pi 配置"
         override val backupCategoryModelsSubtitle =
-            "每个已保存的配置档案和其中的 Key，以及 pi 读取的 models.json、settings.json、" +
-                "web-search.json"
-        override val backupCategoryConversations = "全部历史对话"
+            "每个已保存的档案和其中的 Key，以及 pi 的整个配置目录——你装的扩展也在里面"
+        override val backupCategoryConversations = "对话历史"
         override val backupCategoryConversationsSubtitle =
-            "pi-sessions 目录下的每一个 .jsonl 会话记录、哪些对话被置顶，以及对话里引用过的附件副本"
-        override val backupCategoryAgentPrompt = "Agent 提示词"
-        override val backupCategoryAgentPromptSubtitle =
-            "\$HOME/.pi/agent/ 下的两份文档——「默认提示词」（AGENTS.author.md）和" +
-                "「用户指令」（AGENTS.user.md）；pi 读的 AGENTS.md 是它们合成出来的，" +
-                "恢复后会重新合成"
+            "每条会话记录、哪些被置顶、每条会话的启动模式，以及对话引用过的附件副本"
         override val backupCategoryWorkspace = "工作区文件"
         override val backupCategoryWorkspaceSubtitle =
-            "\$HOME/workspace 的全部内容，加上你在工作区菜单里添加的每一个目录" +
-                "（它们各自的内容）；把 \$HOME 本身加为工作区时整个目录都会打包，" +
-                "其他分组已负责的部分除外。可能是一整个项目，备份包会很大"
-        override val backupCategoryExports = "HTML 导出"
+            "内置工作区和你添加的每个目录；把 \$HOME 本身加为工作区时整个家目录都会打包。" +
+                "通常是最大的一项"
+        override val backupCategoryExports = "导出的 HTML"
         override val backupCategoryExportsSubtitle =
-            "\$HOME/export 下由 /export 生成的 HTML 文件"
+            "\$HOME/export 下由 /export 生成的网页文件"
         override val backupApiKeys = "包含 API Key"
         override val backupApiKeysSubtitle = "关闭后备份包不含任何 Key"
         override val backupExport = "导出备份包"

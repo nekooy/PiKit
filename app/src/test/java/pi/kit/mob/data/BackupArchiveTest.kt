@@ -292,6 +292,33 @@ class BackupArchiveTest {
         assertEquals(setOf(BackupCategory.SETTINGS), read)
     }
 
+    @Test
+    fun `an archive that named the agent prompt restores its documents`() {
+        // The category was folded into SETTINGS — one switch for two small files that a
+        // reinstall needs as much as the theme does. A manifest written by a released
+        // build still says `agent-prompt`, and a name this build does not resolve would
+        // restore an agent with its instructions missing and report success.
+        assertEquals(BackupCategory.SETTINGS, BackupCategory.fromId("agent-prompt"))
+    }
+
+    @Test
+    fun `the agent's instructions ride with the settings`() {
+        val source = device("source")
+        val zip = File(source.root, "settings-only.zip")
+        source.export(zip, categories = setOf(BackupCategory.SETTINGS))
+
+        // A settings backup that cannot bring back the agent's voice is half a settings
+        // backup — and the two documents are the only copy of it this app holds.
+        assertNotNull(
+            "the default instructions travel with the settings",
+            entryText(zip, "agent/AGENTS.author.md"),
+        )
+        assertNotNull(
+            "and the user's",
+            entryText(zip, "agent/AGENTS.user.md"),
+        )
+    }
+
     // -------------------------------------------------------------- refusals
 
     @Test

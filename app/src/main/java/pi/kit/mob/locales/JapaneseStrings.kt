@@ -632,33 +632,33 @@ internal object JapaneseStrings : Strings {
 
         override val backupTitle = "バックアップと復元"
         override val backupSubtitle = "ファイルに書き出して、戻せるように"
-        override val backupExportSection = "エクスポート"
         override val backupImportSection = "インポート"
-        override val backupCategorySettings = "基本設定"
+        override val backupGroupConfig = "アプリとエージェント"
+        override val backupGroupContent = "あなたのコンテンツ"
+        override val backupExportOptions = "エクスポートのオプション"
+        override val backupDefaultNote =
+            "初期状態では、入れ替え後に必ず要るものだけが選ばれています。設定、モデルと pi の設定、" +
+                "会話履歴（添付は会話と一緒に運ばれます）。ワークスペースと書き出した HTML は" +
+                "大きくなりがちなので、外してあります。"
+        override val backupCategorySettings = "アプリの設定"
         override val backupCategorySettingsSubtitle =
-            "テーマ、言語、デフォルトのワークスペース、権限の段階、チャットのプリセットと" +
-                "アバターなど、このアプリが保存する設定の全部"
-        override val backupCategoryModels = "モデルとプロバイダー"
+            "テーマ、言語と文字サイズ、起動アイコン、アイコン画像と名前、チャットのプリセット、" +
+                "既定のワークスペース、権限とモード、そしてエージェントへの指示の二つの文書"
+        override val backupCategoryModels = "モデル・キー・pi の設定"
         override val backupCategoryModelsSubtitle =
-            "保存済みの各プロファイルとそのキー、および pi が読む models.json、settings.json、" +
-                "web-search.json"
-        override val backupCategoryConversations = "会話履歴の全部"
+            "保存済みの各プロファイルとその中の Key、そして pi の設定ディレクトリ全体——" +
+                "入れた拡張もここに入ります"
+        override val backupCategoryConversations = "会話履歴"
         override val backupCategoryConversationsSubtitle =
-            "pi-sessions にある .jsonl を 1 件ずつ、すべてと、どれをピンしているか、" +
-                "それに会話が参照した添付ファイルの複製"
-        override val backupCategoryAgentPrompt = "エージェントのプロンプト"
-        override val backupCategoryAgentPromptSubtitle =
-            "\$HOME/.pi/agent/ の二つの文書——「既定の指示」(AGENTS.author.md) と" +
-                "「ユーザーの指示」(AGENTS.user.md)。pi が読む AGENTS.md はこの二つから合成され、" +
-                "復元後にもう一度合成されます"
+            "会話ごとの記録、どれをピンしているか、各会話の起動モード、" +
+                "そして会話が参照した添付ファイルの複製"
         override val backupCategoryWorkspace = "ワークスペースのファイル"
         override val backupCategoryWorkspaceSubtitle =
-            "\$HOME/workspace のすべてと、ワークスペースメニューで追加した各" +
-                "ディレクトリ。\$HOME そのものを追加した場合は他のグループが担当する" +
-                "部分を除いて丸ごと入り、プロジェクト一式だとバックアップが大きくなります"
-        override val backupCategoryExports = "HTML エクスポート"
+            "組み込みのワークスペースと追加した各ディレクトリ。\$HOME そのものを追加していると" +
+                "ホーム全体が入ります。たいていは最大の項目です"
+        override val backupCategoryExports = "書き出した HTML"
         override val backupCategoryExportsSubtitle =
-            "/export が \$HOME/export に書き出した .html"
+            "/export が \$HOME/export に書き出したページ"
         override val backupApiKeys = "API キーを含める"
         override val backupApiKeysSubtitle = "オフでキーをアーカイブから除外"
         override val backupExport = "バックアップを作成"

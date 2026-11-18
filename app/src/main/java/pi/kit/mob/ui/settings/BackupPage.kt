@@ -56,15 +56,31 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
  * The two directions are two labelled groups, and each draws the state that belongs
  * to it: an export's "packing…" line appears under the export button and an import's
  * under the import button, because one shared status line under both reads as
- * having done the wrong thing. The selection is the same six switches both
- * times, which is the point of the design: what was ticked on the way out is what
- * is offered on the way back in, and an archive that came from someone else shows
- * exactly what it carries rather than what the reader picked last time.
+ * having done the wrong thing.
+ *
+ * **The contents are two groups of rows, not one list of six.** They were one, and the
+ * six were a flat run whose weights differed by four orders of magnitude — two prompt
+ * documents of a few kilobytes between a profile file and a workspace that can be a
+ * project tree — which is a list a reader cannot price. The cut is the one they already
+ * make: what makes *this install* this install (the app's settings and the agent's
+ * instructions, the profiles and pi's config), and what they made with it (the
+ * conversations with their attachments, the workspaces, the exported pages). Each group
+ * is a [PiSection] of its own, which is this app's one heading level (§9.2), and a group
+ * with nothing in it is not drawn — that is what lets a restore review show exactly the
+ * archive's own halves.
+ *
+ * The two directions share the *row list* but not the selection: what a restore offers is
+ * the archive's manifest, re-ticked whenever a different file is read, so an archive from
+ * someone else never inherits the reader's last export.
  *
  * The switches are `SwitchPreference`, whose row toggles with the switch: picking what
  * an archive holds is immediate and undoable, so a tap anywhere on the row is the
  * right target. The storage page deliberately does the opposite with its folder
  * rows, because each of those can raise a question before it moves.
+ *
+ * **The key switch is not one of them.** `包含 API Key` was a seventh row among the
+ * contents, which made it look like something to pack; it is a property of the archive,
+ * so it sits in its own group beside the button it modifies.
  *
  * A restore is the one destructive thing here — it replaces the files of the names
  * the archive carries, and what it replaced is not recoverable — so it is the one
@@ -168,15 +184,24 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
-            PiSection(title = text.settings.backupExportSection) {
-                Categories(
-                    offered = BackupCategory.entries.toSet(),
-                    selected = selection,
-                    enabled = !busy,
-                    onToggle = { category ->
-                        selection = selection.toggle(category)
-                    },
-                )
+            // The two halves the list reads as, and they are the same on both sides: the
+            // three categories that make this install *this install*, and the three that
+            // are the reader's own files. Each group is its own card and its own heading,
+            // because a flat run of six switches of wildly different weights — a 6 KB
+            // document next to a project tree — is a list nobody can price.
+            CategoryGroups(
+                offered = BackupCategory.entries.toSet(),
+                selected = selection,
+                enabled = !busy,
+                onToggle = { category ->
+                    selection = selection.toggle(category)
+                },
+            )
+            SettingsParagraph(text.settings.backupDefaultNote)
+            // The key switch is a property of the archive rather than of its contents, so
+            // it is not a fourth row among the categories: it sits under its own heading,
+            // beside the button it modifies.
+            PiSection(title = text.settings.backupExportOptions) {
                 SwitchPreference(
                     title = text.settings.backupApiKeys,
                     summary = text.settings.backupApiKeysSubtitle,
@@ -236,29 +261,29 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                             date = pending.manifest.createdAt.take(ISO_DATE_LENGTH),
                         ),
                     )
-                    // Nothing tickable when the archive carries nothing: the note below
-                    // says why, and the title row stays so the reader still sees which
-                    // archive was read.
-                    if (available.isNotEmpty()) {
-                        Categories(
-                            offered = available,
-                            selected = chosen,
-                            enabled = !busy,
-                            onToggle = { category -> chosen = chosen.toggle(category) },
-                        )
-                        // What the archive carries, said plainly: whether a key is in it
-                        // is not something the reader can see from the file name, and it
-                        // is the one fact that decides whether this archive may be passed
-                        // on.
-                        BasicComponent(
-                            title = if (pending.manifest.apiKeys) {
-                                text.settings.backupReviewKeys
-                            } else {
-                                text.settings.backupReviewNoKeys
-                            },
-                        )
-                    }
+                    // What the archive carries, said plainly: whether a key is in it is
+                    // not something the reader can see from the file name, and it is the
+                    // one fact that decides whether this archive may be passed on. It sits
+                    // beside the date rather than among the categories, because it is a
+                    // property of the archive and not something to restore.
+                    BasicComponent(
+                        title = if (pending.manifest.apiKeys) {
+                            text.settings.backupReviewKeys
+                        } else {
+                            text.settings.backupReviewNoKeys
+                        },
+                    )
                 }
+                // The same groups the export list draws, holding only what this archive
+                // actually carries — so the two directions read as one list seen twice.
+                // Nothing tickable when the archive carries nothing: the title row stays so
+                // the reader still sees which archive was read.
+                CategoryGroups(
+                    offered = available,
+                    selected = chosen,
+                    enabled = !busy,
+                    onToggle = { category -> chosen = chosen.toggle(category) },
+                )
                 // The destructive half, in the error role: the wording says what a
                 // restore does *and* what it does not, and the button that acts on it is
                 // the next thing below the card.
@@ -279,33 +304,75 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
 }
 
 /**
- * The six switches, drawn from the enum rather than written out.
+ * The two halves a backup's contents read as, and the groups the page draws them in.
  *
- * Both directions draw the same list and the difference is only [offered], so a
- * seventh category is one entry in [BackupCategory], one pair of strings and no
- * change here. The alternative — two hand-written runs of six switches — is two
- * lists to keep in step with the enum, which is how a category comes to be
- * exportable and not restorable.
+ * The list used to be one flat run of six switches, and six is too many to price at a
+ * glance when their weights differ by four orders of magnitude: two documents of a few
+ * kilobytes sat between a profile file and a workspace that can be a project tree. Two
+ * halve it, and the cut is the one a reader already makes — what makes *this install*
+ * this install, and what they made with it — so a category is one question about one
+ * thing rather than a row in a list of filesystem paths.
+ *
+ * Which category belongs to which group is a *reading* decision, not a storage one:
+ * nothing here is written into an archive, so moving a category between groups never
+ * touches a byte of anybody's backup. Both directions of the page draw from these, which
+ * is what keeps an export and a restore review reading alike.
+ */
+private enum class CategoryGroup {
+    /** The app's settings, the agent's instructions, the profiles and pi's own config. */
+    CONFIG,
+
+    /** The conversations, the workspaces and the pages `/export` wrote. */
+    CONTENT,
+}
+
+private val BackupCategory.group: CategoryGroup
+    get() = when (this) {
+        BackupCategory.SETTINGS, BackupCategory.MODELS -> CategoryGroup.CONFIG
+        BackupCategory.CONVERSATIONS,
+        BackupCategory.WORKSPACE,
+        BackupCategory.HTML_EXPORTS,
+        -> CategoryGroup.CONTENT
+    }
+
+/**
+ * The switch rows, under one heading per group — and only the groups that have a row.
+ *
+ * A group with nothing to show is skipped rather than drawn empty: a restore review of an
+ * archive that carries no workspaces should not carry a heading for them. That is one
+ * condition here instead of one at each call site, and it is why the import side can pass
+ * the archive's own set straight through.
  */
 @Composable
-private fun Categories(
+private fun CategoryGroups(
     offered: Set<BackupCategory>,
     selected: Set<BackupCategory>,
     enabled: Boolean,
     onToggle: (BackupCategory) -> Unit,
 ) {
     val text = strings
-    val shown = BackupCategory.entries.filter { it in offered }
-    shown.forEach { category ->
-        val (title, subtitle) = category.label(text)
-        SwitchPreference(
-            title = title,
-            summary = subtitle,
-            checked = category in selected,
-            enabled = enabled,
-            onCheckedChange = { onToggle(category) },
-        )
+    CategoryGroup.entries.forEach { group ->
+        val rows = BackupCategory.entries.filter { it.group == group && it in offered }
+        if (rows.isEmpty()) return@forEach
+        PiSection(title = group.title(text)) {
+            rows.forEach { category ->
+                val (title, subtitle) = category.label(text)
+                SwitchPreference(
+                    title = title,
+                    summary = subtitle,
+                    checked = category in selected,
+                    enabled = enabled,
+                    onCheckedChange = { onToggle(category) },
+                )
+            }
+        }
     }
+}
+
+/** A group's heading, in the catalog's words rather than in this file's. */
+private fun CategoryGroup.title(text: Strings): String = when (this) {
+    CategoryGroup.CONFIG -> text.settings.backupGroupConfig
+    CategoryGroup.CONTENT -> text.settings.backupGroupContent
 }
 
 /**
@@ -390,9 +457,6 @@ private fun BackupCategory.label(text: Strings): Pair<String, String> = when (th
     BackupCategory.MODELS -> text.settings.backupCategoryModels to text.settings.backupCategoryModelsSubtitle
     BackupCategory.CONVERSATIONS ->
         text.settings.backupCategoryConversations to text.settings.backupCategoryConversationsSubtitle
-
-    BackupCategory.AGENT_PROMPT ->
-        text.settings.backupCategoryAgentPrompt to text.settings.backupCategoryAgentPromptSubtitle
 
     BackupCategory.WORKSPACE ->
         text.settings.backupCategoryWorkspace to text.settings.backupCategoryWorkspaceSubtitle

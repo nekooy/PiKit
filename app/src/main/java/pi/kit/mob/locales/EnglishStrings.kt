@@ -658,34 +658,34 @@ internal object EnglishStrings : Strings {
 
         override val backupTitle = "Backup & restore"
         override val backupSubtitle = "Export and restore app data"
-        override val backupExportSection = "Export"
         override val backupImportSection = "Import"
-        override val backupCategorySettings = "Basic settings"
+        override val backupGroupConfig = "The app and the agent"
+        override val backupGroupContent = "Your content"
+        override val backupExportOptions = "Export options"
+        override val backupDefaultNote =
+            "The default selection is what a reinstall cannot do without: the settings, the " +
+                "profiles and pi's config, and the conversations with the files they named. A " +
+                "workspace and the exported pages are often large, so they start unticked."
+        override val backupCategorySettings = "App settings"
         override val backupCategorySettingsSubtitle =
-            "Theme, language, the default workspace, the permission tier, chat presets and " +
-                "avatars, and every other preference this app stores"
-        override val backupCategoryModels = "Models & providers"
+            "Theme, language and text size, launcher icon, avatars and names, chat presets, " +
+                "the default workspace, the permission tier and mode — and the two documents " +
+                "the agent's instructions are made of"
+        override val backupCategoryModels = "Models, keys and pi's config"
         override val backupCategoryModelsSubtitle =
-            "Every saved profile with the key in it, and the files pi reads them from: " +
-                "models.json, settings.json, web-search.json"
-        override val backupCategoryConversations = "All conversations"
+            "Every saved profile with the key in it, and pi's whole config directory — the " +
+                "extensions you installed are in there too"
+        override val backupCategoryConversations = "Conversations"
         override val backupCategoryConversationsSubtitle =
-            "Every saved conversation — one .jsonl per talk under pi-sessions — the copies " +
-                "of the files their prompts named, and which of them are pinned"
-        override val backupCategoryAgentPrompt = "Agent prompt"
-        override val backupCategoryAgentPromptSubtitle =
-            "The two documents under \$HOME/.pi/agent/ — the default instructions " +
-                "(AGENTS.author.md) and the user's (AGENTS.user.md); the AGENTS.md pi reads " +
-                "is composed from them, and is composed again after a restore"
+            "Every saved conversation, which are pinned and how each was started, and the " +
+                "copies of the files their prompts named"
         override val backupCategoryWorkspace = "Workspace files"
         override val backupCategoryWorkspaceSubtitle =
-            "Everything under \$HOME/workspace, plus each directory you added in the " +
-                "workspace menu; \$HOME itself is packed whole when you add it, except " +
-                "the parts another group already carries, and a project tree can make " +
-                "the archive large"
-        override val backupCategoryExports = "HTML exports"
+            "The built-in workspace and every directory you added — a \$HOME workspace packs " +
+                "the whole home directory. Usually the largest part of a backup"
+        override val backupCategoryExports = "Exported HTML"
         override val backupCategoryExportsSubtitle =
-            "The .html files /export wrote into \$HOME/export"
+            "The pages /export wrote into \$HOME/export"
         override val backupApiKeys = "Include API keys"
         override val backupApiKeysSubtitle = "Off strips keys from the archive"
         override val backupExport = "Export archive"
