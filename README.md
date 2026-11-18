@@ -28,6 +28,11 @@ needed is one that can reach the model provider.
   (`Worked 47s · 5 steps`) and reopens on a tap; thinking level, model, context use and
   cache hits are chips above the input, and both switches apply without restarting the
   agent.
+- **Work and chat, two modes per conversation.** Work mode is the full coding agent:
+  pi's prompt, `AGENTS.md`, the bundled web access and seven built-in tools. Chat mode
+  loads none of that: its leading context is a preset — by default just the current
+  time — and a switch can lend the conversation just web search and page fetch. The
+  drawer lists each mode's own conversations, and converting one keeps every message.
 - **Several conversations at once.** A conversation is its own process, so a new one
   starts beside the answer that is still arriving and the list in the drawer is the
   switcher: up to five may be answering at once, and an idle one gives up its process to
