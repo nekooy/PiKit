@@ -33,15 +33,23 @@ sealed interface ChatItem {
     /**
      * A prompt from the user.
      *
-     * [imageCount] is a count rather than the images themselves: pi echoes back
-     * whatever was sent, base64 and all, and holding a megabyte of that per turn
-     * only to render a thumbnail is what made scrolling stutter.
+     * [imageKeys] is an address per attached picture rather than the picture: pi
+     * echoes back whatever was sent, base64 and all, and holding a megabyte of that
+     * per turn only to render a thumbnail is what made scrolling stutter. The key is
+     * [ChatImages.keyOf] of the echoed base64, which is also the name the picture is
+     * cached under, so the picture itself is decoded once and read from disk.
+     *
+     * [imageCount] stays a number of its own because a record can name pictures the
+     * cache does not hold — a session written before the cache existed, one whose
+     * entry was pruned — and the card then falls back to saying how many there were
+     * instead of drawing placeholders for all of them.
      */
     data class User(
         override val key: String,
         val text: String,
         val imageCount: Int = 0,
         override val createdAt: Long = 0L,
+        val imageKeys: List<String> = emptyList(),
     ) : ChatItem
 
     data class Assistant(
@@ -458,11 +466,17 @@ object ConversationReducer {
             when (message.str("role")) {
                 "user" -> {
                     val text = extractContentText(message["content"])
-                    val images = countImages(message["content"])
+                    val (images, keys) = imagesOf(message["content"])
                     if (text.isEmpty() && images == 0) continue
                     val key = "history-user-${seq++}"
                     closeTurn()
-                    items += ChatItem.User(key, text, images, at)
+                    items += ChatItem.User(
+                        key = key,
+                        text = text,
+                        imageCount = images,
+                        createdAt = at,
+                        imageKeys = keys,
+                    )
                     open = true
                     promptKey = key
                     startedAt = at
@@ -772,12 +786,20 @@ object ConversationReducer {
         return when (message.str("role")) {
             "user" -> {
                 val text = extractContentText(message["content"])
-                val images = countImages(message["content"])
+                val (images, keys) = imagesOf(message["content"])
                 if (text.isEmpty() && images == 0) {
                     state
                 } else {
                     val key = "user-${state.seq}"
-                    state.append(ChatItem.User(key, text, images, at))
+                    state.append(
+                        ChatItem.User(
+                            key = key,
+                            text = text,
+                            imageCount = images,
+                            createdAt = at,
+                            imageKeys = keys,
+                        ),
+                    )
                         .copy(
                             seq = state.seq + 1,
                             // A user message is what opens a turn. Doing it here
@@ -1103,16 +1125,20 @@ object ConversationReducer {
         }?.joinToString("\n").orEmpty()
 
     /**
-     * How many image blocks a message carries.
+     * The pictures a message carries: how many, and the cache name of each.
      *
-     * The payload is not read: `pi` echoes the base64 back on `message_start`,
-     * and copying that into the transcript would mean megabytes of strings kept
-     * alive and re-parsed for every frame of a scroll.
+     * The payload is read for its *address* and never kept: `pi` echoes the base64 back
+     * on `message_start` and in the session file, and copying that into the transcript
+     * would mean megabytes of strings kept alive and re-measured for every frame of a
+     * scroll. [ChatImages.keyOf] is the whole of what survives — 40 characters a picture,
+     * which points at a copy the app decoded once.
      */
-    private fun countImages(content: kotlinx.serialization.json.JsonElement?): Int =
-        (content as? JsonArray)?.count { block ->
-            (block as? JsonObject)?.str("type") == "image"
-        } ?: 0
+    private fun imagesOf(content: kotlinx.serialization.json.JsonElement?): Pair<Int, List<String>> {
+        val pictures = (content as? JsonArray)?.mapNotNull { block ->
+            (block as? JsonObject)?.takeIf { it.str("type") == "image" }
+        } ?: return 0 to emptyList()
+        return pictures.size to pictures.map { ChatImages.keyOf(it.str("data").orEmpty()) }
+    }
 
     /** Pulls the text out of an `AgentToolResult` / `partialResult` envelope. */
     private fun extractResultText(element: kotlinx.serialization.json.JsonElement?): String {

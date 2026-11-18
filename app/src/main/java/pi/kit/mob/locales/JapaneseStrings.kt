@@ -21,6 +21,8 @@ internal object JapaneseStrings : Strings {
         override val agentStopped = "エージェント停止中"
         override val removeAttachment = "削除"
         override fun attachmentCount(count: Int) = "画像 $count 枚"
+        override val imageOpen = "画像を表示"
+        override val imageUnavailable = "画像を表示できません"
         override fun extrasCount(fileCount: Int, noteCount: Int): String {
             val parts = buildList {
                 if (fileCount > 0) add("ファイル $fileCount 件")

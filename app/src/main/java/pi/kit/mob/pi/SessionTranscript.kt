@@ -78,4 +78,50 @@ object SessionTranscript {
             put("timestamp", JsonPrimitive(at))
         }
     }
+
+    /**
+     * Every picture a saved conversation's prompts carried, and [action] for each.
+     *
+     * The transcript keeps a *cache name* per picture and no pixels, so a conversation
+     * that was written before the app had a picture cache — or whose cache entry has
+     * since been pruned — names pictures that are nowhere. The session file is where
+     * they still are: pi persists the base64 of every attached picture inside the user
+     * message that carried it, which is also the string the send path encoded, so the
+     * name this app derives from it is the name the transcript is asking for.
+     *
+     * `action` returns whether to keep going; false stops the read, which is what makes
+     * a scan that found everything it wanted cost nothing for the rest of a long file.
+     * The base64 is handed over as it was stored — decoding is the caller's business,
+     * and this stays free of `android.*` so it is testable on the JVM.
+     */
+    fun forEachPromptPicture(file: File, action: (base64: String, mimeType: String) -> Boolean) {
+        if (!file.isFile) return
+        runCatching {
+            file.useLines { lines ->
+                for (line in lines) {
+                    // Both prefilters before the parse: an image line in a session is
+                    // megabytes, and most lines in the file are not messages at all.
+                    if (!IMAGE_BLOCK.containsMatchIn(line)) continue
+                    if (!USER_ROLE.containsMatchIn(line)) continue
+                    val message = PiRecordParser.json.parseToJsonElement(line)
+                        .jsonObject["message"] as? JsonObject ?: continue
+                    if (message.str("role") != "user") continue
+                    val content = message["content"] as? kotlinx.serialization.json.JsonArray ?: continue
+                    for (block in content) {
+                        val picture = block as? JsonObject ?: continue
+                        if (picture.str("type") != "image") continue
+                        val data = picture.str("data") ?: continue
+                        if (!action(data, picture.str("mimeType").orEmpty())) return@useLines
+                    }
+                }
+            }
+        }
+    }
+
+    private fun JsonObject.str(key: String): String? =
+        (this[key] as? JsonPrimitive)?.contentOrNull
+
+    /** Cheap prefilters the two checks above match against. */
+    private val IMAGE_BLOCK = Regex("\"type\"\\s*:\\s*\"image\"")
+    private val USER_ROLE = Regex("\"role\"\\s*:\\s*\"user\"")
 }

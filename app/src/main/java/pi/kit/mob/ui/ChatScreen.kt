@@ -166,10 +166,14 @@ import pi.kit.mob.pi.PiLaunchOptions
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.thinkingLevelsFor
 import pi.kit.mob.ui.WorkspacePickerSheet
+import pi.kit.mob.ui.chat.ChatPictureCache
 import pi.kit.mob.ui.chat.ChatStatusPill
 import pi.kit.mob.ui.chat.ChatTone
 import pi.kit.mob.ui.chat.FollowTailController
 import pi.kit.mob.ui.chat.NoticeCard
+import pi.kit.mob.ui.chat.PictureTarget
+import pi.kit.mob.ui.chat.PictureViewer
+import pi.kit.mob.ui.chat.PromptPictures
 import pi.kit.mob.ui.chat.ROW_SHAPE
 import pi.kit.mob.ui.chat.ReasoningBlock
 import pi.kit.mob.ui.chat.ReasoningToggle
@@ -636,6 +640,10 @@ internal fun ChatScreen(
     // scroll of the row that raised it.
     var openSheet by remember { mutableStateOf<ComposerSheet?>(null) }
     var promptExtras by remember { mutableStateOf<PromptExtras?>(null) }
+    // The picture a tap in the transcript opened, and the row it came from. A value
+    // rather than a file, because the row that raised it can be recycled by the list
+    // while the viewer is still on screen (see `PictureTarget`).
+    var pictures by remember { mutableStateOf<PictureTarget?>(null) }
     // The extras sheet keeps its value while it leaves: a Miuix sheet animates out
     // with the content it was showing, so clearing the value on dismissal would play
     // the exit over an empty panel.
@@ -643,6 +651,26 @@ internal fun ChatScreen(
 
     fun closeSheet() {
         openSheet = null
+    }
+
+    // A conversation read from disk names its pictures by key, and the files behind those
+    // keys are the app's own cache. A session written before that cache existed — or one
+    // whose entries were pruned — would draw the count line for ever, so the session file
+    // is read once, off the main thread, and the copies the transcript is asking for are
+    // filled in; the tiles redraw when they land (`ChatPictureCache.generation`).
+    //
+    // Keyed on the file rather than on the items: the wanted set is read once per
+    // conversation, and a key that arrives while the reader is sending is already on disk
+    // from the send path.
+    LaunchedEffect(state.sessionFile) {
+        val path = state.sessionFile ?: return@LaunchedEffect
+        val wanted = state.items
+            .filterIsInstance<ChatItem.User>()
+            .flatMap { it.imageKeys }
+            .toSet()
+        if (wanted.isNotEmpty()) {
+            ChatPictureCache.hydrate(context.filesDir, java.io.File(path), wanted)
+        }
     }
 
     /** Adds picked documents or images to the composer, refusing oversized images. */
@@ -1170,6 +1198,7 @@ internal fun ChatScreen(
                     promptExtras = extras
                     showPromptExtras = true
                 },
+                onOpenPictures = { target -> pictures = target },
                 onOpenSessions = {
                     drawer.reachable = true
                     settlePage(1f, 0f)
@@ -1225,6 +1254,11 @@ internal fun ChatScreen(
                             }
                             val payload = withContext(Dispatchers.IO) {
                                 pictured.mapNotNull { encodeImage(context, it) }
+                                    // The one moment the bytes are certain: the row pi
+                                    // echoes back is drawn from this copy, and the copy
+                                    // is named by the hash of the same base64 that is
+                                    // about to be sent (`ChatPictures.kt`).
+                                    .onEach { ChatPictureCache.store(context.filesDir, it) }
                             }
                             session.sendPrompt(pathNote, payload)
                         }
@@ -1321,6 +1355,18 @@ internal fun ChatScreen(
         onDismiss = { showPromptExtras = false },
     ) {
         promptExtras?.let { PromptExtrasSheet(extras = it, text = text) }
+    }
+
+    // A prompt's pictures, full screen. A platform window rather than one of Miuix's,
+    // and *composed only while it is open*: a picture viewer has no exit animation to
+    // play over its content — the window is black, the picture is the subject, and the
+    // window behind it is the page the reader came from.
+    pictures?.let { target ->
+        PictureViewer(
+            target = target,
+            text = text,
+            onDismiss = { pictures = null },
+        )
     }
 
     // The folder picker. Its own sheet rather than a row of the workspace menu: a menu
@@ -1644,6 +1690,8 @@ private fun ChatPage(
     onRunCommand: (BuiltInCommand) -> Unit,
     onPickAttachment: (String) -> Unit,
     onShowPromptExtras: (PromptExtras) -> Unit,
+    /** Opens the viewer on a prompt's pictures, at the one that was tapped. */
+    onOpenPictures: (PictureTarget) -> Unit,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     /** This conversation's launch mode: what the empty-state tips and the composer follow. */
@@ -2135,6 +2183,7 @@ private fun ChatPage(
                                                 onToggleTurn = onToggleTurn,
                                                 avatars = avatars,
                                                 onShowExtras = onShowPromptExtras,
+                                                onOpenPictures = onOpenPictures,
                                             )
                                         }
                                         Box(
@@ -3366,6 +3415,7 @@ private fun TranscriptCardView(
     onToggleTurn: (Int) -> Unit,
     avatars: ChatAvatars?,
     onShowExtras: (PromptExtras) -> Unit,
+    onOpenPictures: (PictureTarget) -> Unit,
 ) {
     when (card) {
         // The prompt is measured against the transcript's own width so the cap can
@@ -3428,6 +3478,7 @@ private fun TranscriptCardView(
                             expandedTurns = expandedTurns,
                             onToggleTurn = onToggleTurn,
                             onShowExtras = onShowExtras,
+                            onOpenPictures = onOpenPictures,
                         )
                     }
                     // Outside the card, and that is the rule for both sides: the time
@@ -3482,6 +3533,7 @@ private fun TranscriptCardView(
                             expandedTurns = expandedTurns,
                             onToggleTurn = onToggleTurn,
                             onShowExtras = onShowExtras,
+                            onOpenPictures = onOpenPictures,
                         )
                     }
                 }
@@ -3653,10 +3705,11 @@ private fun TranscriptCardRow(
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
     onShowExtras: (PromptExtras) -> Unit,
+    onOpenPictures: (PictureTarget) -> Unit,
 ) {
     when (row) {
         is TranscriptRow.Message -> when (val item = row.item) {
-            is ChatItem.User -> PromptBody(item, text, onShowExtras)
+            is ChatItem.User -> PromptBody(item, text, onShowExtras, onOpenPictures)
 
             is ChatItem.Assistant ->
                 AssistantBlock(item, text, row.showReasoning)
@@ -3793,8 +3846,8 @@ internal fun parsePromptExtras(raw: String): PromptExtras {
  * ## What identifies it
  *
  * Three things, and none of them is a name line: it is the only card sized to its
- * content, it opens the turn, and it carries the reader's own furniture — the image
- * count and the extras chip, which nothing the model says has.
+ * content, it opens the turn, and it carries the reader's own furniture — the pictures
+ * they attached and the extras chip, which nothing the model says has.
  *
  * ## Why the column has no `fillMaxWidth`
  *
@@ -3808,6 +3861,7 @@ private fun PromptBody(
     item: ChatItem.User,
     text: Strings,
     onShowExtras: (PromptExtras) -> Unit,
+    onOpenPictures: (PictureTarget) -> Unit,
 ) {
     // The prompt is the last thing the reader wrote; what follows it is the other
     // speaker. The space *between* the two cards is `rowGap`'s job — it is the only
@@ -3825,31 +3879,20 @@ private fun PromptBody(
                 onClick = { onShowExtras(extras) },
             )
         }
+        // The pictures the reader sent, drawn: one at its own aspect, several as a
+        // grid, and the old count line only when none of them can be read
+        // ([PromptPictures] has the three cases and why the count survives).
         if (item.imageCount > 0) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            PromptPictures(
+                keys = item.imageKeys,
+                count = item.imageCount,
+                text = text,
+                onOpen = onOpenPictures,
                 modifier = Modifier.padding(
                     top = if (extras.hasExtras) 6.dp else 0.dp,
                     bottom = if (extras.displayText.isBlank()) 0.dp else 6.dp,
                 ),
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Photos,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    // Furniture rather than prose: the count of pictures the reader
-                    // attached is a fact about the message, not part of the sentence
-                    // they typed, so it takes the muted ink and the words under it
-                    // take the card's own.
-                    tint = ChatTone.Neutral.ink(),
-                )
-                Text(
-                    text = text.chat.attachmentCount(item.imageCount),
-                    modifier = Modifier.padding(start = 4.dp),
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = ChatTone.Neutral.ink(),
-                )
-            }
+            )
         }
         if (extras.displayText.isNotBlank()) {
             Text(

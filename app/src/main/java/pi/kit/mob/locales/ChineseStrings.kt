@@ -28,6 +28,8 @@ internal object ChineseStrings : Strings {
         override val agentStopped = "Agent 已停止"
         override val removeAttachment = "移除"
         override fun attachmentCount(count: Int) = "$count 张图片"
+        override val imageOpen = "查看图片"
+        override val imageUnavailable = "图片已无法显示"
         override fun extrasCount(fileCount: Int, noteCount: Int): String {
             val parts = buildList {
                 if (fileCount > 0) add("$fileCount 个文件")

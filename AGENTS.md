@@ -294,6 +294,16 @@ APK's dex has lost them. **A formula verified on a debug build is not a formula 
 build people install**; ARCHITECTURE §12.2 carries
 the numbers.
 
+**A prompt's picture is drawn from `files/chat-pictures`, and the transcript carries only its
+name.** `ChatItem.User.imageKeys` is `ChatImages.keyOf` of the base64 pi echoes; the bytes never
+enter a `ChatItem`, because four megabytes of photo is five and a half of encoded text per turn,
+re-measured on every frame of a scroll. The copy is written at send time and re-derived from the
+session file for a conversation that predates it, so the key's derivation is a contract, not an
+implementation detail: it digests the **encoded text** (which is what lets the send path and a
+restored record agree without a decode), and changing it silently orphans every copy on disk.
+A prompt whose copies are all gone draws the count line and a single missing one draws a
+placeholder tile — a cache miss is a state the page draws, never an error.
+
 **Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
 glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12.3 has that
 sequence. Two exceptions are the *navigation* marks in `ChatScreen.kt` — the terminal's (a chevron

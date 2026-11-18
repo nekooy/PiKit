@@ -2,6 +2,7 @@ package pi.kit.mob.pi
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -460,6 +461,23 @@ class ConversationReducerTest {
         val user = state.users().single()
         assertEquals("", user.text)
         assertEquals(1, user.imageCount)
+    }
+
+    @Test
+    fun `names each attached image by the key its copy is cached under`() {
+        // The transcript draws a picture from the app's own copy, which is stored under
+        // `ChatImages.keyOf` of the base64 pi echoes. The live row has nothing but that
+        // echo to derive the name from, so the record is the contract.
+        val state = fold(
+            """{"type":"message_start","message":{"role":"user","content":[{"type":"image","data":"AAAAAAAA","mimeType":"image/png"},{"type":"image","data":"BBBBBBBB","mimeType":"image/jpeg"}],"timestamp":1}}""",
+        )
+        val user = state.users().single()
+        assertEquals(
+            listOf(ChatImages.keyOf("AAAAAAAA"), ChatImages.keyOf("BBBBBBBB")),
+            user.imageKeys,
+        )
+        // One name per distinct picture, in the order they were sent.
+        assertNotEquals(user.imageKeys[0], user.imageKeys[1])
     }
 
     /**

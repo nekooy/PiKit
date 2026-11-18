@@ -115,7 +115,22 @@ interface Strings {
         val agentFailed: String
         val agentStopped: String
         val removeAttachment: String
+
+        /**
+         * How many pictures a prompt carried, when the card cannot draw them.
+         *
+         * The pictures themselves are drawn from the app's own copy of them
+         * (`ui/chat/ChatPictures.kt`); this line is what is left for a conversation whose
+         * copies are gone — a session written before the cache existed, or one whose
+         * entries were pruned — because a count is truer than four empty frames.
+         */
         fun attachmentCount(count: Int): String
+
+        /** The label a prompt's picture is read out with; the tap opens it full screen. */
+        val imageOpen: String
+
+        /** What a picture the app cannot draw says, in place of the picture. */
+        val imageUnavailable: String
 
         /**
          * The chip on a prompt that carries file paths or image annotations.

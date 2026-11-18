@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlinx.serialization.json.Json
+import pi.kit.mob.pi.ChatImages
 import pi.kit.mob.pi.ChatItem
 import pi.kit.mob.pi.ConversationReducer
 import pi.kit.mob.pi.ConversationState
@@ -404,5 +405,37 @@ class ChatFoldTest {
         val totals = state.usage.total
         assertEquals("inputs are summed across messages", 350L, totals.input)
         assertEquals("outputs too", 30L, totals.output)
+    }
+
+    /**
+     * A restored prompt's pictures are named the way the live path names them.
+     *
+     * The name is what the app's own copy of the picture is cached under, and the two
+     * paths have to agree — the send path writes the copy, history reads it — or a
+     * conversation reopened from disk draws the count line for ever. It also pins the
+     * other half of that contract: what survives is 40 characters a picture, never the
+     * base64 pi stores in the session file.
+     */
+    @Test
+    fun `a restored prompt keeps the cache key of each picture it carried`() {
+        val restored = history(
+            """
+            [
+              {"role":"user","content":[{"type":"text","text":"what is this"},
+                {"type":"image","data":"AAAAAAAA","mimeType":"image/png"}],"timestamp":1000},
+              {"role":"assistant","content":[{"type":"text","text":"a cat"}],
+                "stopReason":"stop","timestamp":2000}
+            ]
+            """.trimIndent(),
+        )
+
+        val state = ConversationReducer.replaceWithMessages(ConversationState(), restored)
+        val prompt = state.items.filterIsInstance<ChatItem.User>().single()
+        assertEquals(1, prompt.imageCount)
+        assertEquals(listOf(ChatImages.keyOf("AAAAAAAA")), prompt.imageKeys)
+        assertFalse(
+            "the payload must not reach the transcript",
+            prompt.imageKeys.any { it.contains("AAAA") },
+        )
     }
 }

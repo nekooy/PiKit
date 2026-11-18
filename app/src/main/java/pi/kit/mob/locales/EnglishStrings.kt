@@ -20,6 +20,8 @@ internal object EnglishStrings : Strings {
         override val agentStopped = "Agent stopped"
         override val removeAttachment = "Remove"
         override fun attachmentCount(count: Int) = plural(count, "image", "images")
+        override val imageOpen = "Show picture"
+        override val imageUnavailable = "Picture is no longer available"
         override fun extrasCount(fileCount: Int, noteCount: Int): String {
             val parts = buildList {
                 if (fileCount > 0) add(plural(fileCount, "file", "files"))
