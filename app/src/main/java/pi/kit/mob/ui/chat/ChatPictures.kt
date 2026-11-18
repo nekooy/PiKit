@@ -44,6 +44,7 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animate
@@ -755,23 +756,6 @@ internal fun PictureViewer(
         }
     }
 
-    // The window is a second one, and the app's theme sets the bar icons through the
-    // activity's. The ground behind the bars here is a photograph in both schemes, so the
-    // icons are made light rather than left to the theme, and the window's own dim is
-    // taken away: the dimming is this composable's ground, which follows the finger.
-    val view = LocalView.current
-    val window = (view.parent as? DialogWindowProvider)?.window
-    DisposableEffect(window, view) {
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        controller?.isAppearanceLightStatusBars = false
-        controller?.isAppearanceLightNavigationBars = false
-        window?.setDimAmount(0f)
-        onDispose {
-            // The window is the dialog's, not the activity's: the activity's own bars and
-            // their icons come back with it.
-        }
-    }
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -779,11 +763,39 @@ internal fun PictureViewer(
             decorFitsSystemWindows = false,
         ),
     ) {
+        // Inside the dialog's content, and only here: `LocalView` read in `PictureViewer`'s
+        // own body is the *activity's* view, whose parent is a `ComposeView` rather than
+        // this window's `DialogWindowProvider` — the window lookup answered null and the
+        // window's dim was never touched.
+        val dialogView = LocalView.current
+        val window = (dialogView.parent as? DialogWindowProvider)?.window
+        DisposableEffect(window, dialogView) {
+            // The window's own dim is the one thing that made closing flash: it sits behind
+            // this window and over the page, so the page is about 40% dark for as long as
+            // the viewer is up, whatever this composable draws — and the frame the window is
+            // removed is the frame the page jumps back to full brightness. The viewer's
+            // black ground is this composable's, and it follows the finger; the platform's
+            // dim has nothing to add and everything to break.
+            window?.apply {
+                clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                setDimAmount(0f)
+            }
+            // The app's theme sets the bar icons through the activity's window, and this is
+            // a second one: over the viewer's black ground they have to be light, or the
+            // light scheme draws near-black icons on a photograph.
+            val controller = window?.let { WindowCompat.getInsetsController(it, dialogView) }
+            controller?.isAppearanceLightStatusBars = false
+            controller?.isAppearanceLightNavigationBars = false
+            onDispose {
+                // The window is the dialog's, not the activity's: the activity's own bars
+                // and their icons come back with it.
+            }
+        }
         Box(
             Modifier
                 .fillMaxSize()
                 .onSizeChanged { frame = it.toSize() }
-                .onGloballyPositioned { rootOnScreen = it.screenRect(view).topLeft }
+                .onGloballyPositioned { rootOnScreen = it.screenRect(dialogView).topLeft }
                 .pointerInput(page, frame) {
                     // One finger, unzoomed and vertical: the pager takes horizontal drags
                     // and a zoomed page consumes its own pans, so anything that reaches
