@@ -21,6 +21,28 @@ reason written down in the chapter that owns it; search `docs/` and the code aro
 first. If the chapter and the code disagree, one of them is stale — settle it in the
 same change instead of silently following one and leaving the other behind.
 
+**A fix is a question about every sibling, not only about the line that failed.** A bug
+in one place is usually a *kind* of bug: the same construction is very likely in the
+other screen, the other catalog, the other call site of the same composable, the second
+launch path, or the release build that nobody looked at. Before the change is called
+done, ask what else shares the mechanism and check it:
+
+- **the same shape elsewhere** — grep the symbol, the modifier order, the flag name, the
+  preference key, the command-line argument; a second spelling is a second bug;
+- **the other implementations of one contract** — three locale catalogs (one string means
+  three entries), every `PiSettings` field's five landing places, both ABI flavours, both
+  workflows, the debug *and* the release APK (R8 is a different program);
+- **the neighbours of a surface** — a page's sibling pages, a row's sibling rows, a
+  gesture's other directions, a keyboard's other dismissal paths;
+- **the data half** — when the change touches anything that is stored, the backup and
+  restore must carry it (ARCHITECTURE §10), and a new file or preference file is a new
+  entry in that chapter's list and in `BackupArchive`.
+
+Fix what belongs to this change; when a sibling is real but outside its scope, write it
+down where the owning chapter or `docs/MAINTAINING.md` will be read, rather than leaving
+it to be rediscovered by breaking it. The report of a fix names the siblings that were
+checked, so "not checked" is visible rather than assumed.
+
 ## Build and test
 
 ```bash
