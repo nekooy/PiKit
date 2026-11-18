@@ -174,7 +174,9 @@ import pi.kit.mob.ui.chat.FollowTailController
 import pi.kit.mob.ui.chat.NoticeCard
 import pi.kit.mob.ui.chat.PictureTarget
 import pi.kit.mob.ui.chat.PictureViewer
+import pi.kit.mob.ui.chat.PreparedImage
 import pi.kit.mob.ui.chat.SEND_IMAGE_MAX_EDGE
+import pi.kit.mob.ui.chat.dimensionNote
 import pi.kit.mob.ui.chat.prepareImageForSend
 import pi.kit.mob.ui.chat.PromptPictures
 import pi.kit.mob.ui.chat.ROW_SHAPE
@@ -1262,9 +1264,22 @@ internal fun ChatScreen(
                                     // echoes back is drawn from this copy, and the copy
                                     // is named by the hash of the same base64 that is
                                     // about to be sent (`ChatPictures.kt`).
-                                    .onEach { ChatPictureCache.store(context.filesDir, it) }
+                                    .onEach { ChatPictureCache.store(context.filesDir, it.attachment) }
                             }
-                            session.sendPrompt(pathNote, payload)
+                            // A picture this app had to fit is a smaller raster than the
+                            // file the reader picked, so the model is told the ratio in the
+                            // wording pi uses — the note the machinery chip already knows
+                            // how to read. An untouched picture needs none: what it sees is
+                            // the original pixels.
+                            val notes = payload.mapNotNull { dimensionNote(it.prepared) }
+                            val promptWithNotes = buildString {
+                                append(pathNote)
+                                if (notes.isNotEmpty()) {
+                                    append("\n\n")
+                                    append(notes.joinToString("\n"))
+                                }
+                            }
+                            session.sendPrompt(promptWithNotes, payload.map { it.attachment })
                         }
                     }
                 },
@@ -6991,6 +7006,12 @@ private fun queryName(context: Context, uri: Uri): String? = runCatching {
     }
 }.getOrNull()
 
+/** One encoded attachment, plus the facts its prompt's coordinate note is built from. */
+private data class EncodedImage(
+    val attachment: ImageAttachment,
+    val prepared: PreparedImage,
+)
+
 /**
  * The attachment as pi expects it: raw base64 plus the mime type.
  *
@@ -7005,14 +7026,17 @@ private fun queryName(context: Context, uri: Uri): String? = runCatching {
  * [SEND_IMAGE_MAX_EDGE] or [SEND_IMAGE_MAX_BYTES] it is scaled and re-encoded here,
  * and below both it is sent exactly as picked.
  */
-private fun encodeImage(context: Context, image: PendingImage): ImageAttachment? = runCatching {
+private fun encodeImage(context: Context, image: PendingImage): EncodedImage? = runCatching {
     val mime = context.contentResolver.getType(image.uri) ?: "image/jpeg"
     val bytes = context.contentResolver.openInputStream(image.uri)?.use { readAtMost(it) }
         ?: return@runCatching null
     val prepared = prepareImageForSend(bytes, mime) ?: return@runCatching null
-    ImageAttachment(
-        base64 = Base64.encodeToString(prepared.bytes, Base64.NO_WRAP),
-        mimeType = prepared.mimeType,
+    EncodedImage(
+        attachment = ImageAttachment(
+            base64 = Base64.encodeToString(prepared.bytes, Base64.NO_WRAP),
+            mimeType = prepared.mimeType,
+        ),
+        prepared = prepared,
     )
 }.getOrNull()
 

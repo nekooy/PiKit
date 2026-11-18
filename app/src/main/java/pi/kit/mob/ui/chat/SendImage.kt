@@ -51,7 +51,13 @@ internal data class PreparedImage(
     val mimeType: String,
     val width: Int,
     val height: Int,
+    /** The decoded source before fitting, which is what a coordinate note reports. */
+    val originalWidth: Int = width,
+    val originalHeight: Int = height,
 ) {
+    /** Whether the bytes were fitted, and therefore whether the model sees a smaller picture. */
+    val wasResized: Boolean get() = width != originalWidth || height != originalHeight
+
     // A data class over a ByteArray compares the array by identity, which is never what a
     // caller wants; the fields a test asserts on are the facts, not the buffer.
     override fun equals(other: Any?): Boolean =
@@ -59,10 +65,35 @@ internal data class PreparedImage(
             mimeType == other.mimeType &&
             width == other.width &&
             height == other.height &&
+            originalWidth == other.originalWidth &&
+            originalHeight == other.originalHeight &&
             bytes.contentEquals(other.bytes)
 
     override fun hashCode(): Int =
-        ((mimeType.hashCode() * 31 + width) * 31 + height) * 31 + bytes.contentHashCode()
+        ((((mimeType.hashCode() * 31 + width) * 31 + height) * 31 + originalWidth) * 31 +
+            originalHeight) * 31 + bytes.contentHashCode()
+}
+
+/**
+ * The line pi would have written had it done the fitting itself.
+ *
+ * pi appends `[Image: original …x…, displayed at …x…. Multiply coordinates by k …]` when
+ * *it* rescales, and this app's prompts no longer reach that branch — which is the point,
+ * but it also removed the only place the model learned the ratio between the picture it
+ * sees and the file on disk. A model that answers "the button is at (500, 300)" is
+ * answering in the sent picture's pixels, so the ratio has to travel with it.
+ *
+ * The wording is pi's, character for character, for two reasons: the model already knows
+ * how to read it, and `parsePromptExtras` already removes it from the bubble into the
+ * machinery chip. Null when nothing was fitted, which is the state pi leaves too.
+ */
+internal fun dimensionNote(image: PreparedImage): String? {
+    if (!image.wasResized) return null
+    val scale = image.originalWidth.toFloat() / image.width
+    return "[Image: original ${image.originalWidth}x${image.originalHeight}, " +
+        "displayed at ${image.width}x${image.height}. " +
+        "Multiply coordinates by ${String.format(java.util.Locale.US, "%.2f", scale)} " +
+        "to map to original image.]"
 }
 
 /**
@@ -106,7 +137,7 @@ internal fun prepareImageForSend(bytes: ByteArray, mimeType: String): PreparedIm
     val height = bounds.outHeight
     if (width <= 0 || height <= 0) return@runCatching null
     if (fitsWithin(width, height, bytes.size)) {
-        return@runCatching PreparedImage(bytes, mimeType, width, height)
+        return@runCatching PreparedImage(bytes, mimeType, width, height, width, height)
     }
 
     val (targetWidth, targetHeight) = fitSize(width, height)
@@ -132,6 +163,8 @@ internal fun prepareImageForSend(bytes: ByteArray, mimeType: String): PreparedIm
             mimeType = if (alpha) "image/webp" else "image/jpeg",
             width = targetWidth,
             height = targetHeight,
+            originalWidth = width,
+            originalHeight = height,
         )
     }
 }.getOrNull()

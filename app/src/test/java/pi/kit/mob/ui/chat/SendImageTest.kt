@@ -2,6 +2,7 @@ package pi.kit.mob.ui.chat
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,5 +44,29 @@ class SendImageTest {
     @Test
     fun `a picture already inside the edge is not enlarged`() {
         assertEquals(800 to 600, fitSize(800, 600))
+    }
+
+    @Test
+    fun `a picture that was not fitted carries no coordinate note`() {
+        assertNull(dimensionNote(PreparedImage(byteArrayOf(), "image/jpeg", 800, 600)))
+    }
+
+    @Test
+    fun `a fitted picture carries the ratio in pi's own wording`() {
+        val note = dimensionNote(
+            PreparedImage(
+                bytes = byteArrayOf(),
+                mimeType = "image/jpeg",
+                width = 900,
+                height = 3000,
+                originalWidth = 1200,
+                originalHeight = 4000,
+            ),
+        )
+        assertEquals(
+            "[Image: original 1200x4000, displayed at 900x3000. " +
+                "Multiply coordinates by 1.33 to map to original image.]",
+            note,
+        )
     }
 }
