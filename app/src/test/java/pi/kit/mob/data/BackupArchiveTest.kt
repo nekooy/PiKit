@@ -110,6 +110,10 @@ class BackupArchiveTest {
             // what makes the whole-directory entry carry it without knowing the names.
             File(paths.avatarDir, "preset-default-1700000000002.png").writeBytes(byteArrayOf(7, 8, 9))
             File(paths.sessionDir, "one.jsonl").writeText("""{"type":"message"}""" + "\n")
+            // The copy of a file a prompt named. The session holds the *path* and none of
+            // the bytes, so this copy is the only thing a restore could put back.
+            paths.attachmentDir.mkdirs()
+            File(paths.attachmentDir, "report.pdf").writeText("%PDF-1.4\n")
             File(paths.workspace, "main.kt").writeText("fun main() {}\n")
             File(paths.exportDir, "talk.html").writeText("<html></html>\n")
         }
@@ -137,9 +141,14 @@ class BackupArchiveTest {
         val source = device("source")
         val zip = File(source.root, "out.zip")
         source.export(zip)
+        assertNotNull(
+            "a named file's copy travels beside the conversations",
+            entryText(zip, "attachments/report.pdf"),
+        )
 
         val target = device("target", preferences = FakePreferences())
         target.paths.sessionDir.listFiles()?.forEach { it.delete() }
+        target.paths.attachmentDir.listFiles()?.forEach { it.delete() }
         File(target.paths.workspace, "main.kt").delete()
         File(target.paths.exportDir, "talk.html").delete()
         target.paths.avatarDir.listFiles().orEmpty().forEach { it.delete() }
@@ -180,6 +189,11 @@ class BackupArchiveTest {
         assertEquals("be terse\n", target.paths.agentsAuthorFile.readText())
         assertEquals("use tabs\n", target.paths.agentsUserFile.readText())
         assertEquals("""{"type":"message"}""" + "\n", File(target.paths.sessionDir, "one.jsonl").readText())
+        assertEquals(
+            "a file a prompt named comes back with the conversation that names it",
+            "%PDF-1.4\n",
+            File(target.paths.attachmentDir, "report.pdf").readText(),
+        )
         assertEquals("fun main() {}\n", File(target.paths.workspace, "main.kt").readText())
         assertEquals("<html></html>\n", File(target.paths.exportDir, "talk.html").readText())
         assertEquals(byteArrayOf(1, 2, 3).toList(), File(target.paths.avatarDir, "ai-1700000000000.png").readBytes().toList())

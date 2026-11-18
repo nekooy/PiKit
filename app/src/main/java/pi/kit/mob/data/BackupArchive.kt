@@ -76,15 +76,17 @@ enum class BackupCategory(val id: String) {
     MODELS("models"),
 
     /**
-     * Every saved conversation: one `.jsonl` per talk under `files/pi-sessions`, and
-     * which of them are pinned.
+     * Every saved conversation: one `.jsonl` per talk under `files/pi-sessions`, the copies
+     * of the files their prompts named (`files/attachments`), and which of them are pinned.
      *
      * The pins travel with the conversations rather than beside them: a pin is a
      * property of a conversation, and a set of names with no conversations to point
-     * at is a list of nothing. The conversation that was *open* when the app last
-     * closed is deliberately not here — it is where the reader happened to be, not
-     * something they chose, and a restore that reopened it would be reopening a file
-     * from another install.
+     * at is a list of nothing. The attachment copies travel here for the same reason —
+     * a prompt names one by absolute path, so a transcript without its copies is a
+     * history whose attachments all point at nothing. The conversation that was *open*
+     * when the app last closed is deliberately not here — it is where the reader
+     * happened to be, not something they chose, and a restore that reopened it would be
+     * reopening a file from another install.
      */
     CONVERSATIONS("conversations"),
 
@@ -241,6 +243,17 @@ internal data class BackupPaths(
      */
     val avatarDir: File get() = AvatarStore.directory(filesDir)
 
+    /**
+     * `files/attachments` — the copies of the files prompts were sent with.
+     *
+     * Driven from [AttachmentStore] rather than spelled again, for the reason the avatars
+     * are: the absolute paths are written into the conversations themselves, so a backup
+     * that put them back anywhere else would restore transcripts naming files that are not
+     * there. They travel with [BackupCategory.CONVERSATIONS] because that is what they are
+     * part of — the path is the message's own furniture.
+     */
+    val attachmentDir: File get() = AttachmentStore.directory(filesDir)
+
     companion object {
         fun of(env: TermuxEnv, workspaces: List<File> = emptyList()): BackupPaths = BackupPaths(
             filesDir = env.filesDir,
@@ -289,10 +302,10 @@ internal data class BackupPaths(
  * `files/chat-pictures`: the transcript's copies of the pictures a prompt was sent with are
  * decoded from the bytes the session file itself carries, so an archive that shipped them
  * would carry the same picture twice and could still put back a copy older than the
- * conversation (§7.3). Nor `files/attachments`: the copy of a *file* a prompt was sent with
- * is a copy of something that already lives outside the app, and the conversation keeps the
- * path rather than the bytes (§7.1). A backup carries what the user made and would have to
- * make again.
+ * conversation (§7.3). A backup carries what the user made and would have to make again.
+ * `files/attachments` *is* carried, and that is not the same case: a session file names a
+ * file attachment by path and holds none of its bytes, so the copy is the only thing a
+ * restore could put back — it travels with CONVERSATIONS (§7.1).
  *
  * ## pi's directory is a tree, not four names
  *
@@ -396,6 +409,18 @@ internal class BackupArchive(
      */
     private val trees: List<TreeItem> = buildList {
         add(TreeItem(BackupCategory.CONVERSATIONS, "conversations", paths.sessionDir))
+        // The files those conversations name. A `文件` attachment is sent as the absolute
+        // path of an app-made copy, and the transcript draws that path again for as long as
+        // the conversation exists — so a restore without the copies is a history whose
+        // attachments all point at nothing. They travel in this category rather than one of
+        // their own: what a reader ticks here is "my conversations as they were".
+        add(
+            TreeItem(
+                BackupCategory.CONVERSATIONS,
+                AttachmentStore.DIRECTORY,
+                paths.attachmentDir,
+            ),
+        )
         // The rest of pi's directory: everything the four entries above do not name.
         // See the class note — a whitelist was a backup that silently lost a user's own
         // extension, and every file pi or an extension adds later needs no entry here.

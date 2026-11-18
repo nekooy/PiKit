@@ -143,6 +143,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
 import pi.kit.mob.data.AgentMode
+import pi.kit.mob.data.AttachmentStore
 import pi.kit.mob.data.ChatPreset
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.PermissionMode
@@ -6921,9 +6922,9 @@ private fun prepareImage(context: Context, uri: Uri, text: Strings): PendingImag
  * every document ever mentioned would be a workspace the agent has to wade through.
  *
  * A name that is already taken gets a numeric suffix rather than overwriting: two
- * documents called `report.pdf` in one prompt are two documents. The directory is held
- * to a budget by [pruneAttachments], because a copy is staging and the reader's own file
- * is the record.
+ * documents called `report.pdf` in one prompt are two documents. The directory, and the
+ * budget that bounds it, are [AttachmentStore]'s rather than this function's — the same
+ * directory is what a backup carries and what a restore puts back.
  *
  * Size is capped the same way an image is, because the copy is a real file on the app's
  * private disk and the alternative is a pick of a 2 GB video filling it. Past the cap the
@@ -6938,12 +6939,12 @@ private fun copyToTemp(
     val size = if (declared >= 0) declared else measure(context, uri)
     if (size <= 0 || size > MAX_IMAGE_BYTES) return@runCatching null
     val name = queryName(context, uri) ?: text.chat.addressFallbackName
-    val dir = java.io.File(context.filesDir, ATTACHMENT_DIRECTORY).apply { mkdirs() }
+    val dir = AttachmentStore.directory(context.filesDir).apply { mkdirs() }
     val target = uniqueChild(dir, name)
     context.contentResolver.openInputStream(uri)?.use { input ->
         target.outputStream().use { output -> input.copyTo(output) }
     } ?: return@runCatching null
-    pruneAttachments(dir)
+    AttachmentStore.prune(context.filesDir)
     PendingImage(
         id = uri.toString() + "#" + System.nanoTime(),
         uri = uri,
@@ -6964,39 +6965,6 @@ private fun uniqueChild(dir: java.io.File, name: String): java.io.File {
         val candidate = java.io.File(dir, "$stem-$n$ext")
         if (!candidate.exists()) return candidate
         n++
-    }
-}
-
-/**
- * Where a file attachment's copy lives: `files/attachments`.
- *
- * One directory rather than one per conversation: a prompt names its attachment by
- * absolute path, so the transcript keeps working whichever conversation is open, and two
- * prompts that mention the same document share one copy. The name is the file's own, with
- * a numeric suffix when it is taken (see [uniqueChild]).
- */
-private const val ATTACHMENT_DIRECTORY = "attachments"
-
-/**
- * The most the attachment directory may hold before its oldest copies go.
- *
- * 256 MB is sixty-four 4 MB documents — the cap one prompt's four attachments make
- * reachable in a single send — which is room for a long working history on the app's
- * private disk without it becoming the largest thing in the install. Past the budget the
- * copies are deleted oldest-first, and a path in an old prompt can then name a file that
- * is gone: the copy was always staging, and the file the reader picked is the record.
- */
-private const val ATTACHMENT_BUDGET_BYTES = 256L * 1024 * 1024
-
-/** Holds [dir] to [ATTACHMENT_BUDGET_BYTES], oldest copies first. */
-private fun pruneAttachments(dir: java.io.File) {
-    val files = dir.listFiles()?.filter { it.isFile } ?: return
-    var total = files.sumOf { it.length() }
-    if (total <= ATTACHMENT_BUDGET_BYTES) return
-    files.sortedBy { it.lastModified() }.forEach { oldest ->
-        if (total <= ATTACHMENT_BUDGET_BYTES) return
-        val length = oldest.length()
-        if (oldest.delete()) total -= length
     }
 }
 

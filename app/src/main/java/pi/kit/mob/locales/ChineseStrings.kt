@@ -627,7 +627,7 @@ internal object ChineseStrings : Strings {
                 "web-search.json"
         override val backupCategoryConversations = "全部历史对话"
         override val backupCategoryConversationsSubtitle =
-            "pi-sessions 目录下的每一个 .jsonl 会话记录，以及哪些对话被置顶"
+            "pi-sessions 目录下的每一个 .jsonl 会话记录、哪些对话被置顶，以及对话里引用过的附件副本"
         override val backupCategoryAgentPrompt = "Agent 提示词"
         override val backupCategoryAgentPromptSubtitle =
             "\$HOME/.pi/agent/ 下的两份文档——「默认提示词」（AGENTS.author.md）和" +

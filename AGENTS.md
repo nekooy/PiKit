@@ -308,8 +308,9 @@ placeholder tile — a cache miss is a state the page draws, never an error.
 workspace.** The absolute path of a `文件` attachment is written into the prompt and drawn again in
 the transcript for as long as the conversation exists, so a directory the platform may empty turns
 the history into a lie; the workspace is the other refusal, because an attachment is staging for one
-message rather than project content. The directory is held to a budget and is not in the backup —
-the reader's own file is the record. ARCHITECTURE §7.1 has the two refusals.
+message rather than project content. The directory is held to a 256 MB budget and it **travels in the
+backup with `CONVERSATIONS`** — the session holds the path and none of the bytes, so the copy is the
+only thing a restore can put back. ARCHITECTURE §7.1 and §10.2 have both arguments.
 
 **Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
 glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12.3 has that

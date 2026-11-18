@@ -670,8 +670,8 @@ internal object EnglishStrings : Strings {
                 "models.json, settings.json, web-search.json"
         override val backupCategoryConversations = "All conversations"
         override val backupCategoryConversationsSubtitle =
-            "Every saved conversation — one .jsonl per talk under pi-sessions — and which " +
-                "of them are pinned"
+            "Every saved conversation — one .jsonl per talk under pi-sessions — the copies " +
+                "of the files their prompts named, and which of them are pinned"
         override val backupCategoryAgentPrompt = "Agent prompt"
         override val backupCategoryAgentPromptSubtitle =
             "The two documents under \$HOME/.pi/agent/ — the default instructions " +

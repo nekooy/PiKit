@@ -644,7 +644,8 @@ internal object JapaneseStrings : Strings {
                 "web-search.json"
         override val backupCategoryConversations = "会話履歴の全部"
         override val backupCategoryConversationsSubtitle =
-            "pi-sessions にある .jsonl を 1 件ずつ、すべてと、どれをピンしているか"
+            "pi-sessions にある .jsonl を 1 件ずつ、すべてと、どれをピンしているか、" +
+                "それに会話が参照した添付ファイルの複製"
         override val backupCategoryAgentPrompt = "エージェントのプロンプト"
         override val backupCategoryAgentPromptSubtitle =
             "\$HOME/.pi/agent/ の二つの文書——「既定の指示」(AGENTS.author.md) と" +
