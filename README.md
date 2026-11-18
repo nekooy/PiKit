@@ -33,21 +33,10 @@ needed is one that can reach the model provider.
   loads none of that: its leading context is a preset — by default just the current
   time — and a switch can lend the conversation just web search and page fetch. The
   drawer lists each mode's own conversations, and converting one keeps every message.
-- **Several conversations at once.** A conversation is its own process, so a new one
-  starts beside the answer that is still arriving and the list in the drawer is the
-  switcher: up to five may be answering at once, and an idle one gives up its process to
-  make room — its transcript is already on disk, so reopening it is a file read.
 - **A terminal and a file manager.** PTY sessions that keep running when you leave the
   page, the keys a phone keyboard lacks, and a read-only file manager over `$HOME`: a
   tappable path, a filter and three orders, a size or entry count per row, image previews
   and copy-path.
-- **Providers on pi's terms.** The 35 single-key providers pi's own key table lists, plus
-  a custom endpoint; a model's context window, output limit, thinking levels and image
-  support come from pi's catalogue.
-- **Storage is scoped and safe.** The workspace a conversation starts in is its write
-  boundary; every tool call is judged against a tier (read-only, workspace-write,
-  full-access) by an extension in the agent, and a delete cannot leave the app's own
-  data. No account, no telemetry.
 
 ## Install
 
