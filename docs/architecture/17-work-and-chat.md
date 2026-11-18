@@ -44,6 +44,14 @@ a row to the top of its own mode's list, not onto a shelf above both. And the ro
 converts has changed sides; the toast names the new mode and the row is gone from the
 list that was showing it.
 
+**The chat history is not grouped by workspace.** Work mode's headings name the folder
+each run of rows came from, because the workspace is the fact that groups a coding
+conversation. Chat mode loads no workspace files, no `AGENTS.md` and no tools, and a
+conversation converted from work still carries its old project's `cwd` in the session
+file; drawing that folder over a chat list would put a workspace back into the mode
+whose promise is that it has none. The chat list is therefore one section under the
+pinned shelf, and its heading is the mode's own name — `聊天 · 3`, not `project · 3`.
+
 ## The switch starts a conversation; the row menu converts one
 
 The chat page's bar used to hold the two-segment **Work / Chat** control. It now holds

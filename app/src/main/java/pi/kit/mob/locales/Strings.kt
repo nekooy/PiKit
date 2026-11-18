@@ -679,13 +679,14 @@ interface Strings {
         fun poolFull(max: Int): String
 
         /**
-         * A history group's heading: the workspace's name and how many conversations it holds.
+         * A history group's heading: the section's name and how many conversations it holds.
          *
          * The name is an argument rather than the word for "workspace": a heading
          * that said `工作区 · 12` over every group would say the same thing on each
          * of them, and the one fact a group heading carries is *which* folder its
-         * conversations were started in. The count travels beside it for the same
-         * reason — the list under the heading is what the number counts.
+         * conversations were started in. Chat mode has no folder to name and titles
+         * its one section with the mode's own name instead. The count travels beside
+         * it for the same reason — the list under the heading is what the number counts.
          */
         fun groupTitle(name: String, count: Int): String
 

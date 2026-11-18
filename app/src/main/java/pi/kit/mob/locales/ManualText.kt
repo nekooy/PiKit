@@ -291,10 +291,13 @@ dimmed and a little smaller, at its right edge.
   work conversation, chat history in a chat one.
   The switch at the foot opens a conversation on
   the other side, and the list changes with it.
-- **Groups**: the pinned ones first, then one
-  group per workspace, the group holding the
-  newest conversation at the top and the one on
-  screen filled in.
+- **Groups**: the pinned ones first. Work
+  history then has one group per workspace, the
+  group holding the newest conversation at the
+  top; chat history is a single list under the
+  mode's own name, because chat mode has no
+  workspace. The conversation on screen is
+  filled in.
 - **A row carries two facts**: a pin mark, and
   a dot for **Answering now** or **Answered, not
   read**.

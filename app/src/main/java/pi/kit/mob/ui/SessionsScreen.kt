@@ -669,6 +669,7 @@ fun SessionsScreen(
                 else -> ConversationList(
                     visible = visible,
                     text = text,
+                    mode = mode,
                     workspaces = workspaces,
                     defaultPath = defaultWorkspacePath,
                     selecting = selecting,
@@ -889,9 +890,9 @@ fun SessionsScreen(
  * long-press haptic, at the moment the menu is decided. A plain tap is answered by the
  * conversation it opens, which is a whole page of feedback rather than a flash.
  *
- * The unpinned heading appears only when something above it is pinned. Without that
- * break a mixed list has no way to say where the pinned group ends, and with it on an
- * all-unpinned list the page would open under a heading that states the obvious.
+ * The pinned shelf is announced by its own heading, and every section below it carries
+ * its heading too: a workspace in work mode, the mode itself in chat mode. The heading
+ * is what names a run of rows, and its count says how many that run holds.
  */
 @Composable
 private fun ConversationList(
@@ -899,6 +900,8 @@ private fun ConversationList(
     /** The list's scroll position, owned by the root so a rebuild keeps it. */
     listState: LazyListState,
     text: Strings,
+    /** The launch mode the list is showing, which decides how its sections are named. */
+    mode: AgentMode,
     workspaces: List<Workspace>,
     defaultPath: String,
     selecting: Boolean,
@@ -924,15 +927,17 @@ private fun ConversationList(
 ) {
     val pinnedVisible = visible.filter { it.pinned }
     val otherVisible = visible.filterNot { it.pinned }
-    // One group per workspace, the most recent group first, and the conversations whose
-    // file recorded no directory last. The pinned shelf stays above all of them: pinning is
-    // a decision about a conversation that crosses workspaces, and burying a pinned row
-    // inside the group it happens to come from is how it stops being findable.
-    val groups = sessionGroups(
+    // The pinned shelf stays above every section: pinning is a decision about a
+    // conversation that crosses workspaces, and burying a pinned row inside the group
+    // it happens to come from is how it stops being findable. What the remaining rows
+    // are grouped by belongs to the mode — see `historyGroups`.
+    val groups = historyGroups(
+        mode = mode,
         sessions = otherVisible,
         workspaces = workspaces,
         defaultPath = defaultPath,
         unknownLabel = text.sessions.groupUnknown,
+        chatLabel = text.settings.modeChat,
         // The folder's own name, without the composer chip's `（默认）` marker: a
         // heading is read once at the top of a run of rows, and the marker is about a
         // choice the reader made elsewhere. Two workspaces with the same name are told
@@ -1033,10 +1038,11 @@ private fun GroupHeading(text: String) {
 }
 
 
-/** One workspace's conversations, as a heading draws them. */
+/** One section of the history list, as a heading draws it. */
 internal data class SessionGroup(
-    /** Stable across a recomposition and unique in the list: the workspace's path. */
+    /** Stable across a recomposition and unique in the list: the workspace's path, or the mode. */
     val key: String,
+    /** The heading's name: a workspace in work mode, the mode's own name in chat. */
     val label: String,
     val sessions: List<PiAgentSession.SessionSummary>,
 )
@@ -1057,6 +1063,34 @@ internal fun sessionsInMode(
     mode: AgentMode,
     modeOf: (String) -> AgentMode,
 ): List<PiAgentSession.SessionSummary> = sessions.filter { modeOf(it.path) == mode }
+
+/**
+ * The sections the drawer draws for [mode], pinned rows excluded (the caller owns that
+ * shelf).
+ *
+ * Work mode groups its conversations by the workspace each one ran in. Chat mode does
+ * not: it loads no `AGENTS.md`, no tools and no workspace files (§17), and a chat
+ * conversation converted from work still carries the old project's `cwd` in its session
+ * file. Grouping that row under the project it was converted from would put a workspace
+ * back into a mode whose promise is that it has none, so the whole chat list is one
+ * section named with the mode itself.
+ */
+internal fun historyGroups(
+    mode: AgentMode,
+    sessions: List<PiAgentSession.SessionSummary>,
+    workspaces: List<Workspace>,
+    defaultPath: String,
+    unknownLabel: String,
+    chatLabel: String,
+    chip: (String, Boolean) -> String,
+): List<SessionGroup> = when (mode) {
+    AgentMode.WORK -> sessionGroups(sessions, workspaces, defaultPath, unknownLabel, chip)
+    AgentMode.CHAT -> if (sessions.isEmpty()) {
+        emptyList()
+    } else {
+        listOf(SessionGroup(key = "chat", label = chatLabel, sessions = sessions))
+    }
+}
 
 /**
  * The conversations by the workspace they came from, most recently used group first.
