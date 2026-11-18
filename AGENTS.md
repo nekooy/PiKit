@@ -43,6 +43,28 @@ down where the owning chapter or `docs/MAINTAINING.md` will be read, rather than
 it to be rediscovered by breaking it. The report of a fix names the siblings that were
 checked, so "not checked" is visible rather than assumed.
 
+**A lesson that comes back is a line missing from this tree.** The first time a trap costs
+an afternoon it is the trap's fault; the second time it is the record's, because the answer
+was already in front of the agent and nobody wrote it down. When the same trap, the same
+build order or the same measurement is needed twice, the entry lands in the same change, at
+the address its subject already owns:
+
+- **a constraint a change has to obey** → the chapter under `docs/architecture/` that owns
+  it, with the measurement that established it (*Hard constraints* above when it is a
+  do-not-fix);
+- **a way of working here** — a device, an emulator, a build order, a checker's refusal →
+  `docs/BUILDING.md`;
+- **a chore to repeat** → *Periodically* in `docs/MAINTAINING.md`;
+- **a trap no chapter owns** → the list at the end of this file, *Things that will waste
+  your time if you do not know them*, which is the list a change is written against.
+
+An entry a reader can act on names the **symptom**, the **cause** and the **check**; "be
+careful with the image" is not one, "an edit to `IMAGE_INPUTS` without a rebuild ships the
+previous guard, and `build-apks.py` fails on the timestamp" is. Where a script could catch
+it, write the checker and list it in `build-apks.py` — prose nobody runs is the weakest form
+of the rule. The list is pruned as it grows: an entry whose cause was fixed is deleted in
+the change that fixes it, or it outgrows being read.
+
 ## Build and test
 
 ```bash
