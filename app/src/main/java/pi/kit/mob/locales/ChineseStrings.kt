@@ -30,6 +30,7 @@ internal object ChineseStrings : Strings {
         override fun attachmentCount(count: Int) = "$count 张图片"
         override val imageOpen = "查看图片"
         override val imageUnavailable = "图片已无法显示"
+        override fun picturePosition(index: Int, total: Int) = "$index / $total"
         override fun extrasCount(fileCount: Int, noteCount: Int): String {
             val parts = buildList {
                 if (fileCount > 0) add("$fileCount 个文件")

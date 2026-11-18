@@ -133,6 +133,17 @@ interface Strings {
         val imageUnavailable: String
 
         /**
+         * Where the viewer is in a prompt's set: `1 / 3`.
+         *
+         * The viewer's one piece of information, drawn in the chrome's trailing capsule. It
+         * is a format rather than two numbers joined at the call site because the separator
+         * and the spacing are the catalog's — the same reason every other count is a member
+         * here — and because a set of one draws no counter at all (the caller's decision, not
+         * this string's).
+         */
+        fun picturePosition(index: Int, total: Int): String
+
+        /**
          * The chip on a prompt that carries file paths or image annotations.
          *
          * `2 files` / `1 image note` / `2 files · 1 image note`. File paths and

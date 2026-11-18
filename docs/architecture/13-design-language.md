@@ -375,6 +375,13 @@ because the strip version was worse:
   and the hand-drawn blur was re-rasterised on every frame (measured under the composer's
   field while the keyboard closed, a **48 ms frame**). Neither is needed for a filled
   surface, so the fill now carries the separation by itself.
+- **Over a picture, the capsule is a scrim.** The picture viewer's two chrome capsules are
+  the header's object — 42dp, one glyph or one count — with a fill of 38% black and white
+  ink. The filled-not-tinted rule above answers a page scrolling under a capsule; a
+  photograph is not the page, and the viewer's first device pass showed what the page's fill
+  does there: white capsules, a white disc and white counter text vanished over a white
+  screenshot. A scrim with white ink is legible over any picture, which is the only
+  property the viewer can rely on. The full reasoning is §7.3.
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.

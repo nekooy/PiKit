@@ -651,6 +651,10 @@ internal fun ChatScreen(
     // rather than a file, because the row that raised it can be recycled by the list
     // while the viewer is still on screen (see `PictureTarget`).
     var pictures by remember { mutableStateOf<PictureTarget?>(null) }
+    // The viewer's own switch, kept beside the value it draws: the window is driven by
+    // `show` so its exit can play over the picture, and the target has to outlive the
+    // closing animation (see `PictureViewer`).
+    var viewerUp by remember { mutableStateOf(false) }
     // The extras sheet keeps its value while it leaves: a Miuix sheet animates out
     // with the content it was showing, so clearing the value on dismissal would play
     // the exit over an empty panel.
@@ -1206,7 +1210,10 @@ internal fun ChatScreen(
                     promptExtras = extras
                     showPromptExtras = true
                 },
-                onOpenPictures = { target -> pictures = target },
+                onOpenPictures = { target ->
+                    pictures = target
+                    viewerUp = true
+                },
                 onOpenSessions = {
                     drawer.reachable = true
                     settlePage(1f, 0f)
@@ -1378,15 +1385,17 @@ internal fun ChatScreen(
         promptExtras?.let { PromptExtrasSheet(extras = it, text = text) }
     }
 
-    // A prompt's pictures, full screen. A platform window rather than one of Miuix's,
-    // and *composed only while it is open*: a picture viewer has no exit animation to
-    // play over its content — the window is black, the picture is the subject, and the
-    // window behind it is the page the reader came from.
+    // A prompt's pictures, full screen. The window is composed while it has a target and
+    // driven by `show`: a window that animates out is composed while it leaves, and the
+    // target is what it draws for the length of that exit — the same contract every Miuix
+    // window in this app has (§13).
     pictures?.let { target ->
         PictureViewer(
+            show = viewerUp,
             target = target,
             text = text,
-            onDismiss = { pictures = null },
+            onDismiss = { viewerUp = false },
+            onDismissFinished = { pictures = null },
         )
     }
 

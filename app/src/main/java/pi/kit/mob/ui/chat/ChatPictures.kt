@@ -20,7 +20,7 @@
  *  - [PromptPictures] draws the keys a prompt carries: one picture at its own aspect,
  *    several as a grid, and the old count line when none of them can be read.
  *  - [PictureViewer] is the full window a tap opens: one picture at a time, swiped
- *    between, dismissed by a tap.
+ *    between or pinched into, with Miuix's floating chrome over a black ground.
  *
  * The picture is never carried in the transcript itself; the address is 40 characters
  * and survives the conversation being closed, restored, pruned and re-hydrated.
@@ -41,51 +41,90 @@ package pi.kit.mob.ui.chat
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.pi.ChatImages
 import pi.kit.mob.pi.ImageAttachment
 import pi.kit.mob.pi.SessionTranscript
 import pi.kit.mob.ui.kit.PiTone
+import top.yukonga.miuix.kmp.anim.SinOutEasing
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
@@ -494,72 +533,346 @@ private fun PictureCount(count: Int, text: Strings, modifier: Modifier) {
 /**
  * The window a tap on a picture opens.
  *
- * Full screen and black, which is the one place in this app that is not the page's own
- * surface: the picture is the subject and everything else is frame. A tap anywhere
- * closes it and the back gesture is the platform's, so there is no button — a viewer is
- * one decision and it is "done". Several pictures are swiped between rather than listed,
- * and the counter is the only chrome.
+ * ## Why the window is the platform's, and the contents are Miuix's
  *
- * The copy on disk is decoded per page, at viewer size, and released when the page
- * leaves the composition: four pictures of a prompt are 26 MB of bitmaps if all four are
- * held, and only one is ever on screen.
+ * Miuix ships no picture viewer, and a viewer is not one of its dialogs: `WindowDialog` is
+ * a card by construction — it keeps the status bar out of its panel (`DialogContentLayout`
+ * pads the panel by the status bar's inset), insets it from the window's edges at
+ * `DialogDefaults.outsideMargin`, and cuts it with the screen's own corner radius. Those
+ * are right for a question and wrong for a photograph, because the strip above the panel
+ * would show the page the reader came from. So this is the one surface in the app drawn in
+ * a platform `Dialog` — `decorFitsSystemWindows = false`, so the black ground reaches the
+ * window's last pixel — and everything *on* it is the app's Miuix vocabulary: floating
+ * capsules at the same 42dp the conversation page's header wears, the library's type and
+ * glyphs, its progress indicator, and its sine-out clock. The capsules take a dark scrim
+ * rather than the page's own fill, and the reason is on [VIEWER_CHROME_FILL]: the page is
+ * not what they float over.
+ *
+ * It is drawn from the current still, not a platform dialog that appears and disappears;
+ * `Dialog` is created for the first frame and torn down after the exit, which reads as a
+ * window opening rather than as a page being replaced.
+ *
+ * ## Why it can be zoomed, and what the gestures stay out of
+ *
+ * A picture that fills the screen at `ContentScale.Fit` is a picture read at the size the
+ * phone chose, not a look at its detail: a screenshot's small type is unreadable until it is
+ * magnified. Pinch zooms about the fingers and a double tap toggles between fitted and
+ * [PictureZoom.DOUBLE_TAP_SCALE]; while the picture is zoomed, one finger pans it inside its
+ * frame. The pager keeps its own horizontal drag until the picture is zoomed *and* the
+ * one-finger drag is claimed by this page — a gesture this page consumes is one the pager
+ * cancels, which is how swiping between pictures and panning one picture can share the same
+ * finger ([PictureZoom] has the arithmetic).
+ *
+ * ## The chrome, and why a tap does not close it
+ *
+ * The old viewer closed on any tap, which made zoom impossible to add and made a mis-tap on
+ * a photograph end the look. It now draws the app's floating capsules — a back disc at the
+ * leading edge and, for a prompt with several pictures, the position in a pill at the
+ * trailing one — and a tap anywhere else shows or hides them. Closing is the back disc, the
+ * platform's back gesture, or the dialog's own dismissal, and every one of those is a
+ * deliberate exit rather than a stray touch. The system's bar icons are made light while the
+ * dialog is up: the ground behind them is black in both schemes, and the app's own light
+ * scheme would otherwise draw near-black icons on it.
+ *
+ * The copy on disk is decoded per page, at viewer size, and released when the page leaves
+ * the composition: four pictures of a prompt are 26 MB of bitmaps if all four are held, and
+ * only one is ever looked at.
  */
 @Composable
-internal fun PictureViewer(target: PictureTarget, text: Strings, onDismiss: () -> Unit) {
+internal fun PictureViewer(
+    show: Boolean,
+    target: PictureTarget,
+    text: Strings,
+    onDismiss: () -> Unit,
+    onDismissFinished: () -> Unit = {},
+) {
     if (target.keys.isEmpty()) return
-    val context = LocalContext.current
+    val pager = rememberPagerState(
+        initialPage = target.start.coerceIn(0, target.keys.lastIndex),
+    ) { target.keys.size }
+    var chrome by remember { mutableStateOf(true) }
+    var visible by remember { mutableStateOf(show) }
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(show) {
+        if (show) {
+            visible = true
+            chrome = true
+            progress.animateTo(1f, tween(VIEWER_ENTER_MILLIS, easing = SinOutEasing))
+        } else if (visible) {
+            progress.animateTo(0f, tween(VIEWER_EXIT_MILLIS, easing = SinOutEasing))
+            visible = false
+            onDismissFinished()
+        }
+    }
+    if (!visible) return
+
+    // The dialog window is a second window, and the app's theme sets the bar icons through
+    // the activity's. A viewer is the one surface that wants the bars out of the way: the
+    // ground behind them is a photograph, and a white status bar on a white screenshot
+    // (or a near-black one on a dark photo) is unreadable whichever ink it takes. They are
+    // hidden rather than tinted, and the system brings them back transiently on a swipe —
+    // the gallery convention, and the only answer that does not depend on what is on screen.
+    // The activity's own flags are untouched and come back with it when the dialog closes.
+    val view = LocalView.current
+    val window = (view.parent as? DialogWindowProvider)?.window
+    DisposableEffect(window, view) {
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        controller?.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            // The window is the dialog's, not the activity's: it is going away, and the
+            // activity's own bars come back with it.
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            val pager = rememberPagerState(
-                initialPage = target.start.coerceIn(0, target.keys.lastIndex),
-            ) { target.keys.size }
-
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
-                val key = target.keys[page]
-                val picture by produceState<ImageBitmap?>(null, key) {
-                    value = withContext(Dispatchers.IO) {
-                        ChatPictureCache.load(context.filesDir, key, VIEW_PIXELS)
-                    }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    // The window opens as a surface rather than as a cut: it fades in while
+                    // growing the last few per cent, which is the library's own dialog idiom
+                    // seen from the other side of the window.
+                    val current = progress.value
+                    alpha = current
+                    val scale = VIEWER_ENTER_SCALE + (1f - VIEWER_ENTER_SCALE) * current
+                    scaleX = scale
+                    scaleY = scale
                 }
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClickLabel = text.common.back,
-                            onClick = onDismiss,
-                        ),
-                    contentAlignment = Alignment.Center,
+                .background(Color.Black),
+        ) {
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+                PicturePage(
+                    key = target.keys[page],
+                    text = text,
+                    onToggleChrome = { chrome = !chrome },
+                )
+            }
+
+            AnimatedVisibility(
+                visible = chrome,
+                modifier = Modifier.align(Alignment.TopCenter),
+                enter = fadeIn(tween(VIEWER_CHROME_MILLIS)),
+                exit = fadeOut(tween(VIEWER_CHROME_MILLIS)),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(horizontal = VIEWER_CHROME_INSET, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    picture?.let {
-                        Image(
-                            bitmap = it,
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize(),
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(VIEWER_MARK_SIZE),
+                        backgroundColor = VIEWER_CHROME_FILL,
+                        cornerRadius = VIEWER_MARK_SIZE / 2,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = text.common.back,
+                            tint = Color.White,
+                            modifier = Modifier.size(VIEWER_GLYPH_SIZE),
                         )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (target.keys.size > 1) {
+                        Box(
+                            modifier = Modifier
+                                .height(VIEWER_MARK_SIZE)
+                                .clip(RoundedCornerShape(percent = 50))
+                                .background(VIEWER_CHROME_FILL)
+                                .padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = text.chat.picturePosition(
+                                    pager.currentPage + 1,
+                                    target.keys.size,
+                                ),
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = Color.White,
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
 
-            if (target.keys.size > 1) {
+/**
+ * One page of the viewer: the picture, its zoom, and the gesture that owns the finger.
+ *
+ * The gesture is one loop rather than a `transformable` beside a pager: whether a drag
+ * belongs to this page or to the pager is exactly the question, and only the page knows
+ * whether it is zoomed. A single finger on an unzoomed picture is left unconsumed, so the
+ * pager's own detector takes it; the moment a second finger lands, or a pan begins while
+ * the picture is zoomed, every change this loop sees is consumed and the pager stands down
+ * for the rest of the gesture — including a pinch that ends back at fit, so the release
+ * cannot turn into a page swipe.
+ */
+@Composable
+private fun PicturePage(
+    key: String,
+    text: Strings,
+    onToggleChrome: () -> Unit,
+) {
+    val context = LocalContext.current
+    val generation by ChatPictureCache.generation.collectAsState()
+    val load by produceState<PictureLoad>(PictureLoad.Loading, key, generation) {
+        val bitmap = withContext(Dispatchers.IO) {
+            ChatPictureCache.load(context.filesDir, key, VIEW_PIXELS)
+        }
+        value = bitmap?.let(PictureLoad::Ready) ?: PictureLoad.Missing
+    }
+    val bitmap = (load as? PictureLoad.Ready)?.bitmap
+    var frame by remember(key) { mutableStateOf(Size.Zero) }
+    var scale by remember(key) { mutableFloatStateOf(PictureZoom.MIN_SCALE) }
+    var offset by remember(key) { mutableStateOf(Offset.Zero) }
+    val scope = rememberCoroutineScope()
+    val fitted = remember(bitmap, frame) {
+        bitmap?.let { PictureZoom.fitted(Size(it.width.toFloat(), it.height.toFloat()), frame) }
+            ?: Size.Zero
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { frame = it.toSize() }
+            .pointerInput(load, frame) {
+                val drawn = (load as? PictureLoad.Ready)?.bitmap ?: return@pointerInput
+                if (frame.width <= 0f || frame.height <= 0f) return@pointerInput
+                val fittedOnPage = PictureZoom.fitted(
+                    Size(drawn.width.toFloat(), drawn.height.toFloat()),
+                    frame,
+                )
+                val centre = Offset(frame.width / 2f, frame.height / 2f)
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var claimed = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.count { it.pressed }
+                        if (pressed == 0) break
+                        val multi = pressed >= 2
+                        // The pager's drag, not ours: one finger on a picture that is not
+                        // magnified has nothing to pan.
+                        if (!multi && !claimed && PictureZoom.isSettled(scale)) continue
+                        claimed = true
+                        val next = (scale * event.calculateZoom())
+                            .coerceIn(PictureZoom.MIN_SCALE, PictureZoom.MAX_SCALE)
+                        offset = PictureZoom.zoomAround(
+                            offset = offset,
+                            centroid = event.calculateCentroid(useCurrent = true) - centre,
+                            factor = if (scale == 0f) 1f else next / scale,
+                        ) + event.calculatePan()
+                        scale = next
+                        offset = PictureZoom.clampOffset(offset, frame, fittedOnPage, scale)
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            }
+            .pointerInput(load, frame) {
+                detectTapGestures(
+                    onTap = { onToggleChrome() },
+                    onDoubleTap = { point ->
+                        if (bitmap == null || fitted.width <= 0f || fitted.height <= 0f) {
+                            return@detectTapGestures
+                        }
+                        val centre = Offset(frame.width / 2f, frame.height / 2f)
+                        val targetScale = if (PictureZoom.isSettled(scale)) {
+                            PictureZoom.DOUBLE_TAP_SCALE
+                        } else {
+                            PictureZoom.MIN_SCALE
+                        }
+                        val targetOffset = if (PictureZoom.isSettled(targetScale)) {
+                            Offset.Zero
+                        } else {
+                            PictureZoom.clampOffset(
+                                offset = PictureZoom.zoomAround(
+                                    offset = offset,
+                                    centroid = point - centre,
+                                    factor = targetScale / scale,
+                                ),
+                                frame = frame,
+                                fitted = fitted,
+                                scale = targetScale,
+                            )
+                        }
+                        val fromScale = scale
+                        val fromOffset = offset
+                        scope.launch {
+                            animate(
+                                initialValue = 0f,
+                                targetValue = 1f,
+                                animationSpec = tween(VIEWER_ZOOM_MILLIS, easing = SinOutEasing),
+                            ) { done, _ ->
+                                scale = fromScale + (targetScale - fromScale) * done
+                                offset = lerp(fromOffset, targetOffset, done)
+                            }
+                            scale = targetScale
+                            offset = targetOffset
+                        }
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        when (val current = load) {
+            is PictureLoad.Ready -> Image(
+                bitmap = current.bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    },
+            )
+
+            PictureLoad.Loading -> CircularProgressIndicator()
+
+            // A page whose copy is gone is a state the viewer draws, like the tile's count
+            // line: the ground is black in both schemes, so the sentence takes the white the
+            // old counter used rather than the theme's ink, which is near-black in the light
+            // scheme.
+            PictureLoad.Missing -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Photos,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = VIEWER_INK,
+                )
                 Text(
-                    text = "${pager.currentPage + 1} / ${target.keys.size}",
-                    // The one piece of chrome: white on the picture's own black, far
-                    // enough from the gesture strip to clear it.
-                    color = Color.White.copy(alpha = 0.7f),
-                    style = MiuixTheme.textStyles.footnote1,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = PICTURE_COUNTER_INSET),
+                    text = text.chat.imageUnavailable,
+                    style = MiuixTheme.textStyles.body2,
+                    color = VIEWER_INK,
                 )
             }
         }
     }
+}
+
+/** What one page of the viewer has to draw: the picture, the wait, or the miss. */
+private sealed interface PictureLoad {
+    data object Loading : PictureLoad
+    data class Ready(val bitmap: ImageBitmap) : PictureLoad
+    data object Missing : PictureLoad
 }
 
 /**
@@ -596,8 +909,56 @@ private val PICTURE_GAP = 4.dp
  */
 private val PICTURE_CORNER = 8.dp
 
-/** How far the counter sits above the window's foot. */
-private val PICTURE_COUNTER_INSET = 36.dp
+/**
+ * A chrome mark's box in the viewer, the same 42dp the conversation page's header uses.
+ *
+ * The conversation and the viewer are the two pages drawn entirely in floating chrome, and
+ * a reader who has learned the header's discs should not find a second size for the same
+ * object over a picture.
+ */
+private val VIEWER_MARK_SIZE = 42.dp
+
+/** The glyph inside a chrome capsule: the header's 22–24dp step, at the disc's own centre. */
+private val VIEWER_GLYPH_SIZE = 24.dp
+
+/**
+ * The ink the viewer's own sentences take, on the black ground it draws in both schemes.
+ *
+ * It cannot be the theme's `onSurface`: that is near-black in the light scheme, and the
+ * ground here is black in *both* — the one place the app deliberately leaves the page's
+ * surface (`§7.3`). White at 72% reads the same in either scheme and stays quieter than the
+ * picture, which is the subject.
+ */
+private val VIEWER_INK = Color.White.copy(alpha = 0.72f)
+
+/**
+ * A chrome capsule's fill, over the picture rather than over the page.
+ *
+ * The app's floating controls are filled with `PiGlass.fill()` — the page's own raised
+ * surface — because a page scrolls underneath them and a tinted capsule would let it show
+ * through (§13). A picture does nothing of the kind, and the same fill is exactly wrong
+ * here: in the light scheme it is white, so a white screenshot hid the capsule, the disc and
+ * the counter outright (measured on the viewer's first device pass). The ground behind the
+ * chrome is an arbitrary photograph, so the fill is a dark scrim with white ink — the one
+ * treatment that is legible over *any* picture, and the one every gallery uses.
+ */
+private val VIEWER_CHROME_FILL = Color.Black.copy(alpha = 0.38f)
+
+/** How far the chrome sits from the window's edges, outside the status bar's inset. */
+private val VIEWER_CHROME_INSET = 12.dp
+
+/** The window's fade-and-grow, longer in than out — the same asymmetry a page's motion has. */
+private const val VIEWER_ENTER_MILLIS = 180
+private const val VIEWER_EXIT_MILLIS = 160
+
+/** How long a tap takes to show or hide the chrome: a state, not a transition to watch. */
+private const val VIEWER_CHROME_MILLIS = 140
+
+/** A double tap's zoom, on the page's own clock rather than the window's. */
+private const val VIEWER_ZOOM_MILLIS = 220
+
+/** The scale the window starts at, before its opening animation has grown it to 1. */
+private const val VIEWER_ENTER_SCALE = 0.94f
 
 /** How many tiles one row holds. Four pictures is the composer's cap: two rows of two. */
 private const val PICTURES_PER_ROW = 2
