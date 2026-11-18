@@ -13,8 +13,18 @@ import kotlinx.serialization.json.jsonPrimitive
 data class SessionMeta(
     /** The name from the last `session_info` record, if the user ever set one. */
     val name: String? = null,
-    /** Text of the first user message — pi's own fallback label for a session. */
+    /**
+     * The prose of the first user turn — pi's own fallback label for a session.
+     *
+     * The machinery around it is gone: an `[Image: …]` note and the address block a file
+     * attachment writes are not words the reader typed, and a list row titled after one
+     * read as an English sentence in the middle of the interface.
+     */
     val firstMessage: String? = null,
+    /** Pictures the first turn carried, which is what names a prompt that had no words. */
+    val imageCount: Int = 0,
+    /** Files the first turn carried, for the same reason. */
+    val fileCount: Int = 0,
     val messageCount: Int = 0,
     /**
      * The directory pi was started in, from the file's first record.
@@ -77,8 +87,14 @@ object SessionMetadata {
     fun read(lines: Sequence<String>): SessionMeta {
         var name: String? = null
         var firstMessage: String? = null
+        var imageCount = 0
+        var fileCount = 0
         var workspace: String? = null
         var count = 0
+        // The first user turn names the conversation even when it has no prose. The scan
+        // used to keep looking until it found words, so a prompt that was only pictures was
+        // titled with the *next* turn's sentence — something the reader said afterwards.
+        var firstTurnRead = false
 
         for (line in lines) {
             when {
@@ -104,16 +120,28 @@ object SessionMetadata {
 
                 MESSAGE.containsMatchIn(line) -> {
                     count++
-                    if (firstMessage == null && USER_ROLE.containsMatchIn(line)) {
-                        firstMessage = runCatching {
+                    if (!firstTurnRead && USER_ROLE.containsMatchIn(line)) {
+                        val turn = runCatching {
                             val message = PiRecordParser.json.parseToJsonElement(line)
                                 .jsonObject["message"]?.jsonObject
                             if (message?.get("role")?.jsonPrimitive?.contentOrNull == "user") {
-                                messageText(message["content"])
+                                val content = message["content"]
+                                val spoken = parsePromptExtras(messageText(content).orEmpty())
+                                Triple(
+                                    spoken.displayText.takeIf { it.isNotBlank() },
+                                    imageBlocks(content),
+                                    spoken.filePaths.size,
+                                )
                             } else {
                                 null
                             }
-                        }.getOrNull()?.takeIf { it.isNotBlank() }
+                        }.getOrNull()
+                        if (turn != null) {
+                            firstTurnRead = true
+                            firstMessage = turn.first
+                            imageCount = turn.second
+                            fileCount = turn.third
+                        }
                     }
                 }
             }
@@ -121,6 +149,8 @@ object SessionMetadata {
         return SessionMeta(
             name = name,
             firstMessage = firstMessage,
+            imageCount = imageCount,
+            fileCount = fileCount,
             messageCount = count,
             workspace = workspace,
         )
@@ -144,6 +174,21 @@ object SessionMetadata {
 
         is JsonPrimitive -> content.contentOrNull
         else -> null
+    }
+
+    /**
+     * How many pictures a message carries.
+     *
+     * Counted from the image blocks rather than from the `[Image: …]` notes: a picture that
+     * fitted inside pi's limits never gets a note, and that is now the common case. The
+     * blocks are present in every session pi wrote.
+     */
+    private fun imageBlocks(content: JsonElement?): Int = when (content) {
+        is JsonArray -> content.count { block ->
+            (block as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull == "image"
+        }
+
+        else -> 0
     }
 
     /**

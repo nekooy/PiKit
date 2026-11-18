@@ -252,6 +252,8 @@ internal object EnglishStrings : Strings {
         override val unpin = "Unpin"
         override val delete = "Delete"
         override val emptyTitle = "Empty conversation"
+        override fun imageTitle(count: Int) = plural(count, "image", "images")
+        override fun fileTitle(count: Int) = plural(count, "file", "files")
         override val renameTitle = "Rename conversation"
         override val renameLabel = "Name"
         override val renameActiveNote = "This conversation is open, so pi renames it directly."

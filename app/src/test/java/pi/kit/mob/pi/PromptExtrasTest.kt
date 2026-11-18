@@ -1,4 +1,4 @@
-package pi.kit.mob.ui
+package pi.kit.mob.pi
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

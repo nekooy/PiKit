@@ -282,4 +282,53 @@ class SessionMetadataTest {
         // end, so this is the ceiling the row can ever be asked to draw.
         assertTrue("expected a bounded line, got ${snippet.length}", snippet.length <= 120 + 2)
     }
+
+    private fun imageBlock() =
+        """{"type":"image","data":"iVBORw0KGgo=","mimeType":"image/png"}"""
+
+    @Test
+    fun `a first turn that was only a picture carries its count, not words`() {
+        val meta = read(header, message("user", "[${imageBlock()}]"))
+
+        assertNull("there is nothing the reader typed to draw", meta.firstMessage)
+        assertEquals(1, meta.imageCount)
+    }
+
+    @Test
+    fun `pi's dimension note is not the conversation's name`() {
+        // The note travels in the text block, so a row that took the block's first line was
+        // titled with an English sentence — the machinery chip's content, in the list.
+        val note = "[Image: original 1200x2670, displayed at 899x2000. " +
+            "Multiply coordinates by 1.33 to map to original image.]"
+        val meta = read(
+            header,
+            message("user", """[{"type":"text","text":"$note"},${imageBlock()}]"""),
+        )
+
+        assertNull("the note is machinery, not prose", meta.firstMessage)
+        assertEquals(1, meta.imageCount)
+    }
+
+    @Test
+    fun `a first turn that was only files carries their count`() {
+        val raw = "These files are ready; read them by path:\\n" +
+            "/data/data/pi.kit.mob/files/attachments/report.pdf\\n" +
+            "/data/data/pi.kit.mob/files/attachments/notes.txt"
+        val meta = read(header, message("user", textBlock(raw)))
+
+        assertNull(meta.firstMessage)
+        assertEquals(2, meta.fileCount)
+    }
+
+    @Test
+    fun `a picture-first conversation is not named after a later sentence`() {
+        val meta = read(
+            header,
+            message("user", "[${imageBlock()}]", id = "first"),
+            message("user", textBlock("and then explain it"), id = "second"),
+        )
+
+        assertNull("the first turn names the conversation", meta.firstMessage)
+        assertEquals(1, meta.imageCount)
+    }
 }

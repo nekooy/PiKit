@@ -251,6 +251,8 @@ internal object ChineseStrings : Strings {
         override val unpin = "取消置顶"
         override val delete = "删除"
         override val emptyTitle = "空对话"
+        override fun imageTitle(count: Int) = "$count 张图片"
+        override fun fileTitle(count: Int) = "$count 个文件"
         override val renameTitle = "重命名对话"
         override val renameLabel = "名称"
         override val renameActiveNote = "这个对话正在使用中，Pi 会直接改名。"

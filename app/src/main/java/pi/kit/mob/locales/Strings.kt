@@ -700,6 +700,17 @@ interface Strings {
 
         /** A conversation whose transcript holds no message at all. */
         val emptyTitle: String
+
+        /**
+         * A conversation whose first turn was pictures and no words.
+         *
+         * The row used to say [emptyTitle] over a conversation that plainly was not empty;
+         * a prompt that was only a screenshot is an ordinary conversation.
+         */
+        fun imageTitle(count: Int): String
+
+        /** The same, for a first turn that only attached files. */
+        fun fileTitle(count: Int): String
         val renameTitle: String
         val renameLabel: String
         val renameActiveNote: String

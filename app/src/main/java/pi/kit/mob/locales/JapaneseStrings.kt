@@ -251,6 +251,8 @@ internal object JapaneseStrings : Strings {
         override val unpin = "固定を解除"
         override val delete = "削除"
         override val emptyTitle = "空の会話"
+        override fun imageTitle(count: Int) = "画像 $count 枚"
+        override fun fileTitle(count: Int) = "ファイル $count 個"
         override val renameTitle = "会話の名前を変更"
         override val renameLabel = "名前"
         override val renameActiveNote = "この会話は開いているため、Pi が直接名前を変更します。"

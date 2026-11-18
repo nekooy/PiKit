@@ -1214,6 +1214,12 @@ class PiAgentSession internal constructor(
          * [PiHost.openConversation] relaunches the agent into.
          */
         val workspace: String? = null,
+        /**
+         * What the first turn carried, for the case where it carried no words: the list
+         * names such a conversation after its pictures or files rather than `emptyTitle`.
+         */
+        val imageCount: Int = 0,
+        val fileCount: Int = 0,
     ) {
         val fileName: String get() = File(path).name
     }
@@ -1257,6 +1263,8 @@ class PiAgentSession internal constructor(
                 modifiedAt = modifiedAt,
                 pinned = file.name in pinned,
                 workspace = meta.workspace,
+                imageCount = meta.imageCount,
+                fileCount = meta.fileCount,
             )
         }.also { summaries ->
             // A conversation deleted while the app was running would otherwise be

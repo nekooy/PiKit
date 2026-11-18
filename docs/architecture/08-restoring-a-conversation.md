@@ -32,6 +32,27 @@ assistant row on `message_start`, before it knows whether the message will carry
 a tool call, so a live tool-using turn hides one more row than the same turn restored from
 disk. `ChatFoldTest` pins both numbers.
 
+## What a conversation is called
+
+A row's label is the first user turn, and "the first user turn" used to mean "the first line
+of text in it". Two kinds of conversation therefore had no true name: a prompt that was
+only a picture drew `空对话` — the empty label, over a conversation that had plainly just
+started — and one whose picture pi had rescaled was titled with pi's own
+`[Image: original 1200x2670, displayed at 899x2000 …]` note, an English sentence in the
+middle of the interface.
+
+The turn is now read in three parts. `SessionMetadata.read` strips the machinery with the
+same parser the transcript's chip uses (`parsePromptExtras`, which lives in `pi` because the
+shapes it parses are pi's), counts the `image` blocks the turn carried, and counts the paths
+its address block named. `SessionSummary` carries both counts, and the row's label falls
+back in that order: the words, then `N 张图片`, then `N 个文件`, then the empty label. The
+first turn names the conversation even when it has no words — the scan used to keep looking
+for text, so a picture-first conversation was titled with the *second* turn's sentence,
+something the reader said afterwards.
+
+The counts come from the content blocks, not from the notes: a picture inside pi's limit
+gets no note, and that is now the common case.
+
 ## Searching a conversation's content
 
 The drawer's list filtered on the title alone, and a title is the first user message, so

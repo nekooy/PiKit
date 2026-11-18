@@ -1178,7 +1178,7 @@ private fun ConversationRow(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = item.title.ifBlank { text.sessions.emptyTitle },
+                        text = item.displayTitle(text),
                         style = MiuixTheme.textStyles.body1,
                         fontWeight = if (current) FontWeight.Medium else FontWeight.Normal,
                         color = MiuixTheme.colorScheme.onSurface,
@@ -1523,6 +1523,23 @@ private fun RenameDialog(
  * The other asks on this page keep [PiConfirm]: they are one sentence, and a sentence
  * cannot overflow. This one is the only question whose body is a *list*.
  */
+/**
+ * What a row is called when it has no words of its own.
+ *
+ * A conversation is named by its first user turn: the words when it has any, and what the
+ * turn carried otherwise. A prompt that was only a picture used to draw `emptyTitle` —
+ * "空对话" over a conversation that plainly was not empty — and one that carried pi's
+ * `[Image: …]` note used to be titled with that English sentence instead.
+ */
+internal fun PiAgentSession.SessionSummary.displayTitle(text: Strings): String =
+    title.ifBlank {
+        when {
+            imageCount > 0 -> text.sessions.imageTitle(imageCount)
+            fileCount > 0 -> text.sessions.fileTitle(fileCount)
+            else -> text.sessions.emptyTitle
+        }
+    }
+
 @Composable
 private fun DeleteConfirm(
     show: Boolean,
@@ -1532,7 +1549,7 @@ private fun DeleteConfirm(
     onConfirm: () -> Unit,
 ) {
     val count = targets.size
-    val first = targets.firstOrNull()?.title?.ifBlank { text.sessions.emptyTitle }.orEmpty()
+    val first = targets.firstOrNull()?.displayTitle(text).orEmpty()
     // A dialog window is full-screen (`usePlatformDefaultWidth = false`), so this is
     // the screen's height. The body takes the fixed ceiling on a portrait phone and a
     // share of the window when the window is short — a landscape phone is 360dp tall,
@@ -1588,7 +1605,7 @@ private fun DeleteConfirm(
                 ) {
                     targets.forEach { item ->
                         Text(
-                            text = "• ${item.title.ifBlank { text.sessions.emptyTitle }}",
+                            text = "• ${item.displayTitle(text)}",
                             style = MiuixTheme.textStyles.body2,
                             color = MiuixTheme.colorScheme.onSurface,
                             maxLines = 2,
