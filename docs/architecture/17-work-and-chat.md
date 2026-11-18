@@ -199,9 +199,15 @@ app rewrites on every launch, so a reader's edit would fight the writer exactly 
 Chat mode still opens no door of its own. The one door the reader can open is the
 conversation's **network-tools switch**, in the action row where the permission control
 stands in work mode — the tier judges tool calls, and a chat conversation's tools are the
-two that reach the web, so the same slot answers the neighbouring question. It is on by
+two that reach the web, so the same slot answers the neighbouring question. It is off by
 default, per conversation, and its tint carries the state (the row's controls are one
-40dp dress; a second shape for "off" would be a second glyph to keep in step).
+40dp dress; a second shape for "off" would be a second glyph to keep in step). Off is the
+clean context the mode promises, and the tools are declared in the request rather than
+hidden on screen: a default of on would put `web_search` in every chat request whether or
+not the reply had anything to look up, which is the always-on design this chapter
+rejects. Turning it on is one tap and is recorded for that conversation alone; a
+conversation with no record — including every one written before the default moved —
+therefore starts off.
 
 On, the launch passes a **strict allowlist** of two names —
 `--tools web_search,fetch_content` — and loads the bundled web-access extension by an

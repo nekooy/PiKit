@@ -39,10 +39,11 @@ internal class SessionModeStore(context: Context) {
      *
      * A second record per session, in the same file and under a prefixed key, because the
      * answer is the same kind of fact as the mode: a launch flag that belongs to the
-     * conversation. **True when there is no record**, which is both the default the
-     * composer's control shows and the behaviour every conversation written before the
-     * control existed has — chat mode with the extension loaded is the app's whole point
-     * of the switch being on by default.
+     * conversation. **False when there is no record**, which is the clean context chat
+     * mode promises: a conversation whose reply is only talking declares no tool at all,
+     * and looking something up is the reader's one tap for that conversation. The tools
+     * are declared in the request rather than hidden on screen, so a default of on would
+     * put `web_search` in every chat request whether or not the reply needed it.
      *
      * The prefix keeps the two maps apart in one preference file: a mode is stored under
      * the bare path, and a boolean under `web:<path>`. One file rather than two because a
@@ -50,8 +51,8 @@ internal class SessionModeStore(context: Context) {
      * travel with the transcripts.
      */
     fun webAccessFor(path: String): Boolean {
-        if (path.isBlank()) return true
-        return prefs.getBoolean(KEY_WEB_PREFIX + path, true)
+        if (path.isBlank()) return false
+        return prefs.getBoolean(KEY_WEB_PREFIX + path, false)
     }
 
     /** Records [enabled] for [path]; a blank path is a conversation with no file yet. */

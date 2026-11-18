@@ -580,7 +580,7 @@ the one optional tool the reader may lend them.
   prompt is where the current time goes; the
   actual timestamp is filled in at launch.
 - **Web access**: the magnifier beside the
-  input, on by default and per conversation. On
+  input, off by default and per conversation. On
   lends the conversation `web_search` and
   `fetch_content` and nothing else; off gives it
   no tool at all.

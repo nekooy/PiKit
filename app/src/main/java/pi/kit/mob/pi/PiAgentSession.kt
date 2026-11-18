@@ -244,12 +244,12 @@ class PiAgentSession internal constructor(
     /**
      * Whether this chat conversation may use the bundled extension's network tools.
      *
-     * On by default, per conversation, and a launch flag rather than a runtime switch:
+     * Off by default, per conversation, and a launch flag rather than a runtime switch:
      * the tools are registered when pi starts, so flipping it restarts this conversation
      * the way a preset change does. `SessionModeStore` records it beside the mode.
      */
     private val _chatWebAccess = MutableStateFlow(
-        boundSession?.let { host.sessionModes.webAccessFor(it) } ?: true,
+        boundSession?.let { host.sessionModes.webAccessFor(it) } ?: false,
     )
     val chatWebAccess: StateFlow<Boolean> = _chatWebAccess.asStateFlow()
 

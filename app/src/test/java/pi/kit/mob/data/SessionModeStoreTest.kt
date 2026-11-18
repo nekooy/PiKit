@@ -1,7 +1,9 @@
 package pi.kit.mob.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
 
@@ -23,6 +25,25 @@ class SessionModeStoreTest {
         val store = newStore()
 
         assertEquals(AgentMode.WORK, store.modeFor("/sessions/old.jsonl"))
+    }
+
+    @Test
+    fun `a conversation with no web record has the network tools off`() {
+        val store = newStore()
+
+        assertFalse(store.webAccessFor("/sessions/old.jsonl"))
+    }
+
+    @Test
+    fun `the web switch is recorded per conversation`() {
+        val preferences = FakeSharedPreferences()
+        val first = newStore(preferences)
+        first.setWebAccess("/sessions/short.jsonl", true)
+
+        val rebuilt = newStore(preferences)
+
+        assertTrue(rebuilt.webAccessFor("/sessions/short.jsonl"))
+        assertFalse(rebuilt.webAccessFor("/sessions/other.jsonl"))
     }
 
     @Test
