@@ -23,6 +23,12 @@ internal object JapaneseStrings : Strings {
         override fun attachmentCount(count: Int) = "画像 $count 枚"
         override val imageOpen = "画像を表示"
         override val imageUnavailable = "画像を表示できません"
+        override val imageClose = "閉じる"
+        override val imageShare = "共有"
+        override val imageSave = "保存"
+        override val imageSaved = "写真に保存しました"
+        override val imageSaveFailed = "保存できませんでした"
+        override val imageShareFailed = "共有できるアプリがありません"
         override fun picturePosition(index: Int, total: Int) = "$index / $total"
         override fun extrasCount(fileCount: Int, noteCount: Int): String {
             val parts = buildList {

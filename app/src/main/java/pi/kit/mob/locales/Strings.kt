@@ -132,10 +132,28 @@ interface Strings {
         /** What a picture the app cannot draw says, in place of the picture. */
         val imageUnavailable: String
 
+        /** The viewer's close disc, which is a window's exit rather than a page's back. */
+        val imageClose: String
+
+        /**
+         * The viewer's two foot actions, and what a save answers.
+         *
+         * `imageSave` is the action and `imageSaved` the toast that confirms it: a picture
+         * that has left the viewer for the gallery is a fact the reader cannot see, so the
+         * window has to say so once. Under the same heading because the three are one
+         * sentence's worth of interface, read together.
+         */
+        val imageShare: String
+        val imageSave: String
+        val imageSaved: String
+        val imageSaveFailed: String
+        val imageShareFailed: String
+
         /**
          * Where the viewer is in a prompt's set: `1 / 3`.
          *
-         * The viewer's one piece of information, drawn in the chrome's trailing capsule. It
+         * The viewer's one piece of information, drawn in the middle of the chrome's top
+         * row — the middle because it is a caption for the set rather than a control. It
          * is a format rather than two numbers joined at the call site because the separator
          * and the spacing are the catalog's — the same reason every other count is a member
          * here — and because a set of one draws no counter at all (the caller's decision, not

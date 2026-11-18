@@ -90,6 +90,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -117,6 +118,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -174,6 +176,7 @@ import pi.kit.mob.ui.chat.ChatStatusPill
 import pi.kit.mob.ui.chat.ChatTone
 import pi.kit.mob.ui.chat.FollowTailController
 import pi.kit.mob.ui.chat.NoticeCard
+import pi.kit.mob.ui.chat.PictureSource
 import pi.kit.mob.ui.chat.PictureTarget
 import pi.kit.mob.ui.chat.PictureViewer
 import pi.kit.mob.ui.chat.PreparedImage
@@ -188,6 +191,7 @@ import pi.kit.mob.ui.chat.ToolCallRow
 import pi.kit.mob.ui.chat.TurnSummaryData
 import pi.kit.mob.ui.chat.TurnSummaryRow
 import pi.kit.mob.ui.chat.rememberFollowTail
+import pi.kit.mob.ui.chat.screenRect
 import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.components.chatPresetName
 import pi.kit.mob.ui.components.chatPresetSummary
@@ -2563,6 +2567,7 @@ private fun ChatPage(
                 onValueChange = onInputChange,
                 attachments = attachments,
                 onRemoveImage = onRemoveImage,
+                onOpenPictures = onOpenPictures,
                 isStreaming = state.isStreaming,
                 // Two flags, because they answer two different questions. The actions
                 // wait for `Running`: `sendPrompt` is `client?.request(…)` and `client`
@@ -4455,6 +4460,8 @@ private fun Composer(
     onValueChange: (String) -> Unit,
     attachments: List<PendingImage>,
     onRemoveImage: (String) -> Unit,
+    /** Opens the pictures a prompt is about to carry, from the tile that was tapped. */
+    onOpenPictures: (PictureTarget) -> Unit,
     isStreaming: Boolean,
     /** Whether the actions are available: send, the command list and `+`. */
     enabled: Boolean,
@@ -4599,8 +4606,32 @@ private fun Composer(
                     items(attachments, key = { it.id }) { image ->
                         AttachmentChip(
                             image = image,
+                            openLabel = text.chat.imageOpen,
                             removeLabel = text.chat.removeAttachment,
                             onRemove = { onRemoveImage(image.id) },
+                            onOpen = { origin, preview ->
+                                // The pictures the viewer may swipe through: the picked
+                                // images, not the file attachments — a document is a path
+                                // this page sends, and has no picture behind it.
+                                val previewable = attachments.filter { it.workspacePath == null }
+                                onOpenPictures(
+                                    PictureTarget(
+                                        pictures = previewable.map { pending ->
+                                            if (pending.id == image.id) {
+                                                PictureSource(
+                                                    uri = pending.uri,
+                                                    preview = preview,
+                                                    origin = origin,
+                                                )
+                                            } else {
+                                                PictureSource(uri = pending.uri)
+                                            }
+                                        },
+                                        start = previewable.indexOfFirst { it.id == image.id }
+                                            .coerceAtLeast(0),
+                                    ),
+                                )
+                            },
                         )
                     }
                 }
@@ -6412,15 +6443,23 @@ private val BUILT_IN_COMMANDS: List<BuiltInCommand> = listOf(
 @Composable
 private fun AttachmentChip(
     image: PendingImage,
+    openLabel: String,
     removeLabel: String,
     onRemove: () -> Unit,
+    onOpen: (Rect, ImageBitmap) -> Unit,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     // Decoded off the main thread: a 12-megapixel photo takes long enough to
     // decode that doing it during composition is a visible stall.
     val thumbnail by produceState<ImageBitmap?>(initialValue = null, image.id) {
         value = withContext(Dispatchers.IO) { loadThumbnail(context, image.uri) }
     }
+    // Where the tile is on screen, for the viewer's opening flight: tapping a picture in
+    // the composer opens the same window a prompt's picture opens, and it grows out of
+    // this square rather than fading in over the page. The coordinates are kept rather
+    // than a rectangle so the position is the one at the tap.
+    var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     // 8dp: the dense step for a small information tile — between the 8dp chip and
     // the 12dp panel, which is as far as the shape scale is worth taking for a
@@ -6434,7 +6473,11 @@ private fun AttachmentChip(
     // a target width of zero. With the size only on the `Surface` the name band ran
     // the item as wide as the file's own name, and the ✕ anchored to the item's end
     // therefore sat past the picture it belongs to.
-    Box(Modifier.size(ATTACHMENT_TILE)) {
+    Box(
+        Modifier
+            .size(ATTACHMENT_TILE)
+            .onGloballyPositioned { node -> coordinates = node },
+    ) {
         Surface(
             color = MiuixTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(ATTACHMENT_CORNER),
@@ -6446,7 +6489,18 @@ private fun AttachmentChip(
                     bitmap = bitmap,
                     contentDescription = image.name,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(ATTACHMENT_TILE),
+                    modifier = Modifier
+                        .size(ATTACHMENT_TILE)
+                        // The tile is the picture's entry point: the same window a sent
+                        // picture opens, on the bytes the send will carry. It used to be
+                        // inert — the only thing on it was ✕ — so a picked photo could
+                        // not be looked at before it left.
+                        .clickable(
+                            onClickLabel = openLabel,
+                            onClick = {
+                                coordinates?.screenRect(view)?.let { onOpen(it, bitmap) }
+                            },
+                        ),
                 )
             } else {
                 Box(Modifier.size(ATTACHMENT_TILE), contentAlignment = Alignment.Center) {

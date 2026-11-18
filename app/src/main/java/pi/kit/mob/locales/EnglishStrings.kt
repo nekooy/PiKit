@@ -22,6 +22,12 @@ internal object EnglishStrings : Strings {
         override fun attachmentCount(count: Int) = plural(count, "image", "images")
         override val imageOpen = "Show picture"
         override val imageUnavailable = "Picture is no longer available"
+        override val imageClose = "Close"
+        override val imageShare = "Share"
+        override val imageSave = "Save"
+        override val imageSaved = "Saved to your photos"
+        override val imageSaveFailed = "Couldn't save the picture"
+        override val imageShareFailed = "No app to share it with"
         override fun picturePosition(index: Int, total: Int) = "$index / $total"
         override fun extrasCount(fileCount: Int, noteCount: Int): String {
             val parts = buildList {

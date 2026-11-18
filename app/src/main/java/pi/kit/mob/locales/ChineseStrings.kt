@@ -30,6 +30,12 @@ internal object ChineseStrings : Strings {
         override fun attachmentCount(count: Int) = "$count 张图片"
         override val imageOpen = "查看图片"
         override val imageUnavailable = "图片已无法显示"
+        override val imageClose = "关闭"
+        override val imageShare = "分享"
+        override val imageSave = "保存"
+        override val imageSaved = "已保存到相册"
+        override val imageSaveFailed = "保存失败"
+        override val imageShareFailed = "没有可分享的应用"
         override fun picturePosition(index: Int, total: Int) = "$index / $total"
         override fun extrasCount(fileCount: Int, noteCount: Int): String {
             val parts = buildList {
