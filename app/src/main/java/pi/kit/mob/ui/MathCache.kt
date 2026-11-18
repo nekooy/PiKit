@@ -55,7 +55,7 @@
  *
  * ## Why the worker is a single thread
  *
- * `JLatexMathDrawable.builder(...).build()` writes to JLaTeXMath's own static macro and font
+ * `MathDrawable.build(...)` writes to JLaTeXMath's own static macro and font
  * caches — `MacroInfo.Commands`, `TeXFormula`'s predefined set — which are plain maps. One thread
  * is what keeps that safe, and at 0.4 ms a formula it costs nothing to keep.
  */
@@ -68,7 +68,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import ru.noties.jlatexmath.JLatexMathDrawable
 import java.util.Collections
 
 /**
@@ -76,11 +75,11 @@ import java.util.Collections
  *
  * The drawable is **not** drawn by this object — `MathView.kt` does that, because a drawable
  * cannot be drawn outside a `DrawScope` — and it is shared between every block that uses the same
- * formula, which is safe because a `JLatexMathDrawable` is immutable once built and only its
+ * formula, which is safe because a `MathDrawable` is immutable once built and only its
  * bounds are set before a draw, on the one thread that draws.
  */
 internal class Formula(
-    val drawable: JLatexMathDrawable,
+    val drawable: MathDrawable,
     /** Width in pixels, including the padding the builder was given. */
     val widthPx: Int,
     /** Height in pixels, including the padding. */
@@ -256,15 +255,12 @@ private fun typeset(body: String, spec: MathSpec): Formula {
     LatexCompat.installAliases()
     val width = drawable.intrinsicWidth.coerceAtLeast(1)
     val height = drawable.intrinsicHeight.coerceAtLeast(1)
-    // The builder's padding is applied *inside* the drawable, so the icon is drawn PAD pixels
-    // above the drawable's bottom as well as PAD inside its left and right edges: a depth read
-    // from the icon alone would leave every formula PAD pixels too high on the line.
-    //
-    // `icon()` is the library's method, not a Kotlin property: the field behind it is private and
-    // `icon` alone therefore resolves to that field rather than to the getter. Both it and
-    // `iconDepth` are non-null in this release — the compiler says so — which is why neither a
-    // `?.` nor an elvis survives here.
-    val depth = ((drawable.icon().iconDepth) + PAD).coerceIn(0, height)
+    // The padding is applied *inside* the icon, so the formula is drawn PAD pixels above the
+    // drawable's bottom as well as PAD inside its left and right edges: a depth read from the
+    // icon's own bottom without the padding would leave every formula PAD pixels too high on the
+    // line. This is the geometry the library's builder produced, unchanged — the drawable only
+    // draws it.
+    val depth = (drawable.depthPx() + PAD).coerceIn(0, height)
     return Formula(drawable = drawable, widthPx = width, heightPx = height, depthPx = depth)
 }
 
@@ -274,14 +270,8 @@ private fun typeset(body: String, spec: MathSpec): Formula {
  * Split out of [typeset] so that a body the renderer refuses can be rewritten and built again
  * without the geometry below being written twice.
  */
-private fun buildDrawable(body: String, spec: MathSpec): JLatexMathDrawable =
-    JLatexMathDrawable.builder(body)
-        .textSize(spec.sizePx)
-        .padding(PAD)
-        .color(spec.ink)
-        .background(0x00000000)
-        .align(JLatexMathDrawable.ALIGN_LEFT)
-        .build()
+private fun buildDrawable(body: String, spec: MathSpec): MathDrawable =
+    MathDrawable.build(body = body, sizePx = spec.sizePx, ink = spec.ink, padding = PAD)
 
 /**
  * Every LaTeX body in [text], by the same tokeniser the renderer uses.
