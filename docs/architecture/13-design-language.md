@@ -606,6 +606,18 @@ drew `Close` for exactly that act, beside a profile row and a session bar that d
 bin — one kind of act in two vocabularies, and the ✕ read as "close this row" while it
 removed an entry from a stored configuration.
 
+**Controls that sit at one level are inked at one level.** A slot holding several
+controls of the same rank — the edit and delete pair at a profile row's end is the pair
+this was learned on — takes one ink for all of them, because a reader who is told two
+buttons are peers reads their weight as availability: the fainter one looks disabled.
+Miuix's two muted inks are a full opacity step apart (`onSurfaceVariantSummary` is 60% of
+the surface's ink, `onSurfaceVariantActions` 40%), so mixing them inside one slot is not a
+subtlety — the pair read as one live control and one that could not be pressed, and the
+bin was the faint one. The rank decides the ink and the slot does not: a control that is
+the row's subject takes the normal ink, every control beside it in that row's action slot
+takes the same muted one, and a genuinely unavailable control says so with `enabled`,
+which dims its ink *and* refuses the press, rather than by borrowing a fainter token.
+
 `Close` keeps the other act: **taking something off this screen.** A filter field's clear
 (`ClearFieldButton`), the selection bar's exit, a failed tool call's state mark and the
 composer's staged attachment — never sent, nothing stored — are ✕s, and a bin on any of
