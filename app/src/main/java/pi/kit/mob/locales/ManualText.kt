@@ -595,13 +595,13 @@ the one optional tool the reader may lend them.
   starts a new conversation in the mode tapped.
   It does not convert the one behind it, and the
   drawer's history is the mode you are in: the
-  other side's conversations are one switch away.
-  To change a saved conversation's mode, hold its
-  row in the history list and choose the switch
-  row. Its messages stay, and its process is
-  relaunched — and the row leaves this list,
-  because the conversation is on the other side
-  now. Saving a prompt restarts the
+  other side's conversations are one switch
+  away. To change a saved conversation's mode,
+  hold its row in the history list and choose
+  the switch row. Its messages stay, and its
+  process is relaunched — and the row leaves
+  this list, because the conversation is on the
+  other side now. Saving a prompt restarts the
   agent, because pi reads it only when the
   process starts.
 
