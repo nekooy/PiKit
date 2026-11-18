@@ -85,7 +85,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -175,6 +174,20 @@ internal data class PictureSource(
     val uri: Uri? = null,
     val preview: ImageBitmap? = null,
     val origin: Rect? = null,
+)
+
+/**
+ * One laid-out picture tile: where it is, and the bitmap it is already drawing.
+ *
+ * The coordinates are kept rather than a rectangle because the page may scroll under the
+ * tile: the rectangle has to be asked for at the moment of a tap, while this is the node
+ * that answers it. Every tile in a set reports one, so the viewer's target knows where
+ * each picture lives — not only the one that was tapped — and a viewer swiped to another
+ * picture still lands on that picture's tile instead of fading out where it stands.
+ */
+internal data class PictureTileFrame(
+    val coordinates: LayoutCoordinates?,
+    val preview: ImageBitmap?,
 )
 
 /**
@@ -435,13 +448,22 @@ internal fun PromptPictures(
     // Each tile reports the frame it is drawn in and the bitmap it already holds, so the
     // target a tap builds knows where *every* picture lives — not only the one tapped.
     // The close flight aims at the picture on screen at that moment, which after a swipe
-    // is not the one the viewer was opened on.
-    val known = remember(keys) { mutableStateMapOf<Int, PictureSource>() }
+    // is not the one the viewer was opened on. The map is plain rather than snapshot:
+    // it is read in the tap handler, not during composition.
+    val tiles = remember(keys) { mutableMapOf<Int, PictureTileFrame>() }
+    val view = LocalView.current
     val open = { index: Int ->
         onOpen(
             PictureTarget(
                 pictures = keys.indices.map { i ->
-                    known[i] ?: PictureSource(key = keys[i])
+                    val tile = tiles[i]
+                    PictureSource(
+                        key = keys[i],
+                        preview = tile?.preview,
+                        origin = tile?.coordinates
+                            ?.takeIf { it.isAttached }
+                            ?.screenRect(view),
+                    )
                 },
                 start = index,
             ),
@@ -462,10 +484,8 @@ internal fun PromptPictures(
                 key = keys[0],
                 text = text,
                 available = available,
-                onOpen = { source ->
-                    known[0] = source
-                    open(0)
-                },
+                onLocated = { tiles[0] = it },
+                onOpen = { open(0) },
             )
             return@BoxWithConstraints
         }
@@ -484,10 +504,8 @@ internal fun PromptPictures(
                             key = key,
                             side = side,
                             text = text,
-                            onOpen = { source ->
-                                known[index] = source
-                                open(index)
-                            },
+                            onLocated = { tiles[index] = it },
+                            onOpen = { open(index) },
                         )
                     }
                 }
@@ -513,7 +531,8 @@ private fun SinglePicture(
     key: String,
     text: Strings,
     available: Float,
-    onOpen: (PictureSource) -> Unit,
+    onLocated: (PictureTileFrame) -> Unit,
+    onOpen: () -> Unit,
 ) {
     val context = LocalContext.current
     val generation by ChatPictureCache.generation.collectAsState()
@@ -539,9 +558,8 @@ private fun SinglePicture(
         text = text,
         modifier = Modifier,
         crop = false,
-        onOpen = { origin ->
-            onOpen(PictureSource(key = key, preview = bitmap, origin = origin))
-        },
+        onLocated = onLocated,
+        onOpen = onOpen,
     )
 }
 
@@ -551,7 +569,8 @@ private fun PictureTile(
     key: String,
     side: Dp,
     text: Strings,
-    onOpen: (PictureSource) -> Unit,
+    onLocated: (PictureTileFrame) -> Unit,
+    onOpen: () -> Unit,
 ) {
     val context = LocalContext.current
     val generation by ChatPictureCache.generation.collectAsState()
@@ -567,9 +586,8 @@ private fun PictureTile(
         text = text,
         modifier = Modifier,
         crop = true,
-        onOpen = { origin ->
-            onOpen(PictureSource(key = key, preview = picture, origin = origin))
-        },
+        onLocated = onLocated,
+        onOpen = onOpen,
     )
 }
 
@@ -588,18 +606,27 @@ private fun PictureFrame(
     text: Strings,
     modifier: Modifier,
     crop: Boolean,
-    onOpen: (Rect?) -> Unit,
+    onLocated: (PictureTileFrame) -> Unit,
+    onOpen: () -> Unit,
 ) {
     val shape = RoundedCornerShape(PICTURE_CORNER)
-    val view = LocalView.current
     // The node's coordinates rather than a rectangle: a rectangle copied while the page was
     // still sliding in behind the drawer is a rectangle the flight would start from, and the
     // position has to be asked for at the moment of the tap.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    // The bitmap can arrive after the first layout, so it reports separately; the node
+    // itself reports on every position change, which is what keeps a scrolled tile's
+    // origin current without a rectangle copied at composition time.
+    LaunchedEffect(bitmap) {
+        coordinates?.let { onLocated(PictureTileFrame(it, bitmap)) }
+    }
     Box(
         modifier
             .size(width, height)
-            .onGloballyPositioned { coordinates = it }
+            .onGloballyPositioned {
+                coordinates = it
+                onLocated(PictureTileFrame(it, bitmap))
+            }
             .clip(shape)
             .background(PiTone.inset()),
         contentAlignment = Alignment.Center,
@@ -620,7 +647,7 @@ private fun PictureFrame(
                     .fillMaxSize()
                     .clickable(
                         onClickLabel = text.chat.imageOpen,
-                        onClick = { onOpen(coordinates?.screenRect(view)) },
+                        onClick = onOpen,
                     ),
             )
         }
@@ -790,6 +817,14 @@ internal fun PictureViewer(
             window?.apply {
                 clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                 setDimAmount(0f)
+                // The flight is this window's whole motion. The platform's dialog
+                // animation still scaled the picture for its own exit *after* the
+                // flight had landed — measured over a 10x slow close as a six-pixel
+                // step upward for two frames before the window went, which is the
+                // jump the reader sees once the picture is back in the message. A
+                // window with no animation of its own leaves the landing frame as
+                // the last thing it draws.
+                setWindowAnimations(0)
             }
             // The app's theme sets the bar icons through the activity's window, and this is
             // a second one: over the viewer's black ground they have to be light, or the

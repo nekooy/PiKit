@@ -178,6 +178,7 @@ import pi.kit.mob.ui.chat.FollowTailController
 import pi.kit.mob.ui.chat.NoticeCard
 import pi.kit.mob.ui.chat.PictureSource
 import pi.kit.mob.ui.chat.PictureTarget
+import pi.kit.mob.ui.chat.PictureTileFrame
 import pi.kit.mob.ui.chat.PictureViewer
 import pi.kit.mob.ui.chat.PreparedImage
 import pi.kit.mob.ui.chat.SEND_IMAGE_MAX_EDGE
@@ -4601,6 +4602,14 @@ private fun Composer(
     Box(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
             if (attachments.isNotEmpty()) {
+                // Every chip reports the frame it is drawn in and the bitmap it already
+                // holds, so the target a tap builds knows where *every* picked picture
+                // lives — the viewer swipes between them and has to land on the one on
+                // screen, not on the one it was opened from.
+                val tiles = remember(attachments) {
+                    mutableMapOf<String, PictureTileFrame>()
+                }
+                val view = LocalView.current
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -4612,7 +4621,8 @@ private fun Composer(
                             openLabel = text.chat.imageOpen,
                             removeLabel = text.chat.removeAttachment,
                             onRemove = { onRemoveImage(image.id) },
-                            onOpen = { origin, preview ->
+                            onLocated = { tiles[image.id] = it },
+                            onOpen = {
                                 // The pictures the viewer may swipe through: the picked
                                 // images, not the file attachments — a document is a path
                                 // this page sends, and has no picture behind it.
@@ -4620,15 +4630,14 @@ private fun Composer(
                                 onOpenPictures(
                                     PictureTarget(
                                         pictures = previewable.map { pending ->
-                                            if (pending.id == image.id) {
-                                                PictureSource(
-                                                    uri = pending.uri,
-                                                    preview = preview,
-                                                    origin = origin,
-                                                )
-                                            } else {
-                                                PictureSource(uri = pending.uri)
-                                            }
+                                            val tile = tiles[pending.id]
+                                            PictureSource(
+                                                uri = pending.uri,
+                                                preview = tile?.preview,
+                                                origin = tile?.coordinates
+                                                    ?.takeIf { it.isAttached }
+                                                    ?.screenRect(view),
+                                            )
                                         },
                                         start = previewable.indexOfFirst { it.id == image.id }
                                             .coerceAtLeast(0),
@@ -6449,10 +6458,10 @@ private fun AttachmentChip(
     openLabel: String,
     removeLabel: String,
     onRemove: () -> Unit,
-    onOpen: (Rect, ImageBitmap) -> Unit,
+    onLocated: (PictureTileFrame) -> Unit,
+    onOpen: () -> Unit,
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
     // Decoded off the main thread: a 12-megapixel photo takes long enough to
     // decode that doing it during composition is a visible stall.
     val thumbnail by produceState<ImageBitmap?>(initialValue = null, image.id) {
@@ -6463,6 +6472,13 @@ private fun AttachmentChip(
     // this square rather than fading in over the page. The coordinates are kept rather
     // than a rectangle so the position is the one at the tap.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val bitmap = thumbnail
+    // The bitmap can arrive after the first layout; the node reports its own position
+    // changes, so a scrolled chip's origin is the one at the tap rather than at
+    // composition time.
+    LaunchedEffect(bitmap) {
+        coordinates?.let { onLocated(PictureTileFrame(it, bitmap)) }
+    }
 
     // 8dp: the dense step for a small information tile — between the 8dp chip and
     // the 12dp panel, which is as far as the shape scale is worth taking for a
@@ -6479,14 +6495,16 @@ private fun AttachmentChip(
     Box(
         Modifier
             .size(ATTACHMENT_TILE)
-            .onGloballyPositioned { node -> coordinates = node },
+            .onGloballyPositioned { node ->
+                coordinates = node
+                onLocated(PictureTileFrame(node, bitmap))
+            },
     ) {
         Surface(
             color = MiuixTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(ATTACHMENT_CORNER),
             modifier = Modifier.size(ATTACHMENT_TILE),
         ) {
-            val bitmap = thumbnail
             if (bitmap != null) {
                 Image(
                     bitmap = bitmap,
@@ -6500,9 +6518,7 @@ private fun AttachmentChip(
                         // not be looked at before it left.
                         .clickable(
                             onClickLabel = openLabel,
-                            onClick = {
-                                coordinates?.screenRect(view)?.let { onOpen(it, bitmap) }
-                            },
+                            onClick = onOpen,
                         ),
                 )
             } else {
