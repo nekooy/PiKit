@@ -698,7 +698,7 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val showAvatars: Boolean = true,
     /**
-     * The agent's avatar: a short label, a picture, and the colour of its circle.
+     * The agent's avatar: a name, a picture, and the colour of its circle.
      *
      * Three things, and the order they are tried in is in `PiAvatar`: the picture
      * wins, then the speaker's own figure — the app's PiKit mark for the agent, a person

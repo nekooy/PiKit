@@ -1034,9 +1034,9 @@ interface Strings {
          * Two rows and a switch on the personalization page. The agent's default is
          * the app's own PiKit mark and the reader's is a person silhouette — both drawn
          * by the app, not stored — so the two never look alike and neither has to be
-         * set up before the first message. A label is a short word or the reader's
-         * initials; blank means the built-in mark, and a chosen picture wins over
-         * both.
+         * set up before the first message. A speaker's name is a word beside that mark,
+         * never text inside the disc; blank means "no name", and a chosen picture wins
+         * over the mark.
          */
         val avatars: String
         val showAvatars: String

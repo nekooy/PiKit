@@ -3334,9 +3334,9 @@ private fun noticeLines(message: String): String {
 /**
  * The two avatars the transcript draws over its cards, or null when they are off.
  *
- * A null label (and no image) is the built-in mark rather than a word: the agent's is
- * the app's own PiKit mark and the reader's is the person figure — [PiAvatar] holds both
- * and is the one place that decides which is drawn, so this transcript and the
+ * A null name draws no word beside the mark; it never changes what the disc holds. The
+ * agent's is the app's own PiKit mark and the reader's is the person figure — [PiAvatar]
+ * holds both and is the one place that decides which is drawn, so this transcript and the
  * personalization page cannot disagree about the reader's own avatar. The colours are
  * the two `AvatarColor` seeds that page offers, and an image is a file path the
  * settings store holds.
@@ -3350,20 +3350,6 @@ private data class ChatAvatars(
     val userColor: Color,
 )
 
-/**
- * The avatar's drawn size and the air between it and the card under it.
- *
- * 34dp, up from 26. The avatar is a *name* for the speaker, and at 26dp a
- * two-character label was legible but the figure was not — the transcript is read at
- * arm's length, and the mark has to be tellable from the other speaker's at a glance
- * rather than by looking for it. 34dp is the size the agent's mark is drawn at in the
- * process row (`PiAgentMark`'s 28dp is inside a container; this is the whole badge),
- * and it clears the answer card's own 16dp inset without competing with the text's
- * first line.
- *
- * The 8dp gap is the inside-module gap — it belongs to the card's own top edge, not
- * to the transcript's `rowGap`, which is the space between two turns.
- */
 /**
  * A speaker's name, beside their mark.
  *
@@ -3389,6 +3375,20 @@ private fun SpeakerName(name: String) {
     )
 }
 
+/**
+ * The avatar's drawn size and the air between it and the card under it.
+ *
+ * 34dp, up from 26. The avatar is a *name* for the speaker, and at 26dp a two-character
+ * label was legible but the figure was not — the transcript is read at arm's length, and
+ * the mark has to be tellable from the other speaker's at a glance rather than by looking
+ * for it. (The label is gone; the size it forced is what the figure and the name beside it
+ * inherited.) 34dp is the size the agent's mark is drawn at in the process row
+ * (`PiAgentMark`'s 28dp is inside a container; this is the whole badge), and it clears the
+ * answer card's own 16dp inset without competing with the text's first line.
+ *
+ * The 8dp gap is the inside-module gap — it belongs to the card's own top edge, not
+ * to the transcript's `rowGap`, which is the space between two turns.
+ */
 private val AVATAR_SIZE = 34.dp
 private val AVATAR_GAP = 8.dp
 

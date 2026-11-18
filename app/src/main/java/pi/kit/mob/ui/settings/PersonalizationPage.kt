@@ -172,6 +172,11 @@ internal fun PersonalizationPage(
             // The transcript's two speakers, as names, pictures or marks. A switch
             // over the pair rather than one per side: they are one feature — "draw
             // who is talking" — and a reader who wants them off wants both off.
+            //
+            // Each row's disc is the mark the transcript draws, and nothing else: the
+            // name is a word beside that mark on the side its speaker owns, so passing
+            // it here would put a monogram in the one place the reader goes to see what
+            // the transcript will show. `PiAvatar` no longer has the branch for it.
             PiSection(title = text.settings.avatars) {
                 SwitchPreference(
                     title = text.settings.showAvatars,
@@ -187,7 +192,6 @@ internal fun PersonalizationPage(
                         PiAvatar(
                             speaker = AvatarSpeaker.AGENT,
                             color = settings.aiAvatarColor.seed,
-                            label = settings.aiAvatarName.ifBlank { null },
                             imagePath = settings.aiAvatarImage.ifBlank { null },
                         )
                     },
@@ -202,8 +206,7 @@ internal fun PersonalizationPage(
                         PiAvatar(
                             speaker = AvatarSpeaker.READER,
                             color = settings.userAvatarColor.seed,
-                            // Blank draws the silhouette — the reader's default mark.
-                            label = settings.userAvatarName.ifBlank { null },
+                            // No picture draws the silhouette — the reader's default mark.
                             imagePath = settings.userAvatarImage.ifBlank { null },
                         )
                     },

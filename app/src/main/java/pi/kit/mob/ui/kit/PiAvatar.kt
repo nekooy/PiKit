@@ -18,19 +18,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * Which of the conversation's two speakers a circle is drawn for.
@@ -43,16 +38,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * new call site cannot pick a third answer.
  */
 enum class AvatarSpeaker {
-    /** The agent: the app's own PiKit mark when the reader has not named it. */
+    /** The agent: the app's own PiKit mark when the reader has not chosen a picture. */
     AGENT,
 
-    /** The reader: the person figure when they have not named themselves. */
+    /** The reader: the person figure when they have not chosen a picture. */
     READER,
 }
 
 /**
- * One speaker's mark: a disc in the colour the reader chose, holding their picture,
- * their label, or the speaker's built-in figure.
+ * One speaker's mark: a disc in the colour the reader chose, holding their picture or
+ * the speaker's built-in figure.
  *
  * ## Why this is one composable and not two
  *
@@ -64,10 +59,25 @@ enum class AvatarSpeaker {
  * conversation and as a plain person where they chose it. The report was "用户头像实际
  * 显示的为何和设置页不一样，以设置页为准".
  *
- * A picture, a label and a figure are three answers to one question ("who is this"),
- * so the order they are tried in is stated once, here: **picture, then label, then
- * the figure**, and the settings page's figure is the reader's (the page that lets
- * them replace it is the one that decides what it is when they have not).
+ * A picture and a figure are two answers to one question ("who is this"), so the order
+ * they are tried in is stated once, here: **picture, then the speaker's mark**, and the
+ * settings page's figure is the reader's (the page that lets them replace it is the one
+ * that decides what it is when they have not).
+ *
+ * ## A name is a word beside the disc, and there is no label parameter
+ *
+ * The disc used to hold the speaker's name too — capped at three characters, because a
+ * fourth was already an ellipsis at 34dp — which made it a monogram rather than a name,
+ * and the same avatar read as a word where it was set and as a figure where it was read.
+ * The name is now drawn beside the mark on the side that speaker owns (`SpeakerName` in
+ * `ChatScreen`), and the disc draws the figure.
+ *
+ * The `label` parameter is therefore gone rather than merely unused. The personalization
+ * page's two rows kept passing one after the rest of the app had stopped, so the page
+ * that *previews* the avatar was the one screen still drawing the retired monogram — a
+ * 34dp disc holding `Pi` where the transcript drew the PiKit mark. A parameter nothing
+ * should pass is a parameter a later call site will pass, so the drawing itself no
+ * longer has the branch.
  *
  * ## The two shares, and why they differ
  *
@@ -89,27 +99,22 @@ enum class AvatarSpeaker {
  * ## The ink is the circle's, not the theme's
  *
  * [color] is the reader's choice and may be any hue at any lightness, so the only
- * thing that can be known about it is how bright it is: the label and the figure are
- * black on a light disc and white on a dark one, which is what [luminance] is asked.
+ * thing that can be known about it is how bright it is: the figure is black on a light
+ * disc and white on a dark one, which is what [luminance] is asked.
  *
- * @param label the reader's short label for this speaker, or null for the figure.
  * @param imagePath an absolute path to a picture this app owns ([pi.kit.mob.data.AvatarStore]'s
  *   copy), or null. A path that no longer resolves costs the picture and nothing else:
- *   the avatar falls back to the label or the figure exactly as if none had been chosen.
+ *   the avatar falls back to the speaker's figure exactly as if none had been chosen.
  * @param size the disc's diameter. 28dp on a settings row, 34dp over a message, 96dp
  *   in the editor.
- * @param labelStyle the label's style; null scales it to [size], which is what makes
- *   the same label legible on a 28dp row and on a 96dp preview.
  */
 @Composable
 fun PiAvatar(
     speaker: AvatarSpeaker,
     color: Color,
     modifier: Modifier = Modifier,
-    label: String? = null,
     imagePath: String? = null,
     size: Dp = 28.dp,
-    labelStyle: TextStyle? = null,
 ) {
     val ink = if (color.luminance() > 0.5f) Color.Black else Color.White
     val picture = rememberAvatarBitmap(imagePath)
@@ -120,8 +125,8 @@ fun PiAvatar(
             .background(color),
         contentAlignment = Alignment.Center,
     ) {
-        when {
-            picture != null -> Image(
+        if (picture != null) {
+            Image(
                 bitmap = picture,
                 contentDescription = null,
                 // Crop rather than fit: a portrait photo in a circle should fill it,
@@ -129,32 +134,15 @@ fun PiAvatar(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-
-            label != null -> Text(
-                text = label,
-                // Scaled to the circle rather than fixed: `body2` is 14sp, which is
-                // more than half of the 28dp row avatar, so the three-character label
-                // the field allows was already wider than the disc it sits in. The
-                // editor passes `title1` for its 96dp preview; a call site that passes
-                // nothing gets the row size.
-                style = labelStyle
-                    ?: MiuixTheme.textStyles.body2.copy(fontSize = (size.value * LABEL_SHARE).sp),
-                color = ink,
-                maxLines = 1,
-                // Elided rather than clipped: the label is capped at three characters
-                // but a large font scale still overflows, and a glyph cut in half reads
-                // as a rendering fault where an ellipsis reads as "there is more".
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            speaker == AvatarSpeaker.AGENT -> Icon(
+        } else if (speaker == AvatarSpeaker.AGENT) {
+            Icon(
                 painter = painterResource(R.drawable.ic_pi_mark),
                 contentDescription = null,
                 tint = ink,
                 modifier = Modifier.size(size * AVATAR_MARK_SHARE),
             )
-
-            else -> Icon(
+        } else {
+            Icon(
                 imageVector = MiuixIcons.Contacts,
                 contentDescription = null,
                 tint = ink,
@@ -163,9 +151,6 @@ fun PiAvatar(
         }
     }
 }
-
-/** The label's size as a share of the disc: 0.38 × 34dp is 13sp, a two-character fit. */
-private const val LABEL_SHARE = 0.38f
 
 /** How much of the circle the person figure takes; see [PiAvatar]'s KDoc. */
 private const val AVATAR_GLYPH_SHARE = 0.62f
