@@ -77,6 +77,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -90,6 +91,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -136,11 +138,12 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.pi.ChatImages
 import pi.kit.mob.pi.ImageAttachment
 import pi.kit.mob.pi.SessionTranscript
+import pi.kit.mob.ui.kit.LocalPiHaptics
+import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiTone
 import top.yukonga.miuix.kmp.anim.SinOutEasing
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
@@ -743,6 +746,14 @@ internal fun PictureViewer(
             flight.animateTo(1f, tween(VIEWER_ENTER_MILLIS, easing = SinOutEasing))
         } else if (visible) {
             flight.animateTo(0f, tween(VIEWER_EXIT_MILLIS, easing = SinOutEasing))
+            // The last frame has to be *drawn* before the window goes. `animateTo` returns
+            // during the frame it lands in, so removing the content right after it skips
+            // the frame at rest: the picture the reader last sees is the previous one, a
+            // few per cent larger than the tile it is supposed to land on, and the tile
+            // replacing it is the step that reads as the picture jumping once it is back in
+            // the message. Two frames, because the first is the one that composes it.
+            withFrameNanos { }
+            withFrameNanos { }
             visible = false
             onDismissFinished()
         }
@@ -879,9 +890,11 @@ internal fun PictureViewer(
                 frame = frame,
                 rootOnScreen = rootOnScreen,
                 progress = flight.value,
+                drag = drag,
             )
 
             val chromeAlpha = PictureFlight.chromeAlpha(flight.value, drag, dismissDistance)
+            val haptics = LocalPiHaptics.current
             AnimatedVisibility(
                 visible = chrome,
                 modifier = Modifier
@@ -898,34 +911,28 @@ internal fun PictureViewer(
                         .height(VIEWER_MARK_SIZE),
                     contentAlignment = Alignment.Center,
                 ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .size(VIEWER_MARK_SIZE),
-                        backgroundColor = VIEWER_CHROME_FILL,
-                        cornerRadius = VIEWER_MARK_SIZE / 2,
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Close,
-                            contentDescription = text.chat.imageClose,
-                            tint = Color.White,
-                            modifier = Modifier.size(VIEWER_GLYPH_SIZE),
-                        )
-                    }
+                    ViewerMark(
+                        icon = MiuixIcons.Close,
+                        label = text.chat.imageClose,
+                        onClick = {
+                            haptics.tap()
+                            onDismiss()
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart),
+                    )
                     if (target.pictures.size > 1) {
                         Box(
                             modifier = Modifier
                                 .height(VIEWER_MARK_SIZE)
                                 .clip(RoundedCornerShape(percent = 50))
-                                .background(VIEWER_CHROME_FILL)
+                                .background(PiGlass.fill())
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = text.chat.picturePosition(page + 1, target.pictures.size),
                                 style = MiuixTheme.textStyles.footnote1,
-                                color = Color.White,
+                                color = MiuixTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -946,18 +953,20 @@ internal fun PictureViewer(
                         .padding(bottom = VIEWER_ACTIONS_INSET),
                     horizontalArrangement = Arrangement.spacedBy(VIEWER_ACTION_GAP),
                 ) {
-                    ViewerAction(
+                    ViewerMark(
                         icon = MiuixIcons.Share,
                         label = text.chat.imageShare,
                         onClick = {
+                            haptics.tap()
                             val shared = sharePicture(context, current)
                             if (!shared) notice = text.chat.imageShareFailed
                         },
                     )
-                    ViewerAction(
+                    ViewerMark(
                         icon = MiuixIcons.Download,
                         label = text.chat.imageSave,
                         onClick = {
+                            haptics.tap()
                             scope.launch {
                                 val saved = withContext(Dispatchers.IO) {
                                     savePicture(context, current)
@@ -973,8 +982,9 @@ internal fun PictureViewer(
                 }
             }
 
-            // The save's answer, over the picture's own ground: a sentence the window says
-            // itself, because a toast belongs to the window underneath this one.
+            // The save's answer, in the app's own toast capsule — `PiGlass.fill()` and the
+            // theme's ink, at the toast's padding. It is a sentence the window says itself,
+            // because a toast belongs to the window underneath this one.
             notice?.let { message ->
                 Box(
                     Modifier
@@ -982,13 +992,13 @@ internal fun PictureViewer(
                         .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(bottom = VIEWER_ACTIONS_INSET + VIEWER_MARK_SIZE + 12.dp)
                         .clip(RoundedCornerShape(percent = 50))
-                        .background(VIEWER_CHROME_FILL)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .background(PiGlass.fill())
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
                 ) {
                     Text(
                         text = message,
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = Color.White,
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -996,23 +1006,36 @@ internal fun PictureViewer(
     }
 }
 
-/** One of the viewer's foot actions: the header's 42dp scrim disc, with its glyph. */
+/**
+ * One of the viewer's chrome marks: the header's 42dp glass disc, with its glyph.
+ *
+ * The same object the conversation page's header draws — `PiGlass.fill()`, `onSurface`
+ * ink, a 22dp glyph — because a floating control is one object in this app whatever page
+ * it floats over (§13). The first version of the viewer used a dark scrim instead, on the
+ * argument that a photograph is not a page; the result was a second family of controls the
+ * reader had to learn for one screen. Over a white screenshot the capsule's edge merges
+ * with the picture and the glyph is what the reader aims at, which is the same trade the
+ * header makes over a light page.
+ */
 @Composable
-private fun ViewerAction(
+private fun ViewerMark(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(VIEWER_MARK_SIZE),
-        backgroundColor = VIEWER_CHROME_FILL,
-        cornerRadius = VIEWER_MARK_SIZE / 2,
+    Box(
+        modifier = modifier
+            .size(VIEWER_MARK_SIZE)
+            .clip(CircleShape)
+            .background(PiGlass.fill())
+            .clickable(onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = Color.White,
+            tint = MiuixTheme.colorScheme.onSurface,
             modifier = Modifier.size(VIEWER_GLYPH_SIZE),
         )
     }
@@ -1032,6 +1055,7 @@ private fun FlightPicture(
     frame: Size,
     rootOnScreen: Offset,
     progress: Float,
+    drag: Float,
 ) {
     if (progress >= 1f || bitmap == null) return
     if (frame.width <= 0f || frame.height <= 0f) return
@@ -1049,7 +1073,14 @@ private fun FlightPicture(
         )
     }
     Canvas(Modifier.fillMaxSize()) {
-        val rect = PictureFlight.rect(local, fitted, progress)
+        // The finger's own offset is part of the flight, not a separate transform: a viewer
+        // closed by dragging takes over from the pager exactly where the finger left the
+        // picture, and the distance it was dragged is then travelled back to the tile. Left
+        // out, the first frame of that exit snapped the picture up by the drag — 350px for a
+        // 350px drag — before it started to shrink.
+        val rect = PictureFlight
+            .rect(local, fitted, progress)
+            .translate(0f, drag)
         if (rect.width < 1f || rect.height < 1f) return@Canvas
         // The picture keeps its own shape and *covers* the rectangle, which the clip then
         // trims: at the tile that is the crop the tile was already showing, at the fitted
@@ -1286,8 +1317,13 @@ private val PICTURE_CORNER = 8.dp
  */
 private val VIEWER_MARK_SIZE = 42.dp
 
-/** The glyph inside a chrome capsule: the header's 22–24dp step, at the disc's own centre. */
-private val VIEWER_GLYPH_SIZE = 24.dp
+/**
+ * The glyph inside a chrome disc: the header's 22dp mark, at the disc's own centre.
+ *
+ * 22 rather than the 24 this viewer used first: the header's circles are the object the
+ * viewer's are now, and a glyph a size larger is a second weight of the same control.
+ */
+private val VIEWER_GLYPH_SIZE = 22.dp
 
 /**
  * The ink the viewer's own sentences take, on the black ground it draws in both schemes.
@@ -1298,19 +1334,6 @@ private val VIEWER_GLYPH_SIZE = 24.dp
  * picture, which is the subject.
  */
 private val VIEWER_INK = Color.White.copy(alpha = 0.72f)
-
-/**
- * A chrome capsule's fill, over the picture rather than over the page.
- *
- * The app's floating controls are filled with `PiGlass.fill()` — the page's own raised
- * surface — because a page scrolls underneath them and a tinted capsule would let it show
- * through (§13). A picture does nothing of the kind, and the same fill is exactly wrong
- * here: in the light scheme it is white, so a white screenshot hid the capsule, the disc and
- * the counter outright (measured on the viewer's first device pass). The ground behind the
- * chrome is an arbitrary photograph, so the fill is a dark scrim with white ink — the one
- * treatment that is legible over *any* picture, and the one every gallery uses.
- */
-private val VIEWER_CHROME_FILL = Color.Black.copy(alpha = 0.38f)
 
 /** How far the chrome sits from the window's edges, outside the status bar's inset. */
 private val VIEWER_CHROME_INSET = 12.dp

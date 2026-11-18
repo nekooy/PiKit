@@ -116,9 +116,10 @@ indistinguishable from an oversight:
   page rather than a destination bar.
 - **A control whose only answer is the press.** Buttons, icon buttons, plain rows, chips:
   the fill under the finger is drawn at touch-down, which is before any buzz could
-  arrive, and it is more precise than a vibration — it says *which* control. The five
-  floating capsules covered by `tap()` are the exception, because they float over a
-  scrolling page with no bar behind them. A control that *changes state* is not this
+  arrive, and it is more precise than a vibration — it says *which* control. The eight
+  floating capsules covered by `tap()` are the exception — the header's two, the drawer
+  foot's two, and the picture viewer's close, save and share — because they float over a
+  full-bleed surface with no bar behind them. A control that *changes state* is not this
   case: a radio row paints a press **and** buzzes, because the press says "you touched
   me" and the buzz says "and I am the answer now".
 - **Typing into the text field.** The IME owns key feedback, as a user setting.

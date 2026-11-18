@@ -70,7 +70,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  *   objects on the page rather than a destination bar.
  * - **A control whose only answer is the press.** Buttons, icon buttons, plain rows,
  *   chips: the fill under the finger is the answer, and it is drawn at touch-down
- *   before a buzz could arrive. The five floating capsules covered by [tap] are the
+ *   before a buzz could arrive. The eight floating capsules covered by [tap] are the
  *   exception — they float over a scrolling page with no bar behind them. A control
  *   that *changes state* is not this case — a radio row paints a press and buzzes,
  *   because the press says "you touched me" and the buzz says "and I am the answer now".
@@ -153,14 +153,14 @@ class PiHaptics internal constructor(
 
     /**
      * A tap on one of the app's floating chrome capsules: the drawer disc and the
-     * action pill at the top of the conversation page, and the two controls at the
-     * drawer's foot.
+     * action pill at the top of the conversation page, the two controls at the
+     * drawer's foot, and the picture viewer's three marks — close, save and share.
      *
      * This is the one button family that buzzes. Every other button, icon button, row
      * and chip stays silent — its fill is the answer. A capsule is different: it
      * floats over a scrolling page with no bar behind it, and the fill is the only
      * press feedback it has. `VirtualKey` is the platform's light button tick. The
-     * family is named at its five controls, never inferred from "it has an onClick".
+     * family is named at its eight controls, never inferred from "it has an onClick".
      */
     fun tap() {
         feedback?.performHapticFeedback(HapticFeedbackType.VirtualKey)
