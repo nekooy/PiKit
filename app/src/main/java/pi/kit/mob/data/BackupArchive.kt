@@ -285,11 +285,14 @@ internal data class BackupPaths(
  * launches ([BackupManager]). `$HOME/.termux/motd.sh`, the `$HOME/storage` links, the
  * package-repair ledger under `files/pkg-restore/`, the catalogue probe's scratch
  * directory and `files/dns-pins.txt` are install- or device-specific: the last one pins
- * DNS for the network the phone is on, which a restore is not a fact about. A backup
- * carries what the user made and would have to make again. Nor `files/chat-pictures`: the
- * transcript's copies of the pictures a prompt was sent with are decoded from the bytes
- * the session file itself carries, so an archive that shipped them would carry the same
- * picture twice and could still put back a copy older than the conversation (§7.3).
+ * DNS for the network the phone is on, which a restore is not a fact about. Nor
+ * `files/chat-pictures`: the transcript's copies of the pictures a prompt was sent with are
+ * decoded from the bytes the session file itself carries, so an archive that shipped them
+ * would carry the same picture twice and could still put back a copy older than the
+ * conversation (§7.3). Nor `files/attachments`: the copy of a *file* a prompt was sent with
+ * is a copy of something that already lives outside the app, and the conversation keeps the
+ * path rather than the bytes (§7.1). A backup carries what the user made and would have to
+ * make again.
  *
  * ## pi's directory is a tree, not four names
  *

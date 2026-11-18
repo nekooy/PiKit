@@ -707,14 +707,15 @@ internal fun ChatScreen(
     }
 
     /**
-     * Copies picked files into a temporary folder and attaches their *paths*.
+     * Copies picked files into the app's attachment directory and attaches their *paths*.
      *
      * This is the `文件` row: any format at all. The image channel is images
      * only, and a document stuffed into it becomes an attachment pi drops or
-     * misreads. The copy lands in the cache rather than the agent's workspace
-     * — an attachment is staging, not project content — and the prompt names
-     * the path when the message is sent, so the model opens it with its own
-     * tools.
+     * misreads. The copy lands in `files/attachments` rather than the agent's
+     * workspace — an attachment is staging, not project content — and never in
+     * the cache, because the path it hands pi is also the path the transcript
+     * keeps ([copyToTemp] has both refusals). The prompt names the path when the
+     * message is sent, so the model opens it with its own tools.
      */
     fun acceptPaths(uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -6902,19 +6903,31 @@ private fun prepareImage(context: Context, uri: Uri, text: Strings): PendingImag
 }.getOrNull()
 
 /**
- * Copies a picked file into a temporary folder and returns a path attachment.
+ * Copies a picked file into the app's own attachment directory and returns a path
+ * attachment.
  *
- * The cache directory, not the agent's workspace: an attachment is staging for
- * one message, not project content, and a workspace that collected every
- * document ever mentioned would be a workspace the agent has to wade through.
- * The path is absolute and the agent runs as this app's uid, so the model can
- * open it from wherever it is working. A name that is already taken gets a
- * numeric suffix rather than overwriting: two documents called `report.pdf` in
- * one prompt are two documents.
+ * ## Not the cache, and not the workspace
  *
- * Size is capped the same way an image is, because the copy is a real file on
- * the app's private disk and the alternative is a pick of a 2 GB video filling
- * it. Past the cap the file is not copied and the pick reports as a failure.
+ * The path is written *into the prompt*: pi reads it there, the model opens it from
+ * wherever it is working, and it is drawn again in the transcript for as long as the
+ * conversation exists (the extras chip lists it). `cacheDir` is therefore the wrong
+ * home — the platform may empty it at any moment, and a copy that a cleanup can take is a
+ * path that silently stops being true in a history nobody edited. `filesDir` is the
+ * app's own: still private, still not the agent's workspace, and the one place Android
+ * does not prune behind the app's back.
+ *
+ * The workspace is the other refusal, and it was the original one: an attachment is
+ * staging for one message rather than project content, and a workspace that collected
+ * every document ever mentioned would be a workspace the agent has to wade through.
+ *
+ * A name that is already taken gets a numeric suffix rather than overwriting: two
+ * documents called `report.pdf` in one prompt are two documents. The directory is held
+ * to a budget by [pruneAttachments], because a copy is staging and the reader's own file
+ * is the record.
+ *
+ * Size is capped the same way an image is, because the copy is a real file on the app's
+ * private disk and the alternative is a pick of a 2 GB video filling it. Past the cap the
+ * file is not copied and the pick reports as a failure.
  */
 private fun copyToTemp(
     context: Context,
@@ -6925,11 +6938,12 @@ private fun copyToTemp(
     val size = if (declared >= 0) declared else measure(context, uri)
     if (size <= 0 || size > MAX_IMAGE_BYTES) return@runCatching null
     val name = queryName(context, uri) ?: text.chat.addressFallbackName
-    val dir = java.io.File(context.cacheDir, TEMP_ATTACHMENT_DIRECTORY).apply { mkdirs() }
+    val dir = java.io.File(context.filesDir, ATTACHMENT_DIRECTORY).apply { mkdirs() }
     val target = uniqueChild(dir, name)
     context.contentResolver.openInputStream(uri)?.use { input ->
         target.outputStream().use { output -> input.copyTo(output) }
     } ?: return@runCatching null
+    pruneAttachments(dir)
     PendingImage(
         id = uri.toString() + "#" + System.nanoTime(),
         uri = uri,
@@ -6953,8 +6967,38 @@ private fun uniqueChild(dir: java.io.File, name: String): java.io.File {
     }
 }
 
-/** Where file attachments land: under the cache dir, which the OS may prune. */
-private const val TEMP_ATTACHMENT_DIRECTORY = "pikit-attachments"
+/**
+ * Where a file attachment's copy lives: `files/attachments`.
+ *
+ * One directory rather than one per conversation: a prompt names its attachment by
+ * absolute path, so the transcript keeps working whichever conversation is open, and two
+ * prompts that mention the same document share one copy. The name is the file's own, with
+ * a numeric suffix when it is taken (see [uniqueChild]).
+ */
+private const val ATTACHMENT_DIRECTORY = "attachments"
+
+/**
+ * The most the attachment directory may hold before its oldest copies go.
+ *
+ * 256 MB is sixty-four 4 MB documents — the cap one prompt's four attachments make
+ * reachable in a single send — which is room for a long working history on the app's
+ * private disk without it becoming the largest thing in the install. Past the budget the
+ * copies are deleted oldest-first, and a path in an old prompt can then name a file that
+ * is gone: the copy was always staging, and the file the reader picked is the record.
+ */
+private const val ATTACHMENT_BUDGET_BYTES = 256L * 1024 * 1024
+
+/** Holds [dir] to [ATTACHMENT_BUDGET_BYTES], oldest copies first. */
+private fun pruneAttachments(dir: java.io.File) {
+    val files = dir.listFiles()?.filter { it.isFile } ?: return
+    var total = files.sumOf { it.length() }
+    if (total <= ATTACHMENT_BUDGET_BYTES) return
+    files.sortedBy { it.lastModified() }.forEach { oldest ->
+        if (total <= ATTACHMENT_BUDGET_BYTES) return
+        val length = oldest.length()
+        if (oldest.delete()) total -= length
+    }
+}
 
 /** How much of a stream can be read, when the provider does not say. */
 private fun measure(context: Context, uri: Uri): Long = runCatching {

@@ -304,6 +304,13 @@ restored record agree without a decode), and changing it silently orphans every 
 A prompt whose copies are all gone draws the count line and a single missing one draws a
 placeholder tile — a cache miss is a state the page draws, never an error.
 
+**A file attachment's copy lives in `files/attachments`, never in the cache and never in the
+workspace.** The absolute path of a `文件` attachment is written into the prompt and drawn again in
+the transcript for as long as the conversation exists, so a directory the platform may empty turns
+the history into a lie; the workspace is the other refusal, because an attachment is staging for one
+message rather than project content. The directory is held to a budget and is not in the backup —
+the reader's own file is the record. ARCHITECTURE §7.1 has the two refusals.
+
 **Do not hand-draw an icon, and do not adjust one you did not draw.** Six revisions of one 24-unit
 glyph were rejected, and every one looked reasonable on the way; ARCHITECTURE §12.3 has that
 sequence. Two exceptions are the *navigation* marks in `ChatScreen.kt` — the terminal's (a chevron
