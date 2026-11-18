@@ -284,8 +284,13 @@ dimmed and a little smaller, at its right edge.
 
 - **Search** is always there, reads the titles
   and the message text of every saved
-  conversation, and shows the matching line
-  under a row while it scans.
+  conversation in this mode, and shows the
+  matching line under a row while it scans.
+- **One mode at a time**: the list is the
+  conversation's own mode — work history in a
+  work conversation, chat history in a chat one.
+  The switch at the foot opens a conversation on
+  the other side, and the list changes with it.
 - **Groups**: the pinned ones first, then one
   group per workspace, the group holding the
   newest conversation at the top and the one on
@@ -588,11 +593,15 @@ the one optional tool the reader may lend them.
   no tool at all.
 - **Mode**: the switch at the drawer's foot
   starts a new conversation in the mode tapped.
-  It does not convert the one behind it. To
-  change a saved conversation's mode, hold its
+  It does not convert the one behind it, and the
+  drawer's history is the mode you are in: the
+  other side's conversations are one switch away.
+  To change a saved conversation's mode, hold its
   row in the history list and choose the switch
   row. Its messages stay, and its process is
-  relaunched. Saving a prompt restarts the
+  relaunched — and the row leaves this list,
+  because the conversation is on the other side
+  now. Saving a prompt restarts the
   agent, because pi reads it only when the
   process starts.
 

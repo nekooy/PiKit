@@ -52,7 +52,9 @@ rebind:
   process carries a dot; tapping it switches to that window, and the row of the
   conversation on screen is the one drawn filled. There is no second place to find a
   conversation, because the list already existed and a second place would be a second
-  thing to keep in step.
+  thing to keep in step. It lists **one launch mode's** conversations at a time — the
+  mode of the conversation on screen — so the two kinds of conversation keep two
+  histories rather than one; §17 owns that rule and the switch that moves it.
 
 ### The three things that had to become shared
 

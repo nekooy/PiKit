@@ -699,7 +699,16 @@ private fun ChatTab(
             rootScope.launch { opened?.startAgent() }
         }
     }
-    val openNew: (AgentMode?) -> Boolean = remember(host, rootScope) {
+    /**
+     * Opens an empty conversation in [wanted] and makes it the active one.
+     *
+     * Both callers name a mode: the header's new-conversation mark passes the mode of the
+     * conversation on screen, and the drawer's foot switch passes the side that was
+     * tapped. Nothing creates a conversation in an unstated mode any more, because the
+     * drawer lists **one mode's** history (§17): a conversation made on the other side
+     * would open onto a list it is not in.
+     */
+    val openNew: (AgentMode) -> Boolean = remember(host, rootScope) {
         { wanted ->
             openedPath = null
             val opened = host.newConversation()
@@ -713,7 +722,7 @@ private fun ChatTab(
                 // the drawer's switch — the one control that used to flip a live
                 // conversation's mode and therefore had to restart it — so what it
                 // creates is a conversation that is already the mode that was tapped.
-                if (wanted != null) opened.switchMode(wanted)
+                opened.switchMode(wanted)
                 rootScope.launch { opened.startAgent() }
                 true
             }
@@ -732,7 +741,10 @@ private fun ChatTab(
             state = state,
             composer = composer,
             onOpenConversation = open,
-            onNewConversation = { openNew(null) },
+            // The header's new-conversation mark opens one **in this conversation's
+            // mode**: the drawer lists that mode's history, and a new conversation on the
+            // other side would be created into a list the reader is not looking at.
+            onNewConversation = { openNew(session.mode.value) },
             onNewConversationInMode = { mode -> openNew(mode) },
             historyOpen = historyOpen,
             drawer = drawer,

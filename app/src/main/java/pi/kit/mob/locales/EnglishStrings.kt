@@ -252,6 +252,10 @@ internal object EnglishStrings : Strings {
         override val empty = "A conversation is written to disk once pi replies."
         override fun nothingMatches(query: String) = "Nothing matches \u201c$query\u201d."
         override val searchEmptyNote = "Search reads every message of every saved conversation."
+        override val emptyModeHeading = "No conversations in this mode yet"
+        override val emptyModeBody =
+            "Work and chat keep separate histories: this list shows only the current " +
+                "mode's, and the other side has its own."
         override val pinned = "Pinned"
         override val actions = "Conversation actions"
         override val rename = "Rename"

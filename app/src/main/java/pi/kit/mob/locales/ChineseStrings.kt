@@ -251,6 +251,10 @@ internal object ChineseStrings : Strings {
         override val empty = "Pi 回复之后，对话才会写入磁盘。"
         override fun nothingMatches(query: String) = "没有匹配「$query」的对话。"
         override val searchEmptyNote = "搜索会读取每个已保存对话里的全部消息。"
+        override val emptyModeHeading = "还没有这个模式的对话"
+        override val emptyModeBody =
+            "工作和聊天各有一套历史：这里只显示当前模式的对话，" +
+                "切到另一边就是那一侧的记录。"
         override val pinned = "已置顶"
         override val actions = "对话操作"
         override val rename = "重命名"

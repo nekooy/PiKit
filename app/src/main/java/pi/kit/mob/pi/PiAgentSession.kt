@@ -1595,6 +1595,12 @@ class PiAgentSession internal constructor(
             _mode.value = host.sessionModes.modeFor(target)
             _chatPresetId.value = host.chatPresets.selectedId(target)
             _chatWebAccess.value = host.sessionModes.webAccessFor(target)
+            // The restored conversation is now the one on screen, and "last used mode" is
+            // that fact — the same invariant `PiHost.activate` keeps for every other
+            // change of conversation. Without it a cold start that came back to a chat
+            // conversation left the record saying work, and the next conversation created
+            // by closing the last one opened on the wrong side of the history list.
+            settingsStore.update { it.copy(agentMode = _mode.value) }
         }
         return target
     }

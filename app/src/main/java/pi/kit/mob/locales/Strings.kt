@@ -720,6 +720,19 @@ interface Strings {
          * message of every saved conversation.
          */
         val searchEmptyNote: String
+
+        /**
+         * The empty list when *this* mode has no history while the other one may.
+         *
+         * The drawer lists one mode's conversations, so an empty list is a state of the
+         * lens rather than of the app: [emptyHeading] would claim nothing has ever been
+         * saved, and the other side's history contradicts that. The body is the rule in
+         * one sentence — where the reader's conversations went is the question this state
+         * has to answer without being asked.
+         */
+        val emptyModeHeading: String
+        val emptyModeBody: String
+
         val pinned: String
         val actions: String
         val rename: String

@@ -124,6 +124,18 @@ import java.util.Locale
  * caption under it — how many are saved, how many are selected, whether a search is
  * still reading. §9.2 has why that caption is one fixed line rather than a heading that
  * grows, collapses or moves as the list does.
+ *
+ * ## One mode's history at a time
+ *
+ * The list is the conversations of the **mode the page behind it is in** — a work
+ * conversation lists work history, a chat one lists chat history — because the two are
+ * two ways of talking and mixing them makes a month of one bury the other. The foot
+ * switch is how the lens moves: it opens a conversation on the other side, and this list
+ * follows the conversation on screen rather than a filter of its own. A conversation's
+ * mode is a fact about that conversation ([pi.kit.mob.data.SessionModeStore]), so a
+ * file with no record — every conversation written before chat mode existed — reads as
+ * work and stays in the list an install already had. The search and the count are the
+ * lens's too: a search cannot find a conversation the list is not showing.
  */
 @Composable
 fun SessionsScreen(
@@ -144,7 +156,10 @@ fun SessionsScreen(
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
     /** Leaves the drawer for the settings page, which is reached from its foot. */
     onOpenSettings: () -> Unit,
-    /** The launch mode of the conversation this drawer belongs to. */
+    /**
+     * The launch mode of the conversation this drawer belongs to, and the lens the list
+     * is filtered by: only conversations recorded in this mode are drawn.
+     */
     mode: AgentMode,
     /**
      * Opens a new conversation in the tapped mode, and reports whether it was created.
@@ -268,6 +283,18 @@ fun SessionsScreen(
         if (summaries.none { it.path == path }) reload++
     }
 
+    // The mode a saved conversation belongs to; a file with no record is work.
+    fun modeOf(path: String): AgentMode = session.host.sessionModes.modeFor(path)
+
+    // The lens: this mode's conversations are the list, and the other mode's are not
+    // drawn anywhere — the foot switch moves the lens by opening a conversation on the
+    // other side, so there is no second place the other history could be reached from.
+    // Keyed on the mode as well as the scan: switching sides recomposes the page and the
+    // record of the conversation on screen decides this list, so both are inputs.
+    val modeSessions = remember(summaries, mode) {
+        sessionsInMode(summaries, mode) { path -> modeOf(path) }
+    }
+
     // The content scan is expensive (a parse per message line, on conversations
     // that can be megabytes), so it waits for a pause in typing: the effect is
     // cancelled and restarted on every keystroke, and the delay before the work is
@@ -277,9 +304,13 @@ fun SessionsScreen(
     // match runs on the keystroke, so for the length of the wait `visible` can already be
     // empty and the page would say "nothing matches" — a claim about a scan that had not
     // started. Raised first, the whole wait is the "still reading" state it is.
-    LaunchedEffect(query, summaries) {
+    //
+    // It reads this mode's conversations and not the directory: a search that found the
+    // other side's file would offer a row the list refuses to draw, so its one job is
+    // narrower than the scan's.
+    LaunchedEffect(query, modeSessions) {
         val needle = query.trim()
-        if (needle.length < MIN_SEARCH_CHARS || summaries.isEmpty()) {
+        if (needle.length < MIN_SEARCH_CHARS || modeSessions.isEmpty()) {
             matches = emptyMap()
             matchedQuery = ""
             searching = false
@@ -287,7 +318,7 @@ fun SessionsScreen(
         }
         searching = true
         delay(SEARCH_DEBOUNCE_MS)
-        matches = session.searchSessionContent(summaries, needle)
+        matches = session.searchSessionContent(modeSessions, needle)
         matchedQuery = needle
         searching = false
     }
@@ -310,12 +341,12 @@ fun SessionsScreen(
     )
     val defaultWorkspacePath = settings.defaultWorkspace.ifBlank { session.env.workspacePath }
 
-    val visible = remember(summaries, query, snippets) {
+    val visible = remember(modeSessions, query, snippets) {
         if (query.isBlank()) {
-            summaries
+            modeSessions
         } else {
             val needle = query.trim()
-            summaries.filter {
+            modeSessions.filter {
                 it.title.contains(needle, ignoreCase = true) || snippets.containsKey(it.path)
             }
         }
@@ -330,9 +361,6 @@ fun SessionsScreen(
         session.setPinned(item, !item.pinned)
         reload++
     }
-
-    /** The mode a saved conversation belongs to; a file with no record is work. */
-    fun modeOf(path: String): AgentMode = session.host.sessionModes.modeFor(path)
 
     /** The mode's own name, as the settings page and the drawer's switch spell it. */
     fun modeName(value: AgentMode): String =
@@ -519,7 +547,12 @@ fun SessionsScreen(
                             haptics.toggle(on = true)
                             selecting = true
                         },
-                        enabled = summaries.isNotEmpty(),
+                        // The list on screen, not the directory: the other mode's
+                        // conversations cannot be selected from here, so a lens with
+                        // nothing in it is not a selection the reader can do anything
+                        // with. A search narrows it further, and selecting the matches is
+                        // exactly what this button is for.
+                        enabled = visible.isNotEmpty(),
                     ) {
                         Icon(
                             MiuixIcons.SelectAll,
@@ -543,7 +576,10 @@ fun SessionsScreen(
                     // than how far along it is. Without it a slow scan is
                     // indistinguishable from an empty result.
                     searching -> text.sessions.searching
-                    else -> text.sessions.saved(summaries.size)
+                    // The lens's count, not the directory's: the list shows one mode's
+                    // history, and a caption counting the other side's rows would describe
+                    // a list that is not on screen.
+                    else -> text.sessions.saved(modeSessions.size)
                 },
                 style = MiuixTheme.textStyles.footnote2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -613,16 +649,19 @@ fun SessionsScreen(
                     SearchingNote(label = text.sessions.searching)
                 }
 
+                // Three ways an empty list can happen, and they are not the same claim: no
+                // conversation has ever been saved, this mode has none while the other
+                // does, or the search found nothing in a list that is not empty.
                 visible.isEmpty() -> SessionsNote(
-                    title = if (summaries.isEmpty()) {
-                        text.sessions.emptyHeading
-                    } else {
-                        text.sessions.nothingMatches(query)
+                    title = when {
+                        summaries.isEmpty() -> text.sessions.emptyHeading
+                        modeSessions.isEmpty() -> text.sessions.emptyModeHeading
+                        else -> text.sessions.nothingMatches(query)
                     },
-                    body = if (summaries.isEmpty()) {
-                        text.sessions.empty
-                    } else {
-                        text.sessions.searchEmptyNote
+                    body = when {
+                        summaries.isEmpty() -> text.sessions.empty
+                        modeSessions.isEmpty() -> text.sessions.emptyModeBody
+                        else -> text.sessions.searchEmptyNote
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1001,6 +1040,23 @@ internal data class SessionGroup(
     val label: String,
     val sessions: List<PiAgentSession.SessionSummary>,
 )
+
+/**
+ * The conversations the drawer lists for [mode] — the lens, as one pure rule.
+ *
+ * A conversation belongs to one of the two worlds (its own file's record, or work when
+ * it has none), and the drawer shows the world of the conversation on screen. The
+ * *record* decides and not the conversation's live state: a row is a file, and a file
+ * outlives the process that wrote it. [modeOf] is the caller's reader of that record
+ * (`SessionModeStore.modeFor`), passed in so this stays testable without a store.
+ *
+ * Order is the caller's: the scan already sorted the listing, and this only removes.
+ */
+internal fun sessionsInMode(
+    sessions: List<PiAgentSession.SessionSummary>,
+    mode: AgentMode,
+    modeOf: (String) -> AgentMode,
+): List<PiAgentSession.SessionSummary> = sessions.filter { modeOf(it.path) == mode }
 
 /**
  * The conversations by the workspace they came from, most recently used group first.

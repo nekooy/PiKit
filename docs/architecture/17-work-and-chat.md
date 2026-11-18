@@ -18,6 +18,32 @@ is. A global switch could not answer "which mode is this conversation" when a wo
 conversation is opened from a chat screen, and that is exactly the bug that moved the
 state into the store: the toggle showed chat while the work transcript was on screen.
 
+## The drawer lists one mode's history
+
+Work and chat are two ways of talking, and one history for both is a list where a month
+of coding buries a week of chatting. **The drawer shows the conversations of the mode the
+page behind it is in** — not a filter the reader sets, and not a second list:
+`SessionsScreen` drops every row whose file's record is the other mode. The record is
+`SessionModeStore`'s answer, so a file with no entry — every conversation written before
+chat mode existed — is work, and stays in the one list its install has always had. The
+search and the count are the lens's too: a search cannot return a conversation the list
+refuses to draw, and the caption above the rows counts the rows it is showing.
+
+The lens moves by moving the conversation, which is why it has no control of its own:
+tapping the other half of the foot switch opens a conversation on that side (below), and
+the list follows it. A mode is a fact about a conversation, so the list cannot be made to
+disagree with the transcript — the one state that would put a work transcript under a
+chat history. For the same reason nothing creates a conversation in an *unstated* mode:
+the header's new-conversation mark passes the mode of the page it is on and the switch
+passes the side that was tapped, so a new conversation always lands on the side the
+reader is looking at (`PiKitRoot`'s `openNew`).
+
+Two consequences are deliberate. **A pinned conversation is filtered too**: pinning lifts
+a row to the top of its own mode's list, not onto a shelf above both. And the row menu's
+**Switch to chat mode** now *moves the row out of the list*, because the conversation it
+converts has changed sides; the toast names the new mode and the row is gone from the
+list that was showing it.
+
 ## The switch starts a conversation; the row menu converts one
 
 The chat page's bar used to hold the two-segment **Work / Chat** control. It now holds
@@ -55,7 +81,9 @@ The foot switch's new conversation is created with the mode already set: a fresh
 `PiAgentSession` has no file for the per-session record to answer from, and `startAgent`
 reads the mode once at the spawn, so `openNew` applies the mode before launching rather
 than converting afterwards. The mode of the conversation that was on screen, and its
-process, are untouched — which is what makes the control safe to tap.
+process, are untouched — which is what makes the control safe to tap. The history list
+behind the switch follows the *new* conversation's mode, so the same tap also changes
+which side's history the drawer is showing.
 
 `restoreTarget` still names the same file after a conversion, so the fresh child rebinds
 to it and the transcript and model history are unchanged. Switching an empty conversation

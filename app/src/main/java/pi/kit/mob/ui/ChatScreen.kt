@@ -458,7 +458,10 @@ internal fun ChatScreen(
      * running here.
      */
     onOpenConversation: (PiAgentSession.SessionSummary) -> Unit,
-    /** Opens an empty conversation beside this one, which keeps running. */
+    /**
+     * Opens an empty conversation beside this one, which keeps running, in this
+     * conversation's mode — the mode whose history the drawer lists.
+     */
     onNewConversation: () -> Boolean,
     /**
      * Opens an empty conversation in [mode], beside this one, which keeps running.

@@ -251,6 +251,10 @@ internal object JapaneseStrings : Strings {
         override val empty = "Pi が返信すると、会話がディスクに保存されます。"
         override fun nothingMatches(query: String) = "「$query」に一致する会話はありません。"
         override val searchEmptyNote = "検索は保存された全会話のすべてのメッセージを読みます。"
+        override val emptyModeHeading = "このモードの会話はまだありません"
+        override val emptyModeBody =
+            "仕事と会話の履歴は別です。この一覧は今のモードの会話だけで、" +
+                "反対側には反対側の履歴があります。"
         override val pinned = "ピン留め"
         override val actions = "会話の操作"
         override val rename = "名前を変更"
