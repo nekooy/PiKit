@@ -1005,6 +1005,19 @@ interface Strings {
         val openNewOnLaunchSubtitle: String
 
         /**
+         * What a conversation with no file yet opens as: the mode last used, work, or
+         * chat.
+         *
+         * Only that case — a saved conversation keeps the mode it was started in, and the
+         * drawer's foot switch still opens one in the mode tapped. The last-used answer is
+         * the default and is what the app did before this row existed, so a fresh install
+         * reads "default" and behaves exactly as the previous build did.
+         */
+        val newConversationMode: String
+        val newConversationModeDefault: String
+        val newConversationModeDefaultSummary: String
+
+        /**
          * Light, dark, or the system's own answer.
          *
          * The palette itself is Miuix's and is not offered: there is no accent to
@@ -1109,13 +1122,15 @@ interface Strings {
         val agentContextSection: String
 
         /**
-         * The two launch modes: the short labels in the drawer's switch and beside the
-         * conversation page's drawer disc, and the full names the Agent page's groups use.
+         * The two launch modes: the short labels in the drawer's switch, beside the
+         * conversation page's drawer disc, and on the personalization page's three-row
+         * choice of what a new conversation opens as; and the full names the Agent
+         * page's groups use.
          *
          * They are separate on purpose. The switch has room for one two-character
-         * word per segment; the settings page names the same choice in full, and a
-         * single "工作模式" in a two-segment switch would make the two halves
-         * different widths.
+         * word per segment, and the three-row choice sits on the same short words;
+         * a settings *group* names the same choice in full, and a single "工作模式" in a
+         * two-segment switch would make the two halves different widths.
          */
         val modeWork: String
         val modeChat: String

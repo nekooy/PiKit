@@ -619,13 +619,25 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val defaultWorkspace: String = "",
     /**
-     * Whether new conversations launch the work agent or the plain chat agent.
+     * The mode the conversation last on screen had, kept up to date by `PiHost.activate`
+     * and `PiAgentSession.switchMode`.
      *
-     * Persisted rather than held in memory because it decides how every later process
-     * is spawned. [AgentMode.WORK] is the default so an install that never switches
-     * keeps the agent it had; see [AgentMode] for what [AgentMode.CHAT] removes.
+     * This is the *last used* mode, not the answer to "what does a new conversation open
+     * as" — that is [newConversationMode], which follows this value by default. Persisted
+     * rather than held in memory because a cold start's first conversation is decided from
+     * it before any screen has been shown.
      */
     val agentMode: AgentMode = AgentMode.DEFAULT,
+    /**
+     * What a conversation with no session file yet opens as.
+     *
+     * [NewConversationMode.FOLLOW_LAST] is the default and reproduces what every install
+     * did before this row existed — a new conversation took [agentMode].
+     * [NewConversationMode.WORK] and [NewConversationMode.CHAT] pin it. A saved
+     * conversation is unaffected either way: its own mode is recorded against its session
+     * file, not here.
+     */
+    val newConversationMode: NewConversationMode = NewConversationMode.DEFAULT,
     /**
      * The chat prompt the single-document editor stored before presets existed.
      *
@@ -729,6 +741,17 @@ enum class FontSize(val code: String, val scale: Float) {
     val userAvatarImage: String = "",
     val userAvatarColor: AvatarColor = AvatarColor.TEAL,
 ) {
+    /**
+     * The mode a conversation with no session file yet starts in.
+     *
+     * [newConversationMode] resolved against [agentMode], and the one expression
+     * `PiAgentSession` reads for a conversation that is not bound to a file. A property
+     * rather than a line at that call site, so the rule has one spelling and the launch
+     * and the tests agree about what "default" means.
+     */
+    val startingMode: AgentMode
+        get() = newConversationMode.startingMode(agentMode)
+
     /**
      * Whether the agent can actually be started with this.
      *
@@ -848,6 +871,9 @@ class SettingsStore(context: Context) {
             thinkingLevel = thinkingLevel(),
             defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
             agentMode = AgentMode.fromCode(prefs.getString(KEY_AGENT_MODE, null)),
+            newConversationMode = NewConversationMode.fromCode(
+                prefs.getString(KEY_NEW_CONVERSATION_MODE, null),
+            ),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -933,6 +959,7 @@ class SettingsStore(context: Context) {
             .putString(KEY_LEVELS_FOR, next.availableThinkingLevelsFor)
             .putString(KEY_WORKSPACE, next.defaultWorkspace)
             .putString(KEY_AGENT_MODE, next.agentMode.code)
+            .putString(KEY_NEW_CONVERSATION_MODE, next.newConversationMode.code)
             .putString(KEY_CHAT_SYSTEM_PROMPT, next.chatSystemPrompt)
             .putString(KEY_PERMISSION, next.permissionMode.code)
             .putString(KEY_LANGUAGE, next.language.code)
@@ -960,6 +987,7 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = next.availableThinkingLevelsFor,
             defaultWorkspace = next.defaultWorkspace,
             agentMode = next.agentMode,
+            newConversationMode = next.newConversationMode,
             chatSystemPrompt = next.chatSystemPrompt,
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
@@ -1047,6 +1075,9 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
             agentMode = AgentMode.fromCode(prefs.getString(KEY_AGENT_MODE, null)),
+            newConversationMode = NewConversationMode.fromCode(
+                prefs.getString(KEY_NEW_CONVERSATION_MODE, null),
+            ),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -1075,6 +1106,7 @@ class SettingsStore(context: Context) {
         availableThinkingLevelsFor: String = current.get().availableThinkingLevelsFor,
         defaultWorkspace: String = current.get().defaultWorkspace,
         agentMode: AgentMode = current.get().agentMode,
+        newConversationMode: NewConversationMode = current.get().newConversationMode,
         chatSystemPrompt: String = current.get().chatSystemPrompt,
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
@@ -1101,6 +1133,7 @@ class SettingsStore(context: Context) {
                 availableThinkingLevelsFor = availableThinkingLevelsFor,
                 defaultWorkspace = defaultWorkspace,
                 agentMode = agentMode,
+                newConversationMode = newConversationMode,
                 chatSystemPrompt = chatSystemPrompt,
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
@@ -1189,6 +1222,12 @@ class SettingsStore(context: Context) {
 
         /** [AgentMode.code]; absent means [AgentMode.DEFAULT]. */
         private const val KEY_AGENT_MODE = "agent_mode"
+
+        /**
+         * [NewConversationMode.code]; absent means [NewConversationMode.DEFAULT], which
+         * reads [KEY_AGENT_MODE] — every install's behaviour before the row existed.
+         */
+        private const val KEY_NEW_CONVERSATION_MODE = "new_conversation_mode"
 
         /** The chat prompt template; see [PiSettings.chatSystemPrompt]. */
         private const val KEY_CHAT_SYSTEM_PROMPT = "chat_system_prompt"

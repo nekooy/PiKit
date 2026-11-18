@@ -843,9 +843,10 @@ class PiHost private constructor(context: Context) {
         _active.value = session
         // Whatever it finished while it was not on screen has now been seen.
         session.markSeen()
-        // A new conversation starts in the mode of the one the reader was just looking
-        // at: the switch is a property of the conversation, and opening a work row from
-        // a chat screen is also a statement that work is what is wanted next.
+        // Record the mode of the conversation now on screen. It is only the *last used*
+        // mode: `PiSettings.newConversationMode` decides whether a new conversation
+        // follows it (the default, and what this app always did) or is pinned to work or
+        // chat on the personalization page.
         val shownMode = session.mode.value
         if (settingsStore.read().agentMode != shownMode) {
             settingsStore.update { it.copy(agentMode = shownMode) }

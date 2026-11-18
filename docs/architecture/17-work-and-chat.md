@@ -11,12 +11,34 @@ and pi starts with every source of ambient resources switched off.
 
 The mode belongs to a **conversation**, not to the app. `SessionModeStore` keeps one
 entry per session file; a conversation opened from the drawer reads its own record,
-and a conversation with no file yet takes `PiSettings.agentMode` — the mode the last
-visible conversation had — as its starting point. The fallback for a path with no
-record is **Work**, which is what every conversation written before chat mode existed
-is. A global switch could not answer "which mode is this conversation" when a work
+and a conversation with no file yet starts in `PiSettings.agentMode` — the mode the last
+visible conversation had — unless the personalization page pins it (**New conversation
+mode**, below). The fallback for a path with no record is **Work**, which is what every
+conversation written before chat mode existed is. A global switch could not answer "which
+mode is this conversation" when a work
 conversation is opened from a chat screen, and that is exactly the bug that moved the
 state into the store: the toggle showed chat while the work transcript was on screen.
+
+## What the next conversation opens as is a choice
+
+`PiSettings.agentMode` answers "the mode last on screen", kept up to date by
+`PiHost.activate` and `switchMode`. Until the personalization page gained the row, that
+was also the answer to "what does the next one open as" — right for a reader whose
+conversations alternate, wrong for one who works in work mode all week and chats with a
+translator every morning: the second reader had to flip the drawer's switch back after
+each conversation opened in the other mode, and a stray tap on that switch was enough to
+change what the next `+` would create.
+
+**New conversation mode** is three radio rows — **Default**, **Work**, **Chat** — where
+only the first reads the last-used value; `NewConversationMode.startingMode` is the one
+rule, and `PiAgentSession`'s initial mode is its only caller. It applies to exactly one
+case: a conversation with **no session file yet**. A saved conversation keeps the mode
+recorded against its file, and the drawer's foot switch still opens a conversation in the
+mode tapped — "open one in *this* mode" is what that control means, so the row is only
+the answer when nothing else names one. The default is the behaviour every install had
+before the row existed, which is why a preference file with no entry for it reads as
+Default: an install that never opens the page keeps exactly the agent it had, including
+the drawer switch's habit of moving the next conversation with it.
 
 ## The switch starts a conversation; the row menu converts one
 
@@ -54,8 +76,10 @@ under a live turn.
 The foot switch's new conversation is created with the mode already set: a fresh
 `PiAgentSession` has no file for the per-session record to answer from, and `startAgent`
 reads the mode once at the spawn, so `openNew` applies the mode before launching rather
-than converting afterwards. The mode of the conversation that was on screen, and its
-process, are untouched — which is what makes the control safe to tap.
+than converting afterwards. That applied mode is also what overrides the personalization
+page's **New conversation mode** row — the row answers only the launches nothing else
+names, and this control names one. The mode of the conversation that was on screen, and
+its process, are untouched — which is what makes the control safe to tap.
 
 `restoreTarget` still names the same file after a conversion, so the fresh child rebinds
 to it and the transcript and model history are unchanged. Switching an empty conversation

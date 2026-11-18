@@ -510,7 +510,7 @@ tab: five rows in **Essentials** and four in
 | --- | --- |
 | Model & provider | provider, endpoint, key, models |
 | Search settings | the web-access switches and its file |
-| Personalization | launch, text size, theme, icon, avatars |
+| Personalization | launch, new-conversation mode, text size, theme, icon, avatars |
 | Language | English, 简体中文, 日本語 |
 | User manual | this page |
 | Agent process | restart, workspace, instructions, chat prompt, keep alive |
@@ -527,6 +527,11 @@ tab: five rows in **Essentials** and four in
 - **App icon and avatars**: two launcher
   icons, and an avatar over each speaker with a
   name, a colour or a picture.
+- **New conversation mode** is what a new
+  conversation opens as. **Default** follows the
+  mode used last; work or chat pins it. A saved
+  conversation keeps its own mode, and the
+  drawer's switch still opens the mode tapped.
 
 > **Tip:** the version and package id a bug report
 > needs are both on **About PiKit**.

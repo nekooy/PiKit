@@ -25,6 +25,7 @@ import pi.kit.mob.data.AvatarSlot
 import pi.kit.mob.data.AvatarStore
 import pi.kit.mob.data.FontSize
 import pi.kit.mob.data.LauncherIcon
+import pi.kit.mob.data.NewConversationMode
 import pi.kit.mob.data.ThemeMode
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -46,15 +47,16 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * Cold-start conversation behaviour, the light/dark choice, the text size, the
- * launcher icon and the transcript's two speakers.
+ * Cold-start conversation behaviour, the mode a new conversation opens as, the
+ * light/dark choice, the text size, the launcher icon and the transcript's two
+ * speakers.
  *
- * Five settings that are all "how the app feels when I open it" and none of which is
- * about the agent: which conversation a launch lands in, how large its text is,
- * whether the palette is light or dark, which of the two marks the launcher and
- * recent tasks show, and whether the transcript draws who is talking. They share a
- * page because a page each would be five rows deep — the same mistake the old
- * "Advanced" group made.
+ * Six settings that are all "how the app feels when I open it" and none of which is
+ * about the agent's model or tools: which conversation a launch lands in, whether a new
+ * one starts in work or chat, how large its text is, whether the palette is light or
+ * dark, which of the two marks the launcher and recent tasks show, and whether the
+ * transcript draws who is talking. They share a page because a page each would be six
+ * rows deep — the same mistake the old "Advanced" group made.
  *
  * The *palette* is not on this page at all any more. The interface is drawn in
  * Miuix's own light and dark schemes, so "follow the system / light / dark" is the
@@ -66,6 +68,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * conversation is one tap away in the history; turning it off is the choice that
  * used to be the only behaviour. Agent restarts after the first launch still
  * restore — see `shouldRestoreRememberedSession`.
+ *
+ * The three mode rows below it answer the other half of that question — not *which*
+ * conversation a launch lands in but what the agent of a new one is. They are a set of
+ * three, so they are radio rows: follow the last conversation (the default, and what
+ * every install did before the row existed), always work, always chat. Only a
+ * conversation with **no session file yet** follows the row; a saved one keeps the mode
+ * recorded against it, and the drawer's foot switch still opens a conversation in the
+ * mode tapped, because that is what the switch is for (ARCHITECTURE §17).
  *
  * ## The modes are radio rows, the size is a slider
  *
@@ -133,6 +143,29 @@ internal fun PersonalizationPage(
                         session.settingsStore.update { it.copy(openNewOnLaunch = on) }
                     },
                 )
+            }
+
+            // The mode a conversation that has no file yet starts in. Three rows rather
+            // than a switch, because there are three answers and one of them is "leave it
+            // as the app had it".
+            PiSection(title = text.settings.newConversationMode) {
+                NewConversationMode.entries.forEach { mode ->
+                    RadioButtonPreference(
+                        title = newConversationModeLabel(mode, text),
+                        // Only the default needs explaining: "work" and "chat" are the two
+                        // words the drawer's switch already uses. Null — not "" — is how a
+                        // row says it has no subtitle.
+                        summary = if (mode == NewConversationMode.FOLLOW_LAST) {
+                            text.settings.newConversationModeDefaultSummary
+                        } else {
+                            null
+                        },
+                        selected = settings.newConversationMode == mode,
+                        onClick = {
+                            session.settingsStore.update { it.copy(newConversationMode = mode) }
+                        },
+                    )
+                }
             }
 
             PiSection(title = text.settings.personalizationAppearance) {
@@ -501,6 +534,22 @@ private fun themeModeLabel(mode: ThemeMode, text: Strings): String = when (mode)
     ThemeMode.LIGHT -> text.settings.themeLight
     ThemeMode.DARK -> text.settings.themeDark
 }
+
+/**
+ * A new-conversation mode's name in the interface language.
+ *
+ * "Work" and "chat" reuse the two words the drawer's foot switch and the conversation
+ * page's disc use, because the row is the same choice one step earlier: what the next
+ * conversation opens as. The third is "default" rather than "follow the last one" — the
+ * row's own subtitle says what it follows, and a title that spelled it out would be the
+ * longest of the three for the answer most readers leave alone.
+ */
+private fun newConversationModeLabel(mode: NewConversationMode, text: Strings): String =
+    when (mode) {
+        NewConversationMode.FOLLOW_LAST -> text.settings.newConversationModeDefault
+        NewConversationMode.WORK -> text.settings.modeWork
+        NewConversationMode.CHAT -> text.settings.modeChat
+    }
 
 /**
  * A launcher mark's name in the interface language.
