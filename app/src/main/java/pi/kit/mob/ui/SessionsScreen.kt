@@ -955,7 +955,13 @@ private fun ConversationList(
         // it the final conversation is the one under the control that leaves the list. The
         // strip is added here rather than around the panel: the list draws through it, and
         // its rows have to be able to scroll clear of the gesture handle.
-        contentPadding = PaddingValues(bottom = LIST_BOTTOM + bottomInset),
+        //
+        // The top is the fade's own height. The fade exists to dissolve a row that
+        // scrolls *under* the search field, and at rest there is no such row; without
+        // this padding the first group heading sat inside the 30dp gradient and read as
+        // blurred — its top half washed into the panel. Reserving the strip keeps the
+        // first row at full contrast while a scrolled one still crosses the ramp.
+        contentPadding = PaddingValues(top = LIST_FADE, bottom = LIST_BOTTOM + bottomInset),
         // A row is a run of text with its own inset now, not a card with an outline, so the
         // gap between two of them is the room the rows already carry — 2dp keeps two
         // highlighted rows from merging into one when they happen to be neighbours.
