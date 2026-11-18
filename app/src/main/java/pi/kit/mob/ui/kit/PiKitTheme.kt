@@ -86,6 +86,12 @@ fun PiKitMiuixTheme(
                 surfaceContainer = LIGHT_CARD,
                 surfaceContainerHighest = Color.White,
                 secondaryContainer = LIGHT_FIELD,
+                // The library's own #F0F0F0 is *this app's page*, so every filled
+                // secondary control — a group's "new configuration", a form's Cancel,
+                // the fetch beside Add — drew its label on a rectangle of its own page
+                // and disappeared. See `LIGHT_CONTROL`.
+                secondaryVariant = LIGHT_CONTROL,
+                disabledSecondaryVariant = LIGHT_CONTROL,
             ),
             isDark = mode,
         )
@@ -352,6 +358,27 @@ private val LIGHT_CARD = Color(0xFFF7F7F7)
 
 /** The light scheme's field fill: a step below the card group, `#E8E8E8`. */
 private val LIGHT_FIELD = Color(0xFFE8E8E8)
+
+/**
+ * The light scheme's secondary-control fill: `#E6E6E6`, one step below the page.
+ *
+ * The library fills a secondary `Button` and `TextButton` with `secondaryVariant`, which
+ * its own scheme sets to `#F0F0F0` — one step below *its* page (`#F7F7F7`). This app
+ * overrides the page to `#F0F0F0` and the card to `#F7F7F7`, so the library's fill became
+ * the page exactly: the history page's "new configuration" row, the model form's Cancel
+ * and Fetch, a preset's Restore, and a dialog answer whose panel was near the page all
+ * drew a label with no visible button under it. `#E6E6E6` is the library's own `secondary`
+ * grey, so it is a colour the palette already has rather than a new one; it sits 10 steps
+ * below the page and 17 below the card, and the scheme's `onSecondaryVariant` ink
+ * (`#303030`) is 10:1 on it.
+ *
+ * The disabled fill moves with it, and to the same value: the library's disabled secondary
+ * (`#F2F2F2`) is *lighter* than this app's page, so a disabled button would have vanished
+ * in the one state that most needs a shape. A disabled secondary control keeps its fill and
+ * fades its ink instead — `disabledOnSecondaryVariant` — which is also how the capsule
+ * controls read.
+ */
+private val LIGHT_CONTROL = Color(0xFFE6E6E6)
 
 /**
  * How much of the surface's own ink a quotation's fill is washed with.

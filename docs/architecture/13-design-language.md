@@ -68,7 +68,24 @@ slider track; the page's two groups are set explicitly:
 - `background` and `surfaceContainer` — `#F7F7F7`, one colour for the history ground and
   the answer cards;
 - `surfaceContainerHighest` — white, the floating controls;
-- `secondaryContainer` — `#E8E8E8`, so fields stay a step below the card group.
+- `secondaryContainer` — `#E8E8E8`, so fields stay a step below the card group;
+- `secondaryVariant` — `#E6E6E6`, the fill of every secondary control.
+
+**A filled secondary control had to move with the page, and its absence was the bug.**
+Miuix fills a secondary `Button` and `TextButton` with `secondaryVariant`, which its own
+light scheme sets to `#F0F0F0` — one step below *its* `#F7F7F7` page. This app's page is
+`#F0F0F0`, so the library's control fill and the page became the same colour: the model
+settings' **new configuration** row drew its label on the page itself, and a measured
+screenshot showed a word with no button around it. It was not one call site. The model
+form's **Cancel** and **Fetch**, a chat preset's **Restore**, and the dialogs' answer pair
+whose panel is the card group all took the same default — the last of those a faint wash
+on `#F7F7F7` rather than a control. `#E6E6E6` is the library's own `secondary` grey, so the
+palette gains no colour it did not have; it sits 10 steps below the page and 17 below the
+card, and the scheme's `onSecondaryVariant` ink (`#303030`) is 10:1 on it. The disabled
+fill moves with it and to the same value, because the library's `#F2F2F2` is *lighter* than
+the page — a disabled button would have vanished in the one state that most needs a shape;
+a disabled secondary control keeps its rectangle and fades only its ink. The dark scheme
+needs none of this: its `secondaryVariant` (`#434343`) is plainly above its black page.
 
 **Why the light palette is overridden: it has no two-group step.** `background`,
 `surfaceVariant` and `surfaceContainer` are all `#FFFFFF` in `lightColorScheme()`, and

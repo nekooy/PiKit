@@ -50,6 +50,11 @@ fun PiSection(
  * The destructive and the additive row are the two that sit here — "clear the
  * cache", "add a profile" — and both are *actions on the group*, not values in it,
  * which is why they are outside rather than another row inside.
+ *
+ * Its fill is the library's secondary one; the light scheme moves that role to
+ * `LIGHT_CONTROL` in `PiKitTheme.kt`, and that constant's KDoc says why. It is the fill
+ * of every secondary control in the app, and the role used to sit on the page's own
+ * colour here, which left this label with no button around it.
  */
 @Composable
 fun PiGroupAction(
