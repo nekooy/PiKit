@@ -571,6 +571,22 @@ container around it changed. They are drawn through Miuix's `Icon`, from the sam
 drawables. The app's in-app mark is the wordmark's P, drawn from `ic_pi_mark.xml`; the launcher
 icon itself is the full PiKit wordmark.
 
+**One glyph deletes, and only its size and ink are the call site's.** Every control that
+removes something the app stores — a conversation, a profile, a model listed in a profile,
+a saved search key, a workspace the reader added — draws `MiuixIcons.Delete`. The size is
+the slot's: 16dp on a dialog row's trailing action, 18dp on the terminal's session roster
+(§10.1), the library's own glyph in a popup row, and the library's row size in a settings
+row's `endActions`; the tint is the summary ink wherever the control is a row's trailing
+action rather than the row's subject. Before this rule the model list and the search page
+drew `Close` for exactly that act, beside a profile row and a session bar that drew the
+bin — one kind of act in two vocabularies, and the ✕ read as "close this row" while it
+removed an entry from a stored configuration.
+
+`Close` keeps the other act: **taking something off this screen.** A filter field's clear
+(`ClearFieldButton`), the selection bar's exit, a failed tool call's state mark and the
+composer's staged attachment — never sent, nothing stored — are ✕s, and a bin on any of
+them would say something was deleted when nothing was (§7.1, §7.3).
+
 Two glyph rules survive from the previous interface because they are still true: a
 glyph from another set has another weight, so **its size is a call-site decision** (⌘
 is drawn at 17dp where the library's glyphs are 21dp); and a glyph that was not drawn

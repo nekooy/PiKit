@@ -47,7 +47,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
-import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Reset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -168,11 +168,14 @@ internal fun WebSearchConfigOptions(store: WebSearchStore, session: PiAgentSessi
                 // prevent it from taking.
                 summary = entry.value.display(),
                 endActions = {
-                    // The ✕ is the row's own control, in the summary ink: it removes one
-                    // key and is not the row's subject, which is the key's name and value.
+                    // The bin is the row's own control, in the summary ink: it removes
+                    // one key and is not the row's subject, which is the key's name and
+                    // value. It is the same mark the model list and the profile rows use
+                    // for the same kind of act (§13) — an entry leaving a stored list —
+                    // where the ✕ it used to draw is the app's *dismiss* mark.
                     IconButton(onClick = { pendingRemoval = entry }) {
                         Icon(
-                            imageVector = MiuixIcons.Close,
+                            imageVector = MiuixIcons.Delete,
                             contentDescription = text.settings.searchConfigRemove(entry.path),
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )

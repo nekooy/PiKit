@@ -54,7 +54,6 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -984,14 +983,16 @@ internal fun ModelEditPage(
                         summary = provider?.label,
                         selected = model == activeModel,
                         endActions = {
-                            // `Close`, the glyph the search page's key rows use for the same
-                            // action: taking one entry out of a list. `Delete` is reserved for
-                            // the profile row above, which removes the whole configuration
-                            // rather than one of its models — two weights of the same act need
-                            // two marks, and one act needs one.
+                            // `Delete`, like every other control that removes something:
+                            // the app has one delete mark and varies only its size and
+                            // ink (§13). The ✕ this used to draw was the *dismiss* mark,
+                            // borrowed for an action that removes a row from the
+                            // configuration — so the model list and the profile row above
+                            // it spoke two vocabularies for one kind of act, and the ✕
+                            // read as "close this row" rather than as "this model goes".
                             IconButton(onClick = { pendingRemove = model }) {
                                 Icon(
-                                    imageVector = MiuixIcons.Close,
+                                    imageVector = MiuixIcons.Delete,
                                     contentDescription = text.settings.removeModel,
                                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 )

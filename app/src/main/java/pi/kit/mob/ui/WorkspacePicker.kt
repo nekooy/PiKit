@@ -53,7 +53,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
@@ -470,8 +470,12 @@ internal fun WorkspaceDialog(
                                 onClick = { onRemove(workspace.path) },
                                 modifier = Modifier.size(32.dp),
                             ) {
+                                // The bin, at the 16dp a dialog row's trailing mark is
+                                // drawn at: taking a workspace out of the list is the
+                                // same act as taking a model or a saved key out of its
+                                // list, so it wears the same glyph (§13).
                                 Icon(
-                                    imageVector = MiuixIcons.Close,
+                                    imageVector = MiuixIcons.Delete,
                                     contentDescription = text.chat.workspaceRemove,
                                     modifier = Modifier.size(16.dp),
                                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
