@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -34,9 +35,16 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -281,8 +289,26 @@ fun PiToastProvider(content: @Composable () -> Unit) {
     val current by toast.shown.collectAsState()
     val ime = WindowInsets.ime
     val bars = WindowInsets.navigationBars
-    Box(Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalPiToast provides toast, content = content)
+    // The root of the app is also the window Miuix places its popups in, and the
+    // platform's answer for that is not refreshed by every window-size change: see
+    // [MeasuredWindowInfo]. The size is taken from this box's own layout, which is
+    // written by the same measure pass that a resize ends in.
+    val measuredWindow = remember { mutableStateOf(IntSize.Zero) }
+    val platformWindow = LocalWindowInfo.current
+    val density = LocalDensity.current
+    val window = remember(platformWindow, density.density, density.fontScale) {
+        MeasuredWindowInfo(platformWindow, measuredWindow, density)
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { measuredWindow.value = it },
+    ) {
+        CompositionLocalProvider(
+            LocalPiToast provides toast,
+            LocalWindowInfo provides window,
+            content = content,
+        )
 
         val message = current
         // One timer per message: the token is in the key, so a second message restarts
@@ -372,3 +398,58 @@ private val TOAST_MAX_WIDTH = 420.dp
 @Composable
 fun piSheetBottomInset(): Dp =
     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+/**
+ * The window, as the composition has measured it rather than as the platform reports it.
+ *
+ * ## What reads it
+ *
+ * Miuix places every anchored popup inside the *window's* rectangle, and it takes that
+ * rectangle from `LocalWindowInfo` (`rememberListPopupLayoutInfo` remembers a `windowBounds`
+ * keyed on `WindowInfo.containerSize`): the popup position provider is asked to keep the
+ * panel inside it, and a popup without an explicit `maxHeight` is measured against its
+ * height. The composer's own provider (§7.1) receives the same rectangle as its
+ * `windowBounds`, and the composer's menus, the transcript's card menu, the drawer's row
+ * menu and the files page's menu are all placed by one of those two providers.
+ *
+ * ## Why the platform's answer is not enough
+ *
+ * `WindowInfo.containerSize` is a lazily-initialised state that Compose refreshes **only**
+ * from `AndroidComposeView.onConfigurationChanged` — `ComposeViewContext.onConfigurationChanged`
+ * calls `LazyWindowInfo.updateContainerSizeIfObserved`, and nothing else does. A window
+ * that changed size without a configuration change the activity sees therefore keeps
+ * handing out the size it had when the popup last composed, and every popup that opens
+ * afterwards is clamped into the old rectangle: the panel is dragged up off its anchor by
+ * the height the window has gained, which reads as "the menu opens far too high" after a
+ * small window returns to fullscreen (§7.1's *The anchored half*).
+ *
+ * The size the root layout gave the app cannot be stale that way, because the measure
+ * pass that a resize ends in is what writes it: `onSizeChanged` on the root box fires
+ * *after* the box has been given the new size, and every consumer of
+ * `containerSize` reads a snapshot state, so a popup that is already composed
+ * re-composes with the new rectangle, and one that opens later reads it directly.
+ *
+ * Only the two size facts are replaced. Focus and the keyboard modifiers are the
+ * platform's, and the px size falls back to the platform's until the root has been
+ * measured once (which also keeps the first frame of a window that has never been laid
+ * out from claiming a window of zero).
+ */
+private class MeasuredWindowInfo(
+    private val platform: WindowInfo,
+    private val measured: State<IntSize>,
+    private val density: Density,
+) : WindowInfo {
+
+    override val isWindowFocused: Boolean get() = platform.isWindowFocused
+
+    override val containerSize: IntSize
+        get() = measured.value.takeIf { it != IntSize.Zero } ?: platform.containerSize
+
+    override val containerDpSize: DpSize
+        get() = DpSize(
+            (containerSize.width / density.density).dp,
+            (containerSize.height / density.density).dp,
+        )
+
+    override val keyboardModifiers get() = platform.keyboardModifiers
+}

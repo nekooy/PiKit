@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import kotlin.math.max
+import kotlin.math.min
 
 /**
  * A popup position provider that always opens **above** its anchor.
@@ -35,12 +36,35 @@ import kotlin.math.max
  *
  * ## The arithmetic
  *
- * The anchor's top edge is the popup's bottom edge, offset by [verticalMargin], and the
- * result is clamped into the window: a popup taller than the space above the anchor
- * slides down until its own bottom is at the anchor rather than being drawn off the
- * status bar. Horizontal placement follows the library's rule — start-aligned to the
- * anchor, or end-aligned when the caller asked for `Align.End` — and is clamped the
- * same way.
+ * The anchor's top edge is the popup's bottom edge, offset by [verticalMargin]; the
+ * panel's own top is then floored at the window's top edge, so a popup taller than the
+ * space above the anchor slides down until its top is at the window's top rather than
+ * being drawn off the status bar. Horizontal placement follows the library's rule —
+ * start-aligned to the anchor, or end-aligned when the caller asked for `Align.End` —
+ * and is clamped into the window.
+ *
+ * ## The window rectangle it is handed can predate the anchor
+ *
+ * `windowBounds` is a rectangle the library composed, not a live reading: Miuix builds it
+ * in `rememberListPopupLayoutInfo` from `WindowInfo.containerSize` and the system-bar
+ * insets, and `containerSize` is state Compose refreshes **only** from
+ * `AndroidComposeView.onConfigurationChanged` (see `MeasuredWindowInfo` in `PiOverlays`,
+ * which is the app's answer to that). A rectangle from before a window changed size
+ * still holds the anchor's *old* place, so a clamp against its far edges is a clamp
+ * against a window that is no longer there: with the small window's `bottom`, "keep the
+ * popup inside the window" turns into "pull the popup up by the height the window has
+ * gained", and a 320dp menu over a composer chip opens at the top of the screen instead
+ * of on the chip it belongs to.
+ *
+ * The anchor is the fact that cannot be stale. Miuix measures it with
+ * `onGloballyPositioned` on every open — the popup body is not composed until the anchor
+ * has been measured, and the `remember` holding it is created after the `show` guard, so
+ * closing the popup drops it — and it is measured in window coordinates by the same
+ * composition that asks for the panel. The rectangle is therefore widened to hold the
+ * anchor before it is used as a clamp ([windowBoundsAround]), and the vertical axis is
+ * never clamped against the rectangle's bottom at all: an above-anchor menu's bottom edge
+ * *is* its anchor's top edge, and a window that is current contains that anchor, so the
+ * bottom clamp can only ever pull the panel away from the trigger and never towards it.
  */
 fun aboveAnchorPositionProvider(
     verticalMargin: Dp = 8.dp,
@@ -55,35 +79,78 @@ fun aboveAnchorPositionProvider(
         popupContentSize: IntSize,
         popupMargin: IntRect,
         alignment: PopupPositionProvider.Align,
-    ): IntOffset {
-        val offsetX = if (isEndAligned(alignment, layoutDirection)) {
-            anchorBounds.right - popupContentSize.width - popupMargin.right
-        } else {
-            anchorBounds.left + popupMargin.left
-        }
-        // Above, always: the popup's bottom edge sits on the anchor's top edge, less the
-        // margin. `max` rather than a bare subtraction is the clamp that keeps a tall
-        // menu inside the window — it can never start above the top margin, so the
-        // overflow is pushed down against the anchor instead of off the screen.
-        val wantedY = anchorBounds.top - popupContentSize.height - popupMargin.top
-        val lowestY = windowBounds.top + popupMargin.top
-        val offsetY = max(wantedY, lowestY)
-        return IntOffset(
-            x = offsetX.coerceIn(
-                windowBounds.left,
-                (windowBounds.right - popupContentSize.width - popupMargin.right)
-                    .coerceAtLeast(windowBounds.left),
-            ),
-            y = offsetY.coerceIn(
-                lowestY,
-                (windowBounds.bottom - popupContentSize.height - popupMargin.bottom)
-                    .coerceAtLeast(lowestY),
-            ),
-        )
-    }
+    ): IntOffset = aboveAnchorOffset(
+        anchorBounds = anchorBounds,
+        windowBounds = windowBounds,
+        popupContentSize = popupContentSize,
+        popupMargin = popupMargin,
+        endAligned = isEndAligned(alignment, layoutDirection),
+    )
 
     override fun getMargins(): PaddingValues = margins
 }
+
+/**
+ * Where an above-anchor panel goes, in window pixels.
+ *
+ * The whole arithmetic of the provider, in one place and without a Compose type in its
+ * signature, so the two windows a phone actually has — a small floating one and
+ * fullscreen — can be driven from a JVM test (`PopupPositionTest`). The provider above
+ * is the only caller.
+ *
+ * [endAligned] is the horizontal half of the library's `Align`: the panel's right edge on
+ * the anchor's right edge when true, its left edge on the anchor's left edge otherwise.
+ *
+ * See [aboveAnchorPositionProvider]'s documentation for why the vertical axis is floored
+ * at the window's top and never clamped against its bottom.
+ */
+internal fun aboveAnchorOffset(
+    anchorBounds: IntRect,
+    windowBounds: IntRect,
+    popupContentSize: IntSize,
+    popupMargin: IntRect,
+    endAligned: Boolean,
+): IntOffset {
+    val offsetX = if (endAligned) {
+        anchorBounds.right - popupContentSize.width - popupMargin.right
+    } else {
+        anchorBounds.left + popupMargin.left
+    }
+    val bounds = windowBoundsAround(anchorBounds, windowBounds)
+    // Above, always: the popup's bottom edge sits on the anchor's top edge, less the
+    // margin, and its own top is floored at the window's top. `max` is the whole of the
+    // vertical clamp — see the provider's documentation for why there is deliberately no
+    // clamp against `bounds.bottom`.
+    val wantedY = anchorBounds.top - popupContentSize.height - popupMargin.top
+    val lowestY = bounds.top + popupMargin.top
+    return IntOffset(
+        x = offsetX.coerceIn(
+            bounds.left,
+            (bounds.right - popupContentSize.width - popupMargin.right)
+                .coerceAtLeast(bounds.left),
+        ),
+        y = max(wantedY, lowestY),
+    )
+}
+
+/**
+ * [windowBounds] widened to hold [anchorBounds].
+ *
+ * A window rectangle that does not contain the anchor it is asked to clamp an anchored
+ * popup into is a rectangle from before the window changed size: the anchor is measured
+ * in window coordinates by the same composition that asks for the popup, so a window
+ * that is current always contains it. Widening restores the one property the clamp
+ * relies on without inventing a rectangle from nothing — the far edges keep what the
+ * library knows, and only an edge the anchor has moved past is replaced by the anchor's
+ * own.
+ */
+internal fun windowBoundsAround(anchorBounds: IntRect, windowBounds: IntRect): IntRect =
+    IntRect(
+        left = min(windowBounds.left, anchorBounds.left),
+        top = min(windowBounds.top, anchorBounds.top),
+        right = max(windowBounds.right, anchorBounds.right),
+        bottom = max(windowBounds.bottom, anchorBounds.bottom),
+    )
 
 /**
  * Whether [alignment] puts the popup's right edge on the anchor's right edge.
