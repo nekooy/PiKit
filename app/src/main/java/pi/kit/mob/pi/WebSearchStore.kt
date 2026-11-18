@@ -47,7 +47,7 @@ import java.io.File
  *  - **The file** (`web-search.json`) is plain JSON, written by [strictDocument].
  *    Only keys that are live in the editor are in it, and every comment is gone.
  *  - **The document** is what [renderWebSearchDocument] produces and what the
- *    settings page's editor shows: PiKit's own six keys live with the values in
+ *    settings page's editor shows: PiKit's own keys live with the values in
  *    effect, and every other option the extension reads as a comment carrying its
  *    path, what it does and a usable example. `WEB_ACCESS_PARAMS` is that list.
  *
@@ -72,18 +72,25 @@ import java.io.File
  * phone. PiKit's default is `none`, and it is in the rendered document, so the
  * default the page shows is also the default pi is running with.
  *
- * ## The one key PiKit writes as a *default* rather than as its own
+ * ## The fake-IP exemption is a control's key, and also a default
  *
  * `ssrf.allowRanges` is the extension's escape hatch for a TUN/fake-IP proxy: its
  * SSRF preflight refuses the `198.18.0.0/15` that such a proxy answers with, and
  * its own default for the key is `[]`, so a phone behind one has every
- * `fetch_content` refused before anything is connected. PiKit writes
- * `["198.18.0.0/15"]` — but only when the key is *not there*
- * ([WEB_SEARCH_DEFAULT_KEYS]): an owned key is rewritten from [WebSearchSettings]
- * on every render, and this value is a policy the user may have set by hand,
- * `[]` included. See [mergedDocumentText] for the write that gives an existing
- * install the key, and ARCHITECTURE §9.3 for the alternative that was rejected
- * (`ssrf.trustEnvProxy`) and why this is not one of [WEB_SEARCH_OWNED_PATHS].
+ * `fetch_content` refused before anything is connected. PiKit's Advanced search
+ * page owns the key now — one switch, on by default, writing
+ * `["198.18.0.0/15"]` when it is on and `[]` when it is off — because the key is
+ * the one thing a reader behind such a proxy needs and the JSON list it takes is
+ * not something to type on a phone. Being owned is also what makes OFF stick: the
+ * empty array is a value in the file, so nothing re-defaults it at the next launch.
+ *
+ * It is *still* a default as well ([WEB_SEARCH_DEFAULT_KEYS]), and the two are not
+ * redundant: the extension reads the file, not [WebSearchSettings], so an existing
+ * install whose strict file predates this key gains it from
+ * [mergedDocumentText] at launch rather than waiting for the first tap on a page
+ * it may never open. ARCHITECTURE §9.3 carries the switch's argument, the cost of
+ * owning a key a reader may have made by hand, and the rejected alternative
+ * (`ssrf.trustEnvProxy`).
  *
  * ## Reads are tolerant, the file on disk is not
  *
@@ -151,6 +158,24 @@ data class WebSearchSettings(
      * socks5h.
      */
     val proxy: String? = null,
+    /**
+     * The `ssrf.allowRanges` exemption a TUN/fake-IP proxy needs, as one switch.
+     *
+     * On writes `["198.18.0.0/15"]` ([FAKE_IP_PROXY_RANGE]); off writes `[]`, which
+     * is the extension's own meaning for "exempt nothing". On is PiKit's default,
+     * because the phone this app runs on is the phone a Clash-style proxy runs on,
+     * and the failure it prevents — every page fetch refused before anything is
+     * connected — names the fix in the extension's own error message without giving
+     * a reader any way to apply it from this page.
+     *
+     * Reading: the key absent (or `ssrf` absent, or not an object) is *on*, which is
+     * what makes an old file and a fresh install behave alike; the array is on when
+     * it names the fake-IP range and off when it does not. A hand-written list of
+     * the reader's own LAN ranges therefore reads as off and is replaced by `[]` on
+     * the next write anywhere on the page — the cost of the key being owned, stated
+     * in ARCHITECTURE §9.3 rather than hidden.
+     */
+    val allowFakeIpProxyRange: Boolean = true,
 ) {
 
     internal companion object {
@@ -274,6 +299,79 @@ data class WebSearchSettings(
             "searchapi",
             "tabstack",
         )
+
+        /**
+         * The providers whose own configuration the extension cannot supply, and the
+         * keys it needs for each — what the page's picker warns about after a choice.
+         *
+         * The rule is *"the extension's file is the only place this provider's
+         * credential can come from"*, and it is a property of the bundled version's
+         * modules rather than of its README:
+         *
+         *  - A **keyless** provider needs nothing: `duckduckgo`, `keenable` (public
+         *    endpoint, key optional) and `degoog` (public instance, key optional) —
+         *    and `exa`, which answers through its zero-config MCP endpoint.
+         *  - A provider that resolves **Pi's own model credentials** is not on this
+         *    list either: `openai` (`openaiSearchProviders` and the Codex
+         *    subscription), `xai`, `gemini` and `kimi` (`/login kimi-coding`) all
+         *    read a key through pi's model registry, and the reader configured that
+         *    when they set up the model this app launches — nothing to add here.
+         *  - `parallel-mcp` and `anysearch` work with no credential at all (rate
+         *    limited), so a key is a limit, not a requirement.
+         *
+         * Everything else is keyed or needs a self-hosted address, and the page says
+         * so after the choice, naming the keys here. `searxng` and `ninerouter` need
+         * an address rather than a key (`searxng.ts`'s `requireBaseUrl`,
+         * `ninerouter.ts`'s base URL check); `brightdata` and `cloudflare` need a
+         * second key each beside the credential (`brightdataSerpZone`,
+         * `cloudflareAccountId`), which is why the value is a list.
+         *
+         * Pinned by `WebSearchStoreTest`: every entry names a provider the picker
+         * offers, and every key it names is a row of `WEB_ACCESS_PARAMS` — a warning
+         * that named a key the editor cannot find would be worse than no warning.
+         */
+        val PROVIDER_CONFIG_KEYS: Map<String, List<String>> = mapOf(
+            "searxng" to listOf("searxngBaseUrl"),
+            "ninerouter" to listOf("ninerouterBaseUrl"),
+            "perplexity" to listOf("perplexityApiKey"),
+            "mistral" to listOf("mistralApiKey"),
+            "ollama" to listOf("ollamaApiKey"),
+            "brave" to listOf("braveApiKey"),
+            "tavily" to listOf("tavilyApiKey"),
+            "jina" to listOf("jinaApiKey"),
+            "firecrawl" to listOf("firecrawlApiKey"),
+            "serper" to listOf("serperApiKey"),
+            "serpapi" to listOf("serpapiApiKey"),
+            "serpbase" to listOf("serpbaseApiKey"),
+            "serply" to listOf("serplyApiKey"),
+            "kagi" to listOf("kagiApiKey"),
+            "valyu" to listOf("valyuApiKey"),
+            "bocha" to listOf("bochaApiKey"),
+            "querit" to listOf("queritApiKey"),
+            "search1api" to listOf("search1apiApiKey"),
+            "searchinfinity" to listOf("searchinfinityApiKey"),
+            "tinyfish" to listOf("tinyfishApiKey"),
+            "parallel" to listOf("parallelApiKey"),
+            "baizhi" to listOf("baizhiApiKey"),
+            "xcrawl" to listOf("xcrawlApiKey"),
+            "brightdata" to listOf("brightdataApiKey", "brightdataSerpZone"),
+            "serpdive" to listOf("serpdiveApiKey"),
+            "you" to listOf("youApiKey"),
+            "zai" to listOf("zaiApiKey"),
+            "ceramic" to listOf("ceramicApiKey"),
+            "deepseek" to listOf("deepseekApiKey"),
+            "linkup" to listOf("linkupApiKey"),
+            "cloudflare" to listOf("cloudflareApiKey", "cloudflareAccountId"),
+            "searchapi" to listOf("searchapiApiKey"),
+            "tabstack" to listOf("tabstackApiKey"),
+        )
+
+        /**
+         * The keys [provider] needs before it can answer, or an empty list when it
+         * needs nothing — see [PROVIDER_CONFIG_KEYS] for the rule and the exclusions.
+         */
+        fun providerConfigKeys(provider: String): List<String> =
+            PROVIDER_CONFIG_KEYS[provider].orEmpty()
 
         /** `maxInlineContentChars` as the extension documents it. */
         const val DEFAULT_INLINE_CONTENT_CHARS = 30_000
@@ -435,6 +533,7 @@ internal fun readWebSearchSettings(text: String): WebSearchSettings? {
     val fetch = document[KEY_FETCH] as? JsonObject
     val search = document[KEY_WEB_SEARCH] as? JsonObject
     val tools = document[KEY_TOOLS] as? JsonObject
+    val ssrf = document[KEY_SSRF] as? JsonObject
 
     // The extension's own resolution, tool by tool (`isToolEnabled` in its
     // `index.ts`): a tool's own `tools.<name>.enabled` when that is a boolean, the
@@ -456,6 +555,14 @@ internal fun readWebSearchSettings(text: String): WebSearchSettings? {
         maxInlineContentChars = document.int(KEY_MAX_INLINE) ?: defaults.maxInlineContentChars,
         fetchTimeoutSeconds = fetch.int(KEY_TIMEOUT) ?: defaults.fetchTimeoutSeconds,
         proxy = document.string(KEY_PROXY),
+        // Absent reads as on, which is what makes a file written before this key
+        // existed behave like a fresh install's. A present array is on only when it
+        // names the fake-IP range: that is the switch's question, and a list of the
+        // reader's own LAN ranges is not an answer to it — see the field's KDoc for
+        // what a write does to that list.
+        allowFakeIpProxyRange = ssrf?.get(KEY_ALLOW_RANGES)?.let { ranges ->
+            (ranges as? JsonArray)?.any { it.rangeText() == FAKE_IP_PROXY_RANGE } ?: false
+        } ?: defaults.allowFakeIpProxyRange,
     )
 }
 
@@ -558,6 +665,11 @@ private val SCHEMA_ROOT: SchemaNode = SchemaNode("", "").also { root ->
  * settings say it is unset, in which case it goes back to being a comment. A key
  * that is not owned is never written from the settings at all; that is what keeps
  * `githubClone.enabled` and its defaults out of this app's hands.
+ *
+ * `ssrf.allowRanges` is owned for the reason its field states: the Advanced page's
+ * switch is its writer, and a value the switch cannot round-trip would make the
+ * switch a control that snaps back. It is the one owned key that is also a
+ * [WEB_SEARCH_DEFAULT_KEYS] entry, because the file may predate the switch.
  */
 private fun isOwned(path: String): Boolean =
     path in OWNED_PATHS || path in TOOL_ENABLED_PATHS
@@ -569,6 +681,7 @@ private val OWNED_PATHS = setOf(
     "fetch.timeout",
     "proxy",
     "webSearch.enabled",
+    "ssrf.allowRanges",
 )
 
 private val TOOL_ENABLED_PATHS = setOf(
@@ -610,25 +723,29 @@ private val SCHEMA_PATHS: Set<String> = WEB_ACCESS_PARAMS.map { it.path }.toSet(
  */
 internal const val FAKE_IP_PROXY_RANGE = "198.18.0.0/15"
 
+/** `ssrf.allowRanges` with the fake-IP range in it: what the switch's ON writes. */
+internal val FAKE_IP_PROXY_RANGES: JsonArray = JsonArray(listOf(JsonPrimitive(FAKE_IP_PROXY_RANGE)))
+
 /**
  * The keys PiKit writes into a file that does not have them, and the value it writes.
  *
- * A **default**, not an owned key. An owned key ([WEB_SEARCH_OWNED_PATHS]) is
- * rewritten from [WebSearchSettings] on every render, and this one is a statement
- * about the user's own network that they may have made by hand — `[]` is a
- * legitimate answer that means "exempt nothing", which is the extension's own
- * default. So it is written only when the path is absent: by
- * [WebSearchStore.defaultDocument] for a fresh install, and by [mergedDocumentText]
- * for a file that is already on disk, which is the half that makes the fix reach an
- * install the user never touches.
+ * `ssrf.allowRanges` is one of the controls' keys too ([WEB_SEARCH_OWNED_PATHS], the
+ * Advanced page's switch), and both halves are load-bearing rather than a leftover:
+ * the extension reads the *file*, so an existing install whose strict file predates
+ * this key would have no exemption until something rewrote that file — and on a
+ * phone behind a fake-IP proxy, "nothing has rewritten it yet" means every page
+ * fetch is refused. [mergedDocumentText] writes the key at launch for that install;
+ * the switch is what lets the reader turn it off afterwards, and its OFF is an
+ * explicit `[]` in the file, which is why the merge — which only writes a *missing*
+ * path — leaves it alone.
  *
- * The option itself is documented in `WEB_ACCESS_PARAMS` like every other key, so
- * the note the reader sees on the document's line comes from the same row the
- * page's "add an option" sheet shows. ARCHITECTURE §9.3 has the mechanism and the
- * rejected alternative.
+ * A path that is present is never touched, whatever its value: `[]` is the
+ * extension's own meaning for "exempt nothing", and it is now also the stored
+ * answer the switch reads back. ARCHITECTURE §9.3 has the mechanism, the cost of
+ * owning a key a reader may have written by hand, and the rejected alternative.
  */
 internal val WEB_SEARCH_DEFAULT_KEYS: Map<String, JsonElement> = mapOf(
-    "ssrf.allowRanges" to JsonArray(listOf(JsonPrimitive(FAKE_IP_PROXY_RANGE))),
+    "ssrf.allowRanges" to FAKE_IP_PROXY_RANGES,
 )
 
 /**
@@ -666,19 +783,6 @@ private fun JsonObject.holdsPath(segments: List<String>): Boolean {
     }
     return false
 }
-
-/**
- * The document a fresh install's file is rendered from: nothing, plus the defaults
- * PiKit writes.
- *
- * A *source* rather than a finished document, because the renderer already writes a
- * key its source has: [WebSearchStore.defaultDocument] hands this to it, so the
- * default is placed by the schema like every other key — in its documented position,
- * with its own note — instead of by a second writer that would have to know where
- * `ssrf` sits. The test reads this name so the fresh-install document has one
- * definition rather than two.
- */
-internal val WEB_SEARCH_DEFAULT_SOURCE: JsonObject = JsonObject(emptyMap()).withWebSearchDefaults()
 
 /**
  * The document with `path` set to [value], creating the objects on the way.
@@ -728,6 +832,11 @@ private fun ownedValue(path: String, settings: WebSearchSettings): JsonElement? 
     path == "maxInlineContentChars" -> JsonPrimitive(settings.maxInlineContentChars)
     path == "fetch.timeout" -> JsonPrimitive(settings.fetchTimeoutSeconds)
     path == "proxy" -> settings.proxy?.let(::JsonPrimitive)
+    // Off is the empty array rather than an absent key: absent is what the merge
+    // treats as "this install never saw the default", and writing the absence back
+    // would turn the switch off only until the next launch.
+    path == "ssrf.allowRanges" ->
+        if (settings.allowFakeIpProxyRange) FAKE_IP_PROXY_RANGES else JsonArray(emptyList())
     path == "webSearch.enabled" -> JsonPrimitive(settings.enabled)
     path in TOOL_ENABLED_PATHS -> JsonPrimitive(settings.enabled)
     else -> null
@@ -976,6 +1085,10 @@ private fun JsonObject?.boolean(key: String): Boolean? =
 private fun JsonObject?.nestedObject(key: String): JsonObject? =
     this?.get(key) as? JsonObject
 
+/** A string's text inside an array, or null for a member that is not a string. */
+private fun JsonElement.rangeText(): String? =
+    (this as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+
 /** The document keys the reader looks at, spelled once. */
 private const val KEY_WORKFLOW = "workflow"
 private const val KEY_PROVIDER = "provider"
@@ -986,6 +1099,8 @@ private const val KEY_WEB_SEARCH = "webSearch"
 private const val KEY_ENABLED = "enabled"
 private const val KEY_PROXY = "proxy"
 private const val KEY_TOOLS = "tools"
+private const val KEY_SSRF = "ssrf"
+private const val KEY_ALLOW_RANGES = "allowRanges"
 private const val KEY_SOURCE_CHECK = "sourceCheck"
 private const val KEY_FETCH_CONTENT = "fetchContent"
 private const val KEY_GET_SEARCH_CONTENT = "getSearchContent"
@@ -1040,8 +1155,9 @@ class WebSearchStore(
     /**
      * Every key in the file that the page's own controls do not own.
      *
-     * This is what the "add an option" section lists: the six controls above it
-     * write their own keys, and everything else in the file is the user's. Read
+     * This is what the "add an option" section lists: the search page's controls —
+     * the ones on the page and the four on its Advanced sub-page — write their own
+     * keys, and everything else in the file is the user's. Read
      * from the file rather than remembered, for the same reason the whole class
      * edits pi's file: a list reconstructed from what this app *believes* it wrote
      * would hide a key the file actually has.
@@ -1111,7 +1227,7 @@ class WebSearchStore(
      *
      * [value] is the JSON value; the page builds it, because whether the text the
      * user typed is a string or a number is a property of the option, not of the
-     * file. A path one of the controls owns is refused: those six are written from
+     * file. A path one of the controls owns is refused: those are written from
      * [WebSearchSettings] on every render, so a value set here would be overwritten
      * by the next tap anywhere on the page.
      */
@@ -1163,17 +1279,17 @@ class WebSearchStore(
      * The document PiKit renders: what a fresh install's editor shows, and what the
      * page's "restore defaults" puts back.
      *
-     * It carries [WEB_SEARCH_DEFAULT_KEYS], because a fresh install has no file for
-     * [mergedDocumentText] to merge into — this text *is* the file. Rendered from
-     * [WEB_SEARCH_DEFAULT_SOURCE] rather than by a second writer, so the default is
-     * an ordinary key of the document: the schema places it, the editor shows it live
-     * with its note, and the strict file gets it because the document has it.
+     * It carries every default PiKit writes, the fake-IP range included, because the
+     * defaults are the controls' values now: the schema places each key, the editor
+     * shows it live with its note, and the strict file gets it because the document
+     * has it. [WEB_SEARCH_DEFAULT_KEYS] is the other half — the merge that gives the
+     * same key to a file already on disk — and a fresh install has no such file.
      *
      * Not a suspend function and not locked, because it touches no file: it is a
      * pure rendering of the default settings against the schema, and the page calls
      * it from a composition-free callback.
      */
-    fun defaultDocument(): String = annotated(WebSearchSettings(), WEB_SEARCH_DEFAULT_SOURCE)
+    fun defaultDocument(): String = annotated(WebSearchSettings(), JsonObject(emptyMap()))
 
     /**
      * The annotated document, for the document editor.
@@ -1241,8 +1357,8 @@ class WebSearchStore(
      * are stripped* but not as it stands — what an older PiKit wrote, and what the
      * extension answers with `Unexpected token '/' … is not valid JSON` for every
      * tool — is rewritten in the strict form; and a strict file that lacks a key in
-     * [WEB_SEARCH_DEFAULT_KEYS] gains it, which is the only way one that is already
-     * strict can gain anything, since nothing else here rewrites it.
+     * [WEB_SEARCH_DEFAULT_KEYS] gains it, which is the only way that key reaches an
+     * install before the reader next changes something on the search page.
      *
      * A strict file that already has the defaults keeps its bytes and its
      * formatting, and one that does not parse at all is left alone (it is the

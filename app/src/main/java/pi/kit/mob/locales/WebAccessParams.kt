@@ -8,7 +8,7 @@ package pi.kit.mob.locales
  *
  * `Strings` is for interface text: a short label per control, completed by the
  * compiler. This is *prose about another program's configuration* — a hundred and
- * forty-eight keys, each with a shape, an example and a sentence — and it is
+ * forty-nine keys, each with a shape, an example and a sentence — and it is
  * written the way
  * `TerminalBanner.kt` and `ManualText*.kt` are, as one parallel structure whose
  * three languages sit beside each other. Prose is the documented exception to the
@@ -24,6 +24,13 @@ package pi.kit.mob.locales
  * other key is written as a comment — its path, its description, and a usable
  * example — so the file *is* the documentation. `example` is therefore JSON text,
  * not a Kotlin value: it is spliced into the document verbatim, inside a `//`.
+ *
+ * A row here is documentation first and a picker entry second, and one row is only
+ * the first: `ssrf.allowRanges` is the search settings' Advanced page's fake-IP
+ * switch, so it is written from the settings and is never offered by "add an option
+ * or key" (the picker leaves out every key a control owns). Its row stays because
+ * the rendered document still has to explain the key where the value sits.
+ * ARCHITECTURE §9.3 has the switch's argument.
  *
  * ## The facts, and where they come from
  *
@@ -52,8 +59,10 @@ package pi.kit.mob.locales
  * `searchapiApiKey`, `searchapiBaseUrl`, `tabstackApiKey`, `tabstackBaseUrl`,
  * `tabstackResearchMode` and `fetchContent.curl`. None of these moves removes a
  * key, so the rows below grow rather than get rewritten. Baizhi MCP
- * remains a *provider* the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`) rather
- * than a document key; its lazy `web_enable` tool is tool surface, not config.
+ * remains a *provider* the picker lists (`WebSearchSettings.SEARCH_PROVIDERS`) and its
+ * key is a row too — `baizhi.ts` reads `baizhiApiKey` from the same file and names it
+ * in its own error, so the header's earlier "not a document key" was wrong; its lazy
+ * `web_enable` tool is tool surface, not config.
  *
  * The provider, type and description of each row were taken from the extension's
  * per-feature modules, which each re-parse the file with their own partial
@@ -635,11 +644,11 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     p(
         "ssrf.allowRanges", "string[]", "[\"198.18.0.0/15\"]",
         "Extra CIDR ranges a fetch may reach — a TUN proxy's fake-IP range, or a service " +
-            "on your own network. PiKit writes the fake-IP range for you.",
+            "on your own network. The Advanced page's fake-IP switch writes this key.",
         "允许抓取到的额外 CIDR 网段：TUN 代理的 fake-IP 网段，或自己局域网内的服务。" +
-            "fake-IP 网段由 PiKit 写好。",
+            "这一项由搜索设置「高级」页的 Fake-IP 开关写入。",
         "取得を許可する追加の CIDR。TUN プロキシの fake-IP 範囲や、自宅ネットワーク内の" +
-            "サービス向けです。fake-IP の範囲は PiKit が書き込みます。",
+            "サービス向けです。この項目は検索設定の「詳細」ページの Fake-IP スイッチが書き込みます。",
     ),
     p(
         "ssrf.trustEnvProxy", "boolean", "false",
@@ -783,6 +792,11 @@ internal val WEB_ACCESS_PARAMS: List<WebAccessParam> = listOf(
     // explicit-only providers (`auto` never routes to them), like Serply and Baizhi.
     key("youApiKey", "You.com", "YOU_API_KEY", "key, for You.com's index search."),
     key("zaiApiKey", "Z.ai", "ZAI_API_KEY", "key, for Z.ai's web_search_prime MCP."),
+    // Baizhi's MCP reads `baizhiApiKey` like every other provider, and its error names
+    // the key — this row was missing while the header below claimed the provider had no
+    // document key, which `baizhi.ts` disagrees with. The Search page's picker warns
+    // about this key, so the editor has to be able to add it.
+    key("baizhiApiKey", "Baizhi", "BAIZHI_API_KEY", "key, for Baizhi's MCP search, used only when it is selected explicitly."),
     p(
         "zaiEndpoint", "string", "\"global\"",
         "`global` (api.z.ai) or `china` (open.bigmodel.cn). GLM Coding Plan keys are " +

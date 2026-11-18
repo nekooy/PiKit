@@ -2,6 +2,7 @@ package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -20,27 +20,32 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebSearchSettings
 import pi.kit.mob.pi.WebSearchStore
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
+import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * The bundled `pi-web-access` extension's options.
  *
  * ## What this page is, and what it deliberately is not
  *
- * The extension reads around 110 configuration keys. The page is **two layers**,
+ * The extension reads around 110 configuration keys. The page is **three layers**,
  * and the split is the design:
  *
- *  - **Controls** for the six keys PiKit is willing to write: the master switch, the
- *    workflow, the provider, the inline-content limit, the fetch timeout and the
- *    proxy. All six are peer rows in **one group** — that is the whole point of the
- *    frame, because the line between the two layers is the page's argument and a
- *    single frame is what draws it: everything inside it is PiKit's, everything
- *    outside it is the file's. Each row states its own value, and the reasons live in
- *    the picker sheets.
+ *  - **Controls** for the keys PiKit is willing to write: the master switch, the
+ *    workflow and the provider here, and — one level down, behind the `Advanced`
+ *    row — the inline-content limit, the fetch timeout, the proxy and the fake-IP
+ *    switch ([SearchAdvancedPage]). The rows here are peer rows in **one group**,
+ *    which is the whole point of the frame: the line between the layers is the
+ *    page's argument and a single frame is what draws it — everything inside it is
+ *    PiKit's, everything outside it is the file's. Each row states its own value,
+ *    and the reasons live in the picker sheets.
  *  - **The configuration section** ([WebSearchConfigOptions]), for everything
  *    else: the file's own keys that the controls do not own, listed with their
  *    values, plus one row that adds a new one from the extension's documented
@@ -48,6 +53,13 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
  *  - **The reset, in a section of its own** ([WebSearchResetSection]), because it
  *    acts on the whole file — the controls' keys as well as the listed ones — and a
  *    control that does that is not one more row in a list of keys.
+ *
+ * The three fetch parameters used to be rows of this page, and the page read as the
+ * whole configuration rather than as the handful of choices a reader makes: what is
+ * left here is a switch, two decisions and a way into the numbers. They are one
+ * page down rather than in a sheet because they are three controls with their own
+ * values, not one question with one answer, and the row that opens them names all
+ * three ([SearchAdvancedPage] carries the argument and the alternative).
  *
  * The second layer used to be a plain text editor of the whole annotated document,
  * and it was complete and honest and asked the user to write JSON to set one API
@@ -57,7 +69,7 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
  * file is not a JSON object — the one state the structured controls cannot start
  * from ([WebSearchDocumentEditor]).
  *
- * The line between the two layers is still not "the important keys" but **"the keys
+ * The line between the layers is still not "the important keys" but **"the keys
  * PiKit is willing to own"**: a control that is only *drawn* from PiKit's default
  * still has to be *written* by PiKit, and `githubClone.enabled` defaults to `true` —
  * so a switch the page drew as "on" because it had never seen the key would silently
@@ -89,21 +101,39 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
  *
  * ## What is saved when
  *
- * The two number fields save as they are typed: neither restarts anything — the
- * extension reads the file per request — and a working directory that saves as it
- * is typed is the precedent (`AgentPage`). Each field keeps a local draft keyed on
- * the stored value, so a number that does not parse yet is left alone in the field
- * rather than rounded into something else. An added option is written on its own
- * button, from a sheet that is dismissed by it: it is a deliberate act with a value
- * the user typed, and it is not something to do on a keystroke. The restart is the
- * write's own consequence rather than a sentence telling the reader to make one: the
- * extension registers its tools when pi starts, so each write schedules it (the trade
+ * The workflow and the provider are written when the picker closes on a choice, and
+ * that is the whole page: the three fields and the fake-IP switch are
+ * [SearchAdvancedPage]'s, and their own KDoc says when they write. An added option
+ * is written on its own button, from a sheet that is dismissed by it: it is a
+ * deliberate act with a value the user typed, and it is not something to do on a
+ * keystroke. The restart is the write's own consequence rather than a sentence
+ * telling the reader to make one: the extension registers its tools when pi starts,
+ * so each write that changes what pi reads at launch schedules it (the trade
  * `WebSearchConfigOptions` records).
+ *
+ * ## A provider that cannot answer yet says so
+ *
+ * The picker lists the extension's own providers, and most of the keyed ones cannot
+ * answer until a key is in the file — which the page adds through the "add an option
+ * or key" row below, not through the picker. A reader who has just chosen `brave`
+ * would otherwise see a selected provider and no result and have no way to know the
+ * next step, so the choice raises one dialog: which keys that provider needs, and
+ * where the value goes ([WebSearchSettings.PROVIDER_CONFIG_KEYS] is the list and its
+ * KDoc the rule for who is on it).
+ *
+ * The provider stays selected while the dialog is open — the dialog is a hint, not a
+ * gate — and the keys are named in the extension's own spelling, because that is
+ * what the picker below filters on. The alternative, checking the file first and
+ * staying quiet when the key is already there, is not available honestly: a key can
+ * also come from the environment (`BRAVE_API_KEY`) or from a `$VARIABLE` reference,
+ * and this page cannot see either — a dialog that guessed would be silent in exactly
+ * the case where the answer is wrong.
  */
 @Composable
 internal fun SearchPage(
     session: PiAgentSession,
     onBack: () -> Unit,
+    onOpenAdvanced: () -> Unit,
 ) {
     val text = strings
     // The session owns this, not the page: PiKit writes one default into the
@@ -120,6 +150,12 @@ internal fun SearchPage(
 
     var workflowPicker by remember { mutableStateOf(false) }
     var providerPicker by remember { mutableStateOf(false) }
+    // The provider the "this one needs a key" dialog is about, and whether the window
+    // is up. Two states rather than one because a Miuix window is driven by `show`:
+    // clearing the id on dismissal would empty the body while the panel is still
+    // animating out (the rule `PiConfirm`'s call sites follow).
+    var configProvider by remember { mutableStateOf<String?>(null) }
+    var showingConfigDialog by remember { mutableStateOf(false) }
 
     PiPage(
         title = text.settings.searchTitle,
@@ -151,7 +187,7 @@ internal fun SearchPage(
             }
 
             if (unreadable) {
-                // The six keys below are hidden rather than merely refused: the
+                // The controls below are hidden rather than merely refused: the
                 // store will not write over a file it could not read, so every one
                 // of them would be a control that appears to work and does not.
                 PiSection {
@@ -198,32 +234,13 @@ internal fun SearchPage(
                         },
                         onClick = { providerPicker = true },
                     )
-                    // No divider between the limit fields and the provider row
-                    // above them: a field draws its own boundary, and a hairline
-                    // beside one is one boundary too many.
-                    NumberField(
-                        label = text.settings.inlineContentLimit,
-                        stored = settings.maxInlineContentChars,
-                        // The extension clamps to its own cap, so a larger number
-                        // would be one the page showed and pi did not use.
-                        max = WebSearchSettings.MAX_INLINE_CONTENT_CHARS,
-                        onParsed = { parsed ->
-                            store.update { it.copy(maxInlineContentChars = parsed) }
-                        },
-                    )
-                    NumberField(
-                        label = text.settings.fetchTimeout,
-                        stored = settings.fetchTimeoutSeconds,
-                        max = Int.MAX_VALUE,
-                        onParsed = { parsed ->
-                            store.update { it.copy(fetchTimeoutSeconds = parsed) }
-                        },
-                    )
-                    ProxyField(
-                        label = text.settings.searchProxy,
-                        caption = text.settings.searchProxySubtitle,
-                        stored = settings.proxy,
-                        onChanged = { value -> store.update { it.copy(proxy = value) } },
+                    // The numbers moved one page down rather than into a sheet: they
+                    // are three controls with three values, and the row says which
+                    // three. See [SearchAdvancedPage].
+                    ArrowPreference(
+                        title = text.settings.searchAdvanced,
+                        summary = text.settings.searchAdvancedSubtitle,
+                        onClick = onOpenAdvanced,
                     )
                 }
             }
@@ -304,6 +321,13 @@ internal fun SearchPage(
                     provider = id.takeIf { chosen -> chosen != WebSearchSettings.PROVIDER_AUTO },
                 )
             }
+            // The choice has landed — the dialog is a hint, not a gate — and it is
+            // raised only for the providers whose configuration the extension's file
+            // is the only source of: see `PROVIDER_CONFIG_KEYS` for the rule.
+            if (WebSearchSettings.providerConfigKeys(id).isNotEmpty()) {
+                configProvider = id
+                showingConfigDialog = true
+            }
         },
         onDismiss = { providerPicker = false },
         // The one thing a picker of thirty rows owes the user: the list is the
@@ -314,6 +338,37 @@ internal fun SearchPage(
         // same kind of list as the model form's provider picker.
         searchHint = text.settings.providerPickSearch,
     )
+
+    // The provider's own configuration, named in the extension's spelling: the reader
+    // is about to type those names into the picker below, so the dialog must use the
+    // same strings the page does rather than prose names for them.
+    val needsConfig = configProvider
+    WindowDialog(
+        show = showingConfigDialog,
+        title = text.settings.searchProviderNeedsConfigTitle,
+        onDismissRequest = { showingConfigDialog = false },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            if (needsConfig != null) {
+                Text(
+                    text = text.settings.searchProviderNeedsConfigBody(
+                        needsConfig,
+                        WebSearchSettings.providerConfigKeys(needsConfig),
+                    ),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+            // One answer, the app's own button shape: there is nothing to decide here,
+            // and the dismiss word is the acknowledgement (`PiDialogAnswers`' single
+            // form, which `SettingsAlert` also uses).
+            PiDialogAnswers(
+                dismiss = text.common.ok,
+                onDismiss = { showingConfigDialog = false },
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+    }
 }
 
 /**
@@ -329,75 +384,3 @@ private fun workflowLabel(id: String, text: Strings): String = when (id) {
     else -> text.settings.workflowNone
 }
 
-/**
- * A whole-number field that saves what parses and keeps what does not.
- *
- * The draft is the field's, and the store is written beside it — never back into it. The
- * first version keyed the draft on the stored number (`remember(stored)`), which looks
- * equivalent and is not: a clamp written to the store re-created the draft, so the digit
- * the reader had just typed was replaced under the cursor. Typing `05` produced `15` —
- * the `0` was clamped to `1` on the way out, the field was rewritten to `1`, and the `5`
- * landed after it. The field therefore keeps exactly what was typed, and a value that
- * arrives from *elsewhere* (a restore, a file edited in the terminal) re-seeds it through
- * [sent], which only ever holds what this field itself last wrote.
- */
-@Composable
-private fun NumberField(
-    label: String,
-    stored: Int,
-    max: Int,
-    onParsed: (Int) -> Unit,
-) {
-    var draft by remember { mutableStateOf(stored.toString()) }
-    var sent by remember { mutableStateOf(stored) }
-    if (stored != sent) {
-        draft = stored.toString()
-        sent = stored
-    }
-    SettingsTextField(
-        value = draft,
-        onValueChange = { raw ->
-            draft = raw
-            val parsed = raw.trim().toIntOrNull() ?: return@SettingsTextField
-            // Clamped on the way to the store and not on the way back into the field: the
-            // extension applies its own cap, so a larger number here is one the page would
-            // show and pi would not use.
-            val accepted = parsed.coerceIn(1, max)
-            sent = accepted
-            onParsed(accepted)
-        },
-        label = label,
-        singleLine = true,
-        keyboardType = KeyboardType.Number,
-    )
-}
-
-/**
- * The proxy, as one field with its caption.
- *
- * It used to be a label row *and* a field, which named the setting twice: the row's
- * title and the field's label were the same string, and the caption under them was
- * the only part that was not the name again. The caption is the field's own
- * supporting line now, so one control states the setting, what it is for and the
- * value.
- */
-@Composable
-private fun ProxyField(
-    label: String,
-    caption: String,
-    stored: String?,
-    onChanged: (String?) -> Unit,
-) {
-    var draft by remember(stored) { mutableStateOf(stored.orEmpty()) }
-    SettingsTextField(
-        value = draft,
-        onValueChange = { value ->
-            draft = value
-            onChanged(value.ifBlank { null })
-        },
-        label = label,
-        supporting = caption,
-        singleLine = true,
-        keyboardType = KeyboardType.Uri,
-    )
-}

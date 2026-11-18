@@ -85,6 +85,17 @@ internal sealed interface SettingsPage {
     /** The bundled web-access extension's options, in pi's own config file. */
     data object Search : SettingsPage
 
+    /**
+     * The search page's numbers, one level down: the inline-content limit, the fetch
+     * timeout, the proxy and the fake-IP switch.
+     *
+     * It is a page rather than a sheet or a dialog because it holds three controls
+     * with three values — the reason is in `SearchAdvancedPage`'s KDoc — and it is a
+     * `SettingsPage` so the stack's own transition, back handling and saver apply to
+     * it without a second mechanism.
+     */
+    data object SearchAdvanced : SettingsPage
+
     /** Cold-start conversation behaviour and the interface theme. */
     data object Personalization : SettingsPage
 
@@ -103,6 +114,11 @@ internal sealed interface SettingsPage {
             // The form was opened from the list, so it goes back to the list
             // rather than all the way to the tab root.
             is ModelEdit -> Model
+            // The advanced page is opened from the search page's row, so back is the
+            // page whose controls it holds — the second two-deep branch beside the
+            // model form, which is why `depth` walks this chain rather than counting
+            // pages.
+            SearchAdvanced -> Search
             else -> Root
         }
 }
@@ -114,51 +130,60 @@ internal sealed interface SettingsPage {
  * saves and restores the composition — dropped the user from a form back to the
  * tab root, losing the half-filled model edit with it. A [Saver] rather than
  * `Parcelable`/`Serializable` because the value has to cross the save boundary as
- * something the platform already knows how to write, and a page is one word plus
- * at most one id.
+ * something the platform already knows how to write, and a page is one word plus at
+ * most one id.
  *
  * [SettingsPage.ModelEdit] is the only page carrying data, so it is the only one
  * with a suffix. The id is appended whole, without escaping: `substringAfter`
  * with a missing delimiter returns the string unchanged, so a profile id that
  * contains a colon still round-trips.
  *
+ * The encode and the decode are two plain functions rather than two lambdas inside
+ * the `Saver`, so `SettingsPageSaverTest` can pin both: a saved page has to restore,
+ * and a name this build does not know — one saved by a newer build, or by a page
+ * that has since been removed — has to land somewhere rather than throw.
+ */
+private val SettingsPageSaver: Saver<SettingsPage, String> = Saver(
+    save = { it.encode() },
+    restore = ::decodeSettingsPage,
+)
+
+/**
  * An unrecognised name restores as [SettingsPage.Root]. That is reachable by a
  * downgrade — a build that knows a page this one does not — and opening the tab
  * root beats throwing out of `restore`, which Compose does not catch.
  */
-private val SettingsPageSaver: Saver<SettingsPage, String> = Saver(
-    save = { it.encode() },
-    restore = { encoded ->
-        when {
-            encoded == "Model" -> SettingsPage.Model
-            encoded.startsWith("ModelEdit:") -> SettingsPage.ModelEdit(encoded.substringAfter("ModelEdit:"))
-            encoded == "Agent" -> SettingsPage.Agent
-            // The environment's facts are rows of About PiKit now. A state saved by a
-            // build that had the page restores to the root rather than to a page this
-            // one does not have.
-            encoded == "Runtime" -> SettingsPage.Root
-            // "Advanced" was the page the three facts below the storage row used
-            // to sit behind. A state saved by a build that had it restores to the
-            // root rather than to a page this one does not have.
-            encoded == "Advanced" -> SettingsPage.Root
-            encoded == "Maintenance" -> SettingsPage.Maintenance
-            encoded == "Backup" -> SettingsPage.Backup
-            // The storage page was removed once the permission tiers took over what it
-            // decided (§14); its stored state lands at the root.
-            encoded == "Storage" -> SettingsPage.Root
-            // Context is a section of the agent process page now. A state saved by
-            // a build that had its own page lands there rather than at the root.
-            encoded == "AgentContext" -> SettingsPage.Agent
-            encoded == "Manual" -> SettingsPage.Manual
-            encoded == "About" -> SettingsPage.About
-            encoded == "Search" -> SettingsPage.Search
-            encoded == "Personalization" -> SettingsPage.Personalization
-            else -> SettingsPage.Root
-        }
-    },
-)
+internal fun decodeSettingsPage(encoded: String): SettingsPage = when {
+    encoded == "Model" -> SettingsPage.Model
+    encoded.startsWith("ModelEdit:") -> SettingsPage.ModelEdit(encoded.substringAfter("ModelEdit:"))
+    encoded == "Agent" -> SettingsPage.Agent
+    // The environment's facts are rows of About PiKit now. A state saved by a
+    // build that had the page restores to the root rather than to a page this
+    // one does not have.
+    encoded == "Runtime" -> SettingsPage.Root
+    // "Advanced" was the page the three facts below the storage row used
+    // to sit behind. A state saved by a build that had it restores to the
+    // root rather than to a page this one does not have.
+    encoded == "Advanced" -> SettingsPage.Root
+    encoded == "Maintenance" -> SettingsPage.Maintenance
+    encoded == "Backup" -> SettingsPage.Backup
+    // The storage page was removed once the permission tiers took over what it
+    // decided (§14); its stored state lands at the root.
+    encoded == "Storage" -> SettingsPage.Root
+    // Context is a section of the agent process page now. A state saved by
+    // a build that had its own page lands there rather than at the root.
+    encoded == "AgentContext" -> SettingsPage.Agent
+    encoded == "Manual" -> SettingsPage.Manual
+    encoded == "About" -> SettingsPage.About
+    encoded == "Search" -> SettingsPage.Search
+    // Added with the page itself: a build that does not know it is a downgrade, and
+    // its saved state restores to the root like every other unknown name.
+    encoded == "SearchAdvanced" -> SettingsPage.SearchAdvanced
+    encoded == "Personalization" -> SettingsPage.Personalization
+    else -> SettingsPage.Root
+}
 
-private fun SettingsPage.encode(): String = when (this) {
+internal fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Root -> "Root"
     SettingsPage.Model -> "Model"
     is SettingsPage.ModelEdit -> "ModelEdit:$profileId"
@@ -168,6 +193,7 @@ private fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
     SettingsPage.Search -> "Search"
+    SettingsPage.SearchAdvanced -> "SearchAdvanced"
     SettingsPage.Personalization -> "Personalization"
 }
 
@@ -287,6 +313,12 @@ fun SettingsScreen(session: PiAgentSession, onBack: () -> Unit) {
             SettingsPage.Search -> SearchPage(
                 session = session,
                 onBack = { open(SettingsPage.Root) },
+                onOpenAdvanced = { open(SettingsPage.SearchAdvanced) },
+            )
+
+            SettingsPage.SearchAdvanced -> SearchAdvancedPage(
+                session = session,
+                onBack = { open(SettingsPage.Search) },
             )
 
             SettingsPage.Personalization -> PersonalizationPage(

@@ -13,6 +13,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import pi.kit.mob.locales.Lang
+import pi.kit.mob.locales.WEB_ACCESS_PARAMS
 import pi.kit.mob.locales.stringsFor
 
 /**
@@ -296,6 +297,7 @@ class WebSearchStoreTest {
             maxInlineContentChars = 12_000,
             fetchTimeoutSeconds = 45,
             proxy = "http://127.0.0.1:8080",
+            allowFakeIpProxyRange = false,
         )
 
         val rendered = render(settings = settings)
@@ -646,13 +648,16 @@ class WebSearchStoreTest {
     fun `a key the controls own is never offered, and a key they do not own always is`() {
         // `fetch` is a *branch* of the schema and `fetch.timeout` is a leaf the
         // controls own: the branch is not something to add, its one live member is
-        // the control's. The unknown key is nobody's, so it is listed.
+        // the control's. The unknown key is nobody's, so it is listed. The fake-IP
+        // range is a control's key now too — the Advanced page's switch — so it is
+        // hidden exactly like the timeout.
         val document = parse(
-            """{"fetch": {"timeout": 30, "retries": 3}, "myOwnKey": "mine", "xaiApiKey": "k"}""",
+            """{"fetch": {"timeout": 30, "retries": 3}, "myOwnKey": "mine", "xaiApiKey": "k", """ +
+                """"ssrf": {"allowRanges": ["198.18.0.0/15"], "trustEnvProxy": false}}""",
         )
 
         assertEquals(
-            listOf("fetch.retries", "myOwnKey", "xaiApiKey"),
+            listOf("fetch.retries", "myOwnKey", "xaiApiKey", "ssrf.trustEnvProxy"),
             webSearchEntries(document).map { it.path },
         )
     }
@@ -738,22 +743,19 @@ class WebSearchStoreTest {
         assertEquals(emptyList<String>(), webSearchEntries(parse(back)).map { it.path })
     }
 
-    // ------------------------------- the default for a TUN/fake-IP proxy
+    // --------------------------------- the fake-IP exemption: a switch now
 
-    /** The file a fresh install ends up with: what `ensureDocument` writes when there is none. */
-    private fun freshFile(): String = strictDocument(render(document = WEB_SEARCH_DEFAULT_SOURCE))
+    /**
+     * The file a fresh install ends up with: what `ensureDocument` writes when there is
+     * none, which is the renderer's default document.
+     */
+    private fun freshFile(): String = strictDocument(render())
 
     /** `ssrf.allowRanges` as a list, or null when the key is not there. */
     private fun JsonObject.ssrfRanges(): List<String>? =
         (this["ssrf"] as? JsonObject)?.get("allowRanges")?.let { ranges ->
             (ranges as? JsonArray)?.map { it.jsonPrimitive.content }
         }
-
-    /** [this] without `ssrf.allowRanges`, leaving the emptied object as `{}` — undoing a merge. */
-    private fun JsonObject.withoutSsrfRange(): JsonObject {
-        val ssrf = this["ssrf"] as? JsonObject ?: return this
-        return JsonObject(toMutableMap().apply { put("ssrf", JsonObject(ssrf.filterKeys { it != "allowRanges" })) })
-    }
 
     @Test
     fun `a fresh install's file carries the fake-IP proxy range`() {
@@ -762,103 +764,150 @@ class WebSearchStoreTest {
         // the key is absent), and its `assertPublicAddress` refuses 198.18.0.0/15 before
         // anything is connected — so on a phone behind a Clash-style TUN proxy, whose DNS
         // answers public hostnames out of that range, `fetch_content` and every page
-        // `source_check` fetches were refused. The key is in the reference list; this is
-        // the change that actually writes it.
+        // `source_check` fetches were refused. The Advanced page's switch answers it now.
         assertEquals(setOf("ssrf.allowRanges"), WEB_SEARCH_DEFAULT_KEYS.keys)
         val file = freshFile()
 
         assertTrue("the file is strict JSON", isStrictJsonObject(file))
         assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(file).ssrfRanges())
-        // Not an owned key: an owned key is rewritten from the settings on every render
-        // and never offered in the page's list, and this one has to be the file's.
-        assertFalse("ssrf.allowRanges" in WEB_SEARCH_OWNED_PATHS)
-        // It is an ordinary document key, so the editor explains it and the page lists
-        // it — the list is the file's live keys that no control owns.
-        val annotated = render(document = WEB_SEARCH_DEFAULT_SOURCE)
+        // The switch's default is on, and the switch is the key's writer: an owned key is
+        // rewritten from the settings on every render.
+        assertTrue(WebSearchSettings().allowFakeIpProxyRange)
+        assertTrue("ssrf.allowRanges" in WEB_SEARCH_OWNED_PATHS)
+        val annotated = render()
         assertTrue(annotated.contains("[in effect] ssrf.allowRanges — "))
         assertTrue("the value is live in the document", annotated.hasLiveKey("allowRanges"))
-        assertTrue(
-            "and the page's list offers it",
+        // And it is not something the page offers to add: the controls own it, so the
+        // "add an option or key" picker leaves it out and the list does not show it.
+        assertFalse(
             "ssrf.allowRanges" in webSearchEntries(readWebSearchDocument(annotated)!!).map { it.path },
         )
-        // The range is not a setting: what the page shows is still the default one.
         assertEquals(WebSearchSettings(), readWebSearchSettings(annotated))
+    }
+
+    @Test
+    fun `the switch's two answers are the two arrays, and the file reads them back`() {
+        val on = strictDocument(render(settings = WebSearchSettings(allowFakeIpProxyRange = true)))
+        val off = strictDocument(render(settings = WebSearchSettings(allowFakeIpProxyRange = false)))
+
+        assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(on).ssrfRanges())
+        assertEquals(emptyList<String>(), parse(off).ssrfRanges())
+        assertTrue(readWebSearchSettings(on)!!.allowFakeIpProxyRange)
+        assertFalse(readWebSearchSettings(off)!!.allowFakeIpProxyRange)
     }
 
     @Test
     fun `an existing file that lacks the range gains it, and nothing else moves`() {
         // The install that has the bug: its file is already strict, so the repair that
         // makes a commented file strict never runs and nothing else rewrites it. The
-        // merge is the write that reaches it, and it is an addition.
-        val existing = strictDocument(render(settings = WebSearchSettings(provider = "brave")))
-        assertNull("the file a tap writes has no range", parse(existing).ssrfRanges())
+        // merge is the write that reaches it before the reader ever opens this page.
+        val existing = """
+            {"workflow": "none", "provider": "brave", "fetch": {"timeout": 30}}
+        """.trimIndent()
+        assertNull("the file has no range", parse(existing).ssrfRanges())
 
         val merged = mergedDocumentText(existing)!!
 
         assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(merged).ssrfRanges())
-        assertEquals(
-            "taking the range out gives the original document back, key for key",
-            parse(existing),
-            parse(merged).withoutSsrfRange(),
-        )
+        // Every key the file had keeps its value, and `ssrf` is the only new one.
+        parse(existing).forEach { (key, value) ->
+            assertEquals("$key survives", value, parse(merged)[key])
+        }
+        assertEquals(setOf("ssrf"), parse(merged).keys - parse(existing).keys)
         assertEquals("and the settings are still the file's", "brave", readWebSearchSettings(merged)!!.provider)
-        // Nothing else moved: the only line that goes is the empty `ssrf` object's, which
-        // becomes an object with the member in it.
-        val gone = existing.lines().filterNot { it in merged.lines() }
-        assertEquals("exactly one line is replaced", 1, gone.size)
-        assertTrue("it is the empty ssrf object", gone.single().trimStart().startsWith("\"ssrf\": {"))
         // Idempotent, which is what makes this safe to run at every launch: a file that
         // has the range is not rewritten, so its bytes and formatting stay its own.
         assertNull("a second launch writes nothing", mergedDocumentText(merged))
     }
 
     @Test
-    fun `a range the user set is never replaced by the default`() {
-        // The two answers that are the user's, not PiKit's: `[]` is the extension's own
-        // meaning for "exempt nothing", and a list of LAN ranges is their own network.
-        // An owned key would rewrite both on the next tap anywhere on the page, which is
-        // exactly what makes this a default rather than a sixth control.
-        listOf(
-            """{"ssrf": {"allowRanges": []}}""",
-            """{"ssrf": {"allowRanges": ["10.0.0.0/8", "192.168.0.0/16"]}}""",
-            """{"ssrf": {"allowRanges": null}}""",
-            """{"ssrf": true}""",
-        ).forEach { mine ->
-            assertNull("no write over $mine", mergedDocumentText(mine))
-        }
-        // A control being tapped is the other writer, and it is equally hands-off: a
-        // non-owned key is written from what the file has, so `[]` survives it too.
-        val tapped = strictDocument(
-            render(
-                document = parse("""{"ssrf": {"allowRanges": []}}"""),
-                settings = WebSearchSettings(provider = "exa"),
-            ),
+    fun `off is an explicit empty array, and nothing re-defaults it`() {
+        // `[]` is the extension's own meaning for "exempt nothing", and it is what OFF
+        // writes. It is also why OFF survives a launch: the merge only writes a *missing*
+        // path, and an empty array is present.
+        val off = """{"ssrf": {"allowRanges": []}}"""
+        assertFalse(readWebSearchSettings(off)!!.allowFakeIpProxyRange)
+        assertNull("a file that has the key is not re-defaulted", mergedDocumentText(off))
+
+        // A write with the switch off keeps the explicit array rather than dropping the
+        // key: an absent key is what the next launch would default again.
+        val rewritten = strictDocument(
+            render(document = parse(off), settings = WebSearchSettings(allowFakeIpProxyRange = false)),
         )
-        assertEquals(emptyList<String>(), parse(tapped).ssrfRanges())
-        // Something else under `ssrf` gains the range *beside* it, never instead of it.
+        assertEquals(emptyList<String>(), parse(rewritten).ssrfRanges())
+        assertFalse(readWebSearchSettings(rewritten)!!.allowFakeIpProxyRange)
+
+        // A list of the reader's own LAN ranges is not the fake-IP exemption, so it reads
+        // as off — and a write replaces it with the range the switch means. That is the
+        // cost of owning the key, stated in ARCHITECTURE §9.3 rather than hidden.
+        val lan = """{"ssrf": {"allowRanges": ["10.0.0.0/8"]}}"""
+        assertFalse(readWebSearchSettings(lan)!!.allowFakeIpProxyRange)
+        val afterWrite = strictDocument(render(document = parse(lan), settings = WebSearchSettings()))
+        assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(afterWrite).ssrfRanges())
+
+        // `null` is not a list of ranges either: the extension ignores it, so it reads as
+        // off and the next write replaces it.
+        assertFalse(readWebSearchSettings("""{"ssrf": {"allowRanges": null}}""")!!.allowFakeIpProxyRange)
+
+        // Something else under `ssrf` gains the key *beside* it, never instead of it.
         val merged = mergedDocumentText("""{"ssrf": {"trustEnvProxy": true}}""")!!
         assertEquals(JsonPrimitive(true), parse(merged).obj("ssrf").value("trustEnvProxy"))
         assertEquals(listOf(FAKE_IP_PROXY_RANGE), parse(merged).ssrfRanges())
     }
 
     @Test
-    fun `the range is a default a render never adds back`() {
-        // What makes the page's ✕ a real removal: the renderer writes what the document
-        // has and has no fallback of its own, so a file without the key stays without it
-        // when a control is tapped. The launch merge is the only thing that puts it back,
-        // which is the behaviour the chapter states rather than hides.
-        val withoutIt = strictDocument(render(settings = WebSearchSettings(proxy = "socks5h://box:1080")))
-        assertNull(parse(withoutIt).ssrfRanges())
-
-        val tapped = strictDocument(
-            render(document = parse(withoutIt), settings = WebSearchSettings(provider = "kagi")),
+    fun `an old file without the key reads as on, and the default is what it gets`() {
+        // Three shapes of "no key": no `ssrf` at all (a file written before the switch),
+        // an `ssrf` holding something else, and a non-object `ssrf`. All read as the
+        // switch's default, which is what makes an old install and a fresh one alike.
+        listOf("""{}""", """{"ssrf": {"trustEnvProxy": false}}""", """{"ssrf": true}""").forEach { file ->
+            assertTrue("$file reads as on", readWebSearchSettings(file)!!.allowFakeIpProxyRange)
+        }
+        // `ssrf` holding a boolean is not a shape the extension can use, and the merge
+        // leaves a present-but-wrong value alone, like every other key it adds on its own.
+        assertNull(mergedDocumentText("""{"ssrf": true}"""))
+        // A settings object that never mentions the switch renders it on: default-on for
+        // an old file and for a fresh install in one place.
+        assertEquals(
+            listOf(FAKE_IP_PROXY_RANGE),
+            parse(strictDocument(render(settings = WebSearchSettings()))).ssrfRanges(),
         )
+    }
 
-        assertNull("a tap does not resurrect it", parse(tapped).ssrfRanges())
-        // And the removal the page performs is a removal: the key goes, and the branch
-        // it emptied is pruned with it, which is what stops the list showing `ssrf`.
-        val removed = parse(mergedDocumentText(withoutIt)!!).withoutValueAt(listOf("ssrf", "allowRanges"))
-        assertNull(removed["ssrf"])
+    @Test
+    fun `the providers that need configuration name keys the reference documents`() {
+        val documented = WEB_ACCESS_PARAMS.map { it.path }.toSet()
+
+        WebSearchSettings.PROVIDER_CONFIG_KEYS.forEach { (provider, keys) ->
+            assertTrue("$provider is one the picker offers", provider in WebSearchSettings.SEARCH_PROVIDERS)
+            assertTrue("$provider needs something", keys.isNotEmpty())
+            keys.forEach { key ->
+                assertTrue("$key is documented for the editor", key in documented)
+            }
+        }
+        // The ones that need nothing new on this page: keyless providers, the ones that
+        // resolve Pi's own model credentials, and the ones whose key only raises a rate
+        // limit. OpenAI is the interesting case — it can answer through the Codex
+        // subscription or `openaiSearchProviders`, so the page cannot know a key is
+        // missing and must not claim it is.
+        listOf(
+            "exa", "duckduckgo", "keenable", "degoog", "anysearch", "parallel-mcp",
+            "openai", "gemini", "kimi", "xai",
+        ).forEach { provider ->
+            assertTrue("$provider is offered", provider in WebSearchSettings.SEARCH_PROVIDERS)
+            assertEquals(
+                "$provider prompts for nothing",
+                emptyList<String>(),
+                WebSearchSettings.providerConfigKeys(provider),
+            )
+        }
+        // The two that need an address rather than a key, and one that needs two keys.
+        assertEquals(listOf("searxngBaseUrl"), WebSearchSettings.providerConfigKeys("searxng"))
+        assertEquals(listOf("ninerouterBaseUrl"), WebSearchSettings.providerConfigKeys("ninerouter"))
+        assertEquals(
+            listOf("cloudflareApiKey", "cloudflareAccountId"),
+            WebSearchSettings.providerConfigKeys("cloudflare"),
+        )
     }
 
     @Test
