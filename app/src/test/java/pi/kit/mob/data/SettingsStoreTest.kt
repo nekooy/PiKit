@@ -55,7 +55,6 @@ class SettingsStoreTest {
             availableThinkingLevelsFor = "deepseek-v4-pro",
             defaultWorkspace = "/tmp/work",
             agentMode = AgentMode.CHAT,
-            newConversationMode = NewConversationMode.CHAT,
             chatSystemPrompt = "Be brief.\nCurrent time: {{time}}",
             language = Lang.JAPANESE,
             openNewOnLaunch = false,
@@ -87,16 +86,12 @@ class SettingsStoreTest {
         SettingsStore(FakeContext(preferences, files)).update {
             it.copy(
                 agentMode = AgentMode.CHAT,
-                // The two mode fields are different questions — the one last used and the
-                // one a new conversation opens as — so the rebuild has to keep them apart.
-                newConversationMode = NewConversationMode.WORK,
                 chatSystemPrompt = "Talk plainly. Now: {{time}}",
             )
         }
         val rebuilt = SettingsStore(FakeContext(preferences, files))
 
         assertEquals(AgentMode.CHAT, rebuilt.read().agentMode)
-        assertEquals(NewConversationMode.WORK, rebuilt.read().newConversationMode)
         assertEquals("Talk plainly. Now: {{time}}", rebuilt.read().chatSystemPrompt)
     }
 

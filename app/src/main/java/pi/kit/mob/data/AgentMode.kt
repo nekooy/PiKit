@@ -9,11 +9,9 @@ import java.util.Locale
  * Which agent a conversation starts: the work agent, or the plain chat agent.
  *
  * The mode belongs to a conversation: [SessionModeStore] keeps one record per saved
- * session, and a conversation that has no file yet starts in
- * [NewConversationMode.startingMode] of [PiSettings.agentMode] — the mode the last one had,
- * unless the personalization page pins it. It decides how the *next* process is launched;
- * a conversation that is already answering keeps the process it was born with until it is
- * restarted.
+ * session, and [PiSettings.agentMode] only supplies the starting mode for a conversation
+ * that has no file yet. It decides how the *next* process is launched; a conversation
+ * that is already answering keeps the process it was born with until it is restarted.
  * [WORK] is the default and the behaviour every install had before chat mode existed,
  * so an install that never touches the switch keeps exactly the agent it had.
  *
@@ -36,55 +34,6 @@ enum class AgentMode(val code: String) {
 
         /** A stored mode, or [DEFAULT] for a missing or unknown value. */
         fun fromCode(code: String?): AgentMode =
-            entries.firstOrNull { it.code == code } ?: DEFAULT
-    }
-}
-
-/**
- * What a conversation with **no session file yet** opens as.
- *
- * A saved conversation's mode is [SessionModeStore]'s answer and this preference never
- * touches it: the row only fills the gap for a conversation that has not written a file,
- * which is the one case with no record to read. [FOLLOW_LAST] is what the app did before
- * the row existed — a new conversation took the mode of the one last on screen, which
- * `PiHost.activate` and `switchMode` keep in [PiSettings.agentMode] — and it stays the
- * default so an install that never opens the row behaves exactly as it did.
- *
- * [WORK] and [CHAT] pin it instead. The two habits this answers are real: a reader who
- * translates something in chat mode every morning otherwise has to flip the drawer's
- * switch back after each conversation opened in work mode, and a reader who never wants
- * chat mode in the first place should not have a stray tap change what the next `+`
- * creates.
- *
- * The drawer's foot switch **overrides** this, because that control's whole meaning is
- * "open one in *this* mode": it applies the tapped mode to the conversation it creates
- * (`PiKitRoot`'s `openNew`). This is only the answer when nothing names a mode.
- */
-enum class NewConversationMode(val code: String) {
-    /** The mode of the conversation last on screen — every install's behaviour before the row. */
-    FOLLOW_LAST("follow-last"),
-
-    WORK("work"),
-    CHAT("chat"),
-    ;
-
-    /**
-     * The mode a conversation with no file starts in, given the mode of [last].
-     *
-     * The one rule, so the reader of the preference (`PiAgentSession`'s initial mode) and
-     * its test cannot disagree about what "default" means.
-     */
-    fun startingMode(last: AgentMode): AgentMode = when (this) {
-        FOLLOW_LAST -> last
-        WORK -> AgentMode.WORK
-        CHAT -> AgentMode.CHAT
-    }
-
-    companion object {
-        val DEFAULT = FOLLOW_LAST
-
-        /** A stored choice, or [DEFAULT] for a missing or unknown value. */
-        fun fromCode(code: String?): NewConversationMode =
             entries.firstOrNull { it.code == code } ?: DEFAULT
     }
 }

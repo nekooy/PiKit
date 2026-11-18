@@ -9,7 +9,6 @@ import pi.kit.mob.data.CustomApi
 import pi.kit.mob.data.CustomEndpoint
 import pi.kit.mob.data.ModelProfile
 import pi.kit.mob.data.ModelSettings
-import pi.kit.mob.data.NewConversationMode
 import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.PiConfigSnapshot
 import pi.kit.mob.data.PiProvider
@@ -218,14 +217,13 @@ class PiAgentSession internal constructor(
      * This conversation's launch mode.
      *
      * A conversation opened from history takes the mode recorded for its session file;
-     * a conversation with no file yet takes the app's starting mode — the personalization
-     * page's choice, which by default is the mode the last conversation shown was in
-     * ([NewConversationMode.startingMode]). It is a state of the conversation rather than
-     * of the app because two conversations with different histories can be open at once:
-     * opening a work conversation while chat mode was the last choice must answer work.
+     * a conversation with no file yet takes the app's default, which is the mode the
+     * last switch selected. It is a state of the conversation rather than of the app
+     * because two conversations with different histories can be open at once: opening a
+     * work conversation while chat mode was the last choice must answer work.
      */
     private val _mode = MutableStateFlow(
-        boundSession?.let { host.sessionModes.modeFor(it) } ?: settingsStore.read().startingMode,
+        boundSession?.let { host.sessionModes.modeFor(it) } ?: settingsStore.read().agentMode,
     )
     val mode: StateFlow<AgentMode> = _mode.asStateFlow()
 
@@ -547,10 +545,8 @@ class PiAgentSession internal constructor(
         // there whether the file came from the drawer or from the handshake.
         sessionPath?.let { host.sessionModes.setMode(it, mode) }
         restoreTarget?.let { host.sessionModes.setMode(it, mode) }
-        // Remember the mode as the last one used. Whether the next *new* conversation
-        // follows it is the personalization page's choice
-        // (`PiSettings.newConversationMode`); the conversation on screen is already
-        // answered by [_mode].
+        // The next *new* conversation starts in the mode just chosen. This is only a
+        // default; the conversation on screen is already answered by [_mode].
         settingsStore.update { it.copy(agentMode = mode) }
         when (_agent.value) {
             is AgentStatus.Stopped -> Unit
