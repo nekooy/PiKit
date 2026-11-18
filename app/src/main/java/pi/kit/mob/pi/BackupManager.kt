@@ -17,7 +17,9 @@ import pi.kit.mob.data.BackupArchive
 import pi.kit.mob.data.BackupCategory
 import pi.kit.mob.data.BackupManifest
 import pi.kit.mob.env.AgentContext
+import pi.kit.mob.env.PermissionPolicy
 import pi.kit.mob.env.SafeDelete
+import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.env.TermuxEnv
 
 /**
@@ -248,6 +250,14 @@ class BackupManager(
      * stores are reloaded after the files are in place and before the agent is
      * started again, because the agent's own launch rewrites `models.json` and
      * `settings.json` *from* the restored profile.
+     *
+     * Three things an archive deliberately does not carry are re-derived at the end of
+     * the import instead, because a restore does not have to be followed by a launch:
+     * `AGENTS.md` is composed from the two restored halves, the restored tier is
+     * published into `$HOME/.pikit/permission.json` — the file the permission extension
+     * reads on every tool call — and the `$HOME/storage` links are recreated *before* the
+     * workspace files move, since a workspace reached through `~/storage/shared` only
+     * exists while its link does.
      */
     fun restore(categories: Set<BackupCategory>) {
         val pending = _review.value ?: return
@@ -308,12 +318,26 @@ class BackupManager(
                     count++
                     _status.value = BackupStatus.Running(BackupStatus.Kind.IMPORT, count)
                 }
+                // The restored workspace list may name a folder reached through
+                // `$HOME/storage/shared`, and that link exists only while the platform's
+                // grant holds — `StorageAccess.syncFarm` recreates it from the grant, and
+                // nothing else in the restore does. Before the files move, because
+                // `mkdirs` on a dead link fails and the workspace's files would be dropped
+                // in silence rather than reported.
+                runCatching { StorageAccess.syncFarm(env) }
+                val files = count + archive.applyAll(staging, categories)
                 // The two halves are on disk now, so the document pi reads has to be
                 // rebuilt: an archive carries the halves, not the composed file, and a
                 // restore that left yesterday's composition in place would run the agent
                 // on the old text until the next launch.
-                val files = count + archive.applyAll(staging, categories)
                 runCatching { AgentContext.compose(env) }
+                // The tier the extension reads is a *file*, and the preference that
+                // decides it was restored a moment ago. The launch path rewrites this
+                // file, but a restore that finds the agent stopped never launches — which
+                // left every `pi` typed in the terminal judged by the tier the archive
+                // just replaced. Same shape as `AGENTS.md` above: the archive carries the
+                // source, the restore re-derives the projection (§14).
+                PermissionPolicy.publish(context, env)
                 files
             }
             // The files are in place; everything the app holds in memory is still the

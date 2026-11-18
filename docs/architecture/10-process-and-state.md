@@ -180,19 +180,30 @@ has ever been opened — and what makes the drawer's list ready on its first fra
 beside the built-in one's `workspace/` — an entry name a restore can decode back on an install
 that has never heard of that folder, which is exactly the state a restore starts in. The added
 list itself travels in the settings document (`pikit_workspaces`), so the menu is restored with
-the files. A workspace outside `$HOME` has no relative path to record and is left out.
+the files. A workspace *outside* `$HOME` — the picker can walk to `/sdcard/Dev`, and the tier
+allows it — has no such relative name and is left out. That is a stated limit rather than a
+silent half-restore: an absolute-path entry would let an archive write anywhere the app can
+reach, which is the one thing the zip-slip guard in the format exists to prevent, and a
+hand-picked archive must not be able to replace an arbitrary file on the phone. The list still
+travels, so on the phone the folder came from it still has its files; on another phone the row
+reappears and its files do not.
 
 ## Where state lives
 
 | What | Where |
 | --- | --- |
 | Profiles, API keys, conversations, runtime | `<app files>/pikit-config.json`, `pi-sessions/*.jsonl` (written by pi), `usr` |
-| Thinking level, default workspace, permission tier, language, pins | SharedPreferences `pikit_settings`, `pikit_session_pins` |
-| The workspaces the reader added | SharedPreferences `pikit_workspaces`; the directories themselves are under `$HOME` |
+| Thinking level, default workspace, permission tier, language, text size, launcher icon, avatars, chat prompt template, agent mode, pins | SharedPreferences `pikit_settings`, `pikit_session_pins` |
+| pi's own directory — the provider/model/settings files, the catalogue cache, the permission extension, any extension the reader installed | `<app files>/home/.pi/agent` |
+| The mode each conversation was started in, and its web-access answer | SharedPreferences `pikit_session_modes`, one entry per session path plus `web:<path>` |
+| The chat personas, their default, and which one a conversation speaks in | SharedPreferences `pikit_chat_presets` |
+| The workspaces the reader added | SharedPreferences `pikit_workspaces`; the directories themselves under `$HOME` |
 | Whether the first-launch storage prompt was answered | SharedPreferences `pikit_storage`; the grant itself is the platform's (`isExternalStorageManager`) |
 | Whether the battery-optimisation exemption was asked for | SharedPreferences `pikit_power`; the exemption itself is the platform's (`isIgnoringBatteryOptimizations`) |
+| The catalogue refresh deadline, and which conversation was open | SharedPreferences `pikit_model_catalogue` and `pikit_agent_session` — both re-decided on the next launch |
 | Agent instructions and permission extension | `<app files>/home/.pi/agent/AGENTS.md`, `.../extensions/pikit-permissions.ts` |
 | The permission tier in force | `<app files>/home/.pikit/permission.json` — a file, because the extension reads it per tool call (§14) |
+| The rendered chat prompt | `<app files>/home/.pikit/chat-system-prompt.txt` — written for a chat launch from the template in `pikit_settings` |
 | The built-in workspace | `<app files>/home/workspace` |
 | Shared storage links | `<app files>/home/storage/shared` → `/storage/emulated/0`, one convenience link, while the grant holds (§5) |
 
@@ -206,6 +217,57 @@ tier the reader chose (§5, §14). The API key's exposure is in [§6.1](06.1-cus
 The page is `ui/settings/BackupPage.kt`; the reasoning is here rather than in [§9.2](09.2-settings-pages.md)
 because the subject is state ownership — which of these files is the app's, which is pi's, and which
 of them anything actually reads — and not the layout of a page.
+
+**The inventory below is the checklist, and a change that stores something new owes it a row.** A
+new preference file, a new file under `$HOME` or `files/`, or a new store's directory is not finished
+until its row is here and its entry is in `BackupArchive` in the same change. The failure this
+prevents is the quiet one: the restore reports entries, the page says it worked, and one kind of
+data simply never travelled.
+
+| Data | Where | In the archive |
+| --- | --- | --- |
+| Basic settings — theme, language, text size, launcher icon, avatars' names and colours, default workspace, open-new-on-launch, chat prompt template, permission tier, agent mode, thinking levels, the retired flat `api_key` | `pikit_settings` | `SETTINGS`, as one typed document; `api_key` is dropped when *Include API keys* is off |
+| The workspaces the reader added | `pikit_workspaces` | `SETTINGS`; the directories under `$HOME` travel as `workspaces/<relative path>/…` |
+| The first-launch storage prompt was answered | `pikit_storage` | `SETTINGS` |
+| The first-launch battery prompt was answered | `pikit_power` | `SETTINGS`; the exemption itself is the platform's (`isIgnoringBatteryOptimizations`) and cannot travel |
+| The chat personas — the list, which one a new conversation starts with, and which preset each conversation speaks in | `pikit_chat_presets` | `SETTINGS`; the per-conversation selections travel in the same document, because a preference *file* is one entry |
+| Model profiles, their keys, and which profile is active | `pikit-config.json` | `MODELS` |
+| pi's own files — `models.json`, `settings.json`, `web-search.json` | `$HOME/.pi/agent` | `MODELS` |
+| Everything else in pi's directory, including an extension the reader installed there | `$HOME/.pi/agent` | `MODELS`, as `pi/agent/…`; a new config file needs no entry |
+| The composed `AGENTS.md`, pi's catalogue cache, and the two extension copies the runtime image installs | `$HOME/.pi/agent` | **no** — derived, re-downloaded, or re-installed; the permission extension especially must never come back from an old archive |
+| The agent's instructions | `AGENTS.author.md`, `AGENTS.user.md` | `AGENT_PROMPT`; a restore recomposes `AGENTS.md` |
+| Every saved conversation | `pi-sessions/*.jsonl` | `CONVERSATIONS`, with each file's own date |
+| Which conversations are pinned | `pikit_session_pins` | `CONVERSATIONS` |
+| Which launch mode each conversation was started in, and whether a chat conversation may use the web tools | `pikit_session_modes` — the mode under the session path, the web answer under `web:<path>` | `CONVERSATIONS`, whole file |
+| Which conversation was open, and when the catalogue may refresh | `pikit_agent_session`, `pikit_model_catalogue` | **no** — where the reader happened to be, and a deadline the app re-decides itself |
+| The avatar pictures — the two speakers' and each chat preset's | `files/avatars` | `SETTINGS`, whole directory |
+| The built-in workspace and every added workspace under `$HOME` | `$HOME/workspace`, `$HOME/…` | `WORKSPACE` |
+| A workspace outside `$HOME`, such as `/sdcard/Dev` | anywhere the picker reaches | **no** — see the workspace section: there is no relative entry name, and an absolute one would let an archive write anywhere |
+| The HTML a reply's `/export` wrote | `$HOME/export` | `HTML_EXPORTS` |
+| The permission tier in force | `$HOME/.pikit/permission.json` | **no** — a projection of `pikit_settings`, republished at the end of a restore |
+| The rendered chat prompt | `$HOME/.pikit/chat-system-prompt.txt` | **no** — a projection of the template, rewritten by the next chat launch |
+| The runtime, its stamps and logs, the package-repair ledger, the catalogue probe's scratch tree, the storage links, the shell banner, `files/dns-pins.txt` | `usr/`, `files/…`, `$HOME/…` | **no** — rebuilt from the APK, re-derived, or a fact about this phone's network |
+
+**pi's directory is carried as a tree, and that is the one structural lesson in the list.** The
+archive used to name four files under `$HOME/.pi/agent`; a reader who dropped their own extension
+into `extensions/`, or a newer pi that reads one more config, lost it on a reinstall with nothing
+anywhere saying so — a whitelist cannot notice a file it was never told about. So the directory
+travels whole under `pi/agent/…` and only the *derived* names are withheld, in both directions: the
+composed `AGENTS.md` (rebuilt from its halves), `models-store.json` (pi's cache, refreshed on a
+four-hour window), and the two extension copies the image installs. Withholding
+`extensions/pikit-permissions.ts` on the way back in is not tidiness: pi loads every module in that
+directory, `installPermissionExtension` only runs on an install or a content update, and an archive
+that restored an older policy would judge tool calls by it until the next update — and the retired
+`pi-safety-guard.ts` would judge them by *two*, the stricter one winning, with no switch anywhere
+that turns it off (§14). The four files this build knows keep their shorter entry names
+(`pi/models.json`, …), so an archive written before the tree is still read by a build that has it,
+and a build without the tree skips the extra entries instead of refusing the archive: the format
+number stays 1 because the change is additive.
+
+**Two rows of the state table above are absent from this one because they are not stored at all.**
+The terminal's shells and the live conversation pool are process state: a shell's scrollback dies
+with the shell, and a turn in flight is not a file — there is nothing for a restore to put back, and
+a backup that claimed to carry them would be promising something no file on the device holds.
 
 **Two halves travel differently, and the difference is otherwise a silent one.** Files are copied byte
 for byte and extracted back to where they came from. Preferences are *not*: a `SharedPreferences` file
@@ -232,7 +294,22 @@ own `models-store.json` catalogue cache, which the launch path refreshes on a fo
 ([§3](03-what-is-baked-in.md), [§6.2](06.2-models-and-catalogue.md)). The catalogue's *deadline* is in
 `pikit_model_catalogue` and is deliberately not exported either: it is one timestamp this app
 re-decides by itself, and a restored one would either do nothing or make the app skip a refresh it
-should have made.
+should have made. The same test — *is this derived, or a fact about this install* — is what keeps
+`$HOME/.pikit`, `$HOME/.termux/motd.sh`, the `$HOME/storage` links, the package-repair ledger under
+`files/pkg-restore/`, the catalogue probe's scratch tree and `files/dns-pins.txt` out. The last one is
+worth naming because it sounds like user data: it pins hostnames for the network the phone is on, and
+a restore onto a phone on another network is the case it would be wrong for. Nothing was made by the
+reader there that they would have to make again, which is the test the archive's contents answer to.
+
+**Three derived things are rebuilt at the end of an import, not carried.** `AGENTS.md` is recomposed
+from the restored halves (above); `$HOME/.pikit/permission.json` is republished from the restored
+`permission_mode`, because the permission extension reads *that file* on every tool call and the
+launch path only rewrites it when a launch follows — a restore that finds the agent stopped would
+otherwise leave every `pi` typed in the terminal judged by the tier the archive replaced (§14); and
+the `$HOME/storage` links are recreated **before** the workspace files move, because a workspace
+reached through `~/storage/shared` exists only while its link does, and `mkdirs` on a dead link drops
+the files without an error. The other projection, `$HOME/.pikit/chat-system-prompt.txt`, needs no
+work at import time: nothing reads it until a chat launch writes it anew.
 
 **A restore is a merge, and nothing is ever deleted.** An entry of the archive replaces the file of
 that name; a preference is applied key by key, so a key the archive does not carry keeps the value it
@@ -270,16 +347,24 @@ against the staging root's canonical path, the same zip-slip guard `BootstrapIns
 uses for the runtime image: an entry name is a string the archive chose, and `..` in one is an archive
 that writes outside the app.
 
-**The keys question is asked, and the answer travels.** `pikit-config.json` and `web-search.json` hold
-credentials in cleartext, and `android:allowBackup="false"` is in the manifest precisely to keep them
-out of cloud backups. The page therefore carries one switch — include the keys or not — and the
-manifest records which was chosen, because it cannot be worked out from the entries: a profile with its
-key blanked looks exactly like a profile whose key was never filled in, and the reader of an archive
-somebody else handed them has to be told which of the two they have. What comes out is a named recipe
-per file rather than a generic one — a profile's `apiKey`, the web-access extension's
-`*ApiKey`/`*ApiToken` fields — because `models.json`'s `apiKey` names the *environment variable* that
-holds the key (`PIKIT_API_KEY`), so blanking it would produce a file the custom endpoint cannot
-resolve while protecting nothing ([§6.1](06.1-custom-endpoints.md)).
+**The keys question is asked, and the answer travels.** `pikit-config.json`, `models.json`,
+`settings.json` and `web-search.json` can hold credentials in cleartext, and
+`android:allowBackup="false"` is in the manifest precisely to keep them out of cloud backups. The
+page therefore carries one switch — include the keys or not — and the manifest records which was
+chosen, because it cannot be worked out from the entries: a profile with its key blanked looks
+exactly like a profile whose key was never filled in, and the reader of an archive somebody else
+handed them has to be told which of the two they have. What comes out is **one recipe for every JSON
+document the archive carries**, because all of them are hand-editable and the field names are not a
+fixed list: a key named `apiKey`/`apiToken` or ending in `ApiKey`/`ApiToken` is blanked — the suffix
+rule is the same one the extension's own options table implies, and a newer provider's field needs no
+edit here. Two details are load-bearing. A value that starts with `$` is an *environment reference*,
+not a secret — `models.json` names the variable that holds the key (`"$PIKIT_KEY_…"`, §6.1) — so it
+is kept, and blanking it would produce a file the custom endpoint cannot resolve while protecting
+nothing. And the walk descends into arrays as well as objects, because a profile is an element of
+`profiles` and the extension's provider table is a list: an object-only walk missed the files the
+recipe was written for. A file the redaction leaves unchanged is copied **byte for byte**, so a
+document with no key in it keeps the reader's own formatting and comments; re-encoding is the price
+of redaction and is paid only when something was actually taken out.
 
 **The run is owned by the session, not by the page.** A workspace backup is thousands of files, and a
 restore is a stop, an unpack and a restart; the page leaves the composition the moment the

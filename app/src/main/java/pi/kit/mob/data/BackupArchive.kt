@@ -20,7 +20,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -63,8 +62,14 @@ enum class BackupCategory(val id: String) {
     SETTINGS("settings"),
 
     /**
-     * The model profiles — provider, model, key — and the files under
-     * `$HOME/.pi/agent` that carry them to pi.
+     * The model profiles — provider, model, key — and pi's own directory,
+     * `$HOME/.pi/agent`, from which the profiles are projected into `models.json` and
+     * `settings.json` at every launch.
+     *
+     * The directory travels *whole*, minus the files the app or the runtime image
+     * derives, because a whitelist of the four files this build knows is a backup that
+     * silently drops the extension the user installed there or a config a newer pi reads
+     * (see [BackupArchive]).
      */
     MODELS("models"),
 
@@ -171,6 +176,14 @@ internal interface PreferenceStore {
  */
 internal data class BackupPaths(
     val filesDir: File,
+    /**
+     * `$HOME/.pi/agent` — pi's own directory.
+     *
+     * It is one root rather than four file paths because the MODELS category carries it
+     * as a tree: the four files this build names keep their own entries (`pi/models.json`
+     * and the rest), and everything else a user or a newer pi puts there travels under
+     * `pi/agent/` without anyone having to list it first.
+     */
     val piConfigDir: File,
     val sessionDir: File,
     val workspace: File,
@@ -253,8 +266,31 @@ internal data class BackupPaths(
  * Nothing under `usr/`, `usr-staging/`, `usr-content-staging/` or the extracted half of
  * `$HOME`: that is the runtime image, hundreds of megabytes of it, rebuilt from the APK on
  * the next launch. The same for `runtime-revision.txt`, `content-revision.txt`, the
- * first-install log and pi's own catalogue cache, which are each either re-derived or
- * re-downloaded. A backup carries what the user made and would have to make again.
+ * first-install log and pi's own catalogue cache (`models-store.json`), which are each
+ * either re-derived or re-downloaded. `$HOME/.pikit` is *derived*: `permission.json` is a
+ * projection of the SETTINGS category's `permission_mode`, and `chat-system-prompt.txt` of
+ * its chat template — the second is rewritten by the chat launch, and the first is
+ * re-derived at the end of a restore because a restore that finds the agent stopped never
+ * launches ([BackupManager]). `$HOME/.termux/motd.sh`, the `$HOME/storage` links, the
+ * package-repair ledger under `files/pkg-restore/`, the catalogue probe's scratch
+ * directory and `files/dns-pins.txt` are install- or device-specific: the last one pins
+ * DNS for the network the phone is on, which a restore is not a fact about. A backup
+ * carries what the user made and would have to make again.
+ *
+ * ## pi's directory is a tree, not four names
+ *
+ * `$HOME/.pi/agent` is pi's and its extensions', and this app writes only some of it:
+ * `models.json` and `settings.json` (merged on every launch), `web-search.json` (the
+ * search page's only writer) and the two `AGENTS` halves. A whitelist of those was a
+ * backup that silently dropped everything else the user put there — their own pi
+ * extension, a config a newer pi reads — so the directory travels as a tree and only the
+ * *derived* names are withheld: the composed `AGENTS.md`, the catalogue cache, and the
+ * extension copies the runtime image installs (restoring an older
+ * `pikit-permissions.ts` would put a policy back that nothing can switch off until the
+ * next content update, §14). The four known files keep their shorter entry names, so an
+ * archive written before the tree existed is still read by a build that has it, and a
+ * build without the tree skips the extra entries instead of refusing the archive — the
+ * format number stays 1 because the change is additive.
  *
  * ## The two halves, and why they are not symmetric
  *
@@ -281,10 +317,25 @@ internal class BackupArchive(
      * backup must not do.
      */
     private val files: List<FileItem> = listOf(
-        FileItem(BackupCategory.MODELS, "pi/pikit-config.json", paths.configFile, Redaction.PROFILE),
-        FileItem(BackupCategory.MODELS, "pi/models.json", File(paths.piConfigDir, "models.json")),
-        FileItem(BackupCategory.MODELS, "pi/settings.json", File(paths.piConfigDir, "settings.json")),
-        FileItem(BackupCategory.MODELS, "pi/web-search.json", File(paths.piConfigDir, WEB_SEARCH_FILE), Redaction.WEB_SEARCH),
+        FileItem(BackupCategory.MODELS, "pi/pikit-config.json", paths.configFile, Redaction.SECRETS),
+        FileItem(
+            BackupCategory.MODELS,
+            "pi/models.json",
+            File(paths.piConfigDir, "models.json"),
+            Redaction.SECRETS,
+        ),
+        FileItem(
+            BackupCategory.MODELS,
+            "pi/settings.json",
+            File(paths.piConfigDir, "settings.json"),
+            Redaction.SECRETS,
+        ),
+        FileItem(
+            BackupCategory.MODELS,
+            "pi/web-search.json",
+            File(paths.piConfigDir, WEB_SEARCH_FILE),
+            Redaction.SECRETS,
+        ),
         FileItem(BackupCategory.AGENT_PROMPT, "agent/AGENTS.author.md", paths.agentsAuthorFile),
         FileItem(BackupCategory.AGENT_PROMPT, "agent/AGENTS.user.md", paths.agentsUserFile),
     )
@@ -298,6 +349,18 @@ internal class BackupArchive(
      */
     private val trees: List<TreeItem> = buildList {
         add(TreeItem(BackupCategory.CONVERSATIONS, "conversations", paths.sessionDir))
+        // The rest of pi's directory: everything the four entries above do not name.
+        // See the class note — a whitelist was a backup that silently lost a user's own
+        // extension, and every file pi or an extension adds later needs no entry here.
+        add(
+            TreeItem(
+                BackupCategory.MODELS,
+                PI_AGENT_DIR,
+                paths.piConfigDir,
+                skip = ::skipPiAgentFile,
+                redaction = ::piAgentRedaction,
+            ),
+        )
         add(TreeItem(BackupCategory.WORKSPACE, "workspace", paths.workspace))
         // Every other workspace, under the one directory whose contents an archive may
         // name: `$HOME`. A workspace outside it has no relative path to record, and is
@@ -309,6 +372,35 @@ internal class BackupArchive(
         add(TreeItem(BackupCategory.HTML_EXPORTS, "html-exports", paths.exportDir))
         add(TreeItem(BackupCategory.SETTINGS, "avatars", paths.avatarDir))
     }
+
+    /**
+     * Whether a file under `$HOME/.pi/agent` is carried by an entry of its own, or is
+     * derived and must not travel at all.
+     *
+     * The derived names are load-bearing in both directions, and that is why the same
+     * function guards the write and the restore ([destinationOf]): an archive that names
+     * a file this build withholds — one taken by an older build, or one crafted to
+     * replace the permission policy — must not be able to put it back.
+     */
+    private fun skipPiAgentFile(relative: String): Boolean =
+        relative in PI_AGENT_OWNED_ELSEWHERE ||
+            relative in PI_AGENT_DERIVED ||
+            // PiKit writes an atomic `.tmp` beside `web-search.json`; a backup taken in
+            // that instant carries a half-written file that is not a document.
+            relative.endsWith(".tmp")
+
+    /**
+     * The redaction for one file of pi's directory.
+     *
+     * Only JSON can hold a credential, and it is read as text only when a secret is
+     * actually there ([redacted] returns null when nothing was taken out), so every
+     * other file is copied byte for byte. The four known files have their own entries
+     * and their own recipe; this covers what the tree adds — an extension's config, a
+     * config a newer pi writes — so the "include the keys" switch cannot be defeated by
+     * a file nobody listed.
+     */
+    private fun piAgentRedaction(relative: String): Redaction =
+        if (relative.endsWith(".json", ignoreCase = true)) Redaction.SECRETS else Redaction.NONE
 
     /**
      * `foo/bar` for a directory under `$HOME`, or null for one somewhere else.
@@ -377,7 +469,7 @@ internal class BackupArchive(
                 if (item.category !in categories) continue
                 if (!item.source.isFile) continue
                 zip.putNextEntry(entryFor(item.entry, item.source))
-                zip.write(exported(item, includeApiKeys))
+                zip.write(exported(item.source, item.redaction, includeApiKeys))
                 zip.closeEntry()
                 onProgress(++written)
             }
@@ -386,8 +478,16 @@ internal class BackupArchive(
                 if (tree.category !in categories) continue
                 if (!tree.source.isDirectory) continue
                 walk(tree.source) { file, relative ->
+                    // The name is the one the restore decodes, so a skipped name is
+                    // skipped by both directions — see [skipPiAgentFile].
+                    if (tree.skip(relative)) return@walk
                     zip.putNextEntry(entryFor("${tree.entry}/$relative", file))
-                    file.inputStream().use { it.copyTo(zip) }
+                    val how = tree.redaction(relative)
+                    if (how == Redaction.NONE) {
+                        file.inputStream().use { it.copyTo(zip) }
+                    } else {
+                        zip.write(exported(file, how, includeApiKeys))
+                    }
                     zip.closeEntry()
                     onProgress(++written)
                 }
@@ -420,57 +520,69 @@ internal class BackupArchive(
     }
 
     /**
-     * The bytes one [FileItem] contributes.
+     * The bytes one file contributes.
      *
-     * The file is copied **verbatim** unless a secret actually has to come out of it,
-     * and that is deliberate: these files are pi's, the user is invited to edit them
-     * by hand, and a round trip through this app's JSON encoder would return a
-     * reformatted file with every comment in it gone. Re-encoding is the price of
-     * redaction and is paid only when redaction was asked for.
+     * The file is copied **verbatim** unless a secret actually has to come out of it, and
+     * that is deliberate: these files are pi's, the user is invited to edit them by hand,
+     * and a round trip through this app's JSON encoder would return a reformatted file
+     * with every comment in it gone. Re-encoding is the price of redaction and is paid
+     * only when redaction was asked for *and* found something to take out — [redacted]
+     * answers null when the document is unchanged, which is what keeps that promise for a
+     * file the reader formatted themselves.
      */
-    private fun exported(item: FileItem, includeApiKeys: Boolean): ByteArray {
-        val text = runCatching { item.source.readText() }.getOrNull() ?: return ByteArray(0)
-        if (includeApiKeys || item.redaction == Redaction.NONE) return text.toByteArray()
-        return redacted(text, item.redaction)?.toByteArray() ?: text.toByteArray()
+    private fun exported(source: File, redaction: Redaction, includeApiKeys: Boolean): ByteArray {
+        val text = runCatching { source.readText() }.getOrNull() ?: return ByteArray(0)
+        if (includeApiKeys || redaction == Redaction.NONE) return text.toByteArray()
+        return redacted(text, redaction)?.toByteArray() ?: text.toByteArray()
     }
 
     private fun redacted(text: String, how: Redaction): String? = runCatching {
         val root = Json.parseToJsonElement(text)
         val stripped = when (how) {
-            Redaction.PROFILE -> stripProfileKeys(root)
-            Redaction.WEB_SEARCH -> stripSearchKeys(root)
+            Redaction.SECRETS -> stripSecrets(root)
             Redaction.NONE -> root
         }
+        // Nothing was taken out, so the file keeps its own bytes, its own indentation and
+        // its own ordering. Without this test a `web-search.json` with no provider key
+        // was re-encoded on every archive with the switch off, which is exactly the
+        // reformatting the byte-for-byte half of the design promises not to do.
+        if (stripped == root) return@runCatching null
         DOCUMENT_JSON.encodeToString(JsonElement.serializer(), stripped) + "\n"
     }.getOrNull()
 
-    /** Every profile's own `apiKey`, and nothing else — the shape [ModelProfile] declares. */
-    private fun stripProfileKeys(root: JsonElement): JsonElement {
-        val document = root.jsonObject
-        val profiles = document["profiles"]?.jsonArray ?: return root
-        val stripped = buildJsonArray {
-            profiles.forEach { profile ->
-                val entry = profile.jsonObject.toMutableMap()
-                if (entry.containsKey("apiKey")) entry["apiKey"] = JsonPrimitive("")
-                add(JsonObject(entry))
-            }
-        }
-        return JsonObject(document.toMutableMap().apply { this["profiles"] = stripped })
+    /**
+     * Every credential-shaped field in a pi JSON document, blanked.
+     *
+     * One recipe for the four files rather than a named one each, because they are all
+     * pi's and all hand-editable, and the exact field names are not the thing to pin: a
+     * provider names its key `apiKey`, the web-access extension's table ends every one of
+     * them in `ApiKey` and xAI's in `ApiToken`, and a newer provider adds a field nobody
+     * listed. The suffix match is the same rule the extension's own options table implies
+     * — and unlike a list here it cannot stop covering a file.
+     *
+     * **A `$` reference is not a secret.** `models.json` names the *environment variable*
+     * that holds a profile's key (`apiKey: "$PIKIT_KEY_…"`, ARCHITECTURE §6.1), so
+     * blanking it would produce a file the custom endpoint cannot resolve while removing
+     * nothing worth protecting. A literal key the user pasted into any of these files is
+     * blanked; the reference is kept.
+     *
+     * This walks arrays as well as objects: a profile is an element of `profiles`, so the
+     * earlier object-only walk missed the one file the field names were written for.
+     */
+    private fun stripSecrets(root: JsonElement): JsonElement = rewrite(root) { key, value ->
+        val primitive = value as? JsonPrimitive
+        val literal = primitive != null &&
+            primitive.isString &&
+            primitive.content.isNotEmpty() &&
+            !primitive.content.startsWith("$")
+        if (isSecretName(key) && literal) JsonPrimitive("") else value
     }
 
-    /**
-     * Every key in the web-access extension's file whose *name* says it is one.
-     *
-     * Matched on the suffix rather than against a list of the field names: the file
-     * is the extension's, the extension is replaced by a newer one with new providers
-     * in it, and a list here would be a list that silently stopped covering the file.
-     * `braveApiKey`, `tavilyApiKey` and the rest all end the same way, and the one
-     * field that does not — xAI's `Token`-not-`ApiKey`, which the options table says
-     * so about — is matched by `ApiToken`.
-     */
-    private fun stripSearchKeys(root: JsonElement): JsonElement = rewrite(root) { key, value ->
-        if (key.endsWith("ApiKey") || key.endsWith("ApiToken")) JsonPrimitive("") else value
-    }
+    private fun isSecretName(key: String): Boolean =
+        key == "apiKey" ||
+            key == "apiToken" ||
+            key.endsWith("ApiKey") ||
+            key.endsWith("ApiToken")
 
     private fun rewrite(element: JsonElement, transform: (String, JsonElement) -> JsonElement): JsonElement =
         when (element) {
@@ -478,6 +590,7 @@ internal class BackupArchive(
                 element.mapValues { (key, value) -> transform(key, rewrite(value, transform)) },
             )
 
+            is JsonArray -> JsonArray(element.map { rewrite(it, transform) })
             else -> element
         }
 
@@ -657,6 +770,11 @@ internal class BackupArchive(
         trees.firstOrNull { name.startsWith("${it.entry}/") }?.let { tree ->
             val relative = name.removePrefix("${tree.entry}/")
             if (relative.isEmpty()) return null
+            // The same names the write withholds, withheld again on the way back: an
+            // archive written by an older build — or crafted to replace the permission
+            // policy — must not be able to restore a file this build derives, because
+            // the derived copy is the one the runtime installs and the app recomposes.
+            if (tree.skip(relative)) return null
             return File(tree.source, relative)
         }
         // The same fallback `categoryOf` has, and for the same reason: the entry names the
@@ -812,13 +930,16 @@ internal class BackupArchive(
          * The preference files a category is made of, and the keys that are a secret
          * inside each.
          *
-         * Two are deliberately absent. `pikit_model_catalogue` holds one deadline,
-         * `due_at`, which this app re-decides within four hours of any launch, so a
-         * restored one would either do nothing or make the app skip a refresh it
-         * should have made. `pikit_agent_session` holds which conversation was open,
+         * This list is the *whole* inventory of the app's preference files; a new file
+         * belongs here in the same change that creates it, or a reinstall forgets it.
+         *
+         * Two are deliberately absent, and neither is a preference. `pikit_model_catalogue`
+         * holds one deadline, `due_at`, which this app re-decides within four hours of any
+         * launch, so a restored one would either do nothing or make the app skip a refresh
+         * it should have made. `pikit_agent_session` holds which conversation was open,
          * which is where the reader happened to be rather than a choice — and on a
-         * restored install it names a file from the archive's own `pi-sessions` that
-         * may not be there at all.
+         * restored install it names a file from the archive's own `pi-sessions` that may
+         * not be there at all.
          */
         /**
          * The entry prefix for workspaces beyond the built-in one.
@@ -830,13 +951,78 @@ internal class BackupArchive(
          */
         internal const val EXTRA_WORKSPACES_DIR = "workspaces"
 
+        /**
+         * The entry prefix for the rest of pi's directory.
+         *
+         * The four files this build writes have short entries of their own
+         * (`pi/models.json`, …), so renaming them would strand every archive already
+         * written. Everything else under `$HOME/.pi/agent` — a user's own extension, a
+         * config a newer pi reads — travels here, and needs no entry anywhere when it
+         * appears, which is the point: a whitelist is a backup that silently loses the
+         * next file.
+         */
+        private const val PI_AGENT_DIR = "pi/agent"
+
+        /**
+         * Files under `$HOME/.pi/agent` that are carried by an entry of their own.
+         *
+         * The halves travel under `AGENT_PROMPT` rather than here because they are the
+         * user's document and a restore recomposes `AGENTS.md` from them; the other four
+         * are spelled in [files] with the entry names earlier archives already use.
+         */
+        private val PI_AGENT_OWNED_ELSEWHERE = setOf(
+            "models.json",
+            "settings.json",
+            WEB_SEARCH_FILE,
+            AgentContext.FILE_NAME,
+            AgentContext.AUTHOR_FILE_NAME,
+            AgentContext.USER_FILE_NAME,
+        )
+
+        /**
+         * Files under `$HOME/.pi/agent` that are derived and must not travel.
+         *
+         * `models-store.json` is pi's catalogue cache, re-downloaded by the launch path
+         * (§6.2). The two extension files are the runtime image's: pi loads every module
+         * it finds in `extensions/`, so restoring an older `pikit-permissions.ts` would
+         * judge tool calls by a policy the app no longer ships — and restoring the
+         * retired `pi-safety-guard.ts` would judge them by *two*, the stricter one
+         * winning, with no switch anywhere that turns it off (§14). The installer copies
+         * both from `$PREFIX` itself.
+         *
+         * Spelled here as strings because the installer's names are private to it; a
+         * rename there is a rename here too. `BackupArchiveTest` pins that these names
+         * are the ones withheld in both directions.
+         */
+        private val PI_AGENT_DERIVED = setOf(
+            "models-store.json",
+            "extensions/pikit-permissions.ts",
+            "extensions/pi-safety-guard.ts",
+        )
+
         private val PREFERENCE_FILES = listOf(
             PreferenceFile("pikit_settings", BackupCategory.SETTINGS, secretKeys = setOf("api_key")),
             PreferenceFile("pikit_storage", BackupCategory.SETTINGS),
+            // Whether the first-launch battery question was answered. A preference in the
+            // same sense the storage prompt's answer is: one record of an onboarding
+            // answer, with the exemption itself being the platform's and out of reach of
+            // any file. Carried because the SETTINGS category promises *every*
+            // preference, and the cost of an answer that is already true on the target
+            // install is nothing.
+            PreferenceFile("pikit_power", BackupCategory.SETTINGS),
             // The workspaces the user added, which is what makes them appear in the
             // composer's menu again after a restore — the directories themselves travel
             // under [EXTRA_WORKSPACES_DIR].
             PreferenceFile(WorkspaceStore.PREFS, BackupCategory.SETTINGS),
+            // The chat personas: the list, which one a new conversation starts with, and
+            // which preset each saved conversation speaks in. The last is a fact about a
+            // conversation, but it lives in the same `SharedPreferences` document, and a
+            // preference *file* is one archive entry — splitting it by key would write
+            // the same name into the zip twice. So it travels with the settings document;
+            // the page's default tick set includes conversations as well, and a
+            // conversation whose selection did not come back opens in the default voice,
+            // which is the same answer a deleted preset gets.
+            PreferenceFile(ChatPresetStore.PREFS, BackupCategory.SETTINGS),
             PreferenceFile("pikit_session_pins", BackupCategory.CONVERSATIONS),
             // The mode each conversation was started in travels with the transcripts:
             // without it every restored chat conversation would reopen as work.
@@ -889,10 +1075,10 @@ private class ContextPreferences(context: Context) : PreferenceStore {
  * One file of the archive.
  *
  * [redaction] is the recipe for taking the secret out of it, and [Redaction.NONE] is
- * not the same as "has no secret": `models.json` names the *environment variable*
- * that holds the key (`PIKIT_API_KEY`) rather than the key itself, so blanking its
- * `apiKey` would produce a file the custom endpoint cannot resolve while removing
- * nothing worth protecting.
+ * not the same as "has no secret": a binary or a document this app does not parse is
+ * copied verbatim by design. [Redaction.SECRETS] is tried on every JSON document the
+ * archive carries, because any of them can hold a credential the user pasted in by
+ * hand, and it costs a re-encode only when it actually finds one.
  */
 private data class FileItem(
     val category: BackupCategory,
@@ -901,13 +1087,24 @@ private data class FileItem(
     val redaction: Redaction = Redaction.NONE,
 )
 
-private enum class Redaction { NONE, PROFILE, WEB_SEARCH }
+private enum class Redaction { NONE, SECRETS }
 
-/** One tree of the archive: a directory copied whole, and read back whole. */
+/**
+ * One tree of the archive: a directory copied whole, and read back whole.
+ *
+ * [skip] and [redaction] are what make a directory an archive entry rather than a copy
+ * of one: `$HOME/.pi/agent` holds files the app derives and must not restore, and JSON
+ * that can hold a credential. Both are applied in *both* directions — see
+ * [BackupArchive.skipPiAgentFile] — so an archive can neither omit nor inject them.
+ */
 private data class TreeItem(
     val category: BackupCategory,
     val entry: String,
     val source: File,
+    /** Relative paths this tree does not carry, and will not put back. */
+    val skip: (String) -> Boolean = { false },
+    /** The redaction recipe for one relative path; [Redaction.NONE] copies bytes. */
+    val redaction: (String) -> Redaction = { Redaction.NONE },
 )
 
 private data class PreferenceFile(
