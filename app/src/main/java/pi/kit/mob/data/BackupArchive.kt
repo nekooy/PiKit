@@ -25,7 +25,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import pi.kit.mob.BuildConfig
 import pi.kit.mob.env.AgentContext
+import pi.kit.mob.env.PermissionPolicy
 import pi.kit.mob.env.SafeDelete
+import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.env.TermuxEnv
 
 /**
@@ -89,7 +91,16 @@ enum class BackupCategory(val id: String) {
     /** `AGENTS.md` — the one prompt file the user edits. */
     AGENT_PROMPT("agent-prompt"),
 
-    /** The agent's working directory. */
+    /**
+     * The agent's working directory — the built-in `$HOME/workspace` and every directory
+     * the reader added, `$HOME` itself among them.
+     *
+     * [EXTRA_WORKSPACES_DIR] spells an added workspace as `workspaces/<its path relative
+     * to $HOME>`, and `$HOME` is the one workspace that relative path cannot name: it
+     * would be the empty string. It therefore travels under an entry of its own,
+     * `home/…`, with the parts of `$HOME` other categories own skipped rather than
+     * duplicated — see [HOME_TREE_DIR].
+     */
     WORKSPACE("workspace"),
 
     /** The HTML the reply's `/export` wrote into `$HOME/export`. */
@@ -292,6 +303,23 @@ internal data class BackupPaths(
  * build without the tree skips the extra entries instead of refusing the archive — the
  * format number stays 1 because the change is additive.
  *
+ * ## `$HOME` is owned by categories, and a workspace inside it inherits that
+ *
+ * Any directory may be a workspace, `$HOME` and `$HOME/.pi` included, and each part of
+ * `$HOME` already belongs to a category: the built-in workspace and the added ones, the
+ * HTML exports, pi's directory, the derived `.pikit` and the installer's `.termux`. A
+ * workspace tree therefore never carries a second copy of a part another entry owns —
+ * and, the half that can bite, never carries one under a *different* treatment. The
+ * MODELS entry withholds pi's derived files and redacts its JSON; a workspace over
+ * `$HOME/.pi` did neither, so an archive taken that way could restore the retired
+ * `pikit-permissions.ts` and have it judge every tool call until the next content
+ * update (§14). [withheldInHome] is that rule, stated once and applied to every entry
+ * that can reach into pi's directory.
+ *
+ * A workspace that *is* `$HOME` has no relative name to travel under —
+ * [EXTRA_WORKSPACES_DIR] would spell it as `workspaces/` — so it travels as `home/…`,
+ * the one workspace the archive used to drop in silence while the menu showed it.
+ *
  * ## The two halves, and why they are not symmetric
  *
  * Files are copied byte for byte. Preferences are read and written through
@@ -341,6 +369,19 @@ internal class BackupArchive(
     )
 
     /**
+     * The added workspaces' `$HOME`-relative paths.
+     *
+     * Read by [skipHomeTreeOnExport], and for one reason: with `$HOME` *and* a folder
+     * inside it both in the list — `~` and `~/projects/app` is a pair the menu allows —
+     * the folder would be in the archive twice, once as `workspaces/projects/app/…` and
+     * once under `home/…`. A workspace backup is the one that can be hundreds of
+     * megabytes, so the second copy is skipped and the folder keeps the entry name it has
+     * always had.
+     */
+    private val addedWorkspaceRoots: List<String> =
+        paths.workspaces.mapNotNull { relativeToHome(it) }.filter { it.isNotEmpty() }
+
+    /**
      * Everything that is a whole tree.
      *
      * A tree is walked without following symlinks: `$HOME/workspace` may hold one
@@ -366,8 +407,34 @@ internal class BackupArchive(
         // name: `$HOME`. A workspace outside it has no relative path to record, and is
         // left out rather than written under a name a restore could not decode back.
         for (workspace in paths.workspaces) {
-            val relative = relativeToHome(workspace) ?: continue
-            add(TreeItem(BackupCategory.WORKSPACE, "$EXTRA_WORKSPACES_DIR/$relative", workspace))
+            when (val relative = relativeToHome(workspace)) {
+                // `$HOME` itself: the one workspace whose relative name is empty, and the
+                // one the archive used to drop in silence — see [HOME_TREE_DIR].
+                "" -> add(
+                    TreeItem(
+                        BackupCategory.WORKSPACE,
+                        HOME_TREE_DIR,
+                        workspace,
+                        skip = ::skipHomeTreeOnExport,
+                        // The dedupe above is the export's business only — see the two
+                        // functions. A restore refuses [skipHomeTree] and nothing else.
+                        restoreSkip = ::skipHomeTree,
+                    ),
+                )
+                // Outside `$HOME`: no name a restore could decode back.
+                null -> continue
+
+                else -> add(
+                    TreeItem(
+                        BackupCategory.WORKSPACE,
+                        "$EXTRA_WORKSPACES_DIR/$relative",
+                        workspace,
+                        // A workspace that reaches pi's directory must withhold what the
+                        // MODELS entry withholds; see [withheldInHome].
+                        skip = workspaceSkip(relative),
+                    ),
+                )
+            }
         }
         add(TreeItem(BackupCategory.HTML_EXPORTS, "html-exports", paths.exportDir))
         add(TreeItem(BackupCategory.SETTINGS, "avatars", paths.avatarDir))
@@ -403,6 +470,74 @@ internal class BackupArchive(
         if (relative.endsWith(".json", ignoreCase = true)) Redaction.SECRETS else Redaction.NONE
 
     /**
+     * Whether a path **relative to `$HOME`** is one no entry of the archive carries.
+     *
+     * The rule exists because a workspace may be `$HOME`, `$HOME/.pi` or
+     * `$HOME/.pi/agent` — the picker refuses only "not a directory" — and a workspace
+     * tree is a plain directory copy. Without this, adding `.pi` to the workspace menu
+     * turned the archive's withheld names into ordinary files: the composed `AGENTS.md`,
+     * pi's catalogue cache, and the two extension copies the runtime image installs,
+     * the last of which pi loads on every tool call. An archive that restored
+     * `pikit-permissions.ts` from one would judge tool calls by an older policy until
+     * the next content update, and the retired `pi-safety-guard.ts` would judge them by
+     * two (§14). One rule for every entry that can reach into pi's directory, rather
+     * than a second list beside the first.
+     */
+    private fun withheldInHome(relative: String): Boolean {
+        val prefix = "$PI_AGENT_SUBDIR/"
+        if (!relative.startsWith(prefix)) return false
+        return skipPiAgentFile(relative.removePrefix(prefix))
+    }
+
+    /**
+     * What a workspace tree withholds, given its own `$HOME`-relative path.
+     *
+     * A workspace elsewhere under `$HOME` withholds nothing: its `.pi` is the reader's
+     * own project folder, not pi's. A workspace *at* or *inside* pi's directory
+     * withholds the names [withheldInHome] names, and the rebasing is the whole
+     * function — `agent/extensions/x.ts` inside `$HOME/.pi` is
+     * `.pi/agent/extensions/x.ts` to the rule.
+     */
+    private fun workspaceSkip(base: String): (String) -> Boolean = { relative ->
+        withheldInHome("$base/$relative")
+    }
+
+    /**
+     * What the `$HOME` tree withholds, on **both** directions: the parts of `$HOME` that
+     * another category owns.
+     *
+     * Each name here is carried by an entry of its own — the built-in workspace, the HTML
+     * exports, pi's directory, the derived `.pikit`, the installer's `.termux`, the
+     * `storage` links — so carrying it here as well would put the same file in the zip
+     * twice, and under a *different* treatment: pi's JSON is redacted by MODELS and its
+     * derived files are withheld, where a plain workspace copy would do neither. `.pi` is
+     * skipped whole for that reason.
+     *
+     * This is the rule a restore applies, so it is stated with nothing about *this*
+     * install's workspace list: an archive taken where `$HOME` was a workspace has
+     * `home/projects/app/…` in it, and a phone that happens to have that folder as a
+     * workspace of its own must still get the file.
+     */
+    private fun skipHomeTree(relative: String): Boolean {
+        if (relative.substringBefore('/') in HOME_OWNED_ELSEWHERE) return true
+        return withheldInHome(relative)
+    }
+
+    /**
+     * What the `$HOME` tree leaves out of an **export** — [skipHomeTree] plus the folders
+     * that travel under a name of their own.
+     *
+     * `~` and `~/projects/app` together are a pair the workspace menu allows, and the
+     * project would otherwise be in the archive twice. That is export-side only: the
+     * dedupe reads the *source* install's list, and applying it on the way back in would
+     * drop an archive's `home/projects/app/…` on a phone whose list differs — silently,
+     * which is the failure this whole class exists to avoid.
+     */
+    private fun skipHomeTreeOnExport(relative: String): Boolean =
+        skipHomeTree(relative) ||
+            addedWorkspaceRoots.any { root -> relative == root || relative.startsWith("$root/") }
+
+    /**
      * `foo/bar` for a directory under `$HOME`, or null for one somewhere else.
      *
      * Separator-normalised, for the reason `walk` states: an entry name inside a zip is
@@ -414,11 +549,15 @@ internal class BackupArchive(
         val separator = File.separator
         val home = paths.home.absoluteFile.path.trimEnd(File.separatorChar)
         val absolute = file.absoluteFile.path
+        // `$HOME` itself answers the **empty** relative name, and that is a value rather
+        // than an absence: it is the one workspace that travels under [HOME_TREE_DIR]
+        // instead of [EXTRA_WORKSPACES_DIR]. Null therefore keeps meaning "outside
+        // `$HOME`", which is the one case with no entry name at all.
+        if (absolute == home) return ""
         if (!absolute.startsWith(home + separator)) return null
         return absolute.removePrefix(home + separator)
             .replace(File.separatorChar, '/')
             .trimEnd('/')
-            .takeIf { it.isNotEmpty() }
     }
 
     // ------------------------------------------------------------------ write
@@ -762,6 +901,10 @@ internal class BackupArchive(
         // is still a workspace's file, and dropping it would restore a backup of a project
         // that came back empty.
         if (name.startsWith("$EXTRA_WORKSPACES_DIR/")) return BackupCategory.WORKSPACE
+        // An archive taken on an install where `$HOME` itself was a workspace. It is the
+        // same category and the same kind of entry as `workspaces/…`; only the name
+        // differs, because an empty relative path cannot be spelled.
+        if (name.startsWith("$HOME_TREE_DIR/")) return BackupCategory.WORKSPACE
         return null
     }
 
@@ -774,7 +917,7 @@ internal class BackupArchive(
             // archive written by an older build — or crafted to replace the permission
             // policy — must not be able to restore a file this build derives, because
             // the derived copy is the one the runtime installs and the app recomposes.
-            if (tree.skip(relative)) return null
+            if (tree.restoreSkip(relative)) return null
             return File(tree.source, relative)
         }
         // The same fallback `categoryOf` has, and for the same reason: the entry names the
@@ -783,6 +926,19 @@ internal class BackupArchive(
         if (name.startsWith("$EXTRA_WORKSPACES_DIR/")) {
             val relative = name.removePrefix("$EXTRA_WORKSPACES_DIR/")
             if (relative.isEmpty()) return null
+            // The withholding belongs to the *name*, not to this install's workspace
+            // list: a phone that never made `.pi` a workspace must still not let an
+            // archive put the runtime's extension back through this fallback.
+            if (withheldInHome(relative)) return null
+            return File(paths.home, relative.replace('/', File.separatorChar))
+        }
+        // A workspace that was `$HOME` on the install the archive came from. Same
+        // reasoning as above, and the tree's own skip is applied here as well so the
+        // fallback cannot carry what the tree would have withheld.
+        if (name.startsWith("$HOME_TREE_DIR/")) {
+            val relative = name.removePrefix("$HOME_TREE_DIR/")
+            if (relative.isEmpty()) return null
+            if (skipHomeTree(relative)) return null
             return File(paths.home, relative.replace('/', File.separatorChar))
         }
         return null
@@ -952,6 +1108,57 @@ internal class BackupArchive(
         internal const val EXTRA_WORKSPACES_DIR = "workspaces"
 
         /**
+         * The entry prefix for a workspace that *is* `$HOME`.
+         *
+         * `$HOME` is a legal workspace — `WorkspaceStore` refuses only "not a directory"
+         * — and it was the one the archive dropped in silence: its `$HOME`-relative path
+         * is the empty string, which [EXTRA_WORKSPACES_DIR] cannot spell, so the tree
+         * loop skipped it beside the folders *outside* `$HOME`. That is the worst shape
+         * a backup failure takes: the menu shows the folder, the export reports its
+         * entries, and everything the reader put there is simply not in the file.
+         *
+         * It gets an entry of its own rather than a magic relative path, and its tree is
+         * written under the rules [skipHomeTree] states: the categories that own a part
+         * of `$HOME` carry that part, and this entry carries the rest.
+         */
+        internal const val HOME_TREE_DIR = "home"
+
+        /**
+         * pi's own directory relative to `$HOME` — the prefix [withheldInHome] measures
+         * an entry's path against.
+         */
+        private const val PI_AGENT_SUBDIR = ".pi/agent"
+
+        /**
+         * The top-level names under `$HOME` that another category owns.
+         *
+         * Read by [skipHomeTree], which is the rule for the one workspace that covers the
+         * whole of `$HOME`. Each name has an entry elsewhere and would otherwise be in
+         * the archive twice — and the second copy would be the worse one, because a plain
+         * tree copies bytes while MODELS redacts pi's JSON and withholds its derived
+         * files.
+         *
+         * `.pi` is here whole rather than as `.pi/agent`: pi keeps nothing of the reader's
+         * directly under `.pi`, and a workspace copy of `.pi/agent/models.json` verbatim
+         * is exactly the unredacted duplicate the "include the keys" switch must not
+         * have.
+         */
+        private val HOME_OWNED_ELSEWHERE = setOf(
+            // The built-in workspace and every added one — WORKSPACE's own trees.
+            TermuxEnv.WORKSPACE_DIR_NAME,
+            // The replies' `/export` output — HTML_EXPORTS.
+            TermuxEnv.EXPORT_DIR_NAME,
+            // Recreated from the platform's grant, never restored (§5).
+            StorageAccess.STORAGE_DIR_NAME,
+            // Derived: the permission file and the rendered chat prompt (§14).
+            PermissionPolicy.DIR_NAME,
+            // The installer's banner, rewritten on every install and update.
+            ".termux",
+            // pi's directory — MODELS, redacted and with its derived names withheld.
+            ".pi",
+        )
+
+        /**
          * The entry prefix for the rest of pi's directory.
          *
          * The four files this build writes have short entries of their own
@@ -1103,6 +1310,15 @@ private data class TreeItem(
     val source: File,
     /** Relative paths this tree does not carry, and will not put back. */
     val skip: (String) -> Boolean = { false },
+    /**
+     * Relative paths a restore refuses, when that is narrower than [skip].
+     *
+     * The two differ in exactly one place today: a folder that is *also* a workspace of
+     * its own is left out of the `$HOME` tree's export because it travels under its own
+     * entry, but the dedupe reads the exporting install's list and must not decide what a
+     * different install may restore.
+     */
+    val restoreSkip: (String) -> Boolean = skip,
     /** The redaction recipe for one relative path; [Redaction.NONE] copies bytes. */
     val redaction: (String) -> Redaction = { Redaction.NONE },
 )

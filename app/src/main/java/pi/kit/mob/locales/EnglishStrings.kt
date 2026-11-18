@@ -660,8 +660,8 @@ internal object EnglishStrings : Strings {
         override val backupImportSection = "Import"
         override val backupCategorySettings = "Basic settings"
         override val backupCategorySettingsSubtitle =
-            "Theme, language, the default workspace, the permission tier, shared-storage " +
-                "access, and every other preference this app stores"
+            "Theme, language, the default workspace, the permission tier, chat presets and " +
+                "avatars, and every other preference this app stores"
         override val backupCategoryModels = "Models & providers"
         override val backupCategoryModelsSubtitle =
             "Every saved profile with the key in it, and the files pi reads them from: " +
@@ -677,8 +677,10 @@ internal object EnglishStrings : Strings {
                 "is composed from them, and is composed again after a restore"
         override val backupCategoryWorkspace = "Workspace files"
         override val backupCategoryWorkspaceSubtitle =
-            "Everything under \$HOME/workspace, plus each directory you added in " +
-                "the workspace menu; a project tree can make the archive large"
+            "Everything under \$HOME/workspace, plus each directory you added in the " +
+                "workspace menu; \$HOME itself is packed whole when you add it, except " +
+                "the parts another group already carries, and a project tree can make " +
+                "the archive large"
         override val backupCategoryExports = "HTML exports"
         override val backupCategoryExportsSubtitle =
             "The .html files /export wrote into \$HOME/export"

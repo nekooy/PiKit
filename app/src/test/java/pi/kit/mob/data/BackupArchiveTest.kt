@@ -715,6 +715,248 @@ class BackupArchiveTest {
         )
     }
 
+    /**
+     * `$HOME` itself is a workspace the picker allows, and it used to be the one the
+     * archive dropped without a word: its `$HOME`-relative name is the empty string, so
+     * the tree loop skipped it beside the folders outside `$HOME`. The shape that cost
+     * was the silent one — the menu showed `~`, the export reported its entries, and
+     * nothing under it was in the file.
+     *
+     * The entry it travels under is *narrower* than a plain directory copy:
+     * `workspace/`, `export/`, `.pi/` and `.termux/` are other entries' business. And the
+     * restore half has to be narrower still — it must not consult the restoring install's
+     * workspace list, which is why the target here has `projects/app` as a workspace of
+     * its own and still has to receive the archive's `home/projects/app/…`.
+     */
+    @Test
+    fun `a workspace that is home itself travels under its own entry`() {
+        val root = temporary.newFolder("home-workspace")
+        val filesDir = File(root, "files")
+        val home = File(filesDir, "home")
+        File(home, ".pi/agent").mkdirs()
+        File(filesDir, "pi-sessions").mkdirs()
+        File(home, "workspace").mkdirs()
+        File(home, "export").mkdirs()
+        val project = File(home, "projects/app").apply { mkdirs() }
+        val paths = BackupPaths(
+            filesDir = filesDir,
+            piConfigDir = File(home, ".pi/agent"),
+            sessionDir = File(filesDir, "pi-sessions"),
+            workspace = File(home, "workspace"),
+            exportDir = File(home, "export"),
+            home = home,
+            // `~` on its own: the folder inside it is part of this workspace, not a
+            // workspace of its own.
+            workspaces = listOf(home),
+        )
+        File(home, "notes.md").writeText("a day's notes\n")
+        File(project, "app.kt").writeText("fun app() {}\n")
+        File(File(home, "workspace"), "main.kt").writeText("fun main() {}\n")
+        File(File(home, "export"), "talk.html").writeText("<html></html>\n")
+        File(File(home, ".pi/agent"), "models.json").writeText("""{"providers":{}}""")
+        File(File(home, ".termux").apply { mkdirs() }, "motd.sh").writeText("banner\n")
+        val zip = File(root, "out.zip")
+        BackupArchive(FakePreferences(), paths).write(
+            zip.outputStream(),
+            BackupCategory.entries.toSet(),
+            includeApiKeys = true,
+        )
+
+        assertNotNull(
+            "the files directly in \$HOME are what this entry is for",
+            entryText(zip, "home/notes.md"),
+        )
+        assertNotNull(
+            "a folder inside the workspace travels with it",
+            entryText(zip, "home/projects/app/app.kt"),
+        )
+        assertNull("the built-in workspace has its own tree", entryText(zip, "home/workspace/main.kt"))
+        assertNull("the exports have their own tree", entryText(zip, "home/export/talk.html"))
+        assertNull("pi's directory belongs to MODELS", entryText(zip, "home/.pi/agent/models.json"))
+        assertNull("the banner is rewritten by the installer", entryText(zip, "home/.termux/motd.sh"))
+
+        // And back, onto an install whose workspace list is *different*: it has
+        // `projects/app` of its own, and `~` is not a workspace there at all.
+        val targetHome = File(root, "target/files/home").apply { mkdirs() }
+        val targetProject = File(targetHome, "projects/app").apply { mkdirs() }
+        val target = BackupPaths(
+            filesDir = File(root, "target/files"),
+            piConfigDir = File(targetHome, ".pi/agent").apply { mkdirs() },
+            sessionDir = File(root, "target/files/pi-sessions").apply { mkdirs() },
+            workspace = File(targetHome, "workspace").apply { mkdirs() },
+            exportDir = File(targetHome, "export").apply { mkdirs() },
+            home = targetHome,
+            workspaces = listOf(targetProject),
+        )
+        val targetArchive = BackupArchive(FakePreferences(), target)
+        val staging = File(root, "staging").apply { mkdirs() }
+        val manifest = targetArchive.manifest(zip)!!
+        targetArchive.extract(zip, manifest.included, staging)
+        targetArchive.applyAll(staging, manifest.included)
+
+        assertEquals("a day's notes\n", File(targetHome, "notes.md").readText())
+        assertEquals(
+            "the dedupe is the export's rule, not the restoring install's",
+            "fun app() {}\n",
+            File(targetProject, "app.kt").readText(),
+        )
+        assertFalse(
+            "the installer's banner is not a workspace file on the way back either",
+            File(targetHome, ".termux/motd.sh").exists(),
+        )
+    }
+
+    /**
+     * With `~` and `~/projects/app` both in the list, the project travels once.
+     *
+     * It keeps the entry name it has always had, `workspaces/<relative path>`, because
+     * that is the name every archive written before `$HOME` could travel already uses.
+     */
+    @Test
+    fun `a folder inside home is not packed twice when home is a workspace too`() {
+        val root = temporary.newFolder("home-and-project")
+        val filesDir = File(root, "files")
+        val home = File(filesDir, "home")
+        File(home, ".pi/agent").mkdirs()
+        File(filesDir, "pi-sessions").mkdirs()
+        File(home, "workspace").mkdirs()
+        File(home, "export").mkdirs()
+        val project = File(home, "projects/app").apply { mkdirs() }
+        File(project, "app.kt").writeText("fun app() {}\n")
+        val paths = BackupPaths(
+            filesDir = filesDir,
+            piConfigDir = File(home, ".pi/agent"),
+            sessionDir = File(filesDir, "pi-sessions"),
+            workspace = File(home, "workspace"),
+            exportDir = File(home, "export"),
+            home = home,
+            workspaces = listOf(home, project),
+        )
+        val zip = File(root, "out.zip")
+        BackupArchive(FakePreferences(), paths).write(
+            zip.outputStream(),
+            setOf(BackupCategory.WORKSPACE),
+            includeApiKeys = true,
+        )
+
+        assertNotNull(entryText(zip, "workspaces/projects/app/app.kt"))
+        assertNull(
+            "a project with an entry of its own is not packed again under home/",
+            entryText(zip, "home/projects/app/app.kt"),
+        )
+    }
+
+    /**
+     * A workspace over pi's directory inherits the MODELS entry's withholding.
+     *
+     * Measured shape before the rule: `$HOME/.pi` added in the workspace menu put
+     * `workspaces/.pi/agent/extensions/pikit-permissions.ts` in the zip, because a
+     * workspace tree was a plain copy. A restore wrote it back, and pi loads every module
+     * in that directory — the older policy then judged every tool call until the next
+     * content update, with nothing on any screen saying which policy was in force (§14).
+     * The reader's own extension beside it still has to travel: the tree is pi's, and the
+     * archive carries what pi would load.
+     */
+    @Test
+    fun `a workspace over pi's directory withholds what the models entry withholds`() {
+        val root = temporary.newFolder("pi-workspace")
+        val filesDir = File(root, "files")
+        val home = File(filesDir, "home")
+        val pi = File(home, ".pi/agent").apply { mkdirs() }
+        File(pi, "extensions").mkdirs()
+        File(filesDir, "pi-sessions").mkdirs()
+        File(home, "workspace").mkdirs()
+        File(home, "export").mkdirs()
+        // The composed prompt, the catalogue cache and the two image-installed modules:
+        // the names the pi/agent tree already refuses to carry.
+        File(pi, "AGENTS.md").writeText("composed\n")
+        File(pi, "models-store.json").writeText("""{"providers":{}}""")
+        File(pi, "extensions/pikit-permissions.ts").writeText("// image\n")
+        File(pi, "extensions/pi-safety-guard.ts").writeText("// retired\n")
+        File(pi, "models.json").writeText("""{"providers":{}}""")
+        // What the tree adds, which must survive on both paths.
+        File(pi, "extensions/mine.ts").writeText("export default 1\n")
+        File(pi, "presets.json").writeText("""{"presets":["terse"]}""")
+        val paths = BackupPaths(
+            filesDir = filesDir,
+            piConfigDir = pi,
+            sessionDir = File(filesDir, "pi-sessions"),
+            workspace = File(home, "workspace"),
+            exportDir = File(home, "export"),
+            home = home,
+            workspaces = listOf(File(home, ".pi")),
+        )
+        val zip = File(root, "out.zip")
+        BackupArchive(FakePreferences(), paths).write(
+            zip.outputStream(),
+            BackupCategory.entries.toSet(),
+            includeApiKeys = true,
+        )
+
+        assertNull(
+            "the runtime's policy module must not come back from an archive",
+            entryText(zip, "workspaces/.pi/agent/extensions/pikit-permissions.ts"),
+        )
+        assertNull(
+            "the retired guard would judge every call by a second policy",
+            entryText(zip, "workspaces/.pi/agent/extensions/pi-safety-guard.ts"),
+        )
+        assertNull(
+            "the composed prompt is rebuilt from its halves",
+            entryText(zip, "workspaces/.pi/agent/AGENTS.md"),
+        )
+        assertNull(
+            "the catalogue cache is re-downloaded",
+            entryText(zip, "workspaces/.pi/agent/models-store.json"),
+        )
+        assertNull(
+            "models.json has an entry of its own under MODELS",
+            entryText(zip, "workspaces/.pi/agent/models.json"),
+        )
+        assertNotNull(
+            "an extension the reader installed still travels",
+            entryText(zip, "workspaces/.pi/agent/extensions/mine.ts"),
+        )
+        assertNotNull(
+            "a config a newer pi reads still travels",
+            entryText(zip, "workspaces/.pi/agent/presets.json"),
+        )
+    }
+
+    /**
+     * The withholding belongs to the entry *name*, not to the restoring install's
+     * workspace list.
+     *
+     * `destinationOf` falls back to `$HOME` for a workspace this install has never heard
+     * of — the state every restore starts in — and that fallback is the one an archive
+     * can use to put a file back that no export would have taken. Measured here with a
+     * target that never added `.pi` as a workspace.
+     */
+    @Test
+    fun `an archive cannot put the runtime's extension back through a workspace entry`() {
+        val target = Device(temporary.newFolder("target"))
+        val staging = File(target.root, "staging").apply { mkdirs() }
+        val crafted = File(staging, "workspaces/.pi/agent/extensions").apply { mkdirs() }
+        File(crafted, "pikit-permissions.ts").writeText("// downgraded policy\n")
+        File(crafted, "mine.ts").writeText("export default 2\n")
+
+        val moved = target.archive.applyAll(staging, BackupCategory.entries.toSet())
+
+        assertFalse(
+            "an archive replaced the policy the runtime installs",
+            File(target.paths.piConfigDir, "extensions/pikit-permissions.ts").exists(),
+        )
+        assertEquals(
+            "only the reader's own extension is a file this app may write",
+            1,
+            moved,
+        )
+        assertEquals(
+            "export default 2\n",
+            File(target.paths.piConfigDir, "extensions/mine.ts").readText(),
+        )
+    }
+
     // ------------------------------------------------------------- redaction
 
     @Test

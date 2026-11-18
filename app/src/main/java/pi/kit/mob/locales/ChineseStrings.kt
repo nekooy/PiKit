@@ -618,7 +618,7 @@ internal object ChineseStrings : Strings {
         override val backupImportSection = "导入"
         override val backupCategorySettings = "基础设置"
         override val backupCategorySettingsSubtitle =
-            "主题、语言、默认工作区、权限等级，以及本应用保存的其他全部偏好"
+            "主题、语言、默认工作区、权限等级、聊天预设与头像，以及本应用保存的其他全部偏好"
         override val backupCategoryModels = "模型与供应商配置"
         override val backupCategoryModelsSubtitle =
             "每个已保存的配置档案和其中的 Key，以及 pi 读取的 models.json、settings.json、" +
@@ -634,7 +634,8 @@ internal object ChineseStrings : Strings {
         override val backupCategoryWorkspace = "工作区文件"
         override val backupCategoryWorkspaceSubtitle =
             "\$HOME/workspace 的全部内容，加上你在工作区菜单里添加的每一个目录" +
-                "（它们各自的内容）；可能是一整个项目，备份包会很大"
+                "（它们各自的内容）；把 \$HOME 本身加为工作区时整个目录都会打包，" +
+                "其他分组已负责的部分除外。可能是一整个项目，备份包会很大"
         override val backupCategoryExports = "HTML 导出"
         override val backupCategoryExportsSubtitle =
             "\$HOME/export 下由 /export 生成的 HTML 文件"

@@ -47,7 +47,7 @@ checked, so "not checked" is visible rather than assumed.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 628 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 639 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```

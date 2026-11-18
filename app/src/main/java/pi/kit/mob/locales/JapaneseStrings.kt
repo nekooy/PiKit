@@ -634,8 +634,8 @@ internal object JapaneseStrings : Strings {
         override val backupImportSection = "インポート"
         override val backupCategorySettings = "基本設定"
         override val backupCategorySettingsSubtitle =
-            "テーマ、言語、デフォルトのワークスペース、権限の段階など、" +
-                "このアプリが保存する設定の全部"
+            "テーマ、言語、デフォルトのワークスペース、権限の段階、チャットのプリセットと" +
+                "アバターなど、このアプリが保存する設定の全部"
         override val backupCategoryModels = "モデルとプロバイダー"
         override val backupCategoryModelsSubtitle =
             "保存済みの各プロファイルとそのキー、および pi が読む models.json、settings.json、" +
@@ -651,7 +651,8 @@ internal object JapaneseStrings : Strings {
         override val backupCategoryWorkspace = "ワークスペースのファイル"
         override val backupCategoryWorkspaceSubtitle =
             "\$HOME/workspace のすべてと、ワークスペースメニューで追加した各" +
-                "ディレクトリ。プロジェクト一式だとバックアップが大きくなります"
+                "ディレクトリ。\$HOME そのものを追加した場合は他のグループが担当する" +
+                "部分を除いて丸ごと入り、プロジェクト一式だとバックアップが大きくなります"
         override val backupCategoryExports = "HTML エクスポート"
         override val backupCategoryExportsSubtitle =
             "/export が \$HOME/export に書き出した .html"
