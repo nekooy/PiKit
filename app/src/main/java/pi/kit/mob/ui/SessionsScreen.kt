@@ -32,7 +32,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -415,7 +414,13 @@ fun SessionsScreen(
     // heading is the app's own name at twice a bar title's height. The one thing the bar
     // was still carrying here is `onBack`, which the drawer now owns — the system gesture
     // closes the panel rather than leaving the app.
-    BackHandler(onBack = onBack)
+    // The drawer's own handler is enabled only while the panel is out. It used to be
+    // unconditional, and because the panel stays composed once opened, its callback
+    // could outrank the chat page's exit handler for the rest of the session: back on
+    // a closed drawer then did nothing, and the double-press exit was unreachable.
+    // `enabled` makes the two handlers disjoint, so the dispatcher's order cannot
+    // decide which one answers.
+    BackHandler(enabled = open, onBack = onBack)
 
     // The drawer is a surface pulled over the conversation, not a page: the window's own
     // insets are its only frame, so the panel reaches the window's last pixel and the list
@@ -1225,8 +1230,10 @@ private fun ConversationRow(
                 // The margin is outside the fill: a highlighted row has to be inset from
                 // the panel's edge to read as a highlight rather than as a band across it.
                 .padding(horizontal = 8.dp)
-                .clip(RoundedCornerShape(ROW_CORNER))
-                .background(
+                // The row's fill and its clip are one continuous-corner surface, like the
+                // cards beside it; `RoundedCornerShape` here drew a circular corner on a
+                // list whose every other shape is a squircle (docs/UI.md, *Shapes*).
+                .squircleSurface(
                     // Two ways to be "the row in question", and one fill for both: the
                     // conversation the page behind is showing, and the row whose actions
                     // are open. The second is the one the menu needs — a panel that
@@ -1234,7 +1241,8 @@ private fun ConversationRow(
                     // is a menu with no subject — and it is the same wash rather than a
                     // second one, because a list has one answer to "which conversation"
                     // and it must not have two shades of it.
-                    if (current || actionsUp) PiTone.inset() else Color.Transparent,
+                    color = if (current || actionsUp) PiTone.inset() else Color.Transparent,
+                    cornerRadius = ROW_CORNER,
                 )
                 .semantics {
                     onLongClick(label = text.sessions.actions) {
@@ -1255,8 +1263,9 @@ private fun ConversationRow(
                     indication = null,
                     onClick = {
                         if (selecting) {
-                            // A tick that stays ticked is a mode flip; the box beside it
-                            // buzzes inside `Checkbox`, and its taps never reach here.
+                            // A tick that stays ticked is a mode flip: the row itself
+                            // buzzes `toggle()`, and the mark beside it is drawn rather
+                            // than a Miuix `Checkbox` that would buzz a second time.
                             haptics.toggle(on = !checked)
                             onToggleChecked()
                         } else {
@@ -1310,7 +1319,9 @@ private fun ConversationRow(
                 if (pinned) {
                     Icon(
                         imageVector = MiuixIcons.Pin,
-                        contentDescription = null,
+                        // A state fact, like the dot below it: without a description the
+                        // one thing a pinned row says would be silent to TalkBack.
+                        contentDescription = text.sessions.pinned,
                         tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         modifier = Modifier.size(14.dp),
                     )

@@ -216,10 +216,11 @@ import pi.kit.mob.ui.kit.piGlass
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.rememberPiBackdrop
-import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.material.GlassShape
+import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
@@ -1147,8 +1148,10 @@ internal fun ChatScreen(
                     scaleY = scale
                     transformOrigin = TransformOrigin(0.5f, 0.5f)
                     // Rounded only while it is a card. At rest the page is the window,
-                    // and a corner radius there would cut the screen.
-                    shape = RoundedCornerShape(PAGE_CARD_CORNER)
+                    // and a corner radius there would cut the screen. `GlassShape` rather
+                    // than `RoundedCornerShape`: the card's corner during the drag is the
+                    // same continuous curve as the cards it uncovers.
+                    shape = GlassShape(PAGE_CARD_CORNER)
                     clip = progress > 0f
                 }
                 // After the layer, so the fill travels with the card. Before it, the
@@ -1228,6 +1231,7 @@ internal fun ChatScreen(
                     pictures = target
                     viewerUp = true
                 },
+                historyOpen = historyOpen,
                 onOpenSessions = {
                     drawer.reachable = true
                     settlePage(1f, 0f)
@@ -1638,7 +1642,7 @@ private fun HeaderMark(
  * that makes an accidental edge swipe a sentence instead of an exit.
  */
 @Composable
-private fun ExitBackHandler() {
+private fun ExitBackHandler(enabled: Boolean) {
     val context = LocalContext.current
     val toasts = LocalPiToast.current
     val text = strings
@@ -1649,7 +1653,10 @@ private fun ExitBackHandler() {
             armed = false
         }
     }
-    BackHandler(enabled = true) {
+    // Disabled while the drawer is out: the drawer's handler closes the panel first, and
+    // two enabled handlers whose precedence depends on composition order made "back"
+    // either swallow the press or leave the app from behind an open drawer.
+    BackHandler(enabled = enabled) {
         if (armed) {
             armed = false
             (context as? Activity)?.finish()
@@ -1738,6 +1745,8 @@ private fun ChatPage(
     onShowPromptExtras: (PromptExtras) -> Unit,
     /** Opens the viewer on a prompt's pictures, at the one that was tapped. */
     onOpenPictures: (PictureTarget) -> Unit,
+    /** Whether the conversation drawer is out; the exit handler stands down while it is. */
+    historyOpen: Boolean,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     /** This conversation's launch mode: what the empty-state tips and the composer follow. */
@@ -1942,7 +1951,7 @@ private fun ChatPage(
     var menuAt by remember { mutableStateOf(Offset.Zero) }
     // The message whose Markdown source is open in the reader sheet.
     var sourceFor by remember { mutableStateOf<ChatItem?>(null) }
-    ExitBackHandler()
+    ExitBackHandler(enabled = !historyOpen)
     // The message menu's actions live at the page; the menu itself is emitted at the
     // message (see the transcript's item scope), because Miuix anchors a popup to its own
     // parent's bounds.
@@ -1958,9 +1967,15 @@ private fun ChatPage(
     // The Markdown source of the message, in a sheet of its own: what the reader asked
     // for when they chose "select text" is the *text*, not a selection mode they then have
     // to discover. Everything here is selectable and copyable without a second gesture.
-    val sourceItem = sourceFor
+    //
+    // The subject is held through the exit: `show` follows `sourceFor`, but the content
+    // reads the last non-null value, or dismissing clears the one thing the leaving sheet
+    // draws and its 200 ms exit plays over an empty panel (docs/UI.md, *Dialogs, sheets*).
+    var sourceShown by remember { mutableStateOf<ChatItem?>(null) }
+    if (sourceFor != null) sourceShown = sourceFor
+    val sourceItem = sourceShown
     PiSheet(
-        show = sourceItem != null,
+        show = sourceFor != null,
         title = text.chat.selectText,
         onDismiss = { sourceFor = null },
     ) {
@@ -1969,7 +1984,14 @@ private fun ChatPage(
             val sourceClipboard = messageClipboard
             val sourceScope = messageScope
             val sourceToast = messageToasts
-            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    // The sheet's own edge is the window's; the copy row clears the
+                    // gesture strip itself (docs/UI.md, *Dialogs, sheets*).
+                    .padding(bottom = 12.dp + piSheetBottomInset()),
+            ) {
                 SelectionContainer {
                     Text(
                         text = source,
@@ -2691,6 +2713,11 @@ private fun ChatNotice(
     onClick: (() -> Unit)? = null,
     action: (@Composable () -> Unit)? = null,
 ) {
+    // Built here rather than in a file-level val: `GlassShape` lives in `miuix-material`,
+    // whose classes are Java 21 bytecode, and a top-level initializer would run at
+    // `ChatScreenKt`'s class init — which the JVM-17 unit tests load for the pure row
+    // functions. A local reference is resolved only when this composable runs.
+    val noticeShape = remember { GlassShape(12.dp) }
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -2699,10 +2726,12 @@ private fun ChatNotice(
             // exactly the strip the reader can see: a dismissable notice whose
             // gesture started in the gap beside it would be a control a few
             // millimetres larger than it looks. The clip comes first for the same
-            // reason the chip's does — the press tint must not square off the corners.
-            .clip(ROW_SHAPE)
+            // reason the chip's does — the press tint must not square off the corners —
+            // and it is the glass renderer's continuous shape, so the strip's corner is
+            // the same curve as the cards around it rather than a circular one.
+            .clip(noticeShape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        shape = ROW_SHAPE,
+        shape = noticeShape,
         color = tone.container(),
         contentColor = tone.onContainer(),
     ) {
@@ -4101,7 +4130,7 @@ private fun MessageAction(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(PiCorner.radius))
+            .squircleClip(PiCorner.radius)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -4386,38 +4415,6 @@ private val COMPOSER_FOOT = 10.dp
  */
 private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
 
-/**
- * The air the composer's frame leaves below itself: 10dp, and **always** 10dp.
- *
- * Enough that the frame's rounded corners are drawn against the page rather than against
- * the keyboard's edge, and small enough that it does not read as a band of its own — the
- * composer sits at the foot of the page, it just floats there.
- *
- * ## Why it does not move any more
- *
- * It used to ramped: 10dp while the keyboard was up and nothing once it was down, eased
- * over the last 40dp of the keyboard's travel so no step would show. What that produced is
- * the report *"收起键盘后那一点空白的下滑动画还是不够丝滑和迅速"* — the blank sliding down after
- * the keyboard was already gone — and the cause is the ramp outliving the keyboard:
- *
- *  - The page's own padding is floored (`PiKitRoot.imePaddingFloor`): below 12dp of inset
- *    the page lands rather than follows the last steps of the platform's staircase. That
- *    floor exists because a 1px-at-a-time tail reads as a crawl.
- *  - The ramp was driven by the **raw** inset, so while the page had already landed, the
- *    gap went on shrinking from its remaining ~8dp to zero over the next three frames. The
- *    only thing moving on screen was this band of page colour, and it was moving after the
- *    keyboard had visibly gone: exactly the sliding blank.
- *
- * A constant has nothing to interpolate, so nothing can outlive the keyboard: the band's
- * position is the platform's own inset animation and nothing else, and the last thing the
- * reader sees is the keyboard itself leaving. The cost is 10dp of page colour between the
- * field's frame and the navigation strip when no keyboard is up, which is the same 10dp
- * the frame keeps above the keyboard — it reads as the composer's own margin rather than
- * as a seam, and the band and the strip are the same `surface` colour, so no line is drawn
- * where they meet.
- */
-private val COMPOSER_IME_GAP = 10.dp
-
 
 /**
  * The composer: the page's bottom band, with the field inside it.
@@ -4598,11 +4595,10 @@ private fun Composer(
     // animation, before and after), so its frame *times* do not settle a question about
     // one card's work; the position of the band on each frame does.
     //
-    // The band reads no inset of its own any more: the page above is padded by the
-    // keyboard at the root, and the composer's own foot is a constant 10dp
-    // ([COMPOSER_IME_GAP]). What is left of the old layout-phase reads — `LocalDensity`,
-    // `WindowInsets.ime`, `WindowInsets.navigationBars` — was needed only by the gap that
-    // used to shrink after the keyboard had gone.
+    // The band's own foot is resolved in the layout pass by `bandBottom`
+    // (`WindowInsets.ime` ∪ `WindowInsets.navigationBars`), and the root's `imePadding`
+    // keeps the page above it in step. The inset is read there rather than here, so a
+    // keyboard close moves the band without recomposing this subtree.
 
 
     // Measured here, read in the band's own draw: the field block's height is what puts
@@ -6269,8 +6265,8 @@ private fun ContextMenu(session: PiAgentSession, text: Strings) {
  * left. `DropdownImpl` draws an unselected row identically (title, summary, the
  * library's 20dp sides), and it does not require the row to be a choice: `isSelected`
  * is simply false and no tick is drawn. `PiMenuRow` remains for the rows that carry a
- * leading mark or a trailing control — the terminal's roster and the attach menu
- * below — because those are the ones the library's dropdown row cannot hold.
+ * leading mark or a trailing control — the terminal's roster is the live example —
+ * because those are the ones the library's dropdown row cannot hold.
  *
  * ## Why `agentCommands()` is still on the session
  *
