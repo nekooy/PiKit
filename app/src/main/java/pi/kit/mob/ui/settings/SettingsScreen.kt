@@ -82,7 +82,7 @@ internal sealed interface SettingsPage {
 
     data object About : SettingsPage
 
-    /** The bundled web extension's settings: search and fetch. */
+    /** The bundled web extension's settings, and a new chat's web-access default. */
     data object Search : SettingsPage
 
     /** Cold-start conversation behaviour and the interface theme. */

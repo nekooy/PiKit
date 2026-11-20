@@ -244,11 +244,19 @@ two that reach the web, so the same slot answers the neighbouring question. It i
 default, per conversation, and its tint carries the state (the row's controls are one
 40dp dress; a second shape for "off" would be a second glyph to keep in step). Off is the
 clean context the mode promises, and the tools are declared in the request rather than
-hidden on screen: a default of on would put `web_search` in every chat request whether or
-not the reply had anything to look up, which is the always-on design this chapter
-rejects. Turning it on is one tap and is recorded for that conversation alone; a
-conversation with no record — including every one written before the default moved —
-therefore starts off.
+hidden on screen: an unconditionally on design would put `web_search` in every chat
+request whether or not the reply had anything to look up, which is the always-on design
+this chapter rejects.
+
+**A new conversation's starting state is the app's choice.** The Search page's *New chat
+conversations* rows offer **Search on**, **Search off** (the shipped answer) and **Follow
+the last**. The value is `PiSettings.chatWebAccessDefault`; Follow the last reads
+`PiSettings.lastChatWebAccess`, written whenever a chat conversation is activated or its
+switch moves. It decides only a conversation that has no file yet: an existing chat
+conversation keeps its own `SessionModeStore` record, including every conversation
+written before this preference existed, so the preference cannot rewrite a history
+entry's launch flags. Turning the switch on in a conversation is one tap and is still
+recorded for that conversation alone.
 
 On, the launch passes a **strict allowlist** of two names —
 `--tools web_search,web_fetch` — and loads the bundled `pikit-web` extension by an

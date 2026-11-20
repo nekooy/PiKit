@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import pi.kit.mob.data.ChatWebAccessDefault
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
@@ -36,6 +37,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Reset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -49,6 +51,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * free-form configuration editor: the extension's whole configuration is this
  * page, and a file it cannot parse is answered by the one reset action rather
  * than by asking the reader to write JSON on a phone.
+ *
+ * One section is the app's rather than the extension's: **New chat conversations**
+ * chooses the network-tools switch a chat conversation with no file starts from.
+ * It is here because this page is where the reader decides what web access the
+ * agent has; the value lives in `PiSettings` and `PiAgentSession` applies it at a
+ * chat launch (§17), not in `web.json`.
  */
 @Composable
 internal fun SearchPage(
@@ -58,6 +66,7 @@ internal fun SearchPage(
     val text = strings
     val store = session.webSearch
     val settings by store.settings.collectAsState()
+    val appSettings by session.settingsStore.settings.collectAsState()
     val unreadable by store.unreadable.collectAsState()
     val available = store.available
 
@@ -100,6 +109,26 @@ internal fun SearchPage(
                             session.scheduleRestart()
                         },
                     )
+                }
+
+                // The chat-mode default is not part of `web.json`: the extension never
+                // reads it, `PiAgentSession` does when it builds a chat launch. It sits
+                // on this page because this page is where the reader decides what web
+                // access the agent has, and a new chat conversation's answer to that is
+                // the same question one step earlier. See ARCHITECTURE §9.3 and §17.
+                PiSection(title = text.settings.chatWebAccessDefault) {
+                    ChatWebAccessDefault.entries.forEach { option ->
+                        RadioButtonPreference(
+                            title = chatWebAccessLabel(option, text),
+                            summary = chatWebAccessSummary(option, text),
+                            selected = appSettings.chatWebAccessDefault == option,
+                            onClick = {
+                                session.settingsStore.update {
+                                    it.copy(chatWebAccessDefault = option)
+                                }
+                            },
+                        )
+                    }
                 }
 
                 PiSection(title = text.settings.searchSection) {
@@ -324,6 +353,19 @@ private fun fetchProviderLabel(id: String, text: Strings): String = when (id) {
     WebSearchSettings.FETCH_DIRECT -> text.settings.fetchDirect
     else -> WebSearchSettings.provider(id)?.label ?: id
 }
+
+private fun chatWebAccessLabel(option: ChatWebAccessDefault, text: Strings): String = when (option) {
+    ChatWebAccessDefault.OFF -> text.settings.chatWebAccessOff
+    ChatWebAccessDefault.ON -> text.settings.chatWebAccessOn
+    ChatWebAccessDefault.LAST -> text.settings.chatWebAccessLast
+}
+
+private fun chatWebAccessSummary(option: ChatWebAccessDefault, text: Strings): String =
+    when (option) {
+        ChatWebAccessDefault.OFF -> text.settings.chatWebAccessOffSubtitle
+        ChatWebAccessDefault.ON -> text.settings.chatWebAccessOnSubtitle
+        ChatWebAccessDefault.LAST -> text.settings.chatWebAccessLastSubtitle
+    }
 
 private fun providerBaseUrlPlaceholder(id: String): String? = when (id) {
     "deepseek" -> "https://api.deepseek.com"

@@ -53,4 +53,14 @@ class AgentModeTest {
         assertEquals(AgentMode.WORK, AgentMode.fromCode("later-mode"))
         assertEquals(AgentMode.CHAT, AgentMode.fromCode("chat"))
     }
+
+    @Test
+    fun `a new chat conversation's web default follows the chosen rule`() {
+        assertEquals(false, ChatWebAccessDefault.OFF.initialValue(lastChatWebAccess = true))
+        assertEquals(true, ChatWebAccessDefault.ON.initialValue(lastChatWebAccess = false))
+        assertEquals(true, ChatWebAccessDefault.LAST.initialValue(lastChatWebAccess = true))
+        assertEquals(false, ChatWebAccessDefault.LAST.initialValue(lastChatWebAccess = false))
+        assertEquals(ChatWebAccessDefault.OFF, ChatWebAccessDefault.fromCode(null))
+        assertEquals(ChatWebAccessDefault.LAST, ChatWebAccessDefault.fromCode("last"))
+    }
 }

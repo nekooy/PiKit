@@ -828,12 +828,22 @@ internal object EnglishStrings : Strings {
 
         override val searchTitle = "Web access"
         override val searchSubtitle = "Search the web and read pages"
-        override val searchPageSubtitle = "The pikit-web extension: web_search and web_fetch"
+        override val searchPageSubtitle =
+            "The pikit-web extension and a new chat's web default"
         override val searchNotBundled =
             "This runtime has no web extension. Update the runtime under Maintenance & repair, " +
                 "then open this page again."
         override val webAccess = "Web access"
         override val webAccessSubtitle = "Let the agent search the web and read pages"
+        override val chatWebAccessDefault = "New chat conversations"
+        override val chatWebAccessOn = "Search on"
+        override val chatWebAccessOnSubtitle =
+            "A new chat starts with web search and page fetching"
+        override val chatWebAccessOff = "Search off"
+        override val chatWebAccessOffSubtitle = "A new chat starts with no web tools"
+        override val chatWebAccessLast = "Follow the last"
+        override val chatWebAccessLastSubtitle =
+            "Use the last switch setting from chat mode"
         override val searchSection = "Search"
         override val searchProvider = "Search provider"
         override val searchProviderSubtitle = "The service web_search asks first"

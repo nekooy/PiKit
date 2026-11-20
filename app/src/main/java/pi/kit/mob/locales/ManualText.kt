@@ -484,6 +484,7 @@ Free, then DuckDuckGo.
 | Row | What it sets |
 | --- | --- |
 | Web access | the master switch over searching and page reading |
+| New chat conversations | whether a new chat starts with the two web tools |
 | Search provider | which service `web_search` asks first |
 | Results per search | how many sources one search returns |
 | Fetch provider | how `web_fetch` retrieves a page; Automatic is direct HTTP |
@@ -501,8 +502,9 @@ Free, then DuckDuckGo.
   account id.
 
 The file is `web.json`, and this page is its
-only writer. **Restore defaults** replaces it
-and asks first.
+only writer. The new-chat default is an app
+setting, not part of that file. **Restore
+defaults** replaces the file and asks first.
 
 ## 9. Settings at a glance
 
@@ -513,7 +515,7 @@ tab: five rows in **Essentials** and four in
 | Row | What it holds |
 | --- | --- |
 | Model & provider | provider, endpoint, key, models |
-| Search settings | the web search and fetch settings |
+| Search settings | web search, fetch and a new chat's default |
 | Personalization | launch, text size, theme, icon, avatars |
 | Language | English, 简体中文, 日本語 |
 | User manual | this page |
@@ -586,7 +588,11 @@ the one optional tool the reader may lend them.
   prompt is where the current time goes; the
   actual timestamp is filled in at launch.
 - **Web access**: the magnifier beside the
-  input, off by default and per conversation. On
+  input belongs to each conversation. A new
+  chat's starting state is chosen under
+  **Settings → Web access** → New chat
+  conversations — search on, search off, or
+  follow the last; the shipped answer is off. On
   lends the conversation `web_search` and
   `web_fetch` and nothing else; off gives it no
   tool at all.

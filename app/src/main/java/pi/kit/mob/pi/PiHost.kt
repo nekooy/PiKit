@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.ChatPresetStore
 import pi.kit.mob.data.ProfileAddressing
 import pi.kit.mob.data.SessionModeStore
@@ -772,15 +773,22 @@ class PiHost private constructor(context: Context) {
         PiAgentSession(this, bound)
 
     /**
-     * Opens a new, empty conversation and makes it the active one.
+     * Opens a new, empty conversation in [mode] and makes it the active one.
+     *
+     * [mode] is applied before [activate], because activation mirrors the conversation
+     * on screen into the app's defaults — the launch mode, and the chat switch that
+     * `ChatWebAccessDefault.LAST` reads. A conversation created for one mode must not
+     * stamp the defaults with the mode it was constructed in and never displayed. Null
+     * leaves the mode as the constructor read it, which is the cold start's path.
      *
      * @return null when [MAX_LIVE] conversations are already open and none of them is
      *   idle; the caller says so rather than silently evicting a conversation whose
      *   answer is still arriving.
      */
-    fun newConversation(): PiAgentSession? {
+    fun newConversation(mode: AgentMode? = null): PiAgentSession? {
         val opened = makeRoom() ?: return null
         val session = opened
+        if (mode != null) session.switchMode(mode)
         _sessions.value = _sessions.value + session
         activate(session)
         return session
@@ -850,6 +858,11 @@ class PiHost private constructor(context: Context) {
         if (settingsStore.read().agentMode != shownMode) {
             settingsStore.update { it.copy(agentMode = shownMode) }
         }
+        // A chat conversation becoming the one on screen is what "the last setting"
+        // means for `ChatWebAccessDefault.LAST`: whether it arrived from the drawer or
+        // was just created, its switch is now the state a new chat conversation
+        // should inherit.
+        if (shownMode == AgentMode.CHAT) session.rememberChatWebAccess()
         session.rememberAsLastConversation()
     }
 
@@ -875,6 +888,7 @@ class PiHost private constructor(context: Context) {
                 fresh
             }
             _active.value = next
+            if (next.mode.value == AgentMode.CHAT) next.rememberChatWebAccess()
             next.rememberAsLastConversation()
         }
         return true

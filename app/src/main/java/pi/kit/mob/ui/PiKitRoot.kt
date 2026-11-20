@@ -711,18 +711,16 @@ private fun ChatTab(
     val openNew: (AgentMode) -> Boolean = remember(host, rootScope) {
         { wanted ->
             openedPath = null
-            val opened = host.newConversation()
+            // A new conversation's mode is decided **before** its process exists:
+            // `startAgent` reads the mode once, at the spawn, and a fresh session has no
+            // file yet for the per-session record to answer from. `newConversation`
+            // applies it before activation, so the mode, and the chat web default
+            // `LAST` follows, describe the conversation actually being opened.
+            val opened = host.newConversation(wanted)
             if (opened == null) {
                 toasts?.show(text.sessions.poolFull(PiHost.MAX_ANSWERING))
                 false
             } else {
-                // A new conversation's mode is decided **before** its process exists:
-                // `startAgent` reads the mode once, at the spawn, and a fresh session
-                // has no file yet for the per-session record to answer from. This is
-                // the drawer's switch — the one control that used to flip a live
-                // conversation's mode and therefore had to restart it — so what it
-                // creates is a conversation that is already the mode that was tapped.
-                opened.switchMode(wanted)
                 rootScope.launch { opened.startAgent() }
                 true
             }

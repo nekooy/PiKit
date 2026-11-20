@@ -55,6 +55,8 @@ class SettingsStoreTest {
             availableThinkingLevelsFor = "deepseek-v4-pro",
             defaultWorkspace = "/tmp/work",
             agentMode = AgentMode.CHAT,
+            chatWebAccessDefault = ChatWebAccessDefault.LAST,
+            lastChatWebAccess = true,
             chatSystemPrompt = "Be brief.\nCurrent time: {{time}}",
             language = Lang.JAPANESE,
             openNewOnLaunch = false,
@@ -103,6 +105,31 @@ class SettingsStoreTest {
 
         assertEquals("   ", resolved.chatSystemPrompt)
         assertEquals("   ", store.read().chatSystemPrompt)
+    }
+
+    @Test
+    fun `the chat web default and its memory survive a store rebuild`() {
+        val preferences = FakeSharedPreferences()
+        val files = tempDir()
+
+        SettingsStore(FakeContext(preferences, files)).update {
+            it.copy(
+                chatWebAccessDefault = ChatWebAccessDefault.LAST,
+                lastChatWebAccess = true,
+            )
+        }
+        val rebuilt = SettingsStore(FakeContext(preferences, files))
+
+        assertEquals(ChatWebAccessDefault.LAST, rebuilt.read().chatWebAccessDefault)
+        assertEquals(true, rebuilt.read().lastChatWebAccess)
+    }
+
+    @Test
+    fun `a fresh install starts a chat conversation with search off`() {
+        val store = newStore()
+
+        assertEquals(ChatWebAccessDefault.OFF, store.read().chatWebAccessDefault)
+        assertFalse("nothing has set the last switch yet", store.read().lastChatWebAccess)
     }
 
     @Test

@@ -246,12 +246,17 @@ class PiAgentSession internal constructor(
     /**
      * Whether this chat conversation may use the bundled extension's network tools.
      *
-     * Off by default, per conversation, and a launch flag rather than a runtime switch:
-     * the tools are registered when pi starts, so flipping it restarts this conversation
-     * the way a preset change does. `SessionModeStore` records it beside the mode.
+     * A conversation opened from history takes its own record; one with no file yet
+     * takes the app's [ChatWebAccessDefault], which is Off unless the reader chose
+     * otherwise. It is a launch flag rather than a runtime switch: the tools are
+     * registered when pi starts, so flipping it restarts this conversation the way a
+     * preset change does. `SessionModeStore` records it beside the mode.
      */
     private val _chatWebAccess = MutableStateFlow(
-        boundSession?.let { host.sessionModes.webAccessFor(it) } ?: false,
+        boundSession?.let { host.sessionModes.webAccessFor(it) }
+            ?: settingsStore.read().let { settings ->
+                settings.chatWebAccessDefault.initialValue(settings.lastChatWebAccess)
+            },
     )
     val chatWebAccess: StateFlow<Boolean> = _chatWebAccess.asStateFlow()
 
@@ -548,6 +553,7 @@ class PiAgentSession internal constructor(
         // The next *new* conversation starts in the mode just chosen. This is only a
         // default; the conversation on screen is already answered by [_mode].
         settingsStore.update { it.copy(agentMode = mode) }
+        if (mode == AgentMode.CHAT) rememberChatWebAccess()
         when (_agent.value) {
             is AgentStatus.Stopped -> Unit
             is AgentStatus.Starting, is AgentStatus.Running, is AgentStatus.Failed ->
@@ -604,11 +610,28 @@ class PiAgentSession internal constructor(
         sessionPath?.let { host.sessionModes.setWebAccess(it, enabled) }
         restoreTarget?.let { host.sessionModes.setWebAccess(it, enabled) }
         if (_mode.value == AgentMode.CHAT) {
+            rememberChatWebAccess()
             when (_agent.value) {
                 is AgentStatus.Stopped -> Unit
                 is AgentStatus.Starting, is AgentStatus.Running, is AgentStatus.Failed ->
                     scheduleRestart()
             }
+        }
+    }
+
+    /**
+     * Records this chat conversation's switch as the app's last one.
+     *
+     * [ChatWebAccessDefault.LAST] reads this memory when a conversation with no file
+     * starts. It is written when a chat conversation is activated and whenever its
+     * switch moves, so "the last setting" means the state the reader last saw — not
+     * the last flip alone. Work conversations never write it: their tools come with
+     * the agent and the switch is not drawn.
+     */
+    internal fun rememberChatWebAccess() {
+        val value = _chatWebAccess.value
+        if (settingsStore.read().lastChatWebAccess != value) {
+            settingsStore.update { it.copy(lastChatWebAccess = value) }
         }
     }
 
@@ -1593,6 +1616,7 @@ class PiAgentSession internal constructor(
             _mode.value = host.sessionModes.modeFor(target)
             _chatPresetId.value = host.chatPresets.selectedId(target)
             _chatWebAccess.value = host.sessionModes.webAccessFor(target)
+            if (_mode.value == AgentMode.CHAT) rememberChatWebAccess()
             // The restored conversation is now the one on screen, and "last used mode" is
             // that fact — the same invariant `PiHost.activate` keeps for every other
             // change of conversation. Without it a cold start that came back to a chat

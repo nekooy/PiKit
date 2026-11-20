@@ -627,6 +627,25 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val agentMode: AgentMode = AgentMode.DEFAULT,
     /**
+     * What a new chat conversation's network-tools switch starts as.
+     *
+     * Off is the shipped default and the clean-context promise §17 describes; On
+     * and Follow the last are for a reader whose chats usually look something up.
+     * A conversation that already has a file keeps its own record in
+     * [SessionModeStore], so this field only answers a conversation with no file
+     * yet — the same rule [agentMode] follows for the launch mode.
+     */
+    val chatWebAccessDefault: ChatWebAccessDefault = ChatWebAccessDefault.DEFAULT,
+    /**
+     * The network-tools switch's value the last time a chat conversation was active.
+     *
+     * A memory rather than a setting: [ChatWebAccessDefault.LAST] reads it to answer
+     * a conversation with no record yet. It is updated whenever a chat conversation
+     * is activated or its switch moves, and travels in `pikit_settings` with the
+     * rest of the preferences.
+     */
+    val lastChatWebAccess: Boolean = false,
+    /**
      * The chat prompt the single-document editor stored before presets existed.
      *
      * **Read once, as a migration input.** The prompt is a [ChatPreset]'s now
@@ -848,6 +867,10 @@ class SettingsStore(context: Context) {
             thinkingLevel = thinkingLevel(),
             defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
             agentMode = AgentMode.fromCode(prefs.getString(KEY_AGENT_MODE, null)),
+            chatWebAccessDefault = ChatWebAccessDefault.fromCode(
+                prefs.getString(KEY_CHAT_WEB_DEFAULT, null),
+            ),
+            lastChatWebAccess = prefs.getBoolean(KEY_LAST_CHAT_WEB_ACCESS, false),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -933,6 +956,8 @@ class SettingsStore(context: Context) {
             .putString(KEY_LEVELS_FOR, next.availableThinkingLevelsFor)
             .putString(KEY_WORKSPACE, next.defaultWorkspace)
             .putString(KEY_AGENT_MODE, next.agentMode.code)
+            .putString(KEY_CHAT_WEB_DEFAULT, next.chatWebAccessDefault.code)
+            .putBoolean(KEY_LAST_CHAT_WEB_ACCESS, next.lastChatWebAccess)
             .putString(KEY_CHAT_SYSTEM_PROMPT, next.chatSystemPrompt)
             .putString(KEY_PERMISSION, next.permissionMode.code)
             .putString(KEY_LANGUAGE, next.language.code)
@@ -960,6 +985,8 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = next.availableThinkingLevelsFor,
             defaultWorkspace = next.defaultWorkspace,
             agentMode = next.agentMode,
+            chatWebAccessDefault = next.chatWebAccessDefault,
+            lastChatWebAccess = next.lastChatWebAccess,
             chatSystemPrompt = next.chatSystemPrompt,
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
@@ -1047,6 +1074,10 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             defaultWorkspace = prefs.getString(KEY_WORKSPACE, "").orEmpty(),
             agentMode = AgentMode.fromCode(prefs.getString(KEY_AGENT_MODE, null)),
+            chatWebAccessDefault = ChatWebAccessDefault.fromCode(
+                prefs.getString(KEY_CHAT_WEB_DEFAULT, null),
+            ),
+            lastChatWebAccess = prefs.getBoolean(KEY_LAST_CHAT_WEB_ACCESS, false),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -1075,6 +1106,8 @@ class SettingsStore(context: Context) {
         availableThinkingLevelsFor: String = current.get().availableThinkingLevelsFor,
         defaultWorkspace: String = current.get().defaultWorkspace,
         agentMode: AgentMode = current.get().agentMode,
+        chatWebAccessDefault: ChatWebAccessDefault = current.get().chatWebAccessDefault,
+        lastChatWebAccess: Boolean = current.get().lastChatWebAccess,
         chatSystemPrompt: String = current.get().chatSystemPrompt,
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
@@ -1101,6 +1134,8 @@ class SettingsStore(context: Context) {
                 availableThinkingLevelsFor = availableThinkingLevelsFor,
                 defaultWorkspace = defaultWorkspace,
                 agentMode = agentMode,
+                chatWebAccessDefault = chatWebAccessDefault,
+                lastChatWebAccess = lastChatWebAccess,
                 chatSystemPrompt = chatSystemPrompt,
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
@@ -1189,6 +1224,12 @@ class SettingsStore(context: Context) {
 
         /** [AgentMode.code]; absent means [AgentMode.DEFAULT]. */
         private const val KEY_AGENT_MODE = "agent_mode"
+
+        /** [ChatWebAccessDefault.code]; absent means [ChatWebAccessDefault.DEFAULT]. */
+        private const val KEY_CHAT_WEB_DEFAULT = "chat_web_default"
+
+        /** The last chat conversation's network-tools switch; see [PiSettings.lastChatWebAccess]. */
+        private const val KEY_LAST_CHAT_WEB_ACCESS = "last_chat_web_access"
 
         /** The chat prompt template; see [PiSettings.chatSystemPrompt]. */
         private const val KEY_CHAT_SYSTEM_PROMPT = "chat_system_prompt"

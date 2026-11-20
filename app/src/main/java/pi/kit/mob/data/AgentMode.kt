@@ -39,6 +39,42 @@ enum class AgentMode(val code: String) {
 }
 
 /**
+ * What a new chat conversation's network-tools switch starts as.
+ *
+ * The shipped value is [OFF] and stays so: the clean context is what chat mode
+ * promises, and the tools are declared in the request rather than hidden on screen,
+ * so an on-by-default install would put `web_search` in every chat request whether
+ * or not the reply had anything to look up (§17). The other two are choices for a
+ * reader whose chats usually do look something up.
+ *
+ * The value is app-wide, but it only answers a conversation that has no file yet:
+ * a conversation opened from history keeps its own [SessionModeStore] record.
+ * [LAST] follows [PiSettings.lastChatWebAccess], the switch's value the last time a
+ * chat conversation was active.
+ */
+enum class ChatWebAccessDefault(val code: String) {
+    OFF("off"),
+    ON("on"),
+    LAST("last"),
+    ;
+
+    /** The switch a new conversation with no record starts on. */
+    fun initialValue(lastChatWebAccess: Boolean): Boolean = when (this) {
+        OFF -> false
+        ON -> true
+        LAST -> lastChatWebAccess
+    }
+
+    companion object {
+        val DEFAULT = OFF
+
+        /** A stored preference, or [DEFAULT] for a missing or unknown value. */
+        fun fromCode(code: String?): ChatWebAccessDefault =
+            entries.firstOrNull { it.code == code } ?: DEFAULT
+    }
+}
+
+/**
  * The token the chat-mode editor shows instead of a concrete timestamp.
  *
  * The editor edits the *template*, not one launch's answer: the same template is

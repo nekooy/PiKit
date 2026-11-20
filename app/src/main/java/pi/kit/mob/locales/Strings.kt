@@ -1950,6 +1950,24 @@ interface Strings {
         val webAccess: String
         val webAccessSubtitle: String
 
+        /**
+         * The chat-mode default for a new conversation's network-tools switch.
+         *
+         * It is not part of `web.json`: the extension never reads it, and the
+         * `PiAgentSession` that launches a chat process is what applies it. Off is
+         * the shipped answer — the clean context of §17 — and the other two are
+         * choices for a reader whose chats usually look something up. The three
+         * rows are radio buttons, so the current default is visible without opening
+         * a sheet.
+         */
+        val chatWebAccessDefault: String
+        val chatWebAccessOn: String
+        val chatWebAccessOnSubtitle: String
+        val chatWebAccessOff: String
+        val chatWebAccessOffSubtitle: String
+        val chatWebAccessLast: String
+        val chatWebAccessLastSubtitle: String
+
         /** The search section: provider menu and result count. */
         val searchSection: String
         val searchProvider: String
