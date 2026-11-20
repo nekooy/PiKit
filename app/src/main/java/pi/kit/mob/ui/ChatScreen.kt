@@ -1552,8 +1552,10 @@ private fun ChatHeader(
             backdrop = LocalPiBackdrop.current,
             size = HEADER_MARK_SIZE,
             // The header is a row of objects on a page, not a bar's buttons over a
-            // scrolling surface; the bar's shadow would halo a 42dp disc.
-            shadow = null,
+            // scrolling surface; the bar's shadow would halo a 42dp disc. The panel's
+            // own small shadow is the one the trailing capsule carries, so both ends
+            // of the row are the same object.
+            shadow = PiGlass.floatingShadow,
         ) {
             Icon(
                 imageVector = DrawerGlyph,

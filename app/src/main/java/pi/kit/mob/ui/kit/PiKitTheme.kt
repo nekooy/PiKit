@@ -31,6 +31,7 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.glass.glassPanel
 import top.yukonga.miuix.kmp.material.GlassEdgeStrokes
+import top.yukonga.miuix.kmp.material.GlassMaterials
 import top.yukonga.miuix.kmp.material.GlassShadow
 import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
@@ -220,8 +221,34 @@ fun DarkNavigationBar() {
  * underneath showed through the capsule. The glass panel has the same rule: its body
  * is the blurred *backdrop*, not a wash of the surface colour, and its fallback is
  * opaque. A translucent fill would be neither.
+ *
+ * ## The material is the one the bar's buttons use
+ *
+ * `glassPanel` with no `material` draws the blurred backdrop alone. Over a page with
+ * text and cards that is a legible piece of glass, but over an empty page it is the
+ * page colour: the conversation header's leading `GlassIconButton` and its trailing
+ * `PiGlass.panel` were then two different materials, measured at rgb(239) and
+ * rgb(230) on the light scheme. `GlassIconButton` supplies
+ * `GlassMaterials.puredThinGlass` and turns shading off, and those are the two
+ * arguments a floating panel now passes too, so every capsule, chip and field is the
+ * same material as the button beside it.
  */
 object PiGlass {
+
+    /**
+     * The soft edge under a floating control: small enough not to halo a 32dp chip.
+     *
+     * `GlassIconButton` takes the same value for the header's leading disc, so the two
+     * ends of one row are the same object rather than one shadowed capsule beside one
+     * flat disc.
+     */
+    val floatingShadow: GlassShadow = GlassShadow(
+        color = Color.Black.copy(alpha = 0.04f),
+        offsetX = 0f,
+        offsetY = 1f,
+        radius = 10f,
+        dispersion = 0.5f,
+    )
 
     /** The fill used when the device has no backdrop renderer. */
     @Composable
@@ -241,6 +268,10 @@ object PiGlass {
             backdrop = LocalPiBackdrop.current,
             shape = shape.toGlassShape(),
             alpha = alpha,
+            material = GlassMaterials.puredThinGlass(dark),
+            // The material supplies the body, so the bar's refraction pass is not a
+            // second one: GlassIconButton draws through `glass(shading = false)`.
+            shading = false,
             stroke = GlassEdgeStrokes.forTheme(
                 isDark = dark,
                 light = GlassEdgeStrokes.SmallLight,
@@ -249,7 +280,7 @@ object PiGlass {
             // A floating control is small; the panel shadow's 64-unit spread is the
             // bar/panel shadow and reads as a halo around a 32dp chip. This is the
             // same silhouette at a floating-control radius.
-            shadow = PI_GLASS_SHADOW,
+            shadow = floatingShadow,
             fallback = Modifier.clip(shape).background(fill()),
         )
     }
@@ -414,15 +445,6 @@ private const val PROMPT_SHARE_DARK = 0.34f
  * absorb.
  */
 private const val DARK_BASE_LUMINANCE = 0.2f
-
-/** The soft edge under a floating control: small enough not to halo a 32dp chip. */
-private val PI_GLASS_SHADOW = GlassShadow(
-    color = Color.Black.copy(alpha = 0.04f),
-    offsetX = 0f,
-    offsetY = 1f,
-    radius = 10f,
-    dispersion = 0.5f,
-)
 
 /**
  * The light scheme's page: `#F0F0F0`, one step below Miuix's `#F7F7F7` page.

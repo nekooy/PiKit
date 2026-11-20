@@ -72,11 +72,18 @@ before its first frame. The transcript is the layer; every control that samples 
 sibling. A single window-wide layer would have put the bars inside their own sample.
 
 **`PiGlass.panel(shape)` is the one surface a floating control is cut from.** It calls
-`glassPanel` with the page's `LocalPiBackdrop`, the OS4 small edge stroke, and an
-opaque fallback; `PiGlass.fill()` remains that fallback and is what `piGlass()` uses
-when no backdrop exists. The old `PiGlass` KDoc said a real backdrop blur was
-impossible because Compose has no backdrop filter — that was true of the library the
-app shipped against, and `miuix-blur` is what replaced it.
+`glassPanel` with the page's `LocalPiBackdrop`, `GlassMaterials.puredThinGlass` — the
+same material `GlassIconButton` uses — the OS4 small edge stroke, and an opaque
+fallback; `PiGlass.fill()` remains that fallback and is what `piGlass()` uses when no
+backdrop exists. The material is load-bearing on a flat page: `glassPanel` with no
+material draws the blurred backdrop alone, which over an empty page is the page itself.
+Measured on the light scheme before the material was added, the leading
+`GlassIconButton` sampled rgb(239) while the trailing `PiGlass.panel` sampled rgb(230)
+beside it; the two ends of one header row were different materials. With
+`puredThinGlass` and the shared floating-control shadow on both ends, both sampled
+rgb(230). The old `PiGlass` KDoc said a real backdrop blur was impossible because
+Compose has no backdrop filter — that was true of the library the app shipped against,
+and `miuix-blur` is what replaced it.
 
 **The Android 8 floor is kept by a deliberate override.** `miuix-blur` declares
 `minSdk 33` because `android.graphics.RuntimeShader` starts there. The manifest
