@@ -278,7 +278,9 @@ private fun ProviderFields(store: WebSearchStore, providerId: String?, text: Str
             text = text.settings.providerNeedsKey,
             style = MiuixTheme.textStyles.footnote2,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = SettingsFieldTextInset, end = SettingsFieldTextInset, bottom = 4.dp),
         )
     }
     provider.fields.forEach { field ->

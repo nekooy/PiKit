@@ -67,7 +67,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.PiCorner
@@ -234,57 +233,61 @@ fun SettingsParagraph(
 }
 
 /**
- * How far a field's box is pulled in from the card's edge — the number the field's own
- * KDoc means when it says the label's 4dp is the price.
+ * How far a field's box is pulled in from the card's edge.
  *
- * The section below is why this is about the outline rather than the text, and it is the
- * record of the first attempt; the wrapper's own doc has the current geometry.
+ * Miuix's `TextField` draws its own filled box, and with no wrapper the box fills the
+ * card: its side walls then touch the card's edge, so the page reads as one stretched
+ * control rather than as a field placed on a card. The box is therefore inset by
+ * [FIELD_INSET] on each side, which leaves the card's fill visible around it and gives
+ * the field's own rounded corners something to sit inside.
  *
- * ## The gutter is the library's, not this wrapper's
- *
- * `TextFieldDefaults.InsideMargin` is 16dp on each side and
- * `BasicComponentDefaults.InsideMargin` is 16dp, so a field with no gutter of its own
- * starts its label on the same column a row starts its title — inside a `Card` inset by
- * 12dp both land at 28dp from the page edge, and inside a sheet (24dp) both land at 40.
- * This used to add a 12dp gutter on top, which put every field 12dp to the right of the
- * rows it sat among, and it was removed for that reason.
- *
- * **What came back is a different thing, and it is about the outline rather than the
- * text.** An edge-to-edge field ran its *box* to within 12dp of the window, so the two
- * side walls of a full-width group's field were 24dp apart with the card's fill in
- * between and nothing else — measured, the widest control on the page and the closest
- * to its edge, which read as a field that had been stretched rather than placed. The
- * box is therefore inset by [FIELD_INSET], which puts each wall 24dp from the window
- * and leaves the card's fill visible on both sides of it.
- *
- * [FIELD_INSET] is 12dp and the inside margin is reduced by it only down to
- * [FIELD_MIN_INSIDE]: the label therefore starts 20dp inside the card rather than the
- * 16dp a row's title starts at, which is the supporting line's own column below the
- * box. That 4dp is the price of the clearance, and it is the right way round — a field
- * whose *outline* is 4dp off the page's column is a control placed on a page, while a
- * field whose *text* is 4dp from its own wall is a box with a word crammed into it. The
- * first attempt at this only moved the outline (6dp of inset, the inside margin reduced
- * by the same amount) and the report came back that the boxes still ran to the edge.
+ * **The library's inside margin is not reduced to pay for this.** Earlier versions
+ * treated the two paddings as one budget and kept their sum constant: 6dp of inset
+ * with the inside margin at 10dp, then 12dp with the inside margin floored at 8dp.
+ * The outline moved each time, but the *label and the value* ended up 8dp from their
+ * own wall and the box only 4dp from the card's edge above and below — the two things
+ * a field must not do, measured on the search page's timeout field. The two numbers
+ * answer different questions: [FIELD_INSET] is the card's frame around the control,
+ * and `TextFieldDefaults.InsideMargin` is the control's padding around its text. Both
+ * are therefore the library's own 16dp, and the field's text starts 32dp inside the
+ * card instead of sharing a row's 16dp column — a field is a box, and its text belongs
+ * at the box's padding, not at the label column of the rows around it.
  */
-private val FIELD_INSET = 12.dp
+private val FIELD_INSET = 16.dp
 
 /**
- * The floor under the field's inside margin, so [FIELD_INSET] never squeezes the text.
+ * How far a field's box sits from the card's top and bottom edge.
  *
- * 8dp: half the library's own 16dp. Below that the label starts to look like it is
- * resting on the wall, which is the reason the library states 16 in the first place.
+ * The same argument as [FIELD_INSET], on the other axis: a field is a surface of its
+ * own and needs the card's fill visible above and below it. 4dp — the value this
+ * carried while the horizontal padding was being argued over — left a box that read as
+ * squeezed into the card's rounded corner; 12dp is a visible frame and still smaller
+ * than the 16dp a row's own content sits at.
+ *
+ * A run of fields is separated by two of these (24dp), because each field owns its
+ * share of the seam rather than a section spacing them. The supporting line stays
+ * inside its own field's share, so the gap below a box is its hint, not white space.
  */
-private val FIELD_MIN_INSIDE = 8.dp
+private val FIELD_VERTICAL_INSET = 12.dp
+
+/**
+ * The column a field's own text and its supporting line share.
+ *
+ * The label is drawn inside the field's box by the library; the supporting line is
+ * drawn outside it by this wrapper. Its inset is therefore the box's [FIELD_INSET]
+ * plus the field's own inside margin, stated once so the line cannot drift from the
+ * label it explains.
+ */
+internal val SettingsFieldTextInset: Dp = FIELD_INSET + TextFieldDefaults.InsideMargin.width
 
 /**
  * A settings field: Miuix's own, with its supporting line under it.
  *
- * The field carries 4dp above and below and [FIELD_INSET] on each side, so a run of
- * fields sits inside the group rather than edge to edge and two stacked fields stay 8dp
- * apart (their own outlines separate them, and a hairline beside a field would be a
- * boundary too many). [supporting] is the sentence under the box: Miuix's `TextField`
- * has a floating label and no supporting slot, and that sentence is help for *this*
- * field, so it stays with it.
+ * The field carries [FIELD_VERTICAL_INSET] above and below and [FIELD_INSET] on each
+ * side, so a lone field sits inside the group with the card's fill visible on all four
+ * sides rather than against two of its edges. [supporting] is the sentence under the
+ * box: Miuix's `TextField` has a floating label and no supporting slot, and that
+ * sentence is help for *this* field, so it stays with it.
  *
  * [placeholder] is drawn under the box while the field is empty, beside [supporting]
  * rather than instead of it: a call site that passes both wants the sentence about the
@@ -313,7 +316,7 @@ fun SettingsTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     visualTransformation: VisualTransformation? = null,
 ) {
-    Column(modifier.fillMaxWidth()) {
+    Column(modifier.fillMaxWidth().padding(vertical = FIELD_VERTICAL_INSET)) {
         TextField(
             cornerRadius = PiCorner.radius,
             value = value,
@@ -336,20 +339,13 @@ fun SettingsTextField(
             // `piFieldColors`'s KDoc for why the two are one decision.
             colors = piFieldColors(),
             cursorBrush = piFieldCursor(),
-            // The box is pulled in from the card's edge, and its inside margin is
-            // reduced by as much of that as it can spare: the *outline* stops 12dp
-            // inside the card, while the *label* stays at 8dp from that outline and
-            // lands on the supporting line's column (20dp inside the card, against the
-            // rows' 16 — see [FIELD_INSET] for why that 4dp is the right trade).
-            insideMargin = DpSize(
-                (TextFieldDefaults.InsideMargin.width - FIELD_INSET)
-                    .coerceAtLeast(FIELD_MIN_INSIDE),
-                TextFieldDefaults.InsideMargin.height,
-            ),
+            // The library's own inside margin, unsqueezed: the box is a control placed
+            // on the card, and its text is what that control contains. See [FIELD_INSET]
+            // for why the two paddings are no longer traded against each other.
+            insideMargin = TextFieldDefaults.InsideMargin,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = FIELD_INSET)
-                .padding(vertical = 4.dp),
+                .padding(horizontal = FIELD_INSET),
         )
         // Both lines, when both are given: `supporting` explains the field and
         // `placeholder` shows an example of its content, and the version that drew the
@@ -364,7 +360,12 @@ fun SettingsTextField(
                 text = hint,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp),
+                    .padding(
+                        start = SettingsFieldTextInset,
+                        end = SettingsFieldTextInset,
+                        top = 4.dp,
+                        bottom = 0.dp,
+                    ),
                 style = MiuixTheme.textStyles.footnote2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
