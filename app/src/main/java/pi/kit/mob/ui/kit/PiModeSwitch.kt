@@ -59,10 +59,11 @@ import kotlin.math.roundToInt
  * answer rather than for a toggle: the switch has been both, and the shape of the
  * control survived the change.
  *
- * The labels are [MiuixTheme.textStyles.paragraph], the same running-prose size the
- * transcript's messages use. The first version used `title3`, which made a binary
- * switch taller and louder than the conversation it sits over; the switch is a
- * control about a message, not a page title.
+ * The labels are the library's own pair — [MiuixTheme.textStyles.subtitle] for the chosen
+ * half, `body2` for the other — because the glass path is `GlassSegmentedTabRow` and the
+ * hand-drawn fallback below API 33 has to be the same control at the same size. The first
+ * version used `title3`, which made a binary switch taller and louder than the
+ * conversation it sits over; the switch is a control about a message, not a page title.
  */
 @Composable
 fun PiModeSwitch(
@@ -79,7 +80,11 @@ fun PiModeSwitch(
     backdrop: LayerBackdrop? = null,
 ) {
     val haptics = LocalPiHaptics.current
-    val style = MiuixTheme.textStyles.paragraph
+    // The library's segmented row draws the chosen label in `subtitle` and the other in
+    // `body2`; the hand-drawn fallback below API 33 used `paragraph`, so the same control
+    // changed type size on a device without the shader. Both paths state the library's
+    // pair, and the measurement uses it, so the capsule is the same width either way.
+    val style = MiuixTheme.textStyles.subtitle
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
@@ -277,8 +282,8 @@ private val MODE_SEGMENT_HEIGHT = 36.dp
 /** The inset that separates the thumb from the capsule's rounded edge. */
 private val MODE_SWITCH_INSET = 3.dp
 
-/** The air between a label and its segment's edge. */
-private val MODE_LABEL_PADDING = 13.dp
+/** The air between a label and its segment's edge: the library's own 16dp tab padding. */
+private val MODE_LABEL_PADDING = 16.dp
 
 /** How long the thumb takes to travel when a tap changes the mode. */
 private const val MODE_SLIDE_MILLIS = 180
