@@ -149,6 +149,7 @@ internal fun MaintenancePage(
         }
     }
 
+    val pageScroll = rememberScrollState()
     PiPage(
         // The Settings row is "Maintenance & repair" and the manual quotes that
         // same label; the old header said "Updates & repair". Reading the row's own
@@ -159,6 +160,7 @@ internal fun MaintenancePage(
         title = text.settings.updateAndRepair,
         subtitle = text.settings.maintenanceSubtitle,
         onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         Column(
             modifier = Modifier
@@ -166,7 +168,7 @@ internal fun MaintenancePage(
                 .padding(padding)
                 // The page's elastic end. See `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 // The strip under the page is content padding rather than a
                 // viewport cut (see `PiPage`): the card scrolls behind the
                 // gesture handle and its last row can still be cleared of it.

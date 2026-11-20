@@ -23,7 +23,7 @@ tokens into the app's vocabulary. Every screen depended on that vocabulary, and 
 Material upgrade had to be re-read against it.
 
 The rewrite replaced it with a library that already owns the vocabulary:
-`compose-miuix-ui/miuix` 0.9.5-beta01, a Compose Multiplatform component library drawing the
+`compose-miuix-ui/miuix` 0.9.5-beta02, a Compose Multiplatform component library drawing the
 MIUI/HyperOS idiom. Its theme engine ships the two palettes and derives a third
 from a seed colour if asked; its preference components are the rows a settings page
 is made of; its window dialogs,
@@ -54,9 +54,10 @@ maintained alongside every screen.
 
 ## OS4 glass: the material the library draws, and the page it samples
 
-Miuix 0.9.5-beta01 is the first release with `miuix-glass`, the OS4 material. The
-app's chrome — the page bar, the chat header's capsules, the composer and its chips,
-the jump-to-latest disc, and a dialog or sheet raised from a page — is drawn from it.
+Miuix 0.9.5-beta02 is the release this project builds against — the second beta of
+`miuix-glass`, the OS4 material (beta01 was the first). The app's chrome — the page
+bar, the chat header's capsules, the composer and its chips, the jump-to-latest disc,
+and a dialog or sheet raised from a page — is drawn from it.
 A settings card is still a Miuix `Card`: OS4's glass is a material for controls that
 float over the page, not for every rectangle on it.
 
@@ -73,19 +74,24 @@ until the RenderThread stack overflowed (`SIGSEGV`, `SEGV_ACCERR`, Android repor
 before its first frame. The transcript is the layer; every control that samples it is a
 sibling. A single window-wide layer would have put the bars inside their own sample.
 
-**`PiGlass.panel(shape)` is the one surface a floating control is cut from.** It calls
-`glassPanel` with the page's `LocalPiBackdrop`, `GlassMaterials.puredThinGlass` — the
-same material `GlassIconButton` uses — the OS4 small edge stroke, and an opaque
-fallback; `PiGlass.fill()` remains that fallback and is what `piGlass()` uses when no
-backdrop exists. The material is load-bearing on a flat page: `glassPanel` with no
-material draws the blurred backdrop alone, which over an empty page is the page itself.
-Measured on the light scheme before the material was added, the leading
+**`PiGlass.panel(shape)` is the one surface a floating control is cut from, and its
+material is the popup glass at a floating-control blur.** It calls `glassPanel` with
+the page's `LocalPiBackdrop`, `PiGlass.material()` — `GlassMaterials.popupViewGlass`
+at 28dp, the library's own stronger white mix — the OS4 small edge stroke, and an
+opaque fallback; `PiGlass.fill()` remains that fallback and is what `piGlass()` uses
+when no backdrop exists. The material is load-bearing on a flat page: `glassPanel`
+with no material draws the blurred backdrop alone, which over an empty page is the page
+itself. Measured on the empty light conversation, `puredThinGlass` drew the header
+capsules, chips and composer frame at rgb(230) against a rgb(240) page — *darker* than
+the page, so each control read as a hole rather than as an object; the popup material
+at 28dp brings the same controls to rgb(249), a nine-step lift, and the populated
+conversation's text shows through the same body. On the drawer's `#F7F7F7` panel the
+settings disc lands at rgb(251), only a 4-step fill, which is why it carries Miuix's
+`GlassShadows.Float` for its edge. Before any material was added the leading
 `GlassIconButton` sampled rgb(239) while the trailing `PiGlass.panel` sampled rgb(230)
-beside it; the two ends of one header row were different materials. With
-`puredThinGlass` and the shared floating-control shadow on both ends, both sampled
-rgb(230). The old `PiGlass` KDoc said a real backdrop blur was impossible because
-Compose has no backdrop filter — that was true of the library the app shipped against,
-and `miuix-blur` is what replaced it.
+beside it; both ends of one row now share one material. The old `PiGlass` KDoc
+said a real backdrop blur was impossible because Compose has no backdrop filter — that
+was true of the library the app shipped against, and `miuix-blur` is what replaced it.
 
 **The Android 8 floor is kept by a deliberate override.** `miuix-blur` declares
 `minSdk 33` because `android.graphics.RuntimeShader` starts there. The manifest
@@ -377,12 +383,17 @@ a bar of four equally weighted destinations said otherwise. The **Work / Chat** 
 left the header for the drawer's foot, where it shares the panel's footer with the
 settings disc.
 
-**The drawer's foot wears the same kind of object.** The mode switch and the settings disc at the
-bottom of the history panel use `PiGlass.fill()`, the opaque fallback, because the drawer is
-a panel rather than a page and has no page backdrop for glass to sample; they are still
-controls floating over a page rather than rows on it. The settings control used to be an
-opaque `surfaceContainer` pill with a word; it is a disc now, since the mode switch beside
-it already names the only other thing the footer does.
+**The drawer's foot wears the same kind of object, and the drawer now owns the layer it
+samples.** The mode switch and the settings disc at the bottom of the history panel used
+to be `PiGlass.fill()` because the drawer is a panel rather than a page and had no
+backdrop; `SessionsScreen` now creates one with `rememberPiBackdrop()` over the panel's
+`background`, records its heading, search field and list into it, and keeps both controls
+outside the layer as siblings. The mode switch is Miuix's `GlassSegmentedTabRow` (the
+library owns the glass track, the sliding indicator and the drag) and the settings disc
+is a `GlassIconButton` with the library's glass `SettingsOutline` and `GlassShadows.Float`.
+The settings control used to be an opaque `surfaceContainer` pill with a word; it is a
+disc now, since the mode switch beside it already names the only other thing the footer
+does.
 
 **A bar with no bar in it.** The reference drawing the page follows has no strip across
 the top: the content scrolls *under* the marks, fades out as it reaches them, and the
@@ -584,6 +595,19 @@ the 16dp the same arrow had on every settings page. Two pushes, two arrow positi
 chat page has no bar at all now, so the left-aligned variant had no caller left; it is
 gone, and every page's arrow starts where the library puts it.
 
+**The back arrow is a plain glyph until content reaches the bar.** Miuix's
+`GlassTopAppBar` drives its buttons' material from `isContentScrolled`; at rest the
+button is a glyph with no pill, and once the page has scrolled under the bar the band
+and the pill rise together. `PiPage` therefore takes `contentScrolled` from the page's
+own `ScrollState`/`LazyListState` (`canScrollBackward`) and passes it through. The old
+call passed neither a scroll behaviour nor a visual offset, and the library's fallback
+for that case is `true` — every arrow was floated on the first frame, including the
+settings pages that fit the window. A nested-scroll accumulator was tried as the
+generic answer and rejected: `piOverScroll` reports elastic displacement through the
+same chain, so a drag on a page with nothing to scroll left the arrow floated with no
+content under it. The scroll state is the exact answer, and the terminal — which has no
+vertical scroll — passes nothing and keeps the plain arrow.
+
 A page that arrives is also *seen* arriving: the destinations cross-fade with a tenth of
 the width of travel, from the trailing edge on the way in and from the leading edge on the
 way back. The fade alone read as a redraw rather than as a move, which is what "tapping
@@ -624,7 +648,7 @@ control staying that size, and an inline code chip clamps to `min(radius, height
 where a tall box would otherwise cut into its text. The terminal is a family of its
 own and keeps the library's smaller figure throughout: its key bar is a 26dp pill with
 10dp keys on a 32dp cap, and the on-screen keyboard a 14dp panel with 7dp keys on 34dp.
-There is no theme-level shape local in Miuix 0.9.5-beta01 to hang this on, which is
+There is no theme-level shape local in Miuix 0.9.5-beta02 to hang this on, which is
 why it is per-call-site.
 
 **A hand-drawn rectangular surface is cut with the squircle modifiers, not

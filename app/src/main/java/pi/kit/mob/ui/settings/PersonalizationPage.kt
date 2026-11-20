@@ -107,10 +107,12 @@ internal fun PersonalizationPage(
     // The slot the panel is drawing: replaced by a newer one, never cleared by the tap.
     var shownSlot by remember { mutableStateOf<AvatarSlot?>(null) }
 
+    val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.personalization,
         subtitle = text.settings.personalizationSubtitle,
         onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -123,7 +125,7 @@ internal fun PersonalizationPage(
                 // The page's elastic end: two sections fit a phone outright, and a page
                 // that fits is the one Compose's own effect skips. See `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.personalizationConversation) {

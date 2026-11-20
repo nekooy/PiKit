@@ -90,6 +90,19 @@ fun PiPage(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    /**
+     * Whether the page's scrolling body has content above the viewport — Miuix's
+     * `listState.canScrollBackward`.
+     *
+     * The bar uses it exactly as `GlassTopAppBar` does: at rest the bar is transparent
+     * and its back arrow is a plain glyph; once content has scrolled under the bar the
+     * band and the button's glass pill rise together. Passing a *derived scroll
+     * position* rather than a nested-scroll accumulator is deliberate — the old
+     * accumulator counted the elastic overscroll of a page that fits the window, so a
+     * drag with nothing to scroll left the arrow floated. `false` is the honest
+     * default for the pages with no vertical scroll (the terminal).
+     */
+    contentScrolled: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     body: @Composable (PaddingValues) -> Unit,
 ) {
@@ -109,6 +122,14 @@ fun PiPage(
         topBar = {
             GlassTopAppBar(
                 title = title,
+                // The page overlap state, not the library's default. At rest the bar
+                // is transparent and its back arrow is a plain glyph; once the body
+                // has scrolled under it, Miuix raises the band and the button's glass
+                // pill together — the same threshold and motion every Miuix screen
+                // uses. Miuix's `isContentScrolled` overload falls back to `true`
+                // when it has neither a scroll behaviour nor a visual offset; the old
+                // call passed neither, which is why every arrow was floated.
+                isContentScrolled = contentScrolled,
                 expandable = false,
                 // OS4's material: the bar draws a progressive blur over the page's
                 // backdrop and its buttons sample the same layer. `progressiveBlur`
@@ -116,6 +137,7 @@ fun PiPage(
                 // can run the shader; elsewhere the bar keeps its gradient band.
                 progressiveBlur = true,
                 backdrop = pageBackdrop,
+                material = PiGlass.material(),
                 defaultWindowInsetsPadding = true,
                 navigationIcon = {
                     if (onBack != null) {

@@ -18,15 +18,23 @@ rule of theirs does not survive the difference, the difference is named.
 
 ## The pins the rules are written against
 
-- `compose-miuix-ui/miuix` **0.9.5-beta01** — the first release with `miuix-glass`
-  (the OS4 material) and `miuix-squircle`. beta02 is *not* taken: it moves the
-  library to Compose Multiplatform 1.13.0-rc01, and this project builds the stable
-  1.12 line (`gradle/libs.versions.toml` says why).
-- Compose **BOM 2026.09.00** (the 1.12 line), Kotlin **2.4.21**. So: `derivedStateOf`
-  (not 1.13's `computedStateOf`), `AnimatedVisibility` (not `CapturedAnimatedVisibility`),
-  and `TextFieldState` *is* available and is what a field uses. The strong-skipping
-  compiler is on, which is why an unstable parameter is skipped by instance equality
-  and the app carries no immutable-collections dependency.
+- `compose-miuix-ui/miuix` **0.9.5-beta02** — the second beta of the OS4 material:
+  `GlassTextField`, the animated `GlassNavigationRail`/`GlassTabRow`, the refined
+  progressive-blur pipeline and the Compose 1.13 API migration. It targets Compose
+  Multiplatform 1.13.0-rc01; this project resolves the stable **Compose 1.13.0** line
+  through BOM 2026.11.01, which is API-compatible with the candidate the library was
+  compiled against.
+- Compose **BOM 2026.11.01** (the 1.13 line), Kotlin **2.4.21**. So: `computedStateOf`
+  replaces `derivedStateOf`; `CapturedAnimatedVisibility` is available, but the two
+  cross-fades (`PiOverlays`' toast, `ChatPictures`' chrome) keep `AnimatedVisibility`
+  because they animate a child that is already composed and the captured variant is
+  for a conditional subtree. `TextFieldState` is available; the app's existing
+  Miuix `TextField` call sites keep the value overload because the value is screen
+  state (`ChatComposerState`'s draft, a settings form's field), and beta02's
+  deprecation is a warning rather than a removal — a new field starts from
+  `rememberTextFieldState` and the state-based overload. The strong-skipping compiler
+  is on, which is why an unstable parameter is skipped by instance equality and the
+  app carries no immutable-collections dependency.
 - `minSdk 26`, `targetSdk 28`. Glass needs `RuntimeShader` (API 33); the manifest
   overrides `miuix-blur`'s own floor and every glass call site is gated. **Do not
   raise `minSdk` to "fix" the glass floor** — the README promises Android 8.0
@@ -101,6 +109,13 @@ that cut the last card in two (§13, *The window's last pixels*).
 - **The chat page draws its own frame** — no `PiPage`, two floating capsules over a
   transcript that runs under them (§13, *Navigation*). That is the one documented
   exception, not a licence for a second page to invent a bar.
+- **A scrolling page reports `contentScrolled = scroll.canScrollBackward` to
+  `PiPage`.** The bar's back arrow is a plain glyph at rest and becomes a glass pill
+  only once the body has scrolled under the bar; Miuix's `isContentScrolled` overload
+  falls back to `true` when it has neither a scroll behaviour nor a visual offset, so
+  omitting the argument floats every arrow on the first frame. Passing the scroll
+  position (not a nested-scroll accumulator) is what keeps a short page that only
+  bounces from lighting the arrow.
 
 ## Glass: the material, and the red lines
 
@@ -114,14 +129,17 @@ The architecture is two levels, and the page owns the lower one:
 - **The page's backdrop** is created by `rememberPiBackdrop()` at the page level and
   records only the page's **body**. `PiPage` puts `layerBackdrop` on the body `Box`
   and composes the bar in the Scaffold's `topBar` slot — *outside* the layer. The
-  chat page puts it on the transcript `LazyColumn` only; the header and composer are
-  siblings. `LocalPiBackdrop` carries the value down to the controls.
+  chat page puts it on the `BoxWithConstraints` that holds the transcript and the
+  empty state; the header and composer are siblings. `LocalPiBackdrop` carries the
+  value down to the controls.
 - **A floating control** is cut from `PiGlass.panel(shape)`, which calls `glassPanel`
-  with `GlassMaterials.puredThinGlass` — the same material `GlassIconButton` uses —
-  the small OS4 edge stroke, the floating-control shadow, and an **opaque** fallback.
-  The material is load-bearing: `glassPanel` with no material draws the blurred
-  backdrop alone, which over an empty page is the page itself (the two ends of one
-  header row measured rgb(239) and rgb(230) before the material was shared; §13).
+  with `PiGlass.material()` — `GlassMaterials.popupViewGlass` at 28dp — the small OS4
+  edge stroke, the floating-control shadow, and an **opaque** fallback. The material
+  is load-bearing: `glassPanel` with no material draws the blurred backdrop alone,
+  which over an empty page is the page itself, and `puredThinGlass` measured rgb(230)
+  on this app's rgb(240) empty page — a hole rather than an object — where the popup
+  material measures rgb(249). The drawer's settings disc uses Miuix's
+  `GlassShadows.Float`; the chat page's smaller capsules keep the chip shadow (§13).
 
 **The red lines** — each is a crash or a visible defect, not a taste:
 
@@ -135,9 +153,13 @@ The architecture is two levels, and the page owns the lower one:
    `fillMaxSize()`. A layer recorded after a padding is narrowed and offset, and the
    bar's blur clips to a rectangle on rotation or a sidebar change. (Mishka's first
    engineering red line; the same trap, this app's `PiPage` body and transcript.)
+   The chat page's transcript layer sits on the `BoxWithConstraints` that holds both
+   the `LazyColumn` **and** the empty state: on the list alone, an empty conversation
+   had no recording at all and its header capsules and composer chips drew as the page.
 3. **The backdrop draws an opaque base first.** `rememberPiBackdrop` does
-   `drawRect(surface); drawContent()` so a page that paints no background of its own
-   still gives the glass the page colour rather than transparent black.
+   `drawRect(base); drawContent()` — `surface` for a page, `background` for the
+   drawer — so a subtree that paints no background of its own still gives the glass
+   the right colour rather than transparent black.
 4. **Every glass call site is gated by the shader.** `rememberPiBackdrop()` returns
    `null` below API 33 (and on a GPU that cannot run the shader); `PiGlass.panel`
    then draws `fill()` — `surfaceContainerHighest`, opaque. A new call site that
@@ -150,10 +172,14 @@ The architecture is two levels, and the page owns the lower one:
 6. **No second blur over a progressive one.** `GlassTopAppBar(progressiveBlur = true)`
    already draws the ramp; wrapping it in another gaussian blur is two materials.
 
-**The drawer foot and the toast are the documented non-glass controls**: the drawer
-is a panel with no page backdrop, so its mode switch and settings disc use
-`PiGlass.fill()` directly; the toast capsule is the same fill on the window's top
-layer. They are still floating objects, not rows.
+**The drawer foot is glass too, and it owns its layer.** The drawer is a panel rather
+than a page, so `SessionsScreen` creates its own backdrop with `rememberPiBackdrop()`
+and paints the panel's `background` as the base; the mode switch is Miuix's
+`GlassSegmentedTabRow` and the settings disc is a `GlassIconButton` with
+`GlassShadows.Float` — both sample that layer and both sit outside it as siblings.
+The toast capsule is the one remaining `PiGlass.fill()` control: it is raised on the
+window's top layer, above every page, where there is nothing to sample. All three are
+floating objects, not rows.
 
 ## Shapes: one corner, and squircle for the hand-drawn ones
 

@@ -130,10 +130,12 @@ internal fun AboutPage(
     // "no dialog"; the row keeps its own one-word status either way.
     var updateError by remember { mutableStateOf<String?>(null) }
 
+    val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.aboutTitle,
         subtitle = "PiKit ${BuildConfig.VERSION_NAME}",
         onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -146,7 +148,7 @@ internal fun AboutPage(
                 // The page's elastic end: About PiKit is three cards, and the
                 // environment one names the tools' presence row by row. See `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.application) {
@@ -328,7 +330,12 @@ internal fun NotePage(
     body: String,
     onBack: () -> Unit,
 ) {
-    PiPage(title = title, onBack = onBack) { padding ->
+    val pageScroll = rememberScrollState()
+    PiPage(
+        title = title,
+        onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
+    ) { padding ->
         // The page draws through the navigation strip, as every scrolling page does:
         // the strip's height belongs at the end of the content so the last line can
         // be scrolled clear of the gesture handle.
@@ -338,7 +345,7 @@ internal fun NotePage(
                 .fillMaxSize()
                 .padding(padding)
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             SettingsParagraph(text = body)
@@ -481,6 +488,7 @@ internal fun ManualPage(onBack: () -> Unit) {
         title = text.manual.title,
         subtitle = text.manual.subtitle,
         onBack = onBack,
+        contentScrolled = scroll.canScrollBackward,
     ) { padding ->
         // The document is the page's body and now draws through the navigation strip, so
         // the strip's height belongs at the end of the prose rather than around the

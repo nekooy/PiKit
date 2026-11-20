@@ -78,6 +78,11 @@ import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.rememberPiBackdrop
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.material.GlassShadows
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
 import top.yukonga.miuix.kmp.basic.DropdownEntry
@@ -94,8 +99,8 @@ import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Rename
 import top.yukonga.miuix.kmp.icon.extended.Replace
 import top.yukonga.miuix.kmp.icon.extended.Search
-import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
+import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.icon.extended.Unpin
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.squircle.squircleSurface
@@ -430,6 +435,13 @@ fun SessionsScreen(
         .asPaddingValues()
         .calculateBottomPadding()
 
+    // The drawer is a panel rather than a page, so it needs a backdrop of its own:
+    // the base is the panel's `background`, not the page's `surface`, and the layer
+    // records the heading, search field and conversation list. The two foot controls
+    // are siblings of that layer, not inside it — a glass control that samples its
+    // own recording is the RenderThread stack overflow §13 documents.
+    val drawerBackdrop = rememberPiBackdrop(MiuixTheme.colorScheme.background)
+
     Box(
         Modifier
             .fillMaxSize()
@@ -438,6 +450,13 @@ fun SessionsScreen(
         Column(
             Modifier
                 .fillMaxSize()
+                .then(
+                    if (drawerBackdrop != null) {
+                        Modifier.layerBackdrop(drawerBackdrop)
+                    } else {
+                        Modifier
+                    },
+                )
                 // Top and sides only: the strip is spent by the list's content padding
                 // and the pill's own margin, both of which can be scrolled or moved,
                 // where a padding here would end the panel above the handle.
@@ -764,11 +783,13 @@ fun SessionsScreen(
                 // menu is where it changes.
                 onModeChange = { wanted -> onNewConversationInMode(wanted) },
                 text = text,
+                backdrop = drawerBackdrop,
             )
             Spacer(Modifier.weight(1f))
             SettingsDisc(
                 description = text.settings.title,
                 onClick = onOpenSettings,
+                backdrop = drawerBackdrop,
             )
         }
     }
@@ -1849,23 +1870,28 @@ private val ROW_CORNER = 14.dp
 private fun SettingsDisc(
     description: String,
     onClick: () -> Unit,
+    backdrop: LayerBackdrop?,
 ) {
     val haptics = LocalPiHaptics.current
-    Box(
-        modifier = Modifier
-            .size(42.dp)
-            .clip(CircleShape)
-            .background(PiGlass.fill())
-            .clickable {
-                haptics.tap()
-                onClick()
-            },
-        contentAlignment = Alignment.Center,
+    GlassIconButton(
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
+        backdrop = backdrop,
+        material = PiGlass.material(),
+        size = 42.dp,
+        // A disc at the drawer's foot is the library's floating-control scale, not a
+        // 32dp chip: Miuix's own `Float` shadow gives the near-white body an edge
+        // against the drawer's `#F7F7F7` panel where the chip-sized one disappeared.
+        shadow = GlassShadows.Float,
     ) {
         Icon(
-            imageVector = MiuixIcons.Settings,
+            imageVector = MiuixIcons.Glass.SettingsOutline,
             contentDescription = description,
             tint = MiuixTheme.colorScheme.onSurface,
+            // The 42dp disc's own mark: the library's 28dp glass glyph is the bar's
+            // size, and this disc is the drawer foot's smaller object.
             modifier = Modifier.size(20.dp),
         )
     }

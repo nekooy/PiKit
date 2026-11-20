@@ -140,10 +140,12 @@ internal fun ModelPage(
     // on a profile's line: the composer's chip is the one control for the setting, and
     // a row here answers "which configuration", not "at what level".
 
+    val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.profilesTitle,
         subtitle = text.settings.modelCount(profiles.size),
         onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -157,7 +159,7 @@ internal fun ModelPage(
                 // and it is the one every reader sees on their first run. See
                 // `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             // An empty list is not drawn as an empty frame: a card with no rows in it is a
@@ -848,6 +850,7 @@ internal fun ModelEditPage(
     // by the sheet's own dismissal (see the sheet below).
     var shownEdit by remember { mutableStateOf<NumberEdit?>(null) }
 
+    val pageScroll = rememberScrollState()
     PiPage(
         title = if (isNew) text.settings.newProfile else text.settings.editProfile,
         // The provider is what the page is about: the model ids below are its ids and the
@@ -858,6 +861,7 @@ internal fun ModelEditPage(
         // system's back gesture are one action, and a form that saves nothing on the way
         // out has to say so first.
         onBack = ::requestLeave,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -871,7 +875,7 @@ internal fun ModelEditPage(
                 // before a key is typed, and editing one is the same page filled in.
                 // See `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.profile) {

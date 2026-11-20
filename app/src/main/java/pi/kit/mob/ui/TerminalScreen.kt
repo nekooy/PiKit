@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -828,12 +828,12 @@ private fun ExtraKeysRow(
     // Read from the window rather than remembered, so it stays right when the keyboard is
     // raised by tapping the terminal instead of by a button. The raw inset changes on every
     // frame of the keyboard animation, so it is clamped to the boolean that actually matters
-    // inside `derivedStateOf`: reading `getBottom` straight in composition recomposed this
+    // inside `computedStateOf`: reading `getBottom` straight in composition recomposed this
     // bar for each step of the animation (docs/UI.md, *State*).
     val density = LocalDensity.current
     val ime = WindowInsets.ime
     val keyboardUp by remember(density, ime) {
-        derivedStateOf { ime.getBottom(density) > 0 }
+        computedStateOf { ime.getBottom(density) > 0 }
     }
     // The strip under the bar is the bar's own: the background goes on first and the inset
     // is padding *inside* it, so the shell's black reaches the window's last pixel and the

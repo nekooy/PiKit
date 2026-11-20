@@ -107,7 +107,7 @@ internal data class FollowTailState(
      * Folds one reading of the scroll state.
      *
      * The rule the user asked for, and the reason this is a state machine rather
-     * than a `derivedStateOf` on the position: **following stops the moment the
+     * than a `computedStateOf` on the position: **following stops the moment the
      * reader leaves the bottom**, and starts again the moment they come back to
      * it.
      *
@@ -193,7 +193,7 @@ internal class FollowTailController(initial: FollowTailState) {
  *
  * `snapshotFlow` rather than a state read in composition, so the decision costs
  * no recomposition of the transcript: this runs on every frame of a scroll and
- * on every streamed token, and a `derivedStateOf` reading the same values would
+ * on every streamed token, and a `computedStateOf` reading the same values would
  * dirty the whole list each time.
  *
  * [programmatic] is the app's own flag, and it has to come from the caller: the

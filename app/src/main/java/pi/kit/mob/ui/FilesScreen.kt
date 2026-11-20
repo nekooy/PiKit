@@ -92,6 +92,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -275,6 +276,12 @@ fun FilesScreen(session: PiAgentSession,
         if (!openExternally(context, entry.file)) toasts?.show(text.files.openFailed)
     }
 
+    // One list state per folder, so the page's back arrow follows the listing that is
+    // on screen. The states are kept in a plain map rather than a single hoisted one
+    // because `AnimatedContent` composes the outgoing folder and the incoming one at
+    // the same time; one shared state would make the two lists fight over the scroll.
+    val listingStates = remember { mutableMapOf<File, LazyListState>() }
+    val listingState = listingStates.getOrPut(current) { LazyListState() }
     PiPage(
         // The library's bar, not the app's left-aligned one: this page is reached from
         // the chat bar and left with the arrow at the top-left, and the settings pages
@@ -292,6 +299,7 @@ fun FilesScreen(session: PiAgentSession,
         // reserves the line and says nothing in it — see `PiPage`'s *Null and blank are
         // two different answers*.
         subtitle = itemCount?.let { text.files.itemCount(it) }.orEmpty(),
+        contentScrolled = listingState.canScrollBackward,
         actions = {
             IconButton(
                 onClick = { navigate(root) },
@@ -387,6 +395,7 @@ fun FilesScreen(session: PiAgentSession,
             ) { directory ->
                 Listing(
                     directory = directory,
+                    listState = listingStates.getOrPut(directory) { LazyListState() },
                     sort = sort,
                     query = query,
                     text = text,
@@ -435,6 +444,8 @@ fun FilesScreen(session: PiAgentSession,
 @Composable
 private fun Listing(
     directory: File,
+    /** The listing's own position, hoisted so `PiPage` can read `canScrollBackward`. */
+    listState: LazyListState,
     sort: FileSort,
     query: String,
     text: Strings,
@@ -473,6 +484,7 @@ private fun Listing(
 
         else -> DirectoryTable(
             rows = visible,
+            listState = listState,
             text = text,
             onOpen = onOpen,
             onCopyPath = onCopyPath,
@@ -629,6 +641,7 @@ private fun ListToolbar(
 @Composable
 private fun DirectoryTable(
     rows: List<FileEntry>,
+    listState: LazyListState,
     text: Strings,
     onOpen: (FileEntry) -> Unit,
     onCopyPath: (FileEntry) -> Unit,
@@ -639,6 +652,7 @@ private fun DirectoryTable(
     // below the fold still scroll *under* it rather than stopping at its edge.
     val inset = LocalPiNavigationInset.current
     LazyColumn(
+        state = listState,
         // The page's elastic end, from the kit rather than from the list: `LazyColumn`
         // installs an effect of its own, and Compose does not dispatch to it when there
         // is nothing to scroll to — which is the whole of a three-file directory.

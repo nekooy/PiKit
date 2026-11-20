@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import pi.kit.mob.data.AgentMode
 import pi.kit.mob.locales.Strings
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
+import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRowDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
@@ -67,6 +70,13 @@ fun PiModeSwitch(
     onModeChange: (AgentMode) -> Unit,
     text: Strings,
     modifier: Modifier = Modifier,
+    /**
+     * The drawer's own layer. When present the switch is Miuix's
+     * [GlassSegmentedTabRow] — its track, indicator and drag are the library's — and a
+     * missing backdrop (Android below 33) keeps the opaque capsule below as the
+     * fallback.
+     */
+    backdrop: LayerBackdrop? = null,
 ) {
     val haptics = LocalPiHaptics.current
     val style = MiuixTheme.textStyles.paragraph
@@ -82,6 +92,59 @@ fun PiModeSwitch(
     val segmentWidthPx = labelWidth + with(density) { (MODE_LABEL_PADDING * 2).toPx() }
     val segmentWidth = with(density) { segmentWidthPx.toDp() }
     val maxOffset = segmentWidthPx
+
+    if (backdrop != null) {
+        // The library's segmented row uses its own type ladder (`subtitle` for the chosen
+        // tab, `body2` for the other) and its own 16dp side padding plus an 8dp gap. The
+        // old 13dp/paragraph measurement is a few dp too narrow for that, which is how
+        // 工作/聊天 became "..."/"..." on the first build. Measure the library's own
+        // styles and paddings here, and the control is exactly as wide as its labels.
+        val glassLabelWidth = maxOf(
+            measurer.measure(text = text.settings.modeWork, style = MiuixTheme.textStyles.subtitle).size.width,
+            measurer.measure(text = text.settings.modeChat, style = MiuixTheme.textStyles.subtitle).size.width,
+            measurer.measure(text = text.settings.modeWork, style = MiuixTheme.textStyles.body2).size.width,
+            measurer.measure(text = text.settings.modeChat, style = MiuixTheme.textStyles.body2).size.width,
+        )
+        val glassSegmentWidthPx = glassLabelWidth +
+            with(density) {
+                (GlassSegmentedTabRowDefaults.TabPaddingHorizontal * 2).toPx() +
+                    // 8dp per segment — 4dp beside each label: the library's text is
+                    // laid out with its own style, and at the 0.95 baseline scale the
+                    // measured advance rounds up on the device — at exactly the
+                    // padding + label width the last glyph became an ellipsis.
+                    8.dp.toPx()
+            }
+        val glassWidth = with(density) {
+            (glassSegmentWidthPx * 2 + GlassSegmentedTabRowDefaults.TabGap.toPx()).toDp()
+        }
+        // One Miuix control, not a hand-drawn capsule: the library's segmented row owns
+        // the glass track, the sliding indicator and the drag gesture. Both labels take
+        // an equal share, which is the rule the old thumb also obeyed.
+        GlassSegmentedTabRow(
+            tabs = listOf(text.settings.modeWork, text.settings.modeChat),
+            selectedIndex = if (mode == AgentMode.WORK) 0 else 1,
+            onSelect = { index ->
+                val target = if (index == 0) AgentMode.WORK else AgentMode.CHAT
+                if (target != mode) {
+                    // §16: the drawer foot's mode switch is a floating capsule, the
+                    // `tap()` family — it starts a conversation in the chosen mode.
+                    haptics.tap()
+                    onModeChange(target)
+                }
+            },
+            backdrop = backdrop,
+            modifier = modifier.width(glassWidth),
+            height = MODE_SWITCH_HEIGHT,
+            // The app's mode switch keeps the accented thumb it has always drawn:
+            // the library's default segmented style is a neutral grey wash, and the
+            // two launch modes are a choice the page says in the accent everywhere
+            // else. The glass track around it is the library's.
+            indicatorColor = MiuixTheme.colorScheme.primary,
+            selectedContentColor = MiuixTheme.colorScheme.onPrimary,
+            contentColor = MiuixTheme.colorScheme.onSurface,
+        )
+        return
+    }
 
     fun targetOf(value: AgentMode): Float =
         if (value == AgentMode.WORK) 0f else maxOffset

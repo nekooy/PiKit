@@ -316,9 +316,9 @@ dependencies {
     // The interface. Every screen is drawn from Miuix rather than from Material:
     // the theme engine, the preference rows the settings pages are built from, the
     // icons, and the window-level dialogs and sheets. Miuix is a Compose
-    // Multiplatform library whose Android artifacts target the same androidx.compose
-    // 1.12 line this build already resolves, and its Kotlin metadata is 2.4.21
-    // against this project's 2.4.21.
+    // Multiplatform library whose Android artifacts target the androidx.compose
+    // 1.13 line this build already resolves through compose-bom 2026.11.01, and its
+    // Kotlin metadata is 2.4.21 against this project's 2.4.21.
     implementation(libs.miuix.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)

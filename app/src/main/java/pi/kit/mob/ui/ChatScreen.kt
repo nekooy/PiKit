@@ -72,7 +72,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -531,10 +531,10 @@ internal fun ChatScreen(
     // Whether the touch-blocking layer over the card exists at all. A composition read
     // of `drawer.progress` here would make every pixel of a drag recompose the whole
     // conversation page — the transcript, the composer and the drawer — sixty times a
-    // second. `derivedStateOf` only invalidates this body when the answer crosses zero,
+    // second. `computedStateOf` only invalidates this body when the answer crosses zero,
     // which is the one frame the layer has to appear or disappear; the motion itself is
     // read inside the `graphicsLayer` lambdas below, in the draw phase.
-    val drawerVisible by remember { derivedStateOf { drawer.progress > 0f } }
+    val drawerVisible by remember { computedStateOf { drawer.progress > 0f } }
 
     // Arrives with the drawer already out when the page is rebuilt on the way back from
     // the settings page, which is where `historyOpen` came from; the width is only known
@@ -1554,6 +1554,7 @@ private fun ChatHeader(
                 onOpenSessions()
             },
             backdrop = LocalPiBackdrop.current,
+            material = PiGlass.material(),
             size = HEADER_MARK_SIZE,
             // The header is a row of objects on a page, not a bar's buttons over a
             // scrolling surface; the bar's shadow would halo a 42dp disc. The panel's
@@ -2101,7 +2102,23 @@ private fun ChatPage(
                 // own, so the cap is on the selection container itself and the tree is a
                 // level shorter.
                 BoxWithConstraints(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // The transcript's own layer, and it covers the **empty state
+                        // too**. It used to sit on the `LazyColumn` alone, so a
+                        // conversation with no messages had no layer recording at all:
+                        // the header's capsules and the composer's chips sampled an
+                        // empty backdrop and drew as the page itself. The empty state
+                        // is content the glass should blur like any other; the jump
+                        // control is outside this box so it cannot sample its own
+                        // output.
+                        .then(
+                            if (chatBackdrop != null) {
+                                Modifier.layerBackdrop(chatBackdrop)
+                            } else {
+                                Modifier
+                            },
+                        ),
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     // **No selection container around the whole transcript.**
@@ -2161,16 +2178,10 @@ private fun ChatPage(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     // The transcript is the only thing in the page's
-                                    // backdrop. The header's glass samples this layer;
-                                    // the composer and its chips stay outside it, or
-                                    // they would sample their own blur output.
-                                    .then(
-                                        if (chatBackdrop != null) {
-                                            Modifier.layerBackdrop(chatBackdrop)
-                                        } else {
-                                            Modifier
-                                        },
-                                    )
+                                    // backdrop. The layer lives on the `BoxWithConstraints`
+                                    // above, so the empty state is recorded too; the
+                                    // composer and its chips stay outside it, or they
+                                    // would sample their own blur output.
                                     // A conversation shorter than the viewport has no
                                     // edge of its own to give a drag, and Compose's
                                     // `ScrollingLogic` gates the overscroll effect on
@@ -2427,7 +2438,11 @@ private fun ChatPage(
                             }
                         },
                         backdrop = LocalPiBackdrop.current,
+                        material = PiGlass.material(),
                         size = 40.dp,
+                        // The 40dp disc is the header capsule's own object, not a
+                        // bar button: the bar's 64-unit shadow would halo it.
+                        shadow = PiGlass.floatingShadow,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             // Clear of the transcript's own gutter, and of the scrollbar

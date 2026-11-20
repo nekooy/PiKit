@@ -164,10 +164,12 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
         }
     }
 
+    val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.backupTitle,
         subtitle = text.settings.backupSubtitle,
         onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -181,7 +183,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 // a fresh install, and it has to answer a drag regardless. See
                 // `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             // The two halves the list reads as, and they are the same on both sides: the

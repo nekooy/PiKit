@@ -31,6 +31,7 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.glass.glassPanel
 import top.yukonga.miuix.kmp.material.GlassEdgeStrokes
+import top.yukonga.miuix.kmp.material.GlassMaterial
 import top.yukonga.miuix.kmp.material.GlassMaterials
 import top.yukonga.miuix.kmp.material.GlassShadow
 import top.yukonga.miuix.kmp.material.GlassShape
@@ -199,7 +200,7 @@ fun DarkNavigationBar() {
 /**
  * The material a floating control is drawn from: OS4 glass over the page's backdrop.
  *
- * Miuix 0.9.5's `miuix-glass` makes a real backdrop blur possible: [rememberPiBackdrop]
+ * Miuix 0.9.5-beta02's `miuix-glass` makes a real backdrop blur possible: [rememberPiBackdrop]
  * records the page's own drawing into a `LayerBackdrop`, and [glassPanel] samples it
  * behind a shape — the page's cards and text show through the material rather than a
  * flat colour pretending to be one. [LocalPiBackdrop] carries that layer down to the
@@ -228,10 +229,12 @@ fun DarkNavigationBar() {
  * text and cards that is a legible piece of glass, but over an empty page it is the
  * page colour: the conversation header's leading `GlassIconButton` and its trailing
  * `PiGlass.panel` were then two different materials, measured at rgb(239) and
- * rgb(230) on the light scheme. `GlassIconButton` supplies
- * `GlassMaterials.puredThinGlass` and turns shading off, and those are the two
- * arguments a floating panel now passes too, so every capsule, chip and field is the
- * same material as the button beside it.
+ * rgb(230) on the light scheme. [material] is now passed to both kinds of control —
+ * `GlassTopAppBar`'s buttons, every `GlassIconButton` on the chat page, and
+ * `PiGlass.panel` — so every capsule, chip and field is cut from one body. On the
+ * empty light conversation `puredThinGlass` measured rgb(230) against the rgb(240)
+ * page, i.e. darker than the page and reading as a hole; the popup material at 28dp
+ * measures rgb(249) on the same page, a visible nine-step lift.
  */
 object PiGlass {
 
@@ -255,6 +258,27 @@ object PiGlass {
     fun fill(): Color = MiuixTheme.colorScheme.surfaceContainerHighest
 
     /**
+     * The body every PiKit glass control is cut from.
+     *
+     * Miuix's `puredThinGlass` is tuned for a bar over a page with text under it: its two
+     * white layers move a flat `#F0F0F0` page by only a few RGB steps, and an empty
+     * conversation — the one screen with nothing scrolling under the header or composer —
+     * therefore drew its capsules and chips as the page itself. The popup material is the
+     * library's own stronger mix (60% white in both colour layers) for a control that has
+     * to stand as an object without text behind it; the blur is reduced from the popup's
+     * 60dp to [FLOATING_BLUR_RADIUS] because these controls are small and sit over a
+     * live transcript, where 60dp of blur is spread and expensive without becoming more
+     * legible.
+     */
+    @Composable
+    fun material(): GlassMaterial {
+        val dark = MiuixTheme.colorScheme.background.luminance() < DARK_BASE_LUMINANCE
+        return remember(dark) {
+            GlassMaterials.popupViewGlass(dark).copy(blurRadius = FLOATING_BLUR_RADIUS)
+        }
+    }
+
+    /**
      * A shape cut from the page's glass.
      *
      * The fallback is the old opaque fill clipped to [shape], so every call site keeps a
@@ -268,7 +292,7 @@ object PiGlass {
             backdrop = LocalPiBackdrop.current,
             shape = shape.toGlassShape(),
             alpha = alpha,
-            material = GlassMaterials.puredThinGlass(dark),
+            material = material(),
             // The material supplies the body, so the bar's refraction pass is not a
             // second one: GlassIconButton draws through `glass(shading = false)`.
             shading = false,
@@ -309,11 +333,10 @@ val LocalPiBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
  * rather than transparent black.
  */
 @Composable
-fun rememberPiBackdrop(): LayerBackdrop? {
+fun rememberPiBackdrop(base: Color = MiuixTheme.colorScheme.surface): LayerBackdrop? {
     if (!isRuntimeShaderSupported()) return null
-    val surface = MiuixTheme.colorScheme.surface
     return rememberLayerBackdrop {
-        drawRect(surface)
+        drawRect(base)
         drawContent()
     }
 }
@@ -445,6 +468,15 @@ private const val PROMPT_SHARE_DARK = 0.34f
  * absorb.
  */
 private const val DARK_BASE_LUMINANCE = 0.2f
+
+/**
+ * The blur radius a floating control's glass is cut with.
+ *
+ * Miuix's popup material ships at 60dp for a menu-sized panel; a 32dp chip and a 42dp
+ * capsule do not need that reach, and the composer can hold six of them over a live
+ * transcript. 28dp keeps the frost visible while the blur stays a small surface's cost.
+ */
+private val FLOATING_BLUR_RADIUS = 28.dp
 
 /**
  * The light scheme's page: `#F0F0F0`, one step below Miuix's `#F7F7F7` page.

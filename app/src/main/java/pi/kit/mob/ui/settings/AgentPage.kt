@@ -166,6 +166,7 @@ internal fun AgentPage(
         }
     }
 
+    val pageScroll = rememberScrollState()
     PiPage(
         // The row this page opens reads "Agent process" (`text.settings.agentProcess`),
         // and so do the manual and this page's own section list; only the old header
@@ -175,6 +176,7 @@ internal fun AgentPage(
         title = text.settings.agentProcess,
         subtitle = agentDescription(agent, text),
         onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -187,7 +189,7 @@ internal fun AgentPage(
                 // The page's elastic end, from the kit: three sections fit a phone and
                 // five do not, and both sizes have to answer a drag. See `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.workModeSection(text.settings.workspace)) {

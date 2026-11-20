@@ -25,7 +25,7 @@ coreKtx = "1.19.1"
 annotation = "1.11.0"
 lifecycle = "2.11.0"
 activityCompose = "1.13.0"
-composeBom = "2026.09.00"
+composeBom = "2026.11.01"
 coroutines = "1.11.0"
 serialization = "1.13.0"
 okio = "3.18.2"
@@ -40,13 +40,13 @@ jlatexmath = "0.2.0"
 # snackbars and icons. The `-android` artifacts are the ones its guide names for a
 # Compose-only Android project; the multiplatform coordinates select the same code.
 #
-# 0.9.5-beta01 is the first release with `miuix-glass`, the OS4 material: glass
-# app bars, navigation bars, dialogs, sheets, popups and icons. It is pinned rather
-# than 0.9.5-beta02 because beta02 moved the library to Compose Multiplatform
-# 1.13.0-rc01; this project builds against the stable 1.12 line, and beta01 names
-# Compose 1.12.2 with the same Kotlin 2.4.21 and AGP 9.5.1 the rest of this file
-# already uses.
-miuix = "0.9.5-beta01"
+# 0.9.5-beta02 is the current release: the second beta of the OS4 material, with
+# `GlassTextField`, the animated `GlassNavigationRail`/`GlassTabRow`, the refined
+# progressive-blur pipeline and the `computedStateOf`/`CapturedAnimatedVisibility`
+# migration. It targets Compose Multiplatform 1.13.0-rc01; this project resolves
+# the stable Compose 1.13.0 line through compose-bom 2026.11.01, which is API-
+# compatible with the release candidate the library was compiled against.
+miuix = "0.9.5-beta02"
 junit = "4.13.2"
 
 [libraries]

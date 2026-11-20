@@ -73,10 +73,12 @@ internal fun SearchPage(
     var searchPicker by remember { mutableStateOf(false) }
     var fetchPicker by remember { mutableStateOf(false) }
 
+    val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.searchTitle,
         subtitle = text.settings.searchPageSubtitle,
         onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         val inset = LocalPiNavigationInset.current
         Column(
@@ -84,7 +86,7 @@ internal fun SearchPage(
                 .fillMaxSize()
                 .padding(padding)
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             if (!available) {

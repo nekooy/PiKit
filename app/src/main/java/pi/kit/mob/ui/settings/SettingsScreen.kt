@@ -404,7 +404,12 @@ private fun RootPage(
     // back gesture leave the app from here rather than doing nothing.
     // The settings root left-aligns its title for the reason the other three tab
     // roots do — see `PiPage`'s *Why a root can be left-aligned*.
-    PiPage(title = text.settings.title, onBack = onBack) { padding ->
+    val pageScroll = rememberScrollState()
+    PiPage(
+        title = text.settings.title,
+        onBack = onBack,
+        contentScrolled = pageScroll.canScrollBackward,
+    ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
         // gesture handle, which a bottom padding on the viewport would have prevented.
@@ -417,7 +422,7 @@ private fun RootPage(
                 // after it, and it has to answer a drag the same way at both sizes.
                 // See `piOverScroll`.
                 .piOverScroll()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(pageScroll)
                 .padding(top = 4.dp, bottom = 12.dp + inset),
         ) {
             PiSection(title = text.settings.essentials) {
