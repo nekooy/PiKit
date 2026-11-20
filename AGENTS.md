@@ -15,6 +15,12 @@ change: the call sites, the tests and the neighbouring files, not only the line 
 intend to edit. A comment that cites `ARCHITECTURE §…` is a pointer to read before
 touching the line under it, not decoration.
 
+**A change under `ui/` reads [docs/UI.md](docs/UI.md) first.** It is the practical
+checklist — the kit vocabulary, the page skeleton, the glass red lines, the shapes,
+the windows, the state rules — and it cites the chapter that owns each rule's
+reasoning (§13 is the design language). `tools/check-ui.py`, which `build-apks.py`
+runs, holds the three rules a regex can see; the rest is the checklist and review.
+
 **When something is unclear, read the documentation before deciding it is wrong.** An
 odd-looking call site, a magic constant or a redundant-looking wrapper usually has a
 reason written down in the chapter that owns it; search `docs/` and the code around it

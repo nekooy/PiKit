@@ -5,7 +5,9 @@ the motion, the preference rows, the dialogs and the sheets. This chapter is the
 for what a page may look like, and the reason each rule is there. The code it
 describes is `app/src/main/java/pi/kit/mob/ui/kit/` — the theme, the page, the
 section, the menu row and the window-level overlays — plus the screens that compose
-it.
+it. The practical checklist a change runs against is [docs/UI.md](../UI.md): the
+vocabulary, the red lines and the do-this-not-that, each citing the section below
+that carries its reasoning.
 
 **A page composes the library and the kit. It does not invent a colour, a radius, a
 type style or a spring of its own.** That is the whole rule; the rest of this chapter

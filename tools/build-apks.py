@@ -668,6 +668,11 @@ def run_tests() -> bool:
         # moments that must stay *silent* are only as good as the one door they all
         # come through. Cheap: it reads the module's Kotlin sources and two regexes.
         ("the haptic vocabulary", lambda: python_tool("check-haptics.py")),
+        # The UI rules a regex can hold (docs/UI.md): the colour families stay closed,
+        # the bar is composed only by PiPage, and the glass overlay pair and glassPanel
+        # are the kit's. A fourth palette or a screen composing its own bar compiles
+        # and looks like every other line; this is the half that notices.
+        ("the ui vocabulary", lambda: python_tool("check-ui.py")),
     ]
     runnable: list[tuple[str, object]] = []
     for name, check in checks:

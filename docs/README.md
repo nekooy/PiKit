@@ -10,6 +10,7 @@ Every document in this repository, and the rule for adding one.
 | [../README.zh-CN.md](../README.zh-CN.md) | The same README in 简体中文; the two are mirrors | After changing what the project says about itself |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The map of the design decisions and the constraints behind them | Before changing anything whose shape looks arbitrary |
 | [architecture/](architecture/) | The chapters themselves, one file per topic | When a comment in the code cites a chapter |
+| [UI.md](UI.md) | The practical UI checklist: the kit vocabulary, the page skeleton, the glass red lines, shapes, rows, windows, state, colour/type/icons, motion — the rules a change under `ui/` runs against | Before changing anything under `ui/` |
 | [BUILDING.md](BUILDING.md) | Prerequisites, the image builder, artifacts, signing, working on a device — including the Git Bash and emulator traps | Before the first build, on a new machine |
 | [RELEASING.md](RELEASING.md) | The version, the tag, the workflows, and the signing that has to happen first | When publishing a build |
 | [MAINTAINING.md](MAINTAINING.md) | The recurring chores — the pre-release sweep, upstream pi, packages, dependencies, the device pass — and the repository's own description and topics | Periodically, before a release, and after an upstream release |
