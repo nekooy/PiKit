@@ -1903,6 +1903,18 @@ interface Strings {
         val bundledToolsMissing: String
 
         /**
+         * The About page's third group, beside the application and the environment.
+         *
+         * The licence and the credits are the page's two long-form notes: each is a row
+         * here and a page of its own behind it, so the two groups above and this one are
+         * one list of rows rather than two different shapes on one page. The subtitles
+         * are the one-line answer to what each row opens.
+         */
+        val legalSection: String
+        val licenceSubtitle: String
+        val creditsSubtitle: String
+
+        /**
          * The Termux environment's own version, beside pi's.
          *
          * It is the same value `TERMUX_VERSION` carries inside the runtime
@@ -2034,7 +2046,7 @@ interface Strings {
         val contents: String
     }
 
-    /** Long prose blocks that belong to the About page. */
+    /** The About page's long-form notes: the licence and the credits, one page each. */
     interface Notes {
         val licenceTitle: String
         val licence: String

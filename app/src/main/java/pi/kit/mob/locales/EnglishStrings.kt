@@ -816,6 +816,9 @@ internal object EnglishStrings : Strings {
         override val packageName = "Package"
         override val bundledPi = "Bundled pi"
         override val bundledToolsMissing = "missing"
+        override val legalSection = "Legal"
+        override val licenceSubtitle = "GPLv3, and what leaves the device"
+        override val creditsSubtitle = "The open-source projects it uses"
 
         override val termuxEnvironment = "Termux environment"
         override val checkForUpdates = "Check for updates"

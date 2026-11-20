@@ -210,11 +210,12 @@ fun SettingsNote(
 /**
  * Prose outside a card, on the column the group labels use.
  *
- * The licence and the credits are two paragraphs of their own under their own headings,
- * and a card around a paragraph whose only content is that paragraph is a frame with
- * nothing to frame. 28dp is `SmallTitle`'s own inset, so a paragraph and the heading
- * over it start on the same column. Extra room above it, because a paragraph that
- * begins on the line the heading ended leaves the heading reading as part of the
+ * The licence and the credits are the long-form texts this draws — one page each, opened
+ * from the About page's legal group — and the backup page's default-values note is the
+ * other caller. A card around a paragraph whose only content is that paragraph is a
+ * frame with nothing to frame. 28dp is `SmallTitle`'s own inset, so a paragraph and a
+ * heading over it start on the same column. Extra room above it, because a paragraph
+ * that begins on the line a heading ended leaves the heading reading as part of the
  * sentence.
  */
 @Composable

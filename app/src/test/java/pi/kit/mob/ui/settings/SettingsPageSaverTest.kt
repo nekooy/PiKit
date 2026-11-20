@@ -31,6 +31,8 @@ class SettingsPageSaverTest {
             SettingsPage.Backup,
             SettingsPage.Manual,
             SettingsPage.About,
+            SettingsPage.Licence,
+            SettingsPage.Credits,
             SettingsPage.Search,
             SettingsPage.Personalization,
         )
@@ -74,5 +76,11 @@ class SettingsPageSaverTest {
     fun `search goes back to the root and has no second level`() {
         assertEquals(SettingsPage.Root, SettingsPage.Search.parent)
         assertNull(SettingsPage.Root.parent)
+    }
+
+    @Test
+    fun `the licence and the credits go back to about`() {
+        assertEquals(SettingsPage.About, SettingsPage.Licence.parent)
+        assertEquals(SettingsPage.About, SettingsPage.Credits.parent)
     }
 }

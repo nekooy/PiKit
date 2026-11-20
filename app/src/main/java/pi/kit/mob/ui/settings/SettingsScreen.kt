@@ -82,6 +82,12 @@ internal sealed interface SettingsPage {
 
     data object About : SettingsPage
 
+    /** The licence text, opened from the About page's legal group. */
+    data object Licence : SettingsPage
+
+    /** The credits, opened from the About page's legal group. */
+    data object Credits : SettingsPage
+
     /** The bundled web extension's settings, and a new chat's web-access default. */
     data object Search : SettingsPage
 
@@ -103,6 +109,9 @@ internal sealed interface SettingsPage {
             // The form was opened from the list, so it goes back to the list
             // rather than all the way to the tab root.
             is ModelEdit -> Model
+            // The licence and the credits are read from the About page, so back
+            // returns there rather than to the tab root.
+            SettingsPage.Licence, SettingsPage.Credits -> About
             // The search page's former second level is gone: all of its controls are
             // rows of the one page now, and a saved "SearchAdvanced" is a downgrade
             // from a build that had it.
@@ -162,6 +171,8 @@ internal fun decodeSettingsPage(encoded: String): SettingsPage = when {
     encoded == "AgentContext" -> SettingsPage.Agent
     encoded == "Manual" -> SettingsPage.Manual
     encoded == "About" -> SettingsPage.About
+    encoded == "Licence" -> SettingsPage.Licence
+    encoded == "Credits" -> SettingsPage.Credits
     encoded == "Search" -> SettingsPage.Search
     // The search page's former second level: a build that had it restores to the page
     // that now holds every control it had.
@@ -179,6 +190,8 @@ internal fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Backup -> "Backup"
     SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
+    SettingsPage.Licence -> "Licence"
+    SettingsPage.Credits -> "Credits"
     SettingsPage.Search -> "Search"
     SettingsPage.Personalization -> "Personalization"
 }
@@ -309,6 +322,19 @@ fun SettingsScreen(session: PiAgentSession, onBack: () -> Unit) {
             SettingsPage.About -> AboutPage(
                 session = session,
                 onBack = { open(SettingsPage.Root) },
+                onOpen = ::open,
+            )
+
+            SettingsPage.Licence -> NotePage(
+                title = strings.notes.licenceTitle,
+                body = strings.notes.licence,
+                onBack = { open(SettingsPage.About) },
+            )
+
+            SettingsPage.Credits -> NotePage(
+                title = strings.notes.creditsTitle,
+                body = strings.notes.credits,
+                onBack = { open(SettingsPage.About) },
             )
         }
     }

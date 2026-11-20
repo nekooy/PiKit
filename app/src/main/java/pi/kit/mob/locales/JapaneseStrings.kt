@@ -777,6 +777,9 @@ internal object JapaneseStrings : Strings {
         override val packageName = "パッケージ"
         override val bundledPi = "同梱の pi"
         override val bundledToolsMissing = "見つかりません"
+        override val legalSection = "法的情報"
+        override val licenceSubtitle = "GPLv3 と、デバイスから出るもの"
+        override val creditsSubtitle = "使用しているオープンソースと素材"
 
         override val termuxEnvironment = "Termux 環境"
         override val checkForUpdates = "更新を確認"

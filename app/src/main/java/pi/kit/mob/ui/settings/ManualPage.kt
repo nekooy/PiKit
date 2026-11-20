@@ -51,7 +51,6 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -83,9 +82,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *    already on screen where they matter — the root gates the whole interface on the
  *    runtime being ready, and the Agent page is where the process is started, stopped
  *    and restarted — so a copy here was a third place to read them that could disagree.
- *  * **Not repeated:** the licence and the credits are still sections of this page.
+ *  * **Kept as a group:** the licence and the credits are the page's third group — two
+ *    rows that open the full text on a page of its own. They are no longer paragraphs
+ *    under two `SmallTitle`s: nine credit lines below a run of facts read as a
+ *    footnote to the page, and a row keeps the group vocabulary the two cards above
+ *    already use while the prose keeps a page's own measure.
  *
- * The two cards are split by what a row belongs *to*, not by which page it came from:
+ * The two fact cards are split by what a row belongs *to*, not by which page it came from:
  * **应用** is the app and its own facts, **运行环境** is the runtime the app carries. pi's
  * version and the tool list therefore sit in the second, because both live inside
  * `$PREFIX` and arrive with the unpacked image. Under the app's own version row they
@@ -104,6 +107,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal fun AboutPage(
     session: PiAgentSession,
     onBack: () -> Unit,
+    onOpen: (SettingsPage) -> Unit,
 ) {
     val text = strings
     val env = session.env
@@ -138,8 +142,8 @@ internal fun AboutPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                // The page's elastic end: About PiKit is three cards, and the last of
-                // them names the tools' presence row by row. See `piOverScroll`.
+                // The page's elastic end: About PiKit is three cards, and the
+                // environment one names the tools' presence row by row. See `piOverScroll`.
                 .piOverScroll()
                 .verticalScroll(rememberScrollState())
                 .padding(top = 4.dp, bottom = 12.dp + inset),
@@ -286,16 +290,56 @@ internal fun AboutPage(
                 )
             }
 
-            // Prose, and *not* in a container: a card around a paragraph of licence text
-            // drew a box whose only content was the sentence, which is the one kind of
-            // surface §13 reserves for a control or a subject with a body. The reader's
-            // report — "许可证和致谢两项的内容文字都去掉背景色，更简洁" — is that the
-            // background was doing nothing the heading above it does not.
-            SmallTitle(text = text.notes.licenceTitle)
-            SettingsParagraph(text = text.notes.licence)
+            // A group of rows, not two paragraphs at the foot of the page: the two
+            // longest texts in the app belong behind rows like everything else on
+            // About PiKit, and each row names the note it opens.
+            PiSection(title = text.settings.legalSection) {
+                ArrowPreference(
+                    title = text.notes.licenceTitle,
+                    summary = text.settings.licenceSubtitle,
+                    onClick = { onOpen(SettingsPage.Licence) },
+                )
+                ArrowPreference(
+                    title = text.notes.creditsTitle,
+                    summary = text.settings.creditsSubtitle,
+                    onClick = { onOpen(SettingsPage.Credits) },
+                )
+            }
+        }
+    }
+}
 
-            SmallTitle(text = text.notes.creditsTitle)
-            SettingsParagraph(text = text.notes.credits)
+/**
+ * One of the About page's long-form notes, on a page of its own.
+ *
+ * The licence and the credits are prose rather than facts, so they cannot be a row's
+ * summary: the licence is two paragraphs and the credits are one line per component.
+ * A page gives them the app's reading measure and a place to scroll, while the row
+ * that opened it stays a normal `ArrowPreference` in the legal group. The text is
+ * drawn by [SettingsParagraph] on the column the group labels use, with no card: the
+ * card that once held each block was removed because a box whose only content is a
+ * paragraph has nothing to frame (§13).
+ */
+@Composable
+internal fun NotePage(
+    title: String,
+    body: String,
+    onBack: () -> Unit,
+) {
+    PiPage(title = title, onBack = onBack) { padding ->
+        // The page draws through the navigation strip, as every scrolling page does:
+        // the strip's height belongs at the end of the content so the last line can
+        // be scrolled clear of the gesture handle.
+        val inset = LocalPiNavigationInset.current
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .piOverScroll()
+                .verticalScroll(rememberScrollState())
+                .padding(top = 4.dp, bottom = 12.dp + inset),
+        ) {
+            SettingsParagraph(text = body)
         }
     }
 }

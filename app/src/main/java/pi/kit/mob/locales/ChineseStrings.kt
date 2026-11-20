@@ -755,6 +755,9 @@ internal object ChineseStrings : Strings {
         override val packageName = "包名"
         override val bundledPi = "内置 pi"
         override val bundledToolsMissing = "缺失"
+        override val legalSection = "法律信息"
+        override val licenceSubtitle = "GPLv3，以及什么会离开设备"
+        override val creditsSubtitle = "用到的开源项目与素材"
 
         override val termuxEnvironment = "Termux 环境"
         override val checkForUpdates = "检查更新"
