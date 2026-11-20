@@ -326,6 +326,16 @@ The two stamps live beside each other in `files/` (`runtime-revision.txt`,
 `content-revision.txt`) and are written seed-first, so a run that dies between them costs
 a content swap on the next launch rather than a second full unpack.
 
+They also decide the first frame. `PiHost` starts at `RuntimeStatus.Checking` when
+`$PREFIX/bin/bash` and the seed stamp exist, and the conversation page draws while
+`ensureInstalled` revalidates the image and the storage farm. Only a genuinely fresh
+install (`NotInstalled`) or a real content/seed update (`Installing`) holds the setup
+screen. Before `Checking` existed the state machine started at `NotInstalled` on every
+process start, so a warm launch spent its first seconds drawing the setup screen and then
+replaced it with the chat page. Measured on the Medium_Phone snapshot: first frame
+**2.6–2.9 s**, chat ready **5.8–6.4 s** through the UIAutomator poll, with no
+setup-screen state in between.
+
 The two digests cover different things, on purpose. The content stamp covers the
 archive's **bytes** plus the pinned versions: the layer carries no apt packages, so a
 repository that moved cannot change it under the build, and every byte in it is this

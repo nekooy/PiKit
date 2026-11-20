@@ -74,6 +74,15 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Progress of unpacking the bundled Termux environment. */
 sealed interface RuntimeStatus {
+    /**
+     * A runtime is present and is being revalidated.
+     *
+     * The pages can be drawn while this runs: only an unpack that actually has work to
+     * do holds the first frame behind [Installing]. Before this state existed every
+     * launch began at [NotInstalled] and drew the setup screen until the five-path
+     * probe and the storage farm had finished, even when the image was already current.
+     */
+    data object Checking : RuntimeStatus
     data object NotInstalled : RuntimeStatus
     data class Installing(val fraction: Float, val message: String) : RuntimeStatus
     data class Ready(val revision: String, val warnings: List<String> = emptyList()) : RuntimeStatus

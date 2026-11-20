@@ -130,7 +130,14 @@ class PiHost private constructor(context: Context) {
 
     // ----------------------------------------------------------- environment
 
-    private val _runtime = MutableStateFlow<RuntimeStatus>(RuntimeStatus.NotInstalled)
+    // `isInstalled` is two file stats: whether the shell and the seed stamp are there.
+    // It decides whether the first frame may be the page itself. A fresh install still
+    // starts at `NotInstalled` and keeps the setup screen; an update whose image moved
+    // starts at `Checking` and switches to `Installing` on the first real progress
+    // report, which is the only case where the setup screen can arrive a moment late.
+    private val _runtime = MutableStateFlow<RuntimeStatus>(
+        if (env.isInstalled) RuntimeStatus.Checking else RuntimeStatus.NotInstalled,
+    )
     val runtime: StateFlow<RuntimeStatus> = _runtime.asStateFlow()
 
     private val environmentLock = Mutex()

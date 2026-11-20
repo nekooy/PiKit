@@ -430,7 +430,11 @@ private fun RootContent(
             return
         }
 
-        is RuntimeStatus.Ready -> Unit
+        // `Checking` draws the app while the installed image is revalidated. The
+        // composer's first send still waits on `ensureEnvironment()` through
+        // `startAgent`, so this is a faster first paint rather than a second owner of
+        // readiness.
+        is RuntimeStatus.Checking, is RuntimeStatus.Ready -> Unit
     }
 
     LaunchedEffect(language) {
