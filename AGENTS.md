@@ -636,9 +636,10 @@ prompt, which billed the idle gap to a turn that had already finished.
 ## Things that will waste your time if you do not know them
 
 - **An empty `adb devices` means start the AVD, not report a missing device.** Start it
-  with `emulator -avd <name> -gpu host -no-snapshot-save -no-boot-anim` (add `-no-window`
-  for a headless check) and wait for `adb shell getprop sys.boot_completed` to answer `1`.
-  On software rasterisation (`-gpu swiftshader_indirect`) the GPU context times out
+  with `python tools/emulator.py start --avd <name>` (or `emulator -avd <name> -gpu host
+  -no-audio -no-boot-anim -qt-hide-window`) and wait for
+  `adb shell getprop sys.boot_completed` to answer `1`. On software rasterisation
+  (`-gpu swiftshader_indirect`) the GPU context times out
   (`dumpsys gfxinfo`: `GPU Context timeout: 10`, frames at 4950 ms) and the app's window
   never finishes its first draw, while `dumpsys window` calls it visible and
   `dumpsys input` calls it `NOT_VISIBLE, alpha=0` with a blank `screencap` — and
@@ -698,6 +699,24 @@ prompt, which billed the idle gap to a turn that had already finished.
   nothing local fixes it: `getaddrinfo` goes through `netd`, so neither
   `resolv.conf` nor `/etc/hosts` helps, and `tools/dns-pin.cjs` plus a
   `dns-pins.txt` in the app's `files/` directory is the workaround.
+- **`-no-window` is not a performance measurement.** It removes the surface the
+  frame scheduler presents to; a 320 ms drawer swipe measured 4–5 frames and
+  80–100% janky there, against 40 frames and 5% janky under `-qt-hide-window` once
+  the first open had warmed Compose (19–26 frames and 11–26% on the first open
+  after launch) on the same snapshot. Use `-no-window` only for ADB-only checks,
+  and use `python tools/emulator.py start` for the routine quickboot path.
+- **A quickboot snapshot is an old disk, and `-no-snapshot-save` keeps it old.** The
+  snapshot carries the APK and runtime from the moment it was written; loading it
+  returns the guest clock to that date. A fresh build therefore looks like the
+  previous UI on the next start. A normal `adb emu kill` saves the snapshot; use
+  `-no-snapshot-save` only when the cold-boot path is the subject. Medium_Phone
+  quickboots in 5.5 s; a new AVD with no snapshot may take minutes.
+- **A fresh `google_apis` 36.1 AVD with `-gpu host` can loop SurfaceFlinger.** It
+  aborts every 20–25 s on `!rcEnc->featureInfo()->hasReadColorBufferDma` in
+  `GoldfishMapper::readFromHost`, leaving `adb devices` at `device` while
+  `sys.boot_completed` never arrives. The Play Store Medium_Phone image is stable;
+  on an NVIDIA host try `-gpu angle_indirect` for a new image instead of tuning RAM
+  or core count.
 - **`appops set <pkg> MANAGE_EXTERNAL_STORAGE deny` is not enough** to revoke "all
   files access": the uid mode stays `allow`. Use `appops set --uid <pkg> … deny`.
 - **The screen is about 48 columns wide** on a 1080px phone — the terminal prints

@@ -281,11 +281,50 @@ environment variable did not reach the process that resolves it.
 
 **A connected device is not a prerequisite: start the AVD yourself.** `emulator -list-avds`
 names the installed images; start one in the background with
-`emulator -avd <name> -gpu host -no-snapshot-save -no-boot-anim`, adding `-no-window` when
-the check should not take the screen. Wait for `adb shell getprop sys.boot_completed` to
+`emulator -avd <name> -gpu host -no-audio -no-boot-anim`, adding `-qt-hide-window` when
+the window should stay off the desktop. Wait for `adb shell getprop sys.boot_completed` to
 answer `1`, not for `adb devices` to list the device: a snapshot load can hang with the
-entry `offline` and then vanish from the list, while `-no-snapshot` cold-boots in about
-30 s. An empty `adb devices` is a prompt to start one, not a reason to stop.
+entry `offline` and then vanish from the list. An empty `adb devices` is a prompt to start
+one, not a reason to stop.
+
+**Use `tools/emulator.py` for the routine path.** It starts the AVD with a saved
+quickboot snapshot and a hidden Qt window, and `benchmark` reports the first frame and
+the time to the chat page:
+
+```bash
+python tools/emulator.py start --avd <name>
+python tools/emulator.py benchmark --apk app/build/outputs/apk/x64/debug/app-x64-debug.apk
+python tools/emulator.py stop
+```
+
+**A quickboot snapshot is the difference between seconds and minutes.** Measured on
+this host: the Medium_Phone AVD with its `default_boot` snapshot booted in **5.5 s**;
+a newly created AVD with no snapshot had not finished after three minutes. The snapshot
+is a disk image, not just a kernel state: the guest clock came back at the snapshot's
+date, and the app inside it was the APK that was installed when the snapshot was taken.
+That is why `-no-snapshot-save` is a trap for ordinary work — every start returns to the
+old APK and the old runtime, so a new build looks like the previous UI. Use it only when
+the cold-boot path itself is what is being tested; `python tools/emulator.py stop` takes a
+normal exit and saves the snapshot.
+
+**Do not use `-no-window` for anything whose rendering you are judging.** It removes the
+surface the frame scheduler presents to, and the measurements become a property of the
+headless path rather than of the app. Measured on the same Medium_Phone snapshot: a
+320 ms drawer swipe drew **4–5 frames and was 80–100% janky** under `-no-window`,
+against **40 frames and 5% janky** (31 ms median, 36 ms 90th percentile) under
+`-qt-hide-window` once the first open had warmed Compose; the first open after launch
+was 19–26 frames and 11–26% janky. The launcher itself is 12.5% janky on the same
+device. `-no-window` is fine for an ADB-only check such as `package` or `uiautomator`,
+never for “does this look slow?”.
+
+**The `google_apis` 36.1 image and `-gpu host` can loop SurfaceFlinger.** A newly
+created AVD from that image crashed every 20–25 s with
+`Assertion failed: !rcEnc->featureInfo()->hasReadColorBufferDma` in
+`GoldfishMapper::readFromHost`, so `sys.boot_completed` never arrived even though
+`adb devices` showed `device`. The Play Store `Medium_Phone` image on the same
+emulator does not. If a new AVD is needed on an NVIDIA host, use `-gpu angle_indirect`
+after reproducing this, or keep the working Play Store AVD; do not spend time tuning
+RAM or core count for a SurfaceFlinger loop.
 
 **A device can have another driver.** More than one agent session can be attached to the
 same emulator, and then the screen changes between two of your own reads: a page you did
