@@ -287,6 +287,19 @@ answer `1`, not for `adb devices` to list the device: a snapshot load can hang w
 entry `offline` and then vanish from the list, while `-no-snapshot` cold-boots in about
 30 s. An empty `adb devices` is a prompt to start one, not a reason to stop.
 
+**A device can have another driver.** More than one agent session can be attached to the
+same emulator, and then the screen changes between two of your own reads: a page you did
+not open appears, a tap lands on a row you did not choose, or `am start` answers
+`Activity class … does not exist` while the launcher is in front. Read the emulator's own
+command line before suspecting the app — `Get-CimInstance Win32_Process -Filter
+"Name='emulator.exe'"` on Windows gives its `-avd` and `-port` — and pin every `adb` call
+to one serial (`adb -s emulator-5554 …`). A concurrent session needs its own AVD and port
+(`emulator -avd <name> -port 5556 …`, then `adb -s emulator-5556 …`); several instances of
+the *same* AVD are allowed only when all of them were started with `-read-only`. Give the
+second guest its own RAM: a 1GB guest on a host with about 2GB free loses `system_server`
+and reports `Can't find service: package`, so close the idle emulator or free memory
+first. If one AVD is all the machine can hold, the sessions take turns rather than share.
+
 ```bash
 mkdir -p .tooling/shots
 adb install -r -d app/build/outputs/apk/x64/debug/app-x64-debug.apk
