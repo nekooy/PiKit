@@ -16,7 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,7 +102,7 @@ internal fun AgentPage(
     // The workspace a new conversation starts in. Collected rather than passed down: the
     // composer's chip writes the same value, and a page that was handed a snapshot would
     // keep showing the row's old answer until the page was rebuilt.
-    val saved by session.settingsStore.settings.collectAsState()
+    val saved by session.settingsStore.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var choosingWorkspace by remember { mutableStateOf(false) }
     var showWorkspacePicker by remember { mutableStateOf(false) }

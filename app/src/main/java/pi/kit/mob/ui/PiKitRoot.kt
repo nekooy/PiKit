@@ -39,7 +39,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -121,7 +121,7 @@ private enum class Destination {
 
 @Composable
 fun PiKitRoot(host: PiHost) {
-    val settings by host.settingsStore.settings.collectAsState()
+    val settings by host.settingsStore.settings.collectAsStateWithLifecycle()
     val language = settings.language
 
     // Applies the choice to the default locale as well as to the catalogs, so
@@ -203,7 +203,7 @@ private object NotificationPrompt {
 private fun PermissionPrompts(host: PiHost) {
     val text = strings
     val context = LocalContext.current
-    val runtime by host.runtime.collectAsState()
+    val runtime by host.runtime.collectAsStateWithLifecycle()
     val ready = runtime is RuntimeStatus.Ready
 
     var step by remember { mutableStateOf(PromptStep.None) }
@@ -324,12 +324,12 @@ private fun RootContent(
     host: PiHost,
     language: Lang,
 ) {
-    val runtime by host.runtime.collectAsState()
+    val runtime by host.runtime.collectAsStateWithLifecycle()
     // The conversation the screen is on. Everything below is *that* conversation's:
     // its process, its transcript, its composer. A switch of conversation is a change
     // of this value, and the pages below are keyed on it so the change is a rebuild of
     // the chat page rather than a mix of two transcripts.
-    val session by host.active.collectAsState()
+    val session by host.active.collectAsStateWithLifecycle()
     var destination by remember { mutableStateOf(Destination.Chat) }
     // Whether the conversation drawer is out. Held up here rather than inside the chat
     // page because the settings page is reached from the drawer's own foot, and the way
@@ -382,8 +382,8 @@ private fun RootContent(
     val dialogFlow = remember(session) {
         session.conversation.map { it.pendingDialog }.distinctUntilChanged()
     }
-    val pendingDialog by dialogFlow.collectAsState(
-        initial = remember(session) { session.conversation.value.pendingDialog },
+    val pendingDialog by dialogFlow.collectAsStateWithLifecycle(
+        initialValue = remember(session) { session.conversation.value.pendingDialog },
     )
 
     // Unpacking is a one-time, ~200MB operation, so it runs behind a blocking
@@ -661,8 +661,8 @@ private fun ChatTab(
     // The agent is read here rather than in the root for the second half of the same
     // reason: it is a fact about this conversation, and a stale `Running` from the one
     // before would draw a composer that accepts a prompt for an agent still starting.
-    val state by key(session) { session.conversation.collectAsState() }
-    val agent by key(session) { session.agent.collectAsState() }
+    val state by key(session) { session.conversation.collectAsStateWithLifecycle() }
+    val agent by key(session) { session.agent.collectAsStateWithLifecycle() }
     val text = strings
     val toasts = LocalPiToast.current
     // The session file a drawer tap asked for, until the conversation on screen reports

@@ -291,6 +291,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.service)
+    // `collectAsStateWithLifecycle`: the agent streams from a foreground service while
+    // the UI may be stopped, and a plain `collectAsState` keeps recomposing the page for
+    // every token with the screen off. The lifecycle-aware collector pauses below STARTED
+    // and the StateFlow replays its current value on resume (docs/UI.md, *State*).
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

@@ -11,7 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,7 +75,7 @@ internal fun ChatPresetSection(
     text: Strings,
 ) {
     val store = session.host.chatPresets
-    val presets by session.chatPresets.collectAsState()
+    val presets by session.chatPresets.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var defaultId by remember { mutableStateOf(store.defaultId) }
     var defaultPicker by remember { mutableStateOf(false) }

@@ -12,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,8 +99,8 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 @Composable
 internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
     val manager = session.backup
-    val status by manager.status.collectAsState()
-    val review by manager.review.collectAsState()
+    val status by manager.status.collectAsStateWithLifecycle()
+    val review by manager.review.collectAsStateWithLifecycle()
     val text = strings
     val toasts = LocalPiToast.current
 

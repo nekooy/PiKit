@@ -13,7 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
             // the composable's default: the light/dark choice and the text size
             // both live in the settings store, and a theme that read the store
             // itself would be a second owner of those decisions.
-            val settings by host.settingsStore.settings.collectAsState()
+            val settings by host.settingsStore.settings.collectAsStateWithLifecycle()
 
             // The launcher icon is the system's to draw, so choosing one is a
             // component switch rather than a redraw. Keyed on the preference,

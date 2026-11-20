@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -96,7 +96,7 @@ internal fun PersonalizationPage(
     onBack: () -> Unit,
 ) {
     val text = strings
-    val settings by session.settingsStore.settings.collectAsState()
+    val settings by session.settingsStore.settings.collectAsStateWithLifecycle()
 
     // Which avatar is being edited, as the sheet's own state: a Miuix sheet is a window
     // of its own and is dismissed by the scrim, the back gesture and a downward drag, so

@@ -36,7 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -222,8 +222,8 @@ fun SessionsScreen(
     val activeSessionFileFlow = remember(session) {
         session.conversation.map { it.sessionFile }.distinctUntilChanged()
     }
-    val activeSessionFile by activeSessionFileFlow.collectAsState(
-        initial = remember(session) { session.conversation.value.sessionFile },
+    val activeSessionFile by activeSessionFileFlow.collectAsStateWithLifecycle(
+        initialValue = remember(session) { session.conversation.value.sessionFile },
     )
     // The three dialogs are kept composed and opened by a flag: a dialog raised by
     // composing it (`target?.let { Dialog(show = true) }`) vanishes the frame its answer
@@ -238,8 +238,8 @@ fun SessionsScreen(
     // (blue) or finished while the reader was elsewhere (green). "Live" — a process that
     // exists — is neither of those, and drawing it was the dot that appeared on every
     // conversation that merely had a child.
-    val streamingPaths by session.host.streamingPaths.collectAsState()
-    val unreadPaths by session.host.unreadPaths.collectAsState()
+    val streamingPaths by session.host.streamingPaths.collectAsStateWithLifecycle()
+    val unreadPaths by session.host.unreadPaths.collectAsStateWithLifecycle()
     var renameTarget by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
     var renameUp by remember { mutableStateOf(false) }
     var deleteTargets by remember {
@@ -333,7 +333,7 @@ fun SessionsScreen(
     // name the same folder the same way, which is what lets a reader recognise the one the
     // conversation came from.
     val context = LocalContext.current
-    val settings by session.settingsStore.settings.collectAsState()
+    val settings by session.settingsStore.settings.collectAsStateWithLifecycle()
     val workspaces = rememberWorkspaceList(
         context = context,
         env = session.env,

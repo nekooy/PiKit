@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -146,13 +146,13 @@ fun TerminalScreen(session: PiAgentSession,
     // `text` is the name the composables below take for the same catalog.
     val t = strings
     val manager = session.terminalSessions
-    val sessions by manager.sessions.collectAsState()
+    val sessions by manager.sessions.collectAsStateWithLifecycle()
     val selectedId by manager.selectedId
     // The directory the page was opened from. A conversation whose agent has not
     // launched yet has no workspace resolved, and the built-in one is the honest
     // answer there rather than `$HOME`: `$HOME` holds pi's configuration and every
     // session, not the project the reader is looking at.
-    val workspace by session.workspace.collectAsState()
+    val workspace by session.workspace.collectAsStateWithLifecycle()
     val shellCwd = workspace.ifBlank { session.env.workspacePath }
 
     // Used to defer a resize until the layout stops changing, so the keyboard
@@ -595,7 +595,7 @@ private fun TerminalSessionMenu(
     manager: TerminalSessionManager,
     onPicked: () -> Unit,
 ) {
-    val sessions by manager.sessions.collectAsState()
+    val sessions by manager.sessions.collectAsStateWithLifecycle()
     val selectedId by manager.selectedId
     val current = sessions.firstOrNull { it.id == selectedId } ?: sessions.firstOrNull()
 

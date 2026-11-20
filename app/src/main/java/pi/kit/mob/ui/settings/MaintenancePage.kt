@@ -7,7 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,16 +91,16 @@ internal fun MaintenancePage(
     selfTest: StorageSelfTest,
     onBack: () -> Unit,
 ) {
-    val repair by session.repair.collectAsState()
-    val repairRunning by session.repairRunning.collectAsState()
-    val catalogueStatus by catalogue.status.collectAsState()
-    val version by catalogue.version.collectAsState()
-    val storageCheck by selfTest.status.collectAsState()
-    val packages by session.packages.collectAsState()
-    val upgradeRunning by session.upgradeRunning.collectAsState()
-    val restoreRunning by session.restoreRunning.collectAsState()
-    val packageRun by session.packageRun.collectAsState()
-    val rebuildRunning by session.rebuildRunning.collectAsState()
+    val repair by session.repair.collectAsStateWithLifecycle()
+    val repairRunning by session.repairRunning.collectAsStateWithLifecycle()
+    val catalogueStatus by catalogue.status.collectAsStateWithLifecycle()
+    val version by catalogue.version.collectAsStateWithLifecycle()
+    val storageCheck by selfTest.status.collectAsStateWithLifecycle()
+    val packages by session.packages.collectAsStateWithLifecycle()
+    val upgradeRunning by session.upgradeRunning.collectAsStateWithLifecycle()
+    val restoreRunning by session.restoreRunning.collectAsStateWithLifecycle()
+    val packageRun by session.packageRun.collectAsStateWithLifecycle()
+    val rebuildRunning by session.rebuildRunning.collectAsStateWithLifecycle()
     var confirmRebuild by remember { mutableStateOf(false) }
     val text = strings
     val toasts = LocalPiToast.current

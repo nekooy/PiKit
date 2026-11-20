@@ -14,7 +14,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,7 +77,7 @@ internal fun rememberWorkspaceList(
     env: TermuxEnv,
     savedDefault: String,
 ): List<Workspace> {
-    val revision by WorkspaceStore.revision.collectAsState()
+    val revision by WorkspaceStore.revision.collectAsStateWithLifecycle()
     return remember(revision, context, env, savedDefault) {
         WorkspaceStore.list(context, env)
     }
@@ -92,7 +92,7 @@ internal fun rememberWorkspaceList(
  */
 @Composable
 internal fun rememberWorkspacePaths(context: Context, env: TermuxEnv): Set<String> {
-    val revision by WorkspaceStore.revision.collectAsState()
+    val revision by WorkspaceStore.revision.collectAsStateWithLifecycle()
     return remember(revision, context, env) {
         WorkspaceStore.list(context, env).map { it.path }.toSet()
     }
@@ -187,7 +187,7 @@ internal fun WorkspacePickerSheet(
 
     // The store's revision is in the key so the listing is refreshed when a folder is
     // added from this sheet and it stays open (a refusal leaves it open).
-    val revision by WorkspaceStore.revision.collectAsState()
+    val revision by WorkspaceStore.revision.collectAsStateWithLifecycle()
     val listing = remember(path, revision) {
         runCatching { File(path).listFiles() }.getOrNull()
     }

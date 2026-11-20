@@ -10,7 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -104,7 +104,7 @@ internal fun ModelPage(
     // from the composer, is on this page the moment it is committed. It used to be
     // a `remember`ed copy refreshed by hand after each action here, which meant
     // any change made *elsewhere* was invisible until the page was re-entered.
-    val config by store.snapshots.collectAsState()
+    val config by store.snapshots.collectAsStateWithLifecycle()
     val profiles = config.profiles
     val activeId = config.activeProfileId
     val text = strings

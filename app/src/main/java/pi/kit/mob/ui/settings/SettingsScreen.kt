@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -214,8 +214,8 @@ internal fun SettingsPage.encode(): String = when (this) {
  */
 @Composable
 fun SettingsScreen(session: PiAgentSession, onBack: () -> Unit) {
-    val settings by session.settingsStore.settings.collectAsState()
-    val agent by session.agent.collectAsState()
+    val settings by session.settingsStore.settings.collectAsStateWithLifecycle()
+    val agent by session.agent.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Held here rather than inside the Maintenance page: a catalogue refresh runs for
@@ -381,8 +381,8 @@ private fun RootPage(
 ) {
     // Collected here rather than read off the store inside the rows, so a saved
     // profile is reflected the moment the store publishes it.
-    val settings by session.settingsStore.settings.collectAsState()
-    val config by session.settingsStore.profiles.snapshots.collectAsState()
+    val settings by session.settingsStore.settings.collectAsStateWithLifecycle()
+    val config by session.settingsStore.profiles.snapshots.collectAsStateWithLifecycle()
     val activeProfile = config.activeProfile
     // Read on the IO dispatcher and remembered: `installedVersion` opens and parses pi's
     // `package.json`, which is a filesystem read on every recomposition of a page that

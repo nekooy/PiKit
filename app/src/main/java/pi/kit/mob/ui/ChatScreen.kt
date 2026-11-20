@@ -71,7 +71,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -515,7 +515,7 @@ internal fun ChatScreen(
     // drawer's switch, and switching it has to relaunch this conversation rather than
     // open another one. Collected here because both the drawer and the page below it
     // ask the same question.
-    val mode by session.mode.collectAsState()
+    val mode by session.mode.collectAsStateWithLifecycle()
     // Owned by `RootContent`, above the page crossfade, so a page switch does not destroy
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
@@ -645,7 +645,7 @@ internal fun ChatScreen(
     // The workspace in force, collected rather than read once so the chip follows a
     // switch made from anywhere — this page, the history list, or the settings page's
     // default.
-    val currentWorkspace by session.workspace.collectAsState()
+    val currentWorkspace by session.workspace.collectAsStateWithLifecycle()
 
     // Which of the composer's menus or sheets is open, and the prompt-extras sheet.
     //
@@ -1762,13 +1762,13 @@ private fun ChatPage(
     // The two avatars the transcript draws, rebuilt only when one of the settings
     // behind them moves. Collected here rather than passed in so a change on the
     // personalization page reaches this one without a restart.
-    val saved by session.settingsStore.settings.collectAsState()
+    val saved by session.settingsStore.settings.collectAsStateWithLifecycle()
     // A chat conversation's agent identity is its preset's, with every unset part
     // answered by the personalization page — that is the "未设置时则沿用" half of the
     // preset feature. Work mode has no preset, so the same identity the app has always
     // drawn is used there and this whole read is inert.
-    val chatPresetId by session.chatPresetId.collectAsState()
-    val presets by session.chatPresets.collectAsState()
+    val chatPresetId by session.chatPresetId.collectAsStateWithLifecycle()
+    val presets by session.chatPresets.collectAsStateWithLifecycle()
     val activePreset = if (mode == AgentMode.CHAT) {
         presets.firstOrNull { it.id == chatPresetId } ?: presets.firstOrNull()
     } else {
@@ -4514,28 +4514,28 @@ private fun Composer(
     // store was a snapshot with no notification, so this row was only rebuilt when
     // something else happened to recompose it — the agent's handshake, a tab
     // switch, or the picker being opened again.
-    val config by session.settingsStore.profiles.snapshots.collectAsState()
+    val config by session.settingsStore.profiles.snapshots.collectAsStateWithLifecycle()
 
     // The saved settings as well, for the thinking chip: the level is persisted in
     // SharedPreferences, so it is readable synchronously on the first frame and the
     // chip never has to wait for pi to answer `get_state`.
-    val saved by session.settingsStore.settings.collectAsState()
+    val saved by session.settingsStore.settings.collectAsStateWithLifecycle()
 
     // The chat persona this conversation speaks with, and its identity after the
     // personalization page answers whatever the preset left unset. Read here because the
     // chip is the *first* control above the field in chat mode: the voice a message is
     // sent in is chosen before the model and the thinking level are.
-    val presetId by session.chatPresetId.collectAsState()
-    val presets by session.chatPresets.collectAsState()
+    val presetId by session.chatPresetId.collectAsStateWithLifecycle()
+    val presets by session.chatPresets.collectAsStateWithLifecycle()
     val chatPreset = presets.firstOrNull { it.id == presetId } ?: presets.firstOrNull()
     val chatIdentity = chatPreset?.identity(saved)
     // The network tools' switch, which stands where the work page's permission control
     // does — the row's leading group is where "what this message may do" is answered.
-    val chatWeb by session.chatWebAccess.collectAsState()
+    val chatWeb by session.chatWebAccess.collectAsStateWithLifecycle()
 
     // What pi's catalogue on disk says each model's levels are, so a model switch shows
     // the new model's own list before pi has answered for it — see [levelsFor].
-    val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
+    val catalogueLevels by session.catalogueThinkingLevels.collectAsStateWithLifecycle()
 
     // Derived from the agent's actual state rather than from `enabled`. A
     // disabled field used to say "Starting the agent…" whatever the reason, so a
@@ -5954,14 +5954,14 @@ private fun ThinkingMenu(
     session: PiAgentSession,
     onDismiss: () -> Unit,
 ) {
-    val live by session.conversation.collectAsState()
-    val saved by session.settingsStore.settings.collectAsState()
+    val live by session.conversation.collectAsStateWithLifecycle()
+    val saved by session.settingsStore.settings.collectAsStateWithLifecycle()
     // The profile is what says which model the *next* message goes with, and the
     // catalogue on disk is what says which levels that model has — see [levelsFor].
     // Together they are why the menu is right on the frame a model switch lands rather
     // than two round trips later.
-    val config by session.settingsStore.profiles.snapshots.collectAsState()
-    val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
+    val config by session.settingsStore.profiles.snapshots.collectAsStateWithLifecycle()
+    val catalogueLevels by session.catalogueThinkingLevels.collectAsStateWithLifecycle()
     // pi's live answer when it is an answer for this model, then the list remembered for
     // it, then its own catalogue entry. The menu cannot offer a level the model does not
     // have.
@@ -6040,7 +6040,7 @@ private fun ModelMenu(
     text: Strings,
     onDismiss: () -> Unit,
 ) {
-    val config by session.settingsStore.profiles.snapshots.collectAsState()
+    val config by session.settingsStore.profiles.snapshots.collectAsStateWithLifecycle()
     val profiles = config.profiles
     val active = config.activeProfile
     val selectedId = active
@@ -6159,10 +6159,10 @@ private class ModelRow(
  */
 @Composable
 private fun ContextMenu(session: PiAgentSession, text: Strings) {
-    val state by session.conversation.collectAsState()
-    val saved by session.settingsStore.settings.collectAsState()
-    val config by session.settingsStore.profiles.snapshots.collectAsState()
-    val catalogueLevels by session.catalogueThinkingLevels.collectAsState()
+    val state by session.conversation.collectAsStateWithLifecycle()
+    val saved by session.settingsStore.settings.collectAsStateWithLifecycle()
+    val config by session.settingsStore.profiles.snapshots.collectAsStateWithLifecycle()
+    val catalogueLevels by session.catalogueThinkingLevels.collectAsStateWithLifecycle()
     val thinking = thinkingLevelOf(state.composerFacts(), saved, config.activeProfile, catalogueLevels)
     val usage = state.usage
     val context = usage.context

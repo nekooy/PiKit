@@ -82,7 +82,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -431,7 +431,7 @@ internal fun PromptPictures(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val generation by ChatPictureCache.generation.collectAsState()
+    val generation by ChatPictureCache.generation.collectAsStateWithLifecycle()
     val root = context.filesDir
     // A stat per picture, in composition. It is the one check that cannot be deferred:
     // whether the card is a picture or a line of text decides its height, and a frame
@@ -535,7 +535,7 @@ private fun SinglePicture(
     onOpen: () -> Unit,
 ) {
     val context = LocalContext.current
-    val generation by ChatPictureCache.generation.collectAsState()
+    val generation by ChatPictureCache.generation.collectAsStateWithLifecycle()
     val picture by produceState<ImageBitmap?>(null, key, generation) {
         value = withContext(Dispatchers.IO) {
             ChatPictureCache.load(context.filesDir, key, TILE_PIXELS)
@@ -573,7 +573,7 @@ private fun PictureTile(
     onOpen: () -> Unit,
 ) {
     val context = LocalContext.current
-    val generation by ChatPictureCache.generation.collectAsState()
+    val generation by ChatPictureCache.generation.collectAsStateWithLifecycle()
     val picture by produceState<ImageBitmap?>(null, key, generation) {
         value = withContext(Dispatchers.IO) {
             ChatPictureCache.load(context.filesDir, key, TILE_PIXELS)
@@ -1159,7 +1159,7 @@ private fun PicturePage(
     onToggleChrome: () -> Unit,
 ) {
     val context = LocalContext.current
-    val generation by ChatPictureCache.generation.collectAsState()
+    val generation by ChatPictureCache.generation.collectAsStateWithLifecycle()
     val load by produceState<PictureLoad>(PictureLoad.Loading, source, generation) {
         val bitmap = withContext(Dispatchers.IO) { loadPicture(context, source, VIEW_PIXELS) }
         value = bitmap?.let(PictureLoad::Ready) ?: PictureLoad.Missing

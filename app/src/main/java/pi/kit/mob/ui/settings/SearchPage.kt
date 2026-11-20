@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,9 +65,9 @@ internal fun SearchPage(
 ) {
     val text = strings
     val store = session.webSearch
-    val settings by store.settings.collectAsState()
-    val appSettings by session.settingsStore.settings.collectAsState()
-    val unreadable by store.unreadable.collectAsState()
+    val settings by store.settings.collectAsStateWithLifecycle()
+    val appSettings by session.settingsStore.settings.collectAsStateWithLifecycle()
+    val unreadable by store.unreadable.collectAsStateWithLifecycle()
     val available = store.available
 
     var searchPicker by remember { mutableStateOf(false) }
@@ -268,7 +268,7 @@ private fun ProviderFields(store: WebSearchStore, providerId: String?, text: Str
     if (providerId == null || providerId == WebSearchSettings.PROVIDER_AUTO) return
     val provider = WebSearchSettings.provider(providerId) ?: return
     if (provider.fields.isEmpty()) return
-    val settings by store.settings.collectAsState()
+    val settings by store.settings.collectAsStateWithLifecycle()
     val config = settings.configOf(provider.id)
     val needsKey = provider.fields.contains(WebProviderField.API_KEY) &&
         !provider.keyOptional &&
