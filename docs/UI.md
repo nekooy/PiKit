@@ -190,9 +190,12 @@ than a page, so `SessionsScreen` creates its own backdrop with `rememberPiBackdr
 and paints the panel's `background` as the base; the mode switch is Miuix's
 `GlassSegmentedTabRow` and the settings disc is a `GlassIconButton` with
 `GlassShadows.Float` — both sample that layer and both sit outside it as siblings.
+`SessionsScreen` also *provides* that backdrop around its windows, so the rename,
+delete and mode questions are glass over the drawer rather than opaque windows: a
+glass dialog draws in the root Scaffold, so it is outside the layer it samples.
 The toast capsule is the one remaining `PiGlass.fill()` control: it is raised on the
-window's top layer, above every page, where there is nothing to sample. All three are
-floating objects, not rows.
+window's top layer, above every page, where there is nothing to sample. All of these
+are floating objects, not rows.
 
 ## Shapes: one corner, and squircle for the hand-drawn ones
 
