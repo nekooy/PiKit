@@ -153,6 +153,7 @@ if (signingWithReleaseKey) {
 android {
     namespace = "pi.kit.mob"
     compileSdk = providers.gradleProperty("pikit.compileSdk").get().toInt()
+    compileSdkMinor = providers.gradleProperty("pikit.compileSdkMinor").get().toInt()
 
     defaultConfig {
         applicationId = appId
@@ -311,11 +312,16 @@ dependencies {
     // the theme engine, the preference rows the settings pages are built from, the
     // icons, and the window-level dialogs and sheets. Miuix is a Compose
     // Multiplatform library whose Android artifacts target the same androidx.compose
-    // 1.12 this build already resolves, and its Kotlin metadata is 2.4.20 against
-    // this project's 2.4.21.
+    // 1.12 line this build already resolves, and its Kotlin metadata is 2.4.21
+    // against this project's 2.4.21.
     implementation(libs.miuix.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
+    // OS4's glass material: the app bar, icon buttons, dialogs and sheets that draw
+    // a real backdrop blur. `miuix-glass` brings `miuix-blur` and `miuix-material`
+    // with it; `miuix-glass-icons` is the icon set drawn at the same weight.
+    implementation(libs.miuix.glass)
+    implementation(libs.miuix.glass.icons)
 
     // Formula typesetting. JLaTeXMath carries the OpenType math metrics the platform's
     // text API does not expose, and it lays a formula out in **422 µs** where the KaTeX

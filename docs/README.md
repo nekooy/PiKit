@@ -54,7 +54,7 @@ in the other language's own wording rather than transplanted — when the Englis
 clause. The three claims that reach outside the files are checked by hand, because
 nothing parses them: the repository **description** is the tagline and has to match
 both `<strong>` lines, a feature bullet that names a technology is grounded in a pin
-(`Miuix` is true because of `miuix 0.9.4` and the `MiuixTheme` the app is wrapped in),
+(`Miuix` is true because of `miuix 0.9.5-beta01` and the `MiuixTheme` the app is wrapped in),
 and the preview strip shows the interface the README describes — the current strip is
 `preview-0.8.0.webp`, and the versioned ones below it are records of what it looked like
 before, never the current preview.

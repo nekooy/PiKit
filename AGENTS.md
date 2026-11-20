@@ -257,6 +257,14 @@ runtime lives there. AOSP's policy grants `app_data_file:file execute_no_trans` 
 `untrusted_app_29.te`, so 28 is the **highest** value that runs, not merely the safest
 (ARCHITECTURE §1). The `ExpiredTargetSdkVersion` lint warning is expected.
 
+**The app keeps `minSdk 26` even though `miuix-blur` declares 33.** `miuix-glass`
+pulls `miuix-blur`, whose manifest says API 33 because `android.graphics.RuntimeShader`
+starts there. `AndroidManifest.xml` overrides that one library and every glass call site
+is gated by `isRuntimeShaderSupported()`; below 33 `rememberPiBackdrop()` returns null
+and `PiGlass.panel` draws its opaque fill. Do not "simplify" this by raising `minSdk` — the
+README promises Android 8.0 — and do not add a glass call site that bypasses
+`PiGlass`/`rememberPiBackdrop`, which would touch the shader on a device that cannot run it.
+
 **The prefix is an absolute path compiled into every binary.**
 `/data/data/pi.kit.mob/files/usr`. Nothing may move it, and
 `BootstrapInstaller.verifyPrefixMatchesImage()` compares inode identity (not
@@ -362,16 +370,25 @@ figure out to 21 of its 24 units where Miuix's `Add` keeps its ink inside 14. It
 **17dp** in `ChatScreen.kt`, and the vector is untouched — scaling a borrowed glyph at the call
 site is a layout decision; editing its geometry is the mistake the bullet above is about.
 
-**Never put a `BasicComponent` with `startAction` or `endActions` inside a `ListPopupColumn`.**
-Miuix 0.9.4 measures a popup column's children with an unbounded width to size itself, and
-`BasicComponent` answers an intrinsic query by measuring with that width: its end-action budget
-`(available - 8dp) * 6 / 10` overflows `Int` at `Constraints.Infinity` and hands
-`Constraints.copy` a negative `maxWidth` — `IllegalArgumentException: maxWidth must be >= than
-minWidth`, reproduced on the composer's `+` menu, whose three rows carry leading marks, and
-before that on the terminal's session roster. A `BasicComponent` *without* either slot survives
-the same measurement, which is why the command menu did not crash before it was converted.
-`ui/kit/PiMenuRow` is the row to use in a popup, marks and all; ARCHITECTURE §13 has the
+**A popup row is `PiMenuRow`, not a `BasicComponent`.** Miuix 0.9.4 measured a popup
+column's children with an unbounded width, and `BasicComponent` answered an intrinsic query
+by measuring with that width: its end-action budget `(available - 8dp) * 6 / 10` overflowed
+`Int` at `Constraints.Infinity` and handed `Constraints.copy` a negative `maxWidth` —
+`IllegalArgumentException: maxWidth must be >= than minWidth`, reproduced on the composer's
+`+` menu and before that on the terminal's session roster. **0.9.5-beta01 fixed the measure**
+with a `constraints.hasBoundedWidth` branch, so the crash is no longer the reason; the row
+stays `PiMenuRow` because it carries the popup metrics (`body1`/`body2`, 20dp sides) and the
+choice/action/fact semantics a preference row does not name. ARCHITECTURE §13 has the
 arithmetic and the reason the row is hand-built.
+
+**A `layerBackdrop` must not contain the glass controls that sample it.** `PiPage` puts
+the layer on the body and leaves the bar in the Scaffold's `topBar` slot; the chat page
+puts it on the `LazyColumn` only, with the header and composer as siblings. Wrapping the
+whole page in one layer made the glass controls sample their own recording and
+`RenderNode::prepareTreeImpl` recursed until the RenderThread stack overflowed
+(`SIGSEGV`, `SEGV_ACCERR`, `stack pointer is not in a rw map; likely due to stack
+overflow`) — the app died before its first frame. A visual blur is the mild version of
+this bug; the stack overflow is the real one.
 
 **A Miuix window is driven by `show`, not by whether it is composed.** `WindowDialog`
 and `WindowBottomSheet` animate out through that flag: raising one inside
@@ -380,12 +397,13 @@ plays over an empty panel and `onDismissFinished` never fires — and a remember
 inside it carries one answer into the next question. `PiDialogHost` takes a required
 `show`; the caller keeps the last value so the window can draw while it leaves.
 
-**A page's subtitle is `PiPage`'s, not `SmallTopAppBar`'s.** The library renders its own
+**A page's subtitle is `PiPage`'s, not the bar's.** The library renders its own
 `subtitle` with no line limit, so a sentence wider than the space beside the action icons wraps
 and the bar — and every page's content rectangle with it — grows by a line; the terminal
 measured it in English where the Chinese fits. `PiPage` draws the subtitle itself, one line with
 an ellipsis, and reads `null` as "no subtitle" and `""` as "reserve the line while the value is
-being read". Do not bypass it with `SmallTopAppBar(subtitle = …)`.
+being read". Do not bypass it with `SmallTopAppBar(subtitle = …)` or
+`GlassTopAppBar(subtitle = …)`.
 
 **Every buzz goes through `ui/kit/PiHaptics.kt`, and the silences are part of the rule.** The
 app's haptics are six moments — a hold that raises something, a mode that flips and stays

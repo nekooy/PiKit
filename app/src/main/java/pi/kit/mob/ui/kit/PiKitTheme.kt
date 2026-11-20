@@ -1,7 +1,9 @@
 package pi.kit.mob.ui.kit
 
 import android.app.Activity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -9,8 +11,11 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -22,6 +27,13 @@ import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.ThemeMode
 import top.yukonga.miuix.kmp.basic.TextFieldColors
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.glass.glassPanel
+import top.yukonga.miuix.kmp.material.GlassEdgeStrokes
+import top.yukonga.miuix.kmp.material.GlassShadow
+import top.yukonga.miuix.kmp.material.GlassShape
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -184,41 +196,102 @@ fun DarkNavigationBar() {
  *   a wash rather than a pair, for the reason its own KDoc gives.
  */
 /**
- * The fill of a control that floats over the page: an opaque surface of its own.
+ * The material a floating control is drawn from: OS4 glass over the page's backdrop.
  *
- * The reference drawing's top bar is two capsules and its composer is a row of chips.
- * They are white objects in the light scheme and a raised near-black in the dark one.
- * The fill is [surfaceContainerHighest] in both schemes: the light scheme overrides that
- * role to white (`#FFFFFF`), while the dark one keeps `#2D2D2D`. The light cards and
- * history ground are `#F7F7F7`, so the white controls are one step brighter — exactly
- * the dark scheme's `#2D2D2D` against `#242424`. It is a palette role, so a theme change
- * moves it with everything else.
+ * Miuix 0.9.5's `miuix-glass` makes a real backdrop blur possible: [rememberPiBackdrop]
+ * records the page's own drawing into a `LayerBackdrop`, and [glassPanel] samples it
+ * behind a shape — the page's cards and text show through the material rather than a
+ * flat colour pretending to be one. [LocalPiBackdrop] carries that layer down to the
+ * controls; a page that never provides one (a control outside a page) gets the
+ * opaque fallback instead.
  *
- * ## Why it is opaque, and why it took three tries
+ * ## The fallback is still a fill, and why
  *
- * The fill was white at an alpha: 80%, then 90%, then 100% in the light scheme, and 14%,
- * 20% then 24% of white in the dark one. The light one ended at opaque and the dark one
- * did not, so the same control was a solid object by day and a tinted pane by night — a
- * row scrolled underneath showed through the capsule and the chip, and the page stopped
- * reading as one object per theme. **A floating control is filled, not tinted.** It is
- * opaque in both schemes.
+ * `isRuntimeShaderSupported()` is false below API 33 and on a device whose GPU cannot
+ * run the blur shader. The material then falls back to [fill], the role that was the
+ * whole of the old design: `surfaceContainerHighest`, white in the light scheme and
+ * `#2D2D2D` in the dark one. That is the same two-group palette the cards use, so a
+ * fallback control is still a step above the page rather than a tint of it.
  *
- * The fill alone carries the separation from the page: no shadow is drawn under a
- * floating control, so the raise is the colour step and nothing else.
+ * ## A tint was rejected, again
  *
- * ## What it is not
- *
- * A real backdrop blur. Compose has no backdrop filter: `Modifier.blur` blurs a node's
- * *own* content, and the content behind a capsule lives in another node entirely. A blur
- * would also have no pixel of the page to read once the fill is opaque, which is the
- * point of the change.
+ * The old design tried white at 80/90/100% in light and 14/20/24% in dark; the light
+ * control ended opaque while the dark one stayed translucent, and a row scrolling
+ * underneath showed through the capsule. The glass panel has the same rule: its body
+ * is the blurred *backdrop*, not a wash of the surface colour, and its fallback is
+ * opaque. A translucent fill would be neither.
  */
 object PiGlass {
 
-    /** The fill a floating control is painted with. */
+    /** The fill used when the device has no backdrop renderer. */
     @Composable
     fun fill(): Color = MiuixTheme.colorScheme.surfaceContainerHighest
 
+    /**
+     * A shape cut from the page's glass.
+     *
+     * The fallback is the old opaque fill clipped to [shape], so every call site keeps a
+     * visible control on hardware without the shader. The stroke is the OS4 bloom edge
+     * at the small radius, picked for the theme the same way Miuix's own buttons do.
+     */
+    @Composable
+    fun panel(shape: Shape, alpha: Float = 1f): Modifier {
+        val dark = MiuixTheme.colorScheme.background.luminance() < DARK_BASE_LUMINANCE
+        return Modifier.glassPanel(
+            backdrop = LocalPiBackdrop.current,
+            shape = shape.toGlassShape(),
+            alpha = alpha,
+            stroke = GlassEdgeStrokes.forTheme(
+                isDark = dark,
+                light = GlassEdgeStrokes.SmallLight,
+                dark = GlassEdgeStrokes.SmallDark,
+            ),
+            // A floating control is small; the panel shadow's 64-unit spread is the
+            // bar/panel shadow and reads as a halo around a 32dp chip. This is the
+            // same silhouette at a floating-control radius.
+            shadow = PI_GLASS_SHADOW,
+            fallback = Modifier.clip(shape).background(fill()),
+        )
+    }
+}
+
+/** The same surface as [PiGlass.panel], in a modifier chain. */
+@Composable
+fun Modifier.piGlass(shape: Shape, alpha: Float = 1f): Modifier =
+    this.then(PiGlass.panel(shape, alpha))
+
+/**
+ * The backdrop a page's glass controls sample.
+ *
+ * `null` outside a page that provides one, or on a device without runtime shaders;
+ * [PiGlass.panel] reads that as "draw the opaque fallback".
+ */
+val LocalPiBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
+
+/**
+ * Records this subtree into a backdrop the page's glass controls can sample.
+ *
+ * The layer is created only when the device supports the shader: `rememberLayerBackdrop`
+ * allocates a render target and keeps a copy of every frame, which is not a cost to pay
+ * on hardware whose `glassPanel` would ignore it. The base surface is drawn first so a
+ * page that does not paint its own background still gives the glass the page colour
+ * rather than transparent black.
+ */
+@Composable
+fun rememberPiBackdrop(): LayerBackdrop? {
+    if (!isRuntimeShaderSupported()) return null
+    val surface = MiuixTheme.colorScheme.surface
+    return rememberLayerBackdrop {
+        drawRect(surface)
+        drawContent()
+    }
+}
+
+/** The glass renderer's equivalent of a Compose [Shape]. */
+private fun Shape.toGlassShape(): GlassShape = when (this) {
+    is GlassShape -> this
+    is RoundedCornerShape -> GlassShape(topStart, topEnd, bottomEnd, bottomStart)
+    else -> GlassShape(PiCorner.radius)
 }
 
 object PiTone {
@@ -341,6 +414,15 @@ private const val PROMPT_SHARE_DARK = 0.34f
  * absorb.
  */
 private const val DARK_BASE_LUMINANCE = 0.2f
+
+/** The soft edge under a floating control: small enough not to halo a 32dp chip. */
+private val PI_GLASS_SHADOW = GlassShadow(
+    color = Color.Black.copy(alpha = 0.04f),
+    offsetX = 0f,
+    offsetY = 1f,
+    radius = 10f,
+    dispersion = 0.5f,
+)
 
 /**
  * The light scheme's page: `#F0F0F0`, one step below Miuix's `#F7F7F7` page.

@@ -66,6 +66,7 @@ import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMe
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -197,6 +198,7 @@ import pi.kit.mob.ui.chat.scrollToEnd
 import pi.kit.mob.ui.components.chatPresetName
 import pi.kit.mob.ui.components.chatPresetSummary
 import pi.kit.mob.ui.kit.AvatarSpeaker
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiAvatar
@@ -210,10 +212,14 @@ import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piGlass
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
+import pi.kit.mob.ui.kit.rememberPiBackdrop
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
@@ -1512,10 +1518,10 @@ internal fun ChatScreen(
  * behind them is the transcript, faded out by [FADE_TAIL]'s gradient — which is the whole
  * of the difference between this and the opaque strip a `PiPage` would draw.
  *
- * The capsules are `PiGlass.fill()`, the fill the composer's chips and the jump-to-latest
- * button use: a control that floats over the page is the same object whether it holds a
- * label or a glyph, and it is filled rather than tinted so what scrolls underneath cannot
- * show through.
+ * The capsules are `PiGlass.panel(...)`, the same material the composer's chips and the
+ * jump-to-latest button use: a control that floats over the page is the same object
+ * whether it holds a label or a glyph, and its fallback is the opaque `PiGlass.fill()`
+ * for a device without the backdrop renderer.
  */
 @Composable
 private fun ChatHeader(
@@ -1538,16 +1544,16 @@ private fun ChatHeader(
             .padding(start = 12.dp, end = 12.dp, top = 22.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(HEADER_MARK_SIZE)
-                .clip(CircleShape)
-                .background(PiGlass.fill())
-                .clickable {
-                    haptics.tap()
-                    onOpenSessions()
-                },
-            contentAlignment = Alignment.Center,
+        GlassIconButton(
+            onClick = {
+                haptics.tap()
+                onOpenSessions()
+            },
+            backdrop = LocalPiBackdrop.current,
+            size = HEADER_MARK_SIZE,
+            // The header is a row of objects on a page, not a bar's buttons over a
+            // scrolling surface; the bar's shadow would halo a 42dp disc.
+            shadow = null,
         ) {
             Icon(
                 imageVector = DrawerGlyph,
@@ -1567,10 +1573,10 @@ private fun ChatHeader(
         )
         Spacer(Modifier.weight(1f))
         val trailingShape = RoundedCornerShape(percent = 50)
+        val trailingGlass = PiGlass.panel(trailingShape)
         Row(
             modifier = Modifier
-                .clip(trailingShape)
-                .background(PiGlass.fill())
+                .then(trailingGlass)
                 // **No vertical padding**, and the height is the reason: a capsule's
                 // height is [HEADER_MARK_SIZE], because that is what the leading circle
                 // beside this one is. It had 2dp above and below them, so this pill was
@@ -1994,35 +2000,40 @@ private fun ChatPage(
     // stretch, and the marks sit on the gradient.
 
 
-    Box(Modifier.fillMaxSize()) {
-        // The transcript fills the page and the composer floats over its bottom, so the
-        // conversation runs *behind* the band rather than being cut by it. That is what
-        // lets the bottom fade start where the reference draws it — at the field's top —
-        // instead of at the top of the chip row, which is where the band's own edge used
-        // to fall.
-        var bottomStackPx by remember { mutableIntStateOf(0) }
-        val bottomStack: Dp = with(LocalDensity.current) { bottomStackPx.toDp() }
-        Box(
-            Modifier
-                .fillMaxSize()
-                // Tapping anywhere that is not a control gives up the composer's
-                // focus, and clearing focus is what closes the text toolbar — the
-                // floating "粘贴 / 全选" strip Compose shows over a long-pressed field.
-                //
-                // Nothing else did. The text field deselects and hides its toolbar
-                // when it *loses* focus, but Compose does not move focus on a tap: a
-                // tap on the transcript is delivered to the `LazyColumn`, which has no
-                // opinion about focus, so the field stayed focused with its selection
-                // live and the toolbar stayed on screen. The report was exactly that —
-                // long-press the input, get the paste button, tap the empty area, and
-                // it will not go away.
-                //
-                // `detectTapGestures` sees the Main pass, which runs **bottom-up**, so
-                // every button, chip and text-selection handle has already consumed its
-                // own press by the time this runs; and because only the *down* is
-                // consumed here, a drag still reaches the list and scrolls it. A tap on
-                // the field itself never reaches this: the text field consumes it.
-                .pointerInput(Unit) {
+    // The transcript is the page's glass layer: the header's capsules sample it, so a
+    // row scrolling under the header is what the material blurs. The header sits
+    // outside the layer — a control inside it would sample its own output.
+    val chatBackdrop = rememberPiBackdrop()
+    CompositionLocalProvider(LocalPiBackdrop provides chatBackdrop) {
+        Box(Modifier.fillMaxSize()) {
+            // The transcript fills the page and the composer floats over its bottom, so the
+            // conversation runs *behind* the band rather than being cut by it. That is what
+            // lets the bottom fade start where the reference draws it — at the field's top —
+            // instead of at the top of the chip row, which is where the band's own edge used
+            // to fall.
+            var bottomStackPx by remember { mutableIntStateOf(0) }
+            val bottomStack: Dp = with(LocalDensity.current) { bottomStackPx.toDp() }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    // Tapping anywhere that is not a control gives up the composer's
+                    // focus, and clearing focus is what closes the text toolbar — the
+                    // floating "粘贴 / 全选" strip Compose shows over a long-pressed field.
+                    //
+                    // Nothing else did. The text field deselects and hides its toolbar
+                    // when it *loses* focus, but Compose does not move focus on a tap: a
+                    // tap on the transcript is delivered to the `LazyColumn`, which has no
+                    // opinion about focus, so the field stayed focused with its selection
+                    // live and the toolbar stayed on screen. The report was exactly that —
+                    // long-press the input, get the paste button, tap the empty area, and
+                    // it will not go away.
+                    //
+                    // `detectTapGestures` sees the Main pass, which runs **bottom-up**, so
+                    // every button, chip and text-selection handle has already consumed its
+                    // own press by the time this runs; and because only the *down* is
+                    // consumed here, a drag still reaches the list and scrolls it. A tap on
+                    // the field itself never reaches this: the text field consumes it.
+                    .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = {
                             focusManager.clearFocus()
@@ -2125,6 +2136,17 @@ private fun ChatPage(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    // The transcript is the only thing in the page's
+                                    // backdrop. The header's glass samples this layer;
+                                    // the composer and its chips stay outside it, or
+                                    // they would sample their own blur output.
+                                    .then(
+                                        if (chatBackdrop != null) {
+                                            Modifier.layerBackdrop(chatBackdrop)
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
                                     // A conversation shorter than the viewport has no
                                     // edge of its own to give a drag, and Compose's
                                     // `ScrollingLogic` gates the overscroll effect on
@@ -2363,7 +2385,7 @@ private fun ChatPage(
                 // both visible and pointed at a list that was not composed. Nothing is
                 // scrollable about nothing, so there is nothing for the control to be.
                 if (cards.isNotEmpty() && listState.canScrollForward) {
-                    IconButton(
+                    GlassIconButton(
                         onClick = {
                             // The flag is raised *before* the follow flips, so the
                             // effect above cannot slip a snap in between: on the
@@ -2380,6 +2402,8 @@ private fun ChatPage(
                                 }
                             }
                         },
+                        backdrop = LocalPiBackdrop.current,
+                        size = 40.dp,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             // Clear of the transcript's own gutter, and of the scrollbar
@@ -2390,14 +2414,7 @@ private fun ChatPage(
                             // Inside the list's own box, which the composer's band no
                             // longer overlaps: the 10dp is the gutter's own figure and
                             // not a clearance from a floating panel.
-                            .padding(end = 10.dp, bottom = 10.dp + bottomStack)
-                            // 40dp, the same drawn size as the composer's send control
-                            // at the other end of the page — Miuix's icon button *is* a
-                            // 40dp pill by default, so the two controls the thumb reaches
-                            // for are the same shape without either of them stating a
-                            // radius of its own.
-                            .size(40.dp),
-                        backgroundColor = PiGlass.fill(),
+                            .padding(end = 10.dp, bottom = 10.dp + bottomStack),
                     ) {
                         Icon(
                             // An arrow, not the chevron the disclosure controls use:
@@ -2649,6 +2666,7 @@ private fun ChatPage(
             text = text,
             modifier = Modifier.align(Alignment.TopCenter),
         )
+        }
     }
 }
 
@@ -5009,7 +5027,8 @@ private fun Composer(
             // where the original composer had them — and the frame is what makes them
             // read as belonging to the text rather than floating under it.
             //
-            // `PiGlass.fill()` (white in the light scheme, #2D2D2D in the dark one)
+            // `PiGlass.panel(...)` (the opaque `surfaceContainerHighest` fallback is
+            // white in the light scheme, #2D2D2D in the dark one)
             // against the band's `surface` (#F0F0F0) is the same step the chips above
             // take, so the composer and the controls are one floating-object vocabulary.
             // The band itself is now the tab strip's own colour rather than a step above
@@ -5030,11 +5049,12 @@ private fun Composer(
                     .onGloballyPositioned { onFieldTop(it) },
             ) {
             Surface(
-                color = PiGlass.fill(),
+                color = Color.Transparent,
                 shape = RoundedCornerShape(PiCorner.radius),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 12.dp)
+                    .piGlass(RoundedCornerShape(PiCorner.radius)),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
@@ -5757,8 +5777,9 @@ private fun cacheHitPercent(state: ConversationState): Int {
  * That is a luminance test at the call site to answer a question the palette should
  * answer.
  *
- * The answer that survived is `PiGlass.fill()` — the same opaque floating fill the
- * header's capsules and the jump-to-latest button use — rather than a chip-local step
+ * The answer that survived is `PiGlass.panel(...)` — the same glass the header's
+ * capsules and the jump-to-latest button use, with the opaque fill as its fallback —
+ * rather than a chip-local step
  * of the surface ramp: a chip is a floating control, so it wears the control fill
  * wherever it sits rather than a role chosen by the surface beneath it. The answer card
  * stays `surfaceContainer` (white), so the chip still reads as a separate object. The
@@ -5841,13 +5862,13 @@ private fun ControlChipBase(
             // rectangle behind a pill.
             modifier = Modifier
                 .heightIn(min = CHIP_HEIGHT)
+                .piGlass(RoundedCornerShape(percent = 50))
                 .clip(RoundedCornerShape(percent = 50))
                 .clickable(onClick = onClick),
             shape = RoundedCornerShape(percent = 50),
             // The same glass the header's capsules are drawn with: a chip floats over the
-            // fading transcript exactly as a capsule does, and the grey it used to have
-            // (`surfaceContainerHigh`) was a step *into* the page rather than above it.
-            color = PiGlass.fill(),
+            // fading transcript exactly as a capsule does.
+            color = Color.Transparent,
             // The chip's label is *normal* ink, not the muted one the library gives a
             // container-high surface. `onSurfaceContainerHigh` is #A2A2A2 — a summary's
             // grey, chosen for text that explains a row — and these are not

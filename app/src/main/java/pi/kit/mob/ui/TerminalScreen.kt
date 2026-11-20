@@ -566,10 +566,10 @@ private fun ScreenRepaintAnchor(
  * sits in the action row rather than inside the button.
  *
  * The rows are the kit's [PiMenuRow], not Miuix's `RadioButtonPreference`: a
- * `BasicComponent` with end actions cannot be measured inside a `ListPopupColumn` in
+ * `BasicComponent` with end actions could not be measured inside a `ListPopupColumn` in
  * Miuix 0.9.4 (`PiMenuRow`'s KDoc has the arithmetic, and this roster is where the
- * crash was found), and one menu row for every popup in the app is what keeps this
- * list and the chat's model list from drifting apart. The tick the preference would
+ * crash was found; 0.9.5-beta01 fixed the measure), and one menu row for every popup in
+ * the app is what keeps this list and the chat's model list from drifting apart. The tick the preference would
  * have drawn is passed as the row's start slot, and the title beside it is drawn in
  * the same accent, because the two are one statement: a single-choice row that ticks
  * itself in one ink and names itself in another says "chosen" and "ordinary" at once.

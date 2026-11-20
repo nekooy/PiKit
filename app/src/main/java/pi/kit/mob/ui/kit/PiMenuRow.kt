@@ -24,19 +24,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * ## Why this is not a `BasicComponent`
  *
- * Miuix 0.9.4 cannot measure `BasicComponent` with `startAction` or `endActions`
- * under an unbounded width, and a `ListPopupColumn` asks exactly that of its
+ * Miuix 0.9.4 could not measure `BasicComponent` with `startAction` or `endActions`
+ * under an unbounded width, and a `ListPopupColumn` asked exactly that of its
  * children: `BasicComponent`'s end-action budget is `(available - 8dp) * 6 / 10`,
  * which overflows `Int` at `Constraints.Infinity` and hands `Constraints.copy` a
  * negative `maxWidth`. The crash is `IllegalArgumentException: maxWidth must be >=
  * than minWidth` from `BasicComponent.measure`, reproduced on the composer's `+`
  * menu — whose three rows carry leading marks — with `android.view.View.measure`
  * frames above it in the stack, because the popup's own measuring pass is where the
- * infinity arrives. A `BasicComponent` *without* either slot survives the same
- * measurement, which is why the command menu did not crash before it was converted.
+ * infinity arrives. **0.9.5-beta01 fixed it** with a `constraints.hasBoundedWidth`
+ * branch; this row remains because it carries the popup metrics and the three
+ * semantics below, not because the component would still crash.
  *
  * The metrics are `DropdownImpl`'s own popup-mode ones where this row can carry them,
- * read out of the library at `0.9.4`: `body1` at medium weight for the title, `body2`
+ * read out of the library at `0.9.5-beta01`: `body1` at medium weight for the title, `body2`
  * for the summary, 20dp at the sides, and `12dp` between a leading mark and the title.
  * Copying them rather than inventing a row is what lets a menu of these sit beside a
  * menu of `DropdownImpl`s without a seam — the two are used in the same app, sometimes

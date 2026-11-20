@@ -1,8 +1,8 @@
 package pi.kit.mob.ui.kit
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -31,23 +33,24 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.LocalStrings
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassTopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.glass.ChevronBackward
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * One page: a Miuix scaffold, a small top bar, and back.
+ * One page: a Miuix scaffold, a glass top bar, and back.
  *
  * Every destination and every settings page is the same shape, so the shape is
  * written once. The page supplies its title, its top-bar actions and its body;
  * the scaffold supplies the surface colour, the status-bar inset, the popup host
- * that Miuix's own dialogs draw into, and the corner clip a pushed page slides
- * under.
+ * that Miuix's own dialogs draw into, the glass layer the bar samples, and the
+ * corner clip a pushed page slides under.
  *
  * [body] receives the scaffold's [PaddingValues] with start, top and end intact and
  * bottom **zero**. The page's own surface runs to the window's last pixel, so the body
@@ -65,14 +68,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * ## The subtitle is drawn here, not passed to the bar
  *
- * Miuix's `SmallTopAppBar` renders a `subtitle` with no line limit, so a sentence
+ * Miuix's top bars — `SmallTopAppBar` and `GlassTopAppBar` alike — render their
+ * `subtitle` with no line limit, so a sentence
  * that is wider than the space beside the action icons **wraps**, and the bar —
  * and therefore every page's content rectangle — grows by a line. The terminal
  * page measured it: its English idle sentence takes a second line on a phone
  * where the Chinese one does not, which moved the PTY's rectangle when the
  * language changed. It is one line here instead: the bar keeps its own height,
- * the subtitle sits beneath it with an ellipsis, and the page's content top is the
- * same on every page in every language.
+ * the subtitle sits in the bar's `bottomContent` with an ellipsis, and the page's
+ * content top is the same on every page in every language.
  *
  * **Null and blank are two different answers.** `null` is a page that has no
  * subtitle at all and gets no line; `""` reserves the line while the value it
@@ -104,50 +108,66 @@ fun PiPage(
         BackHandler(onBack = onBack)
     }
 
+    // The bar and the body must share one backdrop. The bar is composed in the
+    // Scaffold's `topBar` slot, which is outside the content lambda, so a backdrop
+    // created inside the body would never reach it; the value is therefore created
+    // here and passed to both halves.
+    val pageBackdrop = rememberPiBackdrop()
+
     Scaffold(
         modifier = modifier,
+        containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
-            Column(Modifier.fillMaxWidth()) {
-                SmallTopAppBar(
-                        title = title,
-                        navigationIcon = {
-                            if (onBack != null) {
-                                IconButton(onClick = onBack) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Back,
-                                        // Named, because a back arrow is the one control
-                                        // on the bar with no text beside it: a screen
-                                        // reader that reads nothing here leaves a page
-                                        // that cannot be left. The label is the
-                                        // catalog's, not a literal.
-                                        contentDescription = LocalStrings.current.common.back,
-                                    )
-                                }
-                            }
-                        },
-                        actions = actions,
-                )
-                if (subtitle != null) {
-                    Text(
-                        // A zero-width space keeps a blank line's height without
-                        // drawing a glyph. `Text("")` still lays out its line box, so
-                        // this is belt and braces rather than a requirement — but it
-                        // also keeps the layout from collapsing if the library ever
-                        // skips an empty string.
-                        text = subtitle.ifEmpty { "\u200B" },
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MiuixTheme.colorScheme.surface)
-                            .padding(start = TITLE_GUTTER, end = TITLE_GUTTER)
-                            .padding(bottom = 6.dp),
-                    )
-                }
-            }
+            GlassTopAppBar(
+                title = title,
+                expandable = false,
+                // OS4's material: the bar draws a progressive blur over the page's
+                // backdrop and its buttons sample the same layer. `progressiveBlur`
+                // needs a non-null backdrop, which this page creates on devices that
+                // can run the shader; elsewhere the bar keeps its gradient band.
+                progressiveBlur = true,
+                backdrop = pageBackdrop,
+                defaultWindowInsetsPadding = true,
+                navigationIcon = {
+                    if (onBack != null) {
+                        GlassIconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = MiuixIcons.Glass.ChevronBackward,
+                                // Named, because a back arrow is the one control
+                                // on the bar with no text beside it: a screen
+                                // reader that reads nothing here leaves a page
+                                // that cannot be left. The label is the
+                                // catalog's, not a literal.
+                                contentDescription = LocalStrings.current.common.back,
+                                tint = MiuixTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    }
+                },
+                actions = actions,
+                bottomContent = {
+                    if (subtitle != null) {
+                        Text(
+                            // A zero-width space keeps a blank line's height without
+                            // drawing a glyph. `Text("")` still lays out its line box, so
+                            // this is belt and braces rather than a requirement — but it
+                            // also keeps the layout from collapsing if the library ever
+                            // skips an empty string.
+                            text = subtitle.ifEmpty { "\u200B" },
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = TITLE_GUTTER, end = TITLE_GUTTER)
+                                .padding(bottom = 6.dp),
+                        )
+                    }
+                },
+            )
         },
     ) { padding ->
         // The body is the page, and the page reaches the window's last pixel: only the
@@ -155,17 +175,28 @@ fun PiPage(
         // down as a value a scrolling body spends as content padding. Handing the strip in
         // as a bottom *padding* here was the opaque band under every page — the scaffold's
         // surface showed through it and the viewport ended above the handle.
-        CompositionLocalProvider(
-            LocalPiNavigationInset provides padding.calculateBottomPadding(),
+        //
+        // The body is also the page's glass layer: the bar above it samples this subtree,
+        // so cards and rows scrolling under the bar are what the material blurs. The layer
+        // stops at the bar because a bar inside it would sample its own output.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier),
         ) {
-            body(
-                PaddingValues(
-                    start = padding.calculateStartPadding(LocalLayoutDirection.current),
-                    top = padding.calculateTopPadding(),
-                    end = padding.calculateEndPadding(LocalLayoutDirection.current),
-                    bottom = 0.dp,
-                ),
-            )
+            CompositionLocalProvider(
+                LocalPiBackdrop provides pageBackdrop,
+                LocalPiNavigationInset provides padding.calculateBottomPadding(),
+            ) {
+                body(
+                    PaddingValues(
+                        start = padding.calculateStartPadding(LocalLayoutDirection.current),
+                        top = padding.calculateTopPadding(),
+                        end = padding.calculateEndPadding(LocalLayoutDirection.current),
+                        bottom = 0.dp,
+                    ),
+                )
+            }
         }
     }
 }

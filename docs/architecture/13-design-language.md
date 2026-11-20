@@ -21,7 +21,7 @@ tokens into the app's vocabulary. Every screen depended on that vocabulary, and 
 Material upgrade had to be re-read against it.
 
 The rewrite replaced it with a library that already owns the vocabulary:
-`compose-miuix-ui/miuix` 0.9.4, a Compose Multiplatform component library drawing the
+`compose-miuix-ui/miuix` 0.9.5-beta01, a Compose Multiplatform component library drawing the
 MIUI/HyperOS idiom. Its theme engine ships the two palettes and derives a third
 from a seed colour if asked; its preference components are the rows a settings page
 is made of; its window dialogs,
@@ -42,13 +42,50 @@ component that duplicates a Miuix one.
 and two type scales on one screen is exactly the drift this change removes. Both
 libraries also draw press indications and squircle cards differently, so a screen
 mixing them reads as two apps in one frame. Material 3's AAR metadata is no longer
-what fixes `compileSdk` 37 either: that floor is the Compose artifacts' own, and it
+what fixes `compileSdk` 37.2 either: that floor is the Compose artifacts' own, and it
 stayed when the dependency left.
 
 The cost is real and accepted: the app no longer decides what a Miuix component looks
 like, and Miuix is an experimental library — a bump can move the interface. That is
 the trade: one coherent idiom owned by a library, against a hand-kept design system
 maintained alongside every screen.
+
+## OS4 glass: the material the library draws, and the page it samples
+
+Miuix 0.9.5-beta01 is the first release with `miuix-glass`, the OS4 material. The
+app's chrome — the page bar, the chat header's capsules, the composer and its chips,
+the jump-to-latest disc, and a dialog or sheet raised from a page — is drawn from it.
+A settings card is still a Miuix `Card`: OS4's glass is a material for controls that
+float over the page, not for every rectangle on it.
+
+**The backdrop belongs to the page, not to the window.** `PiPage` creates the page's
+`LayerBackdrop` with `rememberPiBackdrop()` and draws only its **body** into it; the
+`GlassTopAppBar` is composed in the Scaffold's `topBar` slot — outside the body — and
+receives that same value, so a card scrolling under the bar is what the material blurs.
+The bar itself is deliberately *outside* the layer: a control inside it would sample its
+own blurred output. **The failure is not only a visual one.** The first build put the
+whole chat page — transcript, header and composer — in one `layerBackdrop`; the glass
+controls then sampled their own recording, and `RenderNode::prepareTreeImpl` recursed
+until the RenderThread stack overflowed (`SIGSEGV`, `SEGV_ACCERR`, Android reporting
+`stack pointer is not in a rw map; likely due to stack overflow`) and the process died
+before its first frame. The transcript is the layer; every control that samples it is a
+sibling. A single window-wide layer would have put the bars inside their own sample.
+
+**`PiGlass.panel(shape)` is the one surface a floating control is cut from.** It calls
+`glassPanel` with the page's `LocalPiBackdrop`, the OS4 small edge stroke, and an
+opaque fallback; `PiGlass.fill()` remains that fallback and is what `piGlass()` uses
+when no backdrop exists. The old `PiGlass` KDoc said a real backdrop blur was
+impossible because Compose has no backdrop filter — that was true of the library the
+app shipped against, and `miuix-blur` is what replaced it.
+
+**The Android 8 floor is kept by a deliberate override.** `miuix-blur` declares
+`minSdk 33` because `android.graphics.RuntimeShader` starts there. The manifest
+overrides that library (`tools:overrideLibrary="top.yukonga.miuix.kmp.blur"`) and
+every glass call site is gated by `isRuntimeShaderSupported()`; below API 33
+`rememberPiBackdrop()` returns null and `PiGlass.panel` draws `fill()` instead. The app still
+installs on Android 8.0, and a device below 33 gets the old flat material rather than
+a crash. The gate is the contract: a new glass call site that does not pass through
+`PiGlass` or `rememberPiBackdrop` is the way this breaks.
 
 ## The palette: the library's own, with a page step
 
@@ -171,7 +208,7 @@ know nothing about it.
 
 `PiPage(title, subtitle, onBack, actions, body)` is the frame every
 destination and every settings page uses. It is a Miuix `Scaffold` with a pinned
-`SmallTopAppBar`, a `BackHandler` that exists only when `onBack` does (a page with no parent
+`GlassTopAppBar`, a `BackHandler` that exists only when `onBack` does (a page with no parent
 has no back arrow and does not swallow the system gesture), and a body that receives the
 scaffold's `PaddingValues` with the navigation strip taken out of it — see *The window's
 last pixels* below. The `floating` slot this signature used to take was passed by no
@@ -179,7 +216,7 @@ caller and is gone, and the `bottomBarColor` that briefly followed it is gone wi
 it painted.
 
 The subtitle is drawn by the kit, not passed to the bar, and that is a measured rule:
-`SmallTopAppBar` renders its `subtitle` with **no line limit**, so a sentence wider
+the library's top bars render their `subtitle` with **no line limit**, so a sentence wider
 than the space beside the action icons wraps and the bar — and every page's content
 rectangle with it — grows by a line. The terminal page measured it: its English idle
 sentence wraps on a phone where the Chinese one does not. The kit draws the subtitle
@@ -241,50 +278,51 @@ Two row rules are behaviour rather than taste:
   storage grants ask every time they are turned on or off, so the row does not toggle
   and the finger has to reach the switch. Backup's switches stay row-toggling, because
   nothing there asks.
-- **A `BasicComponent` with `startAction` or `endActions` must not go inside a
-  `ListPopupColumn`.** Miuix 0.9.4 sizes a popup column from its children's intrinsic
-  sizes, and the component's end-action budget overflows `Int` at the unbounded width
-  it is asked about — the arithmetic is `(available - 8dp) * 6 / 10`, which is
-  negative at `Constraints.Infinity`, and the crash is `maxWidth must be >= than
-  minWidth`. It was reproduced twice: on the terminal's session roster, and on the
-  composer's `+` menu, whose rows carry a *leading* mark and hit the same branch. A
-  `BasicComponent` *without* either slot is safe. `ui/kit/PiMenuRow` is the row for a
-  popup, marks and all, and it takes the library's own popup-mode metrics —
-  `body1`/`body2`, 20dp at the sides — so a menu of these sits beside a menu of
-  `DropdownImpl`s without a seam. It draws three kinds of row, and the difference is
-  the semantics rather than the shape: a **choice** (the chosen member's title in the
-  accent, which is the ink `DropdownImpl` gives its ticked row, so the terminal's
-  roster and the composer's model list say "this one" the same way), an **action**,
-  and a **fact** — a row with no tap at all, drawn in normal ink because the library's
-  disabled ink makes true numbers read as unavailable choices. The context report is
-  the one menu of facts: a page of readings drawn in the colour of a disabled control
-  reads as readings that are not available.
+- **A popup row is `PiMenuRow`, not a `BasicComponent`.** Miuix 0.9.4 sized a popup
+  column from its children's intrinsic sizes and the component's end-action budget
+  overflowed `Int` at the unbounded width it was asked about — the arithmetic is
+  `(available - 8dp) * 6 / 10`, which is negative at `Constraints.Infinity`, and the
+  crash is `maxWidth must be >= than minWidth`. It was reproduced twice: on the
+  terminal's session roster, and on the composer's `+` menu, whose rows carry a
+  *leading* mark and hit the same branch. **0.9.5-beta01 fixed the measure** by
+  branching on `constraints.hasBoundedWidth`, so the crash is no longer the reason;
+  `ui/kit/PiMenuRow` remains the popup row because it takes the library's own
+  popup-mode metrics — `body1`/`body2`, 20dp at the sides — so a menu of these sits
+  beside a menu of `DropdownImpl`s without a seam, and because a popup row has three
+  semantics the preference component does not name. It draws three kinds of row, and
+  the difference is the semantics rather than the shape: a **choice** (the chosen
+  member's title in the accent, which is the ink `DropdownImpl` gives its ticked row,
+  so the terminal's roster and the composer's model list say "this one" the same way),
+  an **action**, and a **fact** — a row with no tap at all, drawn in normal ink because
+  the library's disabled ink makes true numbers read as unavailable choices. The
+  context report is the one menu of facts: a page of readings drawn in the colour of a
+  disabled control reads as readings that are not available.
 
 ## Dialogs, sheets and the one message
 
-**Dialogs are window-level.** `PiConfirm` wraps Miuix's `WindowDialog` rather than the
-overlay variant, and the reason is this app's shape rather than a
-preference: the first-launch permission prompts are raised before there is a page to
-attach an overlay to, a pi question can arrive over any destination, and a sheet
-belongs to a page that may be disposed while it closes. A window dialog needs no
-`Scaffold` host, so it works in all three cases with one call. The cost is the
-platform's dialog window around Miuix content — the content still inherits the
-theme, density and language, and Miuix draws its own background, corner radius, dim
-and animation inside it.
+**A dialog is glass when the page has a backdrop, and a window when it does not.**
+`PiConfirm` reads `LocalPiBackdrop`: inside a `PiPage` or the chat page it raises
+Miuix's `GlassDialog`, whose material samples the page behind it; above every page —
+the first-launch permission prompts — it keeps `WindowDialog`, because there is no
+page to sample and no `Scaffold` host yet. The two paths share `PiDialogAnswers`, so a
+question reads the same wherever it is raised. The window path's cost is the
+platform's dialog window around Miuix content; the glass path's cost is that it needs
+a page with a backdrop, which is exactly the condition the split names.
 
-**Actions in a dialog are flat text buttons**, with the dismiss answer neutral and the
-confirm answer in the error role only when it cannot be taken back
-(`destructive = true`). Filled buttons were tried in the language picker and rejected:
-a dialog's confirm is not the page's primary action, and a filled pill in a dialog
-competes with the page behind it for the same emphasis.
+**Actions in a glass dialog are Miuix's glass buttons**: the dismiss answer is the
+neutral tonal role, the confirm answer is the primary role, and a destructive confirm
+uses the error role. The window fallback keeps the older filled `TextButton` pair for
+the same reason: it is a window with no glass behind it, and a translucent answer over
+an opaque platform panel is neither one material nor the other.
 
-**Sheets are `PiSheet`** (Miuix's `WindowBottomSheet`): scrim, back gesture and
-downward drag all dismiss, and the page only owns *which* sheet is open. A picker is
-a sheet of radio rows with a filter field, not a dropdown, when its content is longer
-than a few words — a dropdown's popup is sized for a list, not for a search.
+**Sheets are `PiSheet`** (Miuix's `GlassBottomSheet` when a page backdrop exists, its
+`WindowBottomSheet` otherwise): scrim, back gesture and downward drag all dismiss, and
+the page only owns *which* sheet is open. A picker is a sheet of radio rows with a
+filter field, not a dropdown, when its content is longer than a few words — a
+dropdown's popup is sized for a list, not for a search.
 
-**A window is driven by `show`, never by whether it is composed.** Miuix's
-`WindowDialog` and `WindowBottomSheet` animate in *and out* through that flag, so a
+**A window is driven by `show`, never by whether it is composed.** Miuix's window
+components and the glass overlay pair animate in *and out* through that flag, so a
 call site that raises one by writing `if (question != null) PiDialogHost(...)` removes
 it from the hierarchy with the content already gone: the exit plays over an empty
 panel, `onDismissFinished` never fires, and the window a reader answers keeps a
@@ -293,9 +331,9 @@ required `show` and the caller holds the last value — `pendingDialog != null` 
 the held copy is what it draws while it leaves. The sessions page's three dialogs and
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
-**Transient messages are the app's glass capsule**, raised through `LocalPiToast`. It is
-the same fill as the bar's capsules — a `PiGlass.fill()` pill — placed above the composer
-rather than over it. Three other implementations were tried:
+**Transient messages are the app's floating capsule**, raised through `LocalPiToast`. It is
+the same fill as a bar's controls — a `PiGlass.fill()` pill on the window's top layer —
+placed above the composer rather than over it. Three other implementations were tried:
 the platform's `Toast` twice, whose card in the system's colours with the launcher icon
 beside the text reads as a notification that landed on the page, and Miuix's snackbar
 once, which is a full-width bar pinned to the window's bottom edge where the composer
@@ -326,31 +364,29 @@ a bar of four equally weighted destinations said otherwise. The **Work / Chat** 
 left the header for the drawer's foot, where it shares the panel's footer with the
 settings disc.
 
-**The drawer's foot wears the same capsules.** The mode switch and the settings disc at the
-bottom of the history panel are `PiGlass.fill()`, the fill the bar's marks are drawn with,
-because they are the same kind of object: controls floating over a page rather than rows
-on it. The settings control used to be an opaque `surfaceContainer` pill with a word; it is
-a disc now, since the mode switch beside it already names the only other thing the footer
-does.
+**The drawer's foot wears the same kind of object.** The mode switch and the settings disc at the
+bottom of the history panel use `PiGlass.fill()`, the opaque fallback, because the drawer is
+a panel rather than a page and has no page backdrop for glass to sample; they are still
+controls floating over a page rather than rows on it. The settings control used to be an
+opaque `surfaceContainer` pill with a word; it is a disc now, since the mode switch beside
+it already names the only other thing the footer does.
 
 **A bar with no bar in it.** The reference drawing the page follows has no strip across
 the top: the content scrolls *under* the marks, fades out as it reaches them, and the
-marks are the only opaque objects there. That is three decisions, and each was made
+marks are the only objects there. That is three decisions, and each was made
 because the strip version was worse:
 
-- **The marks sit in opaque capsules** (`PiGlass.fill()`: white in the light scheme and
-  `#2D2D2D` in the dark one). The first
-  attempt used `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong for
-  a control, because the capsule then read as shading on the page instead of as an object
-  above it. The fill was white at an alpha for a while — 80%, then 90%, then 100% over the
-  light page, and 14%, 20%, 24% of white over the black one — and the dark half of that pair
-  never became opaque, so the same control was a solid object by day and a tinted pane by
-  night: a row scrolled under the capsule showed through it, and the page stopped reading as
-  one object per theme. **A floating control is filled, not tinted.** The library's white
-  `surfaceContainer` is the card that a white capsule would disappear into; the app moves
-  the card/history group to `#F7F7F7` and keeps the floating controls white, which is the
-  same brighter-white group the dark scheme gets from `#2D2D2D` against `#242424`. The fill
-  alone is the raise: no shadow is drawn around it.
+- **The marks are OS4 glass panels** (`PiGlass.panel` with the small bloom stroke; the
+  opaque `PiGlass.fill()` is the fallback when no backdrop is available). The first
+  attempt used `PiTone.inset()` — a *wash of the ink*, right for quoted material and wrong
+  for a control, because the capsule then read as shading on the page instead of as an
+  object above it. The fill was white at an alpha for a while — 80%, then 90%, then 100%
+  over the light page, and 14%, 20%, 24% of white over the black one — and the dark half of
+  that pair never became opaque, so the same control was a solid object by day and a tinted
+  pane by night: a row scrolled under the capsule showed through it, and the page stopped
+  reading as one object per theme. **A floating control is filled, not tinted** was the
+  rule that replaced it, and the glass material is the other way to obey it: the body is
+  the blurred page, not a wash of the surface colour, and its fallback is opaque.
 - **The row sits a little lower than a bar's.** The capsules' top edge is 22dp under the
   status bar — a bar's row would start at 0 — because the reference keeps the handle clear
   of the clock's own line. That is also why the leading capsule is a circle and the
@@ -365,16 +401,15 @@ because the strip version was worse:
   The touch target is the mark's own box — 42dp, two above the library's `IconButton`
   floor of 40dp — and not the platform's 48dp. The drawer's selection controls go one
   step smaller still (36dp with 20dp glyphs), for the width reason further down.
-- **No floating object carries a shadow.** Its fill is the whole of the raise: a capsule,
-  a chip and the composer's field are separated from the page by `PiGlass.fill()`'s colour
-  step alone. Two lifts were drawn here once, and both are gone: `glassLift` blurred the
-  shape's *own* outline with a `MaskFilter`, and `solidLift` gave an opaque surface a
-  `graphicsLayer` elevation. What they settled is kept — `Modifier.shadow` draws a squircle
-  whatever shape it is given (a circle's shadow came out with flat corners, and against a
-  translucent capsule that silhouette showed through as a white block with grey corners),
-  and the hand-drawn blur was re-rasterised on every frame (measured under the composer's
-  field while the keyboard closed, a **48 ms frame**). Neither is needed for a filled
-  surface, so the fill now carries the separation by itself.
+- **A glass panel carries a small floating-control shadow; the opaque fallback does not.**
+  `PiGlass.panel` uses a 10-unit shadow rather than the library's `Regular` panel shadow:
+  on a 32dp chip the panel radius reads as a halo, and even `Float`'s 24 units is visibly
+  wider than the object. The old rule was that a filled surface had no shadow at all,
+  because `Modifier.shadow` drew a squircle for every shape (a circle's shadow came out
+  with flat corners) and the hand-drawn blur was re-rasterised every frame (measured
+  under the composer's field while the keyboard closed, a **48 ms frame**). The OS4
+  material's shadow is part of `glassPanel` and is applied to the glass shape itself; on
+  the fallback path the fill still carries the separation alone.
 - **Over a picture, the capsule is still the capsule.** The picture viewer's chrome is the
   header's object — 42dp, `PiGlass.fill()`, `onSurface` ink, a 22dp glyph — because a floating
   control is one object in this app whatever page it floats over. A dark scrim (38% of black,
@@ -389,11 +424,10 @@ because the strip version was worse:
   part is exactly the status bar's height and the ramp runs from there, so a row begins to
   dissolve the moment it leaves the clock's line. It is a four-stop ramp
   (`100% → 62% → 26% → 0`): a two-stop one hits its transparent end while the eye still
-  expects a gradual departure, so the row crossing it seemed to snap into place. It is a fade and not a blur: Compose has no backdrop filter, and a real
-  blur here would mean rendering the transcript twice (once through a `RenderEffect`) —
-  a second copy of a `LazyColumn` for an effect that the gradient already carries at
-  arm's length. The reference's blur is a backdrop filter's; this is the same idea drawn
-  by hand, and it is why the seam is invisible while the pixels differ.
+  expects a gradual departure, so the row crossing it seemed to snap into place. The
+  header's glass samples the transcript's own layer; this gradient is still drawn by hand
+  rather than by a second rendering of the list, because it also has to cover the area
+  beside the capsules where no control samples anything.
 
 **The bottom of the page is a fade too, and it starts at the field.** The composer is a
 band that *floats over* the transcript rather than a row under it: the list's bottom
@@ -574,7 +608,7 @@ control staying that size, and an inline code chip clamps to `min(radius, height
 where a tall box would otherwise cut into its text. The terminal is a family of its
 own and keeps the library's smaller figure throughout: its key bar is a 26dp pill with
 10dp keys on a 32dp cap, and the on-screen keyboard a 14dp panel with 7dp keys on 34dp.
-There is no theme-level shape local in Miuix 0.9.4 to hang this on, which is
+There is no theme-level shape local in Miuix 0.9.5-beta01 to hang this on, which is
 why it is per-call-site.
 
 **Motion is the library's**, except for the one page-level move every page has to

@@ -89,7 +89,7 @@ jobs:
         run: yes | sdkmanager --licenses > /dev/null || true
 
       - name: Install the SDK components and the NDK
-        run: sdkmanager --install "platforms;android-37.0" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION"
+        run: sdkmanager --install "platforms;android-37.2" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION"
 
       - name: Set up Node.js
         uses: actions/setup-node@v7

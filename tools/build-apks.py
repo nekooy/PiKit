@@ -306,8 +306,12 @@ def compile_sdk() -> str | None:
     file = REPO_ROOT / "gradle.properties"
     if not file.is_file():
         return None
-    match = re.search(r"^pikit\.compileSdk\s*=\s*(\S+)", file.read_text(encoding="utf-8"), re.M)
-    return match.group(1) if match else None
+    text = file.read_text(encoding="utf-8")
+    major = re.search(r"^pikit\.compileSdk\s*=\s*(\S+)", text, re.M)
+    minor = re.search(r"^pikit\.compileSdkMinor\s*=\s*(\S+)", text, re.M)
+    if not major:
+        return None
+    return f"{major.group(1)}.{minor.group(1)}" if minor else major.group(1)
 
 
 def check_prerequisites() -> list[str]:
@@ -337,13 +341,12 @@ def check_prerequisites() -> list[str]:
         missing.append("the Android SDK (sdk.dir in local.properties, or ANDROID_HOME)")
 
     # The SDK *platform* `compileSdk` names. It is an AAR floor rather than a
-    # preference — every AndroidX artifact this build resolves declares
-    # `minCompileSdk=37` (the floor is named in gradle/libs.versions.toml) — and Gradle
-    # reports a missing one as "Failed to find target with hash string
-    # 'android-37'", from inside the task graph, naming a hash string rather than the
+    # preference — Miuix 0.9.5-beta01 and the AndroidX artifacts this build resolves
+    # declare `minCompileSdk=37.2` (the floor is named in gradle/libs.versions.toml) —
+    # and Gradle reports a missing one as "Failed to find target with hash string
+    # 'android-37.2'", from inside the task graph, naming a hash string rather than the
     # `sdkmanager` argument that installs it. The directory is not always
-    # `android-<n>`: a platform with a minor version is `android-37.0`, so both
-    # spellings are accepted.
+    # `android-<n>`: a platform with a minor version is `android-37.2`.
     if sdk is not None:
         wanted = compile_sdk()
         if wanted:
@@ -356,7 +359,7 @@ def check_prerequisites() -> list[str]:
             if not installed:
                 missing.append(
                     f"the Android SDK platform for compileSdk {wanted} "
-                    f"(`sdkmanager \"platforms;android-{wanted}.0\"`)"
+                    f"(`sdkmanager \"platforms;android-{wanted}\"`)"
                 )
 
     # The NDK, which the vendored terminal emulator's PTY shim is compiled with. Gradle

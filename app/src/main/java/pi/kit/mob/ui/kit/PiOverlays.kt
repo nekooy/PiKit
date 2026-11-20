@@ -52,24 +52,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.glass.GlassBottomSheet
+import top.yukonga.miuix.kmp.glass.GlassDialog
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
- * The app's conversations, in Miuix's own windows.
+ * The app's dialogs and sheets: OS4 glass where a page is behind them, Miuix windows
+ * where there is no page.
  *
- * These are *window* dialogs and sheets rather than the overlay variants, and the
- * reason is the shape of this app rather than taste: a permission explanation is
- * raised from the root before there is a page, a pi question can arrive over any
- * destination, and a sheet belongs to a page that may be disposed while it closes.
- * A window-level component does not need a `Scaffold` host to exist above it, so
- * it works in all three cases with the same call.
- *
- * The cost is the platform's dialog window — the content still inherits the
- * composition's theme, density and language, and Miuix draws its own background,
- * corner radius, dim and slide animation inside that window, so it is Miuix's
- * shape with a platform window around it.
+ * A dialog raised from a destination has a `LocalPiBackdrop` and is drawn as Miuix's
+ * `GlassDialog`/`GlassBottomSheet`, so its material samples the page behind it and it
+ * belongs to the same surface as the bar. The first-launch permission prompts are
+ * raised from the root before any page exists and a pi question can arrive over any
+ * destination; those have no backdrop to sample and keep the window variants, which
+ * need no `Scaffold` host. The window path's cost is the platform's dialog window
+ * around Miuix content — the content still inherits the theme, density and language,
+ * and Miuix draws its own background, corner radius, dim and animation inside it.
  */
 
 /**
@@ -101,20 +103,45 @@ fun PiConfirm(
      */
     destructive: Boolean = false,
 ) {
-    WindowDialog(
-        show = show,
-        modifier = modifier,
-        title = title,
-        summary = text,
-        onDismissRequest = onDismissRequest,
-    ) {
-        PiDialogAnswers(
-            dismiss = dismiss,
-            onDismiss = onDismiss,
-            confirm = confirm,
-            onConfirm = onConfirm,
-            destructive = destructive,
-        )
+    // A page that carries a backdrop gets OS4's glass panel; the first-launch prompts
+    // run above every page and therefore above every backdrop, and keep the window
+    // dialog that works without a Scaffold. The two paths share the answers row, so a
+    // question looks the same wherever it is raised.
+    val backdrop = LocalPiBackdrop.current
+    if (backdrop != null) {
+        GlassDialog(
+            show = show,
+            backdrop = backdrop,
+            modifier = modifier,
+            title = title,
+            summary = text,
+            onDismissRequest = { onDismissRequest?.invoke() },
+        ) {
+            PiDialogAnswers(
+                dismiss = dismiss,
+                onDismiss = onDismiss,
+                confirm = confirm,
+                onConfirm = onConfirm,
+                destructive = destructive,
+                glass = true,
+            )
+        }
+    } else {
+        WindowDialog(
+            show = show,
+            modifier = modifier,
+            title = title,
+            summary = text,
+            onDismissRequest = onDismissRequest,
+        ) {
+            PiDialogAnswers(
+                dismiss = dismiss,
+                onDismiss = onDismiss,
+                confirm = confirm,
+                onConfirm = onConfirm,
+                destructive = destructive,
+            )
+        }
     }
 }
 
@@ -124,9 +151,10 @@ fun PiConfirm(
  * ## One shape, stated once
  *
  * This is the app's only dialog-button row, and it is the shape the *rebuild the
- * runtime* question established: two `TextButton`s of equal weight, 12dp apart, in the
- * library's own filled pair — so both answers are one width and one height, and the
- * destructive one is told apart by its label's colour rather than by being the only
+ * runtime* question established: two equal-weight answers 12dp apart, one width and one
+ * height. A glass dialog draws them as Miuix's `GlassDialogButton`s (normal, primary or
+ * destructive role); the window fallback keeps the filled `TextButton` pair, where the
+ * destructive answer is told apart by its label's colour rather than by being the only
  * button with a fill.
  *
  * The dialogs that were written before that question were not all the same. Three of
@@ -158,33 +186,60 @@ fun PiDialogAnswers(
      * escapable.
      */
     confirmEnabled: Boolean = true,
+    /** Whether the answers are drawn on Miuix's glass button row. */
+    glass: Boolean = false,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(
-            cornerRadius = PiCorner.radius,
-            text = dismiss,
-            onClick = onDismiss,
-            modifier = Modifier.weight(1f),
-        )
-        if (confirm != null && onConfirm != null) {
+        if (glass) {
+            GlassDialogButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                role = GlassDialogButtonRole.Normal,
+            ) {
+                Text(text = dismiss, style = MiuixTheme.textStyles.button)
+            }
+        } else {
             TextButton(
                 cornerRadius = PiCorner.radius,
-                text = confirm,
-                onClick = onConfirm,
+                text = dismiss,
+                onClick = onDismiss,
                 modifier = Modifier.weight(1f),
-                enabled = confirmEnabled,
-                colors = if (destructive) {
-                    ButtonDefaults.textButtonColors(
-                        textColor = MiuixTheme.colorScheme.error,
-                    )
-                } else {
-                    ButtonDefaults.textButtonColors()
-                },
             )
+        }
+        if (confirm != null && onConfirm != null) {
+            if (glass) {
+                GlassDialogButton(
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                    enabled = confirmEnabled,
+                    role = if (destructive) {
+                        GlassDialogButtonRole.Destructive
+                    } else {
+                        GlassDialogButtonRole.Primary
+                    },
+                ) {
+                    Text(text = confirm, style = MiuixTheme.textStyles.button)
+                }
+            } else {
+                TextButton(
+                    cornerRadius = PiCorner.radius,
+                    text = confirm,
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                    enabled = confirmEnabled,
+                    colors = if (destructive) {
+                        ButtonDefaults.textButtonColors(
+                            textColor = MiuixTheme.colorScheme.error,
+                        )
+                    } else {
+                        ButtonDefaults.textButtonColors()
+                    },
+                )
+            }
         }
     }
 }
@@ -205,14 +260,29 @@ fun PiSheet(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    WindowBottomSheet(
-        show = show,
-        modifier = modifier,
-        title = title,
-        onDismissRequest = onDismiss,
-    ) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            content()
+    val backdrop = LocalPiBackdrop.current
+    if (backdrop != null) {
+        GlassBottomSheet(
+            show = show,
+            backdrop = backdrop,
+            modifier = modifier,
+            title = title,
+            onDismissRequest = onDismiss,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                content()
+            }
+        }
+    } else {
+        WindowBottomSheet(
+            show = show,
+            modifier = modifier,
+            title = title,
+            onDismissRequest = onDismiss,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                content()
+            }
         }
     }
 }
