@@ -219,6 +219,10 @@ internal fun WorkspacePickerSheet(
             label = text.chat.workspacePickerPath,
             cornerRadius = PiCorner.radius,
             singleLine = true,
+            // The pair every other field in the app passes: without it this one alone
+            // draws the library's blue focus ring and a caret the ring's colour.
+            colors = piFieldColors(),
+            cursorBrush = piFieldCursor(),
             textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Uri,

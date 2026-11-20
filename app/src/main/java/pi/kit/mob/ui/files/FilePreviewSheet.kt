@@ -87,6 +87,7 @@ import pi.kit.mob.ui.clipEntryFor
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -151,7 +152,10 @@ internal fun FilePreviewSheet(entry: FileEntry) {
         LocalWindowInfo.current.containerDpSize.height * PREVIEW_BODY_SHARE,
     )
 
-    Column(Modifier.fillMaxWidth()) {
+    // The sheet's own edge is the window's, so the action row has to clear the gesture
+    // strip itself; the kit adds only 8dp. This is the sheet-body half of the rule in
+    // docs/UI.md, and the siblings on the chat page spend it the same way.
+    Column(Modifier.fillMaxWidth().padding(bottom = piSheetBottomInset())) {
         Column(
             Modifier
                 .fillMaxWidth()

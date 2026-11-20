@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +82,7 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -824,9 +826,15 @@ private fun ExtraKeysRow(
     var sending by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
     // Read from the window rather than remembered, so it stays right when the keyboard is
-    // raised by tapping the terminal instead of by a button.
+    // raised by tapping the terminal instead of by a button. The raw inset changes on every
+    // frame of the keyboard animation, so it is clamped to the boolean that actually matters
+    // inside `derivedStateOf`: reading `getBottom` straight in composition recomposed this
+    // bar for each step of the animation (docs/UI.md, *State*).
     val density = LocalDensity.current
-    val keyboardUp = WindowInsets.ime.getBottom(density) > 0
+    val ime = WindowInsets.ime
+    val keyboardUp by remember(density, ime) {
+        derivedStateOf { ime.getBottom(density) > 0 }
+    }
     // The strip under the bar is the bar's own: the background goes on first and the inset
     // is padding *inside* it, so the shell's black reaches the window's last pixel and the
     // keys stay above the gesture handle rather than being cut by it.
@@ -1058,7 +1066,10 @@ private fun ExtraKeysRow(
             enabled = draft.isNotEmpty(),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+                // The sheet's own edge is the window's, so the send button clears the
+                // gesture strip itself (docs/UI.md, *Dialogs, sheets*). With the keyboard
+                // up the sheet's own ime padding already lifts it.
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = piSheetBottomInset()),
         ) {
             Text(text = text.terminal.keysMessageSend)
         }

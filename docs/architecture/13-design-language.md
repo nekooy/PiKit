@@ -328,7 +328,10 @@ an opaque platform panel is neither one material nor the other.
 `WindowBottomSheet` otherwise): scrim, back gesture and downward drag all dismiss, and
 the page only owns *which* sheet is open. A picker is a sheet of radio rows with a
 filter field, not a dropdown, when its content is longer than a few words — a
-dropdown's popup is sized for a list, not for a search.
+dropdown's popup is sized for a list, not for a search. Every sheet body spends
+`piSheetBottomInset()` at its bottom — inside the scroll on a scrolling body — because
+the panel's bottom edge is the window's: without it the last row sits under the gesture
+strip, and the panel's own fill still has to reach the window's edge.
 
 **A window is driven by `show`, never by whether it is composed.** Miuix's window
 components and the glass overlay pair animate in *and out* through that flag, so a
@@ -337,7 +340,8 @@ it from the hierarchy with the content already gone: the exit plays over an empt
 panel, `onDismissFinished` never fires, and the window a reader answers keeps a
 remembered field's last answer for the next question. `PiDialogHost` therefore takes a
 required `show` and the caller holds the last value — `pendingDialog != null` opens it,
-the held copy is what it draws while it leaves. The sessions page's three dialogs and
+the held copy is what it draws while it leaves (`rememberLastPresent` is the kit's
+helper for exactly that hold). The sessions page's three dialogs and
 the personalization page's avatar sheet were the same bug and now follow the same rule.
 
 **Transient messages are the app's floating capsule**, raised through `LocalPiToast`. It is
@@ -485,7 +489,7 @@ still one tap from the conversation, from the trailing capsule rather than from 
 **The drawer is behind the page, and the page is the thing that moves.** The conversation
 list is the second thing a chat app is used for, and the reference screens are unambiguous
 about the layer order: the *conversation* is a card that slides right — rounded leading
-edge, about 2% smaller — and the panel is what it uncovers. The first version
+edge, about 5% smaller — and the panel is what it uncovers. The first version
 had the other order (a panel sliding over a dimmed page, with a scrim between them), and
 one frame is enough to tell them apart: in one the conversation looks pushed aside, in the
 other it looks covered.
@@ -567,8 +571,11 @@ thumb lands when it means to pull a drawer *out*. Measured on the emulator with 
 navigation: a left-edge swipe finished the activity and the launcher appeared, which reads
 as the app falling to a black screen. The chat page therefore handles back itself: the
 first press arms and says so in a toast, a second within two seconds leaves. The drawer's
-own handler is composed later and closes the drawer first, which is the order a back press
-has to have.
+own handler answers only while the panel is out, and the page's exit handler stands down
+while it is: the two are disjoint by `enabled`, so which one the dispatcher runs first
+cannot decide what back means. Composing one after the other was the earlier shape, and
+it made back depend on whether the panel had been opened before the page was rebuilt —
+a press could be swallowed behind a closed drawer, or arm the exit behind an open one.
 
 **One bar, and a page that arrives.** `PiPage` used to have a second, left-aligned
 variant for its roots: the title on the page's own gutter, with its back arrow inside a
@@ -619,6 +626,21 @@ own and keeps the library's smaller figure throughout: its key bar is a 26dp pil
 10dp keys on a 32dp cap, and the on-screen keyboard a 14dp panel with 7dp keys on 34dp.
 There is no theme-level shape local in Miuix 0.9.5-beta01 to hang this on, which is
 why it is per-call-site.
+
+**A hand-drawn rectangular surface is cut with the squircle modifiers, not
+`RoundedCornerShape`.** Miuix's cards, fields and buttons are squircles drawn by the
+library's own `miuix-squircle`; a hand-drawn fill or clip at a dp radius with
+`RoundedCornerShape` is a circular corner beside a continuous one — same radius, two
+curves. The library ships `squircleBackground` (fill only, no offscreen layer),
+`squircleClip` (one offscreen layer) and `squircleSurface` (fill + clip for a clickable
+surface); the drawer row, the message-menu row and the avatar crop frame use them.
+Where a `Shape` is passed instead — `graphicsLayer { shape = … }` or a Miuix `Surface`'s
+`shape` — the continuous shape is `GlassShape(radius)`, which is what the drawer card
+and the page notice strip use. A capsule keeps `RoundedCornerShape(percent = 50)`: the
+squircle shader blends to a pure circle at that ratio (`BLEND_THRESHOLD_RATIO` in
+`SquircleBackground.kt`), so the plain shape is the same pixels without a shader and an
+offscreen layer. The terminal's own figures (above) and content rendering (tables, code
+chips, the formula line box) are the other exceptions.
 
 **Motion is the library's**, except for the one page-level move every page has to
 spell out (the root's destinations, the settings stack's forward/back slide, the files

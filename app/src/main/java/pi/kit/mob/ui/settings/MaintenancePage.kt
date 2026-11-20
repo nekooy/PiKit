@@ -27,6 +27,7 @@ import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.rememberLastPresent
 import top.yukonga.miuix.kmp.basic.BasicComponent
 
 /**
@@ -345,18 +346,20 @@ internal fun MaintenancePage(
     // stays on the page (ARCHITECTURE §13). Each is bound to the run's own
     // state, so its OK button *is* the run's clear call: pressing it reads the
     // failure and dismisses it in one.
-    val catalogueFailure = catalogueStatus as? CatalogueStatus.Failed
+    val liveCatalogueFailure = catalogueStatus as? CatalogueStatus.Failed
+    val catalogueFailure = rememberLastPresent(liveCatalogueFailure)
     SettingsAlert(
-        show = catalogueFailure != null,
+        show = liveCatalogueFailure != null,
         title = text.settings.modelListStateFailed,
         body = catalogueFailure?.message.orEmpty(),
         confirm = text.common.ok,
         onConfirm = catalogue::dismiss,
     )
 
-    val repairFailure = repair?.takeIf { it.relocatorDamaged || it.errors.isNotEmpty() }
+    val liveRepairFailure = repair?.takeIf { it.relocatorDamaged || it.errors.isNotEmpty() }
+    val repairFailure = rememberLastPresent(liveRepairFailure)
     SettingsAlert(
-        show = repairFailure != null,
+        show = liveRepairFailure != null,
         title = text.settings.relocateStateFailed,
         body = when {
             repairFailure == null -> ""
@@ -372,9 +375,10 @@ internal fun MaintenancePage(
     // toast above, and a failure is a dialog carrying the run's own sentence and
     // the end of its log. Its OK is the run's clear call — reading the failure
     // and dismissing it are one press, as with the three runs above.
-    val packageFailure = packageRun?.takeIf { !it.succeeded }
+    val livePackageFailure = packageRun?.takeIf { !it.succeeded }
+    val packageFailure = rememberLastPresent(livePackageFailure)
     SettingsAlert(
-        show = packageFailure != null,
+        show = livePackageFailure != null,
         title = if (packageFailure?.kind == PiAgentSession.PackageRun.Kind.Restore) {
             text.settings.packagesRestoreFailed
         } else {
@@ -386,10 +390,11 @@ internal fun MaintenancePage(
         onConfirm = session::clearPackageRun,
     )
 
-    val storageFailure = (storageCheck as? StorageSelfTest.Status.Finished)
+    val liveStorageFailure = (storageCheck as? StorageSelfTest.Status.Finished)
         ?.takeIf { !it.passed }
+    val storageFailure = rememberLastPresent(liveStorageFailure)
     SettingsAlert(
-        show = storageFailure != null,
+        show = liveStorageFailure != null,
         title = text.settings.storageCheckFailed,
         body = storageFailure?.output
             ?.lastOrNull { it.startsWith(STORAGE_CHECK_TALLY) }

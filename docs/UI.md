@@ -44,6 +44,7 @@ writing a composition:
 | A titled group of rows | `PiSection` (+ `PiGroupAction` for the group's own action) | a hand-drawn `Card` + heading |
 | A row in a popup menu | `PiMenuRow` (choice / action / fact) | `BasicComponent`, a preference row |
 | A question with answers | `PiConfirm` (app) / `PiDialogHost` (pi's questions) | a raw `WindowDialog`/`GlassDialog` |
+| A window's content while it leaves | `rememberLastPresent(subject)` | reading the nullable flag straight into the body (empties the exit) |
 | The answer row of any dialog | `PiDialogAnswers` | a hand-built `TextButton` pair |
 | A bottom sheet | `PiSheet` | a raw `WindowBottomSheet`/`GlassBottomSheet` |
 | A transient moment | `LocalPiToast.show(...)` | the platform `Toast`, a snackbar, an in-page line |
@@ -178,6 +179,16 @@ by what the surface does, because the cost differs:
 Below API 33 each falls back to the matching `RoundedCornerShape`, so the Android 8
 floor is kept by the same gate as glass. `LocalSquircleEnabled` (default true) is the
 library's opt-out; the app does not turn it off.
+
+**Where a `Shape` is passed rather than a modifier** — `graphicsLayer { shape = … }`
+and a Miuix `Surface`'s `shape` parameter — the continuous shape is
+`GlassShape(radius)` from `top.yukonga.miuix.kmp.material`, the same corner smoothing
+the glass panels draw. `ChatNotice` and the drawer card use it; a `RoundedCornerShape`
+there is a circular corner beside continuous ones. **Build it inside the composable,
+never in a file-level `val`**: `miuix-material` and `miuix-squircle` are Java 21
+bytecode while the unit tests run a JVM 17, and a top-level initializer makes the
+screen's `…Kt` class fail with `UnsupportedClassVersionError` for every test that loads
+it — `ChatNotice`'s local is the pattern.
 
 **The exceptions, which are not violations:**
 

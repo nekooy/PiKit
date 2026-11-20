@@ -275,16 +275,6 @@ fun FilesScreen(session: PiAgentSession,
         if (!openExternally(context, entry.file)) toasts?.show(text.files.openFailed)
     }
 
-    // The tab root draws no bar arrow; the gesture follows the up button instead. Both
-    // walk until there is nowhere left to go — the filesystem's root — rather than
-    // stopping at `$HOME`. The page's own root is still one tap away, on the Home
-    // button, so the reader can leave and come back; refusing the step *up* only meant
-    // a directory above the home directory was unreachable from a listing that had
-    // just shown its contents.
-    BackHandler(enabled = current.parentFile != null) {
-        current.parentFile?.let(::navigate)
-    }
-
     PiPage(
         // The library's bar, not the app's left-aligned one: this page is reached from
         // the chat bar and left with the arrow at the top-left, and the settings pages
@@ -336,6 +326,16 @@ fun FilesScreen(session: PiAgentSession,
             }
         },
     ) { body ->
+        // The gesture follows the up button: it walks until there is nowhere left to go —
+        // the filesystem's root — rather than stopping at `$HOME`. The handler is composed
+        // *inside* the page body, and that placement is what makes it answer: the
+        // dispatcher runs the most recently added enabled callback first, and one composed
+        // before the `PiPage` call is always outranked by the page's own handler (enabled
+        // whenever `onBack` is non-null), so the walk-up gesture never ran. `onBack` still
+        // leaves for chat from the root.
+        BackHandler(enabled = current.parentFile != null) {
+            current.parentFile?.let(::navigate)
+        }
         Column(
             Modifier
                 .fillMaxSize()
@@ -401,17 +401,20 @@ fun FilesScreen(session: PiAgentSession,
                 )
             }
         }
-    }
 
-    // One sheet, opened from this page's own state. `title = null` and the body's own
-    // heading instead: the subject of a preview is the file's name, and a sheet title
-    // above it would say the same thing twice.
-    PiSheet(
-        show = previewUp,
-        title = null,
-        onDismiss = { previewUp = false },
-    ) {
-        preview?.let { FilePreviewSheet(entry = it) }
+        // One sheet, opened from this page's own state. It lives inside the page body so
+        // `LocalPiBackdrop` is the page's: composed after the `PiPage` call, it had no
+        // backdrop and silently took the window path on every device, while its sibling
+        // sheets on a page drew glass. `title = null` and the body's own heading instead:
+        // the subject of a preview is the file's name, and a sheet title above it would
+        // say the same thing twice.
+        PiSheet(
+            show = previewUp,
+            title = null,
+            onDismiss = { previewUp = false },
+        ) {
+            preview?.let { FilePreviewSheet(entry = it) }
+        }
     }
 }
 

@@ -50,6 +50,7 @@ import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.rememberLastPresent
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
@@ -227,10 +228,11 @@ internal fun AboutPage(
             // section: a check that failed is an *event* — the reader asked for it and it
             // came back wrong — so it is announced and dismissed, not left as a
             // paragraph that has to be found again by scrolling.
+            val shownUpdateError = rememberLastPresent(updateError)
             SettingsAlert(
                 show = updateError != null,
                 title = text.settings.checkForUpdates,
-                body = text.settings.failedWith(updateError.orEmpty()),
+                body = text.settings.failedWith(shownUpdateError.orEmpty()),
                 confirm = text.common.ok,
                 onConfirm = { updateError = null },
             )

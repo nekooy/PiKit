@@ -167,15 +167,22 @@ internal fun windowBoundsAround(anchorBounds: IntRect, windowBounds: IntRect): I
  */
 private fun isEndAligned(
     alignment: PopupPositionProvider.Align,
-    @Suppress("UNUSED_PARAMETER") layoutDirection: LayoutDirection,
-): Boolean = when (alignment) {
-    PopupPositionProvider.Align.Start,
-    PopupPositionProvider.Align.TopStart,
-    PopupPositionProvider.Align.BottomStart,
-    -> false
+    layoutDirection: LayoutDirection,
+): Boolean {
+    val logicalEnd = when (alignment) {
+        PopupPositionProvider.Align.Start,
+        PopupPositionProvider.Align.TopStart,
+        PopupPositionProvider.Align.BottomStart,
+        -> false
 
-    PopupPositionProvider.Align.End,
-    PopupPositionProvider.Align.TopEnd,
-    PopupPositionProvider.Align.BottomEnd,
-    -> true
+        PopupPositionProvider.Align.End,
+        PopupPositionProvider.Align.TopEnd,
+        PopupPositionProvider.Align.BottomEnd,
+        -> true
+    }
+    // A logical end is the physical right in LTR and the physical left in RTL, which is
+    // what the provider's boolean means (`aboveAnchorOffset`'s `endAligned` is the
+    // physical right edge). The parameter used to be suppressed while this KDoc claimed
+    // the flip; no RTL locale ships yet, so the bug was latent rather than visible.
+    return if (layoutDirection == LayoutDirection.Ltr) logicalEnd else !logicalEnd
 }

@@ -1,5 +1,6 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.AvatarColor
 import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.WorkspaceRefusal
 
@@ -392,6 +393,16 @@ internal object EnglishStrings : Strings {
         override val avatarCropUse = "Use this part"
         override val avatarCropZoom = "Zoom"
         override val avatarColor = "Colour"
+        override fun avatarColorName(color: AvatarColor) = when (color) {
+            AvatarColor.BLUE -> "Blue"
+            AvatarColor.INDIGO -> "Indigo"
+            AvatarColor.TEAL -> "Teal"
+            AvatarColor.GREEN -> "Green"
+            AvatarColor.AMBER -> "Amber"
+            AvatarColor.RED -> "Red"
+            AvatarColor.PINK -> "Pink"
+            AvatarColor.PURPLE -> "Purple"
+        }
         override val avatarPicture = "Picture"
         override val avatarPicturePick = "Choose a picture"
         override val avatarPictureChange = "Change picture"

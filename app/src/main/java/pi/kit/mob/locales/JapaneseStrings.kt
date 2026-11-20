@@ -1,5 +1,6 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.AvatarColor
 import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.WorkspaceRefusal
 
@@ -384,6 +385,16 @@ internal object JapaneseStrings : Strings {
         override val avatarCropUse = "この範囲を使う"
         override val avatarCropZoom = "ズーム"
         override val avatarColor = "色"
+        override fun avatarColorName(color: AvatarColor) = when (color) {
+            AvatarColor.BLUE -> "ブルー"
+            AvatarColor.INDIGO -> "インディゴ"
+            AvatarColor.TEAL -> "ティール"
+            AvatarColor.GREEN -> "グリーン"
+            AvatarColor.AMBER -> "アンバー"
+            AvatarColor.RED -> "レッド"
+            AvatarColor.PINK -> "ピンク"
+            AvatarColor.PURPLE -> "パープル"
+        }
         override val avatarPicture = "画像"
         override val avatarPicturePick = "画像を選ぶ"
         override val avatarPictureChange = "画像を変更"

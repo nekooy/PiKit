@@ -42,6 +42,7 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -266,7 +267,10 @@ private fun ChatPresetEditor(
         Modifier
             .fillMaxWidth()
             .piOverScroll()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            // Inside the scroll: the editor's last row travels clear of the gesture strip
+            // and the sheet's fill still reaches the window's edge.
+            .padding(bottom = piSheetBottomInset()),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -286,7 +290,7 @@ private fun ChatPresetEditor(
             )
         }
 
-        Card {
+        Card(cornerRadius = PiCorner.radius) {
             SettingsTextField(
                 value = preset.name,
                 onValueChange = { value ->
@@ -350,6 +354,7 @@ private fun ChatPresetEditor(
                         color = entry.seed,
                         selected = !inherited && preset.color == entry,
                         onClick = { onChange(preset.copy(avatarColor = entry.code)) },
+                        label = text.settings.avatarColorName(entry),
                         size = PRESET_SWATCH,
                     )
                 }

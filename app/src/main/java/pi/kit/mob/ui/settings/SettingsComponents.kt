@@ -34,7 +34,7 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +59,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -75,6 +78,7 @@ import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -486,6 +490,8 @@ fun SettingsSwatch(
     color: Color,
     selected: Boolean,
     onClick: () -> Unit,
+    /** The colour's spoken name; a swatch has no text of its own. */
+    label: String,
     modifier: Modifier = Modifier,
     size: Dp = 38.dp,
 ) {
@@ -497,12 +503,20 @@ fun SettingsSwatch(
             .background(
                 if (selected) MiuixTheme.colorScheme.primary else Color.Transparent,
             )
-            .clickable(onClick = {
-                // `choose()`: a set's member becoming the chosen one, which a Miuix radio
-                // would buzz for itself. The circle already chosen changes nothing.
-                if (!selected) haptics.choose()
-                onClick()
-            })
+            // `selectable` rather than `clickable`: a set of colours is a radio group, so
+            // the chosen state and the role are what a screen reader has to hear beside
+            // the name. The circle already chosen changes nothing.
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = {
+                    // `choose()`: a set's member becoming the chosen one, which a Miuix
+                    // radio would buzz for itself.
+                    if (!selected) haptics.choose()
+                    onClick()
+                },
+            )
+            .semantics { contentDescription = label }
             .padding(3.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -641,7 +655,8 @@ fun SettingsPickerSheet(
     }
 
     PiSheet(show = show, title = title, onDismiss = onDismiss) {
-        Column(Modifier.fillMaxWidth()) {
+        // The sheet's own edge is the window's: the last row clears the gesture strip.
+        Column(Modifier.fillMaxWidth().padding(bottom = piSheetBottomInset())) {
             if (subtitle != null) {
                 Text(
                     text = subtitle,

@@ -49,6 +49,7 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.WorkspaceDialog
 import pi.kit.mob.ui.rememberWorkspacePaths
 import pi.kit.mob.ui.WorkspacePickerSheet
@@ -335,7 +336,10 @@ internal fun AgentPage(
                 // elastic end — on the four-point phone these notes still fit.
                 .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
                 .piOverScroll()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                // Inside the scroll, so the last paragraph travels clear of the gesture
+                // strip and the sheet's own fill still reaches the window's edge.
+                .padding(bottom = piSheetBottomInset()),
         ) {
             ContextPoint(1, text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
             ContextPoint(
@@ -591,7 +595,8 @@ private fun InstructionsEditor(
             // as well; `piOverScroll` is before the scroll rather than after it for the
             // reason its KDoc gives.
             .piOverScroll()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = piSheetBottomInset()),
     ) {
         Text(
             text = file.absolutePath,

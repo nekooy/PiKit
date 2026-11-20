@@ -47,6 +47,8 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.piSheetBottomInset
+import pi.kit.mob.ui.kit.rememberLastPresent
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
@@ -228,16 +230,16 @@ internal fun ModelPage(
     // Deleting a configuration takes the model out of the list and discards what the user
     // declared about it — the image switch and the two numbers — and nothing on this page
     // can put that back, so the question carries the error role on its confirming word.
-    val deleting = pendingDelete
+    val deleting = rememberLastPresent(pendingDelete)
     PiConfirm(
-        show = deleting != null,
+        show = pendingDelete != null,
         title = text.settings.deleteProfileTitle,
         text = text.settings.deleteProfileBody(deleting?.displayName.orEmpty()),
         confirm = text.settings.deleteProfile,
         dismiss = text.common.cancel,
         destructive = true,
         onConfirm = {
-            val target = deleting ?: return@PiConfirm
+            val target = pendingDelete ?: return@PiConfirm
             val deleted = store.delete(target.id)
             if (deleted) {
                 if (target.id == activeId) session.scheduleRestart()
@@ -1465,9 +1467,9 @@ internal fun ModelEditPage(
     // where a reader can read two paragraphs. `SettingsAlert` is the settings pages' shape for
     // exactly this — an operation that came back wrong, announced and then dismissed — and it
     // bounds the sentence so a long one cannot push the acknowledgement off the panel.
-    val failure = discoveryError
+    val failure = rememberLastPresent(discoveryError)
     SettingsAlert(
-        show = failure != null,
+        show = discoveryError != null,
         title = text.settings.fetchModels,
         body = failure.orEmpty(),
         confirm = text.common.ok,
@@ -1477,9 +1479,9 @@ internal fun ModelEditPage(
     // The model row's ✕, asked about. Its own question rather than the profile delete's: the
     // two are different actions with different consequences, and the borrowed strings said
     // "Delete profile?" while naming the profile — neither of which was what the button did.
-    val removing = pendingRemove
+    val removing = rememberLastPresent(pendingRemove)
     PiConfirm(
-        show = removing != null,
+        show = pendingRemove != null,
         title = text.settings.removeModelTitle,
         text = text.settings.removeModelBody(removing.orEmpty()),
         confirm = text.settings.removeModel,
@@ -1603,7 +1605,8 @@ private fun ModelNumberBody(
 ) {
     var draft by remember(model, initial) { mutableStateOf(initial) }
 
-    Column(Modifier.fillMaxWidth()) {
+    // The sheet's own edge is the window's: the save row clears the gesture strip itself.
+    Column(Modifier.fillMaxWidth().padding(bottom = piSheetBottomInset())) {
         Text(
             text = model,
             style = MiuixTheme.textStyles.footnote2,

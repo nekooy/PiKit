@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -23,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pi.kit.mob.BuildConfig
@@ -384,12 +383,14 @@ private fun RootPage(
     val settings by session.settingsStore.settings.collectAsStateWithLifecycle()
     val config by session.settingsStore.profiles.snapshots.collectAsStateWithLifecycle()
     val activeProfile = config.activeProfile
-    // Read on the IO dispatcher and remembered: `installedVersion` opens and parses pi's
-    // `package.json`, which is a filesystem read on every recomposition of a page that
-    // recomposes on every store emission. Keyed on the profile so a reinstall behind the
-    // page is picked up when the agent's own state moves, not on every frame.
-    val piVersion by produceState(
-        initialValue = PiInstallation.installedVersion(session.env),
+    // Read on the IO dispatcher inside the effect. `initialValue` used to call
+    // `installedVersion` itself, and a `produceState` argument is evaluated on every
+    // recomposition of a page that recomposes on every store emission — a file open and
+    // a JSON parse on the main thread for each one. The null first frame draws the
+    // "not found" placeholder that `piVersion ?:` already handles; the effect replaces
+    // it as soon as the read lands.
+    val piVersion by produceState<String?>(
+        initialValue = null,
         session.env,
         agent,
     ) {

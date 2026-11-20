@@ -738,6 +738,13 @@ prompt, which billed the idle gap to a turn that had already finished.
   `build-apks.py` recognises the failure (an APK larger than its own entries) and
   retries that variant once with `--no-build-cache`; if it happens twice, delete
   `~/.gradle/caches/build-cache-1`.
+- **`miuix-material` and `miuix-squircle` are Java 21 bytecode while the unit-test JVM is
+  17.** A file-level `val` that constructs `GlassShape` or calls a squircle builder makes
+  that screen's `…Kt` class initializer throw `UnsupportedClassVersionError` for every
+  test that loads the file — even a test of a pure function in it, and the message names
+  the Miuix class rather than the file. Keep the reference inside the composable that
+  draws with it (`ChatNotice`'s local is the pattern); the APK path desugars it, the JVM
+  test path cannot.
 - **The history starts at 0.1.0, which is the whole application as it then stood.**
   There is nothing before it to compare against, so `git log` and `git blame` answer
   "when did this appear" from that commit onwards. What explains *why* something is

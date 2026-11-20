@@ -32,10 +32,12 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiAvatar
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -386,7 +388,7 @@ private fun AvatarSheet(
         onStored = onChangeImage,
     )
 
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp + piSheetBottomInset())) {
         Box(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             contentAlignment = Alignment.Center,
@@ -399,7 +401,7 @@ private fun AvatarSheet(
             )
         }
 
-        Card {
+        Card(cornerRadius = PiCorner.radius) {
             ArrowPreference(
                 title = text.settings.avatarPicture,
                 summary = text.settings.avatarPictureHint,
@@ -471,6 +473,7 @@ private fun AvatarSheet(
                         color = entry.seed,
                         selected = entry == color,
                         onClick = { onChangeColor(entry) },
+                        label = text.settings.avatarColorName(entry),
                         size = SWATCH_SIZE,
                     )
                 }

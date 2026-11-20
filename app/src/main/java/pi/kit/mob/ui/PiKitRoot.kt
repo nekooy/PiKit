@@ -269,54 +269,54 @@ private fun PermissionPrompts(host: PiHost) {
         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    if (step == PromptStep.Storage) {
-        PiConfirm(
-            show = true,
-            title = text.settings.storageAskTitle,
-            text = text.settings.storageAskBody,
-            confirm = text.settings.storageAskOpen,
-            dismiss = text.settings.storageAskLater,
-            // Neither an outside tap nor the back gesture may dismiss this one:
-            // "later" is an answer, and it records that the question was asked.
-            onDismissRequest = null,
-            onConfirm = {
-                StorageAccess.markPrompted(context)
-                step = afterStorage()
-                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
-            },
-            onDismiss = {
-                StorageAccess.markPrompted(context)
-                step = afterStorage()
-            },
-        )
-    }
+    // Both prompts stay composed and are driven by `show`. Raising one inside
+    // `if (step == …)` removed it the moment its answer changed the step, so the window's
+    // exit played over an empty panel (AGENTS.md, *A Miuix window is driven by show*).
+    // Their text is static, so a leaving window keeps its content without a held copy.
+    PiConfirm(
+        show = step == PromptStep.Storage,
+        title = text.settings.storageAskTitle,
+        text = text.settings.storageAskBody,
+        confirm = text.settings.storageAskOpen,
+        dismiss = text.settings.storageAskLater,
+        // Neither an outside tap nor the back gesture may dismiss this one:
+        // "later" is an answer, and it records that the question was asked.
+        onDismissRequest = null,
+        onConfirm = {
+            StorageAccess.markPrompted(context)
+            step = afterStorage()
+            runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
+        },
+        onDismiss = {
+            StorageAccess.markPrompted(context)
+            step = afterStorage()
+        },
+    )
 
-    if (step == PromptStep.KeepAlive) {
-        PiConfirm(
-            show = true,
-            title = text.settings.keepAliveTitle,
-            // The row on the agent page says the same two things, from the same
-            // key as this title: the state there and the ask here are one subject.
-            text = text.settings.keepAliveAskBody,
-            confirm = text.settings.keepAliveAskOpen,
-            dismiss = text.settings.keepAliveAskLater,
-            onDismissRequest = null,
-            onConfirm = {
-                // Recorded before the system box is opened, not after: there is
-                // no result callback for it — the user may answer it, ignore it,
-                // or come back through the recents list — and an app that asked
-                // again on the next launch would be nagging about a question the
-                // user has already seen.
-                BatteryOptimisation.markAsked(context)
-                step = PromptStep.None
-                BatteryOptimisation.request(context)
-            },
-            onDismiss = {
-                BatteryOptimisation.markAsked(context)
-                step = PromptStep.None
-            },
-        )
-    }
+    PiConfirm(
+        show = step == PromptStep.KeepAlive,
+        title = text.settings.keepAliveTitle,
+        // The row on the agent page says the same two things, from the same
+        // key as this title: the state there and the ask here are one subject.
+        text = text.settings.keepAliveAskBody,
+        confirm = text.settings.keepAliveAskOpen,
+        dismiss = text.settings.keepAliveAskLater,
+        onDismissRequest = null,
+        onConfirm = {
+            // Recorded before the system box is opened, not after: there is
+            // no result callback for it — the user may answer it, ignore it,
+            // or come back through the recents list — and an app that asked
+            // again on the next launch would be nagging about a question the
+            // user has already seen.
+            BatteryOptimisation.markAsked(context)
+            step = PromptStep.None
+            BatteryOptimisation.request(context)
+        },
+        onDismiss = {
+            BatteryOptimisation.markAsked(context)
+            step = PromptStep.None
+        },
+    )
 }
 
 @Composable

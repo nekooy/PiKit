@@ -245,6 +245,27 @@ fun PiDialogAnswers(
 }
 
 /**
+ * The last non-null value, held while the window that draws it leaves.
+ *
+ * A Miuix window animates out through `show`, and its content is whatever the caller
+ * passes on that frame — the library retains nothing (measured on 0.9.5-beta01: no
+ * state in `WindowDialogKt`/`GlassDialogKt`; title and summary pass straight through).
+ * A caller that reads its subject from the nullable flag (`show = x != null`, body
+ * `x?.name.orEmpty()`) therefore empties the panel the moment the answer clears `x`:
+ * the exit plays over a blank question. This holds the last value for that exit while
+ * `show` still follows the live flag.
+ *
+ * The toast host predates this helper with the same one-liner; a dialog body should
+ * use this rather than its own `var last`.
+ */
+@Composable
+fun <T : Any> rememberLastPresent(value: T?): T? {
+    var last by remember { mutableStateOf<T?>(null) }
+    if (value != null) last = value
+    return last
+}
+
+/**
  * A bottom sheet, Miuix's own.
  *
  * [content] is a plain composable rather than a `ColumnScope`: Miuix's sheet wraps

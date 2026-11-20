@@ -122,7 +122,10 @@ fun PiModeSwitch(
                         else -> AgentMode.WORK
                     }
                     if (target != mode) {
-                        haptics.toggle(target == AgentMode.CHAT)
+                        // §16: the drawer foot's mode switch is one of the *floating
+                        // capsules*, the `tap()` family — it starts the conversation in
+                        // the chosen mode rather than flipping the current one.
+                        haptics.tap()
                         onModeChange(target)
                     }
                 },
@@ -146,7 +149,7 @@ fun PiModeSwitch(
                 style = style,
                 onClick = {
                     if (mode != AgentMode.WORK) {
-                        haptics.toggle(false)
+                        haptics.tap()
                         onModeChange(AgentMode.WORK)
                     }
                 },
@@ -158,7 +161,7 @@ fun PiModeSwitch(
                 style = style,
                 onClick = {
                     if (mode != AgentMode.CHAT) {
-                        haptics.toggle(true)
+                        haptics.tap()
                         onModeChange(AgentMode.CHAT)
                     }
                 },

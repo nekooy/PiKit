@@ -1,5 +1,6 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.AvatarColor
 import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.WorkspaceRefusal
 
@@ -1082,6 +1083,16 @@ interface Strings {
 
         /** In the avatar sheet: the row of colour swatches under the label. */
         val avatarColor: String
+
+        /**
+         * The spoken name of one swatch.
+         *
+         * A swatch is a colour and no words, so this is its only accessible name: eight
+         * unnamed circles are eight buttons a screen-reader user cannot tell apart. The
+         * mapping is written in each language rather than derived from the enum's
+         * identifier, and the enum's order is still the order the swatches are offered.
+         */
+        fun avatarColorName(color: AvatarColor): String
 
         /** In the avatar sheet: choosing a picture, and removing the one chosen. */
         val avatarPicture: String

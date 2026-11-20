@@ -1,5 +1,6 @@
 package pi.kit.mob.locales
 
+import pi.kit.mob.data.AvatarColor
 import pi.kit.mob.data.PermissionMode
 import pi.kit.mob.data.WorkspaceRefusal
 
@@ -386,6 +387,16 @@ internal object ChineseStrings : Strings {
         override val avatarCropUse = "用这一块"
         override val avatarCropZoom = "缩放"
         override val avatarColor = "颜色"
+        override fun avatarColorName(color: AvatarColor) = when (color) {
+            AvatarColor.BLUE -> "蓝色"
+            AvatarColor.INDIGO -> "靛蓝"
+            AvatarColor.TEAL -> "青色"
+            AvatarColor.GREEN -> "绿色"
+            AvatarColor.AMBER -> "琥珀色"
+            AvatarColor.RED -> "红色"
+            AvatarColor.PINK -> "粉色"
+            AvatarColor.PURPLE -> "紫色"
+        }
         override val avatarPicture = "图片"
         override val avatarPicturePick = "选择图片"
         override val avatarPictureChange = "更换图片"
