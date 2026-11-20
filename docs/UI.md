@@ -297,7 +297,10 @@ takes the same padding (§9.2).
   `offset {}`, `graphicsLayer {}` or `drawBehind {}`. Clamping to a Boolean or a
   discrete step with `derivedStateOf` *is* allowed in composition (the drawer's
   `progress > 0f`), because the answer changes rarely. The root's `imePaddingFloor`
-  and the toast's bottom offset are the worked examples.
+  and the toast's bottom offset are the worked examples. One measured exception: the
+  composer band's published height feeds the transcript's `contentPadding`, so a
+  keyboard animation re-measures the list per inset step; §7.1 records why that publish
+  point cannot move (moving it inside `bandBottom` under-counted by 95 px).
 - **A `remember` key is not a lambda.** `remember(onSelect) { … }` re-runs every
   recomposition because a call-site lambda is a new instance; key on the data and
   catch the callback with `rememberUpdatedState`.
