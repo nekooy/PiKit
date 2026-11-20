@@ -93,6 +93,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -711,9 +712,11 @@ private fun PictureCount(count: Int, text: Strings, modifier: Modifier) {
  * Top: the close disc at the leading edge and the position in the middle — the middle
  * because it is a caption for the set rather than a control, and a counter in a corner
  * competes with the photograph's own edge. Bottom: **Save** and **Share**, the two things
- * a reader does with a picture they did not draw, in the same 42dp scrim discs as the
- * header's marks. The scrim, not the page's capsule fill, because the ground behind any
- * photograph is arbitrary and a white capsule disappeared over a white screenshot (§13).
+ * a reader does with a picture they did not draw, in the same 42dp `PiGlass.fill()`
+ * capsules as the header's marks — a floating control is one object in this app whatever
+ * page it floats over (§13, §7.3). Over a white screenshot the capsule's edge merges with
+ * the picture and the glyph carries the control, the same trade the header makes over a
+ * light page; the dark scrim that was tried first is the rejected design.
  *
  * ## What it is decoded at, and why the tile is the first frame
  *
@@ -894,11 +897,15 @@ internal fun PictureViewer(
                         }
                     }
                 }
-                .background(
-                    Color.Black.copy(
+                // The ground follows the flight and the finger, and both change every
+                // frame: the alpha is read in the draw phase, not captured by the
+                // composition, or the whole viewer body recomposed per frame.
+                .drawBehind {
+                    drawRect(
+                        color = Color.Black,
                         alpha = PictureFlight.groundAlpha(flight.value, drag, dismissDistance),
-                    ),
-                ),
+                    )
+                },
         ) {
             HorizontalPager(
                 state = pager,
@@ -924,17 +931,21 @@ internal fun PictureViewer(
                 origin = current.origin,
                 frame = frame,
                 rootOnScreen = rootOnScreen,
-                progress = flight.value,
-                drag = drag,
+                // Lambdas rather than values: the flight and the drag are frame-rate
+                // state, and reading them in the Canvas draw scope keeps this subtree
+                // out of the per-frame recomposition.
+                progress = { flight.value },
+                drag = { drag },
             )
 
-            val chromeAlpha = PictureFlight.chromeAlpha(flight.value, drag, dismissDistance)
             val haptics = LocalPiHaptics.current
             AnimatedVisibility(
                 visible = chrome,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .graphicsLayer { alpha = chromeAlpha },
+                    .graphicsLayer {
+                        alpha = PictureFlight.chromeAlpha(flight.value, drag, dismissDistance)
+                    },
                 enter = fadeIn(tween(VIEWER_CHROME_MILLIS)),
                 exit = fadeOut(tween(VIEWER_CHROME_MILLIS)),
             ) {
@@ -978,7 +989,9 @@ internal fun PictureViewer(
                 visible = chrome,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .graphicsLayer { alpha = chromeAlpha },
+                    .graphicsLayer {
+                        alpha = PictureFlight.chromeAlpha(flight.value, drag, dismissDistance)
+                    },
                 enter = fadeIn(tween(VIEWER_CHROME_MILLIS)),
                 exit = fadeOut(tween(VIEWER_CHROME_MILLIS)),
             ) {
@@ -1089,10 +1102,11 @@ private fun FlightPicture(
     origin: Rect?,
     frame: Size,
     rootOnScreen: Offset,
-    progress: Float,
-    drag: Float,
+    /** Frame-rate state, read in the draw scope rather than in composition. */
+    progress: () -> Float,
+    drag: () -> Float,
 ) {
-    if (progress >= 1f || bitmap == null) return
+    if (bitmap == null) return
     if (frame.width <= 0f || frame.height <= 0f) return
     val image = Size(bitmap.width.toFloat(), bitmap.height.toFloat())
     val fitted = PictureFlight.centred(PictureZoom.fitted(image, frame), frame)
@@ -1108,14 +1122,16 @@ private fun FlightPicture(
         )
     }
     Canvas(Modifier.fillMaxSize()) {
+        val p = progress()
+        if (p >= 1f) return@Canvas
         // The finger's own offset is part of the flight, not a separate transform: a viewer
         // closed by dragging takes over from the pager exactly where the finger left the
         // picture, and the distance it was dragged is then travelled back to the tile. Left
         // out, the first frame of that exit snapped the picture up by the drag — 350px for a
         // 350px drag — before it started to shrink.
         val rect = PictureFlight
-            .rect(local, fitted, progress)
-            .translate(0f, drag)
+            .rect(local, fitted, p)
+            .translate(0f, drag())
         if (rect.width < 1f || rect.height < 1f) return@Canvas
         // The picture keeps its own shape and *covers* the rectangle, which the clip then
         // trims: at the tile that is the crop the tile was already showing, at the fitted
@@ -1123,7 +1139,7 @@ private fun FlightPicture(
         val scale = maxOf(rect.width / image.width, rect.height / image.height)
         val width = image.width * scale
         val height = image.height * scale
-        val corner = PICTURE_CORNER.toPx() * (1f - progress)
+        val corner = PICTURE_CORNER.toPx() * (1f - p)
         clipPath(
             Path().apply { addRoundRect(RoundRect(rect, CornerRadius(corner))) },
         ) {
