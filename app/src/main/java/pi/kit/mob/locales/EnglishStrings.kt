@@ -487,9 +487,9 @@ internal object EnglishStrings : Strings {
                 "(PI_TELEMETRY=0)."
         override val agentContextToolsTitle = "Tools"
         override val agentContextToolsBody =
-            "pi's own read, bash, edit, write, grep, find and ls, plus web_search, " +
-                "fetch_content, source_check and get_search_content from the extension PiKit " +
-                "installs, and pikit-permissions, which refuses a call the tier does not allow."
+            "pi's own read, bash, edit, write, grep, find and ls, plus web_search and " +
+                "web_fetch from the pikit-web extension PiKit ships, and pikit-permissions, " +
+                "which refuses a call the tier does not allow."
         override val agentContextHistoryTitle = "Conversation"
         override val agentContextHistoryBody =
             "This session, tool calls and results included, sent with every message and " +
@@ -826,174 +826,75 @@ internal object EnglishStrings : Strings {
         override val updateAvailable = "A newer release is available"
         override val updateNoReleases = "No releases yet"
 
-        override val searchTitle = "Search settings"
-        override val searchSubtitle = "Web search for the agent"
-        override val searchPageSubtitle = "Bundled web-access extension"
+        override val searchTitle = "Web access"
+        override val searchSubtitle = "Search the web and read pages"
+        override val searchPageSubtitle = "The pikit-web extension: web_search and web_fetch"
         override val searchNotBundled =
-            "This runtime has no web-access extension. Update the runtime under Maintenance & " +
-                "repair, then open this page again."
+            "This runtime has no web extension. Update the runtime under Maintenance & repair, " +
+                "then open this page again."
         override val webAccess = "Web access"
-        override val webAccessSubtitle = "Search the web, read pages and clone GitHub links"
-        override val searchWorkflow = "Search workflow"
-        override val searchWorkflowSubtitle = "What happens after a search"
-        override val workflowNone = "Raw results"
-        override val workflowAutoSummary = "Summarise"
-        override val workflowSummaryReview = "Review in a browser"
-        override fun workflowDescription(id: String) = when (id) {
-            "none" -> "The model gets the results as they come"
-            "auto-summary" -> "Each search is summarised before the model sees it"
-            "summary-review" -> "A curator page opens so each summary can be checked"
-            else -> ""
-        }
-
+        override val webAccessSubtitle = "Let the agent search the web and read pages"
+        override val searchSection = "Search"
         override val searchProvider = "Search provider"
-        override val searchProviderSubtitle = "Which search service is asked first"
+        override val searchProviderSubtitle = "The service web_search asks first"
         override val providerAutomatic = "Automatic"
         override fun providerDescription(id: String) = when (id) {
-            "auto" ->
-                "Try Exa's keyless endpoint first, then any provider with a key configured"
-
-            // No key.
-            "exa" -> "Works without a key, with a rate limit"
+            "auto" -> "Tries Exa Free, then DuckDuckGo, then the first provider with a key"
+            "deepseek" -> "DeepSeek's search API; needs a key"
+            "zai" -> "Z.ai web search; needs a key, with an optional regional endpoint"
+            "exa" -> "Exa's index; needs a key"
+            "exa-free" -> "Exa's free endpoint; no key, rate limited"
             "duckduckgo" -> "No key needed"
-            "searxng" -> "Your own instance; set its address in the file below"
-            "keenable" -> "Keenable's public search; no key needed, and is never chosen automatically"
-            "degoog" -> "Metasearch, self-hostable; no key needed, and is never chosen automatically"
-            "ninerouter" -> "Self-hosted 9router; address and optional key, never chosen automatically"
-            // The search runs through a model.
-            "openai" -> "Runs through OpenAI's hosted web search"
-            "gemini" -> "Runs through a Gemini model"
-            "perplexity" -> "Perplexity's own search"
-            "kimi" -> "Runs through a Kimi model"
-            "xai" -> "Grok's web and X search"
-            "mistral" -> "Mistral's web search tool"
-            "ollama" -> "Ollama Cloud's search"
-            // Keyed search APIs.
-            "brave" -> "Needs a Brave Search key"
-            "tavily" -> "Needs a Tavily key"
-            "jina" -> "Needs a Jina key"
-            "firecrawl" -> "Needs a Firecrawl key"
-            "serper" -> "Needs a Serper key"
-            "serpapi" -> "Needs a SerpApi key"
-            "serpbase" -> "Needs a SerpBase key"
-            // 0.30.0's provider, and the one that is never chosen automatically:
-            // listing it without saying so would make a Google result look like the
-            // keyless default.
-            "serply" -> "Google results; needs a Serply key, and is never chosen automatically"
-            "kagi" -> "Needs a Kagi key"
-            "valyu" -> "Needs a Valyu key"
-            "bocha" -> "Needs a Bocha key"
-            "querit" -> "Needs a Querit key"
-            "search1api" -> "Needs a Search1API key"
-            "searchinfinity" -> "Needs a Searchinfinity key"
-            "tinyfish" -> "Needs a TinyFish key"
-            "parallel" -> "Needs a Parallel key"
-            "parallel-mcp" -> "Parallel, over its MCP endpoint"
-            "baizhi" -> "Baizhi MCP; used only when selected explicitly"
-            "anysearch" -> "Needs an AnySearch key"
-            "xcrawl" -> "Needs an XCrawl key"
-            "brightdata" -> "Needs a Bright Data key and a zone name"
-            "serpdive" -> "Needs a SERPdive key; a retrieval depth can be chosen"
-            "you" -> "You.com index; needs a key, and is never chosen automatically"
-            "zai" -> "Z.ai web_search_prime MCP; needs a key and an endpoint (global or China)"
-            "ceramic" -> "Ceramic keyword search; needs a key, and is never chosen automatically"
-            "deepseek" -> "DeepSeek's own search API; needs a key, and is never chosen automatically"
-            "linkup" -> "Linkup search; needs a key, and is never chosen automatically"
-            "cloudflare" -> "Cloudflare search; needs a key and an account id, never chosen automatically"
-            "searchapi" -> "Google via searchapi.io; needs a key, never chosen automatically"
-            "tabstack" -> "Tabstack Research; one cited answer, needs a key, never chosen automatically"
+            "tavily" -> "Tavily search and page extraction; needs a key"
+            "ollama" -> "Ollama Cloud search and page fetch; needs a key"
+            "brave" -> "Brave Search; needs a key"
+            "jina" -> "Jina search and reader; works without a key at a lower rate"
+            "openai" -> "OpenAI's hosted web search; needs a key"
+            "gemini" -> "Gemini with Google Search grounding; needs a key"
+            "kimi" -> "Kimi's search API; needs a key"
+            "xai" -> "Grok's web search; needs a key"
+            "searxng" -> "Your own SearXNG instance; set its address"
+            "cloudflare" -> "Cloudflare Web Search; needs a key and an account id"
+            "searchapi" -> "Google results through SearchAPI; needs a key"
+            "direct" -> "Direct HTTP; no key, no cookies, no JavaScript"
             else -> ""
         }
-
-        override val inlineContentLimit = "Inline content limit (characters)"
-        override val fetchTimeout = "Fetch timeout (seconds)"
         override fun searchProviderFootnote(count: Int) =
-            "All $count providers the extension can route to, in the order it prefers them. " +
-                "A provider still needs its key — see the file below."
-
-        override val searchConfig = "Configuration"
-        override val searchConfigAdd = "Add an option or key"
-        override val searchConfigAddBody = "Pick a key and give it a value"
-        override val searchConfigPickTitle = "Options the extension reads"
-        override val searchConfigPickSearch = "Filter options"
-        override val searchConfigPickFootnote =
-            "Every key the bundled extension reads, with what each one does. Values are " +
-                "stored in the shape the option expects: text as a string, a switch as " +
-                "true or false, a number as a number."
-        override fun searchConfigValueTitle(path: String) = path
-        override val searchConfigValueLabel = "Value"
-        override val searchConfigValueNote =
-            "Type the text itself, without quotes — it is stored as a JSON string. A " +
-                "switch is `true` or `false`, a number is `50`, and a structured value is " +
-                "JSON such as `{\"host\": \"my-box.ts.net\"}`."
-        override val searchConfigValueInvalid =
-            "That is not a value this option accepts. Text needs no quotes; a switch is " +
-                "`true` or `false`; a number is `50`; anything else is JSON."
-        override val searchConfigValueAdd = "Add"
-        override val searchConfigRemoveAction = "Remove"
-        override fun searchConfigRemove(path: String) = "Remove $path"
-        override val searchConfigRemoved = "Removed"
-        override val searchConfigRemoveTitle = "Remove this option?"
-        override fun searchConfigRemoveBody(path: String) =
-            "`$path` is removed from web-search.json. Every other key in the file is left " +
-                "exactly as it is."
-        override val searchConfigInEffect = "in effect"
-        override val searchConfigHeader =
-            "Web access configuration (web-search.json).\n" +
-                "[in effect] marks the lines that are written to\n" +
-                "the file. Lines starting with // are the\n" +
-                "documentation and an example only — they\n" +
-                "configure nothing; delete the // to enable one,\n" +
-                "then press Save (and add a comma above it if\n" +
-                "it needs one).\n" +
-                "Comments are never written to the file: the\n" +
-                "extension reads strict JSON. A whole\n" +
-                "commented-out block needs its braces too."
-        override val searchConfigInvalid =
-            "This is not a JSON object — nothing was saved. Check for a missing comma or " +
-                "quote; comments and trailing commas are fine."
-        override val searchConfigSaved = "Saved"
-        override val searchConfigFailed =
-            "The file could not be written. Check the terminal page for the reason."
-        override val searchConfigRestored =
-            "Restored. The file is back to what a fresh install has, so anything you had " +
-                "configured is gone."
-        override val searchConfigSave = "Save"
-        override val searchConfigRevert = "Discard changes"
+            "All $count search providers the extension supports. A keyed provider needs its key below before it can answer."
+        override val searchMaxResults = "Results per search"
+        override val searchMaxResultsSubtitle = "1 to 50; the default is 8"
+        override val fetchSection = "Fetch"
+        override val fetchProvider = "Fetch provider"
+        override val fetchProviderSubtitle = "How web_fetch retrieves a page"
+        override val fetchAutomatic = "Automatic (direct HTTP)"
+        override val fetchDirect = "Direct HTTP"
+        override val fetchMaxChars = "Maximum page characters"
+        override val fetchMaxCharsSubtitle = "Longer pages are cut at this many characters"
+        override val networkSection = "Network"
+        override val searchTimeout = "Search timeout (seconds)"
+        override val searchTimeoutSubtitle = "One search request's deadline"
+        override val fetchTimeout = "Fetch timeout (seconds)"
+        override val fetchTimeoutSubtitle = "One fetch request's deadline"
+        override val providerNeedsKey = "This provider needs a key before it can answer."
+        override val providerApiKey = "API key"
+        override val providerApiKeySubtitle = "Stored in web.json; an environment variable of the same service also works"
+        override val providerBaseUrl = "Endpoint"
+        override val providerBaseUrlSubtitle = "Leave blank for the service's default address"
+        override val providerBaseUrlRequired = "Required: this provider runs on your own instance"
+        override val providerAccountId = "Account ID"
+        override val providerAccountIdSubtitle = "The Cloudflare account the search is billed to"
+        override val providerModel = "Model"
+        override val providerModelSubtitle = "Leave blank for the extension's default model"
+        override val searchConfigUnreadable =
+            "web.json is not the document this app writes, so the controls are hidden. Restore defaults below replaces it; nothing has been changed yet."
         override val searchConfigRestore = "Restore defaults"
         override val searchConfigRestoreSubtitle = "Back to the install defaults"
-        override val searchConfigRestoreTitle = "Restore the default file?"
+        override val searchConfigRestoreTitle = "Replace the web configuration?"
         override val searchConfigRestoreBody =
-            "This replaces web-search.json with the document a fresh install has. Every " +
-                "API key and every option you have set is removed from the file, and that " +
-                "cannot be undone from here."
-        override val searchConfigUnreadable =
-            "web-search.json is not a JSON object, so the controls above are hidden: " +
-                "they would be writing from a file this app cannot read, and the file may " +
-                "well be one you wrote by hand. Comments and trailing commas are fine; a " +
-                "missing brace is not. Nothing here has been changed. Fix or replace the " +
-                "text below and save to make the page editable again."
-
-        override val searchProxy = "Proxy"
-        override val searchProxySubtitle = "Sent as the web-access proxy, if set"
-
-        override val searchAdvanced = "Advanced"
-        override val searchAdvancedSubtitle =
-            "Inline content limit, fetch timeout, proxy and fake-IP compatibility"
-        override val searchFakeIpProxy = "Fake-IP proxy compatibility"
-        override val searchFakeIpProxySubtitle =
-            "A TUN or fake-IP proxy answers DNS with 198.18.0.0/15, which the extension's " +
-                "address check refuses. When on, PiKit writes that exemption " +
-                "(ssrf.allowRanges) into the file for you."
-        override val searchProviderNeedsConfigTitle = "This provider needs a key"
-        override fun searchProviderNeedsConfigBody(provider: String, keys: List<String>) =
-            "\"$provider\" needs ${keys.joinToString(", ")} before it can answer: the " +
-                "bundled extension reads that from its own configuration. On the Search " +
-                "page, open \"Add an option or key\" below and search for it there — the " +
-                "value is typed into that editor, not in this dialog."
-        override val searchAdvancedUnreadable =
-            "web-search.json is not a JSON object, so these controls are hidden. Go back to " +
-                "Search settings and fix the text in the editor there."
+            "This replaces web.json with the document a fresh install has. Every provider key and every option you set is removed, and that cannot be undone from here."
+        override val searchConfigRestored = "Restored. The web configuration is back to the install defaults."
+        override val searchConfigFailed =
+            "The web configuration could not be written. Check the terminal page for the reason."
 
     }
 
@@ -1009,7 +910,7 @@ internal object EnglishStrings : Strings {
             "PiKit is free software, distributed under the GNU General Public License " +
                 "version 3. It bundles the Termux runtime and terminal emulator, which are " +
                 "GPLv3, so the whole app is GPLv3 as well. The Pi coding agent is MIT " +
-                "licensed, and so is the web-access extension.\n" +
+                "licensed; the web extension is part of PiKit.\n" +
                 "There is no warranty, and no telemetry: nothing leaves the device except " +
                 "the requests you make to your model provider and the searches the agent runs."
         override val creditsTitle = "Credits"
@@ -1018,9 +919,7 @@ internal object EnglishStrings : Strings {
                 "terminal-emulator and terminal-view packages are this app's terminal",
             "JavaScript runtime: Node.js (MIT)",
             "Agent: @earendil-works/pi-coding-agent (MIT)",
-            "Web search, page reading and PDF extraction: pi-web-access by Nico Bailon " +
-                "(MIT), with turndown, @mozilla/readability, defuddle, linkedom, unpdf, " +
-                "undici, p-limit and typebox",
+            "Web search and page reading: pikit-web, PiKit's own extension (GPLv3)",
             "Command-line tools bundled for the agent: ripgrep (MIT/Unlicense) and " +
                 "fd (MIT/Apache-2.0)",
             "Interface: Jetpack Compose and Miuix (Apache-2.0), Kotlin and " +

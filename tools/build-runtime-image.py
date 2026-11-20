@@ -10,7 +10,9 @@ zip archives per CPU architecture:
      transitive dependencies), unpacked into the same prefix.
   3. A host-side vendoring of the pi coding agent (`npm ci`), copied under
      `$PREFIX/lib/node_modules`.
-  4. A small set of generated wrapper scripts.
+  4. PiKit's own web extension, staged as a tiny local package with no
+     dependencies.
+  5. A small set of generated wrapper scripts.
 
 Everything is written into `app/src/<flavor>/assets/runtime/<abi>/` as
 `bootstrap.zip`, `overlay.zip`, `content.zip` and one revision stamp per
@@ -23,9 +25,9 @@ The three archives are two layers, and the split is the update model:
     and the merged dpkg ledger. It is unpacked once and then evolves the
     Termux way, through `pkg upgrade`; an app update that does not change
     these bytes never re-extracts them.
-  * The **content layer** (`content.zip`) is what this app owns: pi, the
-    web-access extension, the permission extension, the chat-prompt extension, the
-    relocator and their wrappers ([CONTENT_PATHS]). An app update replaces these paths
+  * The **content layer** (`content.zip`) is what this app owns: pi, the web
+    extension, the permission extension, the chat-prompt extension, the relocator
+    and their wrappers ([CONTENT_PATHS]). An app update replaces these paths
     point-wise in place, in seconds, without touching a single installed package.
 
 Each layer carries its own revision digest so one can move without the
@@ -149,13 +151,11 @@ ROOT_PACKAGES = [
 
 PI_PACKAGE = "@earendil-works/pi-coding-agent"
 
-#: The pinned product versions the image vendors: pi and the web-access extension.
-#:
-#: Kept in their own file, out of this module's source, for one reason: this
-#: file's bytes are hashed into the *seed* revision (see
-#: [compute_seed_revision]) because it assembles the seed, and a pi bump is a
-#: content-layer change that must not rebuild anyone's environment. A pin that
-#: lived here would make every pi bump do exactly that.
+#: The pinned product versions the image vendors. Kept in their own file, out of
+#: this module's source, for one reason: this file's bytes are hashed into the
+#: *seed* revision (see [compute_seed_revision]) because it assembles the seed, and
+#: a pi bump is a content-layer change that must not rebuild anyone's environment.
+#: A pin that lived here would make every pi bump do exactly that.
 #:
 #: Pinned like BOOTSTRAP_TAG and for the same reason: an image is supposed to be
 #: the same image wherever it is built, and "latest" made a rebuild of one commit
@@ -187,94 +187,36 @@ PI_ENTRY_RELATIVE = f"lib/node_modules/{PI_PACKAGE}/dist/bundle/cli.js"
 #: on a machine whose cache is warm.
 VENDORED_MARKER = "pikit-vendored.json"
 
-#: The web-access extension, bundled because the image cannot run
-#: `pi install npm:pi-web-access` — see `vendor_web_access`. Pinned deliberately:
-#: a new version changes the extension's tools and its config, so it is bumped
-#: with the image and by hand, exactly as BOOTSTRAP_TAG is. The pin lives in
-#: `tools/image-versions.json`, beside pi's (see [IMAGE_VERSIONS]).
-WEB_ACCESS_PACKAGE = "pi-web-access"
-WEB_ACCESS_VERSION = IMAGE_VERSIONS["web_access"]
+#: PiKit's own web extension: one TypeScript file, no dependencies.
+#:
+#: It replaced a vendored npm package (`pi-web-access`) that was 30 MB and a
+#: hundred-odd source files. `tools/pikit-web.ts` is the whole extension; this
+#: build copies it into the content layer as a tiny package so pi's package
+#: discovery can load it by its manifest, and writes the metadata the app reads
+#: to find the entry point for chat mode's explicit `--extension`.
+WEB_EXTENSION_PACKAGE = "pikit-web"
+WEB_EXTENSION_VERSION = "1.0.0"
+WEB_EXTENSION_ROOT = ("lib", "node_modules", "pikit-extensions")
+WEB_EXTENSION_RELATIVE = "/".join((*WEB_EXTENSION_ROOT, "node_modules", WEB_EXTENSION_PACKAGE))
+WEB_EXTENSION_SOURCE = "tools/pikit-web.ts"
+WEB_EXTENSION_METADATA = "share/pikit/web.json"
 
-#: Where the bundled extension lives inside the prefix, relative to `$PREFIX`.
-#: Its own `node_modules` is a separate tree from pi's so that npm cannot touch
-#: the vendored agent, and so that removing this directory removes all of it.
-WEB_ACCESS_ROOT = ("lib", "node_modules", "pikit-extensions")
-WEB_ACCESS_RELATIVE = "/".join((*WEB_ACCESS_ROOT, "node_modules", WEB_ACCESS_PACKAGE))
-
-#: What the extension ships for its npm page rather than for running, as paths relative
-#: to the tree the trim is given (`lib/node_modules/pikit-extensions` in the image, the
-#: cache's project directory behind it). The shape is [vendor_junk]'s `drop`.
-#:
-#: `README.md` is deliberately *not* here: it is the extension's only documentation — 104
-#: KB naming every provider, key and option — and it ships through [WEB_ACCESS_DOCS]. The
-#: changelog needs no entry either: it is one of [VENDOR_JUNK_FILES] everywhere.
-WEB_ACCESS_DROPS = (
-    "node_modules/pi-web-access/pi-web-fetch-demo.mp4",
-    "node_modules/pi-web-access/banner.png",
-    "node_modules/pi-web-access/SECURITY.md",
-)
-
-#: Modules the extension loads at runtime that `--omit=optional` was dropping.
-#:
-#: `defuddle/node` — the entry the extension's `extract.ts` imports for every
-#: `fetch_content` call — reaches `defuddle/dist/elements/math.full.js`, whose fourth
-#: line is an unconditional `require("mathml-to-latex")`, and `defuddle` declares that
-#: package as an *optional* dependency. Vendoring with `--omit=optional` (see
-#: `vendor_web_access`) therefore shipped a tree in which **every** fetch failed, with
-#: `Cannot find module 'mathml-to-latex'`, whatever the URL — the `require` runs when
-#: the module is loaded, not when a formula is met. Reproduced on the vendored tree
-#: before this was added, from `defuddle/node` down to `elements/math.full.js`.
-#:
-#: Exact versions, like every other pinned thing in this image: the point of vendoring
-#: is that two installs of one APK run the same code. `mathml-to-latex` brings
-#: `@xmldom/xmldom`, which it depends on itself; `temml` is deliberately *not* here,
-#: because `math.full.js` reaches it inside a `try`/`catch` and falls back to plain
-#: text — it is optional in the sense the flag means.
-WEB_ACCESS_RUNTIME_DEPS = {
-    "mathml-to-latex": "1.8.0",
-}
-
-#: Transitive packages vendored at a floor of their own, as npm `overrides`, so an
-#: advisory below pi's or the extension's own pin cannot ride into the image while
-#: upstream catches up.
-#:
-#: npm writes an override into the tree it resolves, so the versions here are what
-#: both caches actually install — the floor is not advisory. The floor must stay
-#: inside the range the dependent declares (or npm refuses the install): undici is
-#: an exact pin of pi's own, while `body-parser`/`fast-uri` take a caret floor that
-#: express/ajv still accept. Bumping these is a content-layer change like any other
-#: vendored byte; nothing else in the seed sees them.
-#:
-#: What is deliberately *not* here: a floor for every transitive package. Only
-#: packages an advisory has actually named, so the list is a record of what was
-#: answered rather than a standing guess at what npm resolves next.
+#: The one dependency floor that survives in the pi tree. `undici` is an exact
+#: pin of pi's own; an advisory below it is not something a rebuild should fix by
+#: accident. The extension no longer brings an express/ajv/MCP dependency tree, so
+#: the body-parser/fast-uri/hono floors that existed for `pi-web-access` are gone.
 PACKAGE_OVERRIDES = {
     # pi 1.4.0 pins 8.10.2; GHSA-4qv8-2p9j-2685 / GHSA-f72v-6w45-q472 /
     # GHSA-xjj6-f33q-929c name >=8.12.2 fixed.
     "undici": "8.12.3",
-    # GHSA-27r3-jxmh-p828 (body-parser) and the fast-uri 3.1.x advisories
-    # (GHSA-w74x-v6f9-jxgq &c) through pi-web-access 0.42.0's express/ajv.
-    "body-parser": "^2.4.0",
-    "fast-uri": "^3.1.9",
-    # GHSA-qv5m-9pm6-hqp3 and GHSA-jpvv-r467-5p4w on @hono/node-server through
-    # 2.1.5, and five Hono advisories through 4.13.15, both reached through
-    # pi-web-access 0.48.0's @modelcontextprotocol/sdk 1.32.1.
-    "@hono/node-server": "^2.1.6",
-    "hono": "^4.13.16",
 }
-
-#: What the app reads to find the extension and to describe it on the settings
-#: page. Written as data rather than duplicated in Kotlin so that a runtime image
-#: without the extension (an older one, or a build that dropped it) is a missing
-#: file the app can report instead of a path it assumes exists.
-WEB_ACCESS_METADATA = "share/pikit/web-access.json"
 
 #: The content layer: the archive of it, the manifest that says what it owns,
 #: and the paths it owns.
 #:
 #: `CONTENT_PATHS` is the update boundary. Everything here is written by this
 #: build rather than by a dpkg package — pi and its dependencies, the bundled
-#: web-access extension, the permission extension, the chat-prompt extension, the
+#: web extension, the permission extension, the chat-prompt extension, the
 #: package relocator and the wrappers that reach them — so an app update may replace
 #: exactly these paths and must not touch anything else in the prefix: what lives
 #: beside them is a registered package's file, and dpkg is the only thing allowed to
@@ -297,25 +239,6 @@ CONTENT_PATHS = (
     "libexec/pikit",
     "share/pikit",
 )
-
-#: The check `verify_web_access` runs, so a tree that is missing something the
-#: extension loads fails *this* build rather than every fetch on a phone.
-#:
-#: It goes through `defuddle/node` exactly as `extract.ts` does, on a page with a
-#: formula in it, and prints the text it recovered. A missing optional dependency
-#: throws at `import` time, which is the failure that shipped.
-WEB_ACCESS_CHECK = """
-const html = '<html><head><title>Doc</title></head><body><article><p>Hello '
-  + '<math><mi>x</mi><mo>=</mo><mn>1</mn></math> world</p></article></body></html>';
-const { Defuddle } = await import('defuddle/node');
-const result = await Defuddle(html, 'https://example.com');
-const text = result && result.content ? result.content : '';
-if (!text.includes('Hello')) {
-  console.error('the extraction returned nothing usable');
-  process.exit(1);
-}
-console.log('defuddle/node extraction ok (' + text.length + ' chars)');
-"""
 
 #: The prefix-rewrite exclusion list, so the app's own repair pass can apply the
 #: same one. See `install_rewrite_exclusions`.
@@ -977,199 +900,6 @@ def run(command: list[str], cwd: Path) -> None:
         raise SystemExit(f"Command failed with exit code {completed.returncode}: {command}")
 
 
-def vendor_web_access(cache: Path) -> Path:
-    """
-    Vendors the bundled web-access extension, and returns its project directory.
-
-    The extension's own documentation installs it with
-
-        pi install npm:pi-web-access
-
-    which writes `npm:pi-web-access` into pi's user settings under `$HOME` and
-    installs the package there. PiKit does not do that on the device, for three
-    reasons: it needs npm and a network at a moment the app may be offline; it
-    installs into the user's own directory, which is the one place this project
-    treats as the user's (and where a reinstall of the runtime must not reach);
-    and the version would then drift with whatever npm resolved that day, so two
-    installs of the same APK could run different tools.
-
-    So the package is vendored into the image instead, under
-    `$PREFIX/lib/node_modules/pikit-extensions`, and the app registers the
-    directory in pi's global settings by absolute path — pi's own *local path*
-    package source, which loads it through the package's `pi` manifest and needs
-    no npm at runtime.
-
-    `--legacy-peer-deps` is what keeps this affordable: the package declares the
-    `@earendil-works/pi-*` packages as peers, and npm would otherwise install a
-    second full copy of pi (measured: 193 MB with peers, 30 MB without). pi is
-    already at `$PREFIX/lib/node_modules`, which Node finds by walking up from
-    this directory at runtime.
-
-    `--omit=dev --omit=optional --ignore-scripts` matches the pi vendoring: no
-    test tooling, no platform-specific optional binaries, no install scripts. The
-    one optional dependency that is *not* optional in practice is named in
-    [WEB_ACCESS_RUNTIME_DEPS] and installed on its own — `--omit=optional` took it
-    out and every `fetch_content` call failed without it.
-
-    What it returns is the tree npm installed, untouched: the trim runs on the copy the
-    image ships ([install_web_access]), so a change to the rule reaches a warm cache
-    instead of being silently absent from the image. That used not to be true — the cache
-    itself was trimmed — which is what the marker's `pristine` flag remembers.
-    """
-    node_modules = cache / "node_modules"
-    package_json = cache / "package.json"
-    installed = node_modules / WEB_ACCESS_PACKAGE
-    marker = cache / VENDORED_MARKER
-    spec = f"{WEB_ACCESS_PACKAGE}@{WEB_ACCESS_VERSION}"
-    missing = [
-        name for name in WEB_ACCESS_RUNTIME_DEPS
-        if not (node_modules / name).is_dir()
-    ]
-    # The documentation is required by the same check and for the same reason: it is
-    # what [WEB_ACCESS_DOCS] protects from the trim, so a cache without it is a cache
-    # that would ship the extension with no reference for its options. `held == spec`
-    # would not notice — the version did not move — which is the failure mode this whole
-    # file is written against.
-    missing += [name for name in WEB_ACCESS_DOCS if not (cache / name).is_file()]
-    # The version is checked, not just the presence of a tree, and that check was
-    # missing: `WEB_ACCESS_VERSION` went into the revision digest, so bumping it
-    # rebuilt the image — around the extension the cache had vendored first, because
-    # nothing here compared the cache against what this build asked for. It is the bug
-    # `vendor_pi` already has `VENDORED_MARKER` for, in the same shape and for the same
-    # reason. The old tree could not be caught by the version in `build-metadata.json`
-    # either: that file is written from `WEB_ACCESS_VERSION`, so it would have named
-    # 0.30.0 over a 0.29.0 tree.
-    held = read_vendored_marker(marker)
-    reusable = held.get("spec") == spec and held.get("pristine") is True
-    if installed.is_dir() and not missing and reusable:
-        log(f"reusing vendored web-access extension from cache ({spec})")
-        # Verified on the reuse path too, and that is the point of it: a cache that
-        # was built before this check existed, or emptied of one directory by hand,
-        # is exactly the tree that shipped the bug.
-        verify_web_access(cache)
-        return cache
-    if installed.is_dir():
-        # Regenerated rather than patched in place: the cache is a build artefact,
-        # and a tree that was half-updated is how two builds come to differ.
-        if held.get("spec") != spec:
-            log(
-                f"re-vendoring the web-access extension: the cache holds "
-                f"{held.get('spec') or 'an unrecorded version'}, this build wants {spec}"
-            )
-        elif held.get("pristine") is not True:
-            log(
-                "re-vendoring the web-access extension: the cache was written by a build "
-                "that trimmed it in place, so it is not the tree npm installs"
-            )
-        else:
-            log(f"re-vendoring the web-access extension: {', '.join(missing)} missing from the cache")
-        shutil.rmtree(node_modules)
-        marker.unlink(missing_ok=True)
-
-    cache.mkdir(parents=True, exist_ok=True)
-    package_json.write_text(
-        json.dumps(
-            {
-                "name": "pikit-extensions",
-                "version": "0.0.0",
-                "private": True,
-                "description": "Extensions PiKit bundles for the agent.",
-                # Named here rather than installed in a second npm call, so the
-                # whole tree is resolved once and the lock file records it.
-                "dependencies": dict(WEB_ACCESS_RUNTIME_DEPS),
-                # The same floor pi's tree is vendored under; see [PACKAGE_OVERRIDES].
-                "overrides": PACKAGE_OVERRIDES,
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    log(f"vendoring {WEB_ACCESS_PACKAGE}@{WEB_ACCESS_VERSION} (this downloads ~30 MiB)")
-    run(
-        [
-            "npm", "install", f"{WEB_ACCESS_PACKAGE}@{WEB_ACCESS_VERSION}",
-            "--omit=dev", "--omit=optional", "--ignore-scripts", "--legacy-peer-deps",
-            "--no-audit", "--no-fund", "--loglevel=error",
-        ],
-        cwd=cache,
-    )
-    if not installed.is_dir():
-        raise SystemExit(f"{WEB_ACCESS_PACKAGE} was not installed into {cache}")
-    for name in WEB_ACCESS_RUNTIME_DEPS:
-        if not (node_modules / name).is_dir():
-            raise SystemExit(
-                f"{name} was not installed into {cache}. It is an *optional* "
-                f"dependency of the extension's extractor, so it needs naming in "
-                f"the generated package.json; without it every fetch_content call "
-                f"fails with `Cannot find module`."
-            )
-    for name in WEB_ACCESS_DOCS:
-        if not (cache / name).is_file():
-            raise SystemExit(
-                f"{name} is missing from the vendored {WEB_ACCESS_PACKAGE}. It is the "
-                f"extension's only documentation and [trim_vendor_tree] is told to keep "
-                f"it; a release that stopped shipping it is a version of the extension "
-                f"whose options no longer have a reference on the device."
-            )
-
-    # After the verification above, never before: a marker that outlives a failed
-    # install is a cache that claims to hold something it does not. Same rule as the
-    # pi vendoring's own marker.
-    #
-    # `pristine` records that this cache is what npm installed, untouched. It was not
-    # always: the trim used to run on the cache itself, so a build host's copy is a tree
-    # with another rule's deletions already applied, and reusing it would ship an image
-    # missing whatever the current rule keeps — silently, because the version did not
-    # move. A marker without the flag is such a cache, and it is re-vendored once.
-    marker.write_text(
-        json.dumps({"spec": spec, "pristine": True}) + "\n", encoding="utf-8"
-    )
-    verify_web_access(cache)
-    return cache
-
-
-def verify_web_access(cache: Path) -> None:
-    """
-    Loads the extension's extraction path once, so a missing module fails here.
-
-    The check exists because the failure it catches is invisible to everything else
-    in this build: the tree was complete as far as npm, the file list and the image
-    verifier were concerned, and the first `fetch_content` on a phone — for any URL
-    at all — died on `Cannot find module 'mathml-to-latex'`, an optional dependency
-    of the extractor that `--omit=optional` had removed.
-
-    It runs the real entry (`defuddle/node`) on a real page, with a formula in it, so
-    it also covers the second half of that bug: `mathml-to-latex` is only *loaded*
-    when the module is, but it is only *used* when a formula is met.
-    """
-    node = shutil.which("node")
-    if node is None:
-        raise SystemExit(
-            "node is required to verify the vendored web-access extension, and it is "
-            "not on PATH. It is already required to vendor pi, so a build host that "
-            "can run this script at all has it."
-        )
-    # Inside the cache tree, because a bare specifier resolves from the *script's*
-    # own directory rather than from the working directory; and removed again,
-    # because the whole tree is copied into the image and this is not part of it.
-    script = cache / "pikit-web-access-check.mjs"
-    script.write_text(WEB_ACCESS_CHECK, encoding="utf-8", newline="\n")
-    try:
-        completed = subprocess.run(
-            [node, str(script)], cwd=str(cache), capture_output=True, text=True
-        )
-    finally:
-        script.unlink(missing_ok=True)
-    if completed.returncode != 0:
-        raise SystemExit(
-            "the vendored web-access extension cannot extract a page, so every "
-            "fetch_content call would fail on the device:\n  "
-            + (completed.stdout + completed.stderr).strip()
-        )
-    log("  " + completed.stdout.strip())
-
-
 #: What a vendored npm tree loses, and — this is the whole rule — what it loses *only*.
 #: Everything else ships, including the things nobody thought about when the rule was a
 #: keep list: pi's `examples/` (132 files, its documentation links into them 49 times),
@@ -1207,12 +937,6 @@ PI_API_SCOPE = "@earendil-works"
 #: missing image — the cost this design accepts, against 2.3 MB of archive per ABI.
 PI_DROPS = ("docs/images",)
 
-#: Documentation the shared rule would otherwise delete, as paths relative to the tree
-#: being trimmed. The extension's README is the only one: it is its only documentation —
-#: every provider, key and option it accepts — and `README.md` is a name the rule deletes
-#: everywhere else.
-WEB_ACCESS_DOCS = ("node_modules/pi-web-access/README.md",)
-
 
 def vendored_package(relative: str) -> str | None:
     """
@@ -1240,7 +964,7 @@ def vendor_junk(relative: str, drop: tuple[str, ...] = ()) -> str | None:
     this rule is how a check and its subject drift apart while both look right.
 
     `relative` is a posix path relative to the tree being trimmed, and `drop` is the
-    per-tree extra (`PI_DROPS`, `WEB_ACCESS_DROPS`).
+    per-tree extra ([PI_DROPS]).
     """
     parts = relative.split("/")
     for part in parts:
@@ -1272,15 +996,14 @@ def trim_vendor_tree(
     """
     Removes the parts of a vendored npm tree that [vendor_junk] names.
 
-    Measured on the web-access tree (33.4 MB uncompressed, 7,773 files): the test
-    fixtures, the npm page's artwork and prose, the source maps, a package manager's own
-    bundles and the dependencies' type declarations and manuals are 17.8 MB of it, leaving
-    15.7 MB to ship. `@mixmark-io/domino` alone is 3.4 MB of HTML5-parser conformance data
-    inside a runtime dependency and ships 1.07 MB of Yarn plugin bundles, and `LICENSE`
-    files always stay: they are the terms the code ships under.
+    Measured on pi's tree (105.5 MB, 14,007 files) the rule removes 51.5 MB and
+    leaves 53.9 MB: source maps 33.94 MB, dependency type declarations 12.36 MB,
+    four screenshots 2.29 MB ([PI_DROPS]), `README.md`/`CHANGELOG.md` 2.12 MB,
+    dependency manuals 0.42 MB and test fixtures 0.38 MB. `LICENSE` files always
+    stay: they are the terms the code ships under.
 
-    `drop` is the tree's own extra ([PI_DROPS], [WEB_ACCESS_DROPS]) and `keep` its
-    exception ([WEB_ACCESS_DOCS]). Both are paths relative to `root`.
+    `drop` is the tree's own extra ([PI_DROPS]) and `keep` its exception. Both are
+    paths relative to `root`.
     """
     removed = 0
     # Deepest first, so a directory the rule names is removed once rather than walked
@@ -1335,85 +1058,66 @@ def install_rewrite_exclusions(overlay_root: Path) -> None:
     log(f"recorded {len(prefix_patch.NEVER_REWRITE)} rewrite exclusion(s)")
 
 
-#: The `pi.extensions` entry the shipped package.json is rewritten to, and the file
-#: [BundledExtension.ENTRY_POINT] names in the app.
-#:
-#: The npm package's own manifest points at `./dist` — `prepublishOnly` swaps the
-#: entry to the built bundle for the registry and `postpublish` swaps it back — so a
-#: tree taken from npm as-is registers the extension at `.../pi-web-access/dist`.
-#: pi's compact extension list names a non-package extension by its shortest unique
-#: path suffix (`getCompactNonPackageExtensionLabel`), and that suffix is `dist`.
-#: Pointing at the source entry the package itself restores after publish puts
-#: `index.ts` on the path, which the same label logic strips, leaving
-#: `pi-web-access`.
-WEB_ACCESS_ENTRY = "index.ts"
+#: The `pi.extensions` entry the app's metadata names, and the file the package
+#: manifest points at. The package is this build's own, so there is no npm
+#: `dist`/source split to correct: `index.ts` is the file and the name.
+WEB_EXTENSION_ENTRY = "index.ts"
 
 
-def install_web_access(overlay_root: Path, vendored: Path) -> None:
+def install_web_extension(overlay_root: Path) -> None:
     """
-    Copies the vendored extension into the overlay, trims the copy, and records how to
-    find it.
+    Stages PiKit's own web extension as a tiny local package.
 
-    The trim is here rather than in [vendor_web_access] so that the cache stays the tree
-    npm installed: pi's tree has always been trimmed this way, on the copy, and the
-    extension's used to be trimmed in place — which made a rule change invisible on a warm
-    cache and cost the marker's `pristine` flag to recover from. The `pi.extensions`
-    rewrite is here for the same reason: the cache is what npm installed, and the
-    entry the image ships is this build's decision.
+    The image cannot `pi install` anything at runtime, and the extension has no
+    dependencies to resolve, so the package is three files created here: the
+    source copied from `tools/pikit-web.ts`, a manifest naming it as pi's
+    extension, and the metadata file the app reads for the entry point. This
+    replaces `vendor_web_access`, which downloaded ~30 MiB of npm tree and trimmed
+    it; the whole extension is now one file measured in kilobytes.
     """
-    destination = overlay_root.joinpath(*WEB_ACCESS_ROOT)
+    source = REPO_ROOT / WEB_EXTENSION_SOURCE
+    if not source.is_file():
+        raise SystemExit(f"missing {source}; it is part of the build, not generated")
+    destination = overlay_root.joinpath(
+        *WEB_EXTENSION_ROOT, "node_modules", WEB_EXTENSION_PACKAGE
+    )
     if destination.exists():
         shutil.rmtree(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(vendored, destination, symlinks=True)
-    trim_vendor_tree(destination, drop=WEB_ACCESS_DROPS, keep=WEB_ACCESS_DOCS)
-    # Under the project's own `node_modules`, same as [WEB_ACCESS_RELATIVE] spells
-    # it: `pikit-extensions` is the generated package.json's tree, and the extension
-    # is one of its dependencies rather than a sibling of it.
-    rewrite_web_access_entry(destination / "node_modules" / WEB_ACCESS_PACKAGE)
-
-    metadata = overlay_root / WEB_ACCESS_METADATA
-    metadata.parent.mkdir(parents=True, exist_ok=True)
-    metadata.write_text(
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination / WEB_EXTENSION_ENTRY)
+    (destination / "package.json").write_text(
         json.dumps(
             {
-                "name": WEB_ACCESS_PACKAGE,
-                "version": WEB_ACCESS_VERSION,
-                # Relative to `$PREFIX`, which the app knows: the absolute path
-                # contains the application id, and writing it here would make the
-                # image un-reusable (and un-comparable) for a different id.
-                "path": WEB_ACCESS_RELATIVE,
+                "name": WEB_EXTENSION_PACKAGE,
+                "version": WEB_EXTENSION_VERSION,
+                "private": True,
+                "type": "module",
+                "pi": {"extensions": [f"./{WEB_EXTENSION_ENTRY}"]},
             },
             indent=2,
         )
         + "\n",
         encoding="utf-8",
     )
-    log(f"installed the web-access extension at {WEB_ACCESS_RELATIVE}")
 
-
-def rewrite_web_access_entry(package_dir: Path) -> None:
-    """
-    Points the package's `pi.extensions` at [WEB_ACCESS_ENTRY], so pi names it
-    `pi-web-access` rather than `dist`. See [WEB_ACCESS_ENTRY] for the mechanism.
-    """
-    manifest_path = package_dir / "package.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    pi_manifest = manifest.get("pi")
-    if not isinstance(pi_manifest, dict) or "extensions" not in pi_manifest:
-        raise SystemExit(
-            f"{manifest_path} has no pi.extensions entry, so the image would ship "
-            "a package pi cannot load as an extension"
+    metadata = overlay_root / WEB_EXTENSION_METADATA
+    metadata.parent.mkdir(parents=True, exist_ok=True)
+    metadata.write_text(
+        json.dumps(
+            {
+                "name": WEB_EXTENSION_PACKAGE,
+                "version": WEB_EXTENSION_VERSION,
+                # Relative to `$PREFIX`, which the app knows: the absolute path
+                # contains the application id, and writing it here would make the
+                # image un-reusable (and un-comparable) for a different id.
+                "path": WEB_EXTENSION_RELATIVE,
+            },
+            indent=2,
         )
-    entry = package_dir / WEB_ACCESS_ENTRY
-    if not entry.is_file():
-        raise SystemExit(
-            f"{entry} is missing: the shipped tree is trimmed of what nothing loads, "
-            f"and {WEB_ACCESS_ENTRY} is the entry the rewritten pi.extensions names"
-        )
-    pi_manifest["extensions"] = [f"./{WEB_ACCESS_ENTRY}"]
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    log(f"  pi.extensions -> ./{WEB_ACCESS_ENTRY} (so the plugin list says {WEB_ACCESS_PACKAGE})")
+        + "\n",
+        encoding="utf-8",
+    )
+    log(f"installed the web extension at {WEB_EXTENSION_RELATIVE}")
 
 
 # --------------------------------------------------------------------------- #
@@ -1503,13 +1207,13 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     # `node_modules/` inside it).
     copy_hoisted_dependencies(pi_cache / "node_modules", pi_destination)
 
-    # The same trim the web-access tree gets, and for the same reason: pi's dependency
-    # tree ships source maps, test fixtures, type declarations and the npm page of a
-    # hundred packages. Measured over the vendored tree (105.5 MB, 14,007 files) under the
-    # rule above, 51.5 MB of it goes and 53.9 MB ships: source maps 33.94 MB, the
-    # dependencies' type declarations 12.36 MB, four screenshots 2.29 MB ([PI_DROPS]),
-    # `README.md`/`CHANGELOG.md` 2.12 MB, the dependencies' manuals 0.42 MB and test
-    # fixtures 0.38 MB.
+    # The same trim pi's dependency tree gets, and for the same reason: pi's
+    # dependency tree ships source maps, test fixtures, type declarations and the
+    # npm page of a hundred packages. Measured over the vendored tree (105.5 MB,
+    # 14,007 files) under the rule above, 51.5 MB of it goes and 53.9 MB ships:
+    # source maps 33.94 MB, the dependencies' type declarations 12.36 MB, four
+    # screenshots 2.29 MB ([PI_DROPS]), `README.md`/`CHANGELOG.md` 2.12 MB, the
+    # dependencies' manuals 0.42 MB and test fixtures 0.38 MB.
     #
     # What a keep list cost, for the record: it removed 40.3 MB and deleted pi's
     # `examples/` (0.96 MB, 132 files its own documentation links into 49 times) and the
@@ -1521,10 +1225,10 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
     # (measured 2026-09-15).
     trim_vendor_tree(pi_destination, drop=PI_DROPS)
 
-    # 3b. the bundled web-access extension ----------------------------------
+    # 3b. the bundled web extension ------------------------------------------
     # Ahead of the prefix rewrite below, so it is covered by it like everything
     # else in the overlay, and ahead of the zip, so it is what ships.
-    install_web_access(overlay_root, vendor_web_access(CACHE_DIR / "web-access"))
+    install_web_extension(overlay_root)
 
     # 4. wrappers ------------------------------------------------------------
     bin_dir = overlay_root / "bin"
@@ -1616,7 +1320,7 @@ def build_for(arch: str, flavor: str, pi_version: str | None, keep_staging: bool
         "bootstrap_tag": BOOTSTRAP_TAG,
         "packages": {p.name: p.version for p in resolved},
         "pi_version": pi_version,
-        "web_access": {"name": WEB_ACCESS_PACKAGE, "version": WEB_ACCESS_VERSION},
+        "web_extension": {"name": WEB_EXTENSION_PACKAGE, "version": WEB_EXTENSION_VERSION},
         "revision": seed_revision,
         "content_revision": content_revision,
         "content_paths": list(CONTENT_PATHS),
@@ -2078,7 +1782,7 @@ def compute_content_revision(arch: str, assets_dir: Path, pi_version: str) -> st
     # *archives* and so the digest — but only because npm had downloaded
     # something new, which is the accident this pin removes.
     digest.update(pi_version.encode())
-    digest.update(WEB_ACCESS_VERSION.encode())
+    digest.update(WEB_EXTENSION_VERSION.encode())
     path = assets_dir / CONTENT_ARCHIVE
     if path.is_file():
         digest.update(CONTENT_ARCHIVE.encode())

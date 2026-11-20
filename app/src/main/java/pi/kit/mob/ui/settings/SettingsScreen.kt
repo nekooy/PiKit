@@ -82,19 +82,8 @@ internal sealed interface SettingsPage {
 
     data object About : SettingsPage
 
-    /** The bundled web-access extension's options, in pi's own config file. */
+    /** The bundled web extension's settings: search and fetch. */
     data object Search : SettingsPage
-
-    /**
-     * The search page's numbers, one level down: the inline-content limit, the fetch
-     * timeout, the proxy and the fake-IP switch.
-     *
-     * It is a page rather than a sheet or a dialog because it holds three controls
-     * with three values — the reason is in `SearchAdvancedPage`'s KDoc — and it is a
-     * `SettingsPage` so the stack's own transition, back handling and saver apply to
-     * it without a second mechanism.
-     */
-    data object SearchAdvanced : SettingsPage
 
     /** Cold-start conversation behaviour and the interface theme. */
     data object Personalization : SettingsPage
@@ -114,11 +103,9 @@ internal sealed interface SettingsPage {
             // The form was opened from the list, so it goes back to the list
             // rather than all the way to the tab root.
             is ModelEdit -> Model
-            // The advanced page is opened from the search page's row, so back is the
-            // page whose controls it holds — the second two-deep branch beside the
-            // model form, which is why `depth` walks this chain rather than counting
-            // pages.
-            SearchAdvanced -> Search
+            // The search page's former second level is gone: all of its controls are
+            // rows of the one page now, and a saved "SearchAdvanced" is a downgrade
+            // from a build that had it.
             else -> Root
         }
 }
@@ -176,9 +163,9 @@ internal fun decodeSettingsPage(encoded: String): SettingsPage = when {
     encoded == "Manual" -> SettingsPage.Manual
     encoded == "About" -> SettingsPage.About
     encoded == "Search" -> SettingsPage.Search
-    // Added with the page itself: a build that does not know it is a downgrade, and
-    // its saved state restores to the root like every other unknown name.
-    encoded == "SearchAdvanced" -> SettingsPage.SearchAdvanced
+    // The search page's former second level: a build that had it restores to the page
+    // that now holds every control it had.
+    encoded == "SearchAdvanced" -> SettingsPage.Search
     encoded == "Personalization" -> SettingsPage.Personalization
     else -> SettingsPage.Root
 }
@@ -193,7 +180,6 @@ internal fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
     SettingsPage.Search -> "Search"
-    SettingsPage.SearchAdvanced -> "SearchAdvanced"
     SettingsPage.Personalization -> "Personalization"
 }
 
@@ -313,12 +299,6 @@ fun SettingsScreen(session: PiAgentSession, onBack: () -> Unit) {
             SettingsPage.Search -> SearchPage(
                 session = session,
                 onBack = { open(SettingsPage.Root) },
-                onOpenAdvanced = { open(SettingsPage.SearchAdvanced) },
-            )
-
-            SettingsPage.SearchAdvanced -> SearchAdvancedPage(
-                session = session,
-                onBack = { open(SettingsPage.Search) },
             )
 
             SettingsPage.Personalization -> PersonalizationPage(
@@ -431,15 +411,6 @@ private fun RootPage(
                 ArrowPreference(
                     title = text.settings.searchTitle,
                     summary = text.settings.searchSubtitle,
-                    // The bundled `pi-web-access` extension's version, which is a
-                    // file in the runtime image and otherwise a terminal away. Absent
-                    // — the image carries no extension — leaves the slot empty rather
-                    // than printing a placeholder, which is what the search page
-                    // itself does.
-                    endActions = {
-                        val version = session.webSearch.extension?.version
-                        if (version != null) SettingsValue(version, monospace = true)
-                    },
                     onClick = { onOpen(SettingsPage.Search) },
                 )
                 ArrowPreference(

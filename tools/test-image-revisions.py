@@ -90,10 +90,6 @@ def main() -> int:
         "the content stamp moves with the pi pin",
     )
     check(
-        builder.WEB_ACCESS_VERSION == builder.IMAGE_VERSIONS["web_access"],
-        "the builder reads the web-access pin from tools/image-versions.json",
-    )
-    check(
         builder.PI_VERSION == builder.IMAGE_VERSIONS["pi"],
         "the builder reads the pi pin from tools/image-versions.json",
     )

@@ -10,16 +10,17 @@
  *
  *  - **switch off** — no tool is declared, and the only system message is the preset's
  *    text, byte for byte. No `<cwd>` block, no `AGENTS.md`, no skills, no pi preamble.
- *  - **switch on** — the declared tools are exactly `web_search` and `fetch_content`
- *    (the extension registers four; the allowlist is the promise), and the system text
+ *  - **switch on** — the declared tools are exactly `web_search` and `web_fetch`
+ *    (the extension registers two; the allowlist is the promise), and the system text
  *    is still only the preset.
  *
  * That is the measurement ARCHITECTURE §17 records. It is a process test rather than a
  * unit test by necessity: the flags are pi's interface, and a fixture that agreed with
  * our reading of them is the exact mistake this file exists to catch.
  *
- * It uses the build cache's vendored pi and web-access package, so it skips cleanly on a
- * machine that has not built a runtime image. Run from the repository root:
+ * It uses the build cache's vendored pi and this repository's own web extension, so it
+ * skips cleanly on a machine that has not built a runtime image. Run from the
+ * repository root:
  *
  *     node --experimental-strip-types tools/test-chat-context.mjs
  */
@@ -27,7 +28,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,11 +36,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PI_ROOT = join(ROOT, ".runtime-build", "cache", "pi");
 const CLI = join(PI_ROOT, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "bundle", "cli.js");
-const WEB_ACCESS = join(ROOT, ".runtime-build", "cache", "web-access", "node_modules", "pi-web-access");
+const WEB_EXTENSION = join(ROOT, "tools", "pikit-web.ts");
 const CHAT_PROMPT_EXTENSION = join(ROOT, "tools", "pikit-chat-prompt.ts");
 
-if (!existsSync(CLI) || !existsSync(WEB_ACCESS) || !existsSync(CHAT_PROMPT_EXTENSION)) {
-  console.log("chat context: skipped (no vendored pi / web-access in .runtime-build)");
+if (!existsSync(CLI) || !existsSync(WEB_EXTENSION) || !existsSync(CHAT_PROMPT_EXTENSION)) {
+  console.log("chat context: skipped (no vendored pi / web extension in .runtime-build)");
   process.exit(0);
 }
 
@@ -136,26 +137,11 @@ function startMock() {
   });
 }
 
-/** A directory shape that makes the vendored extension's peer imports resolve. */
+/** A directory shape that makes the extension's imports resolve. */
 function stageExtension(directory) {
-  // pi's own node_modules is where `typebox` and `@earendil-works/pi-coding-agent` were
-  // hoisted to on the image; the same two are put beside the web-access package here so
-  // the extension's own bare imports resolve exactly as they do on the device.
-  const modules = join(directory, "node_modules");
-  mkdirSync(modules, { recursive: true });
-  const link = (target, name) => {
-    const path = join(modules, name);
-    try {
-      symlinkSync(target, path, process.platform === "win32" ? "junction" : "dir");
-    } catch {
-      // A copied tree is not needed for this audit: without the links pi reports the
-      // extension as unloadable, which the failure below will name.
-    }
-  };
-  link(WEB_ACCESS, "pi-web-access");
-  link(join(PI_ROOT, "node_modules", "typebox"), "typebox");
-  link(join(PI_ROOT, "node_modules", "@earendil-works"), "@earendil-works");
-  return join(modules, "pi-web-access", "index.ts");
+  // `pikit-web.ts` imports only Node built-ins at runtime; the type import from
+  // pi's package is erased by jiti. Its path is therefore used directly.
+  return WEB_EXTENSION;
 }
 
 /** Runs one launch and resolves with the recorded request for the test prompt. */
@@ -200,7 +186,7 @@ function runLaunch({ directory, port, webAccess }) {
     join(agentDir, "settings.json"),
     JSON.stringify({
       defaultTools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
-      packages: [WEB_ACCESS],
+      packages: [],
     }),
   );
   // A file named AGENTS.md where a work launch would read it: if chat mode leaked it,
@@ -219,7 +205,7 @@ function runLaunch({ directory, port, webAccess }) {
     "--no-mcp",
   ];
   if (webAccess) {
-    args.push("--tools", "web_search,fetch_content", "--extension", extension);
+    args.push("--tools", "web_search,web_fetch", "--extension", extension);
   } else {
     args.push("--no-tools");
   }
@@ -322,7 +308,7 @@ async function main() {
       if (webAccess) {
         assert.deepEqual(
           request.tools.slice().sort(),
-          ["fetch_content", "web_search"],
+          ["web_fetch", "web_search"],
           `${label}: the allowlist must name exactly the two network tools`,
         );
       } else {

@@ -687,7 +687,7 @@ class PiAgentSession internal constructor(
         // launch, on every `scheduleRestart` and on every settings change, and its
         // caller is the service's `lifecycleScope` — `Dispatchers.Main.immediate` —
         // so before this it parsed and rewrote `models.json` and `settings.json` and
-        // rendered `web-search.json` on the main thread, between the user's tap and
+        // wrote `web.json` on the main thread, between the user's tap and
         // the next frame. Everything below is filesystem work; the `_agent` writes
         // above and below are safe from any thread.
         //
@@ -726,11 +726,9 @@ class PiAgentSession internal constructor(
                 // an `Unknown provider` exit or a `401` that reads as a bad key.
                 val modelsJsonFailure = writeModelsJson(settings, profileSnapshot, entries)
                 writePiDefaults(settings)
-                // The bundled extension's own default is `workflow: "summary-review"`,
-                // which opens its result curator in a browser; there is no browser here,
-                // so PiKit writes the document a fresh install has before pi starts. Done
-                // on every launch rather than from the settings page, because the page may
-                // never be opened and the default has to hold anyway.
+                // The extension reads its file on every tool call, and the page may never
+                // be opened; seeding the fresh-install document before pi starts is what
+                // makes a new conversation's first search work without a settings visit.
                 webSearch.ensureDocument()
                 // `$HOME/workspace`, not `$HOME`: see [TermuxEnv.workspace]. The reader may
                 // have started this conversation in another workspace ([WorkspaceStore]),
@@ -798,7 +796,7 @@ class PiAgentSession internal constructor(
                     // than refused: the conversation still starts, with no tools, which is
                     // the switch's own "off" state.
                     val chatWebExtension = if (_mode.value == AgentMode.CHAT && _chatWebAccess.value) {
-                        env.webAccessExtension?.entryPoint
+                        env.webExtension?.entryPoint
                             ?.takeIf { it.isFile }
                             ?.absolutePath
                             .also { found ->
@@ -806,7 +804,7 @@ class PiAgentSession internal constructor(
                                     Log.w(
                                         TAG,
                                         "chat mode's web access is on but the bundled " +
-                                            "web-access extension is missing from the runtime",
+                                            "web extension is missing from the runtime",
                                     )
                                 }
                             }
@@ -833,7 +831,7 @@ class PiAgentSession internal constructor(
                             },
                             credentials = ProfileAddressing.providerEnvironment(
                                 settingsStore.profiles.snapshots.value,
-                            ),
+                            ) + ("PIKIT_WEB_CONFIG" to File(env.home, WebSearchSettings.FILE_NAME).absolutePath),
                             chatPromptFile = chatPromptFile,
                             chatPromptExtension = chatPromptExtension,
                             chatWebExtension = chatWebExtension,
@@ -2379,19 +2377,15 @@ class PiAgentSession internal constructor(
     val repairScanned: StateFlow<Int> = _repairScanned.asStateFlow()
 
     /**
-     * The bundled web-access extension's configuration, and the only writer of
-     * pi's own `$HOME/.pi/agent/web-search.json`.
+     * The bundled web extension's configuration, and the only writer of
+     * `$HOME/.pikit/web.json`.
      *
-     * Owned by the session rather than by the settings page so that PiKit's one
-     * default is written on launch, whether or not that page is ever opened, and
-     * so the page and the agent read the same in-memory copy.
+     * Owned by the session rather than by the settings page so the default file is
+     * written on launch whether or not that page is ever opened, and so the page and
+     * the agent read the same in-memory copy.
      */
     val webSearch: WebSearchStore by lazy {
-        // The language is read per write rather than captured: the comments in the
-        // rendered document are in the interface's language, and a user who switches
-        // it and then taps a control should get the file in the language they are
-        // looking at.
-        WebSearchStore(env, scope) { settingsStore.read().language }
+        WebSearchStore(env, scope)
     }
 
     /**
@@ -2743,7 +2737,7 @@ class PiAgentSession internal constructor(
         // the store read its list at startup, so without this the chat half would show the
         // personas the backup replaced until the app was relaunched.
         host.chatPresets.reload()
-        // pi's own `web-search.json` travels with MODELS, and the store holds the
+        // The web config travels with MODELS, and the store holds the
         // document it read at startup — the search page would otherwise keep
         // showing the old options while the file on disk was the restored one.
         webSearch.reload()
@@ -3048,7 +3042,7 @@ class PiAgentSession internal constructor(
 
     /**
      * Merges PiKit's tool list, the active profile's defaults and the bundled
-     * web-access package into pi's own settings file.
+     * web extension into pi's own settings file.
      *
      * `--tools` cannot do the first: pi applies it as a strict allowlist to built-in,
      * extension and SDK tools alike, so every tool an installed extension registered
@@ -3078,7 +3072,8 @@ class PiAgentSession internal constructor(
                 existing = existing,
                 tools = PiLaunchOptions.DEFAULT_TOOLS,
                 settings = settings,
-                bundledExtension = env.webAccessExtension,
+                bundledExtension = env.webExtension,
+                retiredExtensionPath = File(env.prefix, "lib/node_modules/pikit-extensions").absolutePath,
                 defaultProvider = defaultProvider,
             )
             val encoded = Json.encodeToString(JsonObject.serializer(), document)
@@ -3307,7 +3302,7 @@ internal val RETRY_PATIENCE = JsonObject(
 
 /**
  * pi's own settings with PiKit's tool list, the active profile's defaults and the
- * bundled web-access package merged in.
+ * bundled web extension merged in.
  *
  * `defaultProvider`/`defaultModel` are pi's keys for what a `pi` started without
  * `--provider`/`--model` should answer with (`dist/core/settings-manager.js:461-474`,
@@ -3317,10 +3312,16 @@ internal val RETRY_PATIENCE = JsonObject(
  *
  * `packages` is where pi keeps the package sources it loads extensions from, and a
  * plain absolute path is pi's documented *local path* source. The bundled
- * `pi-web-access` extension is vendored under `$PREFIX` rather than installed, so
+ * `pikit-web` extension lives under `$PREFIX` rather than being installed, so
  * registering it here is what gives a hand-run `pi` the same extension the app's
  * agent has. Only a missing entry is added: an entry the user added — including one
  * for this very path, at some other spelling — is never removed or rewritten.
+ *
+ * `retiredExtensionPath` is the one exception, and it is a migration rather than a
+ * user setting: releases before this one registered the vendored `pi-web-access`
+ * package at `$PREFIX/lib/node_modules/pikit-extensions`, and that package no
+ * longer exists. Leaving the dead path in `packages` would make every launch warn
+ * about a package that cannot load, so exactly that one string is dropped.
  *
  * `retry` makes the agent-level retry outlast a network change. pi retries
  * transient provider failures (its own pattern list: overload, rate limit, 5xx,
@@ -3343,6 +3344,7 @@ internal fun settingsWithPiDefaults(
     tools: List<String>,
     settings: PiSettings,
     bundledExtension: BundledExtension? = null,
+    retiredExtensionPath: String? = null,
     /**
      * The provider id the **launch** would use ([ProfileAddressing.runtimeProviderId]),
      * which is not the provider's own id for a relay or for a second profile of one
@@ -3361,18 +3363,25 @@ internal fun settingsWithPiDefaults(
     // A `packages` key that is not an array is not this function's to reinterpret:
     // the write is skipped, the same way an unparseable `models.json` is left alone.
     // A user whose own entry names a *different* source is untouched either way —
-    // this only ever appends the bundled directory when it is not already listed.
+    // this only ever removes the retired path and appends the bundled directory.
     val packages = existing["packages"]
     // The guard narrows `packages` to "null, or an array", so the two reads below need
     // no cast of their own — and a cast there is a second place the rule is written.
-    if (bundledExtension != null && (packages == null || packages is JsonArray)) {
-        val path = bundledExtension.directory.absolutePath
-        val listed = packages.orEmpty()
-            .any { (it as? JsonPrimitive)?.contentOrNull == path }
-        if (!listed) {
-            merged = JsonObject(
-                merged + ("packages" to JsonArray(packages.orEmpty() + JsonPrimitive(path))),
-            )
+    if (packages == null || packages is JsonArray) {
+        val current = packages.orEmpty()
+        val kept = if (retiredExtensionPath.isNullOrBlank()) {
+            current
+        } else {
+            current.filterNot { (it as? JsonPrimitive)?.contentOrNull == retiredExtensionPath }
+        }
+        val wanted = if (bundledExtension != null) {
+            val path = bundledExtension.directory.absolutePath
+            if (kept.any { (it as? JsonPrimitive)?.contentOrNull == path }) kept else kept + JsonPrimitive(path)
+        } else {
+            kept
+        }
+        if (wanted != current) {
+            merged = JsonObject(merged + ("packages" to JsonArray(wanted)))
         }
     }
 
@@ -4417,7 +4426,7 @@ internal fun PiSettings.toLaunchOptions(
     chatPromptFile: String? = null,
     /** The extension that makes [chatPromptFile] exact, or null when the image lacks it. */
     chatPromptExtension: String? = null,
-    /** The bundled web-access extension, when this chat conversation's switch is on. */
+    /** The bundled web extension, when this chat conversation's switch is on. */
     chatWebExtension: String? = null,
     /** This launch's mode; [PiSettings.agentMode] is only a new conversation's default. */
     mode: AgentMode = agentMode,

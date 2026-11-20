@@ -184,10 +184,10 @@ class PiProcessLauncherTest {
     fun `chat mode with web access names only the two network tools`() {
         // The per-conversation switch lends chat mode the bundled extension. It is the
         // second explicit `--extension` (the prompt's is the first), and the tool set is
-        // a *strict allowlist* of two names: the extension registers search, source-check,
-        // fetch and stored-result tools, and a chat reply is meant to look something up,
-        // not to run a research workflow.
-        val web = "/prefix/lib/node_modules/pikit-extensions/node_modules/pi-web-access/index.ts"
+        // a *strict allowlist* of two names: the extension registers web search and page
+        // fetching, and a chat reply is meant to look something up, not to run a
+        // research workflow.
+        val web = "/prefix/lib/node_modules/pikit-extensions/node_modules/pikit-web/index.ts"
         val command = PiProcessLauncher.buildCommand(
             options(
                 mode = AgentMode.CHAT,
@@ -201,9 +201,9 @@ class PiProcessLauncherTest {
             "a tool allowlist and --no-tools cannot both be passed",
             command.none { it == "--no-tools" },
         )
-        assertEquals("web_search,fetch_content", command.valueOf("--tools"))
+        assertEquals("web_search,web_fetch", command.valueOf("--tools"))
         assertEquals(2, command.count { it == "--extension" })
-        assertTrue("the web-access entry is one of the two", command.contains(web))
+        assertTrue("the web extension entry is one of the two", command.contains(web))
         // The ambient-context doors stay shut: the switch opens tools, not discovery.
         for (flag in listOf(
             "--no-extensions",

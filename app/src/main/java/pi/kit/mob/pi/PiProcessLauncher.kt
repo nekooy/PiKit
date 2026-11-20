@@ -63,7 +63,7 @@ data class PiLaunchOptions(
      */
     val chatPromptExtension: String? = null,
     /**
-     * The bundled web-access extension, for a chat launch whose network-tools switch is on.
+     * The bundled web extension, for a chat launch whose network-tools switch is on.
      *
      * Chat mode closes every extension with `--no-extensions`, and pi still honours one
      * named by an explicit `--extension` (the same door [chatPromptExtension] uses). This
@@ -71,10 +71,8 @@ data class PiLaunchOptions(
      * Null — the switch off, work mode, or a runtime image without the extension — keeps
      * the conversation at `--no-tools`: no tool at all, which is chat mode's own promise.
      *
-     * Two tool names are allowed beside it ([CHAT_WEB_TOOLS]): the extension registers
-     * search, source-check, fetch and stored-result tools, and chat mode offers the
-     * reader the two that mean "look something up" — a web search and the fetch of the
-     * page it found. The others are research machinery for the work agent.
+     * The extension registers exactly the two tools chat mode offers
+     * ([CHAT_WEB_TOOLS]): `web_search` and `web_fetch`.
      */
     val chatWebExtension: String? = null,
     /**
@@ -156,13 +154,13 @@ data class PiLaunchOptions(
         /**
          * The tools a chat conversation may use, when its network-tools switch is on.
          *
-         * The bundled `pi-web-access` extension's own names, and only the two that are
-         * about reaching something: `web_search` and `fetch_content`. They are passed to
-         * pi as a plain `--tools` list, which is a strict allowlist over built-in,
-         * extension and SDK tools — the form that hid every extension tool when the list
-         * did not name it, and the reason the entry has to name these at all.
+         * The bundled `pikit-web` extension's own names, and exactly what chat mode
+         * offers: `web_search` and `web_fetch`. They are passed to pi as a plain
+         * `--tools` list, which is a strict allowlist over built-in, extension and SDK
+         * tools — the form that hid every extension tool when the list did not name it,
+         * and the reason the entry has to name these at all.
          */
-        val CHAT_WEB_TOOLS = listOf("web_search", "fetch_content")
+        val CHAT_WEB_TOOLS = listOf("web_search", "web_fetch")
 
         val THINKING_LEVELS = listOf("off", "minimal", "low", "medium", "high", "xhigh", "max")
     }
@@ -542,7 +540,7 @@ object PiProcessLauncher {
             // context. Each flag closes one door pi would otherwise open by itself:
             // tools (built-in, extension and MCP), extension discovery, skills,
             // prompt templates, and project/global AGENTS.md. `--no-extensions`
-            // also removes the bundled web-access package; `--no-mcp` is restated
+            // also removes the bundled web package; `--no-mcp` is restated
             // because MCP is a built-in extension and a future default must not
             // quietly bring a tool back. ARCHITECTURE §17 has the mode's design.
             //

@@ -32,7 +32,6 @@ class SettingsPageSaverTest {
             SettingsPage.Manual,
             SettingsPage.About,
             SettingsPage.Search,
-            SettingsPage.SearchAdvanced,
             SettingsPage.Personalization,
         )
 
@@ -65,16 +64,14 @@ class SettingsPageSaverTest {
         assertEquals(SettingsPage.Root, decodeSettingsPage("Advanced"))
         assertEquals(SettingsPage.Root, decodeSettingsPage("Storage"))
         // Context moved into the agent page rather than to the root, because the page it
-        // became still exists.
+        // became still exists. The search page's former second level became rows of the
+        // search page itself, so an old save lands there.
         assertEquals(SettingsPage.Agent, decodeSettingsPage("AgentContext"))
+        assertEquals(SettingsPage.Search, decodeSettingsPage("SearchAdvanced"))
     }
 
     @Test
-    fun `the advanced page's back goes to search, and the deeper move is a push`() {
-        // `SettingsScreen.open` decides the transition's direction by comparing depth,
-        // which is the parent chain's length — so the two facts that make the row a
-        // push rather than a pop are these.
-        assertEquals(SettingsPage.Search, SettingsPage.SearchAdvanced.parent)
+    fun `search goes back to the root and has no second level`() {
         assertEquals(SettingsPage.Root, SettingsPage.Search.parent)
         assertNull(SettingsPage.Root.parent)
     }

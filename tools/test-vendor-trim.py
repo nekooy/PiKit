@@ -10,9 +10,8 @@ name them. A keep list has to be right about everything; a delete list has to be
 about what it names.
 
 So the cases below assert both directions, and the one that matters most is the first:
-what the rule does not name is still there. The rest pin each deletion, the per-tree drops
-([PI_DROPS], [WEB_ACCESS_DROPS]) and the one exception ([WEB_ACCESS_DOCS], the
-extension's README, which the rule deletes by name everywhere else).
+what the rule does not name is still there. The rest pin each deletion and the per-tree
+drop ([PI_DROPS]).
 
 The trees are synthetic and stdlib-only, so this runs on any build host and needs neither
 the network nor the vendoring cache.
@@ -84,23 +83,6 @@ PI_TREE = {
     "node_modules/mathml-to-latex/vendor.js.map": "{}\n",
 }
 
-#: The same shape with the extension's layout, which is the one a single *file* of `keep`
-#: protects and a per-tree `drop` prunes.
-WEB_ACCESS_TREE = {
-    "node_modules/pi-web-access/README.md": "# pi-web-access\n",
-    "node_modules/pi-web-access/CHANGELOG.md": "# 0.30.0\n",
-    "node_modules/pi-web-access/SECURITY.md": "report it\n",
-    "node_modules/pi-web-access/banner.png": "not really a PNG",
-    "node_modules/pi-web-access/pi-web-fetch-demo.mp4": "not really a video",
-    "node_modules/pi-web-access/index.ts": "export {}\n",
-    "node_modules/pi-web-access/dist/index.js": "export {}\n",
-    "node_modules/pi-web-access/tests/extract.test.ts": "test()\n",
-    "node_modules/mathml-to-latex/index.js": "module.exports = {}\n",
-    "node_modules/mathml-to-latex/index.js.map": "{}\n",
-    "node_modules/unpdf/dist/index.d.ts": "export type P = 1\n",
-    "node_modules/unpdf/dist/pdfjs.mjs": "export {}\n",
-}
-
 #: `(case name, tree, drop, keep, paths that must survive, paths that must be gone)`.
 CASES = (
     (
@@ -148,32 +130,6 @@ CASES = (
             "node_modules/undici/docs",
             # The one thing pi's own tree drops on top of the rule.
             "docs/images",
-        ],
-    ),
-    (
-        "the extension keeps its README and loses its npm page",
-        WEB_ACCESS_TREE,
-        (
-            "node_modules/pi-web-access/pi-web-fetch-demo.mp4",
-            "node_modules/pi-web-access/banner.png",
-            "node_modules/pi-web-access/SECURITY.md",
-        ),
-        ("node_modules/pi-web-access/README.md",),
-        [
-            "node_modules/pi-web-access/README.md",
-            "node_modules/pi-web-access/index.ts",
-            "node_modules/pi-web-access/dist/index.js",
-            "node_modules/mathml-to-latex/index.js",
-            "node_modules/unpdf/dist/pdfjs.mjs",
-        ],
-        [
-            "node_modules/pi-web-access/CHANGELOG.md",
-            "node_modules/pi-web-access/SECURITY.md",
-            "node_modules/pi-web-access/banner.png",
-            "node_modules/pi-web-access/pi-web-fetch-demo.mp4",
-            "node_modules/pi-web-access/tests",
-            "node_modules/mathml-to-latex/index.js.map",
-            "node_modules/unpdf/dist/index.d.ts",
         ],
     ),
     (
@@ -255,10 +211,6 @@ def main() -> int:
     # passing nothing, and only a device would show it.
     if not builder.PI_DROPS or not all(d.startswith("docs/") for d in builder.PI_DROPS):
         failures.append(f"PI_DROPS is {builder.PI_DROPS!r}, not pi's screenshots")
-    if not builder.WEB_ACCESS_DOCS or not all(
-        name.endswith("README.md") for name in builder.WEB_ACCESS_DOCS
-    ):
-        failures.append(f"WEB_ACCESS_DOCS is {builder.WEB_ACCESS_DOCS!r}, not the extension's README")
     # The README is deleted by name everywhere else, so an exception that stopped being
     # one — or a rule that stopped deleting it — is the pair this asserts together.
     if "README.md" not in builder.VENDOR_JUNK_FILES:

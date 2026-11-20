@@ -467,8 +467,8 @@ internal object JapaneseStrings : Strings {
                 "完全アクセス）、テレメトリのスイッチ（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "ツール"
         override val agentContextToolsBody =
-            "pi 自身の read、bash、edit、write、grep、find、ls に加えて、PiKit が入れた " +
-                "web_search、fetch_content、source_check、get_search_content、そして権限の段階に" +
+            "pi 自身の read、bash、edit、write、grep、find、ls に加えて、PiKit が同梱する " +
+                "pikit-web 拡張の web_search と web_fetch、そして権限の段階に" +
                 "合わない呼び出しを拒否する pikit-permissions。"
         override val agentContextHistoryTitle = "会話"
         override val agentContextHistoryBody =
@@ -787,160 +787,73 @@ internal object JapaneseStrings : Strings {
         override val updateAvailable = "新しいリリースがあります"
         override val updateNoReleases = "リリースはまだありません"
 
-        override val searchTitle = "検索設定"
-        override val searchSubtitle = "エージェントのウェブ検索"
-        override val searchPageSubtitle = "同梱の web-access 拡張"
+        override val searchTitle = "ウェブ検索"
+        override val searchSubtitle = "エージェントにウェブ検索とページ読み取りを許可"
+        override val searchPageSubtitle = "pikit-web 拡張：web_search と web_fetch"
         override val searchNotBundled =
-            "この実行環境には web-access 拡張がありません。「メンテナンスと修復」で" +
-                "実行環境を更新してから、このページを開き直してください。"
+            "この実行環境にはウェブ拡張がありません。「メンテナンスと修復」でランタイムを更新してから、このページを開き直してください。"
         override val webAccess = "ウェブアクセス"
-        override val webAccessSubtitle = "検索・ページ読み込み・GitHub のクローン"
-        override val searchWorkflow = "検索ワークフロー"
-        override val searchWorkflowSubtitle = "検索後にすること"
-        override val workflowNone = "結果をそのまま返す"
-        override val workflowAutoSummary = "要約を生成"
-        override val workflowSummaryReview = "ブラウザーで確認"
-        override fun workflowDescription(id: String) = when (id) {
-            "none" -> "検索結果をそのままモデルに渡します"
-            "auto-summary" -> "検索ごとに要約してからモデルに渡します"
-            "summary-review" -> "確認ページを開き、要約を一つずつ見ます"
-            else -> ""
-        }
-
+        override val webAccessSubtitle = "エージェントのウェブ検索とページ読み取りを許可します"
+        override val searchSection = "検索"
         override val searchProvider = "検索プロバイダー"
-        override val searchProviderSubtitle = "最初に問い合わせる検索サービス"
+        override val searchProviderSubtitle = "web_search が最初に問い合わせるサービス"
         override val providerAutomatic = "自動"
         override fun providerDescription(id: String) = when (id) {
-            "auto" -> "まず Exa のキー不要エンドポイント、次にキーを設定したサービス"
-            // キー不要
-            "exa" -> "キー不要。レート制限あり"
+            "auto" -> "Exa Free、DuckDuckGo、キー設定済みのプロバイダーの順に試します"
+            "deepseek" -> "DeepSeek 検索 API。キーが必要です"
+            "zai" -> "Z.ai ウェブ検索。キーが必要で、地域別エンドポイントを指定できます"
+            "exa" -> "Exa のインデックス。キーが必要です"
+            "exa-free" -> "Exa の無料エンドポイント。キー不要ですがレート制限があります"
             "duckduckgo" -> "キー不要"
-            "searxng" -> "自前のインスタンス。アドレスは下の設定ファイルに書きます"
-            "keenable" -> "Keenable の公開検索。キー不要で、自動選択はされません"
-            "degoog" -> "メタ検索。キー不要で自前ホストも可、自動選択はされません"
-            "ninerouter" -> "自前の 9router。アドレスが必要で、キーは任意。自動選択はされません"
-            // 既存モデルの検索機能を使う
-            "openai" -> "OpenAI のホスト型ウェブ検索を使います"
-            "gemini" -> "Gemini モデル経由で検索します"
-            "perplexity" -> "Perplexity 自身の検索"
-            "kimi" -> "Kimi モデル経由で検索します"
-            "xai" -> "Grok のウェブ検索と X 検索"
-            "mistral" -> "Mistral のウェブ検索ツール"
-            "ollama" -> "Ollama Cloud の検索"
-            // キーが必要な検索 API
-            "brave" -> "Brave Search のキーが必要です"
-            "tavily" -> "Tavily のキーが必要です"
-            "jina" -> "Jina のキーが必要です"
-            "firecrawl" -> "Firecrawl のキーが必要です"
-            "serper" -> "Serper のキーが必要です"
-            "serpapi" -> "SerpApi のキーが必要です"
-            "serpbase" -> "SerpBase のキーが必要です"
-            "serply" -> "Google の結果。Serply のキーが必要で、自動選択はされません"
-            "kagi" -> "Kagi のキーが必要です"
-            "valyu" -> "Valyu のキーが必要です"
-            "bocha" -> "Bocha のキーが必要です"
-            "querit" -> "Querit のキーが必要です"
-            "search1api" -> "Search1API のキーが必要です"
-            "searchinfinity" -> "Searchinfinity のキーが必要です"
-            "tinyfish" -> "TinyFish のキーが必要です"
-            "parallel" -> "Parallel のキーが必要です"
-            "parallel-mcp" -> "Parallel。MCP エンドポイント経由です"
-            "baizhi" -> "Baizhi MCP。明示的に選んだ場合のみ使われます"
-            "anysearch" -> "AnySearch のキーが必要です"
-            "xcrawl" -> "XCrawl のキーが必要です"
-            "brightdata" -> "Bright Data のキーと Zone 名が必要です"
-            "serpdive" -> "SERPdive のキーが必要です。検索の深さも選べます"
-            "you" -> "You.com インデックス。キーが必要で、自動選択はされません"
-            "zai" -> "Z.ai web_search_prime MCP。キーとエンドポイント（グローバルまたは中国）が必要です"
-            "ceramic" -> "Ceramic のキーワード検索。キーが必要で、自動選択はされません"
-            "deepseek" -> "DeepSeek 独自の検索 API。キーが必要で、自動選択はされません"
-            "linkup" -> "Linkup 検索。キーが必要で、自動選択はされません"
-            "cloudflare" -> "Cloudflare のウェブ検索。キーとアカウント ID が必要で、自動選択はされません"
-            "searchapi" -> "SearchApi 経由の Google 結果。キーが必要で、自動選択はされません"
-            "tabstack" -> "Tabstack のリサーチ。引用付きの回答を返し、キーが必要で、自動選択はされません"
+            "tavily" -> "Tavily の検索と本文抽出。キーが必要です"
+            "ollama" -> "Ollama Cloud の検索とページ取得。キーが必要です"
+            "brave" -> "Brave Search。キーが必要です"
+            "jina" -> "Jina の検索とリーダー。キーなしでも低レートで使えます"
+            "openai" -> "OpenAI のホスト型ウェブ検索。キーが必要です"
+            "gemini" -> "Gemini と Google Search グラウンディング。キーが必要です"
+            "kimi" -> "Kimi の検索 API。キーが必要です"
+            "xai" -> "Grok のウェブ検索。キーが必要です"
+            "searxng" -> "自前の SearXNG インスタンス。アドレスが必要です"
+            "cloudflare" -> "Cloudflare Web Search。キーとアカウント ID が必要です"
+            "searchapi" -> "SearchAPI 経由の Google 結果。キーが必要です"
+            "direct" -> "直接 HTTP。キー不要、Cookie なし、JavaScript なし"
             else -> ""
         }
-
-        override val inlineContentLimit = "インライン内容の上限（文字）"
-        override val fetchTimeout = "取得タイムアウト（秒）"
         override fun searchProviderFootnote(count: Int) =
-            "拡張がルーティングできる $count 個の検索サービスを、拡張自身の優先順に並べています。" +
-                "各サービスにはそれぞれキーが必要です。下の設定ファイルを参照してください。"
-
-        override val searchConfig = "設定項目"
-        override val searchConfigAdd = "設定項目またはキーを追加"
-        override val searchConfigAddBody = "キーを選び値を入力"
-        override val searchConfigPickTitle = "拡張が読む項目"
-        override val searchConfigPickSearch = "項目を絞り込む"
-        override val searchConfigPickFootnote =
-            "同梱の拡張が読むすべてのキーと、それぞれの説明です。値は項目が期待する形で保存" +
-                "されます。文字は文字列、スイッチは true/false、数値は数値として保存されます。"
-        override fun searchConfigValueTitle(path: String) = path
-        override val searchConfigValueLabel = "値"
-        override val searchConfigValueNote =
-            "文字は引用符を付けずにそのまま入力します（JSON の文字列として保存されます）。" +
-                "スイッチは `true` か `false`、数値は `50`、構造化された値は " +
-                "`{\"host\": \"my-box.ts.net\"}` のような JSON です。"
-        override val searchConfigValueInvalid =
-            "この項目が受け取れない値です。文字に引用符は不要、スイッチは `true` か `false`、" +
-                "数値は `50`、それ以外は JSON で入力してください。"
-        override val searchConfigValueAdd = "追加"
-        override val searchConfigRemoveAction = "削除"
-        override fun searchConfigRemove(path: String) = "$path を削除"
-        override val searchConfigRemoved = "削除しました"
-        override val searchConfigRemoveTitle = "この設定項目を削除しますか？"
-        override fun searchConfigRemoveBody(path: String) =
-            "web-search.json から `$path` を削除します。ファイル内の他のキーはそのままです。"
-        override val searchConfigInEffect = "有効"
-        override val searchConfigHeader =
-            "ウェブアクセスの設定（web-search.json）。\n" +
-                "[有効] の行はファイルに書き込まれます。\n" +
-                "// で始まる行は説明と例だけです。\n" +
-                "有効にするには行頭の // を消し、必要なら\n" +
-                "前の行にカンマを足して保存します。\n" +
-                "コメントはファイルに書かれません。\n" +
-                "まるごとコメントの設定は中カッコも外す。"
-        override val searchConfigInvalid =
-            "まだ JSON オブジェクトではありません。保存していません。カンマや引用符の抜けを確認してください。" +
-                "コメントと末尾の余分なカンマは問題ありません。"
-        override val searchConfigSaved = "保存しました"
-        override val searchConfigFailed = "ファイルを書き込めませんでした。理由は端末タブで確認できます。"
-        override val searchConfigRestored =
-            "既定に戻しました。ファイルはインストール直後の内容になり、設定していた内容は失われています。"
-        override val searchConfigSave = "保存"
-        override val searchConfigRevert = "変更を破棄"
-        override val searchConfigRestore = "既定に戻す"
-        override val searchConfigRestoreSubtitle = "インストール時既定に戻す"
-        override val searchConfigRestoreTitle = "既定のファイルに戻しますか？"
-        override val searchConfigRestoreBody =
-            "web-search.json をインストール直後の内容で置き換えます。入力した API キーと設定した項目は" +
-                "すべてファイルから消え、ここから元に戻すことはできません。"
+            "拡張が対応する $count 個の検索プロバイダーです。キー必要なプロバイダーは下のキーを設定するまで応答できません。"
+        override val searchMaxResults = "1 回の検索結果数"
+        override val searchMaxResultsSubtitle = "1〜50、既定は 8"
+        override val fetchSection = "取得"
+        override val fetchProvider = "取得プロバイダー"
+        override val fetchProviderSubtitle = "web_fetch がページを取得する方法"
+        override val fetchAutomatic = "自動（直接 HTTP）"
+        override val fetchDirect = "直接 HTTP"
+        override val fetchMaxChars = "ページの最大文字数"
+        override val fetchMaxCharsSubtitle = "これを超えるページは切り詰められます"
+        override val networkSection = "ネットワーク"
+        override val searchTimeout = "検索タイムアウト（秒）"
+        override val searchTimeoutSubtitle = "1 回の検索リクエストの制限時間"
+        override val fetchTimeout = "取得タイムアウト（秒）"
+        override val fetchTimeoutSubtitle = "1 回の取得リクエストの制限時間"
+        override val providerNeedsKey = "このプロバイダーは応答する前にキーが必要です。"
+        override val providerApiKey = "API キー"
+        override val providerApiKeySubtitle = "web.json に保存されます。同名の環境変数でも設定できます"
+        override val providerBaseUrl = "エンドポイント"
+        override val providerBaseUrlSubtitle = "空欄ならサービスの既定アドレスを使います"
+        override val providerBaseUrlRequired = "必須：このプロバイダーは自前のインスタンスで動きます"
+        override val providerAccountId = "アカウント ID"
+        override val providerAccountIdSubtitle = "Cloudflare 検索の課金先アカウント"
+        override val providerModel = "モデル"
+        override val providerModelSubtitle = "空欄なら拡張の既定モデルを使います"
         override val searchConfigUnreadable =
-            "web-search.json が JSON オブジェクトではないため、上のコントロールは隠しています。" +
-                "このアプリが読めないファイルをもとに書き込んでしまうからです。手書きのファイルである" +
-                "可能性も高いです。コメントと末尾の余分なカンマは問題ありませんが、括弧の閉じ忘れは別です。" +
-                "ここまでの内容は変更していません。下のテキストを直すか置き換えて保存すれば、" +
-                "このページは再び編集できます。"
-
-        override val searchProxy = "プロキシ"
-        override val searchProxySubtitle = "設定するとウェブアクセスのプロキシとして使われます"
-
-        override val searchAdvanced = "詳細"
-        override val searchAdvancedSubtitle =
-            "インライン内容の上限・取得タイムアウト・プロキシ・Fake-IP 互換"
-        override val searchFakeIpProxy = "Fake-IP プロキシ互換"
-        override val searchFakeIpProxySubtitle =
-            "TUN / fake-IP プロキシは DNS に 198.18.0.0/15 を返し、拡張のアドレス検査はこの範囲を" +
-                "拒否します。オンにすると PiKit がその除外設定（ssrf.allowRanges）を設定ファイルに" +
-                "書き込みます。"
-        override val searchProviderNeedsConfigTitle = "このプロバイダーには設定が必要です"
-        override fun searchProviderNeedsConfigBody(provider: String, keys: List<String>) =
-            "「$provider」を使うには ${keys.joinToString("・")} が必要です。同梱の拡張は自身の" +
-                "設定ファイルから読み取ります。検索設定ページに戻り、下の「設定項目またはキーを追加」を" +
-                "開いて項目名で検索し、値をそこで入力してください（このダイアログでは入力しません）。"
-        override val searchAdvancedUnreadable =
-            "web-search.json が JSON オブジェクトではないため、ここのコントロールは隠しています。" +
-                "検索設定ページに戻り、そちらのエディターでテキストを直してください。"
+            "web.json がこのアプリの書く文書ではないため、コントロールを隠しています。下の「既定に戻す」で置き換えられます。まだ何も変更していません。"
+        override val searchConfigRestore = "既定に戻す"
+        override val searchConfigRestoreSubtitle = "インストール時の既定値に戻します"
+        override val searchConfigRestoreTitle = "ウェブ設定を置き換えますか？"
+        override val searchConfigRestoreBody =
+            "web.json を新規インストール時の文書に置き換えます。設定したプロバイダーのキーとオプションはすべて消え、ここから元に戻せません。"
+        override val searchConfigRestored = "復元しました。ウェブ設定はインストール時の既定値に戻りました。"
+        override val searchConfigFailed = "ウェブ設定を書き込めませんでした。理由はターミナルページにあります。"
 
     }
 
@@ -955,7 +868,7 @@ internal object JapaneseStrings : Strings {
         override val licence =
             "PiKit は GNU 一般公衆利用許諾契約書 第3版 の下で配布される自由ソフトウェアです。" +
                 "GPLv3 の Termux 実行環境と端末エミュレーターを同梱しているため、アプリ全体も GPLv3 です。" +
-                "Pi コーディングエージェントとウェブアクセス拡張は MIT ライセンスです。\n" +
+                "Pi コーディングエージェントは MIT ライセンスで、ウェブ拡張は PiKit 自身の一部です。\n" +
                 "保証はなく、テレメトリーもありません。モデルプロバイダーへの、あなたが行ったリクエストと、" +
                 "エージェント自身が実行する検索以外にデバイスから出るものはありません。"
         override val creditsTitle = "クレジット"
@@ -964,9 +877,7 @@ internal object JapaneseStrings : Strings {
                 "その terminal-emulator と terminal-view がこのアプリの端末を構成しています",
             "JavaScript ランタイム：Node.js（MIT）",
             "エージェント：@earendil-works/pi-coding-agent（MIT）",
-            "ウェブ検索・ページ読み込み・PDF 解析：Nico Bailon の pi-web-access（MIT）。" +
-                "turndown、@mozilla/readability、defuddle、linkedom、unpdf、undici、p-limit、" +
-                "typebox も含まれます",
+            "ウェブ検索・ページ読み込み：PiKit 自身の pikit-web 拡張（GPLv3）",
             "エージェント用に同梱したコマンドラインツール：ripgrep（MIT/Unlicense）と " +
                 "fd（MIT/Apache-2.0）",
             "インターフェース：Jetpack Compose と Miuix（Apache-2.0）、Kotlin と " +

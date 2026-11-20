@@ -86,7 +86,8 @@ class BackupArchiveTest {
             paths.configFile.writeText("""{"profiles":[{"id":"a","apiKey":"sk-live"}],"activeProfileId":"a"}""")
             File(paths.piConfigDir, "models.json").writeText("""{"providers":{"acme":{}}}""")
             File(paths.piConfigDir, "settings.json").writeText("""{"defaultTools":[]}""")
-            File(paths.piConfigDir, "web-search.json").writeText("""{"braveApiKey":"brv-secret"}""")
+            File(paths.home, ".pikit").mkdirs()
+            File(paths.home, ".pikit/web.json").writeText("""{"providers":{"brave":{"apiKey":"brv-secret"}}}""")
             // The two halves, not the composed file: `AGENTS.md` is derived, and an
             // archive that carried it would restore a document whose halves the app
             // would then have to guess at.
@@ -1030,20 +1031,20 @@ class BackupArchiveTest {
     @Test
     fun `a search provider's key comes out and the other options do not`() {
         val source = device("source")
-        File(source.paths.piConfigDir, "web-search.json").writeText(
-            """{"braveApiKey":"brv-secret","fetch":{"timeout":9000},"xaiApiToken":"xai-secret"}""",
+        File(source.paths.home, ".pikit/web.json").writeText(
+            """{"providers":{"brave":{"apiKey":"brv-secret"},"xai":{"apiKey":"xai-secret"}},"fetch":{"maxChars":9000}}""",
         )
         val zip = File(source.root, "out.zip")
         source.export(zip, categories = setOf(BackupCategory.MODELS), includeApiKeys = false)
 
-        val document = entryText(zip, "pi/web-search.json")
+        val document = entryText(zip, "web/web.json")
         assertNotNull(document)
         assertFalse("a key survived", document!!.contains("brv-secret"))
         assertFalse("a key survived", document.contains("xai-secret"))
         assertTrue("an option was lost", document.contains("9000"))
         // The name stays and the value goes, which is what the extension's own
         // schema expects: an absent key means "not configured", and so does "".
-        assertTrue("the field name should still be there", document.contains("braveApiKey"))
+        assertTrue("the field name should still be there", document.contains("apiKey"))
     }
 
     /**
@@ -1054,12 +1055,12 @@ class BackupArchiveTest {
     @Test
     fun `a file the user edited keeps its bytes when the keys are kept`() {
         val source = device("source")
-        val original = "{\n  // mine\n  \"braveApiKey\": \"brv-secret\"\n}\n"
-        File(source.paths.piConfigDir, "web-search.json").writeText(original)
+        val original = "{\n  // mine\n  \"providers\": {\"brave\": {\"apiKey\": \"brv-secret\"}}\n}\n"
+        File(source.paths.home, ".pikit/web.json").writeText(original)
         val zip = File(source.root, "out.zip")
         source.export(zip, categories = setOf(BackupCategory.MODELS), includeApiKeys = true)
 
-        assertEquals(original, entryText(zip, "pi/web-search.json"))
+        assertEquals(original, entryText(zip, "web/web.json"))
         assertTrue("the manifest should say the keys are in it", manifestSaysKeys(zip))
     }
 
@@ -1105,7 +1106,7 @@ class BackupArchiveTest {
      * A document with nothing to strip is copied byte for byte.
      *
      * Re-encoding is the price of redaction, and it is paid only when a redaction
-     * actually takes something out: a `web-search.json` the user formatted themselves
+     * actually takes something out: a `web.json` the user formatted themselves
      * used to come back pretty-printed on every archive written with the keys excluded,
      * which is the reformatting the "copied verbatim" half of the design promises not to
      * do.
@@ -1113,60 +1114,60 @@ class BackupArchiveTest {
     @Test
     fun `a file with nothing to strip keeps its bytes`() {
         val source = device("source")
-        val original = """{"workflow":"none","fetch":{"timeout":9000}}"""
-        File(source.paths.piConfigDir, "web-search.json").writeText(original)
+        val original = """{"enabled":true,"search":{"provider":"auto"}}"""
+        val web = File(source.paths.home, ".pikit").apply { mkdirs() }
+        File(web, "web.json").writeText(original)
         val zip = File(source.root, "out.zip")
         source.export(zip, categories = setOf(BackupCategory.MODELS), includeApiKeys = false)
 
-        assertEquals(original, entryText(zip, "pi/web-search.json"))
+        assertEquals(original, entryText(zip, "web/web.json"))
     }
 
     /**
-     * A credential inside an array is still a credential.
+     * A credential inside a nested object is still a credential.
      *
      * The old walk descended into objects only, so a provider list — which is how the
-     * web-access extension arranges the keys the settings page offers — was carried
-     * untouched. A profile is an element of `profiles` in `pikit-config.json` too, which
-     * is the one file the object-only walk was written for.
+     * web-access extension arranged the keys the settings page offers — was carried
+     * untouched. The current document keeps the keys under `providers`, and the walk
+     * must reach them.
      */
     @Test
-    fun `a key inside an array is stripped as well`() {
+    fun `a key inside a nested provider object is stripped as well`() {
         val source = device("source")
-        File(source.paths.piConfigDir, "web-search.json").writeText(
-            """{"providers":[{"name":"brave","braveApiKey":"brv-nested"}]}""",
+        val web = File(source.paths.home, ".pikit").apply { mkdirs() }
+        File(web, "web.json").writeText(
+            """{"providers":{"brave":{"apiKey":"brv-nested"}}}""",
         )
         val zip = File(source.root, "out.zip")
         source.export(zip, categories = setOf(BackupCategory.MODELS), includeApiKeys = false)
 
-        val document = entryText(zip, "pi/web-search.json")
+        val document = entryText(zip, "web/web.json")
         assertNotNull(document)
-        assertFalse("a key inside an array survived", document!!.contains("brv-nested"))
-        assertTrue("the entry itself was lost", document.contains("\"brave\""))
+        assertFalse("a key inside a nested object survived", document!!.contains("brv-nested"))
+        assertTrue("the provider entry itself was lost", document.contains("\"brave\""))
     }
 
     /**
      * An option that is not a credential survives the redaction.
      *
-     * The web-access page's fake-IP exemption is `ssrf.allowRanges`, an array of CIDRs —
-     * its name contains neither `Key` nor `Token`, and a suffix rule that became a
-     * keyword search later would quietly strip the one setting a phone behind a TUN
-     * proxy needs. Its `[]` (off) is a value rather than an absence, so it has to come
-     * back as a value.
+     * A proxy or a size cap contains neither `Key` nor `Token`, and a suffix rule that
+     * became a keyword search later would quietly strip exactly the settings a phone
+     * behind a proxy needs. Their values have to come back as values.
      */
     @Test
-    fun `a non-secret web-search option survives the keys being stripped`() {
+    fun `a non-secret web option survives the keys being stripped`() {
         val source = device("source")
-        File(source.paths.piConfigDir, "web-search.json").writeText(
-            """{"braveApiKey":"brv-secret","ssrf":{"allowRanges":["198.18.0.0/15"]}}""",
+        File(source.paths.home, ".pikit/web.json").writeText(
+            """{"providers":{"brave":{"apiKey":"brv-secret"}},"fetch":{"maxChars":9000}}""",
         )
         val zip = File(source.root, "out.zip")
         source.export(zip, categories = setOf(BackupCategory.MODELS), includeApiKeys = false)
 
-        val document = entryText(zip, "pi/web-search.json")
+        val document = entryText(zip, "web/web.json")
         assertNotNull(document)
         assertFalse("the key survived", document!!.contains("brv-secret"))
-        assertTrue("the fake-IP exemption was lost", document.contains("allowRanges"))
-        assertTrue("the range itself was lost", document.contains("198.18.0.0/15"))
+        assertTrue("the size cap was lost", document.contains("maxChars"))
+        assertTrue("the provider entry was lost", document.contains("brave"))
     }
 
     private fun manifestSaysKeys(zip: File): Boolean =

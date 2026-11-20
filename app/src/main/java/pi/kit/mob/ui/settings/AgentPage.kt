@@ -624,9 +624,9 @@ private fun InstructionsEditor(
                     saved = false
                     failed = false
                 },
-                // Monospace and small, like the web-search document editor and for the same
-                // reason: this is a document the model reads, its structure is headings and
-                // bullets, and a proportional face hides that.
+                // Monospace and small, like every document editor in the app and for the
+                // same reason: this is a document the model reads, its structure is
+                // headings and bullets, and a proportional face hides that.
                 textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Ascii,
@@ -707,11 +707,10 @@ private fun InstructionsEditor(
 /**
  * The editor's height bounds.
  *
- * The same pair the web-search document editor uses (240/440), and for the same
- * reason: a floor so it reads as a document rather than a field, and a cap so the
- * buttons stay on screen — past the cap the field scrolls itself. The numbers used
- * to be 260/460 here against 240/440 there, which is the report that two editors
- * doing the same job stood at two heights.
+ * A floor so it reads as a document rather than a field, and a cap so the buttons
+ * stay on screen — past the cap the field scrolls itself. The pair was settled by
+ * the app's other long-document editor and is kept here so two editors doing the
+ * same job do not stand at two heights.
  */
 private val EDITOR_MIN_HEIGHT = 240.dp
 private val EDITOR_MAX_HEIGHT = 440.dp

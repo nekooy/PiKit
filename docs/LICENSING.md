@@ -38,11 +38,11 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
 2. **Make the corresponding source available.** That is *this repository*, including
    the scripts under `tools/` that produce the bundled runtime image
    (`build-runtime-image.py`, `prefix_patch.py`, `pikit-relocate.js`,
-   `pikit-dpkg.sh`, `pikit-permissions.ts`, `pikit-chat-prompt.ts`, `storage-self-test.sh`) — and, because the
+   `pikit-dpkg.sh`, `pikit-permissions.ts`, `pikit-chat-prompt.ts`, `pikit-web.ts`,
+   `storage-self-test.sh`) — and, because the
    image is built from upstream sources rather than committed, the versions the
    image was built from, which `tools/build-runtime-image.py` pins (`BOOTSTRAP_TAG`,
-   the `pi` version, the web-access version) and the image's `build-metadata.json`
-   records.
+   the `pi` version) and the image's `build-metadata.json` records.
 3. **Say what changed.** Nothing in the Termux packages or the vendored terminal
    modules is modified beyond the prefix rewrite that relocates them to
    `/data/data/pi.kit.mob/files/usr`; that rewrite and every other edit the builder
@@ -55,7 +55,7 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
 | Termux environment, bootstrap and packages | GPLv3 | [termux/termux-packages](https://github.com/termux/termux-packages) |
 | `terminal-emulator`, `terminal-view` (vendored) | GPLv3 | [termux/termux-app](https://github.com/termux/termux-app) |
 | `@earendil-works/pi-coding-agent` (the agent) | MIT | [earendil-works/pi](https://github.com/earendil-works/pi) |
-| `pi-web-access` | MIT | [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access) |
+| `pikit-web`, `pikit-permissions`, `pikit-chat-prompt` (PiKit's own extensions) | GPLv3 | This repository |
 | Node.js | MIT | [nodejs.org](https://nodejs.org) |
 | ripgrep | MIT / Unlicense | [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep) |
 | fd | MIT / Apache-2.0 | [sharkdp/fd](https://github.com/sharkdp/fd) |
@@ -65,7 +65,6 @@ Credits**, next to the build step that vendors it ([ARCHITECTURE
 | Lucide (the model, thinking, command and check marks) | ISC | [lucide.dev](https://lucide.dev) |
 | Material Symbols (the select-text mark, `ic_select_text.xml`) | Apache-2.0 | [google/material-design-icons](https://github.com/google/material-design-icons) |
 
-The web-access extension resolves a further set of MIT/Apache-licensed packages
-(`turndown`, `@mozilla/readability`, `defuddle`, `linkedom`, `unpdf`, `undici`,
-`p-limit`, `typebox`); they are named in the app's credits for the same reason as
-the rest, because the list is what the licence requires.
+The web extension is PiKit's own source, so it adds no third-party licence
+obligation beyond the repository's GPLv3. Pi's dependency tree is covered by
+the `pi` row above.

@@ -328,17 +328,17 @@ internal data class BackupPaths(
  * ## pi's directory is a tree, not four names
  *
  * `$HOME/.pi/agent` is pi's and its extensions', and this app writes only some of it:
- * `models.json` and `settings.json` (merged on every launch), `web-search.json` (the
- * search page's only writer) and the two `AGENTS` halves. A whitelist of those was a
- * backup that silently dropped everything else the user put there — their own pi
- * extension, a config a newer pi reads — so the directory travels as a tree and only the
- * *derived* names are withheld: the composed `AGENTS.md`, the catalogue cache, and the
- * extension copies the runtime image installs (restoring an older
- * `pikit-permissions.ts` would put a policy back that nothing can switch off until the
- * next content update, §14). The four known files keep their shorter entry names, so an
- * archive written before the tree existed is still read by a build that has it, and a
- * build without the tree skips the extra entries instead of refusing the archive — the
- * format number stays 1 because the change is additive.
+ * `models.json` and `settings.json` (merged on every launch) and the two `AGENTS` halves.
+ * The web extension's own config lives outside it, in `.pikit/web.json`, and has an
+ * entry of its own. A whitelist of those was a backup that silently dropped everything
+ * else the user put there — their own pi extension, a config a newer pi reads — so the
+ * directory travels as a tree and only the *derived* names are withheld: the composed
+ * `AGENTS.md`, the catalogue cache, and the extension copies the runtime image installs
+ * (restoring an older `pikit-permissions.ts` would put a policy back that nothing can
+ * switch off until the next content update, §14). The four known files keep their shorter
+ * entry names, so an archive written before the tree existed is still read by a build
+ * that has it, and a build without the tree skips the extra entries instead of refusing
+ * the archive — the format number stays 1 because the change is additive.
  *
  * ## `$HOME` is owned by categories, and a workspace inside it inherits that
  *
@@ -397,8 +397,8 @@ internal class BackupArchive(
         ),
         FileItem(
             BackupCategory.MODELS,
-            "pi/web-search.json",
-            File(paths.piConfigDir, WEB_SEARCH_FILE),
+            "web/web.json",
+            File(paths.home, WEB_CONFIG_FILE),
             Redaction.SECRETS,
         ),
         FileItem(BackupCategory.SETTINGS, "agent/AGENTS.author.md", paths.agentsAuthorFile),
@@ -501,7 +501,7 @@ internal class BackupArchive(
     private fun skipPiAgentFile(relative: String): Boolean =
         relative in PI_AGENT_OWNED_ELSEWHERE ||
             relative in PI_AGENT_DERIVED ||
-            // PiKit writes an atomic `.tmp` beside `web-search.json`; a backup taken in
+            // PiKit writes an atomic `.tmp` beside a JSON document; a backup taken in
             // that instant carries a half-written file that is not a document.
             relative.endsWith(".tmp")
 
@@ -731,7 +731,7 @@ internal class BackupArchive(
             Redaction.NONE -> root
         }
         // Nothing was taken out, so the file keeps its own bytes, its own indentation and
-        // its own ordering. Without this test a `web-search.json` with no provider key
+        // its own ordering. Without this test a `web.json` with no provider key
         // was re-encoded on every archive with the switch off, which is exactly the
         // reformatting the byte-for-byte half of the design promises not to do.
         if (stripped == root) return@runCatching null
@@ -742,11 +742,10 @@ internal class BackupArchive(
      * Every credential-shaped field in a pi JSON document, blanked.
      *
      * One recipe for the four files rather than a named one each, because they are all
-     * pi's and all hand-editable, and the exact field names are not the thing to pin: a
-     * provider names its key `apiKey`, the web-access extension's table ends every one of
-     * them in `ApiKey` and xAI's in `ApiToken`, and a newer provider adds a field nobody
-     * listed. The suffix match is the same rule the extension's own options table implies
-     * — and unlike a list here it cannot stop covering a file.
+     * hand-editable, and the exact field names are not the thing to pin: a provider names
+     * its key `apiKey`, and a newer provider adds a field nobody listed. The suffix match
+     * is the same rule the web config's own option table implies — and unlike a list here
+     * it cannot stop covering a file.
      *
      * **A `$` reference is not a secret.** `models.json` names the *environment variable*
      * that holds a profile's key (`apiKey: "$PIKIT_KEY_…"`, ARCHITECTURE §6.1), so
@@ -1128,8 +1127,8 @@ internal class BackupArchive(
         /** Where a selected archive is unpacked before any of it is applied. */
         private const val STAGING_DIR_NAME = "backup-staging"
 
-        /** pi's own web-access configuration; the store that owns it spells it too. */
-        private const val WEB_SEARCH_FILE = "web-search.json"
+        /** PiKit's web-extension configuration; the store that owns it spells it too. */
+        private const val WEB_CONFIG_FILE = ".pikit/web.json"
 
         /**
          * The preference files a category is made of, and the keys that are a secret
@@ -1199,7 +1198,8 @@ internal class BackupArchive(
             TermuxEnv.EXPORT_DIR_NAME,
             // Recreated from the platform's grant, never restored (§5).
             StorageAccess.STORAGE_DIR_NAME,
-            // Derived: the permission file and the rendered chat prompt (§14).
+            // Derived: the permission file and the rendered chat prompt, plus the web
+            // config — which has its own FileItem above because it holds provider keys.
             PermissionPolicy.DIR_NAME,
             // The installer's banner, rewritten on every install and update.
             ".termux",
@@ -1229,7 +1229,6 @@ internal class BackupArchive(
         private val PI_AGENT_OWNED_ELSEWHERE = setOf(
             "models.json",
             "settings.json",
-            WEB_SEARCH_FILE,
             AgentContext.FILE_NAME,
             AgentContext.AUTHOR_FILE_NAME,
             AgentContext.USER_FILE_NAME,

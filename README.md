@@ -29,7 +29,7 @@ needed is one that can reach the model provider.
   cache hits are chips above the input, and both switches apply without restarting the
   agent.
 - **Work and chat, two modes per conversation.** Work mode is the full coding agent:
-  pi's prompt, `AGENTS.md`, the bundled web access and seven built-in tools. Chat mode
+  pi's prompt, `AGENTS.md`, the bundled web tools and seven built-in tools. Chat mode
   loads none of that: its leading context is a preset — by default just the current
   time — and a switch can lend the conversation just web search and page fetch. The
   drawer lists each mode's own conversations, and converting one keeps every message.
@@ -93,14 +93,12 @@ source available, `tools/` included. The pi agent itself is MIT.
 
 ## Acknowledgements
 
-PiKit is mostly other people's work. The four it leans on:
+PiKit is mostly other people's work. The main ones:
 
 - **Termux environment and terminal** — GPLv3, from
   [termux/termux-packages](https://github.com/termux/termux-packages) and
   [termux/termux-app](https://github.com/termux/termux-app).
 - **pi, the agent** (`@earendil-works/pi-coding-agent`) — MIT, [pi.dev](https://pi.dev).
-- **`pi-web-access`** by Nico Bailon (search, page reading, PDF extraction) — MIT,
-  [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access).
 - **Everything else** — Node.js and the bundled command-line tools, the Android libraries,
   the formula renderer, the marks — is listed with its licence in
   [docs/LICENSING.md](docs/LICENSING.md) and in the app under **Settings → About PiKit →

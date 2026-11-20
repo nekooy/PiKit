@@ -472,41 +472,37 @@ conversation.
 > runtime again, and packages installed with `pkg`
 > are recorded and put back afterwards.
 
-## 8. Web search
+## 8. Web access
 
 The agent can search the web out of the box.
-**Settings → Search settings** needs no change;
-with no key it searches through Exa's keyless
-endpoint, which may be rate-limited when it is
-busy.
+**Settings → Web access** needs no change: no
+key is required, and **Automatic** tries Exa
+Free, then DuckDuckGo.
 
 ### The controls
 
 | Row | What it sets |
 | --- | --- |
 | Web access | the master switch over searching and page reading |
-| Search workflow | raw results, a summary, or a curator page |
-| Search provider | which service is asked first; **Automatic** tries Exa, then a keyed one |
-| Advanced | inline content limit, fetch timeout, proxy, fake-IP compatibility |
+| Search provider | which service `web_search` asks first |
+| Results per search | how many sources one search returns |
+| Fetch provider | how `web_fetch` retrieves a page; Automatic is direct HTTP |
+| Maximum page characters | where a fetched page is cut |
+| Timeouts | the search and fetch request deadlines |
 
-### The configuration file
+### The provider fields
 
-- **Configuration** lists the keys of
-  `web-search.json` that the controls above do
-  not write.
-- **Add an option or key** picks one and
-  stores a value in the shape it expects; the ✕
-  removes that key only.
-- **A provider's API key and a self-hosted
-  SearXNG address** are added there.
-- **Restore defaults** puts the file back to
-  what a fresh install has.
-- **A file that is not a JSON object** turns
-  the controls into a text editor, and saving
-  valid JSON makes the page editable again.
+- **A provider's key and endpoint** appear
+  directly under the menu that selects it.
+- **Exa Free and DuckDuckGo** need no key.
+- **SearXNG** needs the address of your own
+  instance.
+- **Cloudflare** needs an API key and an
+  account id.
 
-> **Warning:** **Restore defaults** removes every
-> key and option you added, and the page asks first.
+The file is `web.json`, and this page is its
+only writer. **Restore defaults** replaces it
+and asks first.
 
 ## 9. Settings at a glance
 
@@ -517,7 +513,7 @@ tab: five rows in **Essentials** and four in
 | Row | What it holds |
 | --- | --- |
 | Model & provider | provider, endpoint, key, models |
-| Search settings | the web-access switches and its file |
+| Search settings | the web search and fetch settings |
 | Personalization | launch, text size, theme, icon, avatars |
 | Language | English, 简体中文, 日本語 |
 | User manual | this page |
@@ -554,7 +550,7 @@ the one optional tool the reader may lend them.
 | System prompt | pi's role, its tools and calling rules, and its documentation index |
 | Instruction files | the default instructions PiKit writes, then yours, then a project's own |
 | Runtime | model, thinking level, session file, workspace and permission tier |
-| Tools | read, bash, edit, write, grep, find, ls, and the extension's search tools |
+| Tools | read, bash, edit, write, grep, find, ls, `web_search` and `web_fetch` |
 | Conversation | every message and tool result so far |
 
 ### Instructions
@@ -592,8 +588,8 @@ the one optional tool the reader may lend them.
 - **Web access**: the magnifier beside the
   input, off by default and per conversation. On
   lends the conversation `web_search` and
-  `fetch_content` and nothing else; off gives it
-  no tool at all.
+  `web_fetch` and nothing else; off gives it no
+  tool at all.
 - **Mode**: the switch at the drawer's foot
   starts a new conversation in the mode tapped.
   It does not convert the one behind it, and the

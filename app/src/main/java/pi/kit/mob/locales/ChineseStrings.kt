@@ -467,8 +467,8 @@ internal object ChineseStrings : Strings {
                 "仅可查看、工作区内读写或完全访问），以及遥测开关（PI_TELEMETRY=0）。"
         override val agentContextToolsTitle = "工具"
         override val agentContextToolsBody =
-            "pi 自带的 read、bash、edit、write、grep、find、ls，加上 PiKit 装的 web_search、" +
-                "fetch_content、source_check、get_search_content，以及按权限等级拦下工具调用的 " +
+            "pi 自带的 read、bash、edit、write、grep、find、ls，加上 PiKit 内置的 pikit-web " +
+                "扩展提供的 web_search 与 web_fetch，以及按权限等级拦下工具调用的 " +
                 "pikit-permissions。"
         override val agentContextHistoryTitle = "对话历史"
         override val agentContextHistoryBody =
@@ -765,155 +765,73 @@ internal object ChineseStrings : Strings {
         override val updateAvailable = "有新版本可以更新"
         override val updateNoReleases = "还没有发布过版本"
 
-        override val searchTitle = "搜索设置"
-        override val searchSubtitle = "Agent 的联网搜索"
-        override val searchPageSubtitle = "内置的 web-access 扩展"
+        override val searchTitle = "联网搜索"
+        override val searchSubtitle = "让 Agent 搜索网页、读取页面"
+        override val searchPageSubtitle = "pikit-web 扩展：web_search 与 web_fetch"
         override val searchNotBundled =
-            "当前运行环境里没有 web-access 扩展。请先在「维护与修复」中更新运行环境，" +
-                "再回到本页。"
-        override val webAccess = "联网访问"
-        override val webAccessSubtitle = "搜索网页、读取页面、克隆 GitHub 链接"
-        override val searchWorkflow = "搜索流程"
-        override val searchWorkflowSubtitle = "搜索之后做什么"
-        override val workflowNone = "直接返回结果"
-        override val workflowAutoSummary = "自动生成摘要"
-        override val workflowSummaryReview = "在浏览器里审阅"
-        override fun workflowDescription(id: String) = when (id) {
-            "none" -> "搜索结果原样交给模型"
-            "auto-summary" -> "每次搜索先自动摘要，再交给模型"
-            "summary-review" -> "打开审阅页面，逐条确认摘要"
-            else -> ""
-        }
-
-        override val searchProvider = "搜索服务"
-        override val searchProviderSubtitle = "优先询问哪一个搜索服务"
+            "这个运行环境没有联网扩展。先在“维护与修复”里更新运行时，再打开此页。"
+        override val webAccess = "联网搜索"
+        override val webAccessSubtitle = "允许 Agent 搜索网页并读取页面"
+        override val searchSection = "搜索"
+        override val searchProvider = "搜索服务商"
+        override val searchProviderSubtitle = "web_search 优先询问的服务"
         override val providerAutomatic = "自动"
         override fun providerDescription(id: String) = when (id) {
-            "auto" -> "先试 Exa 的免 Key 接口，再试配置了 Key 的服务"
-            // 不需要 Key
-            "exa" -> "无需 Key，有速率限制"
+            "auto" -> "依次尝试 Exa Free、DuckDuckGo，再用第一个配了 Key 的服务商"
+            "deepseek" -> "DeepSeek 搜索 API；需要 Key"
+            "zai" -> "Z.ai 网页搜索；需要 Key，可填区域端点"
+            "exa" -> "Exa 索引；需要 Key"
+            "exa-free" -> "Exa 免费端点；无需 Key，有速率限制"
             "duckduckgo" -> "无需 Key"
-            "searxng" -> "自建实例，地址写在下面的配置文件里"
-            "keenable" -> "Keenable 公开搜索，无需 Key；不会被自动选中"
-            "degoog" -> "元搜索，无需 Key，可指向自建实例；不会被自动选中"
-            "ninerouter" -> "自建 9router；需要地址，Key 可选，不会被自动选中"
-            // 借用已有模型的联网能力
-            "openai" -> "走 OpenAI 的联网搜索"
-            "gemini" -> "走 Gemini 模型的联网搜索"
-            "perplexity" -> "Perplexity 自带搜索"
-            "kimi" -> "走 Kimi 模型的联网搜索"
-            "xai" -> "Grok 的网页与 X 搜索"
-            "mistral" -> "Mistral 的联网搜索工具"
-            "ollama" -> "Ollama Cloud 的搜索"
-            // 需要 Key 的搜索接口
-            "brave" -> "需要 Brave Search 的 Key"
-            "tavily" -> "需要 Tavily 的 Key"
-            "jina" -> "需要 Jina 的 Key"
-            "firecrawl" -> "需要 Firecrawl 的 Key"
-            "serper" -> "需要 Serper 的 Key"
-            "serpapi" -> "需要 SerpApi 的 Key"
-            "serpbase" -> "需要 SerpBase 的 Key"
-            "serply" -> "Google 结果；需要 Serply 的 Key，且不会被自动选中"
-            "kagi" -> "需要 Kagi 的 Key"
-            "valyu" -> "需要 Valyu 的 Key"
-            "bocha" -> "需要 Bocha 的 Key"
-            "querit" -> "需要 Querit 的 Key"
-            "search1api" -> "需要 Search1API 的 Key"
-            "searchinfinity" -> "需要 Searchinfinity 的 Key"
-            "tinyfish" -> "需要 TinyFish 的 Key"
-            "parallel" -> "需要 Parallel 的 Key"
-            "parallel-mcp" -> "Parallel，走它的 MCP 接口"
-            "baizhi" -> "百炼 MCP；显式选择才会使用"
-            "anysearch" -> "需要 AnySearch 的 Key"
-            "xcrawl" -> "需要 XCrawl 的 Key"
-            "brightdata" -> "需要 Bright Data 的 Key 和 Zone 名称"
-            "serpdive" -> "需要 SERPdive 的 Key，可选检索深度"
-            "you" -> "You.com 索引；需要 Key，且不会被自动选中"
-            "zai" -> "Z.ai web_search_prime MCP；需要 Key 和端点（国际或中国）"
-            "ceramic" -> "Ceramic 关键词搜索；需要 Key，且不会被自动选中"
-            "deepseek" -> "DeepSeek 自己的搜索接口；需要 Key，且不会被自动选中"
-            "linkup" -> "Linkup 搜索；需要 Key，且不会被自动选中"
-            "cloudflare" -> "Cloudflare 搜索；需要 Key 和账户 ID，不会被自动选中"
-            "searchapi" -> "SearchApi 的 Google 结果；需要 Key，不会被自动选中"
-            "tabstack" -> "Tabstack 研究；返回带引用的答案，需要 Key，不会被自动选中"
+            "tavily" -> "Tavily 搜索与正文提取；需要 Key"
+            "ollama" -> "Ollama Cloud 搜索与页面抓取；需要 Key"
+            "brave" -> "Brave Search；需要 Key"
+            "jina" -> "Jina 搜索与阅读器；无 Key 也可用，速率较低"
+            "openai" -> "OpenAI 托管网页搜索；需要 Key"
+            "gemini" -> "Gemini + Google Search 接地；需要 Key"
+            "kimi" -> "Kimi 搜索 API；需要 Key"
+            "xai" -> "Grok 网页搜索；需要 Key"
+            "searxng" -> "你自己的 SearXNG 实例；需要填地址"
+            "cloudflare" -> "Cloudflare Web Search；需要 Key 与账户 ID"
+            "searchapi" -> "通过 SearchAPI 获取 Google 结果；需要 Key"
+            "direct" -> "直接 HTTP；无需 Key、不带 Cookie、不执行 JavaScript"
             else -> ""
         }
-
-        override val inlineContentLimit = "内联内容上限（字符）"
-        override val fetchTimeout = "抓取超时（秒）"
         override fun searchProviderFootnote(count: Int) =
-            "扩展支持的全部 $count 个搜索服务，按它自己的优先顺序排列；" +
-                "每个服务仍需对应的 Key，见下面的配置文件。"
-
-        override val searchConfig = "配置项"
-        override val searchConfigAdd = "添加配置项或 Key"
-        override val searchConfigAddBody = "选一项键名并填入值"
-        override val searchConfigPickTitle = "扩展可读的配置项"
-        override val searchConfigPickSearch = "筛选配置项"
-        override val searchConfigPickFootnote =
-            "内置扩展能读的全部键，每一项下面写明它的作用。值会按该项期望的形式保存：" +
-                "文字存成字符串，开关存成 true/false，数字存成数字。"
-        override fun searchConfigValueTitle(path: String) = path
-        override val searchConfigValueLabel = "取值"
-        override val searchConfigValueNote =
-            "文字直接输入，不用加引号（会存成 JSON 字符串）；开关填 `true` 或 `false`；" +
-                "数字填 `50`；结构化取值填 JSON，例如 `{\"host\": \"my-box.ts.net\"}`。"
-        override val searchConfigValueInvalid =
-            "这个取值该项不接受。文字不用加引号；开关填 `true` 或 `false`；数字填 `50`；" +
-                "其他情况请填 JSON。"
-        override val searchConfigValueAdd = "添加"
-        override val searchConfigRemoveAction = "移除"
-        override fun searchConfigRemove(path: String) = "移除 $path"
-        override val searchConfigRemoved = "已移除"
-        override val searchConfigRemoveTitle = "移除这个配置项？"
-        override fun searchConfigRemoveBody(path: String) =
-            "将从 web-search.json 中移除 `$path`，文件里其他键保持原样。"
-        override val searchConfigInEffect = "生效"
-        override val searchConfigHeader =
-            "联网访问的配置（web-search.json）。\n" +
-                "标着 [生效] 的行会写进文件，扩展真的会用。\n" +
-                "其余带 // 的行只是说明和示例，没有生效。\n" +
-                "启用一行：删掉行首的 //，\n" +
-                "必要时给上一行补一个逗号，再按保存。\n" +
-                "注释不会被保存（扩展只认严格 JSON）。\n" +
-                "整段被注释掉的配置（如 searchRouting），\n" +
-                "要连大括号一起取消注释。"
-        override val searchConfigInvalid =
-            "这还不是一个 JSON 对象，没有保存。检查是否漏了逗号或引号；注释和结尾多余的逗号没关系。"
-        override val searchConfigSaved = "已保存"
-        override val searchConfigFailed = "文件写入失败，原因见终端页。"
-        override val searchConfigRestored =
-            "已恢复。文件回到刚安装时的内容，之前配置过的内容都不在了。"
-        override val searchConfigSave = "保存"
-        override val searchConfigRevert = "撤销修改"
-        override val searchConfigRestore = "恢复默认"
-        override val searchConfigRestoreSubtitle = "换回安装时的默认配置"
-        override val searchConfigRestoreTitle = "恢复默认配置文件？"
-        override val searchConfigRestoreBody =
-            "会用刚安装时的内容替换 web-search.json：你填过的 API Key 和所有自定义项都会从文件里消失，" +
-                "而且在这里无法撤销。"
+            "扩展支持的全部 $count 个搜索服务商。带 Key 的服务商要先在下方填好 Key 才能回答。"
+        override val searchMaxResults = "每次搜索的结果数"
+        override val searchMaxResultsSubtitle = "1 到 50，默认 8"
+        override val fetchSection = "抓取"
+        override val fetchProvider = "抓取服务商"
+        override val fetchProviderSubtitle = "web_fetch 如何获取页面"
+        override val fetchAutomatic = "自动（直接 HTTP）"
+        override val fetchDirect = "直接 HTTP"
+        override val fetchMaxChars = "页面最大字符数"
+        override val fetchMaxCharsSubtitle = "超出这个长度的页面会被截断"
+        override val networkSection = "网络"
+        override val searchTimeout = "搜索超时（秒）"
+        override val searchTimeoutSubtitle = "单次搜索请求的时限"
+        override val fetchTimeout = "抓取超时（秒）"
+        override val fetchTimeoutSubtitle = "单次抓取请求的时限"
+        override val providerNeedsKey = "这个服务商需要先填 Key 才能回答。"
+        override val providerApiKey = "API Key"
+        override val providerApiKeySubtitle = "保存在 web.json；设置同名环境变量也可以"
+        override val providerBaseUrl = "端点"
+        override val providerBaseUrlSubtitle = "留空使用服务商的默认地址"
+        override val providerBaseUrlRequired = "必填：这个服务商运行在你自己的实例上"
+        override val providerAccountId = "账户 ID"
+        override val providerAccountIdSubtitle = "Cloudflare 搜索计费所属的账户"
+        override val providerModel = "模型"
+        override val providerModelSubtitle = "留空使用扩展的默认模型"
         override val searchConfigUnreadable =
-            "web-search.json 不是 JSON 对象，所以上面的控件都隐藏了：它们会从这个应用读不懂的文件出发去写，" +
-                "而这个文件很可能正是你手写的。注释和结尾多余的逗号都可以，缺一个大括号不行。" +
-                "这里没有改动任何内容。修改或替换下面的文本并保存，这一页就会恢复可编辑。"
-
-        override val searchProxy = "代理"
-        override val searchProxySubtitle = "填写后会作为联网访问的代理"
-
-        override val searchAdvanced = "高级"
-        override val searchAdvancedSubtitle = "内联内容上限、抓取超时、代理和 Fake-IP 兼容"
-        override val searchFakeIpProxy = "Fake-IP 代理兼容"
-        override val searchFakeIpProxySubtitle =
-            "TUN / fake-IP 代理会把域名解析到 198.18.0.0/15，扩展的地址检查默认会拒绝这段地址。" +
-                "开启后由 PiKit 把这项豁免（ssrf.allowRanges）写进配置文件。"
-        override val searchProviderNeedsConfigTitle = "这个服务还需要配置"
-        override fun searchProviderNeedsConfigBody(provider: String, keys: List<String>) =
-            "「$provider」要先有 ${keys.joinToString("、")} 才能用：内置扩展从它自己的配置文件里读取这些项。" +
-                "回到搜索设置页，打开下面的「添加配置项或 Key」并按名字搜索这一项，值填在那个编辑框里，" +
-                "不是在这个弹窗里输入。"
-        override val searchAdvancedUnreadable =
-            "web-search.json 不是 JSON 对象，所以这里的控件都隐藏了。回到搜索设置页，" +
-                "在那一页的编辑器里把文本改好即可。"
+            "web.json 不是这个应用写出的文档，所以控件都隐藏了。下方的“恢复默认”会替换它；目前还没有改动任何内容。"
+        override val searchConfigRestore = "恢复默认"
+        override val searchConfigRestoreSubtitle = "回到安装时的默认值"
+        override val searchConfigRestoreTitle = "要替换联网搜索配置吗？"
+        override val searchConfigRestoreBody =
+            "这会把 web.json 换成全新安装时的文档。你设置的所有服务商 Key 和选项都会消失，且无法从这里撤销。"
+        override val searchConfigRestored = "已恢复。联网搜索配置回到了安装默认值。"
+        override val searchConfigFailed = "联网搜索配置写入失败。原因见终端页。"
 
     }
 
@@ -927,7 +845,7 @@ internal object ChineseStrings : Strings {
         override val licenceTitle = "许可证"
         override val licence =
             "PiKit 是自由软件，以 GNU 通用公共许可证第 3 版发布。它打包了同为 GPLv3 的 " +
-                "Termux 运行环境与终端模拟器，因此整个应用也是 GPLv3；Pi 编程 Agent 与联网访问扩展都是 MIT 许可。\n" +
+                "Termux 运行环境与终端模拟器，因此整个应用也是 GPLv3；Pi 编程 Agent 是 MIT 许可，联网扩展则是 PiKit 自己的一部分。\n" +
                 "没有担保，也没有遥测：除了你主动向模型供应商发起的请求，以及 Agent 自己执行的搜索之外，" +
                 "不会有任何数据离开设备。"
         override val creditsTitle = "致谢"
@@ -936,9 +854,7 @@ internal object ChineseStrings : Strings {
                 "terminal-view 两个包构成本应用的终端",
             "JavaScript 运行时：Node.js（MIT）",
             "Agent：@earendil-works/pi-coding-agent（MIT）",
-            "联网搜索、读取网页与 PDF 解析：Nico Bailon 的 pi-web-access（MIT），" +
-                "并包含 turndown、@mozilla/readability、defuddle、linkedom、unpdf、undici、" +
-                "p-limit 和 typebox",
+            "联网搜索、读取网页与 PDF 解析：PiKit 自带的 pikit-web 扩展（GPLv3）",
             "为 Agent 内置的命令行工具：ripgrep（MIT/Unlicense）与 fd（MIT/Apache-2.0）",
             "界面：Jetpack Compose 与 Miuix（Apache-2.0）、Kotlin 与 " +
                 "kotlinx.serialization（Apache-2.0）、Okio（Apache-2.0）",

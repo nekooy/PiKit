@@ -6217,7 +6217,7 @@ private fun ContextMenu(session: PiAgentSession, text: Strings) {
  * on the theory that the registry is an extension point and a hard-coded list goes
  * stale. The theory is right and the rows were still wrong, and the reader named
  * them: `/websearch`, `/curator`, `/google-account`, `/search`, `/llama` — the ones
- * the bundled web-access extension registers. They are not commands this app can
+ * the web-access extension PiKit used to bundle registered. They are not commands this app can
  * run. Several of them open a *review page* in pi's own terminal UI and never
  * return over RPC; one manages a `llama.cpp` router this app does not ship. Tapping
  * one sent the line to pi as a prompt and the answer was, at best, a paragraph

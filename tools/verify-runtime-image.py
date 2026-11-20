@@ -48,11 +48,10 @@ def load_image_builder():
     Loads the image builder by path, because its file name is not a module name.
 
     Only its declarations are read — what a vendored tree drops ([VENDOR_JUNK_DIRS],
-    [VENDOR_JUNK_FILES], [VENDOR_JUNK_SUFFIXES]), the per-tree extras ([PI_DROPS],
-    [WEB_ACCESS_DROPS]) and the one exception ([WEB_ACCESS_DOCS]) — and the predicate
-    they feed, so that the check below states the rule the builder applied instead of a
-    second copy of it. A copy is how a check and its subject drift apart while both look
-    right, which is the failure this whole file exists to catch.
+    [VENDOR_JUNK_FILES], [VENDOR_JUNK_SUFFIXES]), the per-tree extra ([PI_DROPS]) —
+    and the predicate they feed, so that the check below states the rule the builder
+    applied instead of a second copy of it. A copy is how a check and its subject drift
+    apart while both look right, which is the failure this whole file exists to catch.
     """
     import importlib.util
 
@@ -151,18 +150,6 @@ DOCUMENTED_TREES = (
         (),
         "pi-hoisted",
     ),
-    # The extension's cache root is the project directory the image installs as
-    # `lib/node_modules/pikit-extensions`, which is why one path is relative to the
-    # other: its drops and its kept README are written against that root. The two
-    # share a layout, so there is no map.
-    (
-        "pi-web-access",
-        "lib/node_modules/pikit-extensions",
-        ".runtime-build/cache/web-access",
-        BUILDER.WEB_ACCESS_DROPS,
-        BUILDER.WEB_ACCESS_DOCS,
-        None,
-    ),
 )
 
 #: Documentation the image must carry even where there is no cache to compare against:
@@ -174,7 +161,6 @@ DOCUMENTED_TREES = (
 ANCHOR_DOCUMENTS = (
     "lib/node_modules/@earendil-works/pi-coding-agent/docs/index.md",
     "lib/node_modules/@earendil-works/pi-coding-agent/docs/docs.json",
-    "lib/node_modules/pikit-extensions/node_modules/pi-web-access/README.md",
 )
 
 SYMLINK_SEPARATOR = "\u2190"
@@ -669,9 +655,8 @@ def files_in(root: Path) -> set[str] | None:
     extraction produces a regular file — so the two sides of the comparison describe the
     same entry in different forms. Excluding symlinks here made a *cold CI cache* report
     the six `.bin` entries as files the image has and the tree does not
-    (`node_modules/.bin/esbuild` and friends, five in pi's tree and one in the
-    extension's), while a Windows build host, whose cache has no symlink in that
-    directory at all, passed the same check.
+    (`node_modules/.bin/esbuild` and friends, six in pi's tree), while a Windows build
+    host, whose cache has no symlink in that directory at all, passed the same check.
     """
     if not root.is_dir():
         return None
@@ -805,36 +790,36 @@ def check_abi(abi: str, flavor: str) -> bool:
             f"{path} DT_RUNPATH is {runpath!r}",
         )
 
-    # pi must be the real CLI, not an empty stub. Both it and the extension live
+    # pi must be the real CLI, not an empty stub; it and the web extension live
     # in the content layer — the part an app update point-replaces.
     cli = image.read(
         content, "lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js"
     )
     report(cli is not None and len(cli) > 100, "pi CLI entry point is present and non-trivial")
 
-    # The bundled extension's `pi.extensions` is the image's decision, not npm's:
-    # the published package points at `./dist`, which pi's compact list names
-    # `dist`. See `WEB_ACCESS_ENTRY` in the builder.
-    web_access_manifest = image.read(
-        content, "lib/node_modules/pikit-extensions/node_modules/pi-web-access/package.json"
+    # PiKit's own web extension is a tiny package: its manifest has to name the
+    # entry file, and the app reads the metadata beside it to find that entry for
+    # chat mode's explicit `--extension`.
+    web_manifest = image.read(
+        content, "lib/node_modules/pikit-extensions/node_modules/pikit-web/package.json"
     )
     entry_ok = False
-    if web_access_manifest is not None:
+    if web_manifest is not None:
         try:
             import json as _json
 
-            pi_manifest = _json.loads(web_access_manifest).get("pi") or {}
-            entry_ok = pi_manifest.get("extensions") == [f"./{BUILDER.WEB_ACCESS_ENTRY}"]
+            pi_manifest = _json.loads(web_manifest).get("pi") or {}
+            entry_ok = pi_manifest.get("extensions") == [f"./{BUILDER.WEB_EXTENSION_ENTRY}"]
         except Exception:
             entry_ok = False
     report(
         entry_ok,
-        "the web-access package's pi.extensions names "
-        f"./{BUILDER.WEB_ACCESS_ENTRY} (so the plugin list says pi-web-access, not dist)",
+        "the pikit-web package's pi.extensions names "
+        f"./{BUILDER.WEB_EXTENSION_ENTRY}",
     )
 
     # What the reader has no other copy of (§3): the structure first, then *everything*
-    # the vendored tree holds and the rule keeps — documents, `examples/`, the extension's
+    # the vendored pi tree holds and the rule keeps — documents, `examples/`, pi's
     # TypeScript, all of it. Both halves come from the builder, `vendor_junk` being the
     # predicate the trim itself deletes by, so the check cannot disagree with the build
     # about what ships and a release that adds a file expects it of the image without a

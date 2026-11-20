@@ -123,8 +123,8 @@ IMAGE_FILES = (
 #: [image_input_manifest_errors] reads the builder's own source and reports any repository
 #: file it pulls in that this list does not name.
 IMAGE_INPUTS = (
-    # The recipe itself: the bootstrap tag and package set, the pi and web-access versions,
-    # and the rewrite pass.
+    # The recipe itself: the bootstrap tag and package set, the pi pin, and the
+    # rewrite pass.
     "tools/build-runtime-image.py",
     "tools/prefix_patch.py",
     # The pinned product versions. Its own file because it is hashed into the content
@@ -136,6 +136,7 @@ IMAGE_INPUTS = (
     "tools/pikit-dpkg.sh",
     "tools/pikit-permissions.ts",
     "tools/pikit-chat-prompt.ts",
+    "tools/pikit-web.ts",
     "tools/storage-self-test.sh",
 )
 
@@ -389,7 +390,7 @@ def image_builder_prerequisites() -> list[str]:
 
     if shutil.which("npm") is None:
         missing.append(
-            "npm (the image builder vendors pi and the bundled web-access extension with it)"
+            "npm (the image builder vendors pi with it)"
         )
 
     try:
@@ -606,7 +607,7 @@ def run_tests() -> bool:
     # Gradle's.
     checks = [
         ("the runtime images", lambda: python_tool("verify-runtime-image.py")),
-        # The rule that decides whether the agent's manual — and the extension's only
+        # The rule that decides whether the agent's manual — and the rest of pi's
         # documentation — reaches the phone at all. It is a `keep` argument and one
         # `unlink` away from being silently wrong, and a device shows nothing when it
         # is: the chapters are simply absent, which is how they went missing.
@@ -648,6 +649,11 @@ def run_tests() -> bool:
             "the chat context",
             lambda: node_tool("test-chat-context.mjs", flags=("--experimental-strip-types",)),
         ),
+        # The web extension's pure half: the config document the app writes, the
+        # HTML cleaner that must drop active content, and the provider parsers whose
+        # response shapes all differ. It loads the file through pi's own jiti, so a
+        # syntax or import mistake fails here rather than on a phone.
+        ("the web extension", lambda: node_tool("test-web-extension.mjs")),
         # The README's icon is a second copy of the launcher icon, which is a thing
         # that drifts: nothing about editing the vector would remind anyone that the
         # picture at the top of the README is now wrong. Cheap (it reads two files)
@@ -677,13 +683,19 @@ def run_tests() -> bool:
             log(f"skip {name}: no pi bundle under .runtime-build/cache/pi, which the image "
                 "builder fills")
             continue
-        # The chat-context audit needs the pid bundle *and* the vendored web-access tree,
-        # because the two are what a chat launch is made of.
+        # The web extension's checker loads the TypeScript through the vendored jiti.
+        if name == "the web extension" and not (
+            REPO_ROOT / ".runtime-build" / "cache" / "pi"
+        ).is_dir():
+            log(f"skip {name}: no pi bundle under .runtime-build/cache/pi, which the image "
+                "builder fills")
+            continue
+        # The chat-context audit needs the pi bundle, because what a chat launch is
+        # made of is pi plus this repository's own extensions.
         if name == "the chat context" and not (
-            (REPO_ROOT / ".runtime-build" / "cache" / "pi").is_dir()
-            and (REPO_ROOT / ".runtime-build" / "cache" / "web-access").is_dir()
-        ):
-            log(f"skip {name}: no pi bundle or web-access tree under .runtime-build/cache, "
+            REPO_ROOT / ".runtime-build" / "cache" / "pi"
+        ).is_dir():
+            log(f"skip {name}: no pi bundle under .runtime-build/cache, "
                 "which the image builder fills")
             continue
         runnable.append((name, check))

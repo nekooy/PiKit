@@ -13,9 +13,12 @@ import kotlinx.serialization.json.jsonPrimitive
  * The image cannot run `pi install npm:…`: that needs npm and a network at a
  * moment the app may be offline, it installs into the user's own `$HOME`, and the
  * version would drift with whatever npm resolved that day. So the package is
- * vendored under `$PREFIX` and registered in pi's settings by absolute path —
+ * staged under `$PREFIX` and registered in pi's settings by absolute path —
  * pi's *local path* package source, which loads it through the package's own
  * `pi` manifest.
+ *
+ * `pikit-web` is the one extension this describes today. It has no dependencies:
+ * the package is the manifest and one TypeScript file.
  *
  * [directory] is resolved from [TermuxEnv.prefix] because the metadata file
  * stores the path *relative* to the prefix: an absolute path would bake this
@@ -32,7 +35,7 @@ data class BundledExtension(
 
     companion object {
         /** Where the build writes this extension's metadata, relative to `$PREFIX`. */
-        const val METADATA = "share/pikit/web-access.json"
+        const val METADATA = "share/pikit/web.json"
 
         /** The `pi.extensions` entry of the bundled package. */
         const val ENTRY_POINT = "index.ts"
@@ -176,8 +179,8 @@ class TermuxEnv private constructor(context: Context) {
     val piConfigDir: File = File(home, ".pi/agent")
 
     /**
-     * The web-access extension that ships inside the runtime image, or null when
-     * this runtime does not carry one.
+     * The web extension that ships inside the runtime image, or null when this
+     * runtime does not carry one.
      *
      * Read from metadata the image build writes, not hard-coded here: the path
      * inside `$PREFIX` and the version are the build's business, and a runtime
@@ -185,7 +188,7 @@ class TermuxEnv private constructor(context: Context) {
      * report rather than a path this app assumes exists. A metadata file whose
      * directory has gone is treated as absent for the same reason.
      */
-    val webAccessExtension: BundledExtension? by lazy {
+    val webExtension: BundledExtension? by lazy {
         runCatching {
             val metadata = File(prefix, BundledExtension.METADATA)
             if (!metadata.isFile) return@runCatching null

@@ -81,13 +81,11 @@ Termux 运行环境和它的终端模拟器，两者都是 GPLv3，所以分发�
 
 ## 致谢
 
-APK 里的大部分东西都是别人的工作，最主要的是这四项：
+APK 里的大部分东西都是别人的工作，最主要的是这几项：
 
 - **Termux 运行环境与终端**——GPLv3，来自
   [termux/termux-packages](https://github.com/termux/termux-packages) 和
   [termux/termux-app](https://github.com/termux/termux-app)。
 - **pi，即 Agent**（`@earendil-works/pi-coding-agent`）——MIT，[pi.dev](https://pi.dev)。
-- **`pi-web-access`**（Nico Bailon；联网搜索、读取网页、解析 PDF）——MIT，
-  [nicobailon/pi-web-access](https://github.com/nicobailon/pi-web-access)。
 - 其余的——Node.js 与内置命令行工具、Android 各种库、公式排版、图标——都连同许可证
   列在 [docs/LICENSING.md](docs/LICENSING.md) 和应用的 **设置 → 关于 PiKit → 致谢** 里。

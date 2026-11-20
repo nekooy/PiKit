@@ -4,7 +4,7 @@
 
 PiKit has two agents, and the choice is a launch mode rather than a skin over one
 process. **Work mode** is the agent this app has always had: pi's coding-assistant
-prompt, `AGENTS.md`, the bundled web-access extension, and the seven built-in tools.
+prompt, `AGENTS.md`, the bundled web extension, and the seven built-in tools.
 **Chat mode** is a plain conversation: before its first message the only instruction text
 is one editable system-prompt document — or nothing at all when that document is empty —
 and pi starts with every source of ambient resources switched off.
@@ -119,7 +119,7 @@ agent is started with:
 | Flag | What it closes |
 | --- | --- |
 | `--no-tools` | every built-in, extension, custom and MCP tool |
-| `--no-extensions` | discovered, configured and built-in extensions (including the bundled web-access package) |
+| `--no-extensions` | discovered, configured and built-in extensions (including the bundled web package) |
 | `--no-skills` | discovered and configured skills |
 | `--no-prompt-templates` | discovered and configured templates |
 | `--no-context-files` | `AGENTS.md` and `CLAUDE.md` discovery |
@@ -251,12 +251,11 @@ conversation with no record — including every one written before the default m
 therefore starts off.
 
 On, the launch passes a **strict allowlist** of two names —
-`--tools web_search,fetch_content` — and loads the bundled web-access extension by an
+`--tools web_search,web_fetch` — and loads the bundled `pikit-web` extension by an
 explicit `--extension` beside `--no-extensions`. Off, it passes `--no-tools`, the mode's
-original promise. The extension registers four tools (search, source-check, fetch,
-stored-result retrieval); a chat reply is meant to look something up, and the other two
-are research machinery for the work agent, so the allowlist is what makes "only search
-and fetch" true rather than aspirational.
+original promise. The extension registers exactly those two tools; the allowlist is
+restated because chat mode cannot inherit discovery, and it is what makes "only search and
+fetch" true rather than aspirational.
 
 The whole thing is measured, not inferred. `tools/test-chat-context.mjs` runs the
 vendored pi against a local OpenAI-compatible endpoint that records the request, with a
@@ -264,11 +263,11 @@ preset marker in place of the prompt and an `AGENTS.md` in the working directory
 
 - switch off: **0 tools**, and the only system message is the preset's text byte for
   byte — no `<cwd>`, no `AGENTS.md`, no pi preamble;
-- switch on: **exactly `fetch_content` and `web_search`**, and the same system text.
+- switch on: **exactly `web_search` and `web_fetch`**, and the same system text.
 
 `build-apks.py` runs that audit beside the prompt-extension test, skipping cleanly when
-the build cache has no pi or web-access tree. A settings-file way to disable the other
-tools was rejected: `web-search.json` is one file for the app, and the switch is per
+the build cache has no pi bundle or web extension. A settings-file way to disable the other
+tools was rejected: `web.json` configures the extension, and the switch is per
 conversation. Always-on was rejected because the clean context is the mode's promise; a
 UI-only switch was rejected for the reason the mode itself was: the tools are declared in
 the request, and a switch that changed no request would be a picture of a decision.

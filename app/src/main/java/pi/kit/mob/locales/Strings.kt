@@ -359,11 +359,11 @@ interface Strings {
         //
         // The list these describe used to be pi's own `get_commands` registry plus
         // these, and there was a `commandDescription(name, fallback)` here to
-        // translate the registry's English. It is gone with the rows: everything the
-        // bundled web-access extension registers — `/websearch`, `/curator`,
-        // `/google-account`, `/search`, `/llama` — needs an interactive terminal to
-        // do anything, so a row for one was a control that could not act. See
-        // `CommandSheet`.
+        // translate the registry's English. It is gone with the rows: the web-access
+        // extension PiKit used to bundle registered `/websearch`, `/curator`,
+        // `/google-account`, `/search` and `/llama`, each of which needs an interactive
+        // terminal to do anything, so a row for one was a control that could not act.
+        // See `CommandSheet`.
 
         val commandNew: String
         val commandCompact: String
@@ -1681,7 +1681,7 @@ interface Strings {
          * backup; off is for one that is going to be handed to someone else, and
          * the caption says so rather than leaving the user to work it out. What it
          * takes out per file is `BackupArchive`'s business — a key in a profile, a
-         * key in the web-access extension's options — and the answer travels in the
+         * provider key in `web.json` — and the answer travels in the
          * archive's manifest, so the reader of an archive someone else made is told
          * which of the two they have instead of inferring it from an empty field.
          */
@@ -1940,233 +1940,64 @@ interface Strings {
         /** A repository that exists and has published nothing, which is its state before the first release. */
         val updateNoReleases: String
 
-        // Search settings: the `pi-web-access` extension PiKit bundles for the
-        // agent. Its options live in pi's own `$HOME/.pi/agent/web-search.json`
-        // rather than in this app's preferences, so that the file pi reads and the
-        // page the user edits cannot disagree — see `pi/WebSearchStore.kt`.
+        // Web access: PiKit's own `pikit-web` extension. The page is generated from
+        // `pi/WebSearchStore.kt`'s provider table; the file it writes is
+        // `$HOME/.pikit/web.json`.
         val searchTitle: String
         val searchSubtitle: String
         val searchPageSubtitle: String
-
         val searchNotBundled: String
         val webAccess: String
         val webAccessSubtitle: String
-        val searchWorkflow: String
-        val searchWorkflowSubtitle: String
-        val workflowNone: String
-        val workflowAutoSummary: String
-        val workflowSummaryReview: String
 
-        /** What each workflow does, as a picker entry's second line. */
-        fun workflowDescription(id: String): String
+        /** The search section: provider menu and result count. */
+        val searchSection: String
         val searchProvider: String
         val searchProviderSubtitle: String
-
-        /** The label for "let the extension choose", on both pickers. */
         val providerAutomatic: String
-
-        /** What each search provider is, as a picker entry's second line. */
         fun providerDescription(id: String): String
-
-        /**
-         * The line under the provider picker that says the list is the extension's
-         * own, and how long it is.
-         *
-         * It used to be eleven rows, presented without comment, which read as "these
-         * are the providers" — so a user of Kagi or Serper had no way to tell that
-         * their service was supported and simply not listed.
-         */
         fun searchProviderFootnote(count: Int): String
+        val searchMaxResults: String
+        val searchMaxResultsSubtitle: String
 
-        val inlineContentLimit: String
+        /** The fetch section: provider menu and page-size cap. */
+        val fetchSection: String
+        val fetchProvider: String
+        val fetchProviderSubtitle: String
+        val fetchAutomatic: String
+        val fetchDirect: String
+        val fetchMaxChars: String
+        val fetchMaxCharsSubtitle: String
+
+        /** The network section: the two request timeouts. */
+        val networkSection: String
+        val searchTimeout: String
+        val searchTimeoutSubtitle: String
         val fetchTimeout: String
+        val fetchTimeoutSubtitle: String
 
-        /**
-         * The configuration section: the file *and* the way to add to it.
-         *
-         * The extension reads around eighty keys and the page draws controls for
-         * six. This section is where the rest live. It used to be a text editor of
-         * the whole document — the documentation and the configuration in one box —
-         * and it was replaced by a list plus one button, because the box demanded
-         * that the user write JSON to set one API key: know the key's name, know
-         * whether its value wants quotes, and keep the commas straight.
-         *
-         * The list is the file's own keys that the controls above do not own, and
-         * the button adds one from the extension's documented options.
-         */
-        val searchConfig: String
+        /** The selected provider's own fields, drawn directly under its menu. */
+        val providerNeedsKey: String
+        val providerApiKey: String
+        val providerApiKeySubtitle: String
+        val providerBaseUrl: String
+        val providerBaseUrlSubtitle: String
+        val providerBaseUrlRequired: String
+        val providerAccountId: String
+        val providerAccountIdSubtitle: String
+        val providerModel: String
+        val providerModelSubtitle: String
 
-        /**
-         * The button that opens the option picker; its title names the *key* as well
-         * as the option.
-         *
-         * The word is the one this section already uses everywhere else: the caption
-         * under the title is "pick a key and give it a value", the picker lists the
-         * extension's keys, and the row it appends to the list is a key with a value.
-         * A title that named only the option described what the row does to the
-         * configuration while the control it opens asks which key — so a reader who
-         * knows the key they want (that is the name the extension's own documentation
-         * gives them) had to open the button to find out whether it was the one that
-         * sets it.
-         */
-        val searchConfigAdd: String
+        /** The file exists but is not the document this build writes. */
+        val searchConfigUnreadable: String
 
-        /**
-         * The add button's one-line caption.
-         *
-         * The row used to be a bare title with a chevron, which read as a menu entry
-         * rather than as an action and did not match the app's one other "add a
-         * thing" row — the storage page's add-a-folder, which says what the picker
-         * it opens is for. This is that sentence, in this page's terms.
-         */
-        val searchConfigAddBody: String
-
-        /** The picker's title and its filter field's placeholder. */
-        val searchConfigPickTitle: String
-        val searchConfigPickSearch: String
-
-        /** The muted line under the option list. */
-        val searchConfigPickFootnote: String
-
-        /** The sheet's heading; `path` names the key being set. */
-        fun searchConfigValueTitle(path: String): String
-
-        /** The value field's own label, next to the key the sheet is about. */
-        val searchConfigValueLabel: String
-
-        /** What the value field is for, under the field. */
-        val searchConfigValueNote: String
-
-        /** Shown when the text typed is not a value the option's type accepts. */
-        val searchConfigValueInvalid: String
-
-        /** The confirm button on the value sheet. */
-        val searchConfigValueAdd: String
-
-        /** The confirm button on the removal dialog: it says what it does. */
-        val searchConfigRemoveAction: String
-
-        /** The ✕ on a row of the list; `path` names the key it removes. */
-        fun searchConfigRemove(path: String): String
-
-        /** Confirms a removal. */
-        val searchConfigRemoved: String
-
-        /** The removal's own confirmation, asked before the key is dropped. */
-        val searchConfigRemoveTitle: String
-        fun searchConfigRemoveBody(path: String): String
-
-        /**
-         * The comment block at the top of the document PiKit renders.
-         *
-         * Lines, not a paragraph: the renderer prefixes each with `//`, so a
-         * newline in this string is a new comment line and a `\n` inside a sentence
-         * would end the comment early.
-         *
-         * It is the document's legend, and the one place the marker below is
-         * explained: what a line without `//` means, what the marker means, how to
-         * turn an option on, and the two traps (the comma, and a whole block whose
-         * braces have to be uncommented with it).
-         */
-        val searchConfigHeader: String
-
-        /**
-         * The marker in front of an option that is in the file, e.g. `[in effect]`.
-         *
-         * Inside the rendered document, in brackets, in front of the key's path —
-         * `// [in effect] fetch.timeout — …`. It is what answers "which of these
-         * lines are actually configured?" without the reader having to notice the
-         * `//`, and it is written only for the keys that are in the file: a tag on
-         * every line would be no clearer than the `//` and would push every
-         * description further right in a box about 46 columns wide.
-         *
-         * Keep it short — it costs its columns on each live line — and expect
-         * [searchConfigHeader] to name it.
-         */
-        val searchConfigInEffect: String
-
-        /** Shown under the editor while its text is not a JSON object. */
-        val searchConfigInvalid: String
-        val searchConfigSaved: String
-        val searchConfigFailed: String
-        val searchConfigRestored: String
-        val searchConfigSave: String
-        val searchConfigRevert: String
-
-        /**
-         * Puts the document a fresh install has back into the file.
-         *
-         * Destructive, so the page asks first with [searchConfigRestoreTitle] and
-         * [searchConfigRestoreBody]: everything the user configured — including
-         * every API key — goes with it.
-         *
-         * Its own section, and its own action: it is not one more key in the list
-         * above it, it is the one control that touches them all. [searchConfigRestore]
-         * labels that section and the row inside it, [searchConfigRestoreSubtitle] is
-         * the row's caption and [searchConfigRestoreBody] the dialog's.
-         */
+        /** Restore defaults: destructive, so the page asks first. */
         val searchConfigRestore: String
         val searchConfigRestoreSubtitle: String
         val searchConfigRestoreTitle: String
         val searchConfigRestoreBody: String
-
-        /**
-         * The file exists and is not a JSON object.
-         *
-         * Every control above this note is hidden while it is true — they would all
-         * be writing from a file they could not read — so the note has to say that
-         * the editor is the way out rather than leaving the page looking broken.
-         */
-        val searchConfigUnreadable: String
-
-        val searchProxy: String
-        val searchProxySubtitle: String
-
-        /**
-         * The row that opens the Advanced sub-page: the inline-content limit, the
-         * fetch timeout, the proxy, and the fake-IP switch.
-         *
-         * The three fetch parameters were rows of the search page itself and are one
-         * level down now, because the page had become a list of everything the
-         * extension reads rather than a list of the choices a reader makes. The
-         * summary names what is behind the row, so opening it is not a guess.
-         */
-        val searchAdvanced: String
-        val searchAdvancedSubtitle: String
-
-        /**
-         * The Advanced page's switch over `ssrf.allowRanges`.
-         *
-         * Not "SSRF": the reader's problem is a TUN/fake-IP proxy the extension's
-         * address check refuses, and the switch's job is to say that in the words
-         * they know. The summary says what the range is, that the check refuses it,
-         * and that PiKit writes the exemption — that is the whole mechanism, and the
-         * key it writes can be named because the extension's own error names it.
-         */
-        val searchFakeIpProxy: String
-        val searchFakeIpProxySubtitle: String
-
-        /**
-         * The dialog raised after a provider that needs configuration is chosen.
-         *
-         * [provider] is the extension's own id (a product name, untranslated) and
-         * [keys] are the configuration keys its modules document for it; the body
-         * names them and says the value goes into the "add an option or key" editor,
-         * not into the dialog. The dialog appears *after* the choice lands, so the
-         * provider stays selected while the reader is told what it still needs.
-         */
-        val searchProviderNeedsConfigTitle: String
-        fun searchProviderNeedsConfigBody(provider: String, keys: List<String>): String
-
-        /**
-         * The Advanced page's answer to a file that is not a JSON object.
-         *
-         * The search page's note ([searchConfigUnreadable]) ends "fix the text below",
-         * because the editor is below it there; the Advanced page has no editor, so its
-         * note points back at the page that does rather than describing a box that is
-         * not on this page.
-         */
-        val searchAdvancedUnreadable: String
+        val searchConfigRestored: String
+        val searchConfigFailed: String
 
     }
 

@@ -203,9 +203,9 @@ class ToolDefaultsTest {
     // ---------------------------------------------------- the bundled extension
 
     private val extension = BundledExtension(
-        name = "pi-web-access",
+        name = "pikit-web",
         version = "1.0.0",
-        directory = File("/data/data/pi.kit.mob/files/usr/lib/node_modules/pi-web-access"),
+        directory = File("/data/data/pi.kit.mob/files/usr/lib/node_modules/pikit-extensions/node_modules/pikit-web"),
     )
 
     private fun JsonObject.packages(): List<String> =
@@ -279,5 +279,20 @@ class ToolDefaultsTest {
         val result = withExtension(existing)
 
         assertEquals(JsonPrimitive("npm:pi-something"), result["packages"])
+    }
+
+    @Test
+    fun `the retired web-access package path is removed`() {
+        val retired = "/data/data/pi.kit.mob/files/usr/lib/node_modules/pikit-extensions"
+
+        val result = settingsWithPiDefaults(
+            settings("""{"packages":["npm:pi-something","$retired"]}"""),
+            tools,
+            PiSettings(),
+            bundledExtension = extension,
+            retiredExtensionPath = retired,
+        )
+
+        assertEquals(listOf("npm:pi-something", extension.directory.absolutePath), result.packages())
     }
 }
