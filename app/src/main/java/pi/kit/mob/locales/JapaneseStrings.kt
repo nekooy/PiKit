@@ -518,6 +518,7 @@ internal object JapaneseStrings : Strings {
         override val provider = "プロバイダー"
         override val providerSubtitle = "このプロファイルのプロバイダーを選択します"
         override val providerPickSearch = "プロバイダーを検索"
+        override fun pickNothingMatches(query: String) = "「$query」に一致する項目はありません。"
         override val modelPickSearch = "モデルを検索"
         override fun keyPassedAs(envVar: String) = "環境変数 $envVar"
         override val notChosen = "未選択"

@@ -11,13 +11,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -39,6 +44,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.WindowInfo
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -56,6 +64,7 @@ import top.yukonga.miuix.kmp.glass.GlassBottomSheet
 import top.yukonga.miuix.kmp.glass.GlassDialog
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
@@ -146,6 +155,60 @@ fun PiConfirm(
 }
 
 /**
+ * A custom-content dialog with the same material split as [PiConfirm].
+ *
+ * A page that has a backdrop gets Miuix's [GlassDialog]; a caller above every page —
+ * the first-launch prompts and pi's questions — keeps [WindowDialog], which needs no
+ * `Scaffold` host. Screens with a body that is not a sentence (a language list, an
+ * avatar crop, a workspace picker, a failure body) use this rather than writing the
+ * split at each call site: the direct [GlassDialog] call is checked to live only in
+ * this file, and a call site that reaches for `WindowDialog` while a page backdrop
+ * exists is the opaque-window bug the split exists to avoid.
+ *
+ * `insideMargin` is shared by both branches because a dialog whose content is full
+ * bleed needs the same answer from both materials; the default is Miuix's own.
+ */
+@Composable
+fun PiCustomDialog(
+    show: Boolean,
+    title: String?,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    insideMargin: DpSize = DialogDefaults.insideMargin,
+    onDismissFinished: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    val backdrop = LocalPiBackdrop.current
+    if (backdrop != null) {
+        GlassDialog(
+            show = show,
+            backdrop = backdrop,
+            modifier = modifier,
+            title = title,
+            summary = summary,
+            insideMargin = insideMargin,
+            onDismissRequest = onDismissRequest,
+            onDismissFinished = onDismissFinished,
+        ) {
+            content()
+        }
+    } else {
+        WindowDialog(
+            show = show,
+            modifier = modifier,
+            title = title,
+            summary = summary,
+            insideMargin = insideMargin,
+            onDismissRequest = onDismissRequest,
+            onDismissFinished = onDismissFinished,
+        ) {
+            content()
+        }
+    }
+}
+
+/**
  * The answer row every dialog in the app draws.
  *
  * ## One shape, stated once
@@ -199,6 +262,7 @@ fun PiDialogAnswers(
                 onClick = onDismiss,
                 modifier = Modifier.weight(1f),
                 role = GlassDialogButtonRole.Normal,
+                cornerRadius = PiCorner.radius,
             ) {
                 Text(text = dismiss, style = MiuixTheme.textStyles.button)
             }
@@ -221,6 +285,7 @@ fun PiDialogAnswers(
                     } else {
                         GlassDialogButtonRole.Primary
                     },
+                    cornerRadius = PiCorner.radius,
                 ) {
                     Text(text = confirm, style = MiuixTheme.textStyles.button)
                 }
@@ -448,6 +513,12 @@ fun PiToastProvider(content: @Composable () -> Unit) {
                     color = MiuixTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    // The toast is the app's only transient message, and it is not a
+                    // focusable control: without a polite live region a screen reader
+                    // never hears "Saved" or "Copied" at all.
+                    modifier = Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                    },
                 )
             }
         }
@@ -488,7 +559,14 @@ private val TOAST_MAX_WIDTH = 420.dp
  */
 @Composable
 fun piSheetBottomInset(): Dp =
-    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    // `systemBars` carries the caption bar as well as the navigation bar, and the
+    // display cutout can be on a short edge in a freeform window: a sheet whose last
+    // row only clears `navigationBars` can sit under the caption bar in either case.
+    WindowInsets.systemBars
+        .union(WindowInsets.displayCutout)
+        .only(WindowInsetsSides.Bottom)
+        .asPaddingValues()
+        .calculateBottomPadding()
 
 /**
  * The window, as the composition has measured it rather than as the platform reports it.

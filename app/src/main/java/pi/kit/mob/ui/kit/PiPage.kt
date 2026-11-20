@@ -104,6 +104,18 @@ fun PiPage(
      */
     contentScrolled: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
+    /**
+     * Windows that belong to this page: its sheets, questions and custom dialogs.
+     *
+     * They are composed here rather than after the `PiPage` call because this is the
+     * only place that owns both halves of the glass contract: [LocalPiBackdrop] is
+     * provided, and the layer that value records is the page body rather than the
+     * controls that sample it. A `PiSheet` or `PiConfirm` written after `PiPage`
+     * returns sees no page backdrop and silently falls back to the opaque Miuix
+     * window; one written here keeps the OS4 material and the page's own
+     * `GlassDialog`/`GlassBottomSheet` exit animation.
+     */
+    overlay: @Composable () -> Unit = {},
     body: @Composable (PaddingValues) -> Unit,
 ) {
     if (onBack != null) {
@@ -190,14 +202,14 @@ fun PiPage(
         // The body is also the page's glass layer: the bar above it samples this subtree,
         // so cards and rows scrolling under the bar are what the material blurs. The layer
         // stops at the bar because a bar inside it would sample its own output.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier),
+        CompositionLocalProvider(
+            LocalPiBackdrop provides pageBackdrop,
+            LocalPiNavigationInset provides padding.calculateBottomPadding(),
         ) {
-            CompositionLocalProvider(
-                LocalPiBackdrop provides pageBackdrop,
-                LocalPiNavigationInset provides padding.calculateBottomPadding(),
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier),
             ) {
                 body(
                     PaddingValues(
@@ -208,6 +220,9 @@ fun PiPage(
                     ),
                 )
             }
+            // Outside the recorded body on purpose: a sheet or dialog that sampled a
+            // layer containing itself is the RenderThread stack overflow in docs/UI.md.
+            overlay()
         }
     }
 }

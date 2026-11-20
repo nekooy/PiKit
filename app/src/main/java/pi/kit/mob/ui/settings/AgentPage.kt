@@ -11,17 +11,21 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -46,7 +50,6 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
-import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
@@ -57,7 +60,8 @@ import pi.kit.mob.ui.rememberWorkspaceList
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -177,6 +181,8 @@ internal fun AgentPage(
         subtitle = agentDescription(agent, text),
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        overlay = {
+        },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -208,8 +214,9 @@ internal fun AgentPage(
                     // The name alone: this row *is* the default, so `（默认）` would be the
                     // sentence saying the default is the default. The mark lives in the
                     // list, which is where a reader compares one workspace to another.
+                    // The subtitle already names it; a trailing value repeated the same
+                    // word twice on one row.
                     summary = text.settings.defaultWorkspaceSubtitle(defaultWorkspaceName),
-                    endActions = { SettingsValue(defaultWorkspaceName) },
                     onClick = { choosingWorkspace = true },
                 )
             }
@@ -312,124 +319,6 @@ internal fun AgentPage(
         }
     }
 
-    PiSheet(
-        show = showContext,
-        title = text.settings.agentContextSection,
-        onDismiss = { showContext = false },
-    ) {
-        // The lead sentence is the row's own subtitle, which the sheet's title has no
-        // slot for; the five points are what the row promised.
-        Text(
-            text = text.settings.agentContextLead,
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                // Bounded and scrolled: five prose blocks are taller than a sheet may
-                // grow, and the sheet's own ceiling is the status bar. A plain Column
-                // rather than a lazy list, because these are paragraphs rather than
-                // rows and a lazy list here would be measured against a bounded height
-                // for no benefit.
-                //
-                // The sheet body is where the page would be, so it takes the page's
-                // elastic end — on the four-point phone these notes still fit.
-                .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
-                .piOverScroll()
-                .verticalScroll(rememberScrollState())
-                // Inside the scroll, so the last paragraph travels clear of the gesture
-                // strip and the sheet's own fill still reaches the window's edge.
-                .padding(bottom = piSheetBottomInset()),
-        ) {
-            ContextPoint(1, text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
-            ContextPoint(
-                2,
-                text.settings.agentContextInstructionsTitle,
-                text.settings.agentContextInstructionsBody,
-            )
-            ContextPoint(3, text.settings.agentContextRuntimeTitle, text.settings.agentContextRuntimeBody)
-            ContextPoint(4, text.settings.agentContextToolsTitle, text.settings.agentContextToolsBody)
-            ContextPoint(5, text.settings.agentContextHistoryTitle, text.settings.agentContextHistoryBody)
-        }
-    }
-
-    PiSheet(
-        show = editingDocument != null,
-        title = if (lastDocument == InstructionsDocument.Author) {
-            text.settings.agentContextAuthorTitle
-        } else {
-            text.settings.agentContextUserTitle
-        },
-        onDismiss = { editingDocument = null },
-    ) {
-        InstructionsEditor(document = lastDocument, session = session, text = text)
-    }
-
-    WorkspaceDialog(
-        show = choosingWorkspace,
-        text = text,
-        workspaces = workspaces,
-        home = session.env.homePath,
-        defaultPath = defaultWorkspacePath,
-        // One window at a time: the picker is opened *after* the question closes, and
-        // its answer comes back through the same row when the folder is added.
-        onAdd = {
-            choosingWorkspace = false
-            showWorkspacePicker = true
-        },
-        onRemove = { path -> WorkspaceStore.remove(context, session.env, path) },
-        onPick = { path ->
-            choosingWorkspace = false
-            session.settingsStore.update { it.copy(defaultWorkspace = path) }
-        },
-        onDismiss = { choosingWorkspace = false },
-    )
-
-    PiSheet(
-        show = showWorkspacePicker,
-        title = text.chat.workspacePickerTitle,
-        onDismiss = { showWorkspacePicker = false },
-    ) {
-        WorkspacePickerSheet(
-            text = text,
-            home = session.env.homePath,
-            // The phone's storage: `/sdcard`, when the device has one. A workspace may
-            // live there — it is an ordinary folder once "all files access" is granted,
-            // and the tier's writable root is the workspace, not the page of switches
-            // that used to stand between them (§14).
-            shared = StorageAccess.sharedPath(session.env),
-            existing = rememberWorkspacePaths(context, session.env),
-            granted = StorageAccess.isGranted(),
-            onGrant = {
-                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
-                Unit
-            },
-            onAdd = { folder ->
-                val added = WorkspaceStore.add(context, session.env, folder)
-                val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason
-                val workspace = when {
-                    added.getOrNull() != null -> added.getOrNull()
-                    // Already in the list: the reader picked the folder they want to be
-                    // the default, and it already is a workspace.
-                    reason == WorkspaceRefusal.DUPLICATE ->
-                        WorkspaceStore.list(context, session.env).firstOrNull { it.path == folder }
-
-                    else -> null
-                }
-                if (workspace != null) {
-                    showWorkspacePicker = false
-                    // A folder added from *this* page is the one the reader wants new
-                    // conversations to start in: the row they came from is the default.
-                    session.settingsStore.update { it.copy(defaultWorkspace = workspace.path) }
-                    null
-                } else {
-                    reason?.let { text.chat.workspaceRefusal(it) }
-                }
-            },
-        )
-    }
 }
 
 /**
@@ -576,13 +465,24 @@ private fun InstructionsEditor(
             InstructionsDocument.User -> AgentContext.userFile(session.env)
         }
     }
-    var draft by remember(session, document) {
-        mutableStateOf(
+    // State-based because the editor is a glass sheet: beta02's `GlassTextField` is
+    // the field drawn for that material, and its state overload is the API new fields
+    // start from. `saved`/`failed` follow the text through a snapshotFlow rather than
+    // an `onValueChange` the state overload does not have.
+    val draftState = remember(session, document) {
+        TextFieldState(
             runCatching { file.readText() }.getOrElse { AgentContext.default(session.env) },
         )
     }
+    val draft = draftState.text.toString()
     var saved by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(draftState) {
+        snapshotFlow { draftState.text }.collect {
+            saved = false
+            failed = false
+        }
+    }
 
     Column(
         Modifier
@@ -623,14 +523,8 @@ private fun InstructionsEditor(
                 )
             }
         } else {
-            TextField(
-                cornerRadius = PiCorner.radius,
-                value = draft,
-                onValueChange = {
-                    draft = it
-                    saved = false
-                    failed = false
-                },
+            GlassTextField(
+                state = draftState,
                 // Monospace and small, like every document editor in the app and for the
                 // same reason: this is a document the model reads, its structure is
                 // headings and bullets, and a proportional face hides that.
@@ -641,9 +535,12 @@ private fun InstructionsEditor(
                     // sentence that tells the agent to run something that does not exist.
                     autoCorrectEnabled = false,
                 ),
-                maxLines = Int.MAX_VALUE,
+                lineLimits = TextFieldLineLimits.MultiLine(),
+                cornerRadius = PiCorner.radius,
                 // No focus ring, and the caret stated instead: see `piFieldColors`.
-                colors = piFieldColors(),
+                colors = GlassTextFieldDefaults.textFieldColors(
+                    borderColor = Color.Transparent,
+                ),
                 cursorBrush = piFieldCursor(),
                 modifier = Modifier
                     .fillMaxWidth()

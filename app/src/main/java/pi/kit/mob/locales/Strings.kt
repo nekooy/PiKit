@@ -1297,6 +1297,9 @@ interface Strings {
          * provider picker beside it is searchable.
          */
         val modelPickSearch: String
+
+        /** What a filtered picker says when no row matches its query. */
+        fun pickNothingMatches(query: String): String
         fun keyPassedAs(envVar: String): String
         val notChosen: String
         val apiKey: String

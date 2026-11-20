@@ -61,6 +61,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -186,7 +188,6 @@ import pi.kit.mob.ui.chat.SEND_IMAGE_MAX_EDGE
 import pi.kit.mob.ui.chat.dimensionNote
 import pi.kit.mob.ui.chat.prepareImageForSend
 import pi.kit.mob.ui.chat.PromptPictures
-import pi.kit.mob.ui.chat.ROW_SHAPE
 import pi.kit.mob.ui.chat.ReasoningBlock
 import pi.kit.mob.ui.chat.ReasoningToggle
 import pi.kit.mob.ui.chat.ToolCallRow
@@ -219,6 +220,8 @@ import pi.kit.mob.ui.kit.rememberPiBackdrop
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.basic.Card
@@ -1312,6 +1315,129 @@ internal fun ChatScreen(
                 },
                 onOpenTerminal = onOpenTerminal,
                 onOpenFiles = onOpenFiles,
+                overlay = {
+                    // The same question for a workspace switch: pi's working directory is fixed at
+                    // launch, so the switch is a relaunch, and a relaunch ends the answer in flight.
+                    PiConfirm(
+                        show = pendingWorkspace != null,
+                        title = text.sessions.switchInterruptTitle,
+                        text = text.sessions.switchInterruptBody,
+                        confirm = text.sessions.switchInterruptConfirm,
+                        dismiss = text.common.cancel,
+                        destructive = true,
+                        onConfirm = {
+                            val target = pendingWorkspace
+                            pendingWorkspace = null
+                            if (target != null) {
+                                session.selectWorkspace(target, interrupt = true)
+                                composer.notice = null
+                            }
+                        },
+                        onDismiss = { pendingWorkspace = null },
+                    )
+
+                    // The two report sheets and the prompt's extras, in Miuix's own window sheets.
+                    // They are drawn here rather than inside the band that opens them: a sheet is a
+                    // window of its own, and one composed inside the composer would be measured
+                    // against the band's bounds instead of the screen's.
+                    //
+                    // The context report is **not** one of them any more. It was a bottom sheet of
+                    // fourteen two-line rows — a page-sized panel for a question the reader asks by
+                    // glancing at a number — while every other menu on this page is a dropdown at its
+                    // own chip. It is a dropdown now, for the reason §7.1 gives: a menu that answers
+                    // one question belongs at the control that asks it.
+                    //
+                    // The extras sheet is closed by `showPromptExtras` rather than by clearing the
+                    // value, so the panel still has its own content for the length of its exit.
+                    PiSheet(
+                        show = openSheet == ComposerSheet.Shell,
+                        title = null,
+                        onDismiss = ::closeSheet,
+                    ) {
+                        ShellCommandSheet(
+                            text = text,
+                            onRun = { line ->
+                                closeSheet()
+                                if (line.isNotBlank()) {
+                                    // A shell line that runs a command this page asked for:
+                                    // `runBash` puts the output in the transcript as a notice,
+                                    // which is the same path the `!` prefix in the composer takes.
+                                    follow.enable()
+                                    session.runBash(line)
+                                }
+                            },
+                        )
+                    }
+
+                    PiSheet(
+                        show = showPromptExtras,
+                        title = text.chat.extrasTitle,
+                        onDismiss = { showPromptExtras = false },
+                    ) {
+                        promptExtras?.let { PromptExtrasSheet(extras = it, text = text) }
+                    }
+
+                    // A prompt's pictures, full screen. The window is composed while it has a target and
+                    // driven by `show`: a window that animates out is composed while it leaves, and the
+                    // target is what it draws for the length of that exit — the same contract every Miuix
+                    // window in this app has (§13).
+                    pictures?.let { target ->
+                        PictureViewer(
+                            show = viewerUp,
+                            target = target,
+                            text = text,
+                            onDismiss = { viewerUp = false },
+                            onDismissFinished = { pictures = null },
+                        )
+                    }
+
+                    // The folder picker. Its own sheet rather than a row of the workspace menu: a menu
+                    // answers "which one", and this asks "where is the one that is not in the list yet".
+                    PiSheet(
+                        show = showWorkspacePicker,
+                        title = text.chat.workspacePickerTitle,
+                        onDismiss = { showWorkspacePicker = false },
+                    ) {
+                        WorkspacePickerSheet(
+                            text = text,
+                            home = session.env.homePath,
+                            // The phone's storage: `/sdcard`, when the device has one. A workspace may
+                            // live there — it is an ordinary folder once "all files access" is granted,
+                            // and the tier's writable root is the workspace, not the page of switches
+                            // that used to stand between them (§14).
+                            shared = StorageAccess.sharedPath(session.env),
+                            existing = rememberWorkspacePaths(context, session.env),
+                            granted = StorageAccess.isGranted(),
+                            onGrant = {
+                                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
+                                Unit
+                            },
+                            onAdd = { folder ->
+                                val added = WorkspaceStore.add(context, session.env, folder)
+                                val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason
+                                val workspace = when {
+                                    added.getOrNull() != null -> added.getOrNull()
+                                    // Already in the list is not a failure: the folder is a workspace, and
+                                    // what the reader asked for is to work in it.
+                                    reason == WorkspaceRefusal.DUPLICATE ->
+                                        WorkspaceStore.list(context, session.env).firstOrNull { it.path == folder }
+
+                                    else -> null
+                                }
+                                if (workspace != null) {
+                                    // Added *and* switched to: a folder the reader just picked is the one
+                                    // they want to work in, and making them tap it again in the menu is the
+                                    // second half of one decision.
+                                    showWorkspacePicker = false
+                                    selectWorkspace(workspace.path)
+                                    null
+                                } else {
+                                    reason?.let { text.chat.workspaceRefusal(it) }
+                                }
+                            },
+                        )
+                    }
+                },
             )
         }
 
@@ -1341,127 +1467,6 @@ internal fun ChatScreen(
             )
         }
 
-    }
-    // The same question for a workspace switch: pi's working directory is fixed at
-    // launch, so the switch is a relaunch, and a relaunch ends the answer in flight.
-    PiConfirm(
-        show = pendingWorkspace != null,
-        title = text.sessions.switchInterruptTitle,
-        text = text.sessions.switchInterruptBody,
-        confirm = text.sessions.switchInterruptConfirm,
-        dismiss = text.common.cancel,
-        destructive = true,
-        onConfirm = {
-            val target = pendingWorkspace
-            pendingWorkspace = null
-            if (target != null) {
-                session.selectWorkspace(target, interrupt = true)
-                composer.notice = null
-            }
-        },
-        onDismiss = { pendingWorkspace = null },
-    )
-
-    // The two report sheets and the prompt's extras, in Miuix's own window sheets.
-    // They are drawn here rather than inside the band that opens them: a sheet is a
-    // window of its own, and one composed inside the composer would be measured
-    // against the band's bounds instead of the screen's.
-    //
-    // The context report is **not** one of them any more. It was a bottom sheet of
-    // fourteen two-line rows — a page-sized panel for a question the reader asks by
-    // glancing at a number — while every other menu on this page is a dropdown at its
-    // own chip. It is a dropdown now, for the reason §7.1 gives: a menu that answers
-    // one question belongs at the control that asks it.
-    //
-    // The extras sheet is closed by `showPromptExtras` rather than by clearing the
-    // value, so the panel still has its own content for the length of its exit.
-    PiSheet(
-        show = openSheet == ComposerSheet.Shell,
-        title = null,
-        onDismiss = ::closeSheet,
-    ) {
-        ShellCommandSheet(
-            text = text,
-            onRun = { line ->
-                closeSheet()
-                if (line.isNotBlank()) {
-                    // A shell line that runs a command this page asked for:
-                    // `runBash` puts the output in the transcript as a notice,
-                    // which is the same path the `!` prefix in the composer takes.
-                    follow.enable()
-                    session.runBash(line)
-                }
-            },
-        )
-    }
-
-    PiSheet(
-        show = showPromptExtras,
-        title = text.chat.extrasTitle,
-        onDismiss = { showPromptExtras = false },
-    ) {
-        promptExtras?.let { PromptExtrasSheet(extras = it, text = text) }
-    }
-
-    // A prompt's pictures, full screen. The window is composed while it has a target and
-    // driven by `show`: a window that animates out is composed while it leaves, and the
-    // target is what it draws for the length of that exit — the same contract every Miuix
-    // window in this app has (§13).
-    pictures?.let { target ->
-        PictureViewer(
-            show = viewerUp,
-            target = target,
-            text = text,
-            onDismiss = { viewerUp = false },
-            onDismissFinished = { pictures = null },
-        )
-    }
-
-    // The folder picker. Its own sheet rather than a row of the workspace menu: a menu
-    // answers "which one", and this asks "where is the one that is not in the list yet".
-    PiSheet(
-        show = showWorkspacePicker,
-        title = text.chat.workspacePickerTitle,
-        onDismiss = { showWorkspacePicker = false },
-    ) {
-        WorkspacePickerSheet(
-            text = text,
-            home = session.env.homePath,
-            // The phone's storage: `/sdcard`, when the device has one. A workspace may
-            // live there — it is an ordinary folder once "all files access" is granted,
-            // and the tier's writable root is the workspace, not the page of switches
-            // that used to stand between them (§14).
-            shared = StorageAccess.sharedPath(session.env),
-            existing = rememberWorkspacePaths(context, session.env),
-            granted = StorageAccess.isGranted(),
-            onGrant = {
-                runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
-                Unit
-            },
-            onAdd = { folder ->
-                val added = WorkspaceStore.add(context, session.env, folder)
-                val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason
-                val workspace = when {
-                    added.getOrNull() != null -> added.getOrNull()
-                    // Already in the list is not a failure: the folder is a workspace, and
-                    // what the reader asked for is to work in it.
-                    reason == WorkspaceRefusal.DUPLICATE ->
-                        WorkspaceStore.list(context, session.env).firstOrNull { it.path == folder }
-
-                    else -> null
-                }
-                if (workspace != null) {
-                    // Added *and* switched to: a folder the reader just picked is the one
-                    // they want to work in, and making them tap it again in the menu is the
-                    // second half of one decision.
-                    showWorkspacePicker = false
-                    selectWorkspace(workspace.path)
-                    null
-                } else {
-                    reason?.let { text.chat.workspaceRefusal(it) }
-                }
-            },
-        )
     }
 }
 
@@ -1759,6 +1764,18 @@ private fun ChatPage(
     onSelectWorkspace: (String) -> Unit,
     onOpenWorkspacePicker: () -> Unit,
     onSend: () -> Unit,
+    /**
+     * The page's own windows — the workspace-switch question, the shell and extras
+     * sheets, the picture viewer and the folder picker.
+     *
+     * Chat draws its own frame instead of using `PiPage`, so it owns the same
+     * backdrop contract: these windows are composed inside the page's
+     * [LocalPiBackdrop] provider but outside the recorded transcript, which is what
+     * keeps `PiConfirm`/`PiSheet` on the OS4 glass path instead of the opaque window
+     * fallback. They are still declared by `ChatScreen` because that is where their
+     * state lives; this slot is only the composition point.
+     */
+    overlay: @Composable () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -1965,55 +1982,6 @@ private fun ChatPage(
     // gesture — the same moment a held conversation row in the drawer answers.
     val haptics = LocalPiHaptics.current
 
-    // The Markdown source of the message, in a sheet of its own: what the reader asked
-    // for when they chose "select text" is the *text*, not a selection mode they then have
-    // to discover. Everything here is selectable and copyable without a second gesture.
-    //
-    // The subject is held through the exit: `show` follows `sourceFor`, but the content
-    // reads the last non-null value, or dismissing clears the one thing the leaving sheet
-    // draws and its 200 ms exit plays over an empty panel (docs/UI.md, *Dialogs, sheets*).
-    var sourceShown by remember { mutableStateOf<ChatItem?>(null) }
-    if (sourceFor != null) sourceShown = sourceFor
-    val sourceItem = sourceShown
-    PiSheet(
-        show = sourceFor != null,
-        title = text.chat.selectText,
-        onDismiss = { sourceFor = null },
-    ) {
-        if (sourceItem != null) {
-            val source = itemSource(sourceItem)
-            val sourceClipboard = messageClipboard
-            val sourceScope = messageScope
-            val sourceToast = messageToasts
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    // The sheet's own edge is the window's; the copy row clears the
-                    // gesture strip itself (docs/UI.md, *Dialogs, sheets*).
-                    .padding(bottom = 12.dp + piSheetBottomInset()),
-            ) {
-                SelectionContainer {
-                    Text(
-                        text = source,
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 420.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(12.dp),
-                    )
-                }
-                MessageAction(text.chat.copyMessage, icon = MiuixIcons.Copy) {
-                    sourceScope.launch {
-                        sourceClipboard.setClipEntry(clipEntryFor(source))
-                    }
-                    sourceToast?.show(text.chat.copied)
-                }
-            }
-        }
-    }
 
     // The page, and the layer its bar floats on.
     //
@@ -2577,7 +2545,10 @@ private fun ChatPage(
                             // A notice is a strip, not a form: the button sits inside
                             // it at the strip's own scale rather than at a button's
                             // 40dp minimum, which would make the notice as tall as the
-                            // field under it.
+                            // field under it. The corner is the kit's, so the 28dp
+                            // control still belongs to the same shape family as the
+                            // 40dp buttons around it.
+                            cornerRadius = PiCorner.radius,
                             minHeight = 28.dp,
                             insideMargin = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             textStyle = MiuixTheme.textStyles.footnote1,
@@ -2706,6 +2677,58 @@ private fun ChatPage(
             modifier = Modifier.align(Alignment.TopCenter),
         )
         }
+
+        // The Markdown source of the message, in a sheet of its own: what the reader asked
+        // for when they chose "select text" is the *text*, not a selection mode they then have
+        // to discover. Everything here is selectable and copyable without a second gesture.
+        //
+        // The subject is held through the exit: `show` follows `sourceFor`, but the content
+        // reads the last non-null value, or dismissing clears the one thing the leaving sheet
+        // draws and its 200 ms exit plays over an empty panel (docs/UI.md, *Dialogs, sheets*).
+        var sourceShown by remember { mutableStateOf<ChatItem?>(null) }
+        if (sourceFor != null) sourceShown = sourceFor
+        val sourceItem = sourceShown
+        PiSheet(
+            show = sourceFor != null,
+            title = text.chat.selectText,
+            onDismiss = { sourceFor = null },
+        ) {
+            if (sourceItem != null) {
+                val source = itemSource(sourceItem)
+                val sourceClipboard = messageClipboard
+                val sourceScope = messageScope
+                val sourceToast = messageToasts
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        // The sheet's own edge is the window's; the copy row clears the
+                        // gesture strip itself (docs/UI.md, *Dialogs, sheets*).
+                        .padding(bottom = 12.dp + piSheetBottomInset()),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = source,
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 420.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(12.dp),
+                        )
+                    }
+                    MessageAction(text.chat.copyMessage, icon = MiuixIcons.Copy) {
+                        sourceScope.launch {
+                            sourceClipboard.setClipEntry(clipEntryFor(source))
+                        }
+                        sourceToast?.show(text.chat.copied)
+                    }
+                }
+            }
+        }
+
+        overlay()
     }
 }
 
@@ -4139,7 +4162,6 @@ private fun MessageMeta(
 private fun MessageAction(
     label: String,
     icon: ImageVector? = null,
-    painter: Painter? = null,
     onClick: () -> Unit,
 ) {
     Row(
@@ -4151,15 +4173,9 @@ private fun MessageAction(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        when {
-            icon != null -> Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MiuixTheme.colorScheme.onSurface,
-            )
-            painter != null -> Icon(
-                painter = painter,
+        icon?.let {
+            Icon(
+                imageVector = it,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
                 tint = MiuixTheme.colorScheme.onSurface,
@@ -4441,12 +4457,12 @@ private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
  * front of the list" — and what it cost was the field's own shape. With the panel
  * explaining where the message goes, the field needed no edge, so it had none, and the
  * reader's report is that they wanted it back ("输入框形状改回 0.4.1 的样子，取代现在的悬浮
- * 样式"). So the composer is the strip the app had before the panel: a full-bleed band
- * in the page's column, under the transcript rather than over it, on the band's own
- * `surfaceContainer` so the foot of the page is one band of chrome; and the field
- * inside it is Miuix's own [TextField] — a filled box on `secondaryContainer`, its
- * placeholder carried by the library's label slot, its focused border the palette's
- * `primary`.
+ * 样式"). So the composer is the strip the app had before the panel: a full-bleed,
+ * bottom-aligned overlay band on the page's `surface`, so the foot of the page is one
+ * band of chrome while a row passes behind it and dissolves; and the field inside it is
+ * Miuix's own [TextField] living in the kit's glass frame — the frame is the only fill
+ * and outline, while the field itself paints nothing and keeps the focus ring off
+ * through `piFieldColors` + `piFieldCursor` (§7.1).
  *
  * Nothing about the *contents* changed. The chips stay where they were, and they
  * still read as the settings the next message goes with rather than as part of the
@@ -5061,13 +5077,18 @@ private fun Composer(
                     // rank would land over the chip row and wash the chips themselves out.
                     .onGloballyPositioned { onFieldTop(it) },
             ) {
+            // The frame is cut with the same continuous corner the glass around it
+            // draws. A `RoundedCornerShape` here clipped the content on a circular
+            // 20dp curve inside a squircle glass edge; `GlassShape` is the renderer's
+            // own continuous shape.
+            val fieldShape = remember { GlassShape(PiCorner.radius) }
             Surface(
                 color = Color.Transparent,
-                shape = RoundedCornerShape(PiCorner.radius),
+                shape = fieldShape,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    .piGlass(RoundedCornerShape(PiCorner.radius)),
+                    .piGlass(fieldShape),
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     TextField(
@@ -6660,7 +6681,7 @@ private fun ShellCommandSheet(
     text: Strings,
     onRun: (String) -> Unit,
 ) {
-    var line by remember { mutableStateOf("") }
+    val line = remember { TextFieldState() }
 
     Column(
         Modifier
@@ -6673,16 +6694,19 @@ private fun ShellCommandSheet(
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(start = SHEET_GUTTER, end = SHEET_GUTTER, bottom = 8.dp),
         )
-        TextField(
-            cornerRadius = PiCorner.radius,
-            value = line,
-            onValueChange = { line = it },
+        GlassTextField(
+            state = line,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = SHEET_GUTTER),
             label = text.chat.shellCommandPlaceholder,
             useLabelAsPlaceholder = true,
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
+            cornerRadius = PiCorner.radius,
+            colors = GlassTextFieldDefaults.textFieldColors(
+                borderColor = Color.Transparent,
+            ),
+            cursorBrush = piFieldCursor(),
             textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Ascii,
@@ -6691,10 +6715,10 @@ private fun ShellCommandSheet(
         )
         Button(
             cornerRadius = PiCorner.radius,
-            onClick = { onRun(line.trim()) },
+            onClick = { onRun(line.text.toString().trim()) },
             // Refused while the line is blank: `bash` with an empty command is a
             // shell error the user would be reading for a reason they caused.
-            enabled = line.isNotBlank(),
+            enabled = line.text.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = SHEET_GUTTER, end = SHEET_GUTTER, top = 12.dp),

@@ -10,18 +10,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -32,15 +36,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import java.io.File
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import pi.kit.mob.R
 import pi.kit.mob.data.Workspace
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.env.TermuxEnv
 import pi.kit.mob.locales.Strings
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMenuRow
-import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
@@ -49,7 +57,8 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -58,7 +67,6 @@ import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * The workspace list a chip, a menu or a dialog draws, rebuilt when the set changes.
@@ -169,10 +177,13 @@ internal fun WorkspacePickerSheet(
     }
 
     var path by remember { mutableStateOf(expand(home)) }
-    var typed by remember { mutableStateOf(path) }
+    // The path field is state-based because this sheet is a glass surface: beta02's
+    // `GlassTextField` is the field drawn for that material, and its state overload is
+    // the API the library asks new fields to use.
+    val typed = remember { TextFieldState(expand(home)) }
     var refusal by remember { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
+    val newName = remember { TextFieldState() }
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     fun go(to: String) {
@@ -182,21 +193,27 @@ internal fun WorkspacePickerSheet(
         // focus ring that no longer matched what the sheet was showing.
         focus.clearFocus()
         path = expand(to)
-        typed = path
+        typed.setTextAndPlaceCursorAtEnd(path)
     }
 
     // The store's revision is in the key so the listing is refreshed when a folder is
-    // added from this sheet and it stays open (a refusal leaves it open).
+    // added from this sheet and it stays open (a refusal leaves it open). The walk is
+    // on IO and published through `produceState`, like the files page's listing: a
+    // `listFiles()` in composition blocks the sheet's enter animation, and on
+    // `/sdcard` with thousands of entries it is a visible stall.
     val revision by WorkspaceStore.revision.collectAsStateWithLifecycle()
-    val listing = remember(path, revision) {
-        runCatching { File(path).listFiles() }.getOrNull()
+    val listing by produceState<List<File>?>(initialValue = null, path, revision) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { File(path).listFiles() }.getOrNull()
+                ?.filter { it.isDirectory && !it.name.startsWith(".") }
+                // Ordinary order. The old comparator put every name starting with "a"
+                // first, which lifted `android`, `assets` and `app` above the folder
+                // the reader had just opened; a path browser has no reason to hide
+                // that rule.
+                ?.sortedBy { it.name.lowercase(Locale.ROOT) }
+        }
     }
-    val directories = remember(listing) {
-        listing
-            ?.filter { it.isDirectory && !it.name.startsWith(".") }
-            ?.sortedWith(compareBy({ !it.name.lowercase().startsWith("a") }, { it.name.lowercase() }))
-            .orEmpty()
-    }
+    val directories = listing.orEmpty()
 
     Column(
         Modifier
@@ -213,27 +230,26 @@ internal fun WorkspacePickerSheet(
         )
         // The path is editable: a path copied from a message or the terminal is the
         // fastest way to a folder, and it was the one thing a browser could not do.
-        TextField(
-            value = typed,
-            onValueChange = { typed = it },
+        GlassTextField(
+            state = typed,
             label = text.chat.workspacePickerPath,
             cornerRadius = PiCorner.radius,
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
             // The pair every other field in the app passes: without it this one alone
             // draws the library's blue focus ring and a caret the ring's colour.
-            colors = piFieldColors(),
+            colors = GlassTextFieldDefaults.textFieldColors(
+                borderColor = Color.Transparent,
+            ),
             cursorBrush = piFieldCursor(),
             textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Uri,
                 imeAction = ImeAction.Go,
             ),
-            keyboardActions = KeyboardActions(
-                onGo = {
-                    keyboard?.hide()
-                    go(typed)
-                },
-            ),
+            onKeyboardAction = {
+                keyboard?.hide()
+                go(typed.text.toString())
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = PICKER_GUTTER, end = PICKER_GUTTER, top = 8.dp),
@@ -280,7 +296,7 @@ internal fun WorkspacePickerSheet(
                 }
             }
             NavChip(text.chat.workspacePickerNewFolder, rememberVectorPainter(MiuixIcons.Add)) {
-                newName = ""
+                newName.setTextAndPlaceCursorAtEnd("")
                 creating = true
             }
         }
@@ -336,20 +352,24 @@ internal fun WorkspacePickerSheet(
 
     // Making a folder, where the folders are. It creates inside the path the sheet is
     // *showing*, which is the only place it could mean: the reader navigated here.
-    WindowDialog(
+    // The same `PiCustomDialog` as the workspace list above: the list dialog is glass
+    // over the page, and this one is a window only when the sheet itself is a window.
+    val newNameText = newName.text.toString()
+    PiCustomDialog(
         show = creating,
         title = text.chat.workspacePickerNewFolderTitle,
         onDismissRequest = { creating = false },
     ) {
-        TextField(
-            cornerRadius = PiCorner.radius,
-            value = newName,
-            onValueChange = { newName = it },
+        GlassTextField(
+            state = newName,
             modifier = Modifier.fillMaxWidth(),
             label = text.chat.workspacePickerNewFolderName,
             useLabelAsPlaceholder = true,
-            singleLine = true,
-            colors = piFieldColors(),
+            lineLimits = TextFieldLineLimits.SingleLine,
+            cornerRadius = PiCorner.radius,
+            colors = GlassTextFieldDefaults.textFieldColors(
+                borderColor = Color.Transparent,
+            ),
             cursorBrush = piFieldCursor(),
         )
         PiDialogAnswers(
@@ -357,8 +377,9 @@ internal fun WorkspacePickerSheet(
             onDismiss = { creating = false },
             confirm = text.chat.workspacePickerCreate,
             onConfirm = {
-                val target = File(path, newName.trim())
-                val made = newName.isNotBlank() &&
+                val typed = newNameText.trim()
+                val target = File(path, typed)
+                val made = typed.isNotBlank() &&
                     runCatching { target.mkdirs() || target.isDirectory }.getOrDefault(false)
                 creating = false
                 if (made) {
@@ -368,8 +389,9 @@ internal fun WorkspacePickerSheet(
                 }
             },
             // Nothing to create while the field is empty, or while the name is a path.
-            confirmEnabled = newName.isNotBlank() && !newName.contains('/'),
+            confirmEnabled = newNameText.isNotBlank() && !newNameText.contains('/'),
             modifier = Modifier.padding(top = 12.dp),
+            glass = LocalPiBackdrop.current != null,
         )
     }
 }
@@ -452,15 +474,8 @@ internal fun WorkspaceDialog(
     fun removable(workspace: Workspace): Boolean =
         !workspace.builtIn && workspace.path != defaultPath
 
-    WindowDialog(
-        show = show,
-        title = text.settings.defaultWorkspace,
-        // No horizontal inset for the content, so the rows span the dialog: the title and
-        // the answers are centred and have their own margins, and a row's press
-        // indication is clipped to the bounds it is given.
-        insideMargin = DpSize(0.dp, DialogDefaults.insideMargin.height),
-        onDismissRequest = onDismiss,
-    ) {
+    val backdrop = LocalPiBackdrop.current
+    val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             workspaces.forEach { workspace ->
                 RadioButtonPreference(
@@ -505,7 +520,19 @@ internal fun WorkspaceDialog(
                     horizontal = DialogDefaults.insideMargin.width,
                     vertical = 12.dp,
                 ),
+                glass = backdrop != null,
             )
         }
+    }
+    PiCustomDialog(
+        show = show,
+        title = text.settings.defaultWorkspace,
+        // No horizontal inset for the content, so the rows span the dialog: the
+        // title and the answers are centred and have their own margins, and a row's
+        // press indication is clipped to the bounds it is given.
+        insideMargin = DpSize(0.dp, DialogDefaults.insideMargin.height),
+        onDismissRequest = onDismiss,
+    ) {
+        body()
     }
 }

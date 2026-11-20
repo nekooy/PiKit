@@ -128,18 +128,23 @@ fun PiKitMiuixTheme(
     // `SideEffect` below combines it with the palette's own answer on every pass,
     // including a pass caused by a theme change while the page is still on screen.
     val darkBars = remember { mutableStateOf(false) }
+    val lightStatusBars = remember { mutableStateOf(false) }
     val barsForPage = darkBars.value
+    val lightStatusForPage = lightStatusBars.value
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
             val bars = WindowCompat.getInsetsController(window, view)
-            bars.isAppearanceLightStatusBars = !dark
+            bars.isAppearanceLightStatusBars = !dark && !lightStatusForPage
             bars.isAppearanceLightNavigationBars = !dark && !barsForPage
         }
     }
 
-    CompositionLocalProvider(LocalDarkNavigationBars provides darkBars) {
+    CompositionLocalProvider(
+        LocalDarkNavigationBars provides darkBars,
+        LocalLightStatusBars provides lightStatusBars,
+    ) {
         // The haptics are provided by the theme rather than by a page, because a window
         // dialog is a second composition: a value the page provided would be missing in
         // exactly the window whose buttons need it. See `PiHaptics.kt`.
@@ -161,6 +166,16 @@ fun PiKitMiuixTheme(
 private val LocalDarkNavigationBars = staticCompositionLocalOf { mutableStateOf(false) }
 
 /**
+ * The status-bar twin of [LocalDarkNavigationBars], for the setup field.
+ *
+ * The setup screen is the one full-screen surface that is near-black in both schemes
+ * and is returned before the root Scaffold: in the light theme the theme's own answer
+ * is dark status-bar ink, which disappears on `SETUP_BACKGROUND`. The flag is raised
+ * by [LightStatusBar] for as long as that screen is composed.
+ */
+private val LocalLightStatusBars = staticCompositionLocalOf { mutableStateOf(false) }
+
+/**
  * Takes the light navigation-bar icons for as long as this page is composed.
  *
  * The terminal page is the only caller: its shell, its key bar and its banner are black
@@ -175,6 +190,23 @@ fun DarkNavigationBar() {
     DisposableEffect(dark) {
         dark.value = true
         onDispose { dark.value = false }
+    }
+}
+
+/**
+ * Takes the light status-bar icons for the dark setup surface.
+ *
+ * The setup screen is dark in both themes and sits above the page Scaffold, so it has
+ * no page to set the polarity for it. Pair it with [DarkNavigationBar] when the same
+ * screen paints its own bottom edge dark; the two flags are independent because the
+ * terminal needs only the navigation half.
+ */
+@Composable
+fun LightStatusBar() {
+    val light = LocalLightStatusBars.current
+    DisposableEffect(light) {
+        light.value = true
+        onDispose { light.value = false }
     }
 }
 

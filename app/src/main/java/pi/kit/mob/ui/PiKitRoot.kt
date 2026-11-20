@@ -18,6 +18,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
@@ -85,6 +86,8 @@ import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiHost
 import pi.kit.mob.pi.RuntimeStatus
+import pi.kit.mob.ui.kit.DarkNavigationBar
+import pi.kit.mob.ui.kit.LightStatusBar
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
@@ -835,6 +838,12 @@ internal val TerminalGlyph: ImageVector by lazy {
  */
 @Composable
 private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, message: String) {
+    // The setup field is near-black in both themes and is returned before the root
+    // Scaffold: in light mode the theme's own dark bar ink disappears on it. The two
+    // effects flip the status icons and the gesture handle for as long as this screen
+    // is composed; the root does not exist yet to do it for them.
+    DarkNavigationBar()
+    LightStatusBar()
     // The mark breathes rather than spins: there is no bounded work to indicate
     // per-frame, and a spinner next to a real percentage reads as two competing
     // progress indicators.
@@ -860,90 +869,103 @@ private fun InstallProgress(text: pi.kit.mob.locales.Strings, fraction: Float, m
     )
 
     Surface(Modifier.fillMaxSize(), color = SETUP_BACKGROUND) {
-        Column(
-            modifier = Modifier
+        BoxWithConstraints(
+            Modifier
                 .fillMaxSize()
-                .padding(horizontal = 32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .windowInsetsPadding(WindowInsets.systemBars),
         ) {
-            // The whole wordmark, not the compact P: the tap that opened this
-            // screen landed on the launcher icon, and that icon is the full name.
-            // The compact mark stays inside a 34dp avatar where thirteen cells have
-            // no room; at logo size the name is what the icon showed.
-            Image(
-                painter = painterResource(R.drawable.ic_pi_wordmark),
-                contentDescription = null,
+            Column(
                 modifier = Modifier
-                    .width(SETUP_WORDMARK_WIDTH)
-                    .height(SETUP_WORDMARK_WIDTH / WORDMARK_ASPECT)
-                    // A slow breath between 88% and 100% opacity. Enough to say
-                    // "working" without pulling the eye off the number.
-                    .alpha(0.88f + pulse * 0.12f),
-            )
+                    .fillMaxWidth()
+                    // The min height is what keeps the content centred when it fits;
+                    // the scroll is what keeps it reachable when a landscape window
+                    // or a large text size makes it taller than the screen. Both are
+                    // needed — the setup screen is the one surface a reader cannot
+                    // leave if its bottom is clipped.
+                    .heightIn(min = maxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // The whole wordmark, not the compact P: the tap that opened this
+                // screen landed on the launcher icon, and that icon is the full name.
+                // The compact mark stays inside a 34dp avatar where thirteen cells have
+                // no room; at logo size the name is what the icon showed.
+                Image(
+                    painter = painterResource(R.drawable.ic_pi_wordmark),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .width(SETUP_WORDMARK_WIDTH)
+                        .height(SETUP_WORDMARK_WIDTH / WORDMARK_ASPECT)
+                        // A slow breath between 88% and 100% opacity. Enough to say
+                        // "working" without pulling the eye off the number.
+                        .alpha(0.88f + pulse * 0.12f),
+                )
 
-            Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(28.dp))
 
-            Text(
-                text = text.root.settingUp,
-                style = MiuixTheme.textStyles.title3,
-                color = SETUP_PRIMARY,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = text.root.setupSubtitle,
-                style = MiuixTheme.textStyles.body2,
-                color = SETUP_SECONDARY,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 6.dp),
-            )
+                Text(
+                    text = text.root.settingUp,
+                    style = MiuixTheme.textStyles.title3,
+                    color = SETUP_PRIMARY,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = text.root.setupSubtitle,
+                    style = MiuixTheme.textStyles.body2,
+                    color = SETUP_SECONDARY,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
 
-            Spacer(Modifier.height(36.dp))
+                Spacer(Modifier.height(36.dp))
 
-            Text(
-                text = "${(shown * 100).toInt()}%",
-                style = MiuixTheme.textStyles.title1,
-                color = SETUP_PRIMARY,
-            )
+                Text(
+                    text = "${(shown * 100).toInt()}%",
+                    style = MiuixTheme.textStyles.title1,
+                    color = SETUP_PRIMARY,
+                )
 
-            Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(16.dp))
 
-            LinearProgressIndicator(
-                progress = shown,
-                modifier = Modifier.fillMaxWidth(),
-                // The screen is the one dark surface in an app that may be light, so
-                // the bar cannot take the scheme's own `primary` on
-                // `secondaryContainer`: in light mode that is a pale blue on a pale
-                // track, drawn on near-black. These two colours are the setup field's.
-                colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                    foregroundColor = SETUP_PRIMARY,
-                    backgroundColor = SETUP_MARK_FIELD,
-                ),
-            )
+                LinearProgressIndicator(
+                    progress = shown,
+                    modifier = Modifier.fillMaxWidth(),
+                    // The screen is the one dark surface in an app that may be light, so
+                    // the bar cannot take the scheme's own `primary` on
+                    // `secondaryContainer`: in light mode that is a pale blue on a pale
+                    // track, drawn on near-black. These two colours are the setup field's.
+                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = SETUP_PRIMARY,
+                        backgroundColor = SETUP_MARK_FIELD,
+                    ),
+                )
 
-            Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(14.dp))
 
-            // Fixed height, so the title and number above do not shift as the
-            // message changes length from "Unpacking bootstrap.zip" to
-            // "Activating environment".
-            Text(
-                text = message,
-                style = MiuixTheme.textStyles.footnote1,
-                color = SETUP_SECONDARY,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.heightIn(min = 36.dp),
-            )
+                // Fixed height, so the title and number above do not shift as the
+                // message changes length from "Unpacking bootstrap.zip" to
+                // "Activating environment".
+                Text(
+                    text = message,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = SETUP_SECONDARY,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.heightIn(min = 36.dp),
+                )
 
-            Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(28.dp))
 
-            Text(
-                text = text.root.setupNote,
-                style = MiuixTheme.textStyles.footnote1,
-                color = SETUP_TERTIARY,
-                textAlign = TextAlign.Center,
-            )
+                Text(
+                    text = text.root.setupNote,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = SETUP_TERTIARY,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
@@ -974,6 +996,9 @@ private fun SetupFailure(
     actionLabel: String,
     onAction: () -> Unit,
 ) {
+    // Same dark setup field, same bar-polarity override as InstallProgress.
+    DarkNavigationBar()
+    LightStatusBar()
     Surface(Modifier.fillMaxSize(), color = SETUP_BACKGROUND) {
         Column(
             modifier = Modifier

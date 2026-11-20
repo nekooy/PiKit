@@ -538,6 +538,7 @@ internal object EnglishStrings : Strings {
         override val provider = "Provider"
         override val providerSubtitle = "Choose the provider this profile is for"
         override val providerPickSearch = "Search providers"
+        override fun pickNothingMatches(query: String) = "Nothing matches \u201c$query\u201d."
         override val modelPickSearch = "Search models"
         override fun keyPassedAs(envVar: String) = "Env var $envVar"
         override val notChosen = "Not chosen"

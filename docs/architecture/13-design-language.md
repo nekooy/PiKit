@@ -56,10 +56,13 @@ maintained alongside every screen.
 
 Miuix 0.9.5-beta02 is the release this project builds against — the second beta of
 `miuix-glass`, the OS4 material (beta01 was the first). The app's chrome — the page
-bar, the chat header's capsules, the composer and its chips, the jump-to-latest disc,
-and a dialog or sheet raised from a page — is drawn from it.
-A settings card is still a Miuix `Card`: OS4's glass is a material for controls that
-float over the page, not for every rectangle on it.
+bar and its action buttons, the chat header's capsules, the composer and its chips,
+the jump-to-latest disc, and a dialog or sheet raised from a page — is drawn from it.
+The bar's actions are `GlassIconButton`s with the 28dp glass glyph set, not basic
+`IconButton`s: the bar carries a button into its material transition only when the
+button is the glass control, and a filled basic glyph beside a stroked one is two
+icon sets on one bar. A settings card is still a Miuix `Card`: OS4's glass is a
+material for controls that float over the page, not for every rectangle on it.
 
 **The backdrop belongs to the page, not to the window.** `PiPage` creates the page's
 `LayerBackdrop` with `rememberPiBackdrop()` and draws only its **body** into it; the
@@ -221,14 +224,17 @@ know nothing about it.
 
 ## A page is a scaffold, a bar and a one-line subtitle
 
-`PiPage(title, subtitle, onBack, actions, body)` is the frame every
+`PiPage(title, subtitle, onBack, actions, overlay, body)` is the frame every
 destination and every settings page uses. It is a Miuix `Scaffold` with a pinned
 `GlassTopAppBar`, a `BackHandler` that exists only when `onBack` does (a page with no parent
 has no back arrow and does not swallow the system gesture), and a body that receives the
 scaffold's `PaddingValues` with the navigation strip taken out of it — see *The window's
-last pixels* below. The `floating` slot this signature used to take was passed by no
-caller and is gone, and the `bottomBarColor` that briefly followed it is gone with the strip
-it painted.
+last pixels* below. The `overlay` slot is the page's window home: it is inside
+`LocalPiBackdrop` but outside the recorded body, so a sheet or dialog composed there can
+sample the page without entering the layer that records it. A window written after the
+`PiPage` call is outside the provider and silently takes the opaque platform path. The
+`floating` slot this signature used to take was passed by no caller and is gone, and the
+`bottomBarColor` that briefly followed it is gone with the strip it painted.
 
 The subtitle is drawn by the kit, not passed to the bar, and that is a measured rule:
 the library's top bars render their `subtitle` with **no line limit**, so a sentence wider
@@ -272,11 +278,20 @@ disagreeing. The status bar is deliberately not included: the top bar keeps its 
 which is what puts the terminal's header in the app's light chrome and its body in the
 shell's black.
 
+The setup screen is the one surface that needs both halves. It is returned before the root
+Scaffold and painted `SETUP_BACKGROUND` (`#0B0E13`) in both schemes, so the light theme's
+own answer — dark status-bar ink — disappeared on it, and the gesture handle was drawn in
+the app's dark ink on near-black. `LightStatusBar()` is the status-bar twin of
+`DarkNavigationBar()`: it raises `LocalLightStatusBars`, the theme's `SideEffect` combines
+it into `isAppearanceLightStatusBars`, and the setup screens call it beside
+`DarkNavigationBar()`. The two flags stay separate because the terminal needs only the
+navigation half.
+
 The conversation drawer is not a page and does not use `PiPage`; its panel reaches the
 window's last pixel too, and the list and the Settings pill spend the strip as their own
-bottom padding (`SessionsScreen` reads `WindowInsets.navigationBars` for exactly that). A
-panel that stopped above the handle was the same band in the one place where the surface
-behind it is a different colour.
+bottom padding (`SessionsScreen` reads `WindowInsets.systemBars` unioned with the display
+cutout for exactly that). A panel that stopped above the handle was the same band in the
+one place where the surface behind it is a different colour.
 
 ## Sections, rows, and the one thing a row may not do
 
@@ -320,9 +335,14 @@ Two row rules are behaviour rather than taste:
 Miuix's `GlassDialog`, whose material samples the page behind it; above every page —
 the first-launch permission prompts — it keeps `WindowDialog`, because there is no
 page to sample and no `Scaffold` host yet. The two paths share `PiDialogAnswers`, so a
-question reads the same wherever it is raised. The window path's cost is the
-platform's dialog window around Miuix content; the glass path's cost is that it needs
-a page with a backdrop, which is exactly the condition the split names.
+question reads the same wherever it is raised. A custom body — a language list, an
+avatar crop, a workspace picker, a field-bearing failure — goes through the same split
+in `PiCustomDialog`; a screen does not compose either window itself. The overlay slot
+of `PiPage` (and the chat page's matching provider) is what makes the page path
+reachable: a window composed after the page call has no `LocalPiBackdrop` and falls to
+the opaque window even though the page is visibly behind it. The window path's cost is
+the platform's dialog window around Miuix content; the glass path's cost is that it
+needs a page with a backdrop, which is exactly the condition the split names.
 
 **Actions in a glass dialog are Miuix's glass buttons**: the dismiss answer is the
 neutral tonal role, the confirm answer is the primary role, and a destructive confirm
@@ -337,7 +357,12 @@ filter field, not a dropdown, when its content is longer than a few words — a
 dropdown's popup is sized for a list, not for a search. Every sheet body spends
 `piSheetBottomInset()` at its bottom — inside the scroll on a scrolling body — because
 the panel's bottom edge is the window's: without it the last row sits under the gesture
-strip, and the panel's own fill still has to reach the window's edge.
+strip, and the panel's own fill still has to reach the window's edge. A field inside a
+glass sheet is `GlassTextField`: beta02's glass field carries the translucent fill for
+the material and the state-based API new fields start from; a `TextField` with
+`piFieldColors()` is the field for a page or the composer's own frame, not for a sheet.
+The composer itself keeps its hand-built frame — its field is transparent inside the
+glass panel and `GlassTextField`'s tonal wash would be a second material (see §7.1).
 
 **A window is driven by `show`, never by whether it is composed.** Miuix's window
 components and the glass overlay pair animate in *and out* through that flag, so a

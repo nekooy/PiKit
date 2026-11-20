@@ -110,12 +110,12 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -148,6 +148,7 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbItem
@@ -160,8 +161,15 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.glass.HomeOutline
+import top.yukonga.miuix.kmp.icon.glass.Sort
 import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.Clear
 import top.yukonga.miuix.kmp.icon.extended.Copy
@@ -169,15 +177,12 @@ import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Forward
 import top.yukonga.miuix.kmp.icon.extended.GridView
-import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Image
 import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Search
-import top.yukonga.miuix.kmp.icon.extended.Sort
-import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -237,6 +242,12 @@ fun FilesScreen(session: PiAgentSession,
     // the body while the panel slides away.
     var preview by remember { mutableStateOf<FileEntry?>(null) }
     var previewUp by remember { mutableStateOf(false) }
+    // The sort menu is OS4 glass and its anchor is the toolbar's sort button; both
+    // states live at the page because the popup is rendered from the page's overlay
+    // slot, outside the body layer that supplies the material's backdrop.
+    var sortUp by remember { mutableStateOf(false) }
+    val sortAnchor = rememberGlassPopupAnchor()
+    val haptics = LocalPiHaptics.current
 
     fun navigate(to: File) {
         // The slide's direction is the sign of the depth difference, counted from the
@@ -300,21 +311,103 @@ fun FilesScreen(session: PiAgentSession,
         // two different answers*.
         subtitle = itemCount?.let { text.files.itemCount(it) }.orEmpty(),
         contentScrolled = listingState.canScrollBackward,
-        actions = {
-            IconButton(
-                onClick = { navigate(root) },
-                enabled = current != root,
-            ) {
-                Icon(MiuixIcons.Home, contentDescription = text.files.home)
+        overlay = {
+            // The sort is one of three answers, and it opens from the toolbar button as
+            // Miuix's glass menu rather than the opaque basic dropdown. Its entries are a
+            // single group; the row that is in effect carries the tick.
+            Box(Modifier.fillMaxSize()) {
+                GlassIconDropdownMenu(
+                    show = sortUp,
+                    onDismissRequest = { sortUp = false },
+                    anchor = sortAnchor,
+                    anchorContent = {
+                        Icon(
+                            imageVector = MiuixIcons.Glass.Sort,
+                            contentDescription = text.files.sort,
+                            tint = MiuixTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    },
+                    entries = listOf(
+                        DropdownEntry(
+                            items = listOf(
+                                DropdownItem(
+                                    text = text.files.sortName,
+                                    selected = sort == FileSort.Name,
+                                    onClick = {
+                                        sortUp = false
+                                        if (sort != FileSort.Name) {
+                                            haptics.choose()
+                                            sort = FileSort.Name
+                                        }
+                                    },
+                                ),
+                                DropdownItem(
+                                    text = text.files.sortModified,
+                                    selected = sort == FileSort.Modified,
+                                    onClick = {
+                                        sortUp = false
+                                        if (sort != FileSort.Modified) {
+                                            haptics.choose()
+                                            sort = FileSort.Modified
+                                        }
+                                    },
+                                ),
+                                DropdownItem(
+                                    text = text.files.sortSize,
+                                    selected = sort == FileSort.Size,
+                                    onClick = {
+                                        sortUp = false
+                                        if (sort != FileSort.Size) {
+                                            haptics.choose()
+                                            sort = FileSort.Size
+                                        }
+                                    },
+                                ),
+                            ),
+                        ),
+                    ),
+                    backdrop = LocalPiBackdrop.current,
+                )
             }
-            IconButton(
+        },
+        actions = {
+            // The bar's actions are `GlassIconButton`s, not basic `IconButton`s: the
+            // bar is OS4 glass, and `GlassTopAppBar` only carries a button into its
+            // material transition when the button is the glass control. The old pair
+            // stayed plain while the back arrow rose, and the filled `Home` glyph beside
+            // a stroked arrow read as two icon sets on one bar.
+            // `GlassIconButton` has no `enabled` parameter, so the unavailable state is
+            // stated twice: the ink fades, and the semantics say disabled so a screen
+            // reader does not offer a control that cannot act. The click is gated too —
+            // a dead-looking button that still fires is the worse half of the bug.
+            GlassIconButton(
+                onClick = { if (current != root) navigate(root) },
+                modifier = Modifier.semantics {
+                    if (current == root) disabled()
+                },
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Glass.HomeOutline,
+                    contentDescription = text.files.home,
+                    tint = if (current != root) {
+                        MiuixTheme.colorScheme.onSurface
+                    } else {
+                        MiuixTheme.colorScheme.onSurface.copy(alpha = DISABLED_GLYPH_ALPHA)
+                    },
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            GlassIconButton(
                 // Up one level, until the filesystem's root — see the header. `$HOME`'s
                 // parent is the app's private data directory, and walking into it is
                 // the point: the runtime, the session files and the terminal's own
                 // home all live there, and a listing that showed `~/.pi` while
                 // refusing to show the directory above it was hiding its own subject.
                 onClick = { current.parentFile?.let(::navigate) },
-                enabled = current.parentFile != null,
+                modifier = Modifier.semantics {
+                    if (current.parentFile == null) disabled()
+                },
             ) {
                 // A drawn arrow, not the library's `ArrowRight` turned through a right
                 // angle — which is what this was, and it read as a *send* control: the
@@ -328,8 +421,13 @@ fun FilesScreen(session: PiAgentSession,
                     painter = painterResource(R.drawable.ic_arrow_up),
                     contentDescription = text.files.parent,
                     // 22dp of box for 14 units of ink: about 13dp of drawn arrow, the
-                    // size of the `Home` glyph beside it on the same bar.
+                    // size of the glass glyphs beside it on the same bar.
                     modifier = Modifier.size(22.dp),
+                    tint = if (current.parentFile != null) {
+                        MiuixTheme.colorScheme.onSurface
+                    } else {
+                        MiuixTheme.colorScheme.onSurface.copy(alpha = DISABLED_GLYPH_ALPHA)
+                    },
                 )
             }
         },
@@ -366,8 +464,9 @@ fun FilesScreen(session: PiAgentSession,
             ListToolbar(
                 query = query,
                 onQueryChange = { query = it },
-                sort = sort,
-                onSortChange = { sort = it },
+                sortUp = sortUp,
+                onSortClick = { sortUp = true },
+                sortAnchor = sortAnchor,
                 text = text,
             )
             LocationBar(
@@ -527,7 +626,10 @@ private fun LocationBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 2.dp),
-        itemMaxWidth = Dp.Infinity,
+        // A finite cap is the breadcrumb's only truncation: the trail is a horizontal
+        // LazyRow, so `Dp.Infinity` let one long folder render wider than the screen
+        // and push the current folder out of view.
+        itemMaxWidth = 200.dp,
     )
 }
 
@@ -544,28 +646,19 @@ private fun LocationBar(
  * wanted here is the capsule's look and its clear button, both of which the field
  * carries on its own.
  *
- * The sort control is a floating menu at its own button — the library's
- * `OverlayIconDropdownMenu` (§7.1) — because three orders are a question with three
+ * The sort control is a floating glass menu at its own button — the library's
+ * `GlassIconDropdownMenu` (§7.1) — because three orders are a question with three
  * answers, not a page.
  */
 @Composable
 private fun ListToolbar(
     query: String,
     onQueryChange: (String) -> Unit,
-    sort: FileSort,
-    onSortChange: (FileSort) -> Unit,
+    sortUp: Boolean,
+    onSortClick: () -> Unit,
+    sortAnchor: GlassPopupAnchor,
     text: Strings,
 ) {
-    // The sort is one of three answers, not a command, and the menu's row does not tick
-    // itself (§16): a pick is where the listing's order becomes that answer. A tap on
-    // the order already in effect changes nothing and stays silent.
-    val haptics = LocalPiHaptics.current
-    fun pick(order: FileSort) {
-        if (sort != order) {
-            haptics.choose()
-            onSortChange(order)
-        }
-    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -604,28 +697,26 @@ private fun ListToolbar(
                 }
             },
         )
-        OverlayIconDropdownMenu(
-            entry = DropdownEntry(
-                items = listOf(
-                    DropdownItem(
-                        text = text.files.sortName,
-                        selected = sort == FileSort.Name,
-                        onClick = { pick(FileSort.Name) },
-                    ),
-                    DropdownItem(
-                        text = text.files.sortModified,
-                        selected = sort == FileSort.Modified,
-                        onClick = { pick(FileSort.Modified) },
-                    ),
-                    DropdownItem(
-                        text = text.files.sortSize,
-                        selected = sort == FileSort.Size,
-                        onClick = { pick(FileSort.Size) },
-                    ),
-                ),
+        // The button is the menu's anchor and its opening state is the page's; the menu
+        // itself is in `PiPage`'s overlay slot so it can sample the page backdrop.
+        GlassIconButton(
+            onClick = onSortClick,
+            modifier = Modifier.glassPopupAnchor(
+                anchor = sortAnchor,
+                cornerRadius = 20.dp,
+                floating = true,
             ),
         ) {
-            Icon(MiuixIcons.Sort, contentDescription = text.files.sort)
+            Icon(
+                imageVector = MiuixIcons.Glass.Sort,
+                contentDescription = text.files.sort,
+                tint = if (sortUp) {
+                    MiuixTheme.colorScheme.primary
+                } else {
+                    MiuixTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.size(28.dp),
+            )
         }
     }
 }
@@ -1062,3 +1153,6 @@ private val SIZE_COLUMN = 88.dp
  * strip, and this is the space that keeps a row from being read against the page's edge.
  */
 private val PAGE_BOTTOM = 16.dp
+
+/** The ink a bar glyph fades to when its action is unavailable. */
+private const val DISABLED_GLYPH_ALPHA = 0.38f

@@ -51,6 +51,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -71,8 +73,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import pi.kit.mob.locales.LocalStrings
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
@@ -93,8 +98,9 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * A row's trailing value, in the quiet role Miuix gives a summary.
@@ -124,7 +130,10 @@ fun SettingsValue(
         color = when {
             danger -> MiuixTheme.colorScheme.error
             emphasised -> MiuixTheme.colorScheme.onSurface
-            else -> MiuixTheme.colorScheme.onSurfaceVariantActions
+            // A value the app reports is a summary, not an action label: the 40%
+            // `onSurfaceVariantActions` role made every unselected value read as a
+            // disabled control beside its live title.
+            else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
         },
         fontFamily = if (monospace) FontFamily.Monospace else null,
         maxLines = 1,
@@ -409,12 +418,8 @@ fun SettingsAlert(
     modifier: Modifier = Modifier,
     lines: List<String> = emptyList(),
 ) {
-    WindowDialog(
-        show = show,
-        modifier = modifier,
-        title = title,
-        onDismissRequest = onConfirm,
-    ) {
+    val backdrop = LocalPiBackdrop.current
+    val dialogBody: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             if (body.isNotBlank()) {
                 Text(
@@ -463,8 +468,17 @@ fun SettingsAlert(
             PiDialogAnswers(
                 dismiss = confirm,
                 onDismiss = onConfirm,
+                glass = backdrop != null,
             )
         }
+    }
+    PiCustomDialog(
+        show = show,
+        modifier = modifier,
+        title = title,
+        onDismissRequest = onConfirm,
+    ) {
+        dialogBody()
     }
 }
 
@@ -494,6 +508,7 @@ fun SettingsSwatch(
     label: String,
     modifier: Modifier = Modifier,
     size: Dp = 38.dp,
+    enabled: Boolean = true,
 ) {
     val haptics = LocalPiHaptics.current
     Box(
@@ -508,6 +523,7 @@ fun SettingsSwatch(
             // the name. The circle already chosen changes nothing.
             .selectable(
                 selected = selected,
+                enabled = enabled,
                 role = Role.RadioButton,
                 onClick = {
                     // `choose()`: a set's member becoming the chosen one, which a Miuix
@@ -642,8 +658,13 @@ fun SettingsPickerSheet(
     // Keyed on `show`, so a sheet opened again starts with the whole list rather than with
     // the last search still hiding it. The filter is a question asked *now* — it is not a
     // preference, and a picker that remembered it would look like a list that had lost rows.
-    var query by remember(show) { mutableStateOf("") }
-    val needle = query.trim()
+    //
+    // The filter is the beta02 `GlassTextField`: this sheet is a glass surface, and a
+    // value-bound `TextField` with the opaque secondary fill was a solid grey bar pasted
+    // on the material. The state-based field is also the API the library asks new fields
+    // to start from.
+    val queryState = remember(show) { TextFieldState() }
+    val needle = queryState.text.toString().trim()
     val shown = if (needle.isEmpty()) {
         options
     } else {
@@ -666,11 +687,24 @@ fun SettingsPickerSheet(
                 )
             }
             if (searchHint != null) {
-                SettingsTextField(
-                    value = query,
-                    onValueChange = { query = it },
+                GlassTextField(
+                    state = queryState,
+                    modifier = Modifier.fillMaxWidth(),
                     label = searchHint,
+                    useLabelAsPlaceholder = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
+                    cornerRadius = PiCorner.radius,
+                    // The library's glass field fill, with the focus ring stated as
+                    // transparent for the same reason `piFieldColors` hides it on every
+                    // other field: the ring is the loudest blue rectangle on the sheet.
+                    colors = GlassTextFieldDefaults.textFieldColors(
+                        borderColor = Color.Transparent,
+                    ),
+                    cursorBrush = piFieldCursor(),
                 )
+            }
+            if (shown.isEmpty() && needle.isNotEmpty()) {
+                SettingsNote(LocalStrings.current.settings.pickNothingMatches(needle))
             }
             if (shown.isNotEmpty()) {
                 Card(Modifier.fillMaxWidth(), cornerRadius = PiCorner.radius) {

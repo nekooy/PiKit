@@ -72,6 +72,9 @@ internal fun SearchPage(
 
     var searchPicker by remember { mutableStateOf(false) }
     var fetchPicker by remember { mutableStateOf(false) }
+    var resetConfirming by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val toasts = LocalPiToast.current
 
     val pageScroll = rememberScrollState()
     PiPage(
@@ -79,6 +82,8 @@ internal fun SearchPage(
         subtitle = text.settings.searchPageSubtitle,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        overlay = {
+        },
     ) { padding ->
         val inset = LocalPiNavigationInset.current
         Column(
@@ -201,67 +206,10 @@ internal fun SearchPage(
                 }
             }
 
-            ResetSection(store = store, session = session, text = text)
+            ResetSection(text = text, onRestore = { resetConfirming = true })
         }
     }
 
-    SettingsPickerSheet(
-        show = searchPicker,
-        title = text.settings.searchProvider,
-        subtitle = text.settings.searchProviderSubtitle,
-        options = listOf(
-            SettingsPick(
-                id = WebSearchSettings.PROVIDER_AUTO,
-                label = text.settings.providerAutomatic,
-                description = text.settings.providerDescription(WebSearchSettings.PROVIDER_AUTO),
-            ),
-        ) + WebSearchSettings.SEARCH_PROVIDERS.map { provider ->
-            SettingsPick(
-                id = provider.id,
-                label = provider.label,
-                description = text.settings.providerDescription(provider.id),
-            )
-        },
-        selectedId = settings.searchProvider,
-        onPick = { id ->
-            searchPicker = false
-            store.update { it.copy(searchProvider = id) }
-        },
-        onDismiss = { searchPicker = false },
-        footnote = text.settings.searchProviderFootnote(WebSearchSettings.SEARCH_PROVIDERS.size),
-        searchHint = text.settings.providerPickSearch,
-    )
-
-    SettingsPickerSheet(
-        show = fetchPicker,
-        title = text.settings.fetchProvider,
-        subtitle = text.settings.fetchProviderSubtitle,
-        options = listOf(
-            SettingsPick(
-                id = WebSearchSettings.FETCH_AUTO,
-                label = text.settings.fetchAutomatic,
-                description = text.settings.providerDescription(WebSearchSettings.FETCH_DIRECT),
-            ),
-            SettingsPick(
-                id = WebSearchSettings.FETCH_DIRECT,
-                label = text.settings.fetchDirect,
-                description = text.settings.providerDescription(WebSearchSettings.FETCH_DIRECT),
-            ),
-        ) + WebSearchSettings.WEB_PROVIDERS.filter { it.fetch }.map { provider ->
-            SettingsPick(
-                id = provider.id,
-                label = provider.label,
-                description = text.settings.providerDescription(provider.id),
-            )
-        },
-        selectedId = settings.fetchProvider,
-        onPick = { id ->
-            fetchPicker = false
-            store.update { it.copy(fetchProvider = id) }
-        },
-        onDismiss = { fetchPicker = false },
-        searchHint = text.settings.providerPickSearch,
-    )
 }
 
 /** The provider's own fields, directly under the menu that selected it. */
@@ -433,13 +381,11 @@ private fun NumberField(
 }
 
 @Composable
-private fun ResetSection(store: WebSearchStore, session: PiAgentSession, text: Strings) {
-    val scope = rememberCoroutineScope()
-    val toasts = LocalPiToast.current
-    var confirming by remember { mutableStateOf(false) }
-
+private fun ResetSection(text: Strings, onRestore: () -> Unit) {
     PiSection {
-        BasicComponent(
+        // A tappable action row, not a fact row: it has an arrow and the error role,
+        // because tapping it asks the question that resets the extension's file.
+        ArrowPreference(
             title = text.settings.searchConfigRestore,
             summary = text.settings.searchConfigRestoreSubtitle,
             startAction = {
@@ -451,31 +397,7 @@ private fun ResetSection(store: WebSearchStore, session: PiAgentSession, text: S
                 )
             },
             titleColor = BasicComponentDefaults.titleColor(color = MiuixTheme.colorScheme.error),
-            onClick = { confirming = true },
+            onClick = onRestore,
         )
     }
-
-    PiConfirm(
-        show = confirming,
-        title = text.settings.searchConfigRestoreTitle,
-        text = text.settings.searchConfigRestoreBody,
-        confirm = text.settings.searchConfigRestore,
-        dismiss = text.common.cancel,
-        destructive = true,
-        onConfirm = {
-            confirming = false
-            scope.launch {
-                toasts?.show(
-                    store.restoreDefaults().fold(
-                        onSuccess = {
-                            session.scheduleRestart()
-                            text.settings.searchConfigRestored
-                        },
-                        onFailure = { text.settings.searchConfigFailed },
-                    ),
-                )
-            }
-        },
-        onDismiss = { confirming = false },
-    )
 }

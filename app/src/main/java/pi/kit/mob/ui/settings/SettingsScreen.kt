@@ -34,7 +34,9 @@ import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.StorageSelfTest
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
+import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
@@ -44,8 +46,6 @@ import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /** Screens reachable from the Settings tab. Navigation state lives here only. */
 internal sealed interface SettingsPage {
@@ -409,6 +409,22 @@ private fun RootPage(
         title = text.settings.title,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        overlay = {
+            // Composed inside the page's backdrop scope, so the language question is a
+            // GlassDialog over this page rather than an opaque window above it.
+            LanguageDialog(
+                show = choosingLanguage,
+                text = text,
+                current = settings.language,
+                onDismiss = { choosingLanguage = false },
+                onPick = { entry ->
+                    choosingLanguage = false
+                    // The root of the tree is keyed on this field, so writing it
+                    // rebuilds the whole interface in the chosen language.
+                    session.settingsStore.update { it.copy(language = entry) }
+                },
+            )
+        },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -517,23 +533,6 @@ private fun RootPage(
         }
     }
 
-    // Always composed, and told whether it is open — not wrapped in `if (choosingLanguage)`.
-    // A Miuix window is dismissed by animating itself out, and a window that is only
-    // composed while the flag is true has nothing to animate: it vanished on the tap and
-    // the rest of the app jumped into the hole. This is the same shape `PiConfirm` call
-    // sites use (`show = …`).
-    LanguageDialog(
-        show = choosingLanguage,
-        text = text,
-        current = settings.language,
-        onDismiss = { choosingLanguage = false },
-        onPick = { entry ->
-            choosingLanguage = false
-            // The root of the tree is keyed on this field, so writing it
-            // rebuilds the whole interface in the chosen language.
-            session.settingsStore.update { it.copy(language = entry) }
-        },
-    )
 }
 
 /**
@@ -581,17 +580,12 @@ private fun LanguageDialog(
     // at the language that is actually in effect rather than at whatever the last
     // opening's finger left selected and then cancelled.
     var chosen by remember(show, current) { mutableStateOf(current) }
-
-    WindowDialog(
-        show = show,
-        title = text.settings.language,
-        // No horizontal inset for the *content*, so the list spans the dialog: the
-        // title and the answer row are centred and already have their own margins from
-        // the library, and a row's press indication is clipped to the bounds it is
-        // given — see this function's KDoc.
-        insideMargin = DpSize(0.dp, DialogDefaults.insideMargin.height),
-        onDismissRequest = onDismiss,
-    ) {
+    val backdrop = LocalPiBackdrop.current
+    // One content body for both window variants: the glass dialog is the page's
+    // material, and the window dialog is the same question on a surface with no page
+    // behind it. The answers follow the same split, so a page dialog's buttons are
+    // Miuix's glass buttons rather than the window path's filled pair.
+    val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             Lang.entries.forEach { entry ->
                 RadioButtonPreference(
@@ -609,8 +603,21 @@ private fun LanguageDialog(
                 // them does not: a button's fill has to stop short of the panel's edge,
                 // where a row's highlight has to reach it.
                 modifier = Modifier.padding(horizontal = DIALOG_ANSWER_GUTTER, vertical = 12.dp),
+                glass = backdrop != null,
             )
         }
+    }
+    PiCustomDialog(
+        show = show,
+        title = text.settings.language,
+        // No horizontal inset for the *content*, so the list spans the dialog: the
+        // title and the answer row are centred and already have their own margins
+        // from the library, and a row's press indication is clipped to the bounds
+        // it is given — see this function's KDoc.
+        insideMargin = DpSize(0.dp, DialogDefaults.insideMargin.height),
+        onDismissRequest = onDismiss,
+    ) {
+        body()
     }
 }
 

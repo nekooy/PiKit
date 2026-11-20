@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,14 +43,14 @@ import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
-import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -248,7 +252,10 @@ private fun ChatPresetEditor(
     val slotId = "preset-${preset.id}"
     val identity = preset.identity(settings)
 
-    var draft by remember(preset.id, stateKey) { mutableStateOf(preset.prompt) }
+    // The prompt editor is a glass sheet field; state-based is the beta02 API for new
+    // fields, and the state is also what the restore button resets.
+    val draftState = remember(preset.id, stateKey) { TextFieldState(preset.prompt) }
+    val draft = draftState.text.toString()
     var deleteAsk by remember(preset.id) { mutableStateOf(false) }
     val picker = rememberAvatarPicturePicker(
         filesDir = filesDir,
@@ -260,7 +267,7 @@ private fun ChatPresetEditor(
     // Opening re-seeds from the stored prompt, and only on the open: the draft is left
     // alone while the sheet slides out, which is the same rule every Miuix window has.
     LaunchedEffect(shown, stateKey) {
-        if (shown) draft = preset.prompt
+        if (shown) draftState.setTextAndPlaceCursorAtEnd(preset.prompt)
     }
 
     Column(
@@ -356,6 +363,10 @@ private fun ChatPresetEditor(
                         onClick = { onChange(preset.copy(avatarColor = entry.code)) },
                         label = text.settings.avatarColorName(entry),
                         size = PRESET_SWATCH,
+                        // The inherited state is the preset saying "follow the
+                        // personalization page"; a swatch that still writes a colour
+                        // there would silently override it.
+                        enabled = !inherited,
                     )
                 }
             }
@@ -373,10 +384,8 @@ private fun ChatPresetEditor(
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         )
-        TextField(
-            cornerRadius = PiCorner.radius,
-            value = draft,
-            onValueChange = { draft = it },
+        GlassTextField(
+            state = draftState,
             textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Text,
@@ -384,8 +393,11 @@ private fun ChatPresetEditor(
                 // placeholder that silently stops being one.
                 autoCorrectEnabled = false,
             ),
-            maxLines = Int.MAX_VALUE,
-            colors = piFieldColors(),
+            lineLimits = TextFieldLineLimits.MultiLine(),
+            cornerRadius = PiCorner.radius,
+            colors = GlassTextFieldDefaults.textFieldColors(
+                borderColor = Color.Transparent,
+            ),
             cursorBrush = piFieldCursor(),
             modifier = Modifier
                 .fillMaxWidth()
@@ -401,7 +413,7 @@ private fun ChatPresetEditor(
         ) {
             SettingsButton(
                 text = text.settings.chatSystemPromptRestore,
-                onClick = { draft = DEFAULT_CHAT_SYSTEM_PROMPT },
+                onClick = { draftState.setTextAndPlaceCursorAtEnd(DEFAULT_CHAT_SYSTEM_PROMPT) },
                 modifier = Modifier.weight(1f),
             )
             SettingsButton(

@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -80,7 +83,6 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSheet
-import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.Button
@@ -94,13 +96,15 @@ import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Info
-import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Send
+import top.yukonga.miuix.kmp.icon.glass.Add
+import top.yukonga.miuix.kmp.icon.glass.Layers
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -298,10 +302,16 @@ fun TerminalScreen(session: PiAgentSession,
             // display after the reader has scrolled, which made "new terminal" and the
             // roster — the two controls this page is reached for — start further from
             // the thumb. The banner lists `clear` beside the other commands instead.
-            IconButton(onClick = { manager.create(shellCwd) }) {
+            // The bar's actions are glass buttons for the same reason the files page's
+            // are: `GlassTopAppBar` only carries a `GlassIconButton` through its material
+            // threshold, and its glyphs are the 28dp glass set rather than the 24dp
+            // filled/stroked basic set.
+            GlassIconButton(onClick = { manager.create(shellCwd) }) {
                 Icon(
-                    imageVector = MiuixIcons.Add,
+                    imageVector = MiuixIcons.Glass.Add,
                     contentDescription = t.terminal.newTerminal,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(28.dp),
                 )
             }
             // There is deliberately **no close button here.**
@@ -321,16 +331,14 @@ fun TerminalScreen(session: PiAgentSession,
             // component's items are one line of text and no trailing action, and a
             // shell has to be closable from the list without being switched to
             // first (see [TerminalSessionMenu]).
-            IconButton(
+            GlassIconButton(
                 onClick = { sessionsMenuOpen = true },
-                // Held down while its popup is open, which is the state Miuix's own
-                // popup buttons show: the bar says which button the panel belongs to
-                // even while the panel dims it.
-                holdDownState = sessionsMenuOpen,
             ) {
                 Icon(
-                    imageVector = MiuixIcons.Layers,
+                    imageVector = MiuixIcons.Glass.Layers,
                     contentDescription = t.terminal.switchTerminal,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(28.dp),
                 )
             }
             // The popup is anchored to the parent layout of this call — the app
@@ -824,7 +832,7 @@ private fun ExtraKeysRow(
     onToggleKeyboard: (Boolean) -> Unit,
 ) {
     var sending by remember { mutableStateOf(false) }
-    var draft by remember { mutableStateOf("") }
+    val draft = remember { TextFieldState() }
     // Read from the window rather than remembered, so it stays right when the keyboard is
     // raised by tapping the terminal instead of by a button. The raw inset changes on every
     // frame of the keyboard animation, so it is clamped to the boolean that actually matters
@@ -989,7 +997,7 @@ private fun ExtraKeysRow(
             ) {
                 // The sheet is the answer: this raises a window rather than sending a
                 // byte, so it is navigation and stays silent.
-                draft = ""
+                draft.setTextAndPlaceCursorAtEnd("")
                 sending = true
             }
             BarAction(
@@ -1034,17 +1042,16 @@ private fun ExtraKeysRow(
         title = text.terminal.keysMessage,
         onDismiss = { sending = false },
     ) {
-        TextField(
-            value = draft,
-            onValueChange = { draft = it },
+        GlassTextField(
+            state = draft,
             label = text.terminal.keysMessageLabel,
             useLabelAsPlaceholder = true,
             cornerRadius = PiCorner.radius,
             textStyle = MiuixTheme.textStyles.body2.copy(fontFamily = FontFamily.Monospace),
-            singleLine = false,
-            minLines = 3,
-            maxLines = 8,
-            colors = piFieldColors(),
+            lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 3, maxHeightInLines = 8),
+            colors = GlassTextFieldDefaults.textFieldColors(
+                borderColor = Color.Transparent,
+            ),
             cursorBrush = piFieldCursor(),
             modifier = Modifier
                 .fillMaxWidth()
@@ -1059,11 +1066,11 @@ private fun ExtraKeysRow(
                 // keyboard — and a `git commit -m` message is the case that made the
                 // difference visible: appending a return ran it before it could be
                 // reviewed or completed.
-                onSend(draft)
+                onSend(draft.text.toString())
                 sending = false
-                draft = ""
+                draft.setTextAndPlaceCursorAtEnd("")
             },
-            enabled = draft.isNotEmpty(),
+            enabled = draft.text.isNotEmpty(),
             modifier = Modifier
                 .fillMaxWidth()
                 // The sheet's own edge is the window's, so the send button clears the

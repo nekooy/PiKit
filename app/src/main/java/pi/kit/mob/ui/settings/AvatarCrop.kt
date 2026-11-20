@@ -78,13 +78,14 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import pi.kit.mob.locales.Strings
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * The crop's arithmetic, with no Android type in it.
@@ -274,13 +275,8 @@ internal fun AvatarCropDialog(
     val image = remember(picture) { picture.asImageBitmap() }
     val state = remember(picture) { AvatarCropState(picture.width, picture.height) }
 
-    WindowDialog(
-        show = show,
-        title = text.settings.avatarCropTitle,
-        summary = text.settings.avatarCropHint,
-        onDismissRequest = onDismiss,
-        onDismissFinished = onDismissFinished,
-    ) {
+    val backdrop = LocalPiBackdrop.current
+    val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             CropStage(
                 state = state,
@@ -312,8 +308,18 @@ internal fun AvatarCropDialog(
                     }
                 },
                 modifier = Modifier.padding(top = 12.dp),
+                glass = backdrop != null,
             )
         }
+    }
+    PiCustomDialog(
+        show = show,
+        title = text.settings.avatarCropTitle,
+        summary = text.settings.avatarCropHint,
+        onDismissRequest = onDismiss,
+        onDismissFinished = onDismissFinished,
+    ) {
+        body()
     }
 }
 

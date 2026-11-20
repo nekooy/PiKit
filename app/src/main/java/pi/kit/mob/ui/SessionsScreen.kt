@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -32,8 +34,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -49,9 +55,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,11 +77,13 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.TurnInFlightException
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiGlass
+import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiModeSwitch
 import pi.kit.mob.ui.kit.PiTone
@@ -91,6 +103,8 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -105,7 +119,6 @@ import top.yukonga.miuix.kmp.icon.extended.Unpin
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -431,7 +444,9 @@ fun SessionsScreen(
     // insets are its only frame, so the panel reaches the window's last pixel and the list
     // and the settings pill carry the navigation strip as their own bottom padding instead.
     // A band of `surface` under the panel was the opaque strip that cut the last row.
-    val navigationInset = WindowInsets.navigationBars
+    val navigationInset = WindowInsets.systemBars
+        .union(WindowInsets.displayCutout)
+        .only(WindowInsetsSides.Bottom)
         .asPaddingValues()
         .calculateBottomPadding()
 
@@ -461,9 +476,11 @@ fun SessionsScreen(
                 // and the pill's own margin, both of which can be scrolled or moved,
                 // where a padding here would end the panel above the handle.
                 .windowInsetsPadding(
-                    WindowInsets.systemBars.only(
-                        WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
-                    ),
+                    WindowInsets.systemBars
+                        .union(WindowInsets.displayCutout)
+                        .only(
+                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+                        ),
                 ),
         ) {
             Row(
@@ -794,6 +811,12 @@ fun SessionsScreen(
         }
     }
 
+    // The drawer's windows are composed *outside* the recorded panel (they are siblings
+    // of the Column above), so they may sample it: providing the backdrop here is what
+    // makes the rename, delete and mode questions OS4 glass over the drawer instead of
+    // opaque platform windows. A glass dialog renders in the root Scaffold, so it never
+    // enters the layer it samples.
+    CompositionLocalProvider(LocalPiBackdrop provides drawerBackdrop) {
     // The mode conversion's interruption question, in the same shape as the workspace
     // chip's: a mode is a launch flag, so converting a conversation that is answering
     // ends its turn. The only way here is the row menu's mode row — the drawer's foot
@@ -885,6 +908,7 @@ fun SessionsScreen(
             }
         },
     )
+    }
 }
 
 /**
@@ -1266,6 +1290,17 @@ private fun ConversationRow(
                     cornerRadius = ROW_CORNER,
                 )
                 .semantics {
+                    // Selection mode turns the row into a checkbox, and the drawn mark
+                    // is its only visible state: without this a screen reader reads the
+                    // title but never whether the row is in the set or what a tap does.
+                    if (selecting) {
+                        role = Role.Checkbox
+                        toggleableState = if (checked) {
+                            ToggleableState.On
+                        } else {
+                            ToggleableState.Off
+                        }
+                    }
                     onLongClick(label = text.sessions.actions) {
                         // Nothing to hold for while the list is in selection mode: the
                         // tap is already the checkbox, and a second way to reach the same
@@ -1383,12 +1418,13 @@ private fun ConversationRow(
                 // moment selection begins, which re-flows the whole list under the
                 // reader's finger.
                 //
-                // It is drawn rather than taken from the library, and the size is the
-                // whole reason: `Checkbox` carries a 48dp touch target, which is taller
-                // than this row's text column, so turning selection on grew every row
-                // by 12px and the list's height visibly stepped. The row itself is the
-                // target (its `onClick` is the toggle in selection mode), so the mark
-                // only has to show the state; 20dp stays inside the line box.
+                // It is drawn rather than taken from the library because the row's mark
+                // is a circle and Miuix's `Checkbox` is a rounded square: beta02's
+                // `Checkbox` is 26dp of ink (not the 48dp touch target this comment used
+                // to claim), still too tall for the row's 20dp line box and the wrong
+                // shape beside the radio rows elsewhere. The row itself is the target
+                // (its `onClick` is the toggle in selection mode), so the mark only has
+                // to show the state; 20dp stays inside the line box.
                 if (selecting) {
                     SelectionMark(checked = checked)
                 }
@@ -1585,12 +1621,16 @@ private fun RenameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var value by remember { mutableStateOf(initial) }
+    // State-based, because this dialog is glass on a page and the beta02 field for that
+    // material is `GlassTextField`; the open resets it so a cancelled rename does not
+    // carry its answer into the next question.
+    val value = remember { TextFieldState(initial) }
+    val typed = value.text.toString()
     LaunchedEffect(show) {
-        if (show) value = initial
+        if (show) value.setTextAndPlaceCursorAtEnd(initial)
     }
 
-    WindowDialog(
+    PiCustomDialog(
         show = show,
         title = text.sessions.renameTitle,
         // The note under the field says what naming the conversation the agent is
@@ -1599,16 +1639,17 @@ private fun RenameDialog(
         summary = if (isActive) text.sessions.renameActiveNote else text.sessions.renameClosedNote,
         onDismissRequest = onDismiss,
     ) {
-        TextField(
-            cornerRadius = PiCorner.radius,
-            value = value,
-            onValueChange = { value = it },
+        GlassTextField(
+            state = value,
             modifier = Modifier.fillMaxWidth(),
             label = text.sessions.renameLabel,
             useLabelAsPlaceholder = true,
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
+            cornerRadius = PiCorner.radius,
             // No focus ring, and the caret stated instead: see `piFieldColors`.
-            colors = piFieldColors(),
+            colors = GlassTextFieldDefaults.textFieldColors(
+                borderColor = Color.Transparent,
+            ),
             cursorBrush = piFieldCursor(),
         )
         // The app's one dialog-button row — see `PiDialogAnswers`. This pair was
@@ -1618,12 +1659,13 @@ private fun RenameDialog(
             dismiss = text.sessions.cancel,
             onDismiss = onDismiss,
             confirm = text.sessions.rename,
-            onConfirm = { onConfirm(value) },
+            onConfirm = { onConfirm(typed) },
             // Nothing to rename to while the field is empty: the confirm is disabled
             // rather than refusing the tap, which is the one state the library's
             // disabled fill exists for.
-            confirmEnabled = value.isNotBlank(),
+            confirmEnabled = typed.isNotBlank(),
             modifier = Modifier.padding(top = 12.dp),
+            glass = LocalPiBackdrop.current != null,
         )
     }
 }
@@ -1688,7 +1730,7 @@ private fun DeleteConfirm(
         LocalWindowInfo.current.containerDpSize.height * DIALOG_BODY_SHARE,
     )
 
-    WindowDialog(
+    PiCustomDialog(
         // Visibility is a flag of its own, and the target list is *not* cleared on
         // confirm: shown from `count > 0` on the live list, the panel spent its exit
         // animation reading "Delete 0 conversations" — the question changed while it was
@@ -1756,6 +1798,7 @@ private fun DeleteConfirm(
             onConfirm = onConfirm,
             destructive = true,
             modifier = Modifier.padding(top = 12.dp),
+            glass = LocalPiBackdrop.current != null,
         )
     }
 }
@@ -1847,7 +1890,10 @@ private val LIST_FADE = 30.dp
 private val HEADING_GUTTER = 20.dp
 
 /** The selection controls in the drawer's heading, and their glyphs. */
-private val SELECTION_BUTTON = 36.dp
+// The visible mark stays 20dp; the box is the platform's 48dp touch target. A
+// 36dp box made four adjacent controls (one of them destructive) smaller than a
+// thumb even though their glyphs looked the right size.
+private val SELECTION_BUTTON = 48.dp
 private val SELECTION_GLYPH = 20.dp
 
 /** A row's corner, when it is the highlighted one. */

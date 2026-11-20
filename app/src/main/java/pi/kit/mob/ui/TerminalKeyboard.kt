@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -70,7 +71,7 @@ internal fun PcKeyboard(
             if (ctrl && control != null) {
                 append((control.code and 0x1f).toChar())
             } else {
-                append(if (shift) text.uppercase() else text)
+                append(if (shift) text.uppercase(Locale.ROOT) else text)
             }
         }
         onSend(out)

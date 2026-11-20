@@ -161,6 +161,8 @@ internal fun MaintenancePage(
         subtitle = text.settings.maintenanceSubtitle,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        overlay = {
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -343,85 +345,6 @@ internal fun MaintenancePage(
         }
     }
 
-    // The runs' failures are operations that came back wrong, and in
-    // settings that is a dialog — announced then dismissed — not a strip that
-    // stays on the page (ARCHITECTURE §13). Each is bound to the run's own
-    // state, so its OK button *is* the run's clear call: pressing it reads the
-    // failure and dismisses it in one.
-    val liveCatalogueFailure = catalogueStatus as? CatalogueStatus.Failed
-    val catalogueFailure = rememberLastPresent(liveCatalogueFailure)
-    SettingsAlert(
-        show = liveCatalogueFailure != null,
-        title = text.settings.modelListStateFailed,
-        body = catalogueFailure?.message.orEmpty(),
-        confirm = text.common.ok,
-        onConfirm = catalogue::dismiss,
-    )
-
-    val liveRepairFailure = repair?.takeIf { it.relocatorDamaged || it.errors.isNotEmpty() }
-    val repairFailure = rememberLastPresent(liveRepairFailure)
-    SettingsAlert(
-        show = liveRepairFailure != null,
-        title = text.settings.relocateStateFailed,
-        body = when {
-            repairFailure == null -> ""
-            repairFailure.relocatorDamaged -> text.settings.relocateBroken
-            else -> text.settings.relocateProblems
-        },
-        confirm = text.common.ok,
-        lines = repairFailure?.errors.orEmpty(),
-        onConfirm = session::clearRepairResult,
-    )
-
-    // The two package runs report in this page's one shape: the success is the
-    // toast above, and a failure is a dialog carrying the run's own sentence and
-    // the end of its log. Its OK is the run's clear call — reading the failure
-    // and dismissing it are one press, as with the three runs above.
-    val livePackageFailure = packageRun?.takeIf { !it.succeeded }
-    val packageFailure = rememberLastPresent(livePackageFailure)
-    SettingsAlert(
-        show = livePackageFailure != null,
-        title = if (packageFailure?.kind == PiAgentSession.PackageRun.Kind.Restore) {
-            text.settings.packagesRestoreFailed
-        } else {
-            text.settings.packagesUpgradeFailed
-        },
-        body = packageFailure?.message.orEmpty(),
-        confirm = text.common.ok,
-        lines = packageFailure?.lines.orEmpty(),
-        onConfirm = session::clearPackageRun,
-    )
-
-    val liveStorageFailure = (storageCheck as? StorageSelfTest.Status.Finished)
-        ?.takeIf { !it.passed }
-    val storageFailure = rememberLastPresent(liveStorageFailure)
-    SettingsAlert(
-        show = liveStorageFailure != null,
-        title = text.settings.storageCheckFailed,
-        body = storageFailure?.output
-            ?.lastOrNull { it.startsWith(STORAGE_CHECK_TALLY) }
-            ?: text.settings.storageCheckFailed,
-        confirm = text.common.ok,
-        lines = storageFailure?.output?.filter { FAILURE_MARKER in it }.orEmpty(),
-        onConfirm = selfTest::dismiss,
-    )
-
-    // The one press on this page that replaces something rather than repairing
-    // it, so it asks first. The dialog says the two things being decided: what
-    // stops (a running conversation) and what is kept (the user's packages).
-    PiConfirm(
-        show = confirmRebuild,
-        title = text.settings.rebuildEnvironment,
-        text = text.settings.rebuildEnvironmentConfirm,
-        confirm = text.settings.rebuildEnvironmentConfirmNow,
-        dismiss = text.common.cancel,
-        destructive = true,
-        onConfirm = {
-            confirmRebuild = false
-            session.rebuildEnvironment()
-        },
-        onDismiss = { confirmRebuild = false },
-    )
 }
 
 /**

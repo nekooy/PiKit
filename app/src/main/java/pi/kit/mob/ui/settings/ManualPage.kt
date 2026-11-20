@@ -136,6 +136,18 @@ internal fun AboutPage(
         subtitle = "PiKit ${BuildConfig.VERSION_NAME}",
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        overlay = {
+            // The failure is an event, so it is a dialog; composed in the overlay it
+            // samples the page's backdrop instead of being a window above it.
+            val shownUpdateError = rememberLastPresent(updateError)
+            SettingsAlert(
+                show = updateError != null,
+                title = text.settings.checkForUpdates,
+                body = text.settings.failedWith(shownUpdateError.orEmpty()),
+                confirm = text.common.ok,
+                onConfirm = { updateError = null },
+            )
+        },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -225,19 +237,6 @@ internal fun AboutPage(
                     },
                 )
             }
-
-            // The failure, in the app's dialog shape rather than a note under the
-            // section: a check that failed is an *event* — the reader asked for it and it
-            // came back wrong — so it is announced and dismissed, not left as a
-            // paragraph that has to be found again by scrolling.
-            val shownUpdateError = rememberLastPresent(updateError)
-            SettingsAlert(
-                show = updateError != null,
-                title = text.settings.checkForUpdates,
-                body = text.settings.failedWith(shownUpdateError.orEmpty()),
-                confirm = text.common.ok,
-                onConfirm = { updateError = null },
-            )
 
             PiSection(title = text.settings.environment) {
                 BasicComponent(
@@ -553,9 +552,12 @@ private fun ManualProse(text: String) {
     MarkdownText(
         text = text,
         modifier = Modifier
+            // The cap must come before `fillMaxWidth`: `fillMaxWidth` sets the
+            // minimum to the incoming maximum, so a later `widthIn(max = …)` can
+            // never shrink it — the 560dp measure was a no-op on a tablet.
+            .widthIn(max = MANUAL_MEASURE)
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-            .widthIn(max = MANUAL_MEASURE),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
     )
 }
 

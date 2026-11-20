@@ -113,6 +113,8 @@ internal fun PersonalizationPage(
         subtitle = text.settings.personalizationSubtitle,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        overlay = {
+        },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -223,65 +225,6 @@ internal fun PersonalizationPage(
         }
     }
 
-    // One sheet for both speakers: the body is told which slot it edits, so the two rows
-    // cannot drift into two editors that save differently.
-    //
-    // The slot and the panel are two values, not one: `show` goes false on the tap while
-    // Miuix's exit animation is still playing, and a body and a title read off the same
-    // null slot play that last 200 ms empty — the panel shrinks away with no title and no
-    // content in it. `shownSlot` is the slot the panel is *drawing*, and it is only ever
-    // replaced by a newer one, which is the shape `WebSearchConfig` uses for its own
-    // value sheet for the same reason.
-    val slot = editingAvatar
-    PiSheet(
-        show = slot != null,
-        title = when (shownSlot) {
-            AvatarSlot.Ai -> text.settings.aiAvatar
-            AvatarSlot.User -> text.settings.userAvatar
-            null -> null
-        },
-        onDismiss = { editingAvatar = null },
-    ) {
-        when (shownSlot) {
-            AvatarSlot.Ai -> AvatarSheet(
-                slotId = AvatarSlot.Ai.id,
-                label = settings.aiAvatarName,
-                imagePath = settings.aiAvatarImage,
-                speaker = AvatarSpeaker.AGENT,
-                color = settings.aiAvatarColor,
-                onChangeLabel = { value ->
-                    session.settingsStore.update { it.copy(aiAvatarName = value) }
-                },
-                onChangeImage = { path ->
-                    session.settingsStore.update { it.copy(aiAvatarImage = path) }
-                },
-                onChangeColor = { chosen ->
-                    session.settingsStore.update { it.copy(aiAvatarColor = chosen) }
-                },
-                text = text,
-            )
-
-            AvatarSlot.User -> AvatarSheet(
-                slotId = AvatarSlot.User.id,
-                label = settings.userAvatarName,
-                imagePath = settings.userAvatarImage,
-                speaker = AvatarSpeaker.READER,
-                color = settings.userAvatarColor,
-                onChangeLabel = { value ->
-                    session.settingsStore.update { it.copy(userAvatarName = value) }
-                },
-                onChangeImage = { path ->
-                    session.settingsStore.update { it.copy(userAvatarImage = path) }
-                },
-                onChangeColor = { chosen ->
-                    session.settingsStore.update { it.copy(userAvatarColor = chosen) }
-                },
-                text = text,
-            )
-
-            null -> Unit
-        }
-    }
 }
 
 /**

@@ -515,6 +515,7 @@ internal object ChineseStrings : Strings {
         override val provider = "供应商"
         override val providerSubtitle = "选择该配置对应的供应商"
         override val providerPickSearch = "搜索供应商"
+        override fun pickNothingMatches(query: String) = "没有匹配「$query」的选项。"
         override val modelPickSearch = "搜索模型"
         override fun keyPassedAs(envVar: String) = "环境变量 $envVar"
         override val notChosen = "未选择"

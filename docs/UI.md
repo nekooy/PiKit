@@ -48,10 +48,12 @@ writing a composition:
 
 | Need | Use | Not |
 | --- | --- | --- |
-| A destination or settings page | `PiPage(title, subtitle, onBack, actions, body)` | a bare `Scaffold`, a second bar variant |
+| A destination or settings page | `PiPage(title, subtitle, onBack, actions, overlay, body)` | a bare `Scaffold`, a second bar variant |
 | A titled group of rows | `PiSection` (+ `PiGroupAction` for the group's own action) | a hand-drawn `Card` + heading |
 | A row in a popup menu | `PiMenuRow` (choice / action / fact) | `BasicComponent`, a preference row |
 | A question with answers | `PiConfirm` (app) / `PiDialogHost` (pi's questions) | a raw `WindowDialog`/`GlassDialog` |
+| A question with a custom body | `PiCustomDialog` | composing `WindowDialog` or `GlassDialog` at the screen |
+| A field on a glass sheet/dialog | `GlassTextField` + `piFieldCursor()` | a plain `TextField` with `piFieldColors()` |
 | A window's content while it leaves | `rememberLastPresent(subject)` | reading the nullable flag straight into the body (empties the exit) |
 | The answer row of any dialog | `PiDialogAnswers` | a hand-built `TextButton` pair |
 | A bottom sheet | `PiSheet` | a raw `WindowBottomSheet`/`GlassBottomSheet` |
@@ -116,6 +118,17 @@ that cut the last card in two (§13, *The window's last pixels*).
   omitting the argument floats every arrow on the first frame. Passing the scroll
   position (not a nested-scroll accumulator) is what keeps a short page that only
   bounces from lighting the arrow.
+- **A top-bar action is a `GlassIconButton`, not a basic `IconButton`.** It draws the
+  glass icon set at 28dp and inherits the bar's material/scroll state; a plain
+  `IconButton` stays flat while the back arrow rises, and a filled basic glyph beside
+  a stroked one reads as two icon sets. The files and terminal bars are the two
+  examples.
+- **A page's windows live in `PiPage`'s `overlay` slot.** Compose its sheets,
+  confirmations and custom dialogs there, not after the `PiPage(...) { }` call: the
+  page's `LocalPiBackdrop` is provided around the slot but the slot is outside the
+  recorded body, which is the only place where `PiSheet`/`PiConfirm`/`PiCustomDialog`
+  can take the OS4 glass path without sampling their own layer. A window written after
+  the call sees a null backdrop and silently becomes an opaque platform window.
 
 ## Glass: the material, and the red lines
 
@@ -276,12 +289,14 @@ takes the same padding (§9.2).
   `GlassBottomSheet`; above every page (the first-launch prompts, pi's questions)
   they keep `WindowDialog` / `WindowBottomSheet`, which need no `Scaffold` host. The
   two paths share `PiDialogAnswers`, so a question reads the same wherever it is
-  raised. **A custom-content dialog follows the same split** — a rename field, a
-  picker, the avatar crop compose `WindowDialog`/`GlassDialog` themselves because the
-  confirm shape does not fit their body, but a dialog raised *inside a page* takes the
-  glass variant so its material is the bar's; one raised from the drawer (a panel with
-  no backdrop) or above every page keeps the window. The glass overlay pair itself is
-  the kit's (`PiOverlays`); a screen does not call `GlassDialog` directly.
+  raised. **A custom-content dialog uses `PiCustomDialog`** — it owns the same split
+  for a body that is a list, a crop stage, a field or a failure paragraph, and uses
+  `PiDialogAnswers(glass = …)` for its buttons. A screen never composes `WindowDialog`
+  or `GlassDialog` itself: `check-ui.py` keeps the glass pair inside `PiOverlays`, and
+  the wrapper is what prevents a page dialog from falling back to the opaque window.
+  The drawer is a case of its own: it has a backdrop, and its windows are siblings of
+  the recorded panel, so `SessionsScreen` provides `LocalPiBackdrop` around them and
+  the rename, delete and mode questions are glass over the drawer.
 - **The answers are `PiDialogAnswers`**: dismiss neutral, confirm primary, a
   destructive confirm in the error role. The glass path draws `GlassDialogButton`s;
   the window path keeps the filled `TextButton` pair. A single-answer
@@ -296,7 +311,12 @@ takes the same padding (§9.2).
   clears it. On a scrolling body the inset goes *inside* the scroll, so the text
   travels through it and the panel's fill still reaches the window's edge.
 - **A picker longer than a few words is a sheet of radio rows with a filter field**,
-  not a dropdown: a dropdown's popup is sized for a list, not for a search (§13).
+  not a dropdown: a dropdown's popup is sized for a list, not for a search (§13). Its
+  filter and any other field inside a glass sheet are `GlassTextField` with
+  `GlassTextFieldDefaults.textFieldColors(borderColor = Color.Transparent)` and
+  `piFieldCursor()`: the beta02 field has the translucent fill the material expects,
+  while the opaque `secondaryContainer` fill of `piFieldColors()` is for a field on a
+  page. A field on the composer's glass frame keeps its transparent-fill `TextField`.
 - **A moment is a toast; a condition stays on the page.** "Saved", "Agent restarted"
   is `LocalPiToast.show`; "the agent failed to start", "this folder cannot be read"
   is an in-page line in the error role, because a message that disappears after two

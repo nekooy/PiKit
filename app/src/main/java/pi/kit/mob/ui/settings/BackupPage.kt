@@ -30,6 +30,7 @@ import pi.kit.mob.pi.BackupStatus
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
+import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
@@ -164,12 +165,32 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
         }
     }
 
+    var restoreConfirm by remember { mutableStateOf<Set<BackupCategory>?>(null) }
     val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.backupTitle,
         subtitle = text.settings.backupSubtitle,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        overlay = {
+            // Restore replaces files with the archive's copies; it is the page's one
+            // irreversible action and gets the same destructive question every other
+            // one in settings gets before it runs.
+            PiConfirm(
+                show = restoreConfirm != null,
+                title = text.settings.backupImportConfirm,
+                text = text.settings.backupImportNote,
+                confirm = text.settings.backupImportConfirm,
+                dismiss = text.common.cancel,
+                destructive = true,
+                onConfirm = {
+                    val chosen = restoreConfirm
+                    restoreConfirm = null
+                    if (chosen != null) manager.restore(chosen)
+                },
+                onDismiss = { restoreConfirm = null },
+            )
+        },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -294,7 +315,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
                 }
                 RunActions(
                     label = text.settings.backupImportConfirm,
-                    onAction = { manager.restore(chosen) },
+                    onAction = { restoreConfirm = chosen },
                     enabled = !busy && chosen.isNotEmpty(),
                     onDismiss = if (busy) null else manager::cancelReview,
                     dismissLabel = text.common.cancel,
