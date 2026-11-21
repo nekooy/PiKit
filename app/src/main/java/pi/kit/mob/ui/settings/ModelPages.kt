@@ -59,6 +59,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -844,7 +845,6 @@ internal fun ModelEditPage(
     // sheets and dialogs are windows of their own, so each is a boolean (or the subject it
     // is about) in this composable and the body reads it.
     var providerPicker by remember { mutableStateOf(false) }
-    var apiPicker by remember { mutableStateOf(false) }
     var fetched by remember { mutableStateOf<List<DiscoveredModel>>(emptyList()) }
     var fetchedFootnote by remember { mutableStateOf("") }
     var modelPicker by remember { mutableStateOf(false) }
@@ -921,24 +921,6 @@ internal fun ModelEditPage(
                     }
                 },
                 onDismiss = { providerPicker = false },
-            )
-
-            // Three options, so there is no filter: a search field over three rows is a
-            // control whose only effect is to hide the answer. The labels are pi's own
-            // identifiers and are not translated — they are the strings in pi's
-            // `docs/models.md` and in the relay's own documentation, and the two have to
-            // match (see `CustomApi`).
-            SettingsPickerSheet(
-                show = apiPicker,
-                title = text.settings.apiType,
-                subtitle = text.settings.apiTypeSubtitle,
-                options = CustomApi.entries.map { SettingsPick(id = it.id, label = it.id) },
-                selectedId = CustomApi.fromId(api).id,
-                onPick = { id ->
-                    apiPicker = false
-                    api = id
-                },
-                onDismiss = { apiPicker = false },
             )
 
             // The fetched list. The title is the *count* rather than the word "models": the
@@ -1173,12 +1155,26 @@ internal fun ModelEditPage(
                 // second answer to a question pi has already settled. The labels are pi's
                 // identifiers because those are the values the relay's own docs name — see
                 // `CustomApi`.
+                //
+                // A dropdown row, not a sheet: three alternatives fit a panel, and the value
+                // in effect is a fact this row is the right place for. The provider row above
+                // it stays a sheet because pi ships more than thirty of those and that list
+                // needs the filter field — §13's rule is about the *length* of the list, not
+                // about which page the row is on.
                 if (isCustomEndpoint) {
-                    ArrowPreference(
+                    val protocols = CustomApi.entries
+                    OverlayDropdownPreference(
+                        items = protocols.map { it.id },
+                        selectedIndex = protocols.indexOf(CustomApi.fromId(api)),
                         title = text.settings.apiType,
                         summary = text.settings.apiTypeSubtitle,
-                        endActions = { SettingsValue(CustomApi.fromId(api).id, monospace = true) },
-                        onClick = { apiPicker = true },
+                        onSelectedIndexChange = { index ->
+                            val id = protocols[index].id
+                            if (id != api) {
+                                haptics.choose()
+                                api = id
+                            }
+                        },
                     )
                 }
 

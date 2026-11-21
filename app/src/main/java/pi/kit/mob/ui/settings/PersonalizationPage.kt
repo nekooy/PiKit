@@ -30,6 +30,7 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.AvatarSpeaker
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiCorner
@@ -42,7 +43,7 @@ import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -69,13 +70,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * used to be the only behaviour. Agent restarts after the first launch still
  * restore — see `shouldRestoreRememberedSession`.
  *
- * ## The modes are radio rows, the size is a slider
+ * ## The modes are dropdown rows, the size is a slider
  *
- * Both used to be a row that opened a picker sheet. Three palettes are a *set*, and a
- * set is better read at once than one at a time behind a scrim: the modes as radio
- * rows mean the choice is visible, the current one is marked, and picking one
- * re-themes the very rows that were just tapped. That is the live preview the old
- * sheet hid behind its own scrim.
+ * Both used to be a row that opened a picker sheet, and then radio rows. The radio rows were
+ * chosen for a real reason — three palettes are a *set*, and a set is better read at once than
+ * one at a time behind a **scrim** — and the scrim is what the dropdown removes: Miuix's
+ * dropdown opens a panel anchored at the row with no scrim at all, so the row being changed
+ * stays in sight, the alternatives are one tap away, and picking one re-themes the very panel
+ * that was just tapped. Two rows instead of five, and the shape matches the rest of the app's
+ * short-list choices (see `SettingsPickerSheet` for where the line to a filtered sheet is).
  *
  * The text size is the one that is a *range*, and Miuix has the component for it:
  * `SliderPreference` keeps the slider on the row instead of behind a panel, which
@@ -99,6 +102,7 @@ internal fun PersonalizationPage(
 ) {
     val text = strings
     val settings by session.settingsStore.settings.collectAsStateWithLifecycle()
+    val haptics = LocalPiHaptics.current
 
     // Which avatar is being edited, as the sheet's own state: a Miuix sheet is a window
     // of its own and is dismissed by the scrim, the back gesture and a downward drag, so
@@ -200,6 +204,17 @@ internal fun PersonalizationPage(
                 )
             }
 
+            // One section, three rows: the text size, the theme and the launcher mark are the
+            // whole of "how the app looks", and they used to be three groups with the theme and
+            // the mark as radio lists under headings of their own.
+            //
+            // The two are one row each now, not a radio group. They used to argue for visible
+            // radios — three palettes are a *set*, and a set is better read at once than one at
+            // a time behind a scrim — and that argument was about the *scrim*, not about the
+            // list: Miuix's dropdown opens a panel over the row with no scrim at all, so the
+            // row being changed stays in sight, the alternatives are one tap away, and the page
+            // is three rows shorter. That is the shape every MIUI settings list gives a value
+            // with a handful of options.
             PiSection(title = text.settings.personalizationAppearance) {
                 FontSizeRow(
                     current = settings.fontSize,
@@ -208,30 +223,33 @@ internal fun PersonalizationPage(
                     },
                     text = text,
                 )
-            }
-
-            PiSection(title = text.settings.theme) {
-                ThemeMode.entries.forEach { mode ->
-                    RadioButtonPreference(
-                        title = themeModeLabel(mode, text),
-                        selected = settings.themeMode == mode,
-                        onClick = {
+                OverlayDropdownPreference(
+                    items = ThemeMode.entries.map { themeModeLabel(it, text) },
+                    selectedIndex = settings.themeMode.ordinal,
+                    title = text.settings.theme,
+                    onSelectedIndexChange = { index ->
+                        val mode = ThemeMode.entries[index]
+                        if (mode != settings.themeMode) {
+                            // The library ticks when the panel opens and says nothing when a
+                            // row is picked; `choose` is the documented moment for exactly
+                            // this, and the same one a radio row would perform.
+                            haptics.choose()
                             session.settingsStore.update { it.copy(themeMode = mode) }
-                        },
-                    )
-                }
-            }
-
-            PiSection(title = text.settings.launcherIcon) {
-                LauncherIcon.entries.forEach { icon ->
-                    RadioButtonPreference(
-                        title = launcherIconLabel(icon, text),
-                        selected = settings.launcherIcon == icon,
-                        onClick = {
+                        }
+                    },
+                )
+                OverlayDropdownPreference(
+                    items = LauncherIcon.entries.map { launcherIconLabel(it, text) },
+                    selectedIndex = settings.launcherIcon.ordinal,
+                    title = text.settings.launcherIcon,
+                    onSelectedIndexChange = { index ->
+                        val icon = LauncherIcon.entries[index]
+                        if (icon != settings.launcherIcon) {
+                            haptics.choose()
                             session.settingsStore.update { it.copy(launcherIcon = icon) }
-                        },
-                    )
-                }
+                        }
+                    },
+                )
             }
 
             // The transcript's two speakers, as names, pictures or marks. A switch
@@ -498,10 +516,10 @@ private val AVATAR_PREVIEW_SIZE = 96.dp
 /**
  * A theme's name in the interface language.
  *
- * Three radio rows rather than a segmented control of three short labels: the
- * Japanese `システムに合わせる` is nine characters in a third of a row, which is an
- * ellipsis in a segmented control and a whole label on a row of its own. The enum's
- * own order is the order they are offered in.
+ * The label is the whole of the row's trailing slot in the dropdown, which is why it has to
+ * be short: the Japanese `システムに合わせる` is nine characters and fits the value slot at a
+ * phone's width, where a segmented control of three such labels would have ellipsised it.
+ * The enum's own order is the order they are offered in.
  */
 private fun themeModeLabel(mode: ThemeMode, text: Strings): String = when (mode) {
     ThemeMode.SYSTEM -> text.settings.themeSystem

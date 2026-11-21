@@ -621,22 +621,32 @@ data class SettingsPick(
 )
 
 /**
- * A list of choices, in Miuix's sheet.
+ * A **long** list of choices, in Miuix's sheet.
  *
- * The app's one selection control: a row on the page states the current value, and the
- * list is one tap behind it. There is no dropdown here on purpose —
- * `OverlayDropdownPreference` needs the page's popup host and draws a small anchored
- * panel, which is right for three alternatives and wrong for the thirty-odd provider ids
- * this same sheet is used for. One shape for both, so a picker is recognisable wherever
- * it appears.
+ * This is the control for a list that needs a *filter*: pi ships more than thirty provider
+ * ids, the catalogue brings back a model list of unknown length, and a panel sized for a
+ * handful cannot carry a search field. The row on the page states the current value and the
+ * list is one tap behind it.
+ *
+ * ## The short list is a dropdown row, and the split is the length
+ *
+ * A value with a few alternatives is `OverlayDropdownPreference` — Miuix's own dropdown row,
+ * used directly at the call site the way `ArrowPreference` is, since the app has no row
+ * wrapper of its own. It states the value at the row's end, opens a panel anchored at the row
+ * with no scrim, and is what every MIUI settings list gives a choice like this: the language,
+ * the theme, the launcher mark, the chat web default, the wire protocol.
+ *
+ * The line between the two is the length of the list, not the page it is on: **a list a
+ * reader has to search is this sheet, and a list a reader reads is a dropdown.** The panel
+ * scrolls, so a dozen rows are fine in it; thirty providers with descriptions are not, and
+ * that is what [searchHint] exists for.
  *
  * The rows are `RadioButtonPreference`s when the list *has* a current value, and
  * `ArrowPreference`s when it does not: the radio is Miuix's mark for "one of these is in
- * effect", which is the question the provider, workflow and API-type pickers ask, while
- * the add-an-option and fetched-model lists ask "which of these do I want" and a column of
- * unselected radios answered that with the other question's mark. [searchHint] adds a
- * filter field above the list, for a list of *things that exist* rather than a handful of
- * alternatives.
+ * effect", which is the question the provider picker asks, while the add-an-option and
+ * fetched-model lists ask "which of these do I want" and a column of unselected radios
+ * answered that with the other question's mark. [searchHint] adds a filter field above the
+ * list, for a list of *things that exist* rather than a handful of alternatives.
  *
  * An empty filter result draws no card at all. That is a gap rather than a decision: the
  * catalog has no "no matches" member on `Strings.Settings` — the sentence belongs to

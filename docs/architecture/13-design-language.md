@@ -304,6 +304,22 @@ something"; a switch means "this row is the switch".
 
 Two row rules are behaviour rather than taste:
 
+- **A short list of alternatives is a dropdown row, and the length of the list is the rule.**
+  `OverlayDropdownPreference` states the value in effect at the row's end beside the library's
+  up/down arrow and opens its alternatives in a panel anchored at the row. It is used directly
+  at the call site, like `ArrowPreference` — the app has no row wrapper of its own. This is the
+  shape the language, the theme, the launcher mark, the chat web default and the wire protocol
+  take, and it replaced three shapes that disagreed with each other: a dialog of radio rows (the
+  language), radio rows inline on the page (the theme, the launcher mark, the web default, which
+  cost a screenful for three to five alternatives), and a sheet (the provider, the API type).
+  The inline radio group had a real argument — a set is better read at once than one at a time
+  behind a **scrim** — and the dropdown answers it rather than ignoring it: the panel opens over
+  the row with no scrim, so the row being changed stays in sight and the page below it is not
+  darkened. A list a reader has to *search* is still `SettingsPickerSheet` with a filter field,
+  because a dropdown's panel has no search: thirty-odd provider ids are a sheet, three
+  alternatives are a row. The library ticks when the panel opens and says nothing when a row is
+  picked, so the call site performs `PiHaptics.choose()` on the pick — and only when it changes
+  something, because picking the value already in effect is a read rather than a choice.
 - **A row that raises a question is inert, and its switch is the control.** The
   storage grants ask every time they are turned on or off, so the row does not toggle
   and the finger has to reach the switch. Backup's switches stay row-toggling, because

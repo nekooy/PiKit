@@ -24,6 +24,7 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.WebProviderField
 import pi.kit.mob.pi.WebSearchSettings
 import pi.kit.mob.pi.WebSearchStore
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
@@ -32,12 +33,14 @@ import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Reset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -75,6 +78,7 @@ internal fun SearchPage(
     var resetConfirming by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val toasts = LocalPiToast.current
+    val haptics = LocalPiHaptics.current
 
     val pageScroll = rememberScrollState()
     PiPage(
@@ -216,19 +220,44 @@ internal fun SearchPage(
                 // on this page because this page is where the reader decides what web
                 // access the agent has, and a new chat conversation's answer to that is
                 // the same question one step earlier. See ARCHITECTURE §9.3 and §17.
-                PiSection(title = text.settings.chatWebAccessDefault) {
-                    ChatWebAccessDefault.entries.forEach { option ->
-                        RadioButtonPreference(
-                            title = chatWebAccessLabel(option, text),
-                            summary = chatWebAccessSummary(option, text),
-                            selected = appSettings.chatWebAccessDefault == option,
-                            onClick = {
-                                session.settingsStore.update {
-                                    it.copy(chatWebAccessDefault = option)
-                                }
+                //
+                // A dropdown row rather than three radios, like every other "which of a
+                // few" on the settings pages. This one keeps its per-option sentence in the
+                // panel (`DropdownItem.summary`), and the row's own summary states the
+                // option in effect — the explanation of the current value is exactly what
+                // the row has room for once the alternatives are behind a tap.
+                //
+                // The group has **no** heading: the row is the whole of it, and the title
+                // the three radios used to share with their heading would now be drawn twice
+                // on one card — `PiSection`'s untitled form is the shape for a card that is
+                // obviously one thing.
+                PiSection {
+                    val options = ChatWebAccessDefault.entries
+                    val current = appSettings.chatWebAccessDefault
+                    OverlayDropdownPreference(
+                        entry = DropdownEntry(
+                            items = options.map { option ->
+                                DropdownItem(
+                                    text = chatWebAccessLabel(option, text),
+                                    summary = chatWebAccessSummary(option, text),
+                                    selected = option == current,
+                                    onClick = {
+                                        // The library ticks when the panel opens and says
+                                        // nothing when a row is picked, and picking the
+                                        // value already in effect is a read, not a choice.
+                                        if (option != current) {
+                                            haptics.choose()
+                                            session.settingsStore.update {
+                                                it.copy(chatWebAccessDefault = option)
+                                            }
+                                        }
+                                    },
+                                )
                             },
-                        )
-                    }
+                        ),
+                        title = text.settings.chatWebAccessDefault,
+                        summary = chatWebAccessSummary(current, text),
+                    )
                 }
 
                 PiSection(title = text.settings.searchSection) {

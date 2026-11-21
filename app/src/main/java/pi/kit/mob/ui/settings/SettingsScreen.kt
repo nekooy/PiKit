@@ -1,9 +1,7 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,10 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
@@ -34,18 +30,14 @@ import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.StorageSelfTest
-import pi.kit.mob.ui.kit.LocalPiBackdrop
+import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
-import pi.kit.mob.ui.kit.PiCustomDialog
-import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
-import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 
 /** Screens reachable from the Settings tab. Navigation state lives here only. */
 internal sealed interface SettingsPage {
@@ -397,7 +389,7 @@ private fun RootPage(
         value = withContext(Dispatchers.IO) { PiInstallation.installedVersion(session.env) }
     }
     val text = strings
-    var choosingLanguage by remember { mutableStateOf(false) }
+    val haptics = LocalPiHaptics.current
 
     // The tab root is a page like every other page: it has Miuix's top bar, and the bar
     // is where the tab's name lives. `onBack` is null, which is what makes the system
@@ -409,22 +401,6 @@ private fun RootPage(
         title = text.settings.title,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
-        overlay = {
-            // Composed inside the page's backdrop scope, so the language question is a
-            // GlassDialog over this page rather than an opaque window above it.
-            LanguageDialog(
-                show = choosingLanguage,
-                text = text,
-                current = settings.language,
-                onDismiss = { choosingLanguage = false },
-                onPick = { entry ->
-                    choosingLanguage = false
-                    // The root of the tree is keyed on this field, so writing it
-                    // rebuilds the whole interface in the chosen language.
-                    session.settingsStore.update { it.copy(language = entry) }
-                },
-            )
-        },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
@@ -466,16 +442,29 @@ private fun RootPage(
                     summary = text.settings.personalizationSubtitle,
                     onClick = { onOpen(SettingsPage.Personalization) },
                 )
-                // A dialog, not a menu: the row asks "which language should the
-                // interface speak" and its answers are the whole of the question.
-                // The floating menu this replaced read as a dropdown off a
-                // toolbar control — a habit from a place this row does not live
-                // in — and the reader asked for 弹窗 instead.
-                ArrowPreference(
+                // A dropdown row, like every other value with a handful of options: the
+                // current language sits at the row's end and the three answers open in a
+                // panel anchored there. It has been a picker sheet, a floating menu and a
+                // dialog — the dialog because the *menu* read as a toolbar control's menu
+                // borrowed for a settings list — and the dropdown row is the shape that
+                // answers both objections: it is a settings row, and it opens over itself
+                // rather than over the page.
+                OverlayDropdownPreference(
+                    items = Lang.entries.map { it.label },
+                    selectedIndex = settings.language.ordinal,
                     title = text.settings.language,
                     summary = text.settings.languageSubtitle,
-                    endActions = { SettingsValue(settings.language.label) },
-                    onClick = { choosingLanguage = true },
+                    onSelectedIndexChange = { index ->
+                        val entry = Lang.entries[index]
+                        if (entry != settings.language) {
+                            // The library says nothing when a row is picked; this is the
+                            // documented "a row of a set became the chosen one" moment.
+                            haptics.choose()
+                            // The root of the tree is keyed on this field, so writing it
+                            // rebuilds the whole interface in the chosen language.
+                            session.settingsStore.update { it.copy(language = entry) }
+                        }
+                    },
                 )
                 ArrowPreference(
                     title = text.settings.userManual,
@@ -534,101 +523,6 @@ private fun RootPage(
     }
 
 }
-
-/**
- * The interface language, as a dialog: the question, its three answers under it,
- * and the two words that close it.
- *
- * It has been a picker sheet and a floating menu, and the menu was the wrong
- * habit: a dropdown anchored to a settings row borrows the shape of a toolbar
- * control's menu, and a settings list is not a toolbar. The dialog is the shape
- * the question already has elsewhere in the app — a question with its answers
- * under it, a confirm and a cancel (§13) — and the reader asked for it by name
- * (`语言选择改为弹窗选择的形式`).
- *
- * The marker moves under the finger and nothing is written until the confirm is
- * tapped: this is a dialog, and a dialog's answer is committed by its confirm
- * button. The mark is a radio rather than a tick in a row of the app's own — it is
- * Miuix's own "one of these", and it says which one is chosen without a second
- * glyph being drawn for the question.
- *
- * ## The rows are full-bleed, and the answers are the app's own pair
- *
- * The three languages are one full-width list: Miuix's `Card` is *not* used, because a
- * card is a surface inset from the dialog's own edge and a row's press feedback is
- * drawn inside whatever bounds it has — so the tap highlight stopped 24dp short of the
- * dialog on each side and read as a highlight of the row rather than of the choice. The
- * rows are `RadioButtonPreference`s directly on the dialog's surface, which is where
- * their indication reaches the dialog's own rounded corner.
- *
- * The two answers are [PiDialogAnswers], the app's one dialog-button shape — the same
- * two filled halves the *rebuild the runtime* question draws. This dialog used to pass
- * a transparent container, on the argument that `TextButton`'s `secondaryVariant` fill is
- * the same near-white as the card above it and the three blocks merged. That card is
- * gone with the full-bleed list, so the argument went with it — and the flat pair was
- * the last dialog in the app whose answers did not match every other one's.
- */
-@Composable
-private fun LanguageDialog(
-    show: Boolean,
-    text: Strings,
-    current: Lang,
-    onDismiss: () -> Unit,
-    onPick: (Lang) -> Unit,
-) {
-    // Keyed on `show` as well as on the stored language, so reopening the question starts
-    // at the language that is actually in effect rather than at whatever the last
-    // opening's finger left selected and then cancelled.
-    var chosen by remember(show, current) { mutableStateOf(current) }
-    val backdrop = LocalPiBackdrop.current
-    // One content body for both window variants: the glass dialog is the page's
-    // material, and the window dialog is the same question on a surface with no page
-    // behind it. The answers follow the same split, so a page dialog's buttons are
-    // Miuix's glass buttons rather than the window path's filled pair.
-    val body: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth()) {
-            Lang.entries.forEach { entry ->
-                RadioButtonPreference(
-                    title = entry.label,
-                    selected = entry == chosen,
-                    onClick = { chosen = entry },
-                )
-            }
-            PiDialogAnswers(
-                dismiss = text.common.cancel,
-                onDismiss = onDismiss,
-                confirm = text.common.confirm,
-                onConfirm = { onPick(chosen) },
-                // The answers keep the dialog's own gutter even though the list above
-                // them does not: a button's fill has to stop short of the panel's edge,
-                // where a row's highlight has to reach it.
-                modifier = Modifier.padding(horizontal = DIALOG_ANSWER_GUTTER, vertical = 12.dp),
-                glass = backdrop != null,
-            )
-        }
-    }
-    PiCustomDialog(
-        show = show,
-        title = text.settings.language,
-        // No horizontal inset for the *content*, so the list spans the dialog: the
-        // title and the answer row are centred and already have their own margins
-        // from the library, and a row's press indication is clipped to the bounds
-        // it is given — see this function's KDoc.
-        insideMargin = DpSize(0.dp, DialogDefaults.insideMargin.height),
-        onDismissRequest = onDismiss,
-    ) {
-        body()
-    }
-}
-
-/**
- * The answers' gutter inside a dialog whose content is full-bleed.
- *
- * `DialogDefaults.insideMargin`'s own width, so a dialog that removes the content inset
- * to let its list reach the edges puts the same number back on the buttons — the two are
- * one measurement and stating it as a named constant is what says so.
- */
-private val DIALOG_ANSWER_GUTTER = 24.dp
 
 internal fun agentDescription(agent: AgentStatus, text: Strings): String = when (agent) {
     AgentStatus.Running -> text.settings.running

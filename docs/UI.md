@@ -50,6 +50,8 @@ writing a composition:
 | --- | --- | --- |
 | A destination or settings page | `PiPage(title, subtitle, onBack, actions, overlay, body)` | a bare `Scaffold`, a second bar variant |
 | A titled group of rows | `PiSection` (+ `PiGroupAction` for the group's own action) | a hand-drawn `Card` + heading |
+| A value with a few alternatives | `OverlayDropdownPreference` at the call site | a radio group on the page, a dialog, a sheet |
+| A long list of choices to search | `SettingsPickerSheet` | a dropdown (its panel has no filter) |
 | A row in a popup menu | `PiMenuRow` (choice / action / fact) | `BasicComponent`, a preference row |
 | A question with answers | `PiConfirm` (app) / `PiDialogHost` (pi's questions) | a raw `WindowDialog`/`GlassDialog` |
 | A question with a custom body | `PiCustomDialog` | composing `WindowDialog` or `GlassDialog` at the screen |
@@ -274,6 +276,16 @@ no row wrapper of its own. `PiSection` carries the metrics — `padding(horizont
 cards with `Arrangement.spacedBy`. A `TextField` form is *not* wrapped in a card; it
 takes the same padding (§9.2).
 
+- **A value with a few alternatives is a dropdown row.** Use Miuix's
+  `OverlayDropdownPreference` directly at the call site — the language, the theme, the
+  launcher mark, the chat web default, the wire protocol. It states the value in effect
+  at the row's end with the library's up/down arrow and opens its alternatives in a panel
+  anchored at the row, with **no scrim** — which is why it is preferred over a radio group
+  on the page (five rows for one question) and over a dialog (a scrim over the page the
+  choice re-themes). A list a reader has to *search* is `SettingsPickerSheet` instead: the
+  panel has no filter field, so thirty-odd provider ids are a sheet and three alternatives
+  are a row. The library ticks when the panel opens and is silent on the pick, so the call
+  site performs `PiHaptics.choose()` — and only when the pick changes something.
 - **A row that raises a question is inert; its switch is the control.** The storage
   grants ask every time they flip, so the row does not toggle and the finger reaches
   the switch. A row that asks nothing (backup's switches) stays row-toggling.
