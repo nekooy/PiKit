@@ -51,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -89,6 +88,8 @@ import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiModeSwitch
 import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiTone
+import pi.kit.mob.ui.kit.PiTopEdgeClearance
+import pi.kit.mob.ui.kit.PiTopEdgeViewport
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piMenuAnchor
@@ -672,101 +673,88 @@ fun SessionsScreen(
             // that has been scrolled to the top was cut by the field's own edge, which
             // is the seam this drawer's reference drawing spends the same 16dp hiding.
             Box(Modifier.fillMaxWidth().weight(1f)) {
-            when {
-                loading -> Box(
-                    Modifier.fillMaxWidth().fillMaxHeight(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
+                when {
+                    loading -> Box(
+                        Modifier.fillMaxWidth().fillMaxHeight(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+
+                    // A scan that has not answered yet is not an empty result. The list
+                    // used to say "nothing matches" for as long as the scan ran, which is
+                    // a claim about a search that was still reading files.
+                    searching && visible.isEmpty() -> Box(
+                        Modifier.fillMaxWidth().fillMaxHeight(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        SearchingNote(label = text.sessions.searching)
+                    }
+
+                    // Three ways an empty list can happen, and they are not the same claim: no
+                    // conversation has ever been saved, this mode has none while the other
+                    // does, or the search found nothing in a list that is not empty.
+                    visible.isEmpty() -> SessionsNote(
+                        title = when {
+                            summaries.isEmpty() -> text.sessions.emptyHeading
+                            modeSessions.isEmpty() -> text.sessions.emptyModeHeading
+                            else -> text.sessions.nothingMatches(query)
+                        },
+                        body = when {
+                            summaries.isEmpty() -> text.sessions.empty
+                            modeSessions.isEmpty() -> text.sessions.emptyModeBody
+                            else -> text.sessions.searchEmptyNote
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    else -> PiTopEdgeViewport(
+                        contentScrolled = listState.canScrollBackward,
+                        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                        color = MiuixTheme.colorScheme.background,
+                    ) { reportOverscroll ->
+                        ConversationList(
+                            visible = visible,
+                            text = text,
+                            mode = mode,
+                            workspaces = workspaces,
+                            defaultPath = defaultWorkspacePath,
+                            selecting = selecting,
+                            selected = selected,
+                            snippets = snippets,
+                            currentPath = currentPath,
+                            onToggle = { path ->
+                                selected = if (path in selected) selected - path else selected + path
+                            },
+                            // No question and no interruption: a conversation that is live is
+                            // switched to and keeps its answer, and one that is not is opened as
+                            // a second process in the directory its session file records. The
+                            // dialog that used to stand here asked whether to throw an answer
+                            // away, which is a cost this design does not charge.
+                            streamingPaths = streamingPaths,
+                            unreadPaths = unreadPaths,
+                            onOpen = { item ->
+                                if (item.path != activeSessionFile) onOpenConversation(item)
+                                onOpened()
+                            },
+                            onRename = {
+                                renameTarget = it
+                                renameUp = true
+                            },
+                            onTogglePin = ::togglePinned,
+                            modeOf = { path -> modeOf(path) },
+                            onSwitchMode = { item -> switchRowMode(item) },
+                            onDelete = {
+                                deleteTargets = listOf(it)
+                                deleteUp = true
+                            },
+                            bottomInset = navigationInset,
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                            listState = listState,
+                            reportOverscroll = reportOverscroll,
+                        )
+                    }
                 }
-
-                // A scan that has not answered yet is not an empty result. The list
-                // used to say "nothing matches" for as long as the scan ran, which is
-                // a claim about a search that was still reading files.
-                searching && visible.isEmpty() -> Box(
-                    Modifier.fillMaxWidth().fillMaxHeight(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    SearchingNote(label = text.sessions.searching)
-                }
-
-                // Three ways an empty list can happen, and they are not the same claim: no
-                // conversation has ever been saved, this mode has none while the other
-                // does, or the search found nothing in a list that is not empty.
-                visible.isEmpty() -> SessionsNote(
-                    title = when {
-                        summaries.isEmpty() -> text.sessions.emptyHeading
-                        modeSessions.isEmpty() -> text.sessions.emptyModeHeading
-                        else -> text.sessions.nothingMatches(query)
-                    },
-                    body = when {
-                        summaries.isEmpty() -> text.sessions.empty
-                        modeSessions.isEmpty() -> text.sessions.emptyModeBody
-                        else -> text.sessions.searchEmptyNote
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                else -> ConversationList(
-                    visible = visible,
-                    text = text,
-                    mode = mode,
-                    workspaces = workspaces,
-                    defaultPath = defaultWorkspacePath,
-                    selecting = selecting,
-                    selected = selected,
-                    snippets = snippets,
-                    currentPath = currentPath,
-                    onToggle = { path ->
-                        selected = if (path in selected) selected - path else selected + path
-                    },
-                    // No question and no interruption: a conversation that is live is
-                    // switched to and keeps its answer, and one that is not is opened as
-                    // a second process in the directory its session file records. The
-                    // dialog that used to stand here asked whether to throw an answer
-                    // away, which is a cost this design does not charge.
-                    streamingPaths = streamingPaths,
-                    unreadPaths = unreadPaths,
-                    onOpen = { item ->
-                        if (item.path != activeSessionFile) onOpenConversation(item)
-                        onOpened()
-                    },
-                    onRename = {
-                        renameTarget = it
-                        renameUp = true
-                    },
-                    onTogglePin = ::togglePinned,
-                    modeOf = { path -> modeOf(path) },
-                    onSwitchMode = { item -> switchRowMode(item) },
-                    onDelete = {
-                        deleteTargets = listOf(it)
-                        deleteUp = true
-                    },
-                    bottomInset = navigationInset,
-                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-                    listState = listState,
-                )
-            }
-                Box(
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(LIST_FADE)
-                        .background(
-                            // Three stops, like the chat page's own fades: a row that
-                            // crosses this loses most of its contrast in the first third
-                            // instead of appearing to be cut by the field's edge. The
-                            // colour is the panel's `background`, not the card's
-                            // `surface`: the panel is the step from the chat card behind
-                            // it, and a fade in the card's colour erased that step under
-                            // the field.
-                            Brush.verticalGradient(
-                                0f to MiuixTheme.colorScheme.background,
-                                0.45f to MiuixTheme.colorScheme.background.copy(alpha = 0.55f),
-                                1f to Color.Transparent,
-                            ),
-                        ),
-                )
             }
         }
 
@@ -973,6 +961,7 @@ private fun ConversationList(
     onDelete: (PiAgentSession.SessionSummary) -> Unit,
     /** The navigation strip the panel now draws through, as the list's own end padding. */
     bottomInset: Dp,
+    reportOverscroll: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val pinnedVisible = visible.filter { it.pinned }
@@ -1000,7 +989,7 @@ private fun ConversationList(
         // The drawer's body, so it takes the panel's elastic end: the list is short after
         // the first conversation and long after a month of them, and the first case is the
         // one Compose's own effect skips. See `piOverScroll`.
-        modifier = modifier.piOverScroll(),
+        modifier = modifier.piOverScroll(reportOverscroll),
         // Room at the end for the settings pill, which floats over the last rows: without
         // it the final conversation is the one under the control that leaves the list. The
         // strip is added here rather than around the panel: the list draws through it, and
@@ -1011,7 +1000,7 @@ private fun ConversationList(
         // this padding the first group heading sat inside the 30dp gradient and read as
         // blurred — its top half washed into the panel. Reserving the strip keeps the
         // first row at full contrast while a scrolled one still crosses the ramp.
-        contentPadding = PaddingValues(top = LIST_FADE, bottom = LIST_BOTTOM + bottomInset),
+        contentPadding = PaddingValues(top = PiTopEdgeClearance, bottom = LIST_BOTTOM + bottomInset),
         // A row is a run of text with its own inset now, not a card with an outline, so the
         // gap between two of them is the room the rows already carry — 2dp keeps two
         // highlighted rows from merging into one when they happen to be neighbours.
@@ -1868,9 +1857,6 @@ private const val DIALOG_BODY_SHARE = 0.45f
  * margin is 40dp, so 84dp clears it; the remaining 28dp is scroll slack.
  */
 private val LIST_BOTTOM = 112.dp
-
-/** How far the drawer's list fades into the field above it. */
-private val LIST_FADE = 30.dp
 
 /** The drawer's gutter: the heading, the field and the group headings share it. */
 private val HEADING_GUTTER = 20.dp

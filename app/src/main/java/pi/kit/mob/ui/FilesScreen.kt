@@ -149,6 +149,8 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
+import pi.kit.mob.ui.kit.PiTopEdgeClearance
+import pi.kit.mob.ui.kit.PiTopEdgeViewport
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.LocalPiBackdrop
@@ -698,32 +700,22 @@ private fun DirectoryTable(
     // bottom padding: a row scrolled to the end clears the gesture handle, and the rows
     // below the fold still scroll *under* it rather than stopping at its edge.
     val inset = LocalPiNavigationInset.current
-    LazyColumn(
-        state = listState,
-        // The page's elastic end, from the kit rather than from the list: `LazyColumn`
-        // installs an effect of its own, and Compose does not dispatch to it when there
-        // is nothing to scroll to — which is the whole of a three-file directory.
-        // `piOverScroll` is the one definition of the fix and its KDoc is the proof.
-        modifier = Modifier
-            .fillMaxSize()
-            .piOverScroll(),
-        // Content padding rather than a band of empty page: the last row scrolls past it,
-        // and at rest it is the space that keeps the last row off the gesture handle.
-        contentPadding = PaddingValues(bottom = PAGE_BOTTOM + inset),
-        // The seam between two row cards, at the kit's row gap — the same number the
-        // conversation history states, because the two lists are read one after the
-        // other and were spaced by the same too-tight figure. 2dp is tighter than the
-        // gap inside a row, so two rows read as one panel with a line through it.
-        verticalArrangement = Arrangement.spacedBy(PiCorner.rowGap),
-    ) {
-        items(rows, key = { entry -> entry.file.absolutePath }) { entry ->
-            FileRow(
-                entry = entry,
-                text = text,
-                onOpen = { onOpen(entry) },
-                onCopyPath = { onCopyPath(entry) },
-                onOpenWith = { onOpenWith(entry) },
-            )
+    PiTopEdgeViewport(listState.canScrollBackward, Modifier.fillMaxSize()) { reportOverscroll ->
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().piOverScroll(reportOverscroll),
+            contentPadding = PaddingValues(top = PiTopEdgeClearance, bottom = PAGE_BOTTOM + inset),
+            verticalArrangement = Arrangement.spacedBy(PiCorner.rowGap),
+        ) {
+            items(rows, key = { entry -> entry.file.absolutePath }) { entry ->
+                FileRow(
+                    entry = entry,
+                    text = text,
+                    onOpen = { onOpen(entry) },
+                    onCopyPath = { onCopyPath(entry) },
+                    onOpenWith = { onOpenWith(entry) },
+                )
+            }
         }
     }
 }

@@ -105,11 +105,10 @@ fun PiPage(
      *
      * The bar uses it exactly as `GlassTopAppBar` does: at rest the bar is transparent
      * and its back arrow is a plain glyph; once the body scrolls, the button's glass
-     * pill rises and the band appears if [contentScrollsUnderBar]. Passing a *derived scroll
-     * position* rather than a nested-scroll accumulator is deliberate — the old
-     * accumulator counted the elastic overscroll of a page that fits the window, so a
-     * drag with nothing to scroll left the arrow floated. `false` is the honest
-     * default for the pages with no vertical scroll (the terminal).
+     * pill rises and the band appears if [contentScrollsUnderBar]. Whole-page scrollers
+     * can also report their actual elastic translation via [LocalPiPageOverscroll],
+     * so an upward pull that passes under the bar is covered during the spring back.
+     * `false` is the default for a fixed viewport such as the terminal.
      */
     contentScrolled: Boolean = false,
     contentScrollsUnderBar: Boolean = true,
@@ -139,6 +138,8 @@ fun PiPage(
     val pageBackdrop = rememberPiBackdrop()
 
     var barBottom by remember { mutableFloatStateOf(0f) }
+    var bodyOverscroll by remember { mutableFloatStateOf(0f) }
+    val reportOverscroll: (Float) -> Unit = remember { { bodyOverscroll = it } }
 
     CompositionLocalProvider(LocalPiBarBottom provides barBottom) {
     PiPopupHostProvider {
@@ -149,14 +150,10 @@ fun PiPage(
             GlassTopAppBar(
                 title = title,
                 modifier = Modifier.onGloballyPositioned { barBottom = it.boundsInWindow().bottom },
-                // The page overlap state, not the library's default. At rest the bar
-                // is transparent and its back arrow is a plain glyph; once the body
-                // has scrolled under it, Miuix raises the band and the button's glass
-                // pill together — the same threshold and motion every Miuix screen
-                // uses. Miuix's `isContentScrolled` overload falls back to `true`
-                // when it has neither a scroll behaviour nor a visual offset; the old
-                // call passed neither, which is why every arrow was floated.
-                isContentScrolled = contentScrolled,
+                // A fitting page can pass behind the bar during an upward spring
+                // without changing ScrollState. The reported translation resets with
+                // the spring; unlike accumulated deltas it cannot leave the bar raised.
+                isContentScrolled = contentScrolled || (contentScrollsUnderBar && bodyOverscroll < -1f),
                 expandable = false,
                 // OS4's material: the bar draws a progressive blur over the page's
                 // backdrop and its buttons sample the same layer. `progressiveBlur`
@@ -236,6 +233,7 @@ fun PiPage(
         CompositionLocalProvider(
             LocalPiBackdrop provides pageBackdrop,
             LocalPiNavigationInset provides padding.calculateBottomPadding(),
+            LocalPiPageOverscroll provides reportOverscroll,
         ) {
             Box(
                 Modifier
@@ -275,6 +273,9 @@ fun PiPage(
  * inside a page has no strip of its own to keep clear of.
  */
 val LocalPiNavigationInset: ProvidableCompositionLocal<Dp> = compositionLocalOf { 0.dp }
+
+/** The reported pixel translation of the one scroller that can pass behind the page bar. */
+internal val LocalPiPageOverscroll = compositionLocalOf<((Float) -> Unit)?> { null }
 
 /**
  * The page bar's bottom in window pixels, including the subtitle and top inset.

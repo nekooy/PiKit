@@ -81,6 +81,7 @@ import pi.kit.mob.locales.LocalStrings
 import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
+import pi.kit.mob.ui.kit.LocalPiPageOverscroll
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
@@ -116,7 +117,7 @@ internal fun Modifier.settingsPageScroll(padding: PaddingValues, scroll: ScrollS
             start = padding.calculateStartPadding(direction),
             end = padding.calculateEndPadding(direction),
         )
-        .piOverScroll()
+        .piOverScroll(onOffsetChanged = LocalPiPageOverscroll.current)
         .verticalScroll(scroll)
         .padding(top = padding.calculateTopPadding() + 4.dp, bottom = 12.dp + LocalPiNavigationInset.current)
 }

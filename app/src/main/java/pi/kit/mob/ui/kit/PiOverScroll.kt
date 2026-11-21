@@ -47,4 +47,5 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
  * `node.parent` — a node placed after the scroller in the same chain is downstream of it
  * and is never dispatched to, so the page silently loses the bounce it just asked for.
  */
-fun Modifier.piOverScroll(): Modifier = overScrollVertical()
+fun Modifier.piOverScroll(onOffsetChanged: ((Float) -> Unit)? = null): Modifier =
+    overScrollVertical(onOffsetChanged = onOffsetChanged)

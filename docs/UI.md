@@ -106,10 +106,15 @@ that cut the last card in two (§13, *The window's last pixels*).
   a `Column(Modifier.settingsPageScroll(padding, scroll))` of `PiSection`s. Like
   `LazyColumn(contentPadding = …)` in the Miuix and Mishka examples, it spends the
   header inset inside the scroll so content can move behind the glass. Horizontal
-  insets stay outside the viewport. Fixed controls such as the files toolbar and
-  the manual's contents row keep their own layout below the header and pass
-  `contentScrollsUnderBar = false`: only the region below them scrolls, so the bar
-  buttons still respond to scroll state but the fading band does not blur the controls.
+  insets stay outside the viewport. The modifier also reports the actual elastic
+  displacement to `PiPage`: `canScrollBackward` alone misses an upward pull on a
+  page that fits. The band recedes when the content returns, not when the drag ends.
+- **A fixed header fades only its scrolling viewport.** Files and the manual pass
+  `contentScrollsUnderBar = false` and put `PiTopEdgeViewport` below their pinned
+  controls. The drawer uses the same viewport below search; chat samples its
+  existing transcript recording with `PiTopEdgeFade` below the capsules. The
+  recording and the sampler are siblings; only devices without RuntimeShader use
+  a colour ramp instead of a texture blur.
 - **`piOverScroll()` comes *before* `verticalScroll` in the chain, never after.** A
   nested-scroll connection finds its scrollers by walking ancestors; placed after
   the scroller it is downstream and never dispatched to, so the page silently loses

@@ -603,14 +603,12 @@ because the strip version was worse:
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
-- **The fade starts at the status bar's bottom edge**, not at the button row's: its solid
-  part is exactly the status bar's height and the ramp runs from there, so a row begins to
-  dissolve the moment it leaves the clock's line. It is a four-stop ramp
-  (`100% → 62% → 26% → 0`): a two-stop one hits its transparent end while the eye still
-  expects a gradual departure, so the row crossing it seemed to snap into place. The
-  header's glass samples the transcript's own layer; this gradient is still drawn by hand
-  rather than by a second rendering of the list, because it also has to cover the area
-  beside the capsules where no control samples anything.
+- **The fade starts at the status bar's bottom edge**, not at the button row's.
+  `PiTopEdgeFade` samples the same transcript-only layer as the header glass, but covers
+  the entire width, including the gaps beside the capsules. The status strip stays solid
+  and the progressive blur reaches zero at the end of the band. Without RuntimeShader,
+  the four-stop colour ramp (`100% → 62% → 26% → 0`) keeps the contrast transition; a
+  two-stop ramp snapped into its transparent end.
 
 **The bottom of the page is a fade too, and it starts at the field.** The composer is a
 band that *floats over* the transcript rather than a row under it: the list's bottom
@@ -757,15 +755,16 @@ gone, and every page's arrow starts where the library puts it.
 **The back arrow is a plain glyph until content reaches the bar.** Miuix's
 `GlassTopAppBar` drives its buttons' material from `isContentScrolled`; at rest the
 button is a glyph with no pill, and once the page has scrolled under the bar the band
-and the pill rise together. `PiPage` therefore takes `contentScrolled` from the page's
-own `ScrollState`/`LazyListState` (`canScrollBackward`) and passes it through. The old
-call passed neither a scroll behaviour nor a visual offset, and the library's fallback
-for that case is `true` — every arrow was floated on the first frame, including the
-settings pages that fit the window. A nested-scroll accumulator was tried as the
-generic answer and rejected: `piOverScroll` reports elastic displacement through the
-same chain, so a drag on a page with nothing to scroll left the arrow floated with no
-content under it. The scroll state is the exact answer, and the terminal — which has no
-vertical scroll — passes nothing and keeps the plain arrow.
+and the pill rise together. `PiPage` uses both logical scroll (`canScrollBackward`) and
+actual upward elastic translation from `settingsPageScroll`. At 100% font size on the
+1080 px emulator, Personalization fit the window. A held upward drag moved the first
+card up by 383 px and put its unblurred summary behind the title, even though the scroll
+position stayed at zero. The band must respond to the rendered position, including the
+spring-back frames, not just to consumed scroll. Downward pulls at the top do not put
+content behind the bar. An earlier nested-scroll accumulator was rejected because it
+could leave the arrow floated after the spring returned. Letting the library default to
+`true` floated every arrow on the first frame. The terminal keeps its plain arrow: its
+native scrollback never travels behind the page bar.
 
 A page that arrives is also *seen* arriving: the destinations cross-fade with a tenth of
 the width of travel, from the trailing edge on the way in and from the leading edge on the
