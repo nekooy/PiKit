@@ -22,8 +22,12 @@ touching the line under it, not decoration.
 **A change under `ui/` reads [docs/UI.md](docs/UI.md) first.** It is the practical
 checklist — the kit vocabulary, the page skeleton, the glass red lines, the shapes,
 the windows, the state rules — and it cites the chapter that owns each rule's
-reasoning (§13 is the design language). `tools/check-ui.py`, which `build-apks.py`
-runs, holds the three rules a regex can see; the rest is the checklist and review.
+reasoning (§13 is the design language). For the components and patterns you
+change, consult Miuix's official docs and source for the pinned version, and
+Mishka's implementation and both guides. The links are in
+[References for UI changes](docs/UI.md#references-for-ui-changes).
+`tools/check-ui.py`, which `build-apks.py` runs, holds the three rules a regex
+can see; the rest is the checklist and review.
 
 **When something is unclear, read the documentation before deciding it is wrong.** An
 odd-looking call site, a magic constant or a redundant-looking wrapper usually has a

@@ -8,13 +8,27 @@ file is the checklist for — the palette, the type scale, the page frame, the r
 the windows and the navigation, each with the measurement that settled it. The
 reasoning lives there; the *do this, not that* lives here.
 
-The shape of this file follows a sibling Miuix app's own guidelines
-([Mishka's `ui-guidelines.md`](https://github.com/YuKongA/Mishka/blob/main/docs/ui-guidelines.md)
-and [`miuix-glass-migration.md`](https://github.com/YuKongA/Mishka/blob/main/docs/miuix-glass-migration.md)):
-a checklist of the traps a Compose + Miuix change walks into. The rules are this
-app's, not a transplant — Mishka has four pager tabs, a wide-screen rail and a
-Compose 1.13 line; this app has one root, a drawer, and the pins below. Where a
-rule of theirs does not survive the difference, the difference is named.
+## References for UI changes
+
+Before changing a UI surface, consult these references for the components and
+patterns the change touches.
+
+- Use Miuix's official component documentation for APIs and usage examples. Check
+  the docs and source at the tag matching PiKit's `miuix` pin for implementation
+  details such as defaults, layout, and fallback behaviour.
+  [Official Miuix documentation](https://compose-miuix-ui.github.io/miuix/) ·
+  [Docs at v0.9.5-beta02](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta02/docs) ·
+  [Source at v0.9.5-beta02](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta02) ·
+  [PiKit version catalog](../gradle/libs.versions.toml)
+- Read Mishka's implementation of the equivalent surface alongside its UI guidelines
+  and glass migration guide. Use them for patterns such as backdrop isolation and
+  inset placement. Adapt those patterns to PiKit's single root, drawer, and dependency
+  pins. Mishka's four pager tabs, wide-screen rail, and newer beta APIs reflect its
+  own navigation and dependencies.
+  [Mishka project](https://github.com/YuKongA/Mishka) ·
+  [UI source](https://github.com/YuKongA/Mishka/tree/main/app/src/main/kotlin/top/yukonga/mishka/ui) ·
+  [UI guidelines](https://github.com/YuKongA/Mishka/blob/main/docs/ui-guidelines.md) ·
+  [Miuix glass migration guide](https://github.com/YuKongA/Mishka/blob/main/docs/miuix-glass-migration.md)
 
 ## The pins the rules are written against
 
