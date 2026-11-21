@@ -3,11 +3,9 @@ package pi.kit.mob.ui.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,7 +36,6 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.anyProviderModelFacts
 import pi.kit.mob.pi.modelDefinitionFacts
 import pi.kit.mob.ui.kit.LocalPiHaptics
-import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
@@ -47,7 +44,6 @@ import pi.kit.mob.ui.kit.PiGroupAction
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
-import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.rememberLastPresent
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -177,21 +173,7 @@ internal fun ModelPage(
             )
         },
     ) { padding ->
-        // The page draws through the navigation strip now, so the strip's height is content
-        // padding at the end of the scroll: the last row can still be scrolled clear of the
-        // gesture handle, which a bottom padding on the viewport would have prevented.
-        val inset = LocalPiNavigationInset.current
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // The profiles page's elastic end: one saved profile is a short page,
-                // and it is the one every reader sees on their first run. See
-                // `piOverScroll`.
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                .padding(top = 4.dp, bottom = 12.dp + inset),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             // An empty list is not drawn as an empty frame: a card with no rows in it is a
             // slab of nothing under a heading. The store refuses to delete the last
             // configuration, so this is only reachable before the first one is saved — the
@@ -1089,21 +1071,7 @@ internal fun ModelEditPage(
             )
         },
     ) { padding ->
-        // The page draws through the navigation strip now, so the strip's height is content
-        // padding at the end of the scroll: the last row can still be scrolled clear of the
-        // gesture handle, which a bottom padding on the viewport would have prevented.
-        val inset = LocalPiNavigationInset.current
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // The form's elastic end, from the kit: creating a profile is four rows
-                // before a key is typed, and editing one is the same page filled in.
-                // See `piOverScroll`.
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                .padding(top = 4.dp, bottom = 12.dp + inset),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             PiSection(title = text.settings.profile) {
                 SettingsTextField(
                     value = name,

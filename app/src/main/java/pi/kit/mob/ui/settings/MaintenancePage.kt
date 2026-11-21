@@ -1,10 +1,8 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,12 +19,10 @@ import pi.kit.mob.pi.CatalogueStatus
 import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.StorageSelfTest
-import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
-import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberLastPresent
 import top.yukonga.miuix.kmp.basic.BasicComponent
 
@@ -246,18 +242,7 @@ internal fun MaintenancePage(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // The page's elastic end. See `piOverScroll`.
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                // The strip under the page is content padding rather than a
-                // viewport cut (see `PiPage`): the card scrolls behind the
-                // gesture handle and its last row can still be cleared of it.
-                .padding(top = 4.dp, bottom = 12.dp + LocalPiNavigationInset.current),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             PiSection(title = text.settings.piAgent) {
                 BasicComponent(
                     title = text.settings.installedVersion,

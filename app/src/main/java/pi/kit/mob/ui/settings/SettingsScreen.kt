@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,12 +30,10 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.StorageSelfTest
 import pi.kit.mob.ui.kit.LocalPiHaptics
-import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiDropdownPreference
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
-import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 
 /** Screens reachable from the Settings tab. Navigation state lives here only. */
@@ -402,21 +399,7 @@ private fun RootPage(
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
-        // The page draws through the navigation strip now, so the strip's height is content
-        // padding at the end of the scroll: the last row can still be scrolled clear of the
-        // gesture handle, which a bottom padding on the viewport would have prevented.
-        val inset = LocalPiNavigationInset.current
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // The page's elastic end: the root is short on a first run and full
-                // after it, and it has to answer a drag the same way at both sizes.
-                // See `piOverScroll`.
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                .padding(top = 4.dp, bottom = 12.dp + inset),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             PiSection(title = text.settings.essentials) {
                 ArrowPreference(
                     title = text.settings.manageProfiles,

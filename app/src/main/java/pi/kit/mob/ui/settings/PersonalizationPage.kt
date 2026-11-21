@@ -4,11 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -31,14 +29,12 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.LocalPiHaptics
-import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDropdownPreference
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
-import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -182,17 +178,7 @@ internal fun PersonalizationPage(
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
         // gesture handle, which a bottom padding on the viewport would have prevented.
-        val inset = LocalPiNavigationInset.current
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // The page's elastic end: two sections fit a phone outright, and a page
-                // that fits is the one Compose's own effect skips. See `piOverScroll`.
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                .padding(top = 4.dp, bottom = 12.dp + inset),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             PiSection(title = text.settings.personalizationConversation) {
                 SwitchPreference(
                     title = text.settings.openNewOnLaunch,

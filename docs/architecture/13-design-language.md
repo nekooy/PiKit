@@ -259,19 +259,41 @@ subtitle") from `""` ("reserve the line while the value is being read") — the 
 page's item count is null while a folder is listed, and a line that appeared and
 disappeared once per folder moved the whole page by its height twice.
 
-The subtitle also sits **below** the bar rather than in its `bottomContent`, and the
-reason is the blur band's edge. `GlassTopAppBarLayout` sizes that band from the bar's
-own geometry — `topInset + CollapsedHeight + bottomContentHeight`, times 1.2 — and
-clips it with `RectangleShape`, so its bottom edge is a hard cut inside a smooth ramp.
-With the subtitle in `bottomContent` that cut landed across the title block: measured on
-the personalization page at 420dpi, rows 190 and 191 differed by a uniform −2 levels
-across 900 of 1080 columns (`min=-2 max=0`), and the same rows read flat on the settings
-root, whose bar has no `bottomContent`. A one-pixel step of two levels across the width
-is a Mach band the eye reads as a rule under the title. `PiPage` composes the bar and the
-subtitle in one `Column` in the `topBar` slot instead: the band keeps the no-subtitle
-height the settings root already measured clean, the subtitle stays outside the recorded
-body so the band never blurs it, and `Scaffold` still hands the body a top inset
-containing both, so no page's content rectangle moves.
+`PiPage` draws that one line in the bar's **`bottomContent`**, which Miuix includes in
+the fade's coverage. In 0.9.5-beta02 the progressive band is measured as
+`(topInset + CollapsedHeight + bottomContentHeight + 20dp) × 1.2`. Leaving the subtitle
+as a sibling in the `topBar` slot gave pages the same absolute band height, not the
+same fade past the header: `Scaffold` included the line in the body's top inset, but
+Miuix did not include it in the band. On the 420dpi personalization page the subtitle
+stayed at y=211–260, but the first card's top jumped from gray level 2 to 35 in one
+pixel (y=259 to 260). Including the line in `bottomContent` spreads that same change
+over the fade (16 to 19 on those rows, reaching the card's level of 36 by y=270).
+The resting layout and subtitle bounds were unchanged; the subtitle is foreground,
+outside the recorded body. The settings root has no bottom content and retains the
+compact band's geometry. A previous capture had a two-level step between y=190 and
+191; that is inside the band, not its measured outer edge, and did not recur in the
+comparison at the same density.
+
+The overhang is intentional. The [Miuix documentation](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta02/docs/zh_CN/components/glass/glasstopappbar.md)
+and the [Mishka migration guide](https://github.com/YuKongA/Mishka/blob/main/docs/miuix-glass-migration.md)
+both say not to clip the bar's parent: the fading tail and the buttons' shadows
+extend beyond its measured height. Both examples give the header inset to the
+scroller as **content padding**, not viewport padding. PiKit used to put its header
+inset outside `verticalScroll`; the glass sampled a blank strip under the title,
+while its tail blurred the abruptly clipped section text below. At 420dpi the first
+heading on the settings root could be cut to y=211–224 while its visible fragment
+was still blurred. The root has no subtitle, so the discrepancy stood out there.
+`settingsPageScroll` keeps the original resting gap but allows the rows to travel
+behind the title. At the same density, the heading still spans y=243–292 at rest
+and reaches y=170–219 on a short scroll. On the personalization page, the subtitle
+stays at y=211–260 while the first section heading can move above it. A parent clip
+only hides the tail and leaves the wrong viewport in place.
+
+The manual and files have an inner scroller below fixed controls, not a full-page
+scroll. The manual's contents label stayed at y=292–306 when jumping to a chapter, but
+the band blurred it anyway after the jump. These pages pass `contentScrollsUnderBar = false`:
+the bar's buttons still respond to the scroller, but the background band (including
+the gradient fallback) stays off because no moving content can pass behind the header.
 
 ### The window's last pixels are a page's, not the system's
 

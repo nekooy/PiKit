@@ -33,6 +33,7 @@
  */
 package pi.kit.mob.ui.settings
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -66,6 +69,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -76,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.LocalStrings
 import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.LocalPiHaptics
+import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
@@ -83,6 +88,7 @@ import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
@@ -101,6 +107,19 @@ import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+@Composable
+internal fun Modifier.settingsPageScroll(padding: PaddingValues, scroll: ScrollState): Modifier {
+    val direction = LocalLayoutDirection.current
+    return fillMaxSize()
+        .padding(
+            start = padding.calculateStartPadding(direction),
+            end = padding.calculateEndPadding(direction),
+        )
+        .piOverScroll()
+        .verticalScroll(scroll)
+        .padding(top = padding.calculateTopPadding() + 4.dp, bottom = 12.dp + LocalPiNavigationInset.current)
+}
 
 /**
  * A row's trailing value, in the quiet role Miuix gives a summary.

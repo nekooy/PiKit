@@ -4,12 +4,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,12 +26,10 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.BackupStatus
 import pi.kit.mob.pi.PiAgentSession
-import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
-import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -192,21 +188,7 @@ internal fun BackupPage(session: PiAgentSession, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        // The page draws through the navigation strip now, so the strip's height is content
-        // padding at the end of the scroll: the last row can still be scrolled clear of the
-        // gesture handle, which a bottom padding on the viewport would have prevented.
-        val inset = LocalPiNavigationInset.current
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // The page's elastic end: this page is two cards and three buttons on
-                // a fresh install, and it has to answer a drag regardless. See
-                // `piOverScroll`.
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                .padding(top = 4.dp, bottom = 12.dp + inset),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             // The two halves the list reads as, and they are the same on both sides: the
             // three categories that make this install *this install*, and the three that
             // are the reader's own files. Each group is its own card and its own heading,

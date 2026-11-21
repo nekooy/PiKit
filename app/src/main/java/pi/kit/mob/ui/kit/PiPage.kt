@@ -3,7 +3,6 @@ package pi.kit.mob.ui.kit
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -73,8 +72,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * page measured it: its English idle sentence takes a second line on a phone
  * where the Chinese one does not, which moved the PTY's rectangle when the
  * language changed. It is one line here instead: the bar keeps its own height,
- * the subtitle sits in the bar's `bottomContent` with an ellipsis, and the page's
- * content top is the same on every page in every language.
+ * the subtitle sits in its measured bottom slot with an ellipsis, and the
+ * page's content top does not change with the length of the subtitle.
  *
  * **Null and blank are two different answers.** `null` is a page that has no
  * subtitle at all and gets no line; `""` reserves the line while the value it
@@ -100,18 +99,19 @@ fun PiPage(
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     /**
-     * Whether the page's scrolling body has content above the viewport — Miuix's
+     * Whether the scroll region has content above its viewport — Miuix's
      * `listState.canScrollBackward`.
      *
      * The bar uses it exactly as `GlassTopAppBar` does: at rest the bar is transparent
-     * and its back arrow is a plain glyph; once content has scrolled under the bar the
-     * band and the button's glass pill rise together. Passing a *derived scroll
+     * and its back arrow is a plain glyph; once the body scrolls, the button's glass
+     * pill rises and the band appears if [contentScrollsUnderBar]. Passing a *derived scroll
      * position* rather than a nested-scroll accumulator is deliberate — the old
      * accumulator counted the elastic overscroll of a page that fits the window, so a
      * drag with nothing to scroll left the arrow floated. `false` is the honest
      * default for the pages with no vertical scroll (the terminal).
      */
     contentScrolled: Boolean = false,
+    contentScrollsUnderBar: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
     /**
      * Windows that belong to this page: its sheets, questions and custom dialogs.
@@ -158,11 +158,6 @@ fun PiPage(
         modifier = modifier,
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
-            // One slot, two nodes: the bar and the subtitle below it. `Scaffold` measures
-            // the `topBar` slot once and hands the body its total height as top padding,
-            // so stacking them here is what keeps the subtitle out of the band's geometry
-            // without moving any page's content rectangle (see the subtitle's comment).
-            Column {
             GlassTopAppBar(
                 title = title,
                 // The page overlap state, not the library's default. At rest the bar
@@ -178,7 +173,8 @@ fun PiPage(
                 // backdrop and its buttons sample the same layer. `progressiveBlur`
                 // needs a non-null backdrop, which this page creates on devices that
                 // can run the shader; elsewhere the bar keeps its gradient band.
-                progressiveBlur = true,
+                progressiveBlur = contentScrollsUnderBar,
+                backgroundAlpha = { if (contentScrollsUnderBar) 1f else 0f },
                 backdrop = pageBackdrop,
                 material = PiGlass.material(),
                 defaultWindowInsetsPadding = true,
@@ -220,46 +216,23 @@ fun PiPage(
                         actions()
                     }
                 },
+                bottomContent = {
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle.ifEmpty { "\u200B" },
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = TITLE_GUTTER, end = TITLE_GUTTER)
+                                .padding(bottom = SUBTITLE_BOTTOM),
+                        )
+                    }
+                },
             )
-            // The subtitle is drawn *below* the bar rather than in its `bottomContent`,
-            // and the difference is a 1px seam across the whole width.
-            //
-            // `GlassTopAppBarLayout` sizes its progressive-blur band from the bar's own
-            // geometry: `topInset + CollapsedHeight + bottomContentHeight`, times 1.2.
-            // The band is a fixed-height rectangle clipped with `RectangleShape`, so
-            // whatever height it gets, its bottom edge is a hard cut in the middle of a
-            // smooth ramp — measured on the personalization page at 420dpi as a one-pixel
-            // step of 2 levels spanning 900 of 1080 columns (row 191 minus row 190:
-            // `min=-2 max=0`, i.e. uniform across the row), and absent entirely on a page
-            // whose bar has no `bottomContent` (the settings root, same measurement: no
-            // step anywhere between y=82 and y=180). A subtitle in `bottomContent` is
-            // what puts that edge across the title block.
-            //
-            // Drawing it here instead leaves the band at its no-subtitle height — the
-            // geometry the settings root already has — while the subtitle stays outside
-            // the recorded body, so the band never blurs the text it belongs to. It also
-            // stays outside the body's padding: `Scaffold` measures this slot and hands
-            // the body a top inset that already contains it, so no page's content
-            // rectangle moves and no page has to know the subtitle exists.
-            if (subtitle != null) {
-                Text(
-                    // A zero-width space keeps a blank line's height without drawing a
-                    // glyph. `Text("")` still lays out its line box, so this is belt and
-                    // braces rather than a requirement — but it also keeps the layout from
-                    // collapsing if the library ever skips an empty string.
-                    text = subtitle.ifEmpty { "\u200B" },
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = TITLE_GUTTER, end = TITLE_GUTTER)
-                        .padding(bottom = SUBTITLE_BOTTOM),
-                )
-            }
-            }
         },
     ) { padding ->
         // The body is the page, and the page reaches the window's last pixel: only the
@@ -361,11 +334,4 @@ private val TITLE_GUTTER = TopAppBarDefaults.TitlePadding
  */
 private val ACTION_GAP = 4.dp
 
-/**
- * The space between the bar and the page's subtitle.
- *
- * 6dp was the bottom padding the subtitle carried inside the bar's `bottomContent`, and
- * keeping it means moving the subtitle out of the bar changes its position by nothing —
- * the same gap under the same line, with the band's edge no longer crossing it.
- */
 private val SUBTITLE_BOTTOM = 6.dp

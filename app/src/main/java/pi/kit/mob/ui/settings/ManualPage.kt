@@ -152,17 +152,7 @@ internal fun AboutPage(
         // The page draws through the navigation strip now, so the strip's height is content
         // padding at the end of the scroll: the last row can still be scrolled clear of the
         // gesture handle, which a bottom padding on the viewport would have prevented.
-        val inset = LocalPiNavigationInset.current
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // The page's elastic end: About PiKit is three cards, and the
-                // environment one names the tools' presence row by row. See `piOverScroll`.
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                .padding(top = 4.dp, bottom = 12.dp + inset),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             PiSection(title = text.settings.application) {
                 BasicComponent(
                     title = "PiKit",
@@ -335,18 +325,7 @@ internal fun NotePage(
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
-        // The page draws through the navigation strip, as every scrolling page does:
-        // the strip's height belongs at the end of the content so the last line can
-        // be scrolled clear of the gesture handle.
-        val inset = LocalPiNavigationInset.current
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .piOverScroll()
-                .verticalScroll(pageScroll)
-                .padding(top = 4.dp, bottom = 12.dp + inset),
-        ) {
+        Column(Modifier.settingsPageScroll(padding, pageScroll)) {
             SettingsParagraph(text = body)
         }
     }
@@ -488,6 +467,7 @@ internal fun ManualPage(onBack: () -> Unit) {
         subtitle = text.manual.subtitle,
         onBack = onBack,
         contentScrolled = scroll.canScrollBackward,
+        contentScrollsUnderBar = false,
     ) { padding ->
         // The document is the page's body and now draws through the navigation strip, so
         // the strip's height belongs at the end of the prose rather than around the

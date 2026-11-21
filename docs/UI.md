@@ -95,21 +95,21 @@ that cut the last card in two (§13, *The window's last pixels*).
   an ellipsis. `null` is "no subtitle"; `""` is "reserve the line while the value is
   read" (the files page's count). A page whose subtitle arrives later passes
   `orEmpty()`.
-- **The subtitle is drawn below the bar, not in its `bottomContent`.** Both places
-  keep it out of the library's own `subtitle` and out of the recorded body, but only
-  the first leaves the progressive-blur band alone: the band's height is
-  `topInset + CollapsedHeight + bottomContentHeight` scaled by 1.2, and it is a
-  rectangle clipped with `RectangleShape`, so its bottom edge is a hard cut in the
-  middle of a smooth ramp. With the subtitle in `bottomContent` that edge landed
-  across the title block — measured on the personalization page at 420dpi as a
-  one-pixel step of 2 levels across 900 of 1080 columns, gone on the settings root,
-  whose bar has no `bottomContent`. `PiPage` composes the bar and the subtitle in one
-  `Column` inside the `topBar` slot, so the band keeps its no-subtitle height and the
-  body's top inset still contains both.
-- **A settings page is a `Column(Modifier.verticalScroll(…))` of `PiSection`s.**
-  These pages are short — a dozen rows — so whole-page composition is cheaper than a
-  lazy list's bookkeeping, and the elastic end works on a page that fits. The long
-  lists are lazy: the transcript, the files listing, the history drawer.
+- **`PiPage` draws its subtitle in the bar's `bottomContent`.** That includes the
+  measured line in Miuix's fade coverage without using the wrapping `subtitle`
+  parameter or recording the text in the blurred body. A sibling below the bar
+  extends the body's top inset but not the blur band, so pages with a subtitle
+  spend their fading tail inside the header. A page without a subtitle keeps the
+  compact bar and the same blur behaviour (§13).
+- **Do not clip the `topBar` slot.** Miuix intentionally draws the fading band and
+  button shadows past the measured bar. A settings page that scrolls as a whole uses
+  a `Column(Modifier.settingsPageScroll(padding, scroll))` of `PiSection`s. Like
+  `LazyColumn(contentPadding = …)` in the Miuix and Mishka examples, it spends the
+  header inset inside the scroll so content can move behind the glass. Horizontal
+  insets stay outside the viewport. Fixed controls such as the files toolbar and
+  the manual's contents row keep their own layout below the header and pass
+  `contentScrollsUnderBar = false`: only the region below them scrolls, so the bar
+  buttons still respond to scroll state but the fading band does not blur the controls.
 - **`piOverScroll()` comes *before* `verticalScroll` in the chain, never after.** A
   nested-scroll connection finds its scrollers by walking ancestors; placed after
   the scroller it is downstream and never dispatched to, so the page silently loses

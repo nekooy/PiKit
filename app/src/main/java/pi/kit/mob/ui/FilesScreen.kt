@@ -309,6 +309,7 @@ fun FilesScreen(session: PiAgentSession,
         // two different answers*.
         subtitle = itemCount?.let { text.files.itemCount(it) }.orEmpty(),
         contentScrolled = listingState.canScrollBackward,
+        contentScrollsUnderBar = false,
         overlay = {
             // The sort is one of three answers, and it opens from the toolbar button as
             // the app's one glass menu — the same [PiPopupMenu] the composer's chips and
