@@ -387,10 +387,6 @@ internal class ConversationDrawerState {
         get() = if (width > 0) (offset / width).coerceIn(0f, 1f) else 0f
 }
 
-/** Creates the one [ChatComposerState] per app run, in the scope that outlives the tabs. */
-@Composable
-internal fun rememberChatComposerState(): ChatComposerState = remember { ChatComposerState() }
-
 /** Refused above this size; pi would take it, but the JSONL line becomes absurd. */
 private const val MAX_IMAGE_BYTES = 4 * 1024 * 1024
 
@@ -1408,9 +1404,11 @@ internal fun ChatScreen(
                             shared = StorageAccess.sharedPath(session.env),
                             existing = rememberWorkspacePaths(context, session.env),
                             granted = StorageAccess.isGranted(),
+                            // The intent may not resolve on every device, and a grant that
+                            // cannot be asked for is not a crash: the sheet's own sentence
+                            // already says the folder is unreadable without it.
                             onGrant = {
                                 runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
-                                Unit
                             },
                             onAdd = { folder ->
                                 val added = WorkspaceStore.add(context, session.env, folder)
