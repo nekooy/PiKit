@@ -392,16 +392,18 @@ the row is hand-built.
 `PiDropdownPreference`.** Miuix's `OverlayListPopup`, `OverlayDropdownPopup` and
 `OverlayDropdownPreference` draw the **pre-OS4** panel — `surfaceContainer`, 16dp corners, no
 blur, no stroke, no shadow — so every menu and every dropdown row was the one opaque
-rectangle on a page whose bar, cards and dialogs are OS4 glass. The kit's pair wraps
-`GlassPopup` / `GlassDropdownPreference` with the page's backdrop and `PiCorner.popup` (24dp),
-and a menu is *registered* into a bounded `PiPopupHostProvider` rather than composed at its
-trigger. The host records the scene and draws menus in a separate full-window sibling.
-Chat and history share that host: a lazy history row has unbounded height and the in-place
-fallback crashed in `GlassPopupSurface`. `tools/check-ui.py` refuses the old panels, the old preference rows
-and a `GlassPopup` or `GlassTransformPopup` composed anywhere but the kit. Context menus
-use the edge reveal; glass icon buttons use the native control morph. The composer's
+rectangle on a page whose bar, cards and dialogs are OS4 glass. The kit's pair uses the
+library's glass surface or `GlassDropdownPreference` with the page's backdrop and
+`PiCorner.popup` (24dp). A menu is *registered* into a bounded `PiPopupHostProvider`
+rather than composed at its trigger. The host records the scene and draws menus in a
+separate full-window sibling. Chat and history share that host: a lazy history row has
+unbounded height and the in-place fallback crashed in `GlassPopupSurface`.
+`tools/check-ui.py` refuses the old panels, the old preference rows and a `GlassPopup`
+or `GlassTransformPopup` composed anywhere but the kit. Context menus fade in at full
+size; glass icon buttons use the native morph with the button's own radius. The composer's
 chips and toolbar use `PiPopupPlacement.Above` to morph from the real trigger to a
-viewport above it despite the IME. A control in the page bar passes
+viewport above it despite the IME, releasing touch as soon as dismissal starts.
+A control in the page bar passes
 `openBelow = LocalPiBarBottom.current` to move the expanded endpoint clear of the subtitle.
 ARCHITECTURE §13, *Menus*, has the distinction.
 

@@ -154,7 +154,7 @@ fun PiMenuRow(
     // `indication = null` on both: the fill below *is* the indication, and the library's
     // ripple would square off against the panel's continuous corner.
     val interaction = when {
-        onClick == null -> Modifier
+        onClick == null || !LocalPiMenuInteractive.current -> Modifier
         selected != null -> Modifier.selectable(
             selected = selected,
             enabled = enabled,

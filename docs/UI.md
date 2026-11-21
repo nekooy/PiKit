@@ -255,10 +255,12 @@ ControlChip(
   layer, never the scene that contains it (red line 1). The conversation and history
   drawer share this host so a drawer menu is above the translated chat card too.
   Do not draw an unhosted menu in place: a list item offers unbounded height.
-- **Point and row context menus** use `Auto`, Miuix's edge reveal and fit test.
+- **Point and row context menus** use `Auto`: fade and slide a few pixels at full
+  size, with Miuix's logical-end alignment and safe-area fit test.
 - **Composer menus** use `Above`: they grow from the measured trigger and settle above
   it, 8dp clear of it and aligned at logical start. The scroll viewport is bounded to
-  the available area above the trigger, not the space below it behind the IME.
+  the available area above the trigger, not the space below it behind the IME. Closing
+  panels keep drawing but release touch and accessibility immediately.
 - **Glass icon buttons** use `rememberPiGlassMenuAnchor`, `piGlassMenuAnchor` on the
   button and `piGlassMenuAnchorContent` on the glyph. The `PiPopupMenu` overload takes
   a decorative copy of the glyph for Miuix's `GlassTransformPopup`. A control in the

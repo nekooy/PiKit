@@ -6,8 +6,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import pi.kit.mob.ui.kit.placeContextMenu
 import pi.kit.mob.ui.kit.placeUpwardMenu
 import pi.kit.mob.ui.kit.popupMorphBounds
+import pi.kit.mob.ui.kit.popupRevealBounds
 import pi.kit.mob.ui.kit.upwardMenuMaxHeight
 
 class PopupPlacementTest {
@@ -16,6 +18,35 @@ class PopupPlacementTest {
     private val margin = 32f
     private val gap = 21f
     private val menu = Size(480f, 240f)
+
+    @Test
+    fun aContextMenuHasFullPanelBoundsThroughoutItsReveal() {
+        val point = Rect(700f, 900f, 700f, 900f)
+        val settled = placeContextMenu(point, menu, safe, margin, LayoutDirection.Ltr)
+        val start = popupRevealBounds(settled, point, safe, 16f, 0f)
+        assertEquals(settled.translate(0f, -16f), start)
+        for (fraction in listOf(0f, 0.25f, 0.5f, 1f, 1.1f)) {
+            assertEquals(menu, popupRevealBounds(settled, point, safe, 16f, fraction).size)
+        }
+        assertEquals(settled, popupRevealBounds(settled, point, safe, 16f, 1f))
+    }
+
+    @Test
+    fun aContextMenuDoesNotSlidePastTheSafeArea() {
+        val point = Rect(700f, safe.top + 2f, 700f, safe.top + 2f)
+        val settled = placeContextMenu(point, menu, safe, margin, LayoutDirection.Ltr)
+        assertEquals(Rect(220f, safe.top, 700f, safe.top + menu.height), popupRevealBounds(settled, point, safe, 16f, 0f))
+    }
+
+    @Test
+    fun aContextMenuNearTheBottomFitsAboveItsTrigger() {
+        val row = Rect(100f, 2160f, 1020f, 2270f)
+        val ltr = placeContextMenu(row, menu, safe, margin, LayoutDirection.Ltr)
+        assertEquals(Rect(540f, 2030f, 1020f, 2270f), ltr)
+        val rtl = placeContextMenu(row, menu, safe, margin, LayoutDirection.Rtl)
+        assertEquals(Rect(100f, 2030f, 580f, 2270f), rtl)
+        assertEquals(ltr.translate(0f, 16f), popupRevealBounds(ltr, row, safe, 16f, 0f))
+    }
 
     @Test
     fun aShortMenuOpensAboveAndTowardLogicalEndEvenWhenItFitsBelow() {

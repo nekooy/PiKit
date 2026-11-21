@@ -437,14 +437,22 @@ Two row rules are behaviour rather than taste:
   The transcript's card menu is the exception and is registered by the page, because a
   long conversation recycles cards and a menu that vanished mid-read would be unusable.
 
-  Point and row context menus keep `GlassPopup` and its logical-end edge reveal. A
-  glass icon button instead uses `GlassTransformPopup` with the measured button and
+  Point and row context menus keep Miuix's logical-end alignment and safe-area fit
+  test. Its edge reveal started at 15% of the final width, which read as a new object
+  growing from a corner instead of actions for the pressed item. The panel now fades
+  at full size with only 6dp of travel toward the trigger on exit. Summarised preference
+  menus use the same anchored panel.
+
+  A glass icon button instead uses `GlassTransformPopup` with the measured button and
   separate decorative glyph, matching [Miuix's guide](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta02/docs/components/glass/glasstransformpopup.md)
   and [Mishka's sort menu](https://github.com/YuKongA/Mishka/blob/1bc4acc5f76d916957fd3abdda3ba99763df521a/app/src/main/kotlin/top/yukonga/mishka/ui/screen/proxy/ProxyScreen.kt#L519).
   For the terminal roster, `openBelow = LocalPiBarBottom.current` translates the
   destination anchor to the measured bar bottom, not the collapsed button geometry.
-  Files sort is already below that bar. Both register from the page overlay and keep
-  their `PiMenuRow` content in the host. The host reads the visibility state directly:
+  Files sort is already below that bar. Both morph back to half the default button
+  diameter, not the 20dp card corner: the old radius made the sort button change
+  silhouette when the real button replaced the collapsing panel. Both register from
+  the page overlay and keep their `PiMenuRow` content in the host. The host reads the
+  visibility state directly:
   passing a Boolean through the scaffold slot left the terminal roster closed after
   its button received the click.
 

@@ -19,19 +19,15 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.glass.GlassPopup
-import top.yukonga.miuix.kmp.glass.GlassPopupSizing
 import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
+import top.yukonga.miuix.kmp.glass.GlassPopupSizing
+import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
 import top.yukonga.miuix.kmp.glass.GlassTransformPopup
 import top.yukonga.miuix.kmp.glass.glassPopupAnchor
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorContent
@@ -58,12 +54,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * ## Motion and placement follow the trigger
  *
- * `GlassPopup` places its panel with `placeGlassPopup`: end-aligned to the anchor, below
- * it when the panel fits under the anchor and above it otherwise, clamped into the
- * window's safe area. That edge reveal suits a contextual menu, not a control changing
- * shape. Glass icon buttons use `GlassTransformPopup`; the composer uses [PiUpwardMenu]
- * because automatic placement can put a short menu over the input field when the IME
- * raises the chip row.
+ * Context menus keep the library's fit test and logical-end alignment, but fade in at
+ * full size rather than growing from a corner. Glass icon buttons use `GlassTransformPopup`.
+ * The composer morphs from the trigger toward a viewport above it, so the menu cannot open
+ * over its input field when the IME raises the chip row.
  *
  * ## Where the panel is drawn, and why it is not where the trigger is
  *
@@ -89,7 +83,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * ## The fallback is the library's, and it is opaque
  *
- * Below API 33 the host's backdrop is null, and `GlassPopup` then draws its
+ * Below API 33 the host's backdrop is null, and the glass surface then draws its
  * `containerColor` — an opaque fill — while keeping the bloom stroke and the shadow. That
  * is the same gate every other glass call site in the app passes through (docs/UI.md's
  * fourth red line), and it is why this component may be used on the Android 8 floor at
@@ -112,25 +106,7 @@ fun PiPopupMenu(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     RegisterPiPopup(anchor) { backdrop ->
-        if (placement == PiPopupPlacement.Above) {
-            PiUpwardMenu(show, onDismissRequest, anchor, backdrop, sizing, content)
-        } else {
-            val visible = show && anchor.bounds != Rect.Zero
-            GlassPopup(
-                show = visible,
-                onDismissRequest = { if (visible) onDismissRequest() },
-                anchorBounds = anchor.bounds,
-                backdrop = backdrop,
-                modifier = if (visible) Modifier else Modifier.clearAndSetSemantics {}.pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-                    }
-                },
-                sizing = sizing,
-                cornerRadius = PiCorner.popup,
-                content = content,
-            )
-        }
+        PiAnchoredMenu(show, onDismissRequest, anchor, placement, backdrop, sizing, content)
     }
 }
 
@@ -169,7 +145,11 @@ fun rememberPiGlassMenuAnchor(): PiGlassMenuAnchor {
     return remember(glass) { PiGlassMenuAnchor(glass) }
 }
 
-fun Modifier.piGlassMenuAnchor(anchor: PiGlassMenuAnchor, cornerRadius: Dp = 20.dp): Modifier =
+/** The collapsed frame must use the same radius as the button it hands back to. */
+fun Modifier.piGlassMenuAnchor(
+    anchor: PiGlassMenuAnchor,
+    cornerRadius: Dp = GlassTopAppBarDefaults.ButtonSize / 2,
+): Modifier =
     onGloballyPositioned { anchor.top = it.boundsInWindow().top }
         .glassPopupAnchor(anchor.glass, cornerRadius)
 
