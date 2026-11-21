@@ -5,9 +5,9 @@ the project is; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) says why the design
 shaped the way it is, chapter by chapter, and [docs/README.md](docs/README.md) is
 the index of every document. This file is the practical part.
 
-**Before replying that a change is done:** verify it, commit it locally, then
-check `git status --short --branch` and report the commit hash. If the environment
-requires a direct request to commit, ask before handing off. See [Commits](#commits).
+**Default handoff: verify, commit locally, then report.** A request to change
+PiKit authorizes a local commit for that task; do not ask for a second
+confirmation. See [Commits](#commits).
 
 ## Before you change anything
 
@@ -506,23 +506,26 @@ writable in the middle tier, which is the tier's promise applied to the folder t
 
 ## Commits
 
-**A local commit is part of finishing a verified change.** Do not defer it to
-another turn or substitute a summary for it. A local commit does not imply a push.
+**Commit verified changes locally before handing off.** This is PiKit's
+repository-wide rule for completing changes. The request to make the change
+is the repository's authorization to commit it locally: do not wait for
+another message or ask again. If the user asks to leave changes uncommitted,
+respect that. This rule does not authorize pushing, tagging or creating branches.
 
 1. **Verify the change.** Keep the code, tests and owning documentation together.
    Run `python tools/build-apks.py` (or, for a Kotlin-only change that touches
    nothing else the script checks, `./gradlew :app:testX64DebugUnitTest`). For
    prose-only edits, review the diff and run `git diff --check`.
-2. **Commit before the final reply.** Review `git status --short --branch` and
+2. **Commit only this task's changes.** Review `git status --short --branch` and
    `git diff`, stage only the task's changes, then review `git diff --cached`
-   and run `git diff --cached --check`. The repository's default is to commit
-   without asking again. If a higher-priority rule requires a direct user
-   request, ask before handing off unless the user has already requested the
-   commit. Do not leave verified work uncommitted without naming the blocker.
+   and run `git diff --cached --check` before committing.
 3. **Check the result.** Run `git log -1 --oneline` and
    `git status --short --branch`. Report the commit hash and whether the
    worktree is clean. Leave unrelated changes alone and report them rather than
    staging or discarding them to get a clean status.
+
+If verification fails or a commit cannot be made, report the specific blocker
+and what remains uncommitted.
 
 - **`git push` still needs an explicit yes, every time.** Local commits are
   cheap to rewrite and invisible to anyone else; a pushed one is neither. A
@@ -538,9 +541,10 @@ another turn or substitute a summary for it. A local commit does not imply a pus
   `git checkout`/`restore`, branch creation, tag creation, `git reset`, `git
   rebase`, `git init` — none of these is part of "finishing a task". Read-only
   commands (`status`, `diff`, `log`, `show`, `blame`) are fine at any time.
-- **Only your own work.** This authorises commits of the hunks you wrote this
-  turn. The tree often holds uncommitted work from another agent or from the
-  user; see *Several agents work this tree* below.
+- **Only your own work for the task.** Include only the hunks you wrote for
+  that task, even if verification and commit authorization happen in separate
+  turns. Leave changes from the user or other agents untouched; see
+  *Several agents work this tree* below.
 
 **One concern per commit.** A turn that answers two questions is two commits rather
 than one whose subject carries an "and": a fix and the documentation that describes
