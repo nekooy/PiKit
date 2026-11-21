@@ -125,6 +125,16 @@ that cut the last card in two (§13, *The window's last pixels*).
   `IconButton` stays flat while the back arrow rises, and a filled basic glyph beside
   a stroked one reads as two icon sets. The files and terminal bars are the two
   examples.
+- **Two actions in a bar are spaced by `PiPage`, not by the call site.** The library
+  wraps the `actions` slot in a bare `Row(horizontalArrangement = Arrangement.End)`,
+  so buttons handed to it sit edge to edge: the files page measured its two glyph
+  centres 116px apart against a 115.5px `GlassIconButton` at 420dpi, which is a zero
+  gap — one two-icon control rather than two, with "go up" a thumb-width from "go
+  home" and no gutter between the targets. `PiPage` wraps the slot in a
+  `Row(spacedBy(ACTION_GAP))` at 4dp, the figure the chat header already puts between
+  its marks; the same measurement now reads 127px on both the files and terminal bars.
+  Never add a `Spacer` or a padding to one call site's buttons — a spacing in the
+  callers is a spacing the next page forgets.
 - **A page's windows live in `PiPage`'s `overlay` slot.** Compose its sheets,
   confirmations and custom dialogs there, not after the `PiPage(...) { }` call: the
   page's `LocalPiBackdrop` is provided around the slot but the slot is outside the

@@ -64,6 +64,19 @@ button is the glass control, and a filled basic glyph beside a stroked one is tw
 icon sets on one bar. A settings card is still a Miuix `Card`: OS4's glass is a
 material for controls that float over the page, not for every rectangle on it.
 
+**The bar's actions carry a 4dp gap, and it is `PiPage`'s number.** The library wraps
+the `actions` slot in a `Row(horizontalArrangement = Arrangement.End)` and adds nothing
+else, so two `GlassIconButton`s at the bar's 44dp size are laid edge to edge. Measured on
+the files page at 420dpi, the two glyph centres were 116px apart against a 115.5px
+button — a zero gap, which reads as one control carrying two icons rather than as two
+controls, and puts "上一级目录" a thumb-width from "主目录" with no gutter between the
+targets. The fix is a `Row(Arrangement.spacedBy(4.dp))` inside `PiPage`, in the one place
+every page's bar is composed: a gap written at a call site is a gap the next page does
+not have, and the two call sites (`FilesScreen`, `TerminalScreen`) both measured 127px
+after the change. 4dp rather than the 12dp page gutter, because a bar is a row of
+controls that belong together — a gap that wide reads as two groups and pushes the
+trailing button past where `ActionIconPadding` puts it.
+
 **The backdrop belongs to the page, not to the window.** `PiPage` creates the page's
 `LayerBackdrop` with `rememberPiBackdrop()` and draws only its **body** into it; the
 `GlassTopAppBar` is composed in the Scaffold's `topBar` slot — outside the body — and

@@ -1,8 +1,10 @@
 package pi.kit.mob.ui.kit
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -14,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
@@ -168,7 +171,27 @@ fun PiPage(
                         }
                     }
                 },
-                actions = actions,
+                // The bar's own actions row carries no gap: `GlassTopAppBar` wraps this
+                // slot in a `Row(horizontalArrangement = Arrangement.End)` and nothing
+                // else, so two `GlassIconButton`s at its 44dp size are laid edge to edge.
+                // Measured on the files page at 420dpi, the two glyph centres were 116px
+                // apart against a 115.5px button — a zero gap, which reads as one two-icon
+                // control rather than as two buttons, and puts "go up" a thumb-width from
+                // "go home" with no gutter between the targets.
+                //
+                // The gap is stated here, in the one place every page's bar is composed,
+                // rather than at each call site: `PiPage` owns the bar, and a spacing that
+                // lives in the callers is a spacing the next page forgets.
+                actions = {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(ACTION_GAP),
+                        // The library's own alignment, so a short control in this row still
+                        // sits on the bar's centre line.
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        actions()
+                    }
+                },
                 bottomContent = {
                     if (subtitle != null) {
                         Text(
@@ -254,3 +277,17 @@ val LocalPiNavigationInset: ProvidableCompositionLocal<Dp> = compositionLocalOf 
  * column.
  */
 private val TITLE_GUTTER = TopAppBarDefaults.TitlePadding
+
+/**
+ * The gap between two controls in a page's bar.
+ *
+ * The bar's `actions` slot arrives as a bare `Row` at `Arrangement.End`, so this is the only
+ * space two `GlassIconButton`s have. 4dp is the figure the chat header already puts between
+ * its marks, and it is enough that the two 44dp buttons read as two: at 420dpi it is 10.5px
+ * of gutter against a 115.5px button, where the files page measured none at all.
+ *
+ * Small on purpose. A bar is a row of controls that belong together, and the gesture handle's
+ * own inset is 12dp — a gap that wide would read as two groups and push the trailing button
+ * further from the edge than `ActionIconPadding` puts it.
+ */
+private val ACTION_GAP = 4.dp
