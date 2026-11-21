@@ -129,6 +129,17 @@ that cut the last card in two (§13, *The window's last pixels*).
   recorded body, which is the only place where `PiSheet`/`PiConfirm`/`PiCustomDialog`
   can take the OS4 glass path without sampling their own layer. A window written after
   the call sees a null backdrop and silently becomes an opaque platform window.
+- **Moving a window into the slot means moving it, not deleting it.** The one sweep
+  that introduced `overlay` emptied six pages' slots instead of filling them —
+  `AgentPage`, `MaintenancePage`, `PersonalizationPage`, `SearchPage` and both
+  `ModelPages` — and nothing failed to compile: each page kept its `var x by remember`
+  and its import, so the only symptom was a row that opened nothing. The workspace
+  dialog went with them, which is why a workspace could be added and never removed.
+  An empty `overlay = { }` beside a `var … by remember { mutableStateOf(false) }` is
+  the signature of this bug, and a `false` written by a row with no window reading it
+  is dead state the compiler does not report: grep the page for `overlay = {` and
+  confirm the body is non-empty for every flag the page sets, rather than trusting the
+  build to be green.
 
 ## Glass: the material, and the red lines
 

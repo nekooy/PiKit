@@ -82,7 +82,100 @@ internal fun SearchPage(
         subtitle = text.settings.searchPageSubtitle,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        // The two provider questions and the reset confirmation, in the page's own
+        // backdrop: written after the `PiPage` call they would be opaque windows.
         overlay = {
+            SettingsPickerSheet(
+                show = searchPicker,
+                title = text.settings.searchProvider,
+                subtitle = text.settings.searchProviderSubtitle,
+                options = listOf(
+                    SettingsPick(
+                        id = WebSearchSettings.PROVIDER_AUTO,
+                        label = text.settings.providerAutomatic,
+                        description = text.settings.providerDescription(
+                            WebSearchSettings.PROVIDER_AUTO,
+                        ),
+                    ),
+                ) + WebSearchSettings.SEARCH_PROVIDERS.map { provider ->
+                    SettingsPick(
+                        id = provider.id,
+                        label = provider.label,
+                        description = text.settings.providerDescription(provider.id),
+                    )
+                },
+                selectedId = settings.searchProvider,
+                onPick = { id ->
+                    searchPicker = false
+                    store.update { it.copy(searchProvider = id) }
+                },
+                onDismiss = { searchPicker = false },
+                footnote = text.settings.searchProviderFootnote(
+                    WebSearchSettings.SEARCH_PROVIDERS.size,
+                ),
+                searchHint = text.settings.providerPickSearch,
+            )
+
+            SettingsPickerSheet(
+                show = fetchPicker,
+                title = text.settings.fetchProvider,
+                subtitle = text.settings.fetchProviderSubtitle,
+                options = listOf(
+                    SettingsPick(
+                        id = WebSearchSettings.FETCH_AUTO,
+                        label = text.settings.fetchAutomatic,
+                        description = text.settings.providerDescription(
+                            WebSearchSettings.FETCH_DIRECT,
+                        ),
+                    ),
+                    SettingsPick(
+                        id = WebSearchSettings.FETCH_DIRECT,
+                        label = text.settings.fetchDirect,
+                        description = text.settings.providerDescription(
+                            WebSearchSettings.FETCH_DIRECT,
+                        ),
+                    ),
+                ) + WebSearchSettings.WEB_PROVIDERS.filter { it.fetch }.map { provider ->
+                    SettingsPick(
+                        id = provider.id,
+                        label = provider.label,
+                        description = text.settings.providerDescription(provider.id),
+                    )
+                },
+                selectedId = settings.fetchProvider,
+                onPick = { id ->
+                    fetchPicker = false
+                    store.update { it.copy(fetchProvider = id) }
+                },
+                onDismiss = { fetchPicker = false },
+                searchHint = text.settings.providerPickSearch,
+            )
+
+            // Restoring replaces the extension's whole file, so it asks first — the same
+            // destructive-confirm shape the other settings pages use.
+            PiConfirm(
+                show = resetConfirming,
+                title = text.settings.searchConfigRestoreTitle,
+                text = text.settings.searchConfigRestoreBody,
+                confirm = text.settings.searchConfigRestore,
+                dismiss = text.common.cancel,
+                destructive = true,
+                onConfirm = {
+                    resetConfirming = false
+                    scope.launch {
+                        toasts?.show(
+                            store.restoreDefaults().fold(
+                                onSuccess = {
+                                    session.scheduleRestart()
+                                    text.settings.searchConfigRestored
+                                },
+                                onFailure = { text.settings.searchConfigFailed },
+                            ),
+                        )
+                    }
+                },
+                onDismiss = { resetConfirming = false },
+            )
         },
     ) { padding ->
         val inset = LocalPiNavigationInset.current

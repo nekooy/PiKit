@@ -181,7 +181,149 @@ internal fun AgentPage(
         subtitle = agentDescription(agent, text),
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        // The page's windows, in the slot that keeps them glass. Written after the
+        // `PiPage` call they would see no backdrop and fall back to the opaque Miuix
+        // window — the contract `PiPage.overlay` states.
         overlay = {
+            PiSheet(
+                show = showContext,
+                title = text.settings.agentContextSection,
+                onDismiss = { showContext = false },
+            ) {
+                // The lead sentence is the row's own subtitle, which the sheet's title has no
+                // slot for; the five points are what the row promised.
+                Text(
+                    text = text.settings.agentContextLead,
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // Bounded and scrolled: five prose blocks are taller than a sheet may
+                        // grow, and the sheet's own ceiling is the status bar. A plain Column
+                        // rather than a lazy list, because these are paragraphs rather than
+                        // rows and a lazy list here would be measured against a bounded height
+                        // for no benefit.
+                        //
+                        // The sheet body is where the page would be, so it takes the page's
+                        // elastic end — on the four-point phone these notes still fit.
+                        .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
+                        .piOverScroll()
+                        .verticalScroll(rememberScrollState())
+                        // Inside the scroll, so the last paragraph travels clear of the gesture
+                        // strip and the sheet's own fill still reaches the window's edge.
+                        .padding(bottom = piSheetBottomInset()),
+                ) {
+                    ContextPoint(
+                        1,
+                        text.settings.agentContextSystemTitle,
+                        text.settings.agentContextSystemBody,
+                    )
+                    ContextPoint(
+                        2,
+                        text.settings.agentContextInstructionsTitle,
+                        text.settings.agentContextInstructionsBody,
+                    )
+                    ContextPoint(
+                        3,
+                        text.settings.agentContextRuntimeTitle,
+                        text.settings.agentContextRuntimeBody,
+                    )
+                    ContextPoint(
+                        4,
+                        text.settings.agentContextToolsTitle,
+                        text.settings.agentContextToolsBody,
+                    )
+                    ContextPoint(
+                        5,
+                        text.settings.agentContextHistoryTitle,
+                        text.settings.agentContextHistoryBody,
+                    )
+                }
+            }
+
+            PiSheet(
+                show = editingDocument != null,
+                title = if (lastDocument == InstructionsDocument.Author) {
+                    text.settings.agentContextAuthorTitle
+                } else {
+                    text.settings.agentContextUserTitle
+                },
+                onDismiss = { editingDocument = null },
+            ) {
+                InstructionsEditor(document = lastDocument, session = session, text = text)
+            }
+
+            WorkspaceDialog(
+                show = choosingWorkspace,
+                text = text,
+                workspaces = workspaces,
+                home = session.env.homePath,
+                defaultPath = defaultWorkspacePath,
+                // One window at a time: the picker is opened *after* the question closes, and
+                // its answer comes back through the same row when the folder is added.
+                onAdd = {
+                    choosingWorkspace = false
+                    showWorkspacePicker = true
+                },
+                onRemove = { path -> WorkspaceStore.remove(context, session.env, path) },
+                onPick = { path ->
+                    choosingWorkspace = false
+                    session.settingsStore.update { it.copy(defaultWorkspace = path) }
+                },
+                onDismiss = { choosingWorkspace = false },
+            )
+
+            PiSheet(
+                show = showWorkspacePicker,
+                title = text.chat.workspacePickerTitle,
+                onDismiss = { showWorkspacePicker = false },
+            ) {
+                WorkspacePickerSheet(
+                    text = text,
+                    home = session.env.homePath,
+                    // The phone's storage: `/sdcard`, when the device has one. A workspace may
+                    // live there — it is an ordinary folder once "all files access" is granted,
+                    // and the tier's writable root is the workspace, not the page of switches
+                    // that used to stand between them (§14).
+                    shared = StorageAccess.sharedPath(session.env),
+                    existing = rememberWorkspacePaths(context, session.env),
+                    granted = StorageAccess.isGranted(),
+                    // The intent may not resolve on every device, and a grant that cannot be
+                    // asked for is not a crash: the sheet's own sentence already says the
+                    // folder is unreadable without it.
+                    onGrant = {
+                        runCatching { context.startActivity(StorageAccess.settingsIntent(context)) }
+                    },
+                    onAdd = { folder ->
+                        val added = WorkspaceStore.add(context, session.env, folder)
+                        val reason = (added.exceptionOrNull() as? RefusedWorkspace)?.reason
+                        val workspace = when {
+                            added.getOrNull() != null -> added.getOrNull()
+                            // Already in the list: the reader picked the folder they want to be
+                            // the default, and it already is a workspace.
+                            reason == WorkspaceRefusal.DUPLICATE ->
+                                WorkspaceStore.list(context, session.env)
+                                    .firstOrNull { it.path == folder }
+
+                            else -> null
+                        }
+                        if (workspace != null) {
+                            showWorkspacePicker = false
+                            // A folder added from *this* page is the one the reader wants new
+                            // conversations to start in: the row they came from is the default.
+                            session.settingsStore.update {
+                                it.copy(defaultWorkspace = workspace.path)
+                            }
+                            null
+                        } else {
+                            reason?.let { text.chat.workspaceRefusal(it) }
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content

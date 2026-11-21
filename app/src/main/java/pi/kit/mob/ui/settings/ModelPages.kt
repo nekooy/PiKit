@@ -146,7 +146,34 @@ internal fun ModelPage(
         subtitle = text.settings.modelCount(profiles.size),
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
+        // Deleting a configuration takes the model out of the list and discards what the
+        // user declared about it — the image switch and the two numbers — and nothing on
+        // this page can put that back, so the question carries the error role on its
+        // confirming word. In the overlay, so the question is glass over this page.
         overlay = {
+            val deleting = rememberLastPresent(pendingDelete)
+            PiConfirm(
+                show = pendingDelete != null,
+                title = text.settings.deleteProfileTitle,
+                text = text.settings.deleteProfileBody(deleting?.displayName.orEmpty()),
+                confirm = text.settings.deleteProfile,
+                dismiss = text.common.cancel,
+                destructive = true,
+                onConfirm = {
+                    val target = pendingDelete ?: return@PiConfirm
+                    val deleted = store.delete(target.id)
+                    if (deleted) {
+                        if (target.id == activeId) session.scheduleRestart()
+                    } else {
+                        // The last profile cannot go: pi would have nothing to launch with.
+                        // A toast rather than a strip under the list, because it is the
+                        // answer to the press and the list itself is unchanged.
+                        toasts?.show(text.settings.lastProfile)
+                    }
+                    pendingDelete = null
+                },
+                onDismiss = { pendingDelete = null },
+            )
         },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
@@ -838,7 +865,246 @@ internal fun ModelEditPage(
         // out has to say so first.
         onBack = ::requestLeave,
         contentScrolled = pageScroll.canScrollBackward,
+        // The form's windows, all of them in the page's backdrop. They were written after
+        // the `PiPage` call before the `overlay` slot existed, which is the case its KDoc
+        // names: a window there sees no page backdrop and silently falls back to the
+        // opaque Miuix window.
         overlay = {
+            // The provider list: pi ships more than thirty providers that take a single key,
+            // regional variants of one service included, so the list is filtered rather than
+            // compared. The sheet matches the label and pi's own provider id, which is the
+            // string a reader may have from the docs instead of from this app.
+            SettingsPickerSheet(
+                show = providerPicker,
+                title = text.settings.provider,
+                subtitle = text.settings.providerSubtitle,
+                options = PiProvider.entries.map { SettingsPick(id = it.id, label = it.label) },
+                selectedId = provider?.id,
+                searchHint = text.settings.providerPickSearch,
+                onPick = { id ->
+                    providerPicker = false
+                    val entry = PiProvider.entries.firstOrNull { it.id == id }
+                    if (entry != null && entry != provider) {
+                        // The sheet draws Miuix radios once a provider is chosen and arrow
+                        // rows before that, and only the radio buzzes itself — so the first
+                        // pick buzzes here.
+                        if (provider == null) haptics.choose()
+                        provider = entry
+                        // Model ids are provider-specific: a list built for one provider is
+                        // not a list for another, and pi would reject every entry in it. The
+                        // list is emptied rather than carried across, and the key is
+                        // deliberately *not* cleared — switching to the same account's other
+                        // endpoint is the case this page exists for.
+                        models = emptyList()
+                        activeModel = ""
+                        // The three declarations are keyed by *model id* and nothing else, so
+                        // they cannot tell one provider's `gpt-4o` from another's: carrying
+                        // them across a switch applied the window and the image switch the
+                        // user had set for provider A to the same id on provider B. That is
+                        // a statement about a model they never made, and it is written into
+                        // pi's file for B — so they go with the list, and the half-typed id
+                        // goes too (it was for the provider just left).
+                        settings = emptyMap()
+                        draft = ""
+                        // The endpoint goes with the provider for the same reason, and more
+                        // sharply since the field became an *override*: a relay URL typed
+                        // for `pikit-custom` kept on the form and saved against DeepSeek
+                        // would rewrite every DeepSeek model to that relay
+                        // (`applyModelsJson`). The withdrawal record goes too — it belongs
+                        // to the provider just left, and a blank one here would leave that
+                        // provider's override in pi's file for ever.
+                        baseUrl = ""
+                        // Same reason as the URL: an `anthropic-messages` choice left on the
+                        // form after a switch to DeepSeek is a statement about a relay this
+                        // profile no longer has.
+                        api = ""
+                    }
+                },
+                onDismiss = { providerPicker = false },
+            )
+
+            // Three options, so there is no filter: a search field over three rows is a
+            // control whose only effect is to hide the answer. The labels are pi's own
+            // identifiers and are not translated — they are the strings in pi's
+            // `docs/models.md` and in the relay's own documentation, and the two have to
+            // match (see `CustomApi`).
+            SettingsPickerSheet(
+                show = apiPicker,
+                title = text.settings.apiType,
+                subtitle = text.settings.apiTypeSubtitle,
+                options = CustomApi.entries.map { SettingsPick(id = it.id, label = it.id) },
+                selectedId = CustomApi.fromId(api).id,
+                onPick = { id ->
+                    apiPicker = false
+                    api = id
+                },
+                onDismiss = { apiPicker = false },
+            )
+
+            // The fetched list. The title is the *count* rather than the word "models": the
+            // sheet was opened by a button that already says what it fetched, and how many
+            // rows came back is the fact the reader cannot see from behind the panel. The
+            // ids are the list's own indices because an id can appear twice — once from the
+            // provider and once from pi's own catalog — and a picker keyed on the id itself
+            // would then have two rows with one key.
+            SettingsPickerSheet(
+                show = modelPicker,
+                title = text.settings.modelCount(fetched.size),
+                subtitle = fetchedFootnote,
+                options = fetched.mapIndexed { index, model ->
+                    SettingsPick(
+                        id = index.toString(),
+                        label = model.id,
+                        description = capabilityLine(model, text),
+                    )
+                },
+                selectedId = null,
+                searchHint = text.settings.modelPickSearch,
+                onPick = { key ->
+                    modelPicker = false
+                    val model = fetched.getOrNull(key.toIntOrNull() ?: -1)
+                    if (model != null) {
+                        // The picker already shows each model's window and image
+                        // capability; picking one is the moment those become the controls'
+                        // starting point rather than a caption that vanishes.
+                        //
+                        // A catalogue match wins over the `/models` answer: the store
+                        // carries `cost`, `thinkingLevelMap` and `samplingParams` too, and
+                        // those are what the entry has to name for the id to behave like the
+                        // model it shares a name with.
+                        addModel(
+                            model.id,
+                            prefill = prefillFrom(customIdFacts[model.id])
+                                ?: ModelSettings(
+                                    images = model.supportsImages.takeIf { it },
+                                    contextWindow = model.contextWindow,
+                                    maxTokens = null,
+                                    inherited = buildJsonObject {
+                                        if (model.reasoning) put("reasoning", true)
+                                        model.contextWindow?.let { put("contextWindow", it) }
+                                    }.takeIf { it.isNotEmpty() },
+                                ),
+                        )
+                    }
+                },
+                onDismiss = { modelPicker = false },
+            )
+
+            // One number, typed in a sheet. A sheet rather than a dialog because the keyboard
+            // has to stay up and the field has to keep focus.
+            //
+            // `shownEdit` is what the panel draws, `edit` is what it is open *on*: `show`
+            // goes false on Save while Miuix's exit animation is still playing, and a title
+            // and a body read off the same null value play that last 200 ms as an empty
+            // panel.
+            val edit = editingNumber
+            PiSheet(
+                show = edit != null,
+                title = shownEdit?.let {
+                    if (it.maxTokens) {
+                        text.settings.maxTokensLabel
+                    } else {
+                        text.settings.contextWindowLabel
+                    }
+                },
+                onDismiss = { editingNumber = null },
+            ) {
+                val subject = shownEdit
+                if (subject != null) {
+                    ModelNumberBody(
+                        label = if (subject.maxTokens) {
+                            text.settings.maxTokensLabel
+                        } else {
+                            text.settings.contextWindowLabel
+                        },
+                        model = subject.model,
+                        initial = (
+                            if (subject.maxTokens) settings[subject.model]?.maxTokens
+                            else settings[subject.model]?.contextWindow
+                            )?.toString().orEmpty(),
+                        fallback = subject.fallback,
+                        text = text,
+                        onSave = { value ->
+                            settings = if (subject.maxTokens) {
+                                settings.withMaxTokens(subject.model, value)
+                            } else {
+                                settings.withWindow(subject.model, value)
+                            }
+                            editingNumber = null
+                        },
+                    )
+                }
+            }
+
+            // The fetched list's failure: a provider that answered with an auth failure and a
+            // wrong endpoint produces two paragraphs, and a pill that disappears after three
+            // seconds is not where a reader can read two paragraphs. `SettingsAlert` is the
+            // settings pages' shape for exactly this — an operation that came back wrong,
+            // announced and then dismissed — and it bounds the sentence so a long one cannot
+            // push the acknowledgement off the panel.
+            val failure = rememberLastPresent(discoveryError)
+            SettingsAlert(
+                show = discoveryError != null,
+                title = text.settings.fetchModels,
+                body = failure.orEmpty(),
+                confirm = text.common.ok,
+                onConfirm = { discoveryError = null },
+            )
+
+            // The model row's ✕, asked about. Its own question rather than the profile
+            // delete's: the two are different actions with different consequences, and the
+            // borrowed strings said "Delete profile?" while naming the profile — neither of
+            // which was what the button did.
+            val removing = rememberLastPresent(pendingRemove)
+            PiConfirm(
+                show = pendingRemove != null,
+                title = text.settings.removeModelTitle,
+                text = text.settings.removeModelBody(removing.orEmpty()),
+                confirm = text.settings.removeModel,
+                dismiss = text.common.cancel,
+                destructive = true,
+                onConfirm = {
+                    removing?.let { removeModel(it) }
+                    pendingRemove = null
+                },
+                onDismiss = { pendingRemove = null },
+            )
+
+            // Two buttons, and no third: the dialog's question is what to do with the edits,
+            // and its Cancel would be the third meaning of the same word on this screen — the
+            // page's own Cancel already means "leave without saving". Back and a tap outside
+            // stay on the page, which is the third answer, without a button saying so.
+            //
+            // What the first button *is* depends on whether the form can be stored at all.
+            // Offering Save on a form that `refusal` refuses is a loop with no exit: the press
+            // fails, its reason is written at the bottom of the page the dialog is still
+            // covering, and the user is back at the same question. So the refusal is the
+            // dialog's own body and the answer is "keep editing" — the one action that makes
+            // the other button possible.
+            //
+            // A tap outside or the back gesture is *not* the second button. `PiConfirm`
+            // defaults `onDismissRequest` to `onDismiss`, which here means "discard the
+            // edits", so the scrim — the easiest target on the screen — was the destructive
+            // answer while the two buttons said otherwise. It closes the question and stays on
+            // the page instead, which is the third answer this dialog is deliberately without
+            // a button for.
+            val refused = refusal()
+            PiConfirm(
+                show = askingToSave,
+                title = text.settings.unsavedTitle,
+                text = refused ?: text.settings.unsavedBody,
+                confirm = if (refused == null) text.settings.save else text.settings.keepEditing,
+                dismiss = text.settings.discard,
+                onConfirm = {
+                    askingToSave = false
+                    if (refused == null && save()) leave()
+                },
+                onDismiss = {
+                    askingToSave = false
+                    leave()
+                },
+                onDismissRequest = { askingToSave = false },
+            )
         },
     ) { padding ->
         // The page draws through the navigation strip now, so the strip's height is content
