@@ -630,11 +630,11 @@ data class SettingsPick(
  *
  * ## The short list is a dropdown row, and the split is the length
  *
- * A value with a few alternatives is `OverlayDropdownPreference` — Miuix's own dropdown row,
- * used directly at the call site the way `ArrowPreference` is, since the app has no row
- * wrapper of its own. It states the value at the row's end, opens a panel anchored at the row
- * with no scrim, and is what every MIUI settings list gives a choice like this: the language,
- * the theme, the launcher mark, the chat web default, the wire protocol.
+ * A value with a few alternatives is `PiDropdownPreference` — the kit's glass dropdown row,
+ * used directly at the call site the way `ArrowPreference` is. It states the value at the
+ * row's end, opens a glass panel anchored at the row with no scrim, and is what every MIUI
+ * settings list gives a choice like this: the language, the theme, the launcher mark, the
+ * chat web default, the wire protocol.
  *
  * The line between the two is the length of the list, not the page it is on: **a list a
  * reader has to search is this sheet, and a list a reader reads is a dropdown.** The panel

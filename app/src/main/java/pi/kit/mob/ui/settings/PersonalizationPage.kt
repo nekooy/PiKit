@@ -34,6 +34,7 @@ import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiDropdownPreference
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
@@ -43,7 +44,6 @@ import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -223,7 +223,7 @@ internal fun PersonalizationPage(
                     },
                     text = text,
                 )
-                OverlayDropdownPreference(
+                PiDropdownPreference(
                     items = ThemeMode.entries.map { themeModeLabel(it, text) },
                     selectedIndex = settings.themeMode.ordinal,
                     title = text.settings.theme,
@@ -238,7 +238,7 @@ internal fun PersonalizationPage(
                         }
                     },
                 )
-                OverlayDropdownPreference(
+                PiDropdownPreference(
                     items = LauncherIcon.entries.map { launcherIconLabel(it, text) },
                     selectedIndex = settings.launcherIcon.ordinal,
                     title = text.settings.launcherIcon,

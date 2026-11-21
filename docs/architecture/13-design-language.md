@@ -259,6 +259,20 @@ subtitle") from `""` ("reserve the line while the value is being read") — the 
 page's item count is null while a folder is listed, and a line that appeared and
 disappeared once per folder moved the whole page by its height twice.
 
+The subtitle also sits **below** the bar rather than in its `bottomContent`, and the
+reason is the blur band's edge. `GlassTopAppBarLayout` sizes that band from the bar's
+own geometry — `topInset + CollapsedHeight + bottomContentHeight`, times 1.2 — and
+clips it with `RectangleShape`, so its bottom edge is a hard cut inside a smooth ramp.
+With the subtitle in `bottomContent` that cut landed across the title block: measured on
+the personalization page at 420dpi, rows 190 and 191 differed by a uniform −2 levels
+across 900 of 1080 columns (`min=-2 max=0`), and the same rows read flat on the settings
+root, whose bar has no `bottomContent`. A one-pixel step of two levels across the width
+is a Mach band the eye reads as a rule under the title. `PiPage` composes the bar and the
+subtitle in one `Column` in the `topBar` slot instead: the band keeps the no-subtitle
+height the settings root already measured clean, the subtitle stays outside the recorded
+body so the band never blurs it, and `Scaffold` still hands the body a top inset
+containing both, so no page's content rectangle moves.
+
 ### The window's last pixels are a page's, not the system's
 
 The app asks for edge-to-edge with **no scrim of the platform's own**:
@@ -318,21 +332,36 @@ something"; a switch means "this row is the switch".
 Two row rules are behaviour rather than taste:
 
 - **A short list of alternatives is a dropdown row, and the length of the list is the rule.**
-  `OverlayDropdownPreference` states the value in effect at the row's end beside the library's
+  `PiDropdownPreference` states the value in effect at the row's end beside the library's
   up/down arrow and opens its alternatives in a panel anchored at the row. It is used directly
-  at the call site, like `ArrowPreference` — the app has no row wrapper of its own. This is the
-  shape the language, the theme, the launcher mark, the chat web default and the wire protocol
-  take, and it replaced three shapes that disagreed with each other: a dialog of radio rows (the
-  language), radio rows inline on the page (the theme, the launcher mark, the web default, which
-  cost a screenful for three to five alternatives), and a sheet (the provider, the API type).
-  The inline radio group had a real argument — a set is better read at once than one at a time
-  behind a **scrim** — and the dropdown answers it rather than ignoring it: the panel opens over
-  the row with no scrim, so the row being changed stays in sight and the page below it is not
-  darkened. A list a reader has to *search* is still `SettingsPickerSheet` with a filter field,
-  because a dropdown's panel has no search: thirty-odd provider ids are a sheet, three
-  alternatives are a row. The library ticks when the panel opens and says nothing when a row is
-  picked, so the call site performs `PiHaptics.choose()` on the pick — and only when it changes
-  something, because picking the value already in effect is a read rather than a choice.
+  at the call site, like `ArrowPreference` — the row shape is the kit's, not a per-page
+  composition. This is the shape the language, the theme, the launcher mark, the chat web
+  default and the wire protocol take, and it replaced three shapes that disagreed with each
+  other: a dialog of radio rows (the language), radio rows inline on the page (the theme, the
+  launcher mark, the web default, which cost a screenful for three to five alternatives), and
+  a sheet (the provider, the API type). The inline radio group had a real argument — a set is
+  better read at once than one at a time behind a **scrim** — and the dropdown answers it
+  rather than ignoring it: the panel opens over the row with no scrim, so the row being
+  changed stays in sight and the page below it is not darkened. A list a reader has to
+  *search* is still `SettingsPickerSheet` with a filter field, because a dropdown's panel has
+  no search: thirty-odd provider ids are a sheet, three alternatives are a row. The library
+  ticks when the panel opens and says nothing when a row is picked, so the call site performs
+  `PiHaptics.choose()` on the pick — and only when it changes something, because picking the
+  value already in effect is a read rather than a choice.
+
+  **The row's panel is glass, which is why the row is the kit's.** Miuix's
+  `OverlayDropdownPreference` draws the pre-OS4 `surfaceContainer` rectangle — 16dp corners,
+  no blur, no stroke, no shadow — the same panel the menus had. On a page whose bar, cards and
+  dialogs are OS4 glass, that is the one opaque rectangle left, and it is raised by the rows a
+  reader touches most on a settings page. `PiDropdownPreference` wraps the library's
+  `GlassDropdownPreference`, supplies `LocalPiBackdrop` (the row cannot read the local itself,
+  and a call site that passed `null` would silently get the opaque fill) and states
+  `PiCorner.popup`, so a settings dropdown and a menu are cut the same way. Its `options`
+  overload takes a `PiDropdownOption` per alternative and draws the panel as `PiMenuRow`s —
+  the form for a row whose alternatives each need a sentence, which the library's glass
+  preference cannot express because it takes bare strings. `tools/check-ui.py` refuses
+  `OverlayDropdownPreference`, `WindowDropdownPreference` and the spinner rows for the same
+  reason it refuses `OverlayListPopup`.
 - **A row that raises a question is inert, and its switch is the control.** The
   storage grants ask every time they are turned on or off, so the row does not toggle
   and the finger has to reach the switch. Backup's switches stay row-toggling, because
@@ -346,7 +375,8 @@ Two row rules are behaviour rather than taste:
   *leading* mark and hit the same branch. **0.9.5-beta01 fixed the measure** by
   branching on `constraints.hasBoundedWidth`, so the crash is no longer the reason;
   `ui/kit/PiMenuRow` remains the popup row because it takes the library's own
-  popup-mode metrics — `body1`/`body2`, 20dp at the sides — so a menu of these sits
+  popup-mode metrics — `body1`/`body2`, 20dp at the sides, 44dp minimum, the 24dp mark
+  cell, the press fill at `GlassPopupDefaults.ItemPressRadius` — so a menu of these sits
   beside a menu of `DropdownImpl`s without a seam, and because a popup row has three
   semantics the preference component does not name. It draws three kinds of row, and
   the difference is the semantics rather than the shape: a **choice** (the chosen
@@ -355,7 +385,44 @@ Two row rules are behaviour rather than taste:
   an **action**, and a **fact** — a row with no tap at all, drawn in normal ink because
   the library's disabled ink makes true numbers read as unavailable choices. The
   context report is the one menu of facts: a page of readings drawn in the colour of a
-  disabled control reads as readings that are not available.
+  disabled control reads as readings that are not available. The choice haptic is the
+  row's own — a tap that lands on a row which is not the current answer performs
+  `haptics.choose()`, and a tap on the ticked row is silent — so a menu's handler never
+  buzzes, which is the *Never twice* rule read from the menu's side.
+- **A menu's panel is the library's glass popup, and the app places none of it.**
+  Miuix's `OverlayListPopup` and the `OverlayDropdownPopup` built on it draw the
+  **pre-OS4** panel: `surfaceContainer`, 16dp corners, no blur, no stroke, no shadow.
+  Beside a bar, capsules and dialogs that are all OS4 glass, a menu was the one opaque
+  rectangle on the page — the most frequently raised control and the only one not in
+  the material. Every menu is therefore `GlassPopup` at `PiCorner.popup` (24dp; the
+  popup family is cut one step larger than the 20dp cards, because the library's own
+  popup surface is) and `GlassPopupDefaults.MaxHeight` (416dp, content scrolling
+  inside), reached through `ui/kit/PiPopupMenu`.
+
+  The panel is drawn by a host the page provides, not at the trigger, and that is the
+  same division `OverlayListPopup` made with the root `Scaffold`'s popup host. Two
+  reasons: a panel has to be measured against the **window** (a chip is 32dp tall and a
+  drawer row is clipped by its list), and it samples the page's backdrop, so it cannot
+  be inside the recording that holds the trigger. `PiPopupMenu` registers into
+  `PiPopupHostProvider` through a `DisposableEffect`, which also keeps the menu owned by
+  the composition that raised it — a row that leaves its list takes its menu with it.
+  The transcript's card menu is the exception and is registered by the page, because a
+  long conversation recycles cards and a menu that vanished mid-read would be unusable.
+
+  The app also does not place the panel; `placeGlassPopup` does, and the only knob a
+  call site has is the rectangle it hands over. Its test is
+  `below = window.bottom - margin - anchor.top`, `above = anchor.bottom - anchor.top`,
+  `alignTop = size.height <= below || below >= above` — a fit test against the
+  **window**. On the composer that is wrong: the chip row is the last thing above the
+  input field, so "there is room below" is true and the panel lands on the field the
+  reader is about to type into, and with the keyboard up it lands under the keyboard,
+  because the keyboard shrinks the content rather than the window. `PiPopupPlacement.Above`
+  is that case: it hands `GlassPopup` a rectangle whose `top` is past the window's
+  bottom, which makes `below` negative and the branch unreachable for any content
+  height, and whose `bottom` is the anchor's top edge, where the panel's own bottom then
+  lands. A control in the page's bar does the mirror image — it hands over
+  `openBelow = LocalPiBarHeight.current`, because the bar is chrome outside the recorded
+  layer and a panel drawn over it has nothing to blur there.
 
 ## Dialogs, sheets and the one message
 

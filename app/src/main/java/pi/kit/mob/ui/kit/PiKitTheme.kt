@@ -590,6 +590,22 @@ object PiCorner {
      * flat rather than cards, so it spaces them at 2dp — there is no outline to separate.
      */
     val rowGap: Dp = 6.dp
+
+    /**
+     * The corner of a floating menu.
+     *
+     * Not [radius], and the difference is the library's: Miuix cuts a *popup* panel at
+     * 24dp — `GlassPopupDefaults.CornerRadius`, `GlassDropdownDefaults.CornerRadius` and
+     * the dropdown preference's own panel all state it — while a card, field or button is
+     * 16dp and the app draws those at [radius]. A menu is a surface that floats *over*
+     * the page rather than one of its rows, and OS4 draws that family one step rounder so
+     * a panel reads as an object laid on the page instead of as another card.
+     *
+     * It is a second constant rather than a scale for the same reason [radius] is one
+     * number: the two values are the library's two, and the app only decides which family
+     * a surface belongs to.
+     */
+    val popup: Dp = 24.dp
 }
 
 /**

@@ -42,6 +42,7 @@ import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiDropdownPreference
 import pi.kit.mob.ui.kit.PiGroupAction
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
@@ -59,7 +60,6 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -1163,7 +1163,7 @@ internal fun ModelEditPage(
                 // about which page the row is on.
                 if (isCustomEndpoint) {
                     val protocols = CustomApi.entries
-                    OverlayDropdownPreference(
+                    PiDropdownPreference(
                         items = protocols.map { it.id },
                         selectedIndex = protocols.indexOf(CustomApi.fromId(api)),
                         title = text.settings.apiType,

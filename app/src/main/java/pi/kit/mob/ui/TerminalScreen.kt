@@ -77,22 +77,24 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.ui.kit.DarkNavigationBar
+import pi.kit.mob.ui.kit.LocalPiBarHeight
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piSheetBottomInset
+import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -105,7 +107,6 @@ import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.icon.glass.Add
 import top.yukonga.miuix.kmp.icon.glass.Layers
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Pinch-to-zoom bounds, in sp. */
@@ -204,6 +205,9 @@ fun TerminalScreen(session: PiAgentSession,
     // in the page's bar — and a page that is disposed while the popup closes must
     // not leave a window behind.
     var sessionsMenuOpen by remember { mutableStateOf(false) }
+    // The stack button is the roster's anchor: the panel's end edge is the button's, and
+    // the panel is drawn by the page's popup host rather than inside this action row.
+    val sessionsAnchor = rememberPiMenuAnchor()
     // TerminalView asks the client for the modifier latches on every key event. The bar
     // no longer carries `CTRL`/`ALT`, so both are false — the fields stay because the view
     // client reads them unconditionally.
@@ -326,13 +330,13 @@ fun TerminalScreen(session: PiAgentSession,
             //
             // The roster's switch. Miuix's icon set has no terminal glyph, so the
             // button shows the thing it opens — a stack of sessions — and the
-            // content description says what tapping it does. It is an `IconButton`
-            // rather than Miuix's own `WindowIconDropdownMenu` because that
-            // component's items are one line of text and no trailing action, and a
-            // shell has to be closable from the list without being switched to
-            // first (see [TerminalSessionMenu]).
+            // content description says what tapping it does. The rows are the app's
+            // own: `WindowIconDropdownMenu` has no trailing action, and a shell has
+            // to be closable from the list without being switched to first (see
+            // [TerminalSessionMenu]).
             GlassIconButton(
                 onClick = { sessionsMenuOpen = true },
+                modifier = Modifier.piMenuAnchor(sessionsAnchor, openBelow = LocalPiBarHeight.current),
             ) {
                 Icon(
                     imageVector = MiuixIcons.Glass.Layers,
@@ -341,25 +345,21 @@ fun TerminalScreen(session: PiAgentSession,
                     modifier = Modifier.size(28.dp),
                 )
             }
-            // The popup is anchored to the parent layout of this call — the app
-            // bar's action row — and aligned to its end, so the menu hangs under
-            // the action group with its right edge at the screen's margin. It is the
-            // overlay popup rather than the window one for the reason §7.1 gives: a
-            // window is a second window, so it can outlive the page that raised it and
-            // it takes the focus with it — which on this page would close the keyboard
-            // the moment the roster is opened to switch shells.
-            OverlayListPopup(
+            // The menu is the page's, drawn by its popup host against the page's own
+            // backdrop: the panel is measured against the window rather than clipped to
+            // the bar's action row, and it samples the page without containing itself.
+            // It hangs under the stack button with its end edge at the screen's margin,
+            // which is the anchor the bar's action row used to give it.
+            PiPopupMenu(
                 show = sessionsMenuOpen,
-                alignment = PopupPositionProvider.Align.End,
                 onDismissRequest = { sessionsMenuOpen = false },
+                anchor = sessionsAnchor,
             ) {
-                ListPopupColumn {
-                    TerminalSessionMenu(
-                        text = t,
-                        manager = manager,
-                        onPicked = { sessionsMenuOpen = false },
-                    )
-                }
+                TerminalSessionMenu(
+                    text = t,
+                    manager = manager,
+                    onPicked = { sessionsMenuOpen = false },
+                )
             }
         },
     ) { padding ->

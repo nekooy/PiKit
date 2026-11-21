@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -206,17 +207,22 @@ import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
+import pi.kit.mob.ui.kit.PiMenuAnchor
 import pi.kit.mob.ui.kit.PiMotion
+import pi.kit.mob.ui.kit.PiPopupHostProvider
+import pi.kit.mob.ui.kit.PiPopupMenu
+import pi.kit.mob.ui.kit.PiPopupPlacement
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiTone
-import pi.kit.mob.ui.kit.aboveAnchorPositionProvider
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piGlass
+import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.rememberPiBackdrop
+import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
@@ -226,14 +232,8 @@ import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
@@ -259,7 +259,6 @@ import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
 import top.yukonga.miuix.kmp.icon.extended.Unlock
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -1959,12 +1958,12 @@ private fun ChatPage(
     var menuFor by remember { mutableStateOf<ChatItem?>(null) }
     var menuCardKey by remember { mutableStateOf<String?>(null) }
     var selectionKey by remember { mutableStateOf<String?>(null) }
-    // Where the finger went down, in the pressed card's own coordinates. The menu is
-    // emitted inside that card (see the transcript's item scope) because Miuix positions
-    // a popup from its parent's bounds, and the parent there is a one-pixel anchor placed
-    // at this point. A menu belongs where the finger was, not at the card's corner and
-    // not at the bottom edge of the screen.
-    var menuAt by remember { mutableStateOf(Offset.Zero) }
+    // Where the finger went down, in **window** coordinates, and how many message records
+    // came before the card it landed on. The menu is drawn by the page's popup host, so
+    // the press has to travel as a window rectangle rather than as an offset inside a card
+    // that the list may recycle before the panel closes.
+    val menuAnchor = rememberPiMenuAnchor()
+    var menuCounted by remember { mutableIntStateOf(0) }
     // The message whose Markdown source is open in the reader sheet.
     var sourceFor by remember { mutableStateOf<ChatItem?>(null) }
     ExitBackHandler(enabled = !historyOpen)
@@ -1996,6 +1995,10 @@ private fun ChatPage(
     // outside the layer — a control inside it would sample its own output.
     val chatBackdrop = rememberPiBackdrop()
     CompositionLocalProvider(LocalPiBackdrop provides chatBackdrop) {
+        // The page's floating menus, drawn beside the recorded transcript for the reason
+        // `PiPage` states: a menu samples the page's backdrop and is measured against the
+        // window, so it belongs outside the layer and outside the row that opened it.
+        PiPopupHostProvider {
         Box(Modifier.fillMaxSize()) {
             // The transcript fills the page and the composer floats over its bottom, so the
             // conversation runs *behind* the band rather than being cut by it. That is what
@@ -2236,6 +2239,13 @@ private fun ChatPage(
                                                 it.item is ChatItem.User || it.item is ChatItem.Assistant
                                             }
                                             ?.item
+                                        // The card's own place in the window, written by the
+                                        // measure pass that lays it out. The long press
+                                        // reports a point in *this card's* coordinates and the
+                                        // menu is placed in the window's, so the translation
+                                        // has to come from a node that is still attached when
+                                        // the press lands.
+                                        var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
                                         val cardBody: @Composable () -> Unit = {
                                             TranscriptCardView(
                                                 card = card,
@@ -2248,7 +2258,9 @@ private fun ChatPage(
                                             )
                                         }
                                         Box(
-                                            Modifier.pointerInput(card.key, menuTarget) {
+                                            Modifier
+                                                .onGloballyPositioned { cardCoords = it }
+                                                .pointerInput(card.key, menuTarget) {
                                                 detectTapGestures(
                                                     onLongPress = { press ->
                                                         // Inside the test, not above it: a card
@@ -2261,7 +2273,38 @@ private fun ChatPage(
                                                             haptics.hold()
                                                             menuFor = menuTarget
                                                             menuCardKey = card.key
-                                                            menuAt = press
+                                                            // The press arrives in this card's
+                                                            // own coordinates; the panel is placed
+                                                            // in the window's. The card's own node
+                                                            // is the translation, so the menu opens
+                                                            // where the finger was rather than at
+                                                            // the card's corner. A press with no
+                                                            // coordinates yet cannot be placed, so
+                                                            // the menu is not raised at all rather
+                                                            // than opening at the window's corner.
+                                                            val coords = cardCoords
+                                                            if (coords != null) {
+                                                                val inWindow = coords.localToWindow(press)
+                                                                menuAnchor.bounds = Rect(
+                                                                    left = inWindow.x,
+                                                                    top = inWindow.y,
+                                                                    right = inWindow.x,
+                                                                    bottom = inWindow.y,
+                                                                )
+                                                            }
+                                                            // The count of message records before
+                                                            // this card is the branch point's
+                                                            // coordinate, and it is computed on the
+                                                            // frame that opens the menu: it is a scan
+                                                            // of every earlier turn, which every card
+                                                            // would otherwise pay for on every token.
+                                                            menuCounted = cards.take(index + 1).sumOf { c ->
+                                                                c.rows.count { row ->
+                                                                    row is TranscriptRow.Message &&
+                                                                        (row.item is ChatItem.User ||
+                                                                            row.item is ChatItem.Assistant)
+                                                                }
+                                                            }
                                                             selectionKey = null
                                                         }
                                                     },
@@ -2277,63 +2320,13 @@ private fun ChatPage(
                                             } else {
                                                 cardBody()
                                             }
-                                            // The menu, emitted inside the card that owns
-                                            // it: a Miuix popup is positioned from its
-                                            // parent's bounds, so the anchor is a one-pixel
-                                            // box where the finger went down — which is what
-                                            // opens the panel at the press rather than at the
-                                            // card's corner. `show`, not composition, is what
-                                            // closes it: the panel animates out with its own
-                                            // rows still on it.
-                                            if (menuCardKey == card.key && menuTarget != null) {
-                                                // Computed here rather than beside the card's
-                                                // content: it is a scan of every earlier turn
-                                                // and every card paid for it on every token,
-                                                // whether or not a menu was open. The menu is
-                                                // the only reader, so the scan belongs to the
-                                                // frame that opens it.
-                                                val counted = cards.take(index + 1).sumOf { c ->
-                                                    c.rows.count { row ->
-                                                        row is TranscriptRow.Message &&
-                                                            (row.item is ChatItem.User ||
-                                                                row.item is ChatItem.Assistant)
-                                                    }
-                                                }
-                                                Box(
-                                                    Modifier
-                                                        .offset {
-                                                            IntOffset(
-                                                                menuAt.x.roundToInt(),
-                                                                menuAt.y.roundToInt(),
-                                                            )
-                                                        }
-                                                        .size(1.dp),
-                                                ) {
-                                                    OverlayDropdownPopup(
-                                                        entry = DropdownEntry(
-                                                            items = messageMenuItems(
-                                                                target = menuTarget,
-                                                                counted = counted,
-                                                                streaming = state.isStreaming,
-                                                                text = text,
-                                                                session = session,
-                                                                workspace = currentWorkspace,
-                                                                clipboard = messageClipboard,
-                                                                scope = messageScope,
-                                                                toasts = messageToasts,
-                                                                onDismiss = { menuFor = null },
-                                                                onSelectSource = { sourceFor = it },
-                                                            ),
-                                                        ),
-                                                        show = menuFor != null,
-                                                        onDismiss = { menuFor = null },
-                                                        onDismissFinished = { menuCardKey = null },
-                                                        maxHeight = null,
-                                                        dropdownColors = DropdownDefaults.dropdownColors(),
-                                                        renderInRootScaffold = true,
-                                                    )
-                                                }
-                                            }
+                                            // The menu is the page's, not the card's: it is
+                                            // registered by the page's popup host so the
+                                            // panel is measured against the window and
+                                            // samples the transcript's layer without
+                                            // containing itself. What the card contributes
+                                            // is where the finger went down, in window
+                                            // coordinates — see `menuAnchor`.
                                         }
                                     }
                                 }
@@ -2674,6 +2667,43 @@ private fun ChatPage(
             text = text,
             modifier = Modifier.align(Alignment.TopCenter),
         )
+
+        // The message menu: the rows the transcript's long press offers, at the point the
+        // finger went down. It is registered here rather than inside the card because the
+        // page's popup host draws the panel — outside the transcript's recorded layer and
+        // measured against the window — so a card the list recycles while the menu is open
+        // no longer takes its menu with it.
+        val menuSubject = menuFor
+        if (menuSubject != null) {
+            PiPopupMenu(
+                show = true,
+                onDismissRequest = {
+                    menuFor = null
+                    menuCardKey = null
+                },
+                anchor = menuAnchor,
+            ) {
+                messageMenuItems(
+                    target = menuSubject,
+                    counted = menuCounted,
+                    streaming = state.isStreaming,
+                    text = text,
+                    session = session,
+                    workspace = currentWorkspace,
+                    clipboard = messageClipboard,
+                    scope = messageScope,
+                    toasts = messageToasts,
+                    onDismiss = { menuFor = null },
+                    onSelectSource = { sourceFor = it },
+                ).forEach { action ->
+                    PiMenuRow(
+                        title = action.title,
+                        startAction = action.leading,
+                        onClick = action.onClick,
+                    )
+                }
+            }
+        }
         }
 
         // The Markdown source of the message, in a sheet of its own: what the reader asked
@@ -2727,6 +2757,7 @@ private fun ChatPage(
         }
 
         overlay()
+        }
     }
 }
 
@@ -4196,11 +4227,11 @@ private fun itemSource(item: ChatItem): String = when (item) {
 }
 
 /**
- * The rows a message's menu offers, as Miuix dropdown items.
+ * The rows a message's menu offers.
  *
- * One list rather than three `MessageAction`s drawn by hand: a menu is a library
- * component — its container, row height, press indication, dividers and dismissal are
- * Miuix's — and the same `OverlayDropdownPopup` the drawer's row actions open. The three
+ * One list rather than three `MessageAction`s drawn by hand: a menu is a component — its
+ * panel, row height, press fill and dismissal are the popup's — and the same
+ * [PiPopupMenu] the drawer's row actions and the files page's row menu open. The three
  * actions read as one list: copy the source, open it in a sheet to select text from, or
  * branch the conversation from this message. The branch needs the *count* of message
  * records up to the card, which is what the item scope knows and the item itself does
@@ -4222,11 +4253,11 @@ private fun messageMenuItems(
     toasts: PiToast?,
     onDismiss: () -> Unit,
     onSelectSource: (ChatItem) -> Unit,
-): List<DropdownItem> = buildList {
+): List<MenuAction> = buildList {
     add(
-        DropdownItem(
-            text = text.chat.copyMessage,
-            icon = { modifier -> Icon(MiuixIcons.Copy, contentDescription = null, modifier = modifier) },
+        MenuAction(
+            title = text.chat.copyMessage,
+            leading = { Icon(MiuixIcons.Copy, contentDescription = null) },
             onClick = {
                 onDismiss()
                 scope.launch { clipboard.setClipEntry(clipEntryFor(itemSource(target))) }
@@ -4235,15 +4266,15 @@ private fun messageMenuItems(
         ),
     )
     add(
-        DropdownItem(
-            text = text.chat.selectText,
+        MenuAction(
+            title = text.chat.selectText,
             // A borrowed glyph's size is a call-site decision (§12.3): this menu's ink sits
             // at about 19.5dp, and Material Symbols' figure fills three quarters of its
             // own box, so it is drawn in a [SELECT_TEXT_GLYPH] box — larger than the 24dp
             // cell, whose transparent spare dp are what keep this row's label on the same
             // column as the other two.
-            icon = { modifier ->
-                Box(modifier.size(24.dp), contentAlignment = Alignment.Center) {
+            leading = {
+                Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
                     Icon(
                         painter = painterResource(R.drawable.ic_select_text),
                         contentDescription = null,
@@ -4259,9 +4290,9 @@ private fun messageMenuItems(
     )
     if (!streaming && counted > 0) {
         add(
-            DropdownItem(
-                text = text.chat.fork,
-                icon = { modifier -> Icon(MiuixIcons.Share, contentDescription = null, modifier = modifier) },
+            MenuAction(
+                title = text.chat.fork,
+                leading = { Icon(MiuixIcons.Share, contentDescription = null) },
                 onClick = {
                     onDismiss()
                     val path = session.forkAt(counted)
@@ -4272,6 +4303,20 @@ private fun messageMenuItems(
         )
     }
 }
+
+/**
+ * One row of a menu the page builds as data: a title, its leading mark, and what a tap
+ * does.
+ *
+ * The mark is a composable rather than an `ImageVector` because one of these menus draws a
+ * vector at its own size and another draws a painter — a borrowed glyph's size is a
+ * call-site decision, and that decision is the call site's to make.
+ */
+private class MenuAction(
+    val title: String,
+    val leading: @Composable () -> Unit,
+    val onClick: () -> Unit,
+)
 
 /**
  * The box the select-text figure is drawn in, inside the menu's 24dp icon cell.
@@ -4809,12 +4854,11 @@ private fun Composer(
                         ControlChipBase(
                             label = presetLabel,
                             onClick = { onOpenSheet(ComposerSheet.Preset) },
-                            menu = {
-                                OverlayListPopup(
-                                    popupPositionProvider = aboveAnchorPositionProvider(),
+                            menu = { anchor ->
+                                ControlChipMenu(
                                     show = openSheet == ComposerSheet.Preset,
-                                    maxHeight = MENU_MAX_HEIGHT,
-                                    onDismissRequest = onCloseSheet,
+                                    anchor = anchor,
+                                    onDismiss = onCloseSheet,
                                 ) {
                                     ChatPresetMenu(
                                         show = openSheet == ComposerSheet.Preset,
@@ -4866,7 +4910,7 @@ private fun Composer(
                             glyph = MiuixIcons.Folder,
                             label = workspaceLabel,
                             onClick = { onOpenSheet(ComposerSheet.Workspace) },
-                        ) {
+                        ) { anchor ->
                             // Keyed on the list's size: the popup's content is its own
                             // composition, and a workspace that arrived while the popup was
                             // closed did not reach it — measured on the history page adopting
@@ -4875,23 +4919,22 @@ private fun Composer(
                             // composition, which is the cheapest honest fix for a slot the
                             // library does not re-read.
                             key(workspaces.size) {
-                                OverlayListPopup(
-                                popupPositionProvider = aboveAnchorPositionProvider(),
-                                show = openSheet == ComposerSheet.Workspace,
-                                maxHeight = MENU_MAX_HEIGHT,
-                                onDismissRequest = onCloseSheet,
-                            ) {
-                                WorkspaceMenu(
+                                ControlChipMenu(
                                     show = openSheet == ComposerSheet.Workspace,
-                                    text = text,
-                                    workspaces = workspaces,
-                                    current = currentWorkspace,
-                                    defaultPath = defaultWorkspacePath,
-                                    home = session.env.homePath,
-                                    onPick = onSelectWorkspace,
-                                    onAdd = onOpenWorkspacePicker,
+                                    anchor = anchor,
                                     onDismiss = onCloseSheet,
-                                )
+                                ) {
+                                    WorkspaceMenu(
+                                        show = openSheet == ComposerSheet.Workspace,
+                                        text = text,
+                                        workspaces = workspaces,
+                                        current = currentWorkspace,
+                                        defaultPath = defaultWorkspacePath,
+                                        home = session.env.homePath,
+                                        onPick = onSelectWorkspace,
+                                        onAdd = onOpenWorkspacePicker,
+                                        onDismiss = onCloseSheet,
+                                    )
                                 }
                             }
                         }
@@ -4909,11 +4952,11 @@ private fun Composer(
                         // and the settings row shows.
                         label = thinkingLevelOf(facts, saved, config.activeProfile, catalogueLevels),
                         onClick = { onOpenSheet(ComposerSheet.Thinking) },
-                    ) {
-                        OverlayListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
+                    ) { anchor ->
+                        ControlChipMenu(
                             show = openSheet == ComposerSheet.Thinking,
-                            onDismissRequest = onCloseSheet,
+                            anchor = anchor,
+                            onDismiss = onCloseSheet,
                         ) {
                             ThinkingMenu(
                                 show = openSheet == ComposerSheet.Thinking,
@@ -4960,15 +5003,11 @@ private fun Composer(
                             // loading.
                             ?: if (config.profiles.isEmpty()) text.chat.noModel else text.chat.loadingModel,
                         onClick = { onOpenSheet(ComposerSheet.Model) },
-                    ) {
-                        OverlayListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
+                    ) { anchor ->
+                        ControlChipMenu(
                             show = openSheet == ComposerSheet.Model,
-                            // Two dozen models in one menu: bounded, so the panel
-                            // stays a menu rather than covering the conversation it
-                            // is asking about.
-                            maxHeight = MENU_MAX_HEIGHT,
-                            onDismissRequest = onCloseSheet,
+                            anchor = anchor,
+                            onDismiss = onCloseSheet,
                         ) {
                             ModelMenu(
                                 show = openSheet == ComposerSheet.Model,
@@ -4987,12 +5026,11 @@ private fun Composer(
                         // same one name in [ComposerSheet]: the two are two readings of
                         // one report, so opening either asks the same question.
                         onClick = { onOpenSheet(ComposerSheet.Context) },
-                    ) {
-                        OverlayListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
+                    ) { anchor ->
+                        ControlChipMenu(
                             show = openSheet == ComposerSheet.Context,
-                            maxHeight = MENU_MAX_HEIGHT,
-                            onDismissRequest = onCloseSheet,
+                            anchor = anchor,
+                            onDismiss = onCloseSheet,
                         ) {
                             ContextMenu(session = session, text = text)
                         }
@@ -5201,7 +5239,7 @@ private fun Composer(
                 // on zero, so it measured, reported a node to a screen reader, and
                 // painted nothing. See `ic_commands.xml` for the read of the artefact
                 // and the replacement geometry.
-                PopupAnchor {
+                PopupAnchor { anchor ->
                     IconButton(
                         onClick = { onOpenSheet(ComposerSheet.Commands) },
                         enabled = enabled,
@@ -5222,11 +5260,10 @@ private fun Composer(
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
-                    OverlayListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
+                    ControlChipMenu(
                         show = openSheet == ComposerSheet.Commands,
-                        maxHeight = MENU_MAX_HEIGHT,
-                        onDismissRequest = onCloseSheet,
+                        anchor = anchor,
+                        onDismiss = onCloseSheet,
                     ) {
                         CommandMenu(
                             show = openSheet == ComposerSheet.Commands,
@@ -5253,7 +5290,7 @@ private fun Composer(
                 // Chat mode does not draw it. The tier judges tool calls, and chat mode
                 // has no tools; a lock beside a chat field is a rule for nothing.
                 if (!chatMode) {
-                    PopupAnchor {
+                    PopupAnchor { anchor ->
                         val permission = saved.permissionMode
                         IconButton(
                             onClick = { onOpenSheet(ComposerSheet.Permission) },
@@ -5270,11 +5307,10 @@ private fun Composer(
                                 },
                             )
                         }
-                        OverlayListPopup(
-                            popupPositionProvider = aboveAnchorPositionProvider(),
+                        ControlChipMenu(
                             show = openSheet == ComposerSheet.Permission,
-                            maxHeight = MENU_MAX_HEIGHT,
-                            onDismissRequest = onCloseSheet,
+                            anchor = anchor,
+                            onDismiss = onCloseSheet,
                         ) {
                             PermissionMenu(
                                 show = openSheet == ComposerSheet.Permission,
@@ -5325,7 +5361,7 @@ private fun Composer(
                 // order (see the diagram over the ⌘). The attach menu is the one of
                 // the two that offers the reader a choice — a capture, a picture, a
                 // document — and the command list is the one that acts on the tap.
-                PopupAnchor {
+                PopupAnchor { anchor ->
                     IconButton(
                         onClick = { onOpenSheet(ComposerSheet.Attach) },
                         enabled = enabled,
@@ -5347,10 +5383,10 @@ private fun Composer(
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
-                    OverlayListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
+                    ControlChipMenu(
                         show = openSheet == ComposerSheet.Attach,
-                        onDismissRequest = onCloseSheet,
+                        anchor = anchor,
+                        onDismiss = onCloseSheet,
                     ) {
                         AttachMenu(
                             show = openSheet == ComposerSheet.Attach,
@@ -5379,18 +5415,17 @@ private fun Composer(
                 // the message rather than part of it: a reading sits beside the
                 // action that consumes it, and the two that add something keep the
                 // edge where the writing starts.
-                PopupAnchor {
+                PopupAnchor { anchor ->
                     val percent = facts.contextPercent
                     ContextRing(
                         percent = percent,
                         description = text.chat.contextUsage(percent),
                         onClick = { onOpenSheet(ComposerSheet.ContextRing) },
                     )
-                    OverlayListPopup(
-                        popupPositionProvider = aboveAnchorPositionProvider(),
+                    ControlChipMenu(
                         show = openSheet == ComposerSheet.ContextRing,
-                        maxHeight = MENU_MAX_HEIGHT,
-                        onDismissRequest = onCloseSheet,
+                        anchor = anchor,
+                        onDismiss = onCloseSheet,
                     ) {
                         ContextMenu(session = session, text = text)
                     }
@@ -5852,7 +5887,7 @@ private fun ControlChip(
     glyph: ImageVector,
     label: String,
     onClick: () -> Unit,
-    menu: @Composable () -> Unit = {},
+    menu: @Composable (PiMenuAnchor) -> Unit = {},
 ) {
     ControlChipBase(label = label, onClick = onClick, menu = menu) {
         Icon(
@@ -5869,7 +5904,7 @@ private fun ControlChip(
     glyph: Painter,
     label: String,
     onClick: () -> Unit,
-    menu: @Composable () -> Unit = {},
+    menu: @Composable (PiMenuAnchor) -> Unit = {},
 ) {
     ControlChipBase(label = label, onClick = onClick, menu = menu) {
         Icon(
@@ -5884,9 +5919,14 @@ private fun ControlChip(
 private fun ControlChipBase(
     label: String,
     onClick: () -> Unit,
-    menu: @Composable () -> Unit,
+    menu: @Composable (PiMenuAnchor) -> Unit,
     glyph: @Composable () -> Unit,
 ) {
+    // The chip is its menu's anchor, so the panel's end edge is the pill's end edge and
+    // its opening direction is decided from where the pill actually is. The anchor is
+    // created here rather than at each call site because the bounds have to come from
+    // the pill's own node — a wrapper would report the `Box` around it.
+    val anchor = rememberPiMenuAnchor()
     Box {
         Surface(
             // Clip, then click: Miuix's press indication is drawn by the node that
@@ -5896,6 +5936,7 @@ private fun ControlChipBase(
                 .heightIn(min = CHIP_HEIGHT)
                 .piGlass(RoundedCornerShape(percent = 50))
                 .clip(RoundedCornerShape(percent = 50))
+                .piMenuAnchor(anchor)
                 .clickable(onClick = onClick),
             shape = RoundedCornerShape(percent = 50),
             // The same glass the header's capsules are drawn with: a chip floats over the
@@ -5929,8 +5970,34 @@ private fun ControlChipBase(
                 )
             }
         }
-        menu()
+        menu(anchor)
     }
+}
+
+/**
+ * A chip's menu, at OS4's glass.
+ *
+ * The chip is the anchor and the panel is drawn by the page's popup host, so this is one
+ * line at every chip: the panel's end edge is the pill's end edge. It always opens
+ * **above** the chip ([PiPopupPlacement.Above]): the chip row is the last thing above the
+ * input field, so the space below it is the field the reader is about to type into, and
+ * with the keyboard up it is under the keyboard as well — the library's own fit test
+ * measures against the window, which the keyboard does not shrink.
+ */
+@Composable
+private fun ControlChipMenu(
+    show: Boolean,
+    anchor: PiMenuAnchor,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    PiPopupMenu(
+        show = show,
+        onDismissRequest = onDismiss,
+        anchor = anchor,
+        placement = PiPopupPlacement.Above,
+        content = content,
+    )
 }
 
 /**
@@ -5957,20 +6024,18 @@ private val CHIP_GLYPH = 14.dp
 private val CHIP_AVATAR = 20.dp
 
 /**
- * A box whose only job is to be the bounds an [OverlayListPopup] opens against.
+ * A 40dp control and the menu it opens, with the control as the menu's anchor.
  *
- * Miuix's popups are positioned from their *parent's* bounds in the window, so a
- * popup that has to open at a 40dp icon button must be composed as that button's
- * sibling rather than at the page. One place that says so beats a bare `Box` at four
- * call sites.
+ * A `Box` around one button is the button: the glass panel is drawn by the page's popup
+ * host rather than emitted here (see [PiPopupMenu]), so nothing inside this box has a size
+ * of its own and the box's bounds *are* the button's. One place that says so beats a
+ * `rememberPiMenuAnchor` and a `piMenuAnchor` at four call sites.
  */
 @Composable
-private fun PopupAnchor(content: @Composable () -> Unit) {
-    Box { content() }
+private fun PopupAnchor(content: @Composable (PiMenuAnchor) -> Unit) {
+    val anchor = rememberPiMenuAnchor()
+    Box(Modifier.piMenuAnchor(anchor)) { content(anchor) }
 }
-
-/** The tallest a menu may be before it scrolls: an answer's viewport, not the page. */
-private val MENU_MAX_HEIGHT = 320.dp
 
 /**
  * The thinking levels the model in front of us can actually do.
@@ -5999,37 +6064,28 @@ private fun ThinkingMenu(
     val available = levelsFor(facts, saved, config.activeProfile, catalogueLevels)
     val current = thinkingLevelOf(facts, saved, config.activeProfile, catalogueLevels)
     val options = available.takeIf { it.isNotEmpty() } ?: PiLaunchOptions.THINKING_LEVELS
-    val haptics = LocalPiHaptics.current
-    ListPopupColumn {
-        options.forEachIndexed { index, level ->
-            DropdownImpl(
-                // The id alone. The menu carried each level's sentence under it
-                // once, and seven rows of "off — 直接回答，不做思考" made a menu of
-                // two-line entries out of seven one-word choices; the ids are the
-                // wire strings pi documents, and the picker that explains them is the
-                // model page's own rows.
-                text = level,
-                optionSize = options.size,
-                isSelected = level == current,
-                index = index,
-                onSelectedIndexChange = {
-                    if (show) {
-                        // A level already ticked is already the answer, so only a
-                        // different one is a choice worth announcing.
-                        val picked = level != current
-                        if (picked) haptics.choose()
-                        onDismiss()
-                        if (picked) {
-                            // Applied to the running process immediately: pi
-                            // accepts the change over RPC, so unlike the provider and
-                            // model it needs no restart.
-                            session.settingsStore.update { it.copy(thinkingLevel = level) }
-                            session.setThinkingLevel(level)
-                        }
-                    }
-                },
-            )
-        }
+    options.forEach { level ->
+        PiMenuRow(
+            // The id alone. The menu carried each level's sentence under it
+            // once, and seven rows of "off — 直接回答，不做思考" made a menu of
+            // two-line entries out of seven one-word choices; the ids are the
+            // wire strings pi documents, and the picker that explains them is the
+            // model page's own rows.
+            title = level,
+            selected = level == current,
+            // No buzz here: `PiMenuRow` performs the choice haptic itself, and a second
+            // one in the handler is the double buzz `PiHaptics`' *Never twice* forbids.
+            onClick = {
+                if (show && level != current) {
+                    // Applied to the running process immediately: pi
+                    // accepts the change over RPC, so unlike the provider and
+                    // model it needs no restart.
+                    onDismiss()
+                    session.settingsStore.update { it.copy(thinkingLevel = level) }
+                    session.setThinkingLevel(level)
+                }
+            },
+        )
     }
 }
 
@@ -6099,45 +6155,30 @@ private fun ModelMenu(
     }
 
     val haptics = LocalPiHaptics.current
-    ListPopupColumn {
-        if (!hasModels) {
-            DropdownImpl(
-                text = text.chat.noModel,
-                optionSize = 1,
-                isSelected = false,
-                index = 0,
-                enabled = false,
-                onSelectedIndexChange = {},
-            )
-            return@ListPopupColumn
-        }
-        rows.forEachIndexed { index, row ->
-            DropdownImpl(
-                item = DropdownItem(
-                    text = row.model,
-                    enabled = row.enabled,
-                    selected = row.selected,
-                    summary = row.summary,
-                ),
-                optionSize = rows.size,
-                // The tick is drawn by the library from `isSelected`; passing the
-                // item's own flag here would be the same value read twice.
-                isSelected = row.selected,
-                index = index,
-                onSelectedIndexChange = {
-                    // The gate every menu row in this page carries: the panel is drawn
-                    // for the length of its exit, so a second tap aimed at the page
-                    // behind a menu that is already leaving must not pick a model.
-                    if (show && row.enabled) {
-                        // The row already ticked is the model in effect: reopening a
-                        // menu and choosing it again changes nothing, so it is silent.
-                        if (!row.selected) haptics.choose()
-                        onDismiss()
-                        row.onPick()
-                    }
-                },
-            )
-        }
+    if (!hasModels) {
+        PiMenuRow(
+            title = text.chat.noModel,
+            enabled = false,
+        )
+        return
+    }
+    rows.forEach { row ->
+        PiMenuRow(
+            title = row.model,
+            summary = row.summary,
+            enabled = row.enabled,
+            selected = row.selected,
+            // `PiMenuRow` buzzes a changed choice itself (see `ThinkingMenu`).
+            onClick = {
+                // The gate every menu row in this page carries: the panel is drawn
+                // for the length of its exit, so a second tap aimed at the page
+                // behind a menu that is already leaving must not pick a model.
+                if (show && row.enabled && !row.selected) {
+                    onDismiss()
+                    row.onPick()
+                }
+            },
+        )
     }
 }
 
@@ -6253,11 +6294,9 @@ private fun ContextMenu(session: PiAgentSession, text: Strings) {
         state.sessionFile?.let { add(text.chat.detailSession to java.io.File(it).name) }
     }
 
-    ListPopupColumn {
-        // Every row, in the order it was added, as a fact: see this function's KDoc.
-        rows.forEach { (label, value) ->
-            PiMenuRow(title = label, summary = value)
-        }
+    // Every row, in the order it was added, as a fact: see this function's KDoc.
+    rows.forEach { (label, value) ->
+        PiMenuRow(title = label, summary = value)
     }
 }
 
@@ -6334,39 +6373,26 @@ private fun CommandMenu(
     // It is not a tool the model can call, but it is still the escape hatch of a
     // coding conversation rather than a chat one; chat mode keeps only the commands
     // that operate on the conversation itself.
-    val leading = if (chatMode) 0 else 1
-    ListPopupColumn {
-        if (!chatMode) {
-            DropdownImpl(
-                // The one row whose label is a sigil rather than a command id, and it
-                // carries a summary like every row under it: `!` states the *shape* of
-                // the line it wants, not what happens when it is tapped, and a menu of
-                // rows that each explain themselves with one sentence leaves the one
-                // punctuation mark in it as the only entry a reader has to already know.
-                // The sentence is the catalog's own — the shell field it opens says the
-                // same thing under its title.
-                item = DropdownItem(text = SHELL_SIGIL, summary = text.chat.shellCommandHint),
-                optionSize = rows.size + leading,
-                isSelected = false,
-                index = 0,
-                onSelectedIndexChange = { pick(onShell) },
-            )
-        }
-        rows.forEachIndexed { index, command ->
-            DropdownImpl(
-                item = DropdownItem(
-                    text = command.id,
-                    summary = command.description(text),
-                ),
-                optionSize = rows.size + leading,
-                // A command list has no current answer, so no row is ticked — the
-                // difference between this menu and the model one is the whole reason
-                // the library's row takes `isSelected` rather than deriving it.
-                isSelected = false,
-                index = index + leading,
-                onSelectedIndexChange = { pick { onRun(command) } },
-            )
-        }
+    if (!chatMode) {
+        PiMenuRow(
+            // The one row whose label is a sigil rather than a command id, and it
+            // carries a summary like every row under it: `!` states the *shape* of
+            // the line it wants, not what happens when it is tapped, and a menu of
+            // rows that each explain themselves with one sentence leaves the one
+            // punctuation mark in it as the only entry a reader has to already know.
+            // The sentence is the catalog's own — the shell field it opens says the
+            // same thing under its title.
+            title = SHELL_SIGIL,
+            summary = text.chat.shellCommandHint,
+            onClick = { pick(onShell) },
+        )
+    }
+    rows.forEach { command ->
+        PiMenuRow(
+            title = command.id,
+            summary = command.description(text),
+            onClick = { pick { onRun(command) } },
+        )
     }
 }
 
@@ -6415,22 +6441,13 @@ private fun AttachMenu(
             add(AttachRow(text.chat.attachFile, text.chat.attachFileHint, MiuixIcons.File, "file"))
         }
     }
-    ListPopupColumn {
-        rows.forEachIndexed { index, row ->
-            DropdownImpl(
-                item = DropdownItem(
-                    text = row.title,
-                    summary = row.summary,
-                    icon = { modifier -> Icon(row.glyph, contentDescription = null, modifier = modifier) },
-                ),
-                optionSize = rows.size,
-                // Three kinds of attachment are not a set with a current answer: a
-                // message can carry all three, so no row is ever ticked.
-                isSelected = false,
-                index = index,
-                onSelectedIndexChange = { pick(row.kind) },
-            )
-        }
+    rows.forEach { row ->
+        PiMenuRow(
+            title = row.title,
+            summary = row.summary,
+            icon = row.glyph,
+            onClick = { pick(row.kind) },
+        )
     }
 }
 
@@ -6761,41 +6778,28 @@ private fun WorkspaceMenu(
     onAdd: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val haptics = LocalPiHaptics.current
-    // `chosen` separates the menu's two kinds of row: a workspace that becomes the
-    // current one is a choice, while the one already in force and the "add" row are not.
-    fun pick(chosen: Boolean, action: () -> Unit) {
+    // `chosen` used to be what decided the buzz as well as the action; the buzz is
+    // `PiMenuRow`'s now — it performs it on a tap that changes a choice, and only then —
+    // so the parameter is gone and each row states the one thing it does.
+    fun pick(action: () -> Unit) {
         if (show) {
-            if (chosen) haptics.choose()
             onDismiss()
             action()
         }
     }
 
-    val count = workspaces.size + 1
-    ListPopupColumn {
-        workspaces.forEachIndexed { index, workspace ->
-            DropdownImpl(
-                item = DropdownItem(
-                    text = text.chat.workspaceChip(workspace.label, workspace.path == defaultPath),
-                    summary = workspace.displayPath(home),
-                ),
-                optionSize = count,
-                isSelected = workspace.path == current,
-                index = index,
-                onSelectedIndexChange = {
-                    pick(workspace.path != current) { onPick(workspace.path) }
-                },
-            )
-        }
-        DropdownImpl(
-            item = DropdownItem(text = text.chat.addWorkspace, summary = null),
-            optionSize = count,
-            isSelected = false,
-            index = workspaces.size,
-            onSelectedIndexChange = { pick(false, onAdd) },
+    workspaces.forEach { workspace ->
+        PiMenuRow(
+            title = text.chat.workspaceChip(workspace.label, workspace.path == defaultPath),
+            summary = workspace.displayPath(home),
+            selected = workspace.path == current,
+            onClick = { pick { onPick(workspace.path) } },
         )
     }
+    PiMenuRow(
+        title = text.chat.addWorkspace,
+        onClick = { pick(onAdd) },
+    )
 }
 
 /**
@@ -6824,42 +6828,32 @@ private fun ChatPresetMenu(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val haptics = LocalPiHaptics.current
-
-    // The preset already in force is already the answer, so only a different one is a
-    // choice. Dismiss-then-act, the same order every menu in this app uses: a second tap
-    // aimed at a panel that is already leaving must not land on one of its rows.
-    fun pick(chosen: Boolean, action: () -> Unit) {
+    // Dismiss-then-act, the same order every menu in this app uses: a second tap aimed at
+    // a panel that is already leaving must not land on one of its rows. The buzz for a
+    // changed choice is `PiMenuRow`'s (see its KDoc), not this function's.
+    fun pick(action: () -> Unit) {
         if (show) {
-            if (chosen) haptics.choose()
             onDismiss()
             action()
         }
     }
 
-    ListPopupColumn {
-        presets.forEachIndexed { index, preset ->
-            val identity = preset.identity(settings)
-            DropdownImpl(
-                item = DropdownItem(
-                    text = chatPresetName(preset, settings, text),
-                    summary = chatPresetSummary(preset, text),
-                    icon = { modifier ->
-                        PiAvatar(
-                            speaker = AvatarSpeaker.AGENT,
-                            color = identity.color.seed,
-                            imagePath = identity.image.ifBlank { null },
-                            modifier = modifier,
-                            size = PRESET_MENU_AVATAR,
-                        )
-                    },
-                ),
-                optionSize = presets.size,
-                isSelected = preset.id == selectedId,
-                index = index,
-                onSelectedIndexChange = { pick(preset.id != selectedId) { onPick(preset.id) } },
-            )
-        }
+    presets.forEach { preset ->
+        val identity = preset.identity(settings)
+        PiMenuRow(
+            title = chatPresetName(preset, settings, text),
+            summary = chatPresetSummary(preset, text),
+            selected = preset.id == selectedId,
+            startAction = {
+                PiAvatar(
+                    speaker = AvatarSpeaker.AGENT,
+                    color = identity.color.seed,
+                    imagePath = identity.image.ifBlank { null },
+                    size = PRESET_MENU_AVATAR,
+                )
+            },
+            onClick = { pick { onPick(preset.id) } },
+        )
     }
 }
 
@@ -6874,31 +6868,24 @@ private fun PermissionMenu(
     onPick: (PermissionMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val haptics = LocalPiHaptics.current
     // The tier already in force is already the answer, so only a different one is a
-    // choice — the menu's row for it is ticked and a tap on it changes nothing.
-    fun pick(chosen: Boolean, action: () -> Unit) {
+    // choice — the menu's row for it is ticked and a tap on it changes nothing, which is
+    // also why that tap is silent: `PiMenuRow` buzzes a changed choice itself.
+    fun pick(action: () -> Unit) {
         if (show) {
-            if (chosen) haptics.choose()
             onDismiss()
             action()
         }
     }
 
     val modes = PermissionMode.entries
-    ListPopupColumn {
-        modes.forEachIndexed { index, mode ->
-            DropdownImpl(
-                item = DropdownItem(
-                    text = text.chat.permissionChip(mode),
-                    summary = text.chat.permissionSummary(mode),
-                ),
-                optionSize = modes.size,
-                isSelected = mode == current,
-                index = index,
-                onSelectedIndexChange = { pick(mode != current) { onPick(mode) } },
-            )
-        }
+    modes.forEach { mode ->
+        PiMenuRow(
+            title = text.chat.permissionChip(mode),
+            summary = text.chat.permissionSummary(mode),
+            selected = mode == current,
+            onClick = { pick { onPick(mode) } },
+        )
     }
 }
 

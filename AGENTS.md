@@ -383,9 +383,26 @@ by measuring with that width: its end-action budget `(available - 8dp) * 6 / 10`
 `IllegalArgumentException: maxWidth must be >= than minWidth`, reproduced on the composer's
 `+` menu and before that on the terminal's session roster. **0.9.5-beta01 fixed the measure**
 with a `constraints.hasBoundedWidth` branch, so the crash is no longer the reason; the row
-stays `PiMenuRow` because it carries the popup metrics (`body1`/`body2`, 20dp sides) and the
-choice/action/fact semantics a preference row does not name. ARCHITECTURE §13 has the
-arithmetic and the reason the row is hand-built.
+stays `PiMenuRow` because it carries the popup metrics (`body1`/`body2`, 20dp sides, 44dp
+minimum, the press fill at `GlassPopupDefaults.ItemPressRadius`) and the choice/action/fact
+semantics a preference row does not name. ARCHITECTURE §13 has the arithmetic and the reason
+the row is hand-built.
+
+**A popup menu is `PiPopupMenu`, and a settings row with alternatives is
+`PiDropdownPreference`.** Miuix's `OverlayListPopup`, `OverlayDropdownPopup` and
+`OverlayDropdownPreference` draw the **pre-OS4** panel — `surfaceContainer`, 16dp corners, no
+blur, no stroke, no shadow — so every menu and every dropdown row was the one opaque
+rectangle on a page whose bar, cards and dialogs are OS4 glass. The kit's pair wraps
+`GlassPopup` / `GlassDropdownPreference` with the page's backdrop and `PiCorner.popup` (24dp),
+and a menu is *registered* into the page's `PiPopupHostProvider` rather than composed at its
+trigger: a panel must be measured against the window (a chip is 32dp tall, a drawer row is
+clipped by its list) and it samples the page's backdrop, so it cannot be inside the recording
+that holds the trigger. `tools/check-ui.py` refuses the old panels, the old preference rows
+and a `GlassPopup` composed anywhere but the kit. The composer's chips and toolbar pass
+`PiPopupPlacement.Above` — the library's fit test measures against the window, so it opens
+"below" onto the input field, and under the keyboard — and a control in the page's bar passes
+`openBelow = LocalPiBarHeight.current`, because the bar is chrome outside the recorded layer.
+ARCHITECTURE §13, *Menus*, has the arithmetic.
 
 **A `layerBackdrop` must not contain the glass controls that sample it.** `PiPage` puts
 the layer on the body and leaves the bar in the Scaffold's `topBar` slot; the chat page

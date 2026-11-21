@@ -85,20 +85,22 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
+import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiModeSwitch
+import pi.kit.mob.ui.kit.PiPopupHostProvider
+import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberPiBackdrop
+import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.material.GlassShadows
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
@@ -116,7 +118,6 @@ import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.icon.extended.Unpin
-import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
@@ -816,7 +817,12 @@ fun SessionsScreen(
     // makes the rename, delete and mode questions OS4 glass over the drawer instead of
     // opaque platform windows. A glass dialog renders in the root Scaffold, so it never
     // enters the layer it samples.
+    //
+    // The row menus are drawn from the same place and for the same reason — a panel
+    // samples the drawer's recording without containing itself — so the host is provided
+    // here, beside the dialogs, rather than inside the list.
     CompositionLocalProvider(LocalPiBackdrop provides drawerBackdrop) {
+    PiPopupHostProvider {
     // The mode conversion's interruption question, in the same shape as the workspace
     // chip's: a mode is a launch flag, so converting a conversation that is answering
     // ends its turn. The only way here is the row menu's mode row — the drawer's foot
@@ -908,6 +914,7 @@ fun SessionsScreen(
             }
         },
     )
+    }
     }
 }
 
@@ -1268,10 +1275,17 @@ private fun ConversationRow(
         actionsUp = true
     }
 
+    // The menu is the drawer's own, not the row's: it is registered with the drawer's
+    // popup host so the panel is measured against the window rather than clipped to a
+    // list row, and it samples the drawer's backdrop without containing itself. What the
+    // row contributes is where it is — see `rowAnchor`.
+    val rowAnchor = rememberPiMenuAnchor()
+
     Box {
         Box(
             Modifier
                 .fillMaxWidth()
+                .piMenuAnchor(rowAnchor)
                 // The margin is outside the fill: a highlighted row has to be inset from
                 // the panel's edge to read as a highlight rather than as a band across it.
                 .padding(horizontal = 8.dp)
@@ -1446,90 +1460,69 @@ private fun ConversationRow(
         // cancel row, because a menu is dismissed by the scrim, the back gesture or a
         // tap outside. The gate inside each item keeps a second tap — aimed at the page
         // behind a menu that is already leaving — from running an action twice.
-        OverlayDropdownPopup(
-            entry = DropdownEntry(
-                items = listOf(
-                    DropdownItem(
-                        text = text.sessions.rename,
-                        icon = { modifier ->
-                            Icon(MiuixIcons.Rename, contentDescription = null, modifier = modifier)
-                        },
-                        onClick = {
-                            if (actionsUp) {
-                                actionsUp = false
-                                onRename()
-                            }
-                        },
-                    ),
-                    DropdownItem(
-                        text = if (item.pinned) text.sessions.unpin else text.sessions.pin,
-                        icon = { modifier ->
-                            Icon(
-                                imageVector = if (item.pinned) MiuixIcons.Unpin else MiuixIcons.Pin,
-                                contentDescription = null,
-                                modifier = modifier,
-                            )
-                        },
-                        onClick = {
-                            if (actionsUp) {
-                                actionsUp = false
-                                onTogglePin()
-                            }
-                        },
-                    ),
-                    // The conversation's launch mode, converted here rather than by the
-                    // drawer's switch. The row names the mode it *starts*, so it reads as
-                    // a change of this conversation even before it is applied; the switch
-                    // at the drawer's foot used to write the very same record from over a
-                    // live transcript, where a stray tap converted what was on screen.
-                    //
-                    // The mark is `Replace`, Miuix's two arrows swapping places, and the
-                    // label says which way: the action is one *conversion* either way, so
-                    // the glyph does not change with the target. It used to be `Messages`
-                    // for both directions, which is the mark of the mode being left rather
-                    // than of the change — a filled bubble beside "switch to work mode"
-                    // named the thing the reader was converting away from.
-                    DropdownItem(
-                        text = if (mode == AgentMode.CHAT) {
-                            text.sessions.switchToWorkMode
-                        } else {
-                            text.sessions.switchToChatMode
-                        },
-                        icon = { modifier ->
-                            Icon(
-                                imageVector = MiuixIcons.Replace,
-                                contentDescription = null,
-                                modifier = modifier,
-                            )
-                        },
-                        onClick = {
-                            if (actionsUp) {
-                                actionsUp = false
-                                onSwitchMode()
-                            }
-                        },
-                    ),
-                    DropdownItem(
-                        text = text.sessions.delete,
-                        icon = { modifier ->
-                            Icon(MiuixIcons.Delete, contentDescription = null, modifier = modifier)
-                        },
-                        onClick = {
-                            if (actionsUp) {
-                                actionsUp = false
-                                onDelete()
-                            }
-                        },
-                    ),
-                ),
-            ),
+        PiPopupMenu(
             show = actionsUp,
-            onDismiss = { actionsUp = false },
-            onDismissFinished = {},
-            maxHeight = null,
-            dropdownColors = DropdownDefaults.dropdownColors(),
-            renderInRootScaffold = true,
-        )
+            onDismissRequest = { actionsUp = false },
+            anchor = rowAnchor,
+        ) {
+            PiMenuRow(
+                title = text.sessions.rename,
+                icon = MiuixIcons.Rename,
+                onClick = {
+                    if (actionsUp) {
+                        actionsUp = false
+                        onRename()
+                    }
+                },
+            )
+            PiMenuRow(
+                title = if (item.pinned) text.sessions.unpin else text.sessions.pin,
+                icon = if (item.pinned) MiuixIcons.Unpin else MiuixIcons.Pin,
+                onClick = {
+                    if (actionsUp) {
+                        actionsUp = false
+                        onTogglePin()
+                    }
+                },
+            )
+            // The conversation's launch mode, converted here rather than by the
+            // drawer's switch. The row names the mode it *starts*, so it reads as
+            // a change of this conversation even before it is applied; the switch
+            // at the drawer's foot used to write the very same record from over a
+            // live transcript, where a stray tap converted what was on screen.
+            //
+            // The mark is `Replace`, Miuix's two arrows swapping places, and the
+            // label says which way: the action is one *conversion* either way, so
+            // the glyph does not change with the target. It used to be `Messages`
+            // for both directions, which is the mark of the mode being left rather
+            // than of the change — a filled bubble beside "switch to work mode"
+            // named the thing the reader was converting away from.
+            PiMenuRow(
+                title = if (mode == AgentMode.CHAT) {
+                    text.sessions.switchToWorkMode
+                } else {
+                    text.sessions.switchToChatMode
+                },
+                icon = MiuixIcons.Replace,
+                onClick = {
+                    if (actionsUp) {
+                        actionsUp = false
+                        onSwitchMode()
+                    }
+                },
+            )
+            PiMenuRow(
+                title = text.sessions.delete,
+                icon = MiuixIcons.Delete,
+                titleColor = MiuixTheme.colorScheme.error,
+                onClick = {
+                    if (actionsUp) {
+                        actionsUp = false
+                        onDelete()
+                    }
+                },
+            )
+        }
     }
 }
 

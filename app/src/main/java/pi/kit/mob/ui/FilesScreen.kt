@@ -138,34 +138,33 @@ import pi.kit.mob.ui.files.humanSize
 import pi.kit.mob.ui.files.openExternally
 import pi.kit.mob.ui.files.readDirectory
 import pi.kit.mob.ui.files.stampFor
+import pi.kit.mob.ui.kit.LocalPiBarHeight
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiMenuAnchor
+import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
+import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.LocalPiBackdrop
+import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbItem
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.glass.GlassIconButton
-import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
-import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
-import top.yukonga.miuix.kmp.glass.glassPopupAnchor
-import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.glass.HomeOutline
@@ -183,7 +182,6 @@ import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Search
-import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -246,7 +244,7 @@ fun FilesScreen(session: PiAgentSession,
     // states live at the page because the popup is rendered from the page's overlay
     // slot, outside the body layer that supplies the material's backdrop.
     var sortUp by remember { mutableStateOf(false) }
-    val sortAnchor = rememberGlassPopupAnchor()
+    val sortAnchor = rememberPiMenuAnchor()
     val haptics = LocalPiHaptics.current
 
     fun navigate(to: File) {
@@ -313,62 +311,31 @@ fun FilesScreen(session: PiAgentSession,
         contentScrolled = listingState.canScrollBackward,
         overlay = {
             // The sort is one of three answers, and it opens from the toolbar button as
-            // Miuix's glass menu rather than the opaque basic dropdown. Its entries are a
-            // single group; the row that is in effect carries the tick.
-            Box(Modifier.fillMaxSize()) {
-                GlassIconDropdownMenu(
-                    show = sortUp,
-                    onDismissRequest = { sortUp = false },
-                    anchor = sortAnchor,
-                    anchorContent = {
-                        Icon(
-                            imageVector = MiuixIcons.Glass.Sort,
-                            contentDescription = text.files.sort,
-                            tint = MiuixTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(28.dp),
-                        )
-                    },
-                    entries = listOf(
-                        DropdownEntry(
-                            items = listOf(
-                                DropdownItem(
-                                    text = text.files.sortName,
-                                    selected = sort == FileSort.Name,
-                                    onClick = {
-                                        sortUp = false
-                                        if (sort != FileSort.Name) {
-                                            haptics.choose()
-                                            sort = FileSort.Name
-                                        }
-                                    },
-                                ),
-                                DropdownItem(
-                                    text = text.files.sortModified,
-                                    selected = sort == FileSort.Modified,
-                                    onClick = {
-                                        sortUp = false
-                                        if (sort != FileSort.Modified) {
-                                            haptics.choose()
-                                            sort = FileSort.Modified
-                                        }
-                                    },
-                                ),
-                                DropdownItem(
-                                    text = text.files.sortSize,
-                                    selected = sort == FileSort.Size,
-                                    onClick = {
-                                        sortUp = false
-                                        if (sort != FileSort.Size) {
-                                            haptics.choose()
-                                            sort = FileSort.Size
-                                        }
-                                    },
-                                ),
-                            ),
-                        ),
-                    ),
-                    backdrop = LocalPiBackdrop.current,
-                )
+            // the app's one glass menu — the same [PiPopupMenu] the composer's chips and
+            // the listing's row menu open, rather than a second glass component with its
+            // own anchor type and its own copy of the rows. The row that is in effect
+            // carries the tick.
+            PiPopupMenu(
+                show = sortUp,
+                onDismissRequest = { sortUp = false },
+                anchor = sortAnchor,
+            ) {
+                FileSort.entries.forEach { order ->
+                    PiMenuRow(
+                        title = when (order) {
+                            FileSort.Name -> text.files.sortName
+                            FileSort.Modified -> text.files.sortModified
+                            FileSort.Size -> text.files.sortSize
+                        },
+                        selected = sort == order,
+                        // The buzz is the row's: it performs it on a tap that changes the
+                        // answer, which is exactly the three rows here.
+                        onClick = {
+                            sortUp = false
+                            if (sort != order) sort = order
+                        },
+                    )
+                }
             }
         },
         actions = {
@@ -656,7 +623,7 @@ private fun ListToolbar(
     onQueryChange: (String) -> Unit,
     sortUp: Boolean,
     onSortClick: () -> Unit,
-    sortAnchor: GlassPopupAnchor,
+    sortAnchor: PiMenuAnchor,
     text: Strings,
 ) {
     Row(
@@ -698,14 +665,12 @@ private fun ListToolbar(
             },
         )
         // The button is the menu's anchor and its opening state is the page's; the menu
-        // itself is in `PiPage`'s overlay slot so it can sample the page backdrop.
+        // itself is in `PiPage`'s overlay slot so it can sample the page backdrop. It opens
+        // below the bar (`LocalPiBarHeight`) rather than over it: the bar is outside the
+        // recorded layer, so a panel drawn on top of it has nothing to blur there.
         GlassIconButton(
             onClick = onSortClick,
-            modifier = Modifier.glassPopupAnchor(
-                anchor = sortAnchor,
-                cornerRadius = 20.dp,
-                floating = true,
-            ),
+            modifier = Modifier.piMenuAnchor(sortAnchor, openBelow = LocalPiBarHeight.current),
         ) {
             Icon(
                 imageVector = MiuixIcons.Glass.Sort,
@@ -794,8 +759,11 @@ private fun FileRow(
     // The menu is the row's own state: it is anchored on this card, it dies with the
     // row, and a row that scrolls out of the list with its menu open takes the menu
     // with it (a screen-level "which row is open" would survive the scroll and reopen
-    // on the way back).
+    // on the way back). The panel itself is drawn by the page's popup host, so the row
+    // reports where it is rather than emitting the menu inside the card — a card that
+    // scrolls out of the list would otherwise take a menu that is still open with it.
     var actionsUp by remember(entry.file) { mutableStateOf(false) }
+    val rowAnchor = rememberPiMenuAnchor()
     // The hold's acknowledgement: the card's sink follows the finger and ends with it,
     // while the menu it raises stays. The pointer's long press and the screen reader's
     // long-click open the same menu, so both go through this one lambda.
@@ -811,6 +779,7 @@ private fun FileRow(
             cornerRadius = PiCorner.radius,
             modifier = Modifier
                 .fillMaxWidth()
+                .piMenuAnchor(rowAnchor)
                 .padding(horizontal = 12.dp)
                 // The hold announces itself: `Card` installs the long click but not a
                 // label for it, and a screen reader has to be told what the gesture is
@@ -910,61 +879,39 @@ private fun FileRow(
         // What can be done to this one row, as a floating menu at the row that was
         // held — two short actions on one file do not cover the list to ask their
         // question (§7.1). It hangs off the row's trailing edge, where a row's actions
-        // live. The gate inside each item is what keeps a second tap — aimed at the
+        // live. The gate inside each row is what keeps a second tap — aimed at the
         // page behind a menu that is already leaving — from copying twice.
-        OverlayDropdownPopup(
-            entry = DropdownEntry(
-                items = buildList {
-                    add(
-                        DropdownItem(
-                            text = text.files.copyPath,
-                            icon = { modifier ->
-                                Icon(
-                                    imageVector = MiuixIcons.Copy,
-                                    contentDescription = null,
-                                    modifier = modifier,
-                                )
-                            },
-                            onClick = {
-                                if (actionsUp) {
-                                    actionsUp = false
-                                    onCopyPath()
-                                }
-                            },
-                        ),
-                    )
-                    if (!entry.isDirectory) {
-                        // A file additionally offers **Open with**, which the preview
-                        // carries too: the reader who has found the file in the listing
-                        // should not have to open a preview to hand it to another app.
-                        add(
-                            DropdownItem(
-                                text = text.files.openWith,
-                                icon = { modifier ->
-                                    Icon(
-                                        imageVector = MiuixIcons.Forward,
-                                        contentDescription = null,
-                                        modifier = modifier,
-                                    )
-                                },
-                                onClick = {
-                                    if (actionsUp) {
-                                        actionsUp = false
-                                        onOpenWith()
-                                    }
-                                },
-                            ),
-                        )
+        PiPopupMenu(
+            show = actionsUp,
+            onDismissRequest = { actionsUp = false },
+            anchor = rowAnchor,
+        ) {
+            PiMenuRow(
+                title = text.files.copyPath,
+                icon = MiuixIcons.Copy,
+                onClick = {
+                    if (actionsUp) {
+                        actionsUp = false
+                        onCopyPath()
                     }
                 },
-            ),
-            show = actionsUp,
-            onDismiss = { actionsUp = false },
-            onDismissFinished = {},
-            maxHeight = null,
-            dropdownColors = DropdownDefaults.dropdownColors(),
-            renderInRootScaffold = true,
-        )
+            )
+            if (!entry.isDirectory) {
+                // A file additionally offers **Open with**, which the preview
+                // carries too: the reader who has found the file in the listing
+                // should not have to open a preview to hand it to another app.
+                PiMenuRow(
+                    title = text.files.openWith,
+                    icon = MiuixIcons.Forward,
+                    onClick = {
+                        if (actionsUp) {
+                            actionsUp = false
+                            onOpenWith()
+                        }
+                    },
+                )
+            }
+        }
     }
 }
 

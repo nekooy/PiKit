@@ -3,6 +3,7 @@ package pi.kit.mob.ui.kit
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -15,7 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -131,10 +137,32 @@ fun PiPage(
     // here and passed to both halves.
     val pageBackdrop = rememberPiBackdrop()
 
+    // The bar's height, published to the whole page rather than only to the body: a
+    // control in the bar's `actions` slot composes *outside* the content lambda, so a
+    // value provided down there would read `0.dp` at exactly the call sites that need it
+    // (the terminal's roster and the files page's sort button). The height is measured
+    // from the content padding on the first layout and then stable, which is why it can
+    // start at zero without a frame of a menu in the wrong place: a menu cannot be opened
+    // before the page has been laid out.
+    var barHeight by remember { mutableStateOf(0.dp) }
+
+    CompositionLocalProvider(LocalPiBarHeight provides barHeight) {
+    // The page's floating menus are hosted *here*, outside the Scaffold, for the reason
+    // the panels themselves are measured against the window: a host inside the content
+    // lambda is laid out in the body's rectangle, which starts below the bar, so a panel
+    // anchored to a bar button was placed against an origin that did not match the window
+    // and drifted sideways by the bar's inset. Out here the host's origin is the window's,
+    // which is what `GlassPopup` subtracts.
+    PiPopupHostProvider {
     Scaffold(
         modifier = modifier,
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
+            // One slot, two nodes: the bar and the subtitle below it. `Scaffold` measures
+            // the `topBar` slot once and hands the body its total height as top padding,
+            // so stacking them here is what keeps the subtitle out of the band's geometry
+            // without moving any page's content rectangle (see the subtitle's comment).
+            Column {
             GlassTopAppBar(
                 title = title,
                 // The page overlap state, not the library's default. At rest the bar
@@ -192,28 +220,46 @@ fun PiPage(
                         actions()
                     }
                 },
-                bottomContent = {
-                    if (subtitle != null) {
-                        Text(
-                            // A zero-width space keeps a blank line's height without
-                            // drawing a glyph. `Text("")` still lays out its line box, so
-                            // this is belt and braces rather than a requirement — but it
-                            // also keeps the layout from collapsing if the library ever
-                            // skips an empty string.
-                            text = subtitle.ifEmpty { "\u200B" },
-                            style = MiuixTheme.textStyles.body2,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = TITLE_GUTTER, end = TITLE_GUTTER)
-                                .padding(bottom = 6.dp),
-                        )
-                    }
-                },
             )
+            // The subtitle is drawn *below* the bar rather than in its `bottomContent`,
+            // and the difference is a 1px seam across the whole width.
+            //
+            // `GlassTopAppBarLayout` sizes its progressive-blur band from the bar's own
+            // geometry: `topInset + CollapsedHeight + bottomContentHeight`, times 1.2.
+            // The band is a fixed-height rectangle clipped with `RectangleShape`, so
+            // whatever height it gets, its bottom edge is a hard cut in the middle of a
+            // smooth ramp — measured on the personalization page at 420dpi as a one-pixel
+            // step of 2 levels spanning 900 of 1080 columns (row 191 minus row 190:
+            // `min=-2 max=0`, i.e. uniform across the row), and absent entirely on a page
+            // whose bar has no `bottomContent` (the settings root, same measurement: no
+            // step anywhere between y=82 and y=180). A subtitle in `bottomContent` is
+            // what puts that edge across the title block.
+            //
+            // Drawing it here instead leaves the band at its no-subtitle height — the
+            // geometry the settings root already has — while the subtitle stays outside
+            // the recorded body, so the band never blurs the text it belongs to. It also
+            // stays outside the body's padding: `Scaffold` measures this slot and hands
+            // the body a top inset that already contains it, so no page's content
+            // rectangle moves and no page has to know the subtitle exists.
+            if (subtitle != null) {
+                Text(
+                    // A zero-width space keeps a blank line's height without drawing a
+                    // glyph. `Text("")` still lays out its line box, so this is belt and
+                    // braces rather than a requirement — but it also keeps the layout from
+                    // collapsing if the library ever skips an empty string.
+                    text = subtitle.ifEmpty { "\u200B" },
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = TITLE_GUTTER, end = TITLE_GUTTER)
+                        .padding(bottom = SUBTITLE_BOTTOM),
+                )
+            }
+            }
         },
     ) { padding ->
         // The body is the page, and the page reaches the window's last pixel: only the
@@ -225,10 +271,15 @@ fun PiPage(
         // The body is also the page's glass layer: the bar above it samples this subtree,
         // so cards and rows scrolling under the bar are what the material blurs. The layer
         // stops at the bar because a bar inside it would sample its own output.
+        SideEffect { barHeight = padding.calculateTopPadding() }
         CompositionLocalProvider(
             LocalPiBackdrop provides pageBackdrop,
             LocalPiNavigationInset provides padding.calculateBottomPadding(),
         ) {
+            // The page's floating menus, drawn beside the body and outside the recorded
+            // layer: a menu samples the page's backdrop, so it cannot be inside the
+            // recording, and it has to be measured against the window rather than against
+            // the row or chip that opened it (see `PiPopupMenu`).
             Box(
                 Modifier
                     .fillMaxSize()
@@ -248,6 +299,8 @@ fun PiPage(
             overlay()
         }
     }
+    }
+    }
 }
 
 /**
@@ -265,6 +318,22 @@ fun PiPage(
  * inside a page has no strip of its own to keep clear of.
  */
 val LocalPiNavigationInset: ProvidableCompositionLocal<Dp> = compositionLocalOf { 0.dp }
+
+/**
+ * The height of the page's bar, which a control in it can use to open its menu *below* it.
+ *
+ * The bar is chrome: `layerBackdrop` is on the body, not on the `Scaffold`, because a glass
+ * control that samples a recording containing itself is the RenderThread stack overflow
+ * docs/UI.md's first red line documents. The consequence for a popup is that a panel drawn
+ * over the bar has no recording to blur there — it shows the bar's own title and subtitle
+ * through itself. A control in the bar therefore hands
+ * `Modifier.piMenuAnchor(anchor, openBelow = LocalPiBarHeight.current)`, which pushes the
+ * panel's opening edge down to the bar's lower edge, where the recording is.
+ *
+ * Outside [PiPage] the value is `0.dp`: a composable that is not on a page has no bar to
+ * clear.
+ */
+val LocalPiBarHeight: ProvidableCompositionLocal<Dp> = compositionLocalOf { 0.dp }
 
 
 /**
@@ -291,3 +360,12 @@ private val TITLE_GUTTER = TopAppBarDefaults.TitlePadding
  * further from the edge than `ActionIconPadding` puts it.
  */
 private val ACTION_GAP = 4.dp
+
+/**
+ * The space between the bar and the page's subtitle.
+ *
+ * 6dp was the bottom padding the subtitle carried inside the bar's `bottomContent`, and
+ * keeping it means moving the subtitle out of the bar changes its position by nothing —
+ * the same gap under the same line, with the band's edge no longer crossing it.
+ */
+private val SUBTITLE_BOTTOM = 6.dp

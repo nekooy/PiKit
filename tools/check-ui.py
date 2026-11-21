@@ -28,6 +28,16 @@ review until a screen is a second material or a fourth palette:
      fallback). A screen reaches them through `PiConfirm`/`PiSheet`/`PiGlass`, not
      directly — a direct call is a control that skips the fallback gate or the
      material every other floating control shares.
+  4. **Every popup menu is the kit's glass one.** `GlassPopup`,
+     `GlassIconDropdownMenu` and `GlassDropdownPopup` are composed in
+     `ui/kit/PiPopupMenu.kt`; `OverlayListPopup`, `OverlayDropdownPopup`,
+     `WindowListPopup` and the `*Cascading*` variants nowhere at all. A menu
+     drawn from Miuix's basic popup panel is the pre-OS4 opaque rectangle beside a
+     page whose bar, capsules and dialogs are glass (§13), and one composed at its
+     trigger is clipped by that trigger's node instead of measured against the
+     window. A screen reaches a menu through `PiPopupMenu`; a *custom* panel that
+     is genuinely not a menu of rows is judgement, and `docs/UI.md`'s popup section
+     is where that is written.
 
 A custom-content dialog may still compose `WindowDialog`/`WindowBottomSheet` itself
 (the kit's confirm shape does not fit a field or a crop frame); that is judgement,
@@ -77,6 +87,22 @@ GLASS_OVERLAY_OWNER = UI / "kit/PiOverlays.kt"
 #: The panel modifier, called only by `PiGlass.panel`.
 GLASS_PANEL = re.compile(r"\bglassPanel\s*\(")
 GLASS_PANEL_OWNER = UI / "kit/PiKitTheme.kt"
+
+#: The OS4 popup components, composed only by the kit's menu surface.
+GLASS_POPUP = re.compile(
+    r"\b(?:GlassPopup|GlassIconDropdownMenu|GlassDropdownPopup)\s*\("
+)
+GLASS_POPUP_OWNER = UI / "kit/PiPopupMenu.kt"
+
+#: The pre-OS4 popup panels and the preference rows that draw them, which no screen may
+#: compose any more. This one is not a "composed only here" rule: nothing in the app draws
+#: these, so the owner set is empty and every occurrence is a failure.
+OLD_POPUP = re.compile(
+    r"\b(?:OverlayListPopup|OverlayDropdownPopup|WindowListPopup|WindowDropdownPopup"
+    r"|OverlayCascadingListPopup|WindowCascadingListPopup"
+    r"|OverlayDropdownPreference|WindowDropdownPreference"
+    r"|OverlaySpinnerPreference|WindowSpinnerPreference)\s*\("
+)
 
 
 def kotlin_sources() -> list[Path]:
@@ -147,8 +173,18 @@ def main() -> int:
     failures += scan("a bar composed outside PiPage", BAR, BAR_OWNER)
     failures += scan("a glass overlay composed outside PiOverlays", GLASS_OVERLAY, GLASS_OVERLAY_OWNER)
     failures += scan("glassPanel called outside PiGlass", GLASS_PANEL, GLASS_PANEL_OWNER)
+    failures += scan(
+        "an OS4 popup composed outside PiPopupMenu",
+        GLASS_POPUP,
+        GLASS_POPUP_OWNER,
+    )
+    # No owner: the pre-OS4 panels are not drawn anywhere any more.
+    failures += scan("a pre-OS4 popup panel composed", OLD_POPUP, set())
     if failures == 0:
-        print("  the colour families are closed, the bar is PiPage's, the glass pair is the kit's")
+        print(
+            "  the colour families are closed, the bar is PiPage's, the glass pair is the "
+            "kit's, every menu is the kit's glass popup",
+        )
     return 1 if failures else 0
 
 

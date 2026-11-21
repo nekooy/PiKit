@@ -28,19 +28,18 @@ import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiDropdownOption
+import pi.kit.mob.ui.kit.PiDropdownPreference
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Reset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -223,7 +222,7 @@ internal fun SearchPage(
                 //
                 // A dropdown row rather than three radios, like every other "which of a
                 // few" on the settings pages. This one keeps its per-option sentence in the
-                // panel (`DropdownItem.summary`), and the row's own summary states the
+                // panel (`PiDropdownOption.summary`), and the row's own summary states the
                 // option in effect — the explanation of the current value is exactly what
                 // the row has room for once the alternatives are behind a tap.
                 //
@@ -234,29 +233,30 @@ internal fun SearchPage(
                 PiSection {
                     val options = ChatWebAccessDefault.entries
                     val current = appSettings.chatWebAccessDefault
-                    OverlayDropdownPreference(
-                        entry = DropdownEntry(
-                            items = options.map { option ->
-                                DropdownItem(
-                                    text = chatWebAccessLabel(option, text),
-                                    summary = chatWebAccessSummary(option, text),
-                                    selected = option == current,
-                                    onClick = {
-                                        // The library ticks when the panel opens and says
-                                        // nothing when a row is picked, and picking the
-                                        // value already in effect is a read, not a choice.
-                                        if (option != current) {
-                                            haptics.choose()
-                                            session.settingsStore.update {
-                                                it.copy(chatWebAccessDefault = option)
-                                            }
-                                        }
-                                    },
-                                )
-                            },
-                        ),
+                    // The summarised form: each option carries the sentence that says what
+                    // it allows, so the panel explains the choice rather than the row
+                    // describing whichever one happens to be in effect.
+                    PiDropdownPreference(
+                        options = options.map { option ->
+                            PiDropdownOption(
+                                value = option,
+                                label = chatWebAccessLabel(option, text),
+                                summary = chatWebAccessSummary(option, text),
+                            )
+                        },
+                        selectedIndex = options.indexOf(current),
                         title = text.settings.chatWebAccessDefault,
                         summary = chatWebAccessSummary(current, text),
+                        onSelectedIndexChange = { index ->
+                            val option = options[index]
+                            // Picking the value already in effect is a read, not a choice.
+                            if (option != current) {
+                                haptics.choose()
+                                session.settingsStore.update {
+                                    it.copy(chatWebAccessDefault = option)
+                                }
+                            }
+                        },
                     )
                 }
 

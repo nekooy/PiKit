@@ -33,11 +33,11 @@ import pi.kit.mob.pi.StorageSelfTest
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiMotion
+import pi.kit.mob.ui.kit.PiDropdownPreference
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.piOverScroll
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 
 /** Screens reachable from the Settings tab. Navigation state lives here only. */
 internal sealed interface SettingsPage {
@@ -449,7 +449,7 @@ private fun RootPage(
                 // borrowed for a settings list — and the dropdown row is the shape that
                 // answers both objections: it is a settings row, and it opens over itself
                 // rather than over the page.
-                OverlayDropdownPreference(
+                PiDropdownPreference(
                     items = Lang.entries.map { it.label },
                     selectedIndex = settings.language.ordinal,
                     title = text.settings.language,
