@@ -15,14 +15,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -137,22 +138,9 @@ fun PiPage(
     // here and passed to both halves.
     val pageBackdrop = rememberPiBackdrop()
 
-    // The bar's height, published to the whole page rather than only to the body: a
-    // control in the bar's `actions` slot composes *outside* the content lambda, so a
-    // value provided down there would read `0.dp` at exactly the call sites that need it
-    // (the terminal's roster and the files page's sort button). The height is measured
-    // from the content padding on the first layout and then stable, which is why it can
-    // start at zero without a frame of a menu in the wrong place: a menu cannot be opened
-    // before the page has been laid out.
-    var barHeight by remember { mutableStateOf(0.dp) }
+    var barBottom by remember { mutableFloatStateOf(0f) }
 
-    CompositionLocalProvider(LocalPiBarHeight provides barHeight) {
-    // The page's floating menus are hosted *here*, outside the Scaffold, for the reason
-    // the panels themselves are measured against the window: a host inside the content
-    // lambda is laid out in the body's rectangle, which starts below the bar, so a panel
-    // anchored to a bar button was placed against an origin that did not match the window
-    // and drifted sideways by the bar's inset. Out here the host's origin is the window's,
-    // which is what `GlassPopup` subtracts.
+    CompositionLocalProvider(LocalPiBarBottom provides barBottom) {
     PiPopupHostProvider {
     Scaffold(
         modifier = modifier,
@@ -160,6 +148,7 @@ fun PiPage(
         topBar = {
             GlassTopAppBar(
                 title = title,
+                modifier = Modifier.onGloballyPositioned { barBottom = it.boundsInWindow().bottom },
                 // The page overlap state, not the library's default. At rest the bar
                 // is transparent and its back arrow is a plain glyph; once the body
                 // has scrolled under it, Miuix raises the band and the button's glass
@@ -244,15 +233,10 @@ fun PiPage(
         // The body is also the page's glass layer: the bar above it samples this subtree,
         // so cards and rows scrolling under the bar are what the material blurs. The layer
         // stops at the bar because a bar inside it would sample its own output.
-        SideEffect { barHeight = padding.calculateTopPadding() }
         CompositionLocalProvider(
             LocalPiBackdrop provides pageBackdrop,
             LocalPiNavigationInset provides padding.calculateBottomPadding(),
         ) {
-            // The page's floating menus, drawn beside the body and outside the recorded
-            // layer: a menu samples the page's backdrop, so it cannot be inside the
-            // recording, and it has to be measured against the window rather than against
-            // the row or chip that opened it (see `PiPopupMenu`).
             Box(
                 Modifier
                     .fillMaxSize()
@@ -293,20 +277,9 @@ fun PiPage(
 val LocalPiNavigationInset: ProvidableCompositionLocal<Dp> = compositionLocalOf { 0.dp }
 
 /**
- * The height of the page's bar, which a control in it can use to open its menu *below* it.
- *
- * The bar is chrome: `layerBackdrop` is on the body, not on the `Scaffold`, because a glass
- * control that samples a recording containing itself is the RenderThread stack overflow
- * docs/UI.md's first red line documents. The consequence for a popup is that a panel drawn
- * over the bar has no recording to blur there — it shows the bar's own title and subtitle
- * through itself. A control in the bar therefore hands
- * `Modifier.piMenuAnchor(anchor, openBelow = LocalPiBarHeight.current)`, which pushes the
- * panel's opening edge down to the bar's lower edge, where the recording is.
- *
- * Outside [PiPage] the value is `0.dp`: a composable that is not on a page has no bar to
- * clear.
+ * The page bar's bottom in window pixels, including the subtitle and top inset.
  */
-val LocalPiBarHeight: ProvidableCompositionLocal<Dp> = compositionLocalOf { 0.dp }
+val LocalPiBarBottom: ProvidableCompositionLocal<Float> = compositionLocalOf { 0f }
 
 
 /**

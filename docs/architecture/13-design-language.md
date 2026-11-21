@@ -411,40 +411,48 @@ Two row rules are behaviour rather than taste:
   row's own — a tap that lands on a row which is not the current answer performs
   `haptics.choose()`, and a tap on the ticked row is silent — so a menu's handler never
   buzzes, which is the *Never twice* rule read from the menu's side.
-- **A menu's panel is the library's glass popup, and the app places none of it.**
+- **A menu uses the library's glass material, with motion appropriate to its trigger.**
   Miuix's `OverlayListPopup` and the `OverlayDropdownPopup` built on it draw the
   **pre-OS4** panel: `surfaceContainer`, 16dp corners, no blur, no stroke, no shadow.
   Beside a bar, capsules and dialogs that are all OS4 glass, a menu was the one opaque
   rectangle on the page — the most frequently raised control and the only one not in
-  the material. Every menu is therefore `GlassPopup` at `PiCorner.popup` (24dp; the
+  the material. Menus use the library's glass surface at `PiCorner.popup` (24dp; the
   popup family is cut one step larger than the 20dp cards, because the library's own
   popup surface is) and `GlassPopupDefaults.MaxHeight` (416dp, content scrolling
   inside), reached through `ui/kit/PiPopupMenu`.
 
   The panel is drawn by a host the page provides, not at the trigger, and that is the
   same division `OverlayListPopup` made with the root `Scaffold`'s popup host. Two
-  reasons: a panel has to be measured against the **window** (a chip is 32dp tall and a
-  drawer row is clipped by its list), and it samples the page's backdrop, so it cannot
-  be inside the recording that holds the trigger. `PiPopupMenu` registers into
+  reasons: a panel has to be measured against the **window**, and it samples the page's
+  backdrop, so it cannot be inside the recording that holds the trigger. History put
+  its host beside the list rather than around it; the in-place fallback received the
+  row's unbounded height and crashed in `GlassPopupSurface` with
+  `Size(853 x 2147483647) is out of range`. There is no in-place fallback now.
+  `PiPopupHostProvider` records the scene in an outer layer and renders the menu as its
+  sibling. Bar, composer and drawer controls still sample their inner body or transcript
+  layers; none sample the scene that contains them. The drawer and the chat card share
+  an outer host, so placement and outside taps cover both. `PiPopupMenu` registers into
   `PiPopupHostProvider` through a `DisposableEffect`, which also keeps the menu owned by
   the composition that raised it — a row that leaves its list takes its menu with it.
   The transcript's card menu is the exception and is registered by the page, because a
   long conversation recycles cards and a menu that vanished mid-read would be unusable.
 
-  The app also does not place the panel; `placeGlassPopup` does, and the only knob a
-  call site has is the rectangle it hands over. Its test is
-  `below = window.bottom - margin - anchor.top`, `above = anchor.bottom - anchor.top`,
-  `alignTop = size.height <= below || below >= above` — a fit test against the
-  **window**. On the composer that is wrong: the chip row is the last thing above the
-  input field, so "there is room below" is true and the panel lands on the field the
-  reader is about to type into, and with the keyboard up it lands under the keyboard,
-  because the keyboard shrinks the content rather than the window. `PiPopupPlacement.Above`
-  is that case: it hands `GlassPopup` a rectangle whose `top` is past the window's
-  bottom, which makes `below` negative and the branch unreachable for any content
-  height, and whose `bottom` is the anchor's top edge, where the panel's own bottom then
-  lands. A control in the page's bar does the mirror image — it hands over
-  `openBelow = LocalPiBarHeight.current`, because the bar is chrome outside the recorded
-  layer and a panel drawn over it has nothing to blur there.
+  Point and row context menus keep `GlassPopup` and its logical-end edge reveal. A
+  glass icon button instead uses `GlassTransformPopup` with the measured button and
+  separate decorative glyph, matching [Miuix's guide](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta02/docs/components/glass/glasstransformpopup.md)
+  and [Mishka's sort menu](https://github.com/YuKongA/Mishka/blob/1bc4acc5f76d916957fd3abdda3ba99763df521a/app/src/main/kotlin/top/yukonga/mishka/ui/screen/proxy/ProxyScreen.kt#L519).
+  For the terminal roster, `openBelow = LocalPiBarBottom.current` translates the
+  destination anchor to the measured bar bottom, not the collapsed button geometry.
+  Files sort is already below that bar. Both register from the page overlay and keep
+  their `PiMenuRow` content in the host. The host reads the visibility state directly:
+  passing a Boolean through the scaffold slot left the terminal roster closed after
+  its button received the click.
+
+  The composer needs an explicit upward destination that beta02 does not expose on
+  `GlassTransformPopup`. The previous inverted rectangle forced `GlassPopup` upward but
+  still seeded the animation at the final panel's far corner. The kit now combines the
+  library's `GlassMotion` and `glassSurface` with a viewport above the measured trigger,
+  at logical start with an 8dp gap (§7.1). The viewport stays fixed while bounds move.
 
 ## Dialogs, sheets and the one message
 

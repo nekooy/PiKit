@@ -138,12 +138,11 @@ import pi.kit.mob.ui.files.humanSize
 import pi.kit.mob.ui.files.openExternally
 import pi.kit.mob.ui.files.readDirectory
 import pi.kit.mob.ui.files.stampFor
-import pi.kit.mob.ui.kit.LocalPiBarHeight
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
-import pi.kit.mob.ui.kit.PiMenuAnchor
+import pi.kit.mob.ui.kit.PiGlassMenuAnchor
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
@@ -154,6 +153,9 @@ import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.piMenuAnchor
+import pi.kit.mob.ui.kit.piGlassMenuAnchor
+import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
+import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
@@ -244,7 +246,7 @@ fun FilesScreen(session: PiAgentSession,
     // states live at the page because the popup is rendered from the page's overlay
     // slot, outside the body layer that supplies the material's backdrop.
     var sortUp by remember { mutableStateOf(false) }
-    val sortAnchor = rememberPiMenuAnchor()
+    val sortAnchor = rememberPiGlassMenuAnchor()
     val haptics = LocalPiHaptics.current
 
     fun navigate(to: File) {
@@ -311,15 +313,13 @@ fun FilesScreen(session: PiAgentSession,
         contentScrolled = listingState.canScrollBackward,
         contentScrollsUnderBar = false,
         overlay = {
-            // The sort is one of three answers, and it opens from the toolbar button as
-            // the app's one glass menu — the same [PiPopupMenu] the composer's chips and
-            // the listing's row menu open, rather than a second glass component with its
-            // own anchor type and its own copy of the rows. The row that is in effect
-            // carries the tick.
             PiPopupMenu(
-                show = sortUp,
+                show = { sortUp },
                 onDismissRequest = { sortUp = false },
                 anchor = sortAnchor,
+                anchorContent = {
+                    Icon(MiuixIcons.Glass.Sort, null, Modifier.size(28.dp), tint = MiuixTheme.colorScheme.onSurface)
+                },
             ) {
                 FileSort.entries.forEach { order ->
                     PiMenuRow(
@@ -432,7 +432,6 @@ fun FilesScreen(session: PiAgentSession,
             ListToolbar(
                 query = query,
                 onQueryChange = { query = it },
-                sortUp = sortUp,
                 onSortClick = { sortUp = true },
                 sortAnchor = sortAnchor,
                 text = text,
@@ -622,9 +621,8 @@ private fun LocationBar(
 private fun ListToolbar(
     query: String,
     onQueryChange: (String) -> Unit,
-    sortUp: Boolean,
     onSortClick: () -> Unit,
-    sortAnchor: PiMenuAnchor,
+    sortAnchor: PiGlassMenuAnchor,
     text: Strings,
 ) {
     Row(
@@ -665,23 +663,15 @@ private fun ListToolbar(
                 }
             },
         )
-        // The button is the menu's anchor and its opening state is the page's; the menu
-        // itself is in `PiPage`'s overlay slot so it can sample the page backdrop. It opens
-        // below the bar (`LocalPiBarHeight`) rather than over it: the bar is outside the
-        // recorded layer, so a panel drawn on top of it has nothing to blur there.
         GlassIconButton(
             onClick = onSortClick,
-            modifier = Modifier.piMenuAnchor(sortAnchor, openBelow = LocalPiBarHeight.current),
+            modifier = Modifier.piGlassMenuAnchor(sortAnchor),
         ) {
             Icon(
                 imageVector = MiuixIcons.Glass.Sort,
                 contentDescription = text.files.sort,
-                tint = if (sortUp) {
-                    MiuixTheme.colorScheme.primary
-                } else {
-                    MiuixTheme.colorScheme.onSurface
-                },
-                modifier = Modifier.size(28.dp),
+                tint = MiuixTheme.colorScheme.onSurface,
+                modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sortAnchor),
             )
         }
     }

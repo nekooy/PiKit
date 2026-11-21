@@ -394,20 +394,21 @@ the row is hand-built.
 blur, no stroke, no shadow — so every menu and every dropdown row was the one opaque
 rectangle on a page whose bar, cards and dialogs are OS4 glass. The kit's pair wraps
 `GlassPopup` / `GlassDropdownPreference` with the page's backdrop and `PiCorner.popup` (24dp),
-and a menu is *registered* into the page's `PiPopupHostProvider` rather than composed at its
-trigger: a panel must be measured against the window (a chip is 32dp tall, a drawer row is
-clipped by its list) and it samples the page's backdrop, so it cannot be inside the recording
-that holds the trigger. `tools/check-ui.py` refuses the old panels, the old preference rows
-and a `GlassPopup` composed anywhere but the kit. The composer's chips and toolbar pass
-`PiPopupPlacement.Above` — the library's fit test measures against the window, so it opens
-"below" onto the input field, and under the keyboard — and a control in the page's bar passes
-`openBelow = LocalPiBarHeight.current`, because the bar is chrome outside the recorded layer.
-ARCHITECTURE §13, *Menus*, has the arithmetic.
+and a menu is *registered* into a bounded `PiPopupHostProvider` rather than composed at its
+trigger. The host records the scene and draws menus in a separate full-window sibling.
+Chat and history share that host: a lazy history row has unbounded height and the in-place
+fallback crashed in `GlassPopupSurface`. `tools/check-ui.py` refuses the old panels, the old preference rows
+and a `GlassPopup` or `GlassTransformPopup` composed anywhere but the kit. Context menus
+use the edge reveal; glass icon buttons use the native control morph. The composer's
+chips and toolbar use `PiPopupPlacement.Above` to morph from the real trigger to a
+viewport above it despite the IME. A control in the page bar passes
+`openBelow = LocalPiBarBottom.current` to move the expanded endpoint clear of the subtitle.
+ARCHITECTURE §13, *Menus*, has the distinction.
 
-**A `layerBackdrop` must not contain the glass controls that sample it.** `PiPage` puts
-the layer on the body and leaves the bar in the Scaffold's `topBar` slot; the chat page
-puts it on the `LazyColumn` only, with the header and composer as siblings. Wrapping the
-whole page in one layer made the glass controls sample their own recording and
+**A `layerBackdrop` must not contain the glass controls that sample it.** `PiPage`'s bar
+samples its body layer and chat chrome samples the transcript layer. The menu scene layer
+can contain that chrome only because the chrome samples a different, inner recording.
+Pointing the glass controls at a recording containing themselves made
 `RenderNode::prepareTreeImpl` recursed until the RenderThread stack overflowed
 (`SIGSEGV`, `SEGV_ACCERR`, `stack pointer is not in a rw map; likely due to stack
 overflow`) — the app died before its first frame. A visual blur is the mild version of

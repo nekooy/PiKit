@@ -246,27 +246,28 @@ ControlChip(
 )
 ```
 
-- **`Modifier.piMenuAnchor(anchor)`** goes on the trigger — the pill, the button, the
-  row — and reports its window bounds. Not on a wrapper: the panel's end edge is the
-  trigger's end edge.
+- **`Modifier.piMenuAnchor(anchor)`** goes on the trigger itself. For a composer pill
+  or button, its actual bounds are the collapsed end of the transition.
 - **`PiPopupMenu(show, onDismissRequest, anchor, placement) { PiMenuRow(…) }`** is
   written at the same call site and *registers* into `PiPopupHostProvider`, which the
-  page provides outside its recorded layer. The host draws the panel full-window, so
-  the panel is measured against the window rather than clipped to a chip or a drawer
-  row, and it samples the page backdrop without containing itself (red line 1).
-- **`placement`** is `Auto` (below if it fits, else above — the library's own test) or
-  `Above`. Use `Above` for a band pinned to the bottom of the window: the composer's
-  chip row and its toolbar. There the space "below" is the input field, and with the
-  keyboard up it is under the keyboard, because the library measures against the window
-  and the keyboard shrinks the content rather than the window.
-- **A control in the page's bar** passes `openBelow = LocalPiBarHeight.current`. The bar
-  is chrome and sits outside the recorded layer, so a panel drawn over it has nothing to
-  blur and the bar's title shows through; opening below the bar puts it over the body.
+  page provides around its scene. The host records the scene (body and chrome), then
+  draws menus in a separate full-window sibling. Chrome still samples the inner body
+  layer, never the scene that contains it (red line 1). The conversation and history
+  drawer share this host so a drawer menu is above the translated chat card too.
+  Do not draw an unhosted menu in place: a list item offers unbounded height.
+- **Point and row context menus** use `Auto`, Miuix's edge reveal and fit test.
+- **Composer menus** use `Above`: they grow from the measured trigger and settle above
+  it, 8dp clear of it and aligned at logical start. The scroll viewport is bounded to
+  the available area above the trigger, not the space below it behind the IME.
+- **Glass icon buttons** use `rememberPiGlassMenuAnchor`, `piGlassMenuAnchor` on the
+  button and `piGlassMenuAnchorContent` on the glyph. The `PiPopupMenu` overload takes
+  a decorative copy of the glyph for Miuix's `GlassTransformPopup`. A control in the
+  page bar can pass `openBelow = LocalPiBarBottom.current` to move only the settled
+  placement, clear of the subtitle. Files sort is already below that bar.
 - **The rows are `PiMenuRow`**, at the library's popup metrics — see the next section.
   Do not wrap them in `ListPopupColumn` and do not hand `GlassPopup` a panel of your own.
-- **The panel is the library's**, so the corner is `PiCorner.popup` (24dp) and the
-  height bound is `GlassPopupDefaults.MaxHeight` (416dp) with the content scrolling
-  inside it. A page does not pass a height.
+- **The material is the library's**: the corner is `PiCorner.popup` (24dp), and the
+  scroll viewport is capped at `GlassPopupDefaults.MaxHeight` (416dp).
 
 A menu belongs to the composition that raised it: a row that leaves its list takes its
 menu with it. The transcript's card menu is the exception — it is registered by the

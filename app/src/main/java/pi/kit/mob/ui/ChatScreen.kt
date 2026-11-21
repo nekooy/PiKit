@@ -210,6 +210,7 @@ import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiMenuAnchor
 import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPopupHostProvider
+import pi.kit.mob.ui.kit.rememberLastPresent
 import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiPopupPlacement
 import pi.kit.mob.ui.kit.PiSheet
@@ -1024,6 +1025,7 @@ internal fun ChatScreen(
     // than `offset`, because the page is not interactive while the drawer is out — the
     // scrim below takes every touch — so moving what is drawn and not what is touched is
     // exactly right here, and it is the cheap version of the same thing.
+    PiPopupHostProvider(base = MiuixTheme.colorScheme.background) {
     Box(
         Modifier
             .fillMaxSize()
@@ -1464,6 +1466,7 @@ internal fun ChatScreen(
             )
         }
 
+    }
     }
 }
 
@@ -1956,7 +1959,6 @@ private fun ChatPage(
     val headerSpace = topInset + HEADER_CLEARANCE
     // The message menu, and the one message that is in selection mode.
     var menuFor by remember { mutableStateOf<ChatItem?>(null) }
-    var menuCardKey by remember { mutableStateOf<String?>(null) }
     var selectionKey by remember { mutableStateOf<String?>(null) }
     // Where the finger went down, in **window** coordinates, and how many message records
     // came before the card it landed on. The menu is drawn by the page's popup host, so
@@ -1967,9 +1969,6 @@ private fun ChatPage(
     // The message whose Markdown source is open in the reader sheet.
     var sourceFor by remember { mutableStateOf<ChatItem?>(null) }
     ExitBackHandler(enabled = !historyOpen)
-    // The message menu's actions live at the page; the menu itself is emitted at the
-    // message (see the transcript's item scope), because Miuix anchors a popup to its own
-    // parent's bounds.
     val messageClipboard = LocalClipboard.current
     val messageToasts = LocalPiToast.current
     val messageScope = rememberCoroutineScope()
@@ -1995,10 +1994,6 @@ private fun ChatPage(
     // outside the layer — a control inside it would sample its own output.
     val chatBackdrop = rememberPiBackdrop()
     CompositionLocalProvider(LocalPiBackdrop provides chatBackdrop) {
-        // The page's floating menus, drawn beside the recorded transcript for the reason
-        // `PiPage` states: a menu samples the page's backdrop and is measured against the
-        // window, so it belongs outside the layer and outside the row that opened it.
-        PiPopupHostProvider {
         Box(Modifier.fillMaxSize()) {
             // The transcript fills the page and the composer floats over its bottom, so the
             // conversation runs *behind* the band rather than being cut by it. That is what
@@ -2269,10 +2264,8 @@ private fun ChatPage(
                                                         // that raises nothing must not buzz —
                                                         // `hold()` is "a surface is about to
                                                         // appear" (§16), not "a finger rested here".
-                                                        if (menuTarget != null) {
-                                                            haptics.hold()
-                                                            menuFor = menuTarget
-                                                            menuCardKey = card.key
+                                                        val coords = cardCoords
+                                                        if (menuTarget != null && coords?.isAttached == true) {
                                                             // The press arrives in this card's
                                                             // own coordinates; the panel is placed
                                                             // in the window's. The card's own node
@@ -2282,16 +2275,16 @@ private fun ChatPage(
                                                             // coordinates yet cannot be placed, so
                                                             // the menu is not raised at all rather
                                                             // than opening at the window's corner.
-                                                            val coords = cardCoords
-                                                            if (coords != null) {
-                                                                val inWindow = coords.localToWindow(press)
-                                                                menuAnchor.bounds = Rect(
-                                                                    left = inWindow.x,
-                                                                    top = inWindow.y,
-                                                                    right = inWindow.x,
-                                                                    bottom = inWindow.y,
-                                                                )
-                                                            }
+                                                            val inWindow = coords.localToWindow(press)
+                                                            if (!inWindow.x.isFinite() || !inWindow.y.isFinite()) return@detectTapGestures
+                                                            menuAnchor.bounds = Rect(
+                                                                left = inWindow.x,
+                                                                top = inWindow.y,
+                                                                right = inWindow.x,
+                                                                bottom = inWindow.y,
+                                                            )
+                                                            haptics.hold()
+                                                            menuFor = menuTarget
                                                             // The count of message records before
                                                             // this card is the branch point's
                                                             // coordinate, and it is computed on the
@@ -2673,14 +2666,11 @@ private fun ChatPage(
         // page's popup host draws the panel — outside the transcript's recorded layer and
         // measured against the window — so a card the list recycles while the menu is open
         // no longer takes its menu with it.
-        val menuSubject = menuFor
+        val menuSubject = rememberLastPresent(menuFor)
         if (menuSubject != null) {
             PiPopupMenu(
-                show = true,
-                onDismissRequest = {
-                    menuFor = null
-                    menuCardKey = null
-                },
+                show = menuFor != null,
+                onDismissRequest = { menuFor = null },
                 anchor = menuAnchor,
             ) {
                 messageMenuItems(
@@ -2757,7 +2747,6 @@ private fun ChatPage(
         }
 
         overlay()
-        }
     }
 }
 
@@ -5922,10 +5911,7 @@ private fun ControlChipBase(
     menu: @Composable (PiMenuAnchor) -> Unit,
     glyph: @Composable () -> Unit,
 ) {
-    // The chip is its menu's anchor, so the panel's end edge is the pill's end edge and
-    // its opening direction is decided from where the pill actually is. The anchor is
-    // created here rather than at each call site because the bounds have to come from
-    // the pill's own node — a wrapper would report the `Box` around it.
+    // The panel morph starts at the pill's own bounds, not its wrapper's.
     val anchor = rememberPiMenuAnchor()
     Box {
         Surface(
@@ -5977,12 +5963,8 @@ private fun ControlChipBase(
 /**
  * A chip's menu, at OS4's glass.
  *
- * The chip is the anchor and the panel is drawn by the page's popup host, so this is one
- * line at every chip: the panel's end edge is the pill's end edge. It always opens
- * **above** the chip ([PiPopupPlacement.Above]): the chip row is the last thing above the
- * input field, so the space below it is the field the reader is about to type into, and
- * with the keyboard up it is under the keyboard as well — the library's own fit test
- * measures against the window, which the keyboard does not shrink.
+ * The panel expands from the trigger and settles above it, aligned at logical start.
+ * The field and keyboard remain below it regardless of how short the menu is.
  */
 @Composable
 private fun ControlChipMenu(

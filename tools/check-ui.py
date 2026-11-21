@@ -90,7 +90,7 @@ GLASS_PANEL_OWNER = UI / "kit/PiKitTheme.kt"
 
 #: The OS4 popup components, composed only by the kit's menu surface.
 GLASS_POPUP = re.compile(
-    r"\b(?:GlassPopup|GlassIconDropdownMenu|GlassDropdownPopup)\s*\("
+    r"\b(?:GlassPopup|GlassTransformPopup|GlassIconDropdownMenu|GlassDropdownPopup)\s*\("
 )
 GLASS_POPUP_OWNER = UI / "kit/PiPopupMenu.kt"
 

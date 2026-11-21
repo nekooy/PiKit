@@ -87,7 +87,6 @@ import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiModeSwitch
-import pi.kit.mob.ui.kit.PiPopupHostProvider
 import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
@@ -817,12 +816,7 @@ fun SessionsScreen(
     // makes the rename, delete and mode questions OS4 glass over the drawer instead of
     // opaque platform windows. A glass dialog renders in the root Scaffold, so it never
     // enters the layer it samples.
-    //
-    // The row menus are drawn from the same place and for the same reason — a panel
-    // samples the drawer's recording without containing itself — so the host is provided
-    // here, beside the dialogs, rather than inside the list.
     CompositionLocalProvider(LocalPiBackdrop provides drawerBackdrop) {
-    PiPopupHostProvider {
     // The mode conversion's interruption question, in the same shape as the workspace
     // chip's: a mode is a launch flag, so converting a conversation that is answering
     // ends its turn. The only way here is the row menu's mode row — the drawer's foot
@@ -914,7 +908,6 @@ fun SessionsScreen(
             }
         },
     )
-    }
     }
 }
 

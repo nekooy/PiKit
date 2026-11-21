@@ -77,7 +77,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.terminal.TerminalSessionManager
 import pi.kit.mob.ui.kit.DarkNavigationBar
-import pi.kit.mob.ui.kit.LocalPiBarHeight
+import pi.kit.mob.ui.kit.LocalPiBarBottom
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiCorner
@@ -86,9 +86,10 @@ import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldCursor
-import pi.kit.mob.ui.kit.piMenuAnchor
+import pi.kit.mob.ui.kit.piGlassMenuAnchor
+import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
 import pi.kit.mob.ui.kit.piSheetBottomInset
-import pi.kit.mob.ui.kit.rememberPiMenuAnchor
+import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -207,7 +208,7 @@ fun TerminalScreen(session: PiAgentSession,
     var sessionsMenuOpen by remember { mutableStateOf(false) }
     // The stack button is the roster's anchor: the panel's end edge is the button's, and
     // the panel is drawn by the page's popup host rather than inside this action row.
-    val sessionsAnchor = rememberPiMenuAnchor()
+    val sessionsAnchor = rememberPiGlassMenuAnchor()
     // TerminalView asks the client for the modifier latches on every key event. The bar
     // no longer carries `CTRL`/`ALT`, so both are false — the fields stay because the view
     // client reads them unconditionally.
@@ -336,24 +337,25 @@ fun TerminalScreen(session: PiAgentSession,
             // [TerminalSessionMenu]).
             GlassIconButton(
                 onClick = { sessionsMenuOpen = true },
-                modifier = Modifier.piMenuAnchor(sessionsAnchor, openBelow = LocalPiBarHeight.current),
+                modifier = Modifier.piGlassMenuAnchor(sessionsAnchor),
             ) {
                 Icon(
                     imageVector = MiuixIcons.Glass.Layers,
                     contentDescription = t.terminal.switchTerminal,
                     tint = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sessionsAnchor),
                 )
             }
-            // The menu is the page's, drawn by its popup host against the page's own
-            // backdrop: the panel is measured against the window rather than clipped to
-            // the bar's action row, and it samples the page without containing itself.
-            // It hangs under the stack button with its end edge at the screen's margin,
-            // which is the anchor the bar's action row used to give it.
+        },
+        overlay = {
             PiPopupMenu(
-                show = sessionsMenuOpen,
+                show = { sessionsMenuOpen },
                 onDismissRequest = { sessionsMenuOpen = false },
                 anchor = sessionsAnchor,
+                anchorContent = {
+                    Icon(MiuixIcons.Glass.Layers, null, Modifier.size(28.dp), tint = MiuixTheme.colorScheme.onSurface)
+                },
+                openBelow = LocalPiBarBottom.current,
             ) {
                 TerminalSessionMenu(
                     text = t,
