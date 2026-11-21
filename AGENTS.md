@@ -5,6 +5,10 @@ the project is; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) says why the design
 shaped the way it is, chapter by chapter, and [docs/README.md](docs/README.md) is
 the index of every document. This file is the practical part.
 
+**Before replying that a change is done:** verify it, commit it locally, then
+check `git status --short --branch` and report the commit hash. If the environment
+requires a direct request to commit, ask before handing off. See [Commits](#commits).
+
 ## Before you change anything
 
 **Read the document that owns the area, then the code it describes.** `docs/README.md`
@@ -500,19 +504,26 @@ gone (§5), and `~/storage/shared` survives only as the one convenience link the
 pi's scripts type. A reader who starts a conversation in `$HOME` has made pi's own state
 writable in the middle tier, which is the tier's promise applied to the folder they chose.
 
-## Commits — commit finished work yourself, push only when asked
+## Commits
 
-**Commit when a task is done and verified; push only when the user says so.** The
-old rule was *ask before every commit*, and what it produced in practice was a
-tree that piled unrelated work up for hours until the pile was too tangled to
-slice by hunks. The rule now is the opposite shape:
+**A local commit is part of finishing a verified change.** Do not defer it to
+another turn or substitute a summary for it. A local commit does not imply a push.
 
-- **The gate is verification, not permission.** When one task is finished —
-  code, tests and its chapter under `docs/architecture/` in the same change —
-  run `python tools/build-apks.py` (or, for a Kotlin-only change that touches
-  nothing the script checks, `./gradlew :app:testX64DebugUnitTest`), confirm it
-  is green, and commit it yourself in that turn. Do not let a second task start
-  on top of an uncommitted first one.
+1. **Verify the change.** Keep the code, tests and owning documentation together.
+   Run `python tools/build-apks.py` (or, for a Kotlin-only change that touches
+   nothing else the script checks, `./gradlew :app:testX64DebugUnitTest`). For
+   prose-only edits, review the diff and run `git diff --check`.
+2. **Commit before the final reply.** Review `git status --short --branch` and
+   `git diff`, stage only the task's changes, then review `git diff --cached`
+   and run `git diff --cached --check`. The repository's default is to commit
+   without asking again. If a higher-priority rule requires a direct user
+   request, ask before handing off unless the user has already requested the
+   commit. Do not leave verified work uncommitted without naming the blocker.
+3. **Check the result.** Run `git log -1 --oneline` and
+   `git status --short --branch`. Report the commit hash and whether the
+   worktree is clean. Leave unrelated changes alone and report them rather than
+   staging or discarding them to get a clean status.
+
 - **`git push` still needs an explicit yes, every time.** Local commits are
   cheap to rewrite and invisible to anyone else; a pushed one is neither. A
   turn that ends with committed-but-unpushed work says so in its summary —
@@ -578,9 +589,9 @@ collisions are avoidable with a few habits:
 
 ## Commit message format
 
-When a commit *is* requested, use Conventional Commits. **Only the subject line is
-required — the body and the footer are optional**, and a subject-line-only commit
-is often the right choice for a small change.
+Use Conventional Commits for every commit. **Only the subject line is required —
+the body and the footer are optional**, and a subject-line-only commit is often
+the right choice for a small change.
 
 **A message is short: the subject plus at most five bullets of one or two lines each.**
 A change that does not fit in that is two commits, or the detail belongs in a document
