@@ -5,9 +5,9 @@ the project is; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) says why the design
 shaped the way it is, chapter by chapter, and [docs/README.md](docs/README.md) is
 the index of every document. This file is the practical part.
 
-**Default handoff: verify, commit locally, then report.** A request to change
-PiKit authorizes a local commit for that task; do not ask for a second
-confirmation. See [Commits](#commits).
+**Before reporting a PiKit change as done, verify it and commit it locally.**
+This includes documentation-only edits. A change request authorizes its local
+commit; approval to push is separate. See [Commits](#commits).
 
 ## Before you change anything
 
@@ -510,11 +510,10 @@ writable in the middle tier, which is the tier's promise applied to the folder t
 
 ## Commits
 
-**Commit verified changes locally before handing off.** This is PiKit's
-repository-wide rule for completing changes. The request to make the change
-is the repository's authorization to commit it locally: do not wait for
-another message or ask again. If the user asks to leave changes uncommitted,
-respect that. This rule does not authorize pushing, tagging or creating branches.
+**A PiKit change request includes a local commit.** This applies even when the
+request only asks to edit a document and does not mention Git. Once verification
+passes, do not ask for separate commit confirmation or wait for push approval.
+Local commit authorization does not cover pushing, tagging or creating branches.
 
 1. **Verify the change.** Keep the code, tests and owning documentation together.
    Run `python tools/build-apks.py` (or, for a Kotlin-only change that touches
@@ -523,13 +522,15 @@ respect that. This rule does not authorize pushing, tagging or creating branches
 2. **Commit only this task's changes.** Review `git status --short --branch` and
    `git diff`, stage only the task's changes, then review `git diff --cached`
    and run `git diff --cached --check` before committing.
-3. **Check the result.** Run `git log -1 --oneline` and
-   `git status --short --branch`. Report the commit hash and whether the
-   worktree is clean. Leave unrelated changes alone and report them rather than
-   staging or discarding them to get a clean status.
+3. **Confirm the commit before sending the final response.** Run
+   `git log -1 --oneline` and `git status --short --branch`. Confirm that this
+   task's changes were committed and report the commit hash and worktree status.
+   Leave unrelated changes alone and report them rather than staging or discarding
+   them to get a clean status.
 
-If verification fails or a commit cannot be made, report the specific blocker
-and what remains uncommitted.
+If the user explicitly asks for no commit, leave the changes uncommitted and say
+so. If verification fails or a commit is blocked, report the specific blocker
+and what remains uncommitted instead of reporting the task as done.
 
 - **`git push` still needs an explicit yes, every time.** Local commits are
   cheap to rewrite and invisible to anyone else; a pushed one is neither. A
