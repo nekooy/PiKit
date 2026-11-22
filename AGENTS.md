@@ -665,10 +665,12 @@ prompt, which billed the idle gap to a turn that had already finished.
 
 ## Things that will waste your time if you do not know them
 
-- **An empty `adb devices` means start the AVD, not report a missing device.** Start it
-  with `python tools/emulator.py start --avd <name>` (or `emulator -avd <name> -gpu host
-  -no-audio -no-boot-anim -qt-hide-window`) and wait for
-  `adb shell getprop sys.boot_completed` to answer `1`. On software rasterisation
+- **An empty `adb devices` means start the one AVD, not report a missing device.** Start
+  it with `python tools/emulator.py start` (the AVD name lives in the ignored
+  `local.properties` as `pikit.avd`, or in `PIKIT_AVD`) and wait for
+  `adb shell getprop sys.boot_completed` to answer `1`. If `start` reports another
+  session's lease, `python tools/emulator.py status` shows the owner: wait for it, do not
+  start a second guest. On software rasterisation
   (`-gpu swiftshader_indirect`) the GPU context times out
   (`dumpsys gfxinfo`: `GPU Context timeout: 10`, frames at 4950 ms) and the app's window
   never finishes its first draw, while `dumpsys window` calls it visible and

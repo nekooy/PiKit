@@ -279,27 +279,52 @@ environment variable did not reach the process that resolves it.
 
 ## Working on a device
 
-**A connected device is not a prerequisite: start the AVD yourself.** `emulator -list-avds`
-names the installed images; start one in the background with
-`emulator -avd <name> -gpu host -no-audio -no-boot-anim`, adding `-qt-hide-window` when
-the window should stay off the desktop. Wait for `adb shell getprop sys.boot_completed` to
-answer `1`, not for `adb devices` to list the device: a snapshot load can hang with the
-entry `offline` and then vanish from the list. An empty `adb devices` is a prompt to start
-one, not a reason to stop.
+**One AVD is the device.** The project runs one lightweight AVD; its name is machine
+state, kept in the ignored `local.properties` as `pikit.avd` (or in `PIKIT_AVD`), never
+in this document. It is an **API 33 AOSP `default` x86_64** image: API 33 is the floor
+for `RuntimeShader`, which the glass material needs, and the AOSP image carries no Play
+Store or Google APIs the app never uses. The profile is cut to the bone — 720×1280 at
+320 dpi, 2048 MB RAM, 2 vCPUs, 2 GB data, no camera, no audio, no modem, no Bluetooth,
+no sensors, `-gpu host`:
+
+```bash
+sdkmanager "system-images;android-33;default;x86_64"
+avdmanager create avd -n <name> -k "system-images;android-33;default;x86_64"
+# Then set the profile in ~/.android/avd/<name>.avd/config.ini:
+#   hw.ramSize=2048, hw.cpu.ncore=2, hw.lcd.width=720, hw.lcd.height=1280,
+#   hw.lcd.density=320, disk.dataPartition.size=2G,
+#   hw.camera.back=none, hw.camera.front=none, hw.audioInput=no,
+#   hw.audioOutput=no, hw.gsmModem=no, hw.bluetooth=no,
+#   hw.sensors.*=no, hw.gps=no, hw.gpu.mode=host
+```
+
+**One AVD, one driver.** `tools/emulator.py start` claims `.tooling/emulator.state`
+for the calling session (`DSH_SESSION_ID` by default; `--owner` overrides it). A
+second session gets a clear refusal instead of silently driving the same screen;
+`status` prints the holder, and `stop --force` takes over only after the process check
+has proven the previous owner gone. The emulator's own AVD lock is the second fence:
+two guests of one AVD cannot run without `-read-only`, and this profile deliberately
+does not offer a second AVD. Sessions take turns. A 1 GB guest on a host with about
+2 GB free lost `system_server` and reported `Can't find service: package`, and the
+API 33 emulator refuses anything below 2048 MB anyway (`Increasing RAM size to
+2048MB` in its log), so 2048 is the floor this profile keeps.
 
 **Use `tools/emulator.py` for the routine path.** It starts the AVD with a saved
 quickboot snapshot and a hidden Qt window, and `benchmark` reports the first frame and
 the time to the chat page:
 
 ```bash
-python tools/emulator.py start --avd <name>
+python tools/emulator.py start
+python tools/emulator.py status
 python tools/emulator.py benchmark --apk app/build/outputs/apk/x64/debug/app-x64-debug.apk
 python tools/emulator.py stop
 ```
 
 **A quickboot snapshot is the difference between seconds and minutes.** Measured on
 this host: the Medium_Phone AVD with its `default_boot` snapshot booted in **5.5 s**;
-a newly created AVD with no snapshot had not finished after three minutes. The snapshot
+a newly created AVD with no snapshot had not finished after three minutes. The
+reference profile here cold-booted in **53 s** and quickbooted in **5.5 s** once `stop`
+had saved its snapshot. The snapshot
 is a disk image, not just a kernel state: the guest clock came back at the snapshot's
 date, and the app inside it was the APK that was installed when the snapshot was taken.
 That is why `-no-snapshot-save` is a trap for ordinary work — every start returns to the
@@ -322,22 +347,19 @@ created AVD from that image crashed every 20–25 s with
 `Assertion failed: !rcEnc->featureInfo()->hasReadColorBufferDma` in
 `GoldfishMapper::readFromHost`, so `sys.boot_completed` never arrived even though
 `adb devices` showed `device`. The Play Store `Medium_Phone` image on the same
-emulator does not. If a new AVD is needed on an NVIDIA host, use `-gpu angle_indirect`
-after reproducing this, or keep the working Play Store AVD; do not spend time tuning
-RAM or core count for a SurfaceFlinger loop.
+emulator does not. The one AVD avoids this image entirely — it is API 33 AOSP
+`default`, not the `google_apis` 36.1 image. If a newer image is still needed for a
+specific OS-version check on an NVIDIA host, use `-gpu angle_indirect` after reproducing
+this; do not spend time tuning RAM or core count for a SurfaceFlinger loop.
 
-**A device can have another driver.** More than one agent session can be attached to the
-same emulator, and then the screen changes between two of your own reads: a page you did
-not open appears, a tap lands on a row you did not choose, or `am start` answers
-`Activity class … does not exist` while the launcher is in front. Read the emulator's own
-command line before suspecting the app — `Get-CimInstance Win32_Process -Filter
-"Name='emulator.exe'"` on Windows gives its `-avd` and `-port` — and pin every `adb` call
-to one serial (`adb -s emulator-5554 …`). A concurrent session needs its own AVD and port
-(`emulator -avd <name> -port 5556 …`, then `adb -s emulator-5556 …`); several instances of
-the *same* AVD are allowed only when all of them were started with `-read-only`. Give the
-second guest its own RAM: a 1GB guest on a host with about 2GB free loses `system_server`
-and reports `Can't find service: package`, so close the idle emulator or free memory
-first. If one AVD is all the machine can hold, the sessions take turns rather than share.
+**A device can have another driver; the lease is the fence.** If the screen changes
+between two of your own reads — a page you did not open appears, a tap lands on a row
+you did not choose, or `am start` answers `Activity class … does not exist` while the
+launcher is in front — run `python tools/emulator.py status` before suspecting the app.
+If another session owns the lease, wait; `start` refuses to hand out a second driver,
+and starting a second guest is not a workaround on a 16 GB host. Pin every `adb` call
+to the one serial (`adb -s emulator-5554 …`). `stop --force` is only for a lease whose
+owner process is already gone.
 
 ```bash
 mkdir -p .tooling/shots
