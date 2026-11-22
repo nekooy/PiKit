@@ -5,10 +5,6 @@ the project is; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) says why the design
 shaped the way it is, chapter by chapter, and [docs/README.md](docs/README.md) is
 the index of every document. This file is the practical part.
 
-**Before reporting a PiKit change as done, verify it and commit it locally.**
-This includes documentation-only edits. A change request authorizes its local
-commit; approval to push is separate. See [Commits](#commits).
-
 ## Before you change anything
 
 **Read the document that owns the area, then the code it describes.** `docs/README.md`
@@ -508,30 +504,19 @@ gone (§5), and `~/storage/shared` survives only as the one convenience link the
 pi's scripts type. A reader who starts a conversation in `$HOME` has made pi's own state
 writable in the middle tier, which is the tier's promise applied to the folder they chose.
 
-## Commits
+## Commits — commit finished work yourself, push only when asked
 
-**A PiKit change request includes a local commit.** This applies even when the
-request only asks to edit a document and does not mention Git. Once verification
-passes, do not ask for separate commit confirmation or wait for push approval.
-Local commit authorization does not cover pushing, tagging or creating branches.
+**Commit when a task is done and verified; push only when the user says so.** The
+old rule was *ask before every commit*, and what it produced in practice was a
+tree that piled unrelated work up for hours until the pile was too tangled to
+slice by hunks. The rule now is the opposite shape:
 
-1. **Verify the change.** Keep the code, tests and owning documentation together.
-   Run `python tools/build-apks.py` (or, for a Kotlin-only change that touches
-   nothing else the script checks, `./gradlew :app:testX64DebugUnitTest`). For
-   prose-only edits, review the diff and run `git diff --check`.
-2. **Commit only this task's changes.** Review `git status --short --branch` and
-   `git diff`, stage only the task's changes, then review `git diff --cached`
-   and run `git diff --cached --check` before committing.
-3. **Confirm the commit before sending the final response.** Run
-   `git log -1 --oneline` and `git status --short --branch`. Confirm that this
-   task's changes were committed and report the commit hash and worktree status.
-   Leave unrelated changes alone and report them rather than staging or discarding
-   them to get a clean status.
-
-If the user explicitly asks for no commit, leave the changes uncommitted and say
-so. If verification fails or a commit is blocked, report the specific blocker
-and what remains uncommitted instead of reporting the task as done.
-
+- **The gate is verification, not permission.** When one task is finished —
+  code, tests and its chapter under `docs/architecture/` in the same change —
+  run `python tools/build-apks.py` (or, for a Kotlin-only change that touches
+  nothing the script checks, `./gradlew :app:testX64DebugUnitTest`), confirm it
+  is green, and commit it yourself in that turn. Do not let a second task start
+  on top of an uncommitted first one.
 - **`git push` still needs an explicit yes, every time.** Local commits are
   cheap to rewrite and invisible to anyone else; a pushed one is neither. A
   turn that ends with committed-but-unpushed work says so in its summary —
@@ -546,10 +531,9 @@ and what remains uncommitted instead of reporting the task as done.
   `git checkout`/`restore`, branch creation, tag creation, `git reset`, `git
   rebase`, `git init` — none of these is part of "finishing a task". Read-only
   commands (`status`, `diff`, `log`, `show`, `blame`) are fine at any time.
-- **Only your own work for the task.** Include only the hunks you wrote for
-  that task, even if verification and commit authorization happen in separate
-  turns. Leave changes from the user or other agents untouched; see
-  *Several agents work this tree* below.
+- **Only your own work.** This authorises commits of the hunks you wrote this
+  turn. The tree often holds uncommitted work from another agent or from the
+  user; see *Several agents work this tree* below.
 
 **One concern per commit.** A turn that answers two questions is two commits rather
 than one whose subject carries an "and": a fix and the documentation that describes
@@ -598,9 +582,9 @@ collisions are avoidable with a few habits:
 
 ## Commit message format
 
-Use Conventional Commits for every commit. **Only the subject line is required —
-the body and the footer are optional**, and a subject-line-only commit is often
-the right choice for a small change.
+When a commit *is* requested, use Conventional Commits. **Only the subject line is
+required — the body and the footer are optional**, and a subject-line-only commit
+is often the right choice for a small change.
 
 **A message is short: the subject plus at most five bullets of one or two lines each.**
 A change that does not fit in that is two commits, or the detail belongs in a document
