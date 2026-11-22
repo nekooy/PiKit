@@ -65,6 +65,8 @@ class SettingsStoreTest {
             launcherIcon = LauncherIcon.DARK,
             permissionMode = PermissionMode.FULL_ACCESS,
             showAvatars = false,
+            showHistoryTime = true,
+            showMessageTime = false,
             aiAvatarName = "Pi",
             aiAvatarImage = "avatar.png",
             aiAvatarColor = AvatarColor.RED,
@@ -130,6 +132,14 @@ class SettingsStoreTest {
 
         assertEquals(ChatWebAccessDefault.OFF, store.read().chatWebAccessDefault)
         assertFalse("nothing has set the last switch yet", store.read().lastChatWebAccess)
+    }
+
+    @Test
+    fun `a fresh install hides history times and shows message times`() {
+        val store = newStore()
+
+        assertFalse("the history list starts without a date on every row", store.read().showHistoryTime)
+        assertEquals("a message starts with its time", true, store.read().showMessageTime)
     }
 
     @Test

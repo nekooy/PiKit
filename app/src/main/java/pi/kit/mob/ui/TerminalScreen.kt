@@ -85,6 +85,7 @@ import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
 import pi.kit.mob.ui.kit.piSheetBottomInset
@@ -1075,6 +1076,11 @@ private fun ExtraKeysRow(
                 // gesture strip itself (docs/UI.md, *Dialogs, sheets*). With the keyboard
                 // up the sheet's own ime padding already lifts it.
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = piSheetBottomInset()),
+            // A secondary button on the sheet's glass body.
+            colors = ButtonDefaults.buttonColors(
+                color = PiTone.control(),
+                contentColor = MiuixTheme.colorScheme.onSurface,
+            ),
         ) {
             Text(text = text.terminal.keysMessageSend)
         }

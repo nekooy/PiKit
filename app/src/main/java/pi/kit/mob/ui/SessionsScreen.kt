@@ -41,6 +41,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,9 +52,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
@@ -717,6 +721,7 @@ fun SessionsScreen(
                         selected = selected,
                         snippets = snippets,
                         currentPath = currentPath,
+                        showTimes = settings.showHistoryTime,
                         onToggle = { path ->
                             selected = if (path in selected) selected - path else selected + path
                         },
@@ -957,6 +962,8 @@ private fun ConversationList(
     selecting: Boolean,
     selected: Set<String>,
     snippets: Map<String, String>,
+    /** Whether each row draws its date and time in the trailing lane. */
+    showTimes: Boolean,
     /** The saved conversations that are live processes right now. */
     streamingPaths: Set<String>,
     unreadPaths: Set<String>,
@@ -1032,6 +1039,7 @@ private fun ConversationList(
                     unread = item.path in unreadPaths,
                     pinned = true,
                     current = item.path == currentPath,
+                    showTime = showTimes,
                     mode = modeOf(item.path),
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
@@ -1057,6 +1065,7 @@ private fun ConversationList(
                     unread = item.path in unreadPaths,
                     pinned = false,
                     current = item.path == currentPath,
+                    showTime = showTimes,
                     mode = modeOf(item.path),
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
@@ -1244,6 +1253,8 @@ private fun ConversationRow(
     pinned: Boolean,
     /** Whether this is the conversation the page behind the drawer is showing. */
     current: Boolean,
+    /** Whether the row draws its date and time; the personalization switch owns it. */
+    showTime: Boolean,
     /** The launch mode this row's conversation belongs to. */
     mode: AgentMode,
     onToggleChecked: () -> Unit,
@@ -1414,12 +1425,14 @@ private fun ConversationRow(
                             },
                     )
                 }
-                Text(
-                    text = formatter.format(Date(item.modifiedAt)),
-                    style = MiuixTheme.textStyles.footnote2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    maxLines = 1,
-                )
+                if (showTime) {
+                    Text(
+                        text = formatter.format(Date(item.modifiedAt)),
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                    )
+                }
                 // The selection mark is the row's *trailing* control, not its leading
                 // one: on the leading edge it displaces every title by its own width the
                 // moment selection begins, which re-flows the whole list under the
@@ -1612,8 +1625,21 @@ private fun RenameDialog(
     // carry its answer into the next question.
     val value = remember { TextFieldState(initial) }
     val typed = value.text.toString()
+    // The dialog must open *ready to type*: a rename starts with the name field, and a
+    // panel that opens with the field unfocused makes the reader tap a field whose
+    // keyboard should already be up. The request waits two frames because a dialog's
+    // content is composed on the frame `show` becomes true and its window/layout pass
+    // is what makes a focus request land; requesting during composition is ignored.
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(show) {
-        if (show) value.setTextAndPlaceCursorAtEnd(initial)
+        if (show) {
+            value.setTextAndPlaceCursorAtEnd(initial)
+            withFrameNanos { }
+            withFrameNanos { }
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
     }
 
     PiCustomDialog(
@@ -1627,7 +1653,9 @@ private fun RenameDialog(
     ) {
         GlassTextField(
             state = value,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
             label = text.sessions.renameLabel,
             useLabelAsPlaceholder = true,
             lineLimits = TextFieldLineLimits.SingleLine,

@@ -388,8 +388,11 @@ Two row rules are behaviour rather than taste:
   overload takes a `PiDropdownOption` per alternative and draws the panel as `PiMenuRow`s in
   the library's own `GlassDropdownPopup` — the form for a row whose alternatives each need a
   sentence, which the library's glass *preference* cannot express because it takes bare
-  strings. Both forms therefore raise one popup and open one way; the summarised one puts the
-  app's rows inside that popup rather than composing a second panel around them.
+  strings. Both forms therefore raise one popup and open one way; the summarised one mounts
+  the library's popup through Miuix's root `PopupLayout` (the same host the plain form's
+  `GlassDropdownPreference` uses), because the in-page `PiPopupHostProvider` measured that
+  component at a zero-sized frame and the panel never appeared. The panel itself is the
+  library's arc; only its rows are the app's.
   `tools/check-ui.py` refuses `OverlayDropdownPreference`, `WindowDropdownPreference` and the
   spinner rows for the same reason it refuses `OverlayListPopup`.
 - **A row that raises a question is inert, and its switch is the control.** The
@@ -457,9 +460,13 @@ Two row rules are behaviour rather than taste:
   form used to share the menu's anchored panel and fade at full size, which read as no
   animation at all beside the language row's arc one card away — a fade over a panel that
   is already at its final size is not motion. `PiDropdownPopup` is that panel: the
-  library's `GlassDropdownPopup` with the app's `PiMenuRow`s inside it, registered into
-  `PiPopupHostProvider` like every other popup so it samples the page from outside the
-  recording.
+  library's `GlassDropdownPopup` with the app's `PiMenuRow`s inside it, mounted in
+  Miuix's root popup layer through `PopupLayout` like the plain form rather than in
+  `PiPopupHostProvider`. That host is what the menus use; the dropdown's own popup
+  measured at a zero-sized frame inside it and never drew, while the page's touch layer
+  stayed blocked. The host is mounted only while the panel is open (plus its exit tail),
+  because a `PopupLayout` left mounted is a full-window popup over a page nobody can
+  touch.
 
   A glass icon button uses the same anchored panel in its `FromAnchor` mode: the panel
   morphs out of the measured button and settles at its end edge, below it when it fits.
@@ -503,6 +510,23 @@ neutral tonal role, the confirm answer is the primary role, and a destructive co
 uses the error role. The window fallback keeps the older filled `TextButton` pair for
 the same reason: it is a window with no glass behind it, and a translucent answer over
 an opaque platform panel is neither one material nor the other.
+
+**The roles are the app's control fills, not the library's translucent defaults.**
+`GlassDialogButton` draws `Normal` as a 15/255 (light) or 36/255 (dark) wash of the
+ink, which over a glass dialog is a rectangle the same colour as the panel; with a
+disabled primary the library's `primary.copy(alpha = 0.3f)` leaves white text on a
+pale blue pill. Measured on the rename dialog, the panel's glass body is rgb(223) in
+the light scheme and the library's normal answer measured rgb(230) — *lighter* than
+the panel and only seven steps from it, which is the "看不清" pair; the disabled
+rename answer was white on rgb(194, 217, 255). `PiDialogAnswers` therefore states one
+answer palette: dismiss is `PiTone.control()` — a 15% wash of the surface ink (rgb(190)
+on that panel) with full `onSurface` ink — primary is `primary` / `onPrimary`, and a
+destructive confirm is `error` / `onError` — the error role as a solid control rather
+than a red word floating on the glass. The same `PiTone.control()` is the secondary
+answer on every glass sheet, because a sheet's body is the same glass family. The
+disabled state keeps the 15% rectangle and fades only the label to 45% ink, so a
+rename whose field is empty still reads as a button rather than as a missing control.
+The window-dialog path states the same assignments on its `TextButton` pair.
 
 **Sheets are `PiSheet`** (Miuix's `GlassBottomSheet` when a page backdrop exists, its
 `WindowBottomSheet` otherwise): scrim, back gesture and downward drag all dismiss, and

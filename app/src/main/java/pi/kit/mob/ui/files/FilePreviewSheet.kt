@@ -86,6 +86,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.ui.clipEntryFor
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.Button
@@ -211,6 +212,12 @@ internal fun FilePreviewSheet(entry: FileEntry) {
                     }
                 },
                 modifier = Modifier.weight(1f),
+                // A sheet's glass body is darker than a settings card; the library's
+                // default secondary fill is nearly the panel's own colour there.
+                colors = ButtonDefaults.textButtonColors(
+                    color = PiTone.control(),
+                    textColor = MiuixTheme.colorScheme.onSurface,
+                ),
             )
             Button(
                 cornerRadius = PiCorner.radius,

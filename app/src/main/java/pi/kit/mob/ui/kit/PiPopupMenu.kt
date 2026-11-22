@@ -1,5 +1,7 @@
 package pi.kit.mob.ui.kit
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.ColumnScope
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -21,12 +24,14 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassDropdownPopup
 import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupSizing
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.PopupLayout
 
 /**
  * A floating menu at a control, in OS4's glass — the app's one popup.
@@ -160,7 +165,7 @@ fun PiPopupMenu(
 }
 
 /**
- * A dropdown row's panel: the library's own `GlassDropdownPopup`, hosted by the page.
+ * A dropdown row's panel: the library's own `GlassDropdownPopup`, in Miuix's popup layer.
  *
  * This is the popup `GlassDropdownPreference` raises for the plain form of
  * [PiDropdownPreference], used directly because the summarised form's alternatives are the
@@ -172,10 +177,12 @@ fun PiPopupMenu(
  * was the alternative and was rejected — the arc is four springs and a frame function in the
  * library, and a second copy of them would be a second thing to keep in step.
  *
- * The panel still samples the page's backdrop, so it has to stay outside the recording that
- * holds the row (docs/UI.md's first red line). It registers into [PiPopupHostProvider]
- * through the same machinery [PiPopupMenu] uses, and the host draws it full-window with the
- * page's backdrop supplied and the panel's corner at [PiCorner.popup].
+ * The panel samples the page's backdrop, so it has to stay outside the recording that holds
+ * the row (docs/UI.md's first red line). It registers in Miuix's root popup layer through
+ * `PopupLayout` — the same mount `GlassDropdownPreference` uses — rather than in the page's
+ * [PiPopupHostProvider]. An earlier version used that host and the panel measured at a
+ * zero-sized frame and never drew, while its empty overlay still swallowed every touch on
+ * the page.
  *
  * @param show whether the panel is open. The panel animates out through this flag, so it
  *   stays composed while it leaves; the caller keeps the value rather than composing this
@@ -196,19 +203,52 @@ fun PiDropdownPopup(
     sizing: GlassPopupSizing = GlassPopupSizing(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    RegisterPiPopup(anchor) { backdrop ->
-        GlassDropdownPopup(
-            show = show,
-            onDismissRequest = onDismissRequest,
-            anchorBounds = bounds,
-            backdrop = backdrop,
-            anchor = anchor,
-            sizing = sizing,
-            cornerRadius = PiCorner.popup,
-            content = content,
-        )
+    // The panel is hosted by Miuix's root popup layer, not by `PiPopupHostProvider`.
+    // `GlassDropdownPopup` measures itself against the window and draws its own
+    // full-page dismiss layer; composed through the in-page host its panel was laid
+    // out at a zero-sized frame and never appeared, while the library's own
+    // `GlassDropdownPreference` — which uses `PopupLayout` — opened normally on the
+    // page next to it. This is the same mount the library uses. `show` drives the
+    // panel's own arc and its exit animation; the host itself is mounted only while
+    // the panel is open (plus a short exit tail), because a `PopupLayout` left
+    // mounted is a full-window popup window over a page nobody can touch.
+    var mounted by remember { mutableStateOf(false) }
+    LaunchedEffect(show) {
+        if (show) {
+            mounted = true
+        } else if (mounted) {
+            delay(DROPDOWN_EXIT_MS)
+            mounted = false
+        }
+    }
+    if (!mounted) return
+
+    val visible = remember { mutableStateOf(true) }
+    val backdrop = LocalPiBackdrop.current
+    PopupLayout(
+        visible = visible,
+        enableWindowDim = false,
+        enableBackHandler = false,
+        enterTransition = EnterTransition.None,
+        exitTransition = ExitTransition.None,
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            GlassDropdownPopup(
+                show = show,
+                onDismissRequest = onDismissRequest,
+                anchorBounds = bounds,
+                backdrop = backdrop,
+                anchor = anchor,
+                sizing = sizing,
+                cornerRadius = PiCorner.popup,
+                content = content,
+            )
+        }
     }
 }
+
+/** The library's dropdown exit arc, with a frame of slack before its host is removed. */
+private const val DROPDOWN_EXIT_MS = 350L
 
 @Stable
 class PiGlassMenuAnchor internal constructor(internal val menu: PiMenuAnchor)

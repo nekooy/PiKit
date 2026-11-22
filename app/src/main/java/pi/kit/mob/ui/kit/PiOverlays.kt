@@ -216,9 +216,10 @@ fun PiCustomDialog(
  * This is the app's only dialog-button row, and it is the shape the *rebuild the
  * runtime* question established: two equal-weight answers 12dp apart, one width and one
  * height. A glass dialog draws them as Miuix's `GlassDialogButton`s (normal, primary or
- * destructive role); the window fallback keeps the filled `TextButton` pair, where the
- * destructive answer is told apart by its label's colour rather than by being the only
- * button with a fill.
+ * destructive role); the window fallback keeps the filled `TextButton` pair. Both paths
+ * state the same fills: dismiss is a 15% wash of the surface ink, primary is the scheme's
+ * primary, and a destructive confirm is the scheme's error — a colour distinction that
+ * survives on an opaque window as well as on glass.
  *
  * The dialogs that were written before that question were not all the same. Three of
  * them passed `flatDialogAction()` — a transparent container — on the argument that a
@@ -244,7 +245,7 @@ fun PiDialogAnswers(
      * Whether the confirm answer can be used yet.
      *
      * A dialog whose question needs an answer — a rename with no name in the field — has
-     * nothing to confirm, and the library's disabled fill is what says so. The dismiss
+     * nothing to confirm, and the filled disabled answer is what says so. The dismiss
      * answer stays live in every case: a question that cannot be answered has to be
      * escapable.
      */
@@ -263,6 +264,25 @@ fun PiDialogAnswers(
                 modifier = Modifier.weight(1f),
                 role = GlassDialogButtonRole.Normal,
                 cornerRadius = PiCorner.radius,
+                // The library's `Normal` role is a 6% wash of the ink: on a glass
+                // dialog it is a rectangle the same colour as the panel, so the
+                // dismiss answer reads as a word with no button around it. The
+                // dialog panel's glass body sits around rgb(223) in the light
+                // scheme, and `secondaryVariant` (#E6E6E6, rgb(230)) was *lighter*
+                // than that panel — the measured cause of the "看不清" pair. A 15%
+                // wash of the surface ink lands at rgb(190) on the same panel, a
+                // legible grey step in both schemes, while the label keeps the
+                // scheme's onSurface ink. The disabled state keeps that rectangle
+                // and only fades the ink, so an empty rename field still has a
+                // visible answer.
+                colors = ButtonDefaults.buttonColors(
+                    color = PiTone.control(),
+                    disabledColor = PiTone.control(),
+                    contentColor = MiuixTheme.colorScheme.onSurface,
+                    disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
+                        alpha = DIALOG_DISABLED_INK_ALPHA,
+                    ),
+                ),
             ) {
                 Text(text = dismiss, style = MiuixTheme.textStyles.button)
             }
@@ -272,6 +292,14 @@ fun PiDialogAnswers(
                 text = dismiss,
                 onClick = onDismiss,
                 modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.textButtonColors(
+                    color = PiTone.control(),
+                    disabledColor = PiTone.control(),
+                    textColor = MiuixTheme.colorScheme.onSurface,
+                    disabledTextColor = MiuixTheme.colorScheme.onSurface.copy(
+                        alpha = DIALOG_DISABLED_INK_ALPHA,
+                    ),
+                ),
             )
         }
         if (confirm != null && onConfirm != null) {
@@ -286,6 +314,32 @@ fun PiDialogAnswers(
                         GlassDialogButtonRole.Primary
                     },
                     cornerRadius = PiCorner.radius,
+                    // A primary answer stays the scheme's primary fill with white
+                    // ink; a destructive one is the error fill with its own
+                    // knockout, rather than the library's error-ink-on-a-translucent
+                    // wash, which left the word floating on the glass. Both keep a
+                    // filled rectangle on the disabled state (the same 15% ink wash
+                    // as dismiss), so an empty rename field still shows a button
+                    // whose label fades instead of a pale primary rectangle.
+                    colors = if (destructive) {
+                        ButtonDefaults.buttonColors(
+                            color = MiuixTheme.colorScheme.error,
+                            disabledColor = PiTone.control(),
+                            contentColor = MiuixTheme.colorScheme.onError,
+                            disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
+                                alpha = DIALOG_DISABLED_INK_ALPHA,
+                            ),
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors(
+                            color = MiuixTheme.colorScheme.primary,
+                            disabledColor = PiTone.control(),
+                            contentColor = MiuixTheme.colorScheme.onPrimary,
+                            disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
+                                alpha = DIALOG_DISABLED_INK_ALPHA,
+                            ),
+                        )
+                    },
                 ) {
                     Text(text = confirm, style = MiuixTheme.textStyles.button)
                 }
@@ -298,10 +352,20 @@ fun PiDialogAnswers(
                     enabled = confirmEnabled,
                     colors = if (destructive) {
                         ButtonDefaults.textButtonColors(
-                            textColor = MiuixTheme.colorScheme.error,
+                            color = MiuixTheme.colorScheme.error,
+                            disabledColor = PiTone.control(),
+                            textColor = MiuixTheme.colorScheme.onError,
+                            disabledTextColor = MiuixTheme.colorScheme.onSurface.copy(
+                                alpha = DIALOG_DISABLED_INK_ALPHA,
+                            ),
                         )
                     } else {
-                        ButtonDefaults.textButtonColors()
+                        ButtonDefaults.textButtonColorsPrimary(
+                            disabledColor = PiTone.control(),
+                            disabledTextColor = MiuixTheme.colorScheme.onSurface.copy(
+                                alpha = DIALOG_DISABLED_INK_ALPHA,
+                            ),
+                        )
                     },
                 )
             }
@@ -535,6 +599,9 @@ private fun rememberLastMessage(message: PiToast.Message?): String {
 
 /** How long a message stays up: long enough to read a sentence, short enough to ignore. */
 private const val TOAST_MILLIS = 2_600L
+
+/** The label of a disabled answer: the rectangle is the state, the ink still reads. */
+private const val DIALOG_DISABLED_INK_ALPHA = 0.45f
 
 /** The gap between the composer's band and the capsule above it. */
 private val TOAST_BAND_GAP = 12.dp

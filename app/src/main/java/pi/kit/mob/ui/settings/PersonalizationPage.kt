@@ -188,6 +188,28 @@ internal fun PersonalizationPage(
                         session.settingsStore.update { it.copy(openNewOnLaunch = on) }
                     },
                 )
+                // The two timestamp switches are display choices about the two lists
+                // the app draws: the history page's rows and the transcript's
+                // messages. They share this section because both answer "how much
+                // furniture does a conversation row wear", and the defaults are
+                // deliberately opposite — the history list is a list of questions,
+                // while a message's time is part of the record.
+                SwitchPreference(
+                    title = text.settings.showHistoryTime,
+                    summary = text.settings.showHistoryTimeSubtitle,
+                    checked = settings.showHistoryTime,
+                    onCheckedChange = { on ->
+                        session.settingsStore.update { it.copy(showHistoryTime = on) }
+                    },
+                )
+                SwitchPreference(
+                    title = text.settings.showMessageTime,
+                    summary = text.settings.showMessageTimeSubtitle,
+                    checked = settings.showMessageTime,
+                    onCheckedChange = { on ->
+                        session.settingsStore.update { it.copy(showMessageTime = on) }
+                    },
+                )
             }
 
             // One section, three rows: the text size, the theme and the launcher mark are the

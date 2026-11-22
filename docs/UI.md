@@ -79,7 +79,7 @@ writing a composition:
 | The page's blur layer | `rememberPiBackdrop()` / `LocalPiBackdrop` | a window-wide layer |
 | A text field's colours | `piFieldColors()` **and** `piFieldCursor()` together | the library defaults (a blue ring) |
 | The corner | `PiCorner.radius` (20dp) at every `Card`/`Button`/`TextField` | a per-screen radius |
-| A semantic colour | `PiTone.live/done/error/inset/prompt` | a role named at the call site, a literal |
+| A semantic colour | `PiTone.live/done/error/inset/prompt/control` | a role named at the call site, a literal |
 | A buzz | `PiHaptics` (`haptics.hold/toggle/choose/key/tap/action`) | `performHapticFeedback` anywhere else |
 | A page-level move | `PiMotion` | a hand-written spring |
 | The elastic end of a scroll | `Modifier.piOverScroll()` | a second overscroll inside a region |

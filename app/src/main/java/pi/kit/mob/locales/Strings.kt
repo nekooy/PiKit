@@ -1020,6 +1020,24 @@ interface Strings {
         val openNewOnLaunchSubtitle: String
 
         /**
+         * Whether the history list puts a date and time at the end of each row.
+         *
+         * Off by default: the row is the reader's own question first, and the file's
+         * timestamp is a fact about when it was written rather than part of the title.
+         */
+        val showHistoryTime: String
+        val showHistoryTimeSubtitle: String
+
+        /**
+         * Whether each transcript message wears its date and time underneath.
+         *
+         * On by default: the transcript is a record read in order, and a message's
+         * time is part of what it says.
+         */
+        val showMessageTime: String
+        val showMessageTimeSubtitle: String
+
+        /**
          * Light, dark, or the system's own answer.
          *
          * The palette itself is Miuix's and is not offered: there is no accent to

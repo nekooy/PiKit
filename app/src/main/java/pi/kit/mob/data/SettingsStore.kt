@@ -717,6 +717,25 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val showAvatars: Boolean = true,
     /**
+     * Whether a history row puts the conversation's date and time at its end.
+     *
+     * Off by default: the list is a column of the reader's own questions, and the
+     * row's first job is the title. The timestamp is a fact about the file rather
+     * than part of the question, so it is a choice the reader turns on when they
+     * are looking for a conversation by when it happened; the string itself is
+     * formatted by `SimpleDateFormat` from the session's `modifiedAt`.
+     */
+    val showHistoryTime: Boolean = false,
+    /**
+     * Whether a message in the transcript wears its date and time underneath.
+     *
+     * On by default, unlike [showHistoryTime]: the transcript is a record read in
+     * order, and a message's time is part of what it says. The switcher exists for
+     * a reader who wants the page as prose — every message row's furniture goes
+     * together, and the setting only hides the stamp, never the message.
+     */
+    val showMessageTime: Boolean = true,
+    /**
      * The agent's avatar: a name, a picture, and the colour of its circle.
      *
      * Three things, and the order they are tried in is in `PiAvatar`: the picture
@@ -881,6 +900,8 @@ class SettingsStore(context: Context) {
             availableThinkingLevelsFor = prefs.getString(KEY_LEVELS_FOR, "").orEmpty(),
             permissionMode = PermissionMode.fromCode(prefs.getString(KEY_PERMISSION, null)),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
+            showHistoryTime = prefs.getBoolean(KEY_SHOW_HISTORY_TIME, false),
+            showMessageTime = prefs.getBoolean(KEY_SHOW_MESSAGE_TIME, true),
             aiAvatarName = prefs.getString(KEY_AI_AVATAR_NAME, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
             aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
@@ -966,6 +987,8 @@ class SettingsStore(context: Context) {
             .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
                         .putBoolean(KEY_SHOW_AVATARS, next.showAvatars)
+            .putBoolean(KEY_SHOW_HISTORY_TIME, next.showHistoryTime)
+            .putBoolean(KEY_SHOW_MESSAGE_TIME, next.showMessageTime)
             .putString(KEY_AI_AVATAR_NAME, next.aiAvatarName)
             .putString(KEY_AI_AVATAR_IMAGE, next.aiAvatarImage)
             .putString(KEY_AI_AVATAR_COLOR, next.aiAvatarColor.code)
@@ -995,6 +1018,8 @@ class SettingsStore(context: Context) {
             launcherIcon = next.launcherIcon,
             permissionMode = next.permissionMode,
             showAvatars = next.showAvatars,
+            showHistoryTime = next.showHistoryTime,
+            showMessageTime = next.showMessageTime,
             aiAvatarName = next.aiAvatarName,
             aiAvatarImage = next.aiAvatarImage,
             aiAvatarColor = next.aiAvatarColor,
@@ -1086,6 +1111,8 @@ class SettingsStore(context: Context) {
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             permissionMode = PermissionMode.fromCode(prefs.getString(KEY_PERMISSION, null)),
             showAvatars = prefs.getBoolean(KEY_SHOW_AVATARS, true),
+            showHistoryTime = prefs.getBoolean(KEY_SHOW_HISTORY_TIME, false),
+            showMessageTime = prefs.getBoolean(KEY_SHOW_MESSAGE_TIME, true),
             aiAvatarName = prefs.getString(KEY_AI_AVATAR_NAME, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
             aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
@@ -1116,6 +1143,8 @@ class SettingsStore(context: Context) {
         launcherIcon: LauncherIcon = current.get().launcherIcon,
         permissionMode: PermissionMode = current.get().permissionMode,
         showAvatars: Boolean = current.get().showAvatars,
+        showHistoryTime: Boolean = current.get().showHistoryTime,
+        showMessageTime: Boolean = current.get().showMessageTime,
         aiAvatarName: String = current.get().aiAvatarName,
         aiAvatarImage: String = current.get().aiAvatarImage,
         aiAvatarColor: AvatarColor = current.get().aiAvatarColor,
@@ -1144,6 +1173,8 @@ class SettingsStore(context: Context) {
                 launcherIcon = launcherIcon,
                 permissionMode = permissionMode,
                 showAvatars = showAvatars,
+                showHistoryTime = showHistoryTime,
+                showMessageTime = showMessageTime,
                 aiAvatarName = aiAvatarName,
                 aiAvatarImage = aiAvatarImage,
                 aiAvatarColor = aiAvatarColor,
@@ -1268,6 +1299,12 @@ class SettingsStore(context: Context) {
 
         /** True unless the user switched the transcript's avatars off; see [PiSettings]. */
         private const val KEY_SHOW_AVATARS = "show_avatars"
+
+        /** Whether a history row shows its date and time; off unless chosen; see [PiSettings]. */
+        private const val KEY_SHOW_HISTORY_TIME = "show_history_time"
+
+        /** Whether a transcript message shows its date and time; on unless switched off. */
+        private const val KEY_SHOW_MESSAGE_TIME = "show_message_time"
 
         /** The two avatars' labels (blank = the built-in mark) and their colours. */
         private const val KEY_AI_AVATAR_NAME = "ai_avatar_name"

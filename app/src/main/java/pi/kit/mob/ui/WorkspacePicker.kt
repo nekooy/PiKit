@@ -49,6 +49,7 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiMenuRow
+import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
@@ -345,6 +346,12 @@ internal fun WorkspacePickerSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = PICKER_GUTTER, end = PICKER_GUTTER, top = 12.dp),
+            // A secondary button on a glass sheet: the library's default fill is
+            // nearly the panel's own colour at this depth.
+            colors = ButtonDefaults.buttonColors(
+                color = PiTone.control(),
+                contentColor = MiuixTheme.colorScheme.onSurface,
+            ),
         ) {
             Text(text = text.chat.workspacePickerChoose)
         }

@@ -436,6 +436,22 @@ object PiTone {
     fun inset(): Color = MiuixTheme.colorScheme.onSurface.copy(alpha = INSET_ALPHA)
 
     /**
+     * The fill of a secondary control on a floating glass surface.
+     *
+     * A settings card is `#F7F7F7` and the light scheme's `secondaryVariant` fill
+     * (`LIGHT_CONTROL`, `#E6E6E6`) is a clear step below it. A glass dialog or sheet
+     * body is not a card: the material's white mix over the page measures around
+     * rgb(223), and `#E6E6E6` is then *lighter* than the panel and only seven steps
+     * away — a button that reads as a word with no rectangle under it. A 15% wash of
+     * the surface ink lands around rgb(190) on that panel and the same relative step
+     * in the dark scheme, so a secondary answer on glass keeps the control shape
+     * every page's secondary button already has. The primary and destructive fills
+     * stay `primary` and `error`; this role is only the neutral one.
+     */
+    @Composable
+    fun control(): Color = MiuixTheme.colorScheme.onSurface.copy(alpha = CONTROL_ALPHA)
+
+    /**
      * The fill behind the reader's own message: the accent, mixed into the card colour.
      *
      * ## Why an accent mix rather than a container role
@@ -488,6 +504,15 @@ object PiTone {
  */
 private const val PROMPT_SHARE_LIGHT = 0.16f
 private const val PROMPT_SHARE_DARK = 0.34f
+
+/**
+ * How much of the surface ink a secondary control on glass is washed with.
+ *
+ * The dialog/sheet panel's glass body measures rgb(223) in the light scheme; 15%
+ * of the surface ink puts the control at rgb(190), the same relative step the
+ * library's `secondaryVariant` gives a button on a `#F7` card.
+ */
+private const val CONTROL_ALPHA = 0.15f
 
 /**
  * Where a base counts as dark, for the two shares above.

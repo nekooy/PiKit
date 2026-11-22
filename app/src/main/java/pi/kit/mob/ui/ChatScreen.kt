@@ -225,6 +225,7 @@ import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.rememberPiBackdrop
 import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassTextField
@@ -2248,6 +2249,7 @@ private fun ChatPage(
                                                 expandedTurns = expandedTurns,
                                                 onToggleTurn = onToggleTurn,
                                                 avatars = avatars,
+                                                showMessageTime = saved.showMessageTime,
                                                 onShowExtras = onShowPromptExtras,
                                                 onOpenPictures = onOpenPictures,
                                             )
@@ -2514,7 +2516,14 @@ private fun ChatPage(
                         bottomStackPx = it.height
                         toasts?.setAnchor(it.height.toFloat())
                     }
-                    .bandBottom(imeInsets, barInsets),
+                    // The drawer is a page of its own while it is out: its search
+                    // field and the rename dialog raise the keyboard over the
+                    // drawer, and the conversation behind it is not being typed
+                    // into. Lifting the composer for that keyboard moves the input
+                    // box under a panel that covers it — the chat page's bottom
+                    // edge would follow a field it does not own. The band keeps the
+                    // navigation strip and ignores the IME until the drawer closes.
+                    .bandBottom(imeInsets, barInsets, liftByIme = !historyOpen),
             ) {
             val failure = (agent as? AgentStatus.Failed)?.message
             if (failure != null) {
@@ -3558,6 +3567,8 @@ private fun TranscriptCardView(
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
     avatars: ChatAvatars?,
+    /** Whether a finished message draws its date and time underneath. */
+    showMessageTime: Boolean,
     onShowExtras: (PromptExtras) -> Unit,
     onOpenPictures: (PictureTarget) -> Unit,
 ) {
@@ -3630,7 +3641,12 @@ private fun TranscriptCardView(
                     // part of what was said, and drawn inside the fill they read as a
                     // second line of the message. [MessageMeta] has the placement and
                     // the mirroring between the two sides.
-                    MessageMeta(item = card.row.item, text = text, alignment = Alignment.End)
+                    MessageMeta(
+                        item = card.row.item,
+                        text = text,
+                        alignment = Alignment.End,
+                        show = showMessageTime,
+                    )
                 }
             }
         }
@@ -3686,7 +3702,12 @@ private fun TranscriptCardView(
             // `TranscriptRow.Message.showMeta`), so the card asks which row that is and
             // draws it once, under the frame, mirrored against the prompt's row.
             metaItemOf(card.rows)?.let { answered ->
-                MessageMeta(item = answered, text = text, alignment = Alignment.Start)
+                MessageMeta(
+                    item = answered,
+                    text = text,
+                    alignment = Alignment.Start,
+                    show = showMessageTime,
+                )
             }
         }
     }
@@ -3761,8 +3782,17 @@ private val PAGE_CARD_CORNER = 24.dp
 private fun Modifier.bandBottom(
     ime: WindowInsets,
     bars: WindowInsets,
+    /**
+     * Whether the IME's inset moves the band.
+     *
+     * False while the conversation drawer is out: its search field and its rename
+     * dialog raise the keyboard over the drawer, which covers the conversation, so
+     * the composer is not the field being typed into and must stay at the panel's
+     * bottom edge instead of following an inset it did not cause.
+     */
+    liftByIme: Boolean = true,
 ): Modifier = layout { measurable, constraints ->
-    val applied = bandInset(ime, bars)
+    val applied = bandInset(ime, bars, liftByIme)
         .let { if (constraints.hasBoundedHeight) it.coerceAtMost(constraints.maxHeight) else 0 }
     val inner = if (applied > 0) {
         constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - applied)
@@ -3784,8 +3814,12 @@ private fun Modifier.bandBottom(
  * the same on both edges now, and the only thing that changes during a close is the inset
  * itself, which falls in one direction and never turns back.
  */
-private fun Density.bandInset(ime: WindowInsets, bars: WindowInsets): Int =
-    maxOf(ime.getBottom(this), bars.getBottom(this)) + BAND_AIR.roundToPx()
+private fun Density.bandInset(
+    ime: WindowInsets,
+    bars: WindowInsets,
+    liftByIme: Boolean = true,
+): Int = maxOf(if (liftByIme) ime.getBottom(this) else 0, bars.getBottom(this)) +
+    BAND_AIR.roundToPx()
 
 /**
  * The air between the composer's field and whatever is below it.
@@ -4133,7 +4167,10 @@ private fun MessageMeta(
     text: Strings,
     /** Which edge of the transcript the message this row belongs to sits on. */
     alignment: Alignment.Horizontal,
+    /** Whether the personalization switch lets this row draw its stamp at all. */
+    show: Boolean,
 ) {
+    if (!show) return
     if (item is ChatItem.Assistant && item.isStreaming) return
     if (item is ChatItem.Assistant && item.text.isBlank()) return
 
@@ -6719,6 +6756,12 @@ private fun ShellCommandSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = SHEET_GUTTER, end = SHEET_GUTTER, top = 12.dp),
+            // The sheet's glass body is darker than a page card; the library's
+            // default secondary fill is almost the panel's own colour there.
+            colors = ButtonDefaults.buttonColors(
+                color = PiTone.control(),
+                contentColor = MiuixTheme.colorScheme.onSurface,
+            ),
         ) {
             Text(text = text.common.ok)
         }
