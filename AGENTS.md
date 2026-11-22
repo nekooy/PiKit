@@ -673,15 +673,22 @@ prompt, which billed the idle gap to a turn that had already finished.
 - **An empty `adb devices` means start the one AVD, not report a missing device.** Start
   it with `python tools/emulator.py start` (the AVD name lives in the ignored
   `local.properties` as `pikit.avd`, or in `PIKIT_AVD`) and wait for
-  `adb shell getprop sys.boot_completed` to answer `1`. If `start` reports another
-  session's lease, `python tools/emulator.py status` shows the owner: wait for it, do not
-  start a second guest. On software rasterisation
+  `adb shell getprop sys.boot_completed` to answer `1`. `start` takes a free read-only
+  slot (`emulator-5554` or `emulator-5556`), so a second session gets its own process;
+  `python tools/emulator.py status` lists both owners. If both slots are in use, stop one;
+  never point two sessions at one serial. On software rasterisation
   (`-gpu swiftshader_indirect`) the GPU context times out
   (`dumpsys gfxinfo`: `GPU Context timeout: 10`, frames at 4950 ms) and the app's window
   never finishes its first draw, while `dumpsys window` calls it visible and
   `dumpsys input` calls it `NOT_VISIBLE, alpha=0` with a blank `screencap` — and
   `uiautomator dump` still returns a correct tree, so it looks like a broken instrument
   rather than a broken backend.
+- **An emulator outside `tools/emulator.py` is unmanaged, not a shortcut.** A bare
+  `emulator -avd …` cannot find the private `pikit.avdHome`; one that sets
+  `ANDROID_AVD_HOME` explicitly bypasses the two-slot registry. `start` refuses to add a
+  slot while `adb devices` shows an emulator without a slot lease
+  (`unmanaged: emulator-…`), and `status` prints it. Stop it and start through the tool;
+  that refusal is the technical fence — the prose above is not the only guard.
 - **A tier's refusal is a sentence the model can act on, not a wall.** The extension
   matches paths in a command's *text*; a path built at runtime is not caught. Say
   "checked on every tool call", never "prevented" — the interface and the manual use the

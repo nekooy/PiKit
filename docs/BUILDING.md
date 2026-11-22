@@ -297,9 +297,10 @@ Store or Google APIs the app never uses. The profile is cut to the bone — 720�
 no sensors, `-gpu host`:
 
 ```bash
+export ANDROID_AVD_HOME="$PWD/.tooling/avd"
 sdkmanager "system-images;android-33;default;x86_64"
 avdmanager create avd -n <name> -k "system-images;android-33;default;x86_64"
-# Then set the profile in ~/.android/avd/<name>.avd/config.ini:
+# Then set the profile in $ANDROID_AVD_HOME/<name>.avd/config.ini:
 #   hw.ramSize=2048, hw.cpu.ncore=2, hw.lcd.width=720, hw.lcd.height=1280,
 #   hw.lcd.density=320, disk.dataPartition.size=2G,
 #   hw.camera.back=none, hw.camera.front=none, hw.audioInput=no,
@@ -307,16 +308,32 @@ avdmanager create avd -n <name> -k "system-images;android-33;default;x86_64"
 #   hw.sensors.*=no, hw.gps=no, hw.gpu.mode=host
 ```
 
-**One AVD, one driver.** `tools/emulator.py start` claims `.tooling/emulator.state`
-for the calling session (`DSH_SESSION_ID` by default; `--owner` overrides it). A
-second session gets a clear refusal instead of silently driving the same screen;
-`status` prints the holder, and `stop --force` takes over only after the process check
-has proven the previous owner gone. The emulator's own AVD lock is the second fence:
-two guests of one AVD cannot run without `-read-only`, and this profile deliberately
-does not offer a second AVD. Sessions take turns. A 1 GB guest on a host with about
-2 GB free lost `system_server` and reported `Can't find service: package`, and the
-API 33 emulator refuses anything below 2048 MB anyway (`Increasing RAM size to
-2048MB` in its log), so 2048 is the floor this profile keeps.
+The AVD lives under the ignored `pikit.avdHome` (the tool defaults it to `.tooling/avd`)
+and `tools/emulator.py` exports `ANDROID_AVD_HOME` for the emulator it launches; a bare
+`emulator -avd <name>` resolves the machine's default AVD home instead and cannot find
+it. That is the second fence: an agent has to set the private home deliberately, not
+stumble into the AVD by copying a command from an old note.
+
+**One AVD, two independent slots.** `tools/emulator.py start` takes the first free of
+two slots (`emulator-5554` / `emulator-5556`) and starts that slot **read-only** from the
+one AVD, so a second session gets its own qemu process, ADB serial and screen instead of
+a refusal. Each slot is leased by the calling session (`DSH_SESSION_ID` by default;
+`--owner` overrides it); `status` lists both, `stop --port` releases one, and `stop
+--all` releases this session's slots. `-read-only` is what lets several instances of one
+AVD coexist; nothing a slot installs survives its own exit, and `benchmark` installs the
+APK it measures. Two slots are the memory budget for a 16 GB host: each guest is
+2048 MB (the API 33 floor — the emulator raises anything lower to 2048 with
+`Increasing RAM size to 2048MB` in its log), so a third `start` reports the slots in use
+rather than quietly adding a 3.5 GB guest. A 1 GB guest on a host with about 2 GB free
+lost `system_server` and reported `Can't find service: package`; that measurement is why
+the slot count stays at two.
+
+**An emulator started outside the tool is unmanaged.** `status` prints
+`unmanaged: emulator-… is booted without a slot lease`, and `start` refuses to add a
+slot while one exists. A bare `emulator -avd …` does not find the private AVD home at
+all; one that explicitly sets `ANDROID_AVD_HOME` bypasses the two-slot registry and can
+collide with a leased slot, so stop it before starting through the tool. That refusal
+is the technical fence behind the rule; the prose is not the only guard.
 
 **Use `tools/emulator.py` for the routine path.** It starts the AVD with a saved
 quickboot snapshot and a hidden Qt window, and `benchmark` reports the first frame and
@@ -326,7 +343,7 @@ the time to the chat page:
 python tools/emulator.py start
 python tools/emulator.py status
 python tools/emulator.py benchmark --apk app/build/outputs/apk/x64/debug/app-x64-debug.apk
-python tools/emulator.py stop
+python tools/emulator.py stop --port 5554
 ```
 
 **A quickboot snapshot is the difference between seconds and minutes.** Measured on
@@ -361,14 +378,15 @@ emulator does not. The one AVD avoids this image entirely — it is API 33 AOSP
 specific OS-version check on an NVIDIA host, use `-gpu angle_indirect` after reproducing
 this; do not spend time tuning RAM or core count for a SurfaceFlinger loop.
 
-**A device can have another driver; the lease is the fence.** If the screen changes
+**A device can have another driver; the slot lease says which.** If the screen changes
 between two of your own reads — a page you did not open appears, a tap lands on a row
 you did not choose, or `am start` answers `Activity class … does not exist` while the
 launcher is in front — run `python tools/emulator.py status` before suspecting the app.
-If another session owns the lease, wait; `start` refuses to hand out a second driver,
-and starting a second guest is not a workaround on a 16 GB host. Pin every `adb` call
-to the one serial (`adb -s emulator-5554 …`). `stop --force` is only for a lease whose
-owner process is already gone.
+It lists both slots with their owner and `read_only` flag. Pin every `adb` call to the
+slot you own (`adb -s emulator-5554 …` or `adb -s emulator-5556 …`); two sessions on one
+serial is the conflict the lease forbids. If both slots are in use, stop one; do not
+start a third guest on this host. `stop --force` is only for a slot whose owner process
+is already gone.
 
 ```bash
 mkdir -p .tooling/shots
