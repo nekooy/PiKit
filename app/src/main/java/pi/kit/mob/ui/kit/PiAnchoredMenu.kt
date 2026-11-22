@@ -61,7 +61,7 @@ import kotlin.math.roundToInt
 
 internal val LocalPiMenuInteractive = staticCompositionLocalOf { true }
 
-/** Context menus fade at full size; composer menus morph upward from the trigger. */
+/** Context menus fade at full size; composer and glass-button menus morph from the trigger. */
 @Composable
 internal fun BoxScope.PiAnchoredMenu(
     show: Boolean,
@@ -70,10 +70,11 @@ internal fun BoxScope.PiAnchoredMenu(
     placement: PiPopupPlacement,
     backdrop: Backdrop?,
     sizing: GlassPopupSizing,
+    below: Float = 0f,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val trigger = anchor.bounds
-    val morph = placement == PiPopupPlacement.Above
+    val morph = placement != PiPopupPlacement.Auto
     val open = show && if (morph) !trigger.isEmpty else trigger != Rect.Zero
     val visibility = remember { MutableTransitionState(false) }
     visibility.targetState = open
@@ -149,9 +150,20 @@ internal fun BoxScope.PiAnchoredMenu(
             val margin = sizing.safeMargin.toPx()
             val gap = 8.dp.toPx()
             val maxWidth = minOf(sizing.maxWidth.roundToPx(), (safe.width - margin * 2).toInt())
+            // `below` is a bar's measured bottom in window coordinates. A bar button's
+            // menu hangs from the bar rather than overlapping its subtitle; the morph
+            // still starts at the button, only the settled rectangle moves down.
+            val settleTrigger = if (placement == PiPopupPlacement.FromAnchor) {
+                menuSettleTrigger(trigger, below)
+            } else {
+                trigger
+            }
             val availableHeight = when (placement) {
                 PiPopupPlacement.Above -> upwardMenuMaxHeight(trigger, safe, margin, gap)
-                PiPopupPlacement.Auto -> (safe.bottom - margin - maxOf(safe.top, minOf(safe.top + margin, trigger.top))).toInt()
+                PiPopupPlacement.Auto ->
+                    (safe.bottom - margin - maxOf(safe.top, minOf(safe.top + margin, trigger.top))).toInt()
+                PiPopupPlacement.FromAnchor ->
+                    (safe.bottom - margin - maxOf(safe.top, minOf(safe.top + margin, settleTrigger.top))).toInt()
             }
             val maxHeight = minOf(sizing.maxHeight.roundToPx(), availableHeight)
             if (maxWidth <= 0 || maxHeight <= 0) {
@@ -167,7 +179,8 @@ internal fun BoxScope.PiAnchoredMenu(
             val size = Size(foreground.width.toFloat(), foreground.height.toFloat())
             val settled = when (placement) {
                 PiPopupPlacement.Above -> placeUpwardMenu(trigger, size, safe, margin, gap, direction)
-                PiPopupPlacement.Auto -> placeContextMenu(trigger, size, safe, margin, direction)
+                PiPopupPlacement.Auto, PiPopupPlacement.FromAnchor ->
+                    placeContextMenu(settleTrigger, size, safe, margin, direction)
             }
             val frame = if (morph) {
                 popupMorphBounds(trigger, settled, geometry.value, center.value)
@@ -237,6 +250,16 @@ internal fun placeContextMenu(trigger: Rect, size: Size, safe: Rect, margin: Flo
     val top = wantedTop.coerceIn(minTop, (safe.bottom - margin - size.height).coerceAtLeast(minTop))
     return Rect(Offset(left, top), size)
 }
+
+/**
+ * The trigger rectangle a menu's settled placement is computed from.
+ *
+ * [below] is a bar's measured bottom in window coordinates. A menu opened from a control
+ * in the bar settles below the bar rather than over its subtitle; the morph still starts
+ * at the real button, which is why this rectangle is only used for the settled endpoint.
+ */
+internal fun menuSettleTrigger(trigger: Rect, below: Float): Rect =
+    if (below > trigger.top) trigger.copy(top = below, bottom = below) else trigger
 
 private fun endAlignedMenuLeft(trigger: Rect, size: Size, safe: Rect, margin: Float, direction: LayoutDirection): Float =
     clampedMenuLeft(if (direction == LayoutDirection.Ltr) trigger.right - size.width else trigger.left, size, safe, margin)

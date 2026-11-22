@@ -461,21 +461,23 @@ Two row rules are behaviour rather than taste:
   `PiPopupHostProvider` like every other popup so it samples the page from outside the
   recording.
 
-  A glass icon button instead uses `GlassTransformPopup` with the measured button and
-  separate decorative glyph, matching [Miuix's guide](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta03/docs/components/glass/glasstransformpopup.md)
-  and [Mishka's sort menu](https://github.com/YuKongA/Mishka/blob/1bc4acc5f76d916957fd3abdda3ba99763df521a/app/src/main/kotlin/top/yukonga/mishka/ui/screen/proxy/ProxyScreen.kt#L519).
-  For the terminal roster, `openBelow = LocalPiBarBottom.current` translates the
-  destination anchor to the measured bar bottom, not the collapsed button geometry.
-  Files sort is already below that bar. Both morph back to half the default button
-  diameter, not the 20dp card corner: the old radius made the sort button change
-  silhouette when the real button replaced the collapsing panel. Both register from
-  the page overlay and keep their `PiMenuRow` content in the host. The host reads the
-  visibility state directly:
+  A glass icon button uses the same anchored panel in its `FromAnchor` mode: the panel
+  morphs out of the measured button and settles at its end edge, below it when it fits.
+  The morph is the kit's own rather than Miuix's `GlassTransformPopup`, because the
+  library's popup keeps a full-page dismiss layer composed while its exit spring runs:
+  a trigger tapped to close and tapped again before the panel had finished leaving had
+  its second tap consumed by that invisible layer, which read as a menu that would not
+  reopen for the length of the exit spring. `PiAnchoredMenu` drops the layer the moment
+  `show` turns false while the panel keeps drawing, the same rule the context menus
+  follow. For the terminal roster, `openBelow = LocalPiBarBottom.current` translates
+  the settled rectangle to the measured bar bottom, not the collapsed button geometry;
+  files sort is already below that bar. Both register from the page overlay and keep
+  their `PiMenuRow` content in the host. The host reads the visibility state directly:
   passing a Boolean through the scaffold slot left the terminal roster closed after
   its button received the click.
 
-  The composer needs an explicit upward destination that beta02 does not expose on
-  `GlassTransformPopup`. The previous inverted rectangle forced `GlassPopup` upward but
+  The composer needs an explicit upward destination the library's transform popup did
+  not expose. The previous inverted rectangle forced `GlassPopup` upward but
   still seeded the animation at the final panel's far corner. The kit now combines the
   library's `GlassMotion` and `glassSurface` with a viewport above the measured trigger,
   at logical start with an 8dp gap (§7.1). The viewport stays fixed while bounds move.

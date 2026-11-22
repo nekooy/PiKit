@@ -21,18 +21,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassDropdownPopup
 import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupSizing
-import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
-import top.yukonga.miuix.kmp.glass.GlassTransformPopup
-import top.yukonga.miuix.kmp.glass.glassPopupAnchor
-import top.yukonga.miuix.kmp.glass.glassPopupAnchorContent
-import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -55,10 +48,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * ## Motion and placement follow the trigger
  *
- * Context menus keep the library's fit test and logical-end alignment, but fade in at
- * full size rather than growing from a corner. Glass icon buttons use `GlassTransformPopup`.
- * The composer morphs from the trigger toward a viewport above it, so the menu cannot open
- * over its input field when the IME raises the chip row.
+ * Context menus fade in at full size; the composer and a glass icon button morph from
+ * their measured trigger. The composer's endpoint is a viewport above it, so the menu
+ * cannot open over its input field when the IME raises the chip row. A glass icon
+ * button's endpoint is the bar it belongs to, or the button itself when no bar bottom
+ * is supplied.
+ *
+ * The morph is the kit's own rather than Miuix's `GlassTransformPopup`: the library's
+ * popup keeps its full-page dismiss layer composed through the exit spring, and that
+ * layer consumes every tap until the panel has finished leaving. A trigger tapped twice
+ * in quick succession — close, then open again — lost the second tap inside the
+ * invisible layer. [PiAnchoredMenu] draws the panel itself and drops the dismiss layer
+ * the moment `open` turns false, so the trigger underneath answers again while the exit
+ * is still playing.
  *
  * A **dropdown row's panel is not a menu**, and it is the one panel in this file that does
  * not take that fade: its alternatives *are* the row's value unfolded, so it opens with the
@@ -115,29 +117,43 @@ fun PiPopupMenu(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     RegisterPiPopup(anchor) { backdrop ->
-        PiAnchoredMenu(show, onDismissRequest, anchor, placement, backdrop, sizing, content)
+        PiAnchoredMenu(
+            show = show,
+            onDismissRequest = onDismissRequest,
+            anchor = anchor,
+            placement = placement,
+            backdrop = backdrop,
+            sizing = sizing,
+            content = content,
+        )
     }
 }
 
-/** Matches Miuix's control-to-panel morph without composing inside the scene recording. */
+/**
+ * A menu opened from a glass icon button, growing out of the button itself.
+ *
+ * The button reports its bounds through [Modifier.piGlassMenuAnchor]; the panel is
+ * [PiAnchoredMenu]'s morph, not Miuix's `GlassTransformPopup` — see the file's
+ * *Motion and placement follow the trigger* for the dismissal defect that keeps the
+ * library's version out of the kit.
+ */
 @Composable
 fun PiPopupMenu(
     show: () -> Boolean,
     onDismissRequest: () -> Unit,
     anchor: PiGlassMenuAnchor,
-    anchorContent: @Composable () -> Unit,
     openBelow: Float = 0f,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     RegisterPiPopup(anchor) { backdrop ->
-        GlassTransformPopup(
+        PiAnchoredMenu(
             show = show(),
             onDismissRequest = onDismissRequest,
-            anchor = anchor.glass,
-            anchorContent = anchorContent,
+            anchor = anchor.menu,
+            placement = PiPopupPlacement.FromAnchor,
             backdrop = backdrop,
-            gap = with(LocalDensity.current) { (openBelow - anchor.top).coerceAtLeast(0f).toDp() },
-            cornerRadius = PiCorner.popup,
+            sizing = GlassPopupSizing(),
+            below = openBelow,
             content = content,
         )
     }
@@ -195,26 +211,15 @@ fun PiDropdownPopup(
 }
 
 @Stable
-class PiGlassMenuAnchor internal constructor(internal val glass: GlassPopupAnchor) {
-    internal var top by mutableStateOf(0f)
-}
+class PiGlassMenuAnchor internal constructor(internal val menu: PiMenuAnchor)
 
 @Composable
-fun rememberPiGlassMenuAnchor(): PiGlassMenuAnchor {
-    val glass = rememberGlassPopupAnchor()
-    return remember(glass) { PiGlassMenuAnchor(glass) }
-}
+fun rememberPiGlassMenuAnchor(): PiGlassMenuAnchor =
+    remember { PiGlassMenuAnchor(PiMenuAnchor()) }
 
-/** The collapsed frame must use the same radius as the button it hands back to. */
-fun Modifier.piGlassMenuAnchor(
-    anchor: PiGlassMenuAnchor,
-    cornerRadius: Dp = GlassTopAppBarDefaults.ButtonSize / 2,
-): Modifier =
-    onGloballyPositioned { anchor.top = it.boundsInWindow().top }
-        .glassPopupAnchor(anchor.glass, cornerRadius)
-
-fun Modifier.piGlassMenuAnchorContent(anchor: PiGlassMenuAnchor): Modifier =
-    glassPopupAnchorContent(anchor.glass)
+/** Reports this glass icon button's own bounds as the menu's collapsed endpoint. */
+fun Modifier.piGlassMenuAnchor(anchor: PiGlassMenuAnchor): Modifier =
+    onGloballyPositioned { anchor.menu.bounds = it.boundsInWindow() }
 
 @Composable
 private fun RegisterPiPopup(anchor: Any, panel: @Composable BoxScope.(Backdrop?) -> Unit) {
@@ -248,6 +253,14 @@ enum class PiPopupPlacement {
      * the part of the page the reader is not using while choosing a setting.
      */
     Above,
+
+    /**
+     * Morphs out of the measured trigger and settles at its end edge, below it when the
+     * panel fits — the glass icon button's shape. [PiPopupMenu]'s button overload supplies
+     * the button's bounds; the settled rectangle may be translated by `openBelow` to hang
+     * from a bar's bottom instead of the button itself.
+     */
+    FromAnchor,
 }
 
 /**

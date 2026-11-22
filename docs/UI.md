@@ -288,11 +288,13 @@ ControlChip(
   it, 8dp clear of it and aligned at logical start. The scroll viewport is bounded to
   the available area above the trigger, not the space below it behind the IME. Closing
   panels keep drawing but release touch and accessibility immediately.
-- **Glass icon buttons** use `rememberPiGlassMenuAnchor`, `piGlassMenuAnchor` on the
-  button and `piGlassMenuAnchorContent` on the glyph. The `PiPopupMenu` overload takes
-  a decorative copy of the glyph for Miuix's `GlassTransformPopup`. A control in the
-  page bar can pass `openBelow = LocalPiBarBottom.current` to move only the settled
-  placement, clear of the subtitle. Files sort is already below that bar.
+- **Glass icon buttons** use `rememberPiGlassMenuAnchor` and `piGlassMenuAnchor` on the
+  button; the `PiPopupMenu` overload morphs the panel out of its measured bounds. The
+  kit draws that morph itself: Miuix's `GlassTransformPopup` keeps its full-page dismiss
+  layer composed through the exit spring, so a trigger tapped again before the panel
+  finished leaving lost the tap in the invisible layer. A control in the page bar can
+  pass `openBelow = LocalPiBarBottom.current` to move only the settled placement, clear
+  of the subtitle. Files sort is already below that bar.
 - **The rows are `PiMenuRow`**, at the library's popup metrics — see the next section.
   Do not wrap them in `ListPopupColumn` and do not hand `GlassPopup` a panel of your own.
 - **The material is the library's**: the corner is `PiCorner.popup` (24dp), and the

@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import pi.kit.mob.ui.kit.menuSettleTrigger
 import pi.kit.mob.ui.kit.placeContextMenu
 import pi.kit.mob.ui.kit.placeUpwardMenu
 import pi.kit.mob.ui.kit.popupMorphBounds
@@ -18,6 +19,26 @@ class PopupPlacementTest {
     private val margin = 32f
     private val gap = 21f
     private val menu = Size(480f, 240f)
+
+    @Test
+    fun aBarButtonsMenuHangsFromTheBarBottomButMorphsFromTheButton() {
+        val button = Rect(900f, 70f, 980f, 150f)
+        val barBottom = 210f
+        val settle = menuSettleTrigger(button, barBottom)
+        assertEquals(barBottom, settle.top)
+        assertEquals(button.left, settle.left)
+        assertEquals(button.right, settle.right)
+        val target = placeContextMenu(settle, menu, safe, margin, LayoutDirection.Ltr)
+        assertEquals(barBottom, target.top)
+        assertEquals(button, popupMorphBounds(button, target, 0f, 0f))
+    }
+
+    @Test
+    fun aControlBelowTheBarKeepsItsOwnSettledRect() {
+        val sortButton = Rect(900f, 420f, 980f, 500f)
+        assertEquals(sortButton, menuSettleTrigger(sortButton, 210f))
+        assertEquals(sortButton, menuSettleTrigger(sortButton, 0f))
+    }
 
     @Test
     fun aContextMenuHasFullPanelBoundsThroughoutItsReveal() {

@@ -87,7 +87,6 @@ import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
-import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import top.yukonga.miuix.kmp.basic.Button
@@ -343,7 +342,7 @@ fun TerminalScreen(session: PiAgentSession,
                     imageVector = MiuixIcons.Glass.Layers,
                     contentDescription = t.terminal.switchTerminal,
                     tint = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sessionsAnchor),
+                    modifier = Modifier.size(28.dp),
                 )
             }
         },
@@ -352,9 +351,6 @@ fun TerminalScreen(session: PiAgentSession,
                 show = { sessionsMenuOpen },
                 onDismissRequest = { sessionsMenuOpen = false },
                 anchor = sessionsAnchor,
-                anchorContent = {
-                    Icon(MiuixIcons.Glass.Layers, null, Modifier.size(28.dp), tint = MiuixTheme.colorScheme.onSurface)
-                },
                 openBelow = LocalPiBarBottom.current,
             ) {
                 TerminalSessionMenu(

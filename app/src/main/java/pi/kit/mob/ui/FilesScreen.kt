@@ -154,7 +154,6 @@ import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
-import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
 import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberPiMenuAnchor
@@ -317,9 +316,6 @@ fun FilesScreen(session: PiAgentSession,
                 show = { sortUp },
                 onDismissRequest = { sortUp = false },
                 anchor = sortAnchor,
-                anchorContent = {
-                    Icon(MiuixIcons.Glass.Sort, null, Modifier.size(28.dp), tint = MiuixTheme.colorScheme.onSurface)
-                },
             ) {
                 FileSort.entries.forEach { order ->
                     PiMenuRow(
@@ -671,7 +667,7 @@ private fun ListToolbar(
                 imageVector = MiuixIcons.Glass.Sort,
                 contentDescription = text.files.sort,
                 tint = MiuixTheme.colorScheme.onSurface,
-                modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sortAnchor),
+                modifier = Modifier.size(28.dp),
             )
         }
     }
