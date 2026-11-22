@@ -470,6 +470,16 @@ Two row rules are behaviour rather than taste:
 
   A glass icon button uses the same anchored panel in its `FromAnchor` mode: the panel
   morphs out of the measured button and settles at its end edge, below it when it fits.
+  The button's own glyph is part of that transform. `piGlassMenuAnchorContent` reports
+  the icon's bounds, the call site hands the same icon to the panel as `anchorContent`,
+  and the panel hides the real button for the whole transform while a copy of the glyph
+  grows into the settled panel, blurring and fading as the rows arrive. The panel's
+  surface is opaque from the first frame for this mode, so the collapsed endpoint is the
+  button — same circle, same glyph — rather than a glass rectangle fading in over a
+  control that stayed crisp beside it. An earlier version of this panel dropped the
+  glyph copy: the panel still expanded from the button's bounds, but nothing on the
+  button itself moved, and the sort menu read as a panel appearing next to the control
+  instead of the control unfolding into its menu.
   The morph is the kit's own rather than Miuix's `GlassTransformPopup`, because the
   library's popup keeps a full-page dismiss layer composed while its exit spring runs:
   a trigger tapped to close and tapped again before the panel had finished leaving had

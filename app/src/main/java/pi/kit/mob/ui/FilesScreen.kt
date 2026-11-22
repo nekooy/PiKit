@@ -154,6 +154,7 @@ import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
+import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
 import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberPiMenuAnchor
@@ -316,6 +317,16 @@ fun FilesScreen(session: PiAgentSession,
                 show = { sortUp },
                 onDismissRequest = { sortUp = false },
                 anchor = sortAnchor,
+                // The same glyph the button draws, carried through the transform: the
+                // button is hidden while the menu is up and this copy grows into it.
+                anchorContent = {
+                    Icon(
+                        imageVector = MiuixIcons.Glass.Sort,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(28.dp),
+                    )
+                },
             ) {
                 FileSort.entries.forEach { order ->
                     PiMenuRow(
@@ -667,7 +678,10 @@ private fun ListToolbar(
                 imageVector = MiuixIcons.Glass.Sort,
                 contentDescription = text.files.sort,
                 tint = MiuixTheme.colorScheme.onSurface,
-                modifier = Modifier.size(28.dp),
+                // The glyph's own bounds are the collapsed endpoint of the menu's
+                // transform, so it grows from the icon rather than from the button's
+                // padding.
+                modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sortAnchor),
             )
         }
     }

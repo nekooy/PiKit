@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import pi.kit.mob.ui.kit.anchorCopyMotion
 import pi.kit.mob.ui.kit.menuSettleTrigger
 import pi.kit.mob.ui.kit.placeContextMenu
 import pi.kit.mob.ui.kit.placeUpwardMenu
@@ -107,6 +108,23 @@ class PopupPlacementTest {
         val target = placeUpwardMenu(chip, menu.copy(height = height.toFloat()), shortHost, margin, gap, LayoutDirection.Ltr)
         assertEquals(shortHost.bottom - margin, target.bottom)
         assertEquals(shortHost.top + margin, target.top)
+    }
+
+    @Test
+    fun aGlassButtonsGlyphGrowsFromTheButtonIntoThePanel() {
+        val button = Rect(900f, 420f, 980f, 500f)
+        val settled = Rect(200f, 420f, 980f, 660f)
+        val start = anchorCopyMotion(button, settled.center, settled.width, 0f, 0f)
+        assertEquals(0f, start.translation.x, 1e-4f)
+        assertEquals(0f, start.translation.y, 1e-4f)
+        assertEquals(1f, start.scale, 1e-4f)
+        val end = anchorCopyMotion(button, settled.center, settled.width, 1f, 1f)
+        assertEquals(settled.center.x - button.center.x, end.translation.x, 1e-4f)
+        assertEquals(settled.center.y - button.center.y, end.translation.y, 1e-4f)
+        assertEquals(settled.width / button.width, end.scale, 1e-4f)
+        val half = anchorCopyMotion(button, settled.center, settled.width, 0.5f, 0.5f)
+        assertEquals((settled.center.x - button.center.x) * 0.5f, half.translation.x, 1e-4f)
+        assertEquals((button.width + settled.width) / 2 / button.width, half.scale, 1e-4f)
     }
 
     @Test

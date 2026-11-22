@@ -24,6 +24,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +39,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
@@ -61,7 +64,17 @@ import kotlin.math.roundToInt
 
 internal val LocalPiMenuInteractive = staticCompositionLocalOf { true }
 
-/** Context menus fade at full size; composer and glass-button menus morph from the trigger. */
+/**
+ * The kit's own glass menu.
+ *
+ * Context menus fade at full size; composer menus morph from the trigger. A glass icon
+ * button's menu also carries the button's *glyph* through the transform: the real button is
+ * hidden while the menu is on screen and a copy of its icon, reported through
+ * [Modifier.piGlassMenuAnchorContent], grows into the panel and fades as the rows arrive.
+ * Without that copy the panel merely expanded from behind a button that stayed crisp
+ * beside it, which read as a panel appearing next to the control rather than the control
+ * becoming the menu.
+ */
 @Composable
 internal fun BoxScope.PiAnchoredMenu(
     show: Boolean,
@@ -71,6 +84,7 @@ internal fun BoxScope.PiAnchoredMenu(
     backdrop: Backdrop?,
     sizing: GlassPopupSizing,
     below: Float = 0f,
+    anchorContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val trigger = anchor.bounds
@@ -79,7 +93,14 @@ internal fun BoxScope.PiAnchoredMenu(
     val visibility = remember { MutableTransitionState(false) }
     visibility.targetState = open
     val transition = rememberTransition(visibility, label = "anchoredMenu")
-    if (!(open || visibility.currentState || !visibility.isIdle)) return
+    // Active covers the exit as well: the button stays hidden until the glyph copy has
+    // shrunk back onto it, and the copy is what the reader sees hand the control back.
+    val active = open || visibility.currentState || !visibility.isIdle
+    if (anchorContent != null) {
+        SideEffect { anchor.contentHidden = active }
+        DisposableEffect(anchor) { onDispose { anchor.contentHidden = false } }
+    }
+    if (!active) return
 
     val geometry = transition.animateFloat({
         when {
@@ -115,6 +136,11 @@ internal fun BoxScope.PiAnchoredMenu(
         bottom = (window.height - insets.getBottom(density)).toFloat(),
     )
     var origin by remember { mutableStateOf(Offset.Zero) }
+    // The settled rectangle, written during the panel's measure and read by the glyph
+    // copy's layer. Not snapshot state: a write during measure must not invalidate that
+    // same pass; the copy's layer re-runs because it also reads the animation states.
+    val travel = remember { TransformTravel() }
+    val copyRect = anchor.contentBounds.takeUnless { it.isEmpty } ?: trigger
     val radius = if (morph) {
         with(density) {
             lerp(trigger.minDimension / 2, PiCorner.popup.toPx(), geometry.value.coerceIn(0f, 1f)).toDp()
@@ -182,6 +208,9 @@ internal fun BoxScope.PiAnchoredMenu(
                 PiPopupPlacement.Auto, PiPopupPlacement.FromAnchor ->
                     placeContextMenu(settleTrigger, size, safe, margin, direction)
             }
+            travel.centerX = settled.center.x
+            travel.centerY = settled.center.y
+            travel.width = size.width
             val frame = if (morph) {
                 popupMorphBounds(trigger, settled, geometry.value, center.value)
             } else {
@@ -191,7 +220,13 @@ internal fun BoxScope.PiAnchoredMenu(
             layout(constraints.maxWidth, constraints.maxHeight) {
                 val left = (frame.left - origin.x).roundToInt()
                 val top = (frame.top - origin.y).roundToInt()
-                background.placeWithLayer(left, top) { alpha = surface.value.coerceIn(0f, 1f) }
+                // A glass button's menu starts as the button itself, so its panel is
+                // opaque from the first frame: the button is hidden, and a fading-in
+                // surface would leave its glyph floating alone for those frames. The
+                // glyph copy then carries the icon out of that circle into the panel.
+                background.placeWithLayer(left, top) {
+                    alpha = if (anchorContent != null) 1f else surface.value.coerceIn(0f, 1f)
+                }
                 val scale = if (morph && size.width > 0 && size.height > 0) {
                     minOf(frame.width / size.width, frame.height / size.height)
                 } else {
@@ -212,7 +247,93 @@ internal fun BoxScope.PiAnchoredMenu(
                 }
             }
         }
+        // The button's glyph, handed over to the panel: it starts exactly as the button
+        // (scale 1, no offset, no blur), grows to the settled panel's width and centre,
+        // and fades as the rows arrive. The real button is hidden for as long as this
+        // exists, so the reader sees one glyph becoming the menu rather than a second
+        // icon sitting beside it.
+        val glyph = anchorContent
+        if (glyph != null) {
+            Layout(
+                modifier = Modifier.fillMaxSize(),
+                content = {
+                    Box(
+                        Modifier.graphicsLayer {
+                            val motion = anchorCopyMotion(
+                                trigger = trigger,
+                                settledCenter = travel.center,
+                                settledWidth = travel.width,
+                                sizeProgress = geometry.value,
+                                centerProgress = center.value,
+                            )
+                            translationX = motion.translation.x
+                            translationY = motion.translation.y
+                            scaleX = motion.scale
+                            scaleY = motion.scale
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                            val fraction = surface.value.coerceIn(0f, 1f)
+                            alpha = 1f - fraction
+                            val blur = GlassMotion.TRANSFORM_BLUR_PX * fraction
+                            renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
+                        },
+                    ) { glyph() }
+                },
+            ) { children, constraints ->
+                val placeable = children[0].measure(
+                    Constraints.fixed(
+                        width = copyRect.width.roundToInt().coerceAtLeast(0),
+                        height = copyRect.height.roundToInt().coerceAtLeast(0),
+                    ),
+                )
+                layout(constraints.maxWidth, constraints.maxHeight) {
+                    placeable.place(
+                        (copyRect.left - origin.x).roundToInt(),
+                        (copyRect.top - origin.y).roundToInt(),
+                    )
+                }
+            }
+        }
     }
+}
+
+/** Geometry written during measurement and read by the glyph copy's layer. */
+private class TransformTravel {
+    var centerX: Float = 0f
+    var centerY: Float = 0f
+    var width: Float = 0f
+
+    val center: Offset get() = Offset(centerX, centerY)
+}
+
+/** The glyph copy's offset from, and growth over, the button it starts as. */
+internal data class AnchorCopyMotion(val translation: Offset, val scale: Float)
+
+/**
+ * How far the button's glyph has travelled into the panel, and how much it has grown.
+ *
+ * The collapsed endpoint is the button and the expanded one is the settled panel, so at
+ * progress 0 the copy is the button itself and at 1 it spans the panel. The intermediate
+ * frames are what make the menu look like the button unfolding rather than a panel fading
+ * in over it.
+ */
+internal fun anchorCopyMotion(
+    trigger: Rect,
+    settledCenter: Offset,
+    settledWidth: Float,
+    sizeProgress: Float,
+    centerProgress: Float,
+): AnchorCopyMotion {
+    val growth = sizeProgress.coerceIn(0f, 1f)
+    val travel = centerProgress.coerceIn(0f, 1f)
+    val width = trigger.width + (settledWidth - trigger.width) * growth
+    val scale = if (trigger.width > 0f) (width / trigger.width).coerceAtLeast(0f) else 1f
+    return AnchorCopyMotion(
+        translation = Offset(
+            (settledCenter.x - trigger.center.x) * travel,
+            (settledCenter.y - trigger.center.y) * travel,
+        ),
+        scale = scale,
+    )
 }
 
 /** Keep the visible scroll offset on exit without retaining the scroll gesture node. */

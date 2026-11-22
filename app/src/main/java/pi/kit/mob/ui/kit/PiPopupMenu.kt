@@ -22,6 +22,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import kotlinx.coroutines.delay
@@ -137,16 +138,20 @@ fun PiPopupMenu(
 /**
  * A menu opened from a glass icon button, growing out of the button itself.
  *
- * The button reports its bounds through [Modifier.piGlassMenuAnchor]; the panel is
- * [PiAnchoredMenu]'s morph, not Miuix's `GlassTransformPopup` — see the file's
- * *Motion and placement follow the trigger* for the dismissal defect that keeps the
- * library's version out of the kit.
+ * The button reports its bounds through [Modifier.piGlassMenuAnchor] and its glyph's bounds
+ * through [Modifier.piGlassMenuAnchorContent]; the panel is [PiAnchoredMenu]'s morph, not
+ * Miuix's `GlassTransformPopup` — see the file's *Motion and placement follow the trigger*
+ * for the dismissal defect that keeps the library's version out of the kit. [anchorContent]
+ * is what carries the button's own glyph through that morph: the button is hidden while the
+ * menu is on screen and this copy grows into the panel and fades, so the transformation
+ * reads as the control becoming its menu.
  */
 @Composable
 fun PiPopupMenu(
     show: () -> Boolean,
     onDismissRequest: () -> Unit,
     anchor: PiGlassMenuAnchor,
+    anchorContent: @Composable () -> Unit,
     openBelow: Float = 0f,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -159,6 +164,7 @@ fun PiPopupMenu(
             backdrop = backdrop,
             sizing = GlassPopupSizing(),
             below = openBelow,
+            anchorContent = anchorContent,
             content = content,
         )
     }
@@ -257,9 +263,19 @@ class PiGlassMenuAnchor internal constructor(internal val menu: PiMenuAnchor)
 fun rememberPiGlassMenuAnchor(): PiGlassMenuAnchor =
     remember { PiGlassMenuAnchor(PiMenuAnchor()) }
 
-/** Reports this glass icon button's own bounds as the menu's collapsed endpoint. */
+/** Reports this glass icon button's own bounds as the menu's collapsed endpoint, and hides it while its menu is on screen. */
 fun Modifier.piGlassMenuAnchor(anchor: PiGlassMenuAnchor): Modifier =
     onGloballyPositioned { anchor.menu.bounds = it.boundsInWindow() }
+        .graphicsLayer { alpha = if (anchor.menu.contentHidden) 0f else 1f }
+
+/**
+ * Reports the glyph's own bounds as the content the collapsed transform grows out of.
+ *
+ * Apply to the icon inside a [Modifier.piGlassMenuAnchor] control. Without it the copy is
+ * the whole button, and an icon with padding around it grows from that padding's centre.
+ */
+fun Modifier.piGlassMenuAnchorContent(anchor: PiGlassMenuAnchor): Modifier =
+    onGloballyPositioned { anchor.menu.contentBounds = it.boundsInWindow() }
 
 @Composable
 private fun RegisterPiPopup(anchor: Any, panel: @Composable BoxScope.(Backdrop?) -> Unit) {
@@ -319,6 +335,21 @@ class PiMenuAnchor {
 
     /** The trigger's bounds in window coordinates, or [Rect.Zero] before it is measured. */
     var bounds: Rect by mutableStateOf(Rect.Zero)
+
+    /**
+     * The glyph's bounds inside a glass icon button, or [Rect.Zero] when the call site did
+     * not apply [Modifier.piGlassMenuAnchorContent].
+     */
+    internal var contentBounds: Rect by mutableStateOf(Rect.Zero)
+
+    /**
+     * Whether a menu opened from this anchor is on screen, including its exit.
+     *
+     * [Modifier.piGlassMenuAnchor] reads this to hide the real button: the glyph copy in
+     * the panel takes its place for the whole transform, and the button reappears only
+     * once that copy has shrunk back onto it.
+     */
+    internal var contentHidden: Boolean by mutableStateOf(false)
 }
 
 /** An anchor for one control's menu. */

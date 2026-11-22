@@ -88,6 +88,7 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
+import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import top.yukonga.miuix.kmp.basic.Button
@@ -343,7 +344,10 @@ fun TerminalScreen(session: PiAgentSession,
                     imageVector = MiuixIcons.Glass.Layers,
                     contentDescription = t.terminal.switchTerminal,
                     tint = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(28.dp),
+                    // The glyph's bounds are the collapsed endpoint of the menu's
+                    // transform, so the roster grows out of the mark rather than the
+                    // button's padding.
+                    modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sessionsAnchor),
                 )
             }
         },
@@ -352,6 +356,14 @@ fun TerminalScreen(session: PiAgentSession,
                 show = { sessionsMenuOpen },
                 onDismissRequest = { sessionsMenuOpen = false },
                 anchor = sessionsAnchor,
+                anchorContent = {
+                    Icon(
+                        imageVector = MiuixIcons.Glass.Layers,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(28.dp),
+                    )
+                },
                 openBelow = LocalPiBarBottom.current,
             ) {
                 TerminalSessionMenu(
