@@ -87,6 +87,15 @@ custom verification tasks (`verifyApkPackaging*`, `verifyRuntimeImage*`,
 for the same reason — closing over `Project` or a variant object is what the cache
 refuses to serialize.
 
+**The build does not leave daemons behind.** `gradle.properties` sets
+`org.gradle.daemon.idletimeout=60000` and `kotlin.compiler.execution.strategy=in-process`:
+the Kotlin compiler runs inside the Gradle daemon, and that daemon exits 60 seconds
+after the last task. One full compile here peaked at one Gradle JVM of about 1.7 GB,
+and `./gradlew --status` reported no daemons once the minute had passed — there is no
+second `KotlinCompileDaemon` and no manual `gradlew --stop` in the ordinary workflow.
+If a build is interrupted, `./gradlew --stop` is the recovery; do not leave an idle
+4 GB JVM behind just because the machine has memory to spare.
+
 It also repairs the one failure the packaging guard is known to catch: if a
 variant fails with a stale APK (see *The size of an APK is checked*), it deletes
 that variant's APK and retries it once with `--no-build-cache` — only the variants
