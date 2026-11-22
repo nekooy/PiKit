@@ -151,12 +151,14 @@ that cut the last card in two (§13, *The window's last pixels*).
   transcript that runs under them (§13, *Navigation*). That is the one documented
   exception, not a licence for a second page to invent a bar.
 - **A scrolling page reports `contentScrolled = scroll.canScrollBackward` to
-  `PiPage`.** The bar's back arrow is a plain glyph at rest and becomes a glass pill
-  only once the body has scrolled under the bar; Miuix's `isContentScrolled` overload
-  falls back to `true` when it has neither a scroll behaviour nor a visual offset, so
-  omitting the argument floats every arrow on the first frame. Passing the scroll
-  position (not a nested-scroll accumulator) is what keeps a short page that only
-  bounces from lighting the arrow.
+  `PiPage`.** That value now drives the bar's background band and nothing else: every
+  control in the bar — the back arrow and the action pills — is glass from the first
+  frame, the same control whether the page is at rest or scrolled. `PiPage` reports the
+  bar as always scrolled to Miuix and hands the real scroll state to `backgroundAlpha`,
+  because 0.9.5-beta03 ties a button's material to the bar's `isContentScrolled` with no
+  call-site override, and a band that appeared at rest would be the wrong half to keep.
+  Passing the scroll position (not a nested-scroll accumulator) is what keeps a short
+  page that only bounces from lighting the band.
 - **A top-bar action is a `GlassIconButton`, not a basic `IconButton`.** It draws the
   glass icon set at 28dp and inherits the bar's material/scroll state; a plain
   `IconButton` stays flat while the back arrow rises, and a filled basic glyph beside

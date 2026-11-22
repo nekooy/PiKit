@@ -1,6 +1,9 @@
 package pi.kit.mob.ui.kit
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -103,12 +106,16 @@ fun PiPage(
      * Whether the scroll region has content above its viewport — Miuix's
      * `listState.canScrollBackward`.
      *
-     * The bar uses it exactly as `GlassTopAppBar` does: at rest the bar is transparent
-     * and its back arrow is a plain glyph; once the body scrolls, the button's glass
-     * pill rises and the band appears if [contentScrollsUnderBar]. Whole-page scrollers
-     * can also report their actual elastic translation via [LocalPiPageOverscroll],
-     * so an upward pull that passes under the bar is covered during the spring back.
-     * `false` is the default for a fixed viewport such as the terminal.
+     * This drives the background band and nothing else. The bar's controls are glass
+     * from the first frame (see the `isContentScrolled` argument below), so a page at
+     * rest and a page scrolled under its bar show the same back arrow and the same
+     * action pills; what this flag decides is whether the progressive band behind them
+     * is drawn — and on a page that passes [contentScrollsUnderBar] `false` it decides
+     * nothing, because that band is off whatever this says. Whole-page scrollers can
+     * also report their actual elastic translation via [LocalPiPageOverscroll], so an
+     * upward pull that passes under the bar is covered during the spring back. `false`
+     * is the default for a fixed viewport such as the terminal, which keeps the band off
+     * entirely.
      */
     contentScrolled: Boolean = false,
     contentScrollsUnderBar: Boolean = true,
@@ -141,6 +148,24 @@ fun PiPage(
     var bodyOverscroll by remember { mutableFloatStateOf(0f) }
     val reportOverscroll: (Float) -> Unit = remember { { bodyOverscroll = it } }
 
+    // The band's own progress. The bar itself is reported as scrolled always, so that
+    // the buttons' material never falls back to a bare glyph (see `isContentScrolled`
+    // below); what is left to drive is the background band, and this is the value that
+    // does it. It keeps the library's spec — 100ms, linear — so the band fades in and
+    // out exactly as it used to.
+    //
+    // A fitting page can pass behind the bar during an upward spring without changing
+    // ScrollState. The reported translation resets with the spring; unlike accumulated
+    // deltas it cannot leave the bar raised. A page whose body never travels behind the
+    // bar (`contentScrollsUnderBar = false`) keeps the band off whatever the scroll
+    // position says.
+    val barOverlapped = contentScrolled || (contentScrollsUnderBar && bodyOverscroll < -1f)
+    val bandAlpha by animateFloatAsState(
+        targetValue = if (contentScrollsUnderBar && barOverlapped) 1f else 0f,
+        animationSpec = tween(durationMillis = BAND_FADE_MILLIS, easing = LinearEasing),
+        label = "piPageBarBand",
+    )
+
     CompositionLocalProvider(LocalPiBarBottom provides barBottom) {
     PiPopupHostProvider {
     Scaffold(
@@ -150,17 +175,34 @@ fun PiPage(
             GlassTopAppBar(
                 title = title,
                 modifier = Modifier.onGloballyPositioned { barBottom = it.boundsInWindow().bottom },
-                // A fitting page can pass behind the bar during an upward spring
-                // without changing ScrollState. The reported translation resets with
-                // the spring; unlike accumulated deltas it cannot leave the bar raised.
-                isContentScrolled = contentScrolled || (contentScrollsUnderBar && bodyOverscroll < -1f),
+                // Always scrolled, so the bar's controls are glass from the first frame:
+                // `GlassTopAppBar` turns this one flag into `materialProgress` — the
+                // pill's alpha, its edge stroke and its shadow — and into `maskProgress`,
+                // the band's 100ms fade. Miuix 0.9.5-beta03 has no way to raise the
+                // first without the second at the call site: `GlassIconButton` takes no
+                // progress parameter, `inheritTopBarMaterial = false` only opts out of
+                // the bar's backdrop and material (the shared progress is still passed),
+                // and the context that carries it (`LocalGlassTopAppBarContext`) is
+                // internal. `backgroundAlpha` is the public multiplier the library applies
+                // to the band after `maskProgress`, so the band is handed to `bandAlpha`
+                // below and the buttons keep the material at rest.
+                //
+                // At rest this leaves `keepMaterial` true, which is what keeps the pill,
+                // its stroke and its shadow drawn; the band is off because `bandAlpha` is
+                // 0, so the library's `bandActive` is false and its progressive blur skips
+                // the pass. The bar still records the layer its buttons sample — that is
+                // the cost of a glass control over live content, and with no
+                // `GlassIconButton` in the slot the library attaches no such layer at all.
+                isContentScrolled = true,
                 expandable = false,
                 // OS4's material: the bar draws a progressive blur over the page's
                 // backdrop and its buttons sample the same layer. `progressiveBlur`
                 // needs a non-null backdrop, which this page creates on devices that
                 // can run the shader; elsewhere the bar keeps its gradient band.
                 progressiveBlur = contentScrollsUnderBar,
-                backgroundAlpha = { if (contentScrollsUnderBar) 1f else 0f },
+                // The band's visibility, and now its only driver: the buttons no longer
+                // depend on it.
+                backgroundAlpha = { bandAlpha },
                 backdrop = pageBackdrop,
                 material = PiGlass.material(),
                 defaultWindowInsetsPadding = true,
@@ -309,3 +351,13 @@ private val TITLE_GUTTER = TopAppBarDefaults.TitlePadding
 private val ACTION_GAP = 4.dp
 
 private val SUBTITLE_BOTTOM = 6.dp
+
+/**
+ * How long the bar's background band takes to appear and to leave.
+ *
+ * The library's own band fades through `maskProgress` with `tween(100, LinearEasing)`,
+ * and the band is driven from this file now (the bar is reported as scrolled so its
+ * buttons keep their material), so the same 100ms linear ramp is repeated here rather
+ * than a curve of the kit's own: the band should look exactly as it did.
+ */
+private const val BAND_FADE_MILLIS = 100

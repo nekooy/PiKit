@@ -293,9 +293,9 @@ only hides the tail and leaves the wrong viewport in place.
 The manual and files have an inner scroller below fixed controls, not a full-page
 scroll. The manual's contents label stayed at y=292–306 when jumping to a chapter, but
 the top bar's band blurred it anyway after the jump. These pages pass
-`contentScrollsUnderBar = false`: the bar's buttons still respond to the scroller, but
-the background band (including the gradient fallback) stays off because no moving
-content can pass behind the header. The files page leaves the listing's top edge alone:
+`contentScrollsUnderBar = false`: the bar's buttons are glass from the first frame like
+every other page's, but the background band (including the gradient fallback) stays off
+because no moving content can pass behind the header. The files page leaves the listing's top edge alone:
 its toolbar and location bar are opaque furniture, so there is no edge for a fade to
 hide and a blur band would only soften the first rows of a list that starts below them.
 The manual's contents bar is likewise opaque, and the band only blurred the first lines
@@ -813,19 +813,27 @@ the 16dp the same arrow had on every settings page. Two pushes, two arrow positi
 chat page has no bar at all now, so the left-aligned variant had no caller left; it is
 gone, and every page's arrow starts where the library puts it.
 
-**The back arrow is a plain glyph until content reaches the bar.** Miuix's
-`GlassTopAppBar` drives its buttons' material from `isContentScrolled`; at rest the
-button is a glyph with no pill, and once the page has scrolled under the bar the band
-and the pill rise together. `PiPage` uses both logical scroll (`canScrollBackward`) and
-actual upward elastic translation from `settingsPageScroll`. At 100% font size on the
-1080 px emulator, Personalization fit the window. A held upward drag moved the first
-card up by 383 px and put its unblurred summary behind the title, even though the scroll
-position stayed at zero. The band must respond to the rendered position, including the
-spring-back frames, not just to consumed scroll. Downward pulls at the top do not put
-content behind the bar. An earlier nested-scroll accumulator was rejected because it
-could leave the arrow floated after the spring returned. Letting the library default to
-`true` floated every arrow on the first frame. The terminal keeps its plain arrow: its
-native scrollback never travels behind the page bar.
+**Every control in the bar is glass, and only the band follows the body.** Miuix's
+`GlassTopAppBar` ties a button's pill, stroke and shadow to `isContentScrolled`, and its
+own design has the band and the pill rise together — at rest a bar action is a bare
+glyph. PiKit keeps the pill: a bar action is a control, and a control that is flat until
+the page moves reads as a hole in the bar rather than a target, especially beside the
+chat page's always-glass capsules and the drawer's glass. `PiPage` therefore reports the
+bar as scrolled (`isContentScrolled = true`) so `keepMaterial` holds the pill, the stroke
+and the shadow from the first frame, and hands the real scroll state to `backgroundAlpha`
+— the one public multiplier the library applies to the band after its own mask ramp, with
+the same 100ms linear spec the library used. The band is the half that should follow the
+content: it only says "there is something passing behind me". Both sources still drive it:
+logical scroll (`canScrollBackward`) and actual upward elastic translation from
+`settingsPageScroll`. At 100% font size on the 1080 px emulator, Personalization fit the
+window. A held upward drag moved the first card up by 383 px and put its unblurred summary
+behind the title, even though the scroll position stayed at zero. The band responds to the
+rendered position, including the spring-back frames, not just to consumed scroll.
+Downward pulls at the top do not put content behind the bar. An earlier nested-scroll
+accumulator was rejected because it could leave the band lit after the spring returned;
+letting the library default to `true` lit the band on the first frame. The terminal keeps
+its band off — its native scrollback never travels behind the page bar — while its arrow
+and action pills are glass like every other page's.
 
 A page that arrives is also *seen* arriving: the destinations cross-fade with a tenth of
 the width of travel, from the trailing edge on the way in and from the leading edge on the
