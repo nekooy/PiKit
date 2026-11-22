@@ -719,7 +719,13 @@ fun SettingsPickerSheet(
             if (searchHint != null) {
                 GlassTextField(
                     state = queryState,
-                    modifier = Modifier.fillMaxWidth(),
+                    // The field is a box on the sheet, not a row on it: without its share
+                    // of the vertical seam its rounded fill touched the card below and the
+                    // two read as one stretched control. A field's own inset is 12dp —
+                    // the figure `SettingsTextField` spends above and below (`FIELD_VERTICAL_INSET`)
+                    // — so the filter sits above its list by the same frame as every other
+                    // field on a card.
+                    modifier = Modifier.fillMaxWidth().padding(bottom = FIELD_VERTICAL_INSET),
                     label = searchHint,
                     useLabelAsPlaceholder = true,
                     lineLimits = TextFieldLineLimits.SingleLine,
