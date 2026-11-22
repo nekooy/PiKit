@@ -142,11 +142,11 @@ fun PiPopupMenu(
  * through [Modifier.piGlassMenuAnchorContent]; the panel is [PiAnchoredMenu]'s morph, not
  * Miuix's `GlassTransformPopup` — see the file's *Motion and placement follow the trigger*
  * for the dismissal defect that keeps the library's version out of the kit. [anchorContent]
- * is what carries the button's own glyph through that morph: the button is hidden, the
- * panel's first frame is the button (a copy of its glyph plus [anchorFill] when the button
- * samples no backdrop), and the copy grows into the panel and fades. The transformation
- * therefore reads as the control becoming its menu, not as an icon flying out of a button
- * that stays where it was.
+ * is what carries the button's own glyph through that morph: the button is hidden and the
+ * panel's first frame is the button — a copy of its glyph over the panel's own glass, which
+ * is the glass the button samples — so the copy grows into the panel and fades while the
+ * transformed surface stays one object. The transformation therefore reads as the control
+ * becoming its menu, not as an icon flying out of a button that stays where it was.
  */
 @Composable
 fun PiPopupMenu(
@@ -155,7 +155,6 @@ fun PiPopupMenu(
     anchor: PiGlassMenuAnchor,
     anchorContent: @Composable () -> Unit,
     openBelow: Float = 0f,
-    anchorFill: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     RegisterPiPopup(anchor) { backdrop ->
@@ -168,7 +167,6 @@ fun PiPopupMenu(
             sizing = GlassPopupSizing(),
             below = openBelow,
             anchorContent = anchorContent,
-            anchorFill = anchorFill,
             content = content,
         )
     }

@@ -142,6 +142,7 @@ import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiGlassMenuAnchor
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiMotion
@@ -155,8 +156,9 @@ import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
 import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
-import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
+import pi.kit.mob.ui.kit.rememberPiBackdrop
+import pi.kit.mob.ui.kit.rememberPiGlassMenuAnchor
 import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbItem
@@ -166,8 +168,9 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
-import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.glass.HomeOutline
@@ -248,6 +251,16 @@ fun FilesScreen(session: PiAgentSession,
     // slot, outside the body layer that supplies the material's backdrop.
     var sortUp by remember { mutableStateOf(false) }
     val sortAnchor = rememberPiGlassMenuAnchor()
+    // The ground the toolbar's controls sit on, recorded for the sort button.
+    //
+    // A glass control samples a layer that does not contain it, and this page's whole body
+    // is one layer (`PiPage`), so the toolbar's own ground is recorded beside the controls
+    // rather than the button sampling the page that draws it — that is the recursion that
+    // overflows the render thread. With a backdrop of its own the sort disc is the same
+    // glass as the page bar's buttons and the terminal's roster; without one
+    // `GlassIconButton` draws the library's opaque fallback, which is a white disc beside
+    // their translucent ones.
+    val sortGround = rememberPiBackdrop()
     val haptics = LocalPiHaptics.current
 
     fun navigate(to: File) {
@@ -319,13 +332,11 @@ fun FilesScreen(session: PiAgentSession,
                 onDismissRequest = { sortUp = false },
                 anchor = sortAnchor,
                 // The same glyph the button draws, carried through the transform: the
-                // button is hidden while the menu is up and this copy grows into it.
-                // This button samples no backdrop — it draws itself as the library's
-                // opaque button fill — so the panel's first frame repaints that disc and
-                // fades it into the menu's glass. Without it the endpoint would be the
-                // panel's glass (measured rgb 248) against the button's fill (255), the
-                // step that read as the sort button changing colour after it settled.
-                anchorFill = GlassTopAppBarDefaults.buttonFill(),
+                // button is hidden while the menu is up and this copy grows into it. The
+                // disc the panel starts and ends as is its own glass, and that is the
+                // button's glass too, so neither end of the transform swaps one surface
+                // for another — the terminal measures 247 for the roster disc against the
+                // panel's 248 at the same spot.
                 anchorContent = {
                     Icon(
                         imageVector = MiuixIcons.Glass.Sort,
@@ -448,6 +459,7 @@ fun FilesScreen(session: PiAgentSession,
                 onQueryChange = { query = it },
                 onSortClick = { sortUp = true },
                 sortAnchor = sortAnchor,
+                ground = sortGround,
                 text = text,
             )
             LocationBar(
@@ -629,7 +641,9 @@ private fun LocationBar(
  *
  * The sort control is a floating glass menu at its own button — the library's
  * `GlassIconDropdownMenu` (§7.1) — because three orders are a question with three
- * answers, not a page.
+ * answers, not a page. [ground] is the layer its button samples: the strip's own
+ * background and no control, so the disc is glass like every other icon button instead
+ * of the library's opaque fallback, and nothing samples a layer that draws it.
  */
 @Composable
 private fun ListToolbar(
@@ -637,59 +651,74 @@ private fun ListToolbar(
     onQueryChange: (String) -> Unit,
     onSortClick: () -> Unit,
     sortAnchor: PiGlassMenuAnchor,
+    ground: LayerBackdrop?,
     text: Strings,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        TextField(
-            cornerRadius = PiCorner.radius,
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f),
-            label = text.files.filterHint,
-            useLabelAsPlaceholder = true,
-            singleLine = true,
-            // No focus ring: see `piFieldColors`. The field already reads as focused
-            // because its label has floated and its caret is in it.
-            colors = piFieldColors(),
-            cursorBrush = piFieldCursor(),
-            leadingIcon = {
-                Icon(
-                    imageVector = MiuixIcons.Search,
-                    contentDescription = null,
-                    tint = MiuixTheme.colorScheme.onSurfaceSecondary,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-            },
-            trailingIcon = {
-                // Drawn only when there is something to clear: an always-present cross
-                // is a target that does nothing on an empty field.
-                if (query.isNotEmpty()) {
-                    ClearFieldButton(
-                        onClick = { onQueryChange("") },
-                        contentDescription = text.common.clear,
-                    )
-                }
-            },
+    Box(Modifier.fillMaxWidth()) {
+        // The strip's ground, recorded for the sort button alone: the layer holds this
+        // background and no control, so the disc samples a page rather than itself.
+        Box(
+            Modifier
+                .matchParentSize()
+                .then(if (ground != null) Modifier.layerBackdrop(ground) else Modifier),
         )
-        GlassIconButton(
-            onClick = onSortClick,
-            modifier = Modifier.piGlassMenuAnchor(sortAnchor),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(
-                imageVector = MiuixIcons.Glass.Sort,
-                contentDescription = text.files.sort,
-                tint = MiuixTheme.colorScheme.onSurface,
-                // The glyph's own bounds are the collapsed endpoint of the menu's
-                // transform, so it grows from the icon rather than from the button's
-                // padding.
-                modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sortAnchor),
+            TextField(
+                cornerRadius = PiCorner.radius,
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f),
+                label = text.files.filterHint,
+                useLabelAsPlaceholder = true,
+                singleLine = true,
+                // No focus ring: see `piFieldColors`. The field already reads as focused
+                // because its label has floated and its caret is in it.
+                colors = piFieldColors(),
+                cursorBrush = piFieldCursor(),
+                leadingIcon = {
+                    Icon(
+                        imageVector = MiuixIcons.Search,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceSecondary,
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                },
+                trailingIcon = {
+                    // Drawn only when there is something to clear: an always-present cross
+                    // is a target that does nothing on an empty field.
+                    if (query.isNotEmpty()) {
+                        ClearFieldButton(
+                            onClick = { onQueryChange("") },
+                            contentDescription = text.common.clear,
+                        )
+                    }
+                },
             )
+            GlassIconButton(
+                onClick = onSortClick,
+                backdrop = ground,
+                // The page's own material, the one the bar's buttons inherit through
+                // `PiPage`; the library's default here is `puredThinGlass`, which would be
+                // a second material for the one control that is not in the bar.
+                material = PiGlass.material(),
+                modifier = Modifier.piGlassMenuAnchor(sortAnchor),
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Glass.Sort,
+                    contentDescription = text.files.sort,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    // The glyph's own bounds are the collapsed endpoint of the menu's
+                    // transform, so it grows from the icon rather than from the button's
+                    // padding.
+                    modifier = Modifier.size(28.dp).piGlassMenuAnchorContent(sortAnchor),
+                )
+            }
         }
     }
 }

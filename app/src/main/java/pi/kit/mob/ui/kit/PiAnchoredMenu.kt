@@ -38,7 +38,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -73,13 +72,12 @@ internal val LocalPiMenuInteractive = staticCompositionLocalOf { true }
  * button's menu is the button becoming the menu: the button is hidden for the whole
  * transform and the panel's first frame *is* that button — a copy of its glyph, reported
  * through [Modifier.piGlassMenuAnchorContent], grows into the panel and fades as the rows
- * arrive, and the panel's surface starts at the button's own surface. A button outside a
- * bar draws itself as `GlassTopAppBarDefaults.buttonFill()` (an opaque disc, because it
- * has no backdrop to sample), so [anchorFill] repaints that disc under the panel's glass
- * and fades it as the glass takes over; a button inside a bar is already the bar's glass,
- * so it passes no fill and the panel's own glass is the endpoint. Neither mode swaps one
- * surface for another in the last frame of the close, which read as the button changing
- * colour once it had settled, and neither leaves the button standing beside its own menu.
+ * arrive, and the panel's surface starts at the button's own surface. That surface is the
+ * panel's glass at both ends because the button samples a backdrop of its own — its bar's,
+ * or the ground its call site records — so neither end of the transform swaps one surface
+ * for another. The button is hidden only because the panel's first frame is it: a second
+ * copy left under the glass showed through as a ghost, and a copy left beside the growing
+ * frame read as a pill standing next to its own menu.
  */
 @Composable
 internal fun BoxScope.PiAnchoredMenu(
@@ -91,8 +89,6 @@ internal fun BoxScope.PiAnchoredMenu(
     sizing: GlassPopupSizing,
     below: Float = 0f,
     anchorContent: (@Composable () -> Unit)? = null,
-    /** The trigger's own surface when it samples no backdrop; see the KDoc above. */
-    anchorFill: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val trigger = anchor.bounds
@@ -186,14 +182,6 @@ internal fun BoxScope.PiAnchoredMenu(
                                 },
                             ),
                     )
-                    val fill = anchorFill
-                    if (fill != null && anchorContent != null) {
-                        Box(
-                            Modifier.matchParentSize()
-                                .graphicsLayer { alpha = 1f - surface.value.coerceIn(0f, 1f) }
-                                .background(fill, shape),
-                        )
-                    }
                 }
                 val scroll = rememberScrollState()
                 CompositionLocalProvider(LocalPiMenuInteractive provides open) {

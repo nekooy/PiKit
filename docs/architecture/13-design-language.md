@@ -473,17 +473,31 @@ Two row rules are behaviour rather than taste:
   button is hidden for the whole transform and the panel's first frame reproduces it: a
   copy of its glyph, reported through `piGlassMenuAnchorContent`, grows into the settled
   panel, blurring and fading as the rows arrive, and the panel's surface starts at the
-  button's own surface. A button that samples no backdrop draws itself as
-  `GlassTopAppBarDefaults.buttonFill()` — the files sort disc is opaque rgb 255 — so the
-  call site passes that fill as `anchorFill`; the panel paints it under its glass and fades
-  it as the glass takes over. A button inside a bar is already the bar's glass (the roster
-  disc measures rgb 247 against the panel's rgb 248 at the same spot), so it passes no fill
-  and the panel's glass is the endpoint. Each endpoint is therefore the pixels it started
-  from: hiding the whole button with the panel's glass as the endpoint put rgb 248 against
-  the sort button's 255 in the last frame of the close, which read as the button changing
-  colour once it had settled, and hiding only the glyph left the pill standing beside its
-  own menu. Without the glyph copy at all the panel expanded from the button's bounds but
-  nothing on the button itself moved, which read as a panel appearing next to the control.
+  button's own surface. For that surface to *be* the button's, the button is the library's
+  glass: a control in a bar inherits the bar's backdrop (the roster disc measures rgb 247
+  against the panel's rgb 248 at the same spot), and a control that is not in a bar records
+  the ground it sits on — the files toolbar wraps its own strip in `rememberPiBackdrop()`
+  and passes it as `GlassIconButton`'s `backdrop`, with the page's material, because a
+  control cannot sample the page body that draws it (the recursion `docs/UI.md`'s first red
+  line documents). Each endpoint is therefore the pixels it started from. Hiding only the
+  glyph was the other rejected half: the panel's frame outruns the trigger as it grows, so
+  the pill stood beside its own menu, and without the glyph copy the panel merely expanded
+  from the button's bounds with nothing on the button moving.
+
+  An opaque button instead has to be **repainted** by the panel to land on its own pixels,
+  and that was tried and removed. The panel painted `GlassTopAppBarDefaults.buttonFill()`
+  under its glass and, in the second attempt, cut the whole disc again from the library's
+  primitives — fill, bloom stroke, regular shadow and glass mask — at the panel's current
+  frame; it landed pixel for pixel. What it could not fix is what the reader saw on the way
+  there: a close measured 0.60 s on a 320dpi emulator, the fill was opaque from 0.13 s on,
+  and the panel stayed within 2 px of the button for the last 0.45 s of the spring — so
+  the hand-reproduced disc was the control for half a second, a flat tint beside the
+  terminal roster's glass. The files sort disc was opaque rgb 255 against the panel's 248
+  to begin with, which is the step that read as the button changing colour once it had
+  settled. Giving the button a backdrop removes the stand-in along with the step: the sort
+  disc is the same glass as the roster's, and both closes now end on the panel's own
+  surface rather than on a copy of a fallback.
+
   The morph is the kit's own rather than Miuix's `GlassTransformPopup`, because the
   library's popup keeps a full-page dismiss layer composed while its exit spring runs:
   a trigger tapped to close and tapped again before the panel had finished leaving had
@@ -997,8 +1011,9 @@ one decision each makes that the shared vocabulary does not:
   directory the reader sees in the files page is the one the prompt in the terminal
   already stands in.
 - **Files** — a directory is a list of objects, and it is drawn as one: a
-  `BreadcrumbBar` location trail, a filter field with a sort menu, and a `LazyColumn`
-  of Miuix `Card` rows with press feedback and a hold menu (copy path, open with). It
+  `BreadcrumbBar` location trail, a filter field and a sort button on a ground recorded
+  for it, and a `LazyColumn` of Miuix `Card` rows with press feedback and a hold menu
+  (copy path, open with). It
   opens in the conversation's workspace, and `$HOME` is one step up via the `~` crumb. A
   row's glyph is **by what the file is** — folder, link, code, image, archive, video,
   audio, sheet, document — because a listing where every file wears the same sheet of

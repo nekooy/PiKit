@@ -296,12 +296,17 @@ ControlChip(
   `piGlassMenuAnchor` on the button and `piGlassMenuAnchorContent` on its glyph, and hand
   the same glyph to the `PiPopupMenu` overload as `anchorContent`. The panel morphs out
   of the button's measured bounds and the glyph copy grows into it and fades. The whole
-  button is hidden for the transform, because the panel's first frame *is* that button: a
-  button that samples no backdrop passes
-  `anchorFill = GlassTopAppBarDefaults.buttonFill()` (the opaque disc it draws itself) and
-  the fill fades into the menu's glass; a button inside a bar passes no fill, because it
-  is already the bar's glass. That is what makes the control become its menu, and what
-  keeps the closing frame from swapping the panel's glass for the button's in one step.
+  button is hidden for the transform, because the panel's first frame *is* that button.
+  **Give the button a backdrop.** In a bar it inherits the bar's; anywhere else the call
+  site records the ground the control sits on — `rememberPiBackdrop()` plus
+  `Modifier.layerBackdrop` on a Box *behind* the control, never the page body that draws
+  it — and passes it as `backdrop`, with `material = PiGlass.material()` so the disc is
+  the page's material rather than the library's second one. Without a backdrop
+  `GlassIconButton` draws its opaque fallback, which is a white disc beside the bar's
+  translucent ones (measured rgb 255 against the roster's 247 and the panel's 248) and an
+  endpoint the panel can only approximate at the end of a close. That is what makes the
+  control become its menu, and what keeps both the opening and the closing frame from
+  swapping one surface for another in a single step.
   The kit draws that morph itself: Miuix's
   `GlassTransformPopup` keeps its full-page dismiss layer composed through the exit
   spring, so a trigger tapped again before the panel finished leaving lost the tap in the
