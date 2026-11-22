@@ -151,14 +151,16 @@ that cut the last card in two (§13, *The window's last pixels*).
   transcript that runs under them (§13, *Navigation*). That is the one documented
   exception, not a licence for a second page to invent a bar.
 - **A scrolling page reports `contentScrolled = scroll.canScrollBackward` to
-  `PiPage`.** That value now drives the bar's background band and nothing else: every
+  `PiPage`.** That value drives the bar's background band and nothing else: every
   control in the bar — the back arrow and the action pills — is glass from the first
   frame, the same control whether the page is at rest or scrolled. `PiPage` reports the
   bar as always scrolled to Miuix and hands the real scroll state to `backgroundAlpha`,
   because 0.9.5-beta03 ties a button's material to the bar's `isContentScrolled` with no
   call-site override, and a band that appeared at rest would be the wrong half to keep.
-  Passing the scroll position (not a nested-scroll accumulator) is what keeps a short
-  page that only bounces from lighting the band.
+  Reaching the same trigger through `surfaceAlpha` does not work: Miuix's `glass` treats
+  alpha as the colour layers' multiplier and keeps the blur, so the pill still shows as a
+  blurred disc. Passing the scroll position (not a nested-scroll accumulator) is what
+  keeps a short page that only bounces from lighting the band.
 - **A top-bar action is a `GlassIconButton`, not a basic `IconButton`.** It draws the
   glass icon set at 28dp and inherits the bar's material/scroll state; a plain
   `IconButton` stays flat while the back arrow rises, and a filled basic glyph beside
@@ -293,11 +295,14 @@ ControlChip(
 - **Glass icon buttons** use `rememberPiGlassMenuAnchor` on the button,
   `piGlassMenuAnchor` on the button and `piGlassMenuAnchorContent` on its glyph, and hand
   the same glyph to the `PiPopupMenu` overload as `anchorContent`. The panel morphs out
-  of the button's measured bounds and the glyph copy grows into it and fades. Only the
-  glyph is hidden during the transform — never the button — so the last frame of the
-  close hands the glyph back to a surface that was drawn all along instead of swapping
-  the panel's glass for the button's in one frame, which read as the button changing
-  colour the moment it settled. The kit draws that morph itself: Miuix's
+  of the button's measured bounds and the glyph copy grows into it and fades. The whole
+  button is hidden for the transform, because the panel's first frame *is* that button: a
+  button that samples no backdrop passes
+  `anchorFill = GlassTopAppBarDefaults.buttonFill()` (the opaque disc it draws itself) and
+  the fill fades into the menu's glass; a button inside a bar passes no fill, because it
+  is already the bar's glass. That is what makes the control become its menu, and what
+  keeps the closing frame from swapping the panel's glass for the button's in one step.
+  The kit draws that morph itself: Miuix's
   `GlassTransformPopup` keeps its full-page dismiss layer composed through the exit
   spring, so a trigger tapped again before the panel finished leaving lost the tap in the
   invisible layer. A control in the page bar can pass

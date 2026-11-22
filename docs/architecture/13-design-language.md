@@ -468,20 +468,22 @@ Two row rules are behaviour rather than taste:
   because a `PopupLayout` left mounted is a full-window popup over a page nobody can
   touch.
 
-  A glass icon button uses the same anchored panel in its `FromAnchor` mode: the panel
-  morphs out of the measured button and settles at its end edge, below it when it fits.
-  The button's own glyph is part of that transform. `piGlassMenuAnchorContent` reports
-  the icon's bounds and hides that glyph while a copy of it grows into the settled panel,
-  blurring and fading as the rows arrive. Only the glyph is hidden: the button's fill,
-  stroke and shadow stay drawn underneath, and the panel's own surface fades in and out
-  with `GlassMotion.transformIconMaterial`. That is what makes the closing transform end
-  on the same pixels it started from — an earlier version hid the whole button and kept
-  the panel opaque from its first frame, so the last frame replaced the panel's glass
-  (measured at rgb 248 on the collapsed circle) with the button's fill (rgb 255) in one
-  step, which read as the sort button changing colour once it had settled. An earlier
-  version still had no glyph copy at all: the panel expanded from the button's bounds but
-  nothing on the button itself moved, and the sort menu read as a panel appearing next to
-  the control instead of the control unfolding into its menu.
+  A glass icon button uses the same anchored panel in its `FromAnchor` mode, and it is the
+  **button** that becomes the menu, not an icon flying out of a button that stays put. The
+  button is hidden for the whole transform and the panel's first frame reproduces it: a
+  copy of its glyph, reported through `piGlassMenuAnchorContent`, grows into the settled
+  panel, blurring and fading as the rows arrive, and the panel's surface starts at the
+  button's own surface. A button that samples no backdrop draws itself as
+  `GlassTopAppBarDefaults.buttonFill()` — the files sort disc is opaque rgb 255 — so the
+  call site passes that fill as `anchorFill`; the panel paints it under its glass and fades
+  it as the glass takes over. A button inside a bar is already the bar's glass (the roster
+  disc measures rgb 247 against the panel's rgb 248 at the same spot), so it passes no fill
+  and the panel's glass is the endpoint. Each endpoint is therefore the pixels it started
+  from: hiding the whole button with the panel's glass as the endpoint put rgb 248 against
+  the sort button's 255 in the last frame of the close, which read as the button changing
+  colour once it had settled, and hiding only the glyph left the pill standing beside its
+  own menu. Without the glyph copy at all the panel expanded from the button's bounds but
+  nothing on the button itself moved, which read as a panel appearing next to the control.
   The morph is the kit's own rather than Miuix's `GlassTransformPopup`, because the
   library's popup keeps a full-page dismiss layer composed while its exit spring runs:
   a trigger tapped to close and tapped again before the panel had finished leaving had
@@ -815,25 +817,30 @@ gone, and every page's arrow starts where the library puts it.
 
 **Every control in the bar is glass, and only the band follows the body.** Miuix's
 `GlassTopAppBar` ties a button's pill, stroke and shadow to `isContentScrolled`, and its
-own design has the band and the pill rise together — at rest a bar action is a bare
-glyph. PiKit keeps the pill: a bar action is a control, and a control that is flat until
-the page moves reads as a hole in the bar rather than a target, especially beside the
-chat page's always-glass capsules and the drawer's glass. `PiPage` therefore reports the
-bar as scrolled (`isContentScrolled = true`) so `keepMaterial` holds the pill, the stroke
-and the shadow from the first frame, and hands the real scroll state to `backgroundAlpha`
-— the one public multiplier the library applies to the band after its own mask ramp, with
-the same 100ms linear spec the library used. The band is the half that should follow the
-content: it only says "there is something passing behind me". Both sources still drive it:
-logical scroll (`canScrollBackward`) and actual upward elastic translation from
-`settingsPageScroll`. At 100% font size on the 1080 px emulator, Personalization fit the
-window. A held upward drag moved the first card up by 383 px and put its unblurred summary
-behind the title, even though the scroll position stayed at zero. The band responds to the
-rendered position, including the spring-back frames, not just to consumed scroll.
-Downward pulls at the top do not put content behind the bar. An earlier nested-scroll
-accumulator was rejected because it could leave the band lit after the spring returned;
-letting the library default to `true` lit the band on the first frame. The terminal keeps
-its band off — its native scrollback never travels behind the page bar — while its arrow
-and action pills are glass like every other page's.
+own design has the band and the pill rise together — at rest every bar control is a bare
+glyph. PiKit keeps the pill: a bar control is a control, and one that is flat until the
+page moves reads as a hole in the bar rather than a target, especially beside the chat
+page's always-glass capsules and the drawer's glass. `PiPage` therefore reports the bar as
+scrolled (`isContentScrolled = true`) so `keepMaterial` holds the pill, the stroke and the
+shadow from the first frame, and hands the real scroll state to `backgroundAlpha` — the
+one public multiplier the library applies to the band after its own mask ramp, with the
+same 100ms linear spec the library used. Every control is glass including the back arrow:
+the library drives all of a bar's buttons from that one shared progress, and there is no
+per-control override (`GlassIconButton` takes no progress argument and its context is
+internal). Fading the arrow's own surface was tried and does not work — Miuix's `glass`
+documents its alpha as the colour layers' multiplier and keeps the blur, so the pill
+still showed as a blurred disc over content behind the bar. The band is the half that
+should follow the content: it only says "there is something passing behind me". Both
+sources still drive it: logical scroll (`canScrollBackward`) and actual upward elastic
+translation from `settingsPageScroll`. At 100% font size on the 1080 px emulator,
+Personalization fit the window. A held upward drag moved the first card up by 383 px and
+put its unblurred summary behind the title, even though the scroll position stayed at
+zero. The band responds to the rendered position, including the spring-back frames, not
+just to consumed scroll. Downward pulls at the top do not put content behind the bar. An
+earlier nested-scroll accumulator was rejected because it could leave the band lit after
+the spring returned; letting the library default to `true` lit the band on the first
+frame. The terminal keeps its band off — its native scrollback never travels behind the
+page bar — while its arrow and action pills are glass like every other page's.
 
 A page that arrives is also *seen* arriving: the destinations cross-fade with a tenth of
 the width of travel, from the trailing edge on the way in and from the leading edge on the

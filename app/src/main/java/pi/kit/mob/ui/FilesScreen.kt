@@ -167,6 +167,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.glass.HomeOutline
@@ -319,6 +320,12 @@ fun FilesScreen(session: PiAgentSession,
                 anchor = sortAnchor,
                 // The same glyph the button draws, carried through the transform: the
                 // button is hidden while the menu is up and this copy grows into it.
+                // This button samples no backdrop — it draws itself as the library's
+                // opaque button fill — so the panel's first frame repaints that disc and
+                // fades it into the menu's glass. Without it the endpoint would be the
+                // panel's glass (measured rgb 248) against the button's fill (255), the
+                // step that read as the sort button changing colour after it settled.
+                anchorFill = GlassTopAppBarDefaults.buttonFill(),
                 anchorContent = {
                     Icon(
                         imageVector = MiuixIcons.Glass.Sort,

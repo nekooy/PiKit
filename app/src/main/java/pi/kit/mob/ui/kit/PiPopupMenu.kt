@@ -142,10 +142,11 @@ fun PiPopupMenu(
  * through [Modifier.piGlassMenuAnchorContent]; the panel is [PiAnchoredMenu]'s morph, not
  * Miuix's `GlassTransformPopup` — see the file's *Motion and placement follow the trigger*
  * for the dismissal defect that keeps the library's version out of the kit. [anchorContent]
- * is what carries the button's own glyph through that morph: the button's glyph is hidden
- * while the copy is on screen and that copy grows into the panel and fades, so the
- * transformation reads as the control becoming its menu while the control itself — its
- * glass, its shadow — stays exactly where the reader left it.
+ * is what carries the button's own glyph through that morph: the button is hidden, the
+ * panel's first frame is the button (a copy of its glyph plus [anchorFill] when the button
+ * samples no backdrop), and the copy grows into the panel and fades. The transformation
+ * therefore reads as the control becoming its menu, not as an icon flying out of a button
+ * that stays where it was.
  */
 @Composable
 fun PiPopupMenu(
@@ -154,6 +155,7 @@ fun PiPopupMenu(
     anchor: PiGlassMenuAnchor,
     anchorContent: @Composable () -> Unit,
     openBelow: Float = 0f,
+    anchorFill: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     RegisterPiPopup(anchor) { backdrop ->
@@ -166,6 +168,7 @@ fun PiPopupMenu(
             sizing = GlassPopupSizing(),
             below = openBelow,
             anchorContent = anchorContent,
+            anchorFill = anchorFill,
             content = content,
         )
     }
@@ -264,23 +267,27 @@ class PiGlassMenuAnchor internal constructor(internal val menu: PiMenuAnchor)
 fun rememberPiGlassMenuAnchor(): PiGlassMenuAnchor =
     remember { PiGlassMenuAnchor(PiMenuAnchor()) }
 
-/** Reports this glass icon button's own bounds as the menu's collapsed endpoint. */
+/**
+ * Reports this glass icon button's own bounds as the menu's collapsed endpoint, and hides
+ * it while its menu is on screen.
+ *
+ * The button is hidden for the whole transform because the panel's first frame *is* that
+ * button (see [PiPopupMenu]'s glass overload): the panel's surface starts at the button's
+ * own surface and its glyph copy at the button's own glyph, so a second copy left drawn
+ * under the panel would show through the glass as a ghost.
+ */
 fun Modifier.piGlassMenuAnchor(anchor: PiGlassMenuAnchor): Modifier =
     onGloballyPositioned { anchor.menu.bounds = it.boundsInWindow() }
+        .graphicsLayer { alpha = if (anchor.menu.contentHidden) 0f else 1f }
 
 /**
- * Reports the glyph's own bounds as the content the collapsed transform grows out of, and
- * hides that glyph while the copy in the panel is carrying it.
+ * Reports the glyph's own bounds as the content the collapsed transform grows out of.
  *
  * Apply to the icon inside a [Modifier.piGlassMenuAnchor] control. Without it the copy is
  * the whole button, and an icon with padding around it grows from that padding's centre.
- * Only the glyph is hidden, never the button: the button's own surface stays drawn, so the
- * end of the closing transform hands the icon back to a control that was there all along
- * rather than swapping one glass surface for another under the reader's eye.
  */
 fun Modifier.piGlassMenuAnchorContent(anchor: PiGlassMenuAnchor): Modifier =
     onGloballyPositioned { anchor.menu.contentBounds = it.boundsInWindow() }
-        .graphicsLayer { alpha = if (anchor.menu.contentHidden) 0f else 1f }
 
 @Composable
 private fun RegisterPiPopup(anchor: Any, panel: @Composable BoxScope.(Backdrop?) -> Unit) {
@@ -350,9 +357,9 @@ class PiMenuAnchor {
     /**
      * Whether a menu opened from this anchor is on screen, including its exit.
      *
-     * [Modifier.piGlassMenuAnchorContent] reads this to hide the button's glyph: the copy
-     * in the panel takes its place for the whole transform, and the glyph reappears only
-     * once that copy has shrunk back onto it. The button's own surface is never hidden.
+     * [Modifier.piGlassMenuAnchor] reads this to hide the button: the panel's first frame
+     * reproduces it for the whole transform, and the button reappears only once that
+     * reproduction has shrunk back onto it.
      */
     internal var contentHidden: Boolean by mutableStateOf(false)
 }

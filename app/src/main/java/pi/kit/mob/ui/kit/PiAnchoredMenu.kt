@@ -5,6 +5,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -37,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -68,14 +70,16 @@ internal val LocalPiMenuInteractive = staticCompositionLocalOf { true }
  * The kit's own glass menu.
  *
  * Context menus fade at full size; composer menus morph from the trigger. A glass icon
- * button's menu also carries the button's *glyph* through the transform: the real glyph is
- * hidden while the menu is on screen and a copy of it, reported through
- * [Modifier.piGlassMenuAnchorContent], grows into the panel and fades as the rows arrive.
- * The button itself — its fill, its stroke, its shadow — is never hidden, so the closing
- * transform ends on the control the reader started from instead of swapping one glass
- * surface for another in the last frame. Without the copy the panel merely expanded from
- * behind a button that stayed crisp beside it, which read as a panel appearing next to
- * the control rather than the control becoming the menu.
+ * button's menu is the button becoming the menu: the button is hidden for the whole
+ * transform and the panel's first frame *is* that button — a copy of its glyph, reported
+ * through [Modifier.piGlassMenuAnchorContent], grows into the panel and fades as the rows
+ * arrive, and the panel's surface starts at the button's own surface. A button outside a
+ * bar draws itself as `GlassTopAppBarDefaults.buttonFill()` (an opaque disc, because it
+ * has no backdrop to sample), so [anchorFill] repaints that disc under the panel's glass
+ * and fades it as the glass takes over; a button inside a bar is already the bar's glass,
+ * so it passes no fill and the panel's own glass is the endpoint. Neither mode swaps one
+ * surface for another in the last frame of the close, which read as the button changing
+ * colour once it had settled, and neither leaves the button standing beside its own menu.
  */
 @Composable
 internal fun BoxScope.PiAnchoredMenu(
@@ -87,6 +91,8 @@ internal fun BoxScope.PiAnchoredMenu(
     sizing: GlassPopupSizing,
     below: Float = 0f,
     anchorContent: (@Composable () -> Unit)? = null,
+    /** The trigger's own surface when it samples no backdrop; see the KDoc above. */
+    anchorFill: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val trigger = anchor.bounds
@@ -95,8 +101,8 @@ internal fun BoxScope.PiAnchoredMenu(
     val visibility = remember { MutableTransitionState(false) }
     visibility.targetState = open
     val transition = rememberTransition(visibility, label = "anchoredMenu")
-    // Active covers the exit as well: the button's glyph stays hidden until the copy has
-    // shrunk back onto it, and the copy is what the reader sees hand the glyph back.
+    // Active covers the exit as well: the button stays hidden until its copy has shrunk
+    // back onto it, and the copy is what the reader sees hand the control back.
     val active = open || visibility.currentState || !visibility.isIdle
     if (anchorContent != null) {
         SideEffect { anchor.contentHidden = active }
@@ -160,9 +166,35 @@ internal fun BoxScope.PiAnchoredMenu(
         Layout(
             modifier = Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow() },
             content = {
-                Box(material(shape).then(if (open) Modifier.pointerInput(Unit) {
-                    awaitPointerEventScope { while (true) awaitPointerEvent() }
-                } else Modifier))
+                // The panel surface, and — for a button that has no backdrop of its own —
+                // the button's opaque fill on top of it. The fill is opaque at the first
+                // frame and fades as the glass takes over, so the morph starts on the
+                // control the reader pressed instead of on a panel-shaped circle.
+                Box(
+                    Modifier.matchParentSize().then(if (open) Modifier.pointerInput(Unit) {
+                        awaitPointerEventScope { while (true) awaitPointerEvent() }
+                    } else Modifier),
+                ) {
+                    Box(
+                        Modifier.matchParentSize()
+                            .then(material(shape))
+                            .then(
+                                if (anchorContent != null) {
+                                    Modifier.graphicsLayer { alpha = surface.value.coerceIn(0f, 1f) }
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    )
+                    val fill = anchorFill
+                    if (fill != null && anchorContent != null) {
+                        Box(
+                            Modifier.matchParentSize()
+                                .graphicsLayer { alpha = 1f - surface.value.coerceIn(0f, 1f) }
+                                .background(fill, shape),
+                        )
+                    }
+                }
                 val scroll = rememberScrollState()
                 CompositionLocalProvider(LocalPiMenuInteractive provides open) {
                     Column(
@@ -223,7 +255,10 @@ internal fun BoxScope.PiAnchoredMenu(
                 val left = (frame.left - origin.x).roundToInt()
                 val top = (frame.top - origin.y).roundToInt()
                 background.placeWithLayer(left, top) {
-                    alpha = surface.value.coerceIn(0f, 1f)
+                    // A glyph menu's surface is opaque from its first frame — the button
+                    // it replaces — and the fill above fades out under the glass; every
+                    // other mode fades the whole panel in.
+                    alpha = if (anchorContent != null) 1f else surface.value.coerceIn(0f, 1f)
                 }
                 val scale = if (morph && size.width > 0 && size.height > 0) {
                     minOf(frame.width / size.width, frame.height / size.height)
@@ -247,10 +282,9 @@ internal fun BoxScope.PiAnchoredMenu(
         }
         // The button's glyph, handed over to the panel: it starts exactly on the button
         // (scale 1, no offset, no blur), grows to the settled panel's width and centre,
-        // and fades as the rows arrive. The button's own glyph is hidden for as long as
-        // this exists, so the reader sees one figure becoming the menu rather than a
-        // second icon sitting beside it; the button's surface underneath stays drawn,
-        // which is what makes the last frame of the close a hand-back and not a swap.
+        // and fades as the rows arrive. The whole button is hidden for as long as this
+        // exists, and the panel's first frame is that button, so the reader sees one
+        // object becoming the menu rather than a second icon beside it.
         val glyph = anchorContent
         if (glyph != null) {
             Layout(

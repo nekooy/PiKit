@@ -175,17 +175,18 @@ fun PiPage(
             GlassTopAppBar(
                 title = title,
                 modifier = Modifier.onGloballyPositioned { barBottom = it.boundsInWindow().bottom },
-                // Always scrolled, so the bar's controls are glass from the first frame:
-                // `GlassTopAppBar` turns this one flag into `materialProgress` — the
-                // pill's alpha, its edge stroke and its shadow — and into `maskProgress`,
-                // the band's 100ms fade. Miuix 0.9.5-beta03 has no way to raise the
-                // first without the second at the call site: `GlassIconButton` takes no
-                // progress parameter, `inheritTopBarMaterial = false` only opts out of
-                // the bar's backdrop and material (the shared progress is still passed),
-                // and the context that carries it (`LocalGlassTopAppBarContext`) is
-                // internal. `backgroundAlpha` is the public multiplier the library applies
-                // to the band after `maskProgress`, so the band is handed to `bandAlpha`
-                // below and the buttons keep the material at rest.
+                // Always scrolled, so the bar's controls hold the material from the
+                // first frame: `GlassTopAppBar` turns this one flag into
+                // `materialProgress` — the pill's alpha, its edge stroke and its shadow —
+                // and into `maskProgress`, the band's 100ms fade. Miuix 0.9.5-beta03 has
+                // no way to raise the first without the second at the call site:
+                // `GlassIconButton` takes no progress parameter, `inheritTopBarMaterial =
+                // false` only opts out of the bar's backdrop and material (the shared
+                // progress is still passed), and the context that carries it
+                // (`LocalGlassTopAppBarContext`) is internal. `backgroundAlpha` is the
+                // public multiplier the library applies to the band after `maskProgress`,
+                // so the band is handed to `bandAlpha` below and every control keeps its
+                // material at rest.
                 //
                 // At rest this leaves `keepMaterial` true, which is what keeps the pill,
                 // its stroke and its shadow drawn; the band is off because `bandAlpha` is
