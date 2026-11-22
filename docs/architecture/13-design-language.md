@@ -603,12 +603,17 @@ because the strip version was worse:
 - **The transcript runs under the top**, with `headerSpace` as its *content* padding
   rather than as a margin, so the list can still scroll a row into that space — a margin
   would have cut the row off at the bar's edge instead of letting it dissolve.
-- **The fade starts at the status bar's bottom edge**, not at the button row's.
-  `PiTopEdgeFade` samples the same transcript-only layer as the header glass, but covers
-  the entire width, including the gaps beside the capsules. The status strip stays solid
-  and the progressive blur reaches zero at the end of the band. Without RuntimeShader,
-  the four-stop colour ramp (`100% → 62% → 26% → 0`) keeps the contrast transition; a
-  two-stop ramp snapped into its transparent end.
+- **The fade starts at the status bar's bottom edge**, not at the button row's: its solid
+  part is exactly the status bar's height and the ramp runs from there, so a row begins to
+  dissolve the moment it leaves the clock's line. It is a four-stop ramp
+  (`100% → 62% → 26% → 0`): a two-stop one hits its transparent end while the eye still
+  expects a gradual departure, so the row crossing it seemed to snap into place. The
+  header's glass samples the transcript's own layer; this gradient is still drawn by hand
+  rather than by a second rendering of the list, because it also has to cover the area
+  beside the capsules where no control samples anything. The settings bar's pinned
+  `GlassTopAppBar` band was tried as a replacement and lost: it brings a compact bar's
+  strip to a page that has no bar, so the top stops being two capsules over a full-width
+  dissolve.
 
 **The bottom of the page is a fade too, and it starts at the field.** The composer is a
 band that *floats over* the transcript rather than a row under it: the list's bottom

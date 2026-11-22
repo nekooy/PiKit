@@ -216,7 +216,6 @@ import pi.kit.mob.ui.kit.PiPopupPlacement
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiTone
-import pi.kit.mob.ui.kit.PiTopEdgeFade
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piGlass
@@ -2624,14 +2623,33 @@ private fun ChatPage(
             }
         }
 
-        if (cards.isNotEmpty()) {
-            PiTopEdgeFade(
-                backdrop = chatBackdrop,
-                color = MiuixTheme.colorScheme.surface,
-                height = topInset + FADE_TAIL,
-                solidInset = topInset,
-            )
-        }
+        // The conversation fades out under the bar rather than being cut by it: a hard
+        // edge there is the seam the reference drawing spends the whole top of the screen
+        // hiding. Drawn over the transcript and under the marks, so a row scrolling up
+        // dissolves into the page instead of colliding with a capsule.
+        // The fade belongs to the **status bar's bottom edge**, not to the button row's.
+        //
+        // Its solid part is exactly the status bar's height and the ramp starts there, so
+        // a row begins to dissolve the moment it leaves the clock's line rather than
+        // staying at full contrast all the way down to the capsules. That is where the
+        // reference drawing's own fade begins.
+        val fadeHeight = topInset + FADE_TAIL
+        val fadeSolid = if (fadeHeight > 0.dp) topInset / fadeHeight else 0f
+        val ramp = 1f - fadeSolid
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(fadeHeight)
+                .background(
+                    Brush.verticalGradient(
+                        0f to MiuixTheme.colorScheme.surface,
+                        fadeSolid to MiuixTheme.colorScheme.surface,
+                        fadeSolid + ramp * 0.45f to MiuixTheme.colorScheme.surface.copy(alpha = 0.62f),
+                        fadeSolid + ramp * 0.8f to MiuixTheme.colorScheme.surface.copy(alpha = 0.26f),
+                        1f to Color.Transparent,
+                    ),
+                ),
+        )
 
         ChatHeader(
             title = if (mode == AgentMode.WORK) text.settings.modeWork else text.settings.modeChat,

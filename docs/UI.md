@@ -125,10 +125,9 @@ that cut the last card in two (§13, *The window's last pixels*).
   page that fits. The band recedes when the content returns, not when the drag ends.
 - **A fixed header fades only its scrolling viewport.** Files and the manual pass
   `contentScrollsUnderBar = false` and put `PiTopEdgeViewport` below their pinned
-  controls. The drawer uses the same viewport below search; chat samples its
-  existing transcript recording with `PiTopEdgeFade` below the capsules. The
-  recording and the sampler are siblings; only devices without RuntimeShader use
-  a colour ramp instead of a texture blur.
+  controls. The drawer uses the same viewport below search. Chat is the exception:
+  its header is two floating capsules over a transcript that fades under the page's
+  own hand-drawn four-stop ramp, not a bar's progressive-blur band (§13).
 - **`piOverScroll()` comes *before* `verticalScroll` in the chain, never after.** A
   nested-scroll connection finds its scrollers by walking ancestors; placed after
   the scroller it is downstream and never dispatched to, so the page silently loses
