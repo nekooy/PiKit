@@ -67,7 +67,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * read-only fact — that repeated the application facts this page already carried:
  * *inside the runtime* was listed twice (as 内置 pi here and 已安装镜像 there), the tool
  * list was drawn twice, and the agent's process state was a third row about something
- * the "Agent 进程" row on the tab root and the Agent page both already state. So the
+ * the "Agent 配置" row on the tab root and the Agent page both already state. So the
  * two pages are one, and the duplicate rows are gone rather than merged:
  *
  *  * **Kept, from this page:** the app's version and package id, pi's version and its

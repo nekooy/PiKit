@@ -57,12 +57,13 @@ internal sealed interface SettingsPage {
     data object Backup : SettingsPage
 
     /**
-     * Working directory, what the model is given, and the process controls.
+     * The agent itself: its process, the workspace and instruction documents work
+     * mode reads, and chat mode's presets.
      *
-     * Context used to be its own page between the storage row and this one. It
-     * is a section here now — the answer to "what does the agent know?" sits
-     * with the workspace and the process — and its five points stay points. One
-     * page fewer for the same content and the same one editable file.
+     * Context used to be its own page between the storage row and this one; it is
+     * a sheet from this page now, because "what does the model receive" is a
+     * question about the two instruction rows beside it rather than a destination
+     * of its own.
      */
     data object Agent : SettingsPage
 
@@ -85,7 +86,7 @@ internal sealed interface SettingsPage {
     /**
      * Where the system back button goes from here. Root has no parent.
      *
-     * The environment, the agent process and About PiKit used to be a page of
+     * The environment, Agent settings and About PiKit used to be a page of
      * their own under an "Advanced" row, which made the tab root's list shorter
      * at the cost of a level nobody wanted: three rows that are each one fact,
      * one tap further away than every other fact in the app. They are rows on the
@@ -154,7 +155,7 @@ internal fun decodeSettingsPage(encoded: String): SettingsPage = when {
     // The storage page was removed once the permission tiers took over what it
     // decided (§14); its stored state lands at the root.
     encoded == "Storage" -> SettingsPage.Root
-    // Context is a section of the agent process page now. A state saved by
+    // Context is a sheet on the Agent settings page now. A state saved by
     // a build that had its own page lands there rather than at the root.
     encoded == "AgentContext" -> SettingsPage.Agent
     encoded == "Manual" -> SettingsPage.Manual
@@ -462,11 +463,11 @@ private fun RootPage(
                 // agent page answers the same question now, with one answer instead of
                 // seven switches (§14).
                 ArrowPreference(
-                    title = text.settings.agentProcess,
+                    title = text.settings.agentConfig,
                     summary = agentDescription(agent, text),
                     onClick = { onOpen(SettingsPage.Agent) },
                 )
-                // Between the agent process and the maintenance pair, and that is
+                // Between Agent settings and the maintenance pair, and that is
                 // where it belongs rather than a matter of taste: the two rows either
                 // side of it change things the APK can put back — the runtime, the
                 // process, the pi install — and this one is the only row on this page

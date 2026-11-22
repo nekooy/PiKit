@@ -62,7 +62,7 @@ internal object ChineseStrings : Strings {
         override val chatTips = listOf(
             "聊天模式不加载工具和工作区文件，直接聊就好",
             "聊天模式也会把这段对话的历史一起带上",
-            "想改人设或时间位置，可以去设置 → Agent 进程 → 聊天模式",
+            "想改人设或时间位置，可以去设置 → Agent 配置 → 聊天模式",
         )
         override val loadingConversation = "正在打开对话…"
         override val placeholderAttachment = "给这些图片补充说明…"
@@ -426,73 +426,56 @@ internal object ChineseStrings : Strings {
         override val storageAskOpen = "去授权"
         override val storageAskLater = "稍后再说"
 
-        override val agentContextSection = "上下文"
         override val modeWork = "工作"
         override val modeChat = "聊天"
         override val workMode = "工作模式"
         override val chatMode = "聊天模式"
-        override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "抽屉底部切到「聊天」后，不加载工具、技能和 AGENTS.md；系统提示词只有预设里的那一份，留空就完全不发" +
-                "——除非这个对话的联网开关把搜索和抓取工具借给它"
+            "只发送预设里的系统提示词，不加载工具、技能和 AGENTS.md。"
         override val chatSystemPromptEditorHint =
-            "这里写的内容就是聊天模式唯一的系统提示词。默认只有 {{time}}（当前时间）；留空表示完全不发送。" +
-                "把 {{time}} 放在想注入时间的位置；启动时会替换成当前时间。"
+            "聊天模式唯一的系统提示词。{{time}} 会在启动时替换为当前时间；留空则不发送。"
         override val chatSystemPromptRestore = "恢复默认"
         override val presetDefaultRow = "默认预设"
-        override val presetDefaultSubtitle = "新建聊天对话时使用的预设"
+        override val presetDefaultSubtitle = "新聊天使用的预设"
         override val presetDefaultBadge = "默认"
         override val presetAdd = "添加预设"
-        override val presetAddAction = "添加"
         override val presetNewName = "新预设"
         override val presetEditTitle = "编辑预设"
         override val presetName = "名字"
-        override val presetNameHint =
-            "显示在预设头像旁，也作为对话里回答方的名字。留空则沿用个性化页里的名字。"
+        override val presetNameHint = "显示在头像旁和回答上方；留空则沿用个性化名字。"
         override val presetAvatarInherit = "沿用个性化头像"
-        override val presetAvatarInheritHint = "开启时，上面的图片和颜色都来自个性化页"
+        override val presetAvatarInheritHint = "图片和颜色都来自个性化页"
         override val presetPrompt = "系统提示词"
         override val presetPromptEmpty = "不发送系统提示词"
         override val presetPromptTime = "只发送当前时间"
         override val presetDelete = "删除预设"
-        override val presetDeleteHint = "提示词和头像会一并删除；用过它的对话回落到默认预设"
+        override val presetDeleteHint = "提示词和头像会删除；用过的对话回到默认预设"
         override val presetDeleteTitle = "删除这个预设？"
         override val presetDeleteBody =
             "它的提示词和头像会被删除。用过它的对话改用默认预设，消息和历史都保留。"
-        override val agentContextLead = "模型每次请求时，pi 把这些内容一起发给它："
-        override val agentContextLeadTitle = "上下文说明"
+        override val agentContextLead = "每次请求，pi 会把下面这些一起发给模型："
+        override val agentContextLeadTitle = "模型会收到什么"
+        override val agentContextSummary = "系统提示、指令文件、工具与对话历史"
         override val agentContextSystemTitle = "系统提示"
         override val agentContextSystemBody =
-            "pi 自带的角色设定（编码助手）、工具清单与调用规则（比如 edit 用精确替换、read 代替 " +
-                "cat），以及 pi 自己的文档索引。PiKit 不改动它。"
+            "pi 自带的角色、工具规则和文档索引，PiKit 不改动。"
         override val agentContextInstructionsTitle = "指令文件 AGENTS.md"
         override val agentContextInstructionsBody =
-            "pi 会自动读取 AGENTS.md，有两处：\n" +
-                "· 全局：\$HOME/.pi/agent/AGENTS.md，由 PiKit 把两份文档合成——" +
-                "「默认提示词」（AGENTS.author.md）是 PiKit 写的环境说明，可以改，" +
-                "PiKit 更新默认内容时会覆盖；「用户指令」（AGENTS.user.md）一开始是空的，" +
-                "只属于你，PiKit 永不改写；\n" +
-                "· 工作区：项目自己放在它目录里的 AGENTS.md，例如 ~/workspace/AGENTS.md；" +
-                "pi 从工作区往上找，越靠近项目的那份越具体。"
+            "全局的由「默认提示词」和「用户指令」合成；项目自己放在目录里的也会读取。"
         override val agentContextRuntimeTitle = "运行环境"
         override val agentContextRuntimeBody =
-            "模型与供应商、思考等级、会话 ID 与会话文件路径、这个对话的工作区" +
-                "（PIKIT_WORKSPACE，也就是工具调用里相对路径的基准，中间档只允许写它）、" +
-                "权限等级（写在 \$HOME/.pikit/permission.json，每次工具调用都会重新读：" +
-                "仅可查看、工作区内读写或完全访问），以及遥测开关（PI_TELEMETRY=0）。"
+            "模型、思考等级、会话、工作区和权限等级。"
         override val agentContextToolsTitle = "工具"
         override val agentContextToolsBody =
-            "pi 自带的 read、bash、edit、write、grep、find、ls，加上 PiKit 内置的 pikit-web " +
-                "扩展提供的 web_search 与 web_fetch，以及按权限等级拦下工具调用的 " +
-                "pikit-permissions。"
+            "pi 的 read、bash、edit、write、grep、find、ls，以及联网搜索和抓取。"
         override val agentContextHistoryTitle = "对话历史"
         override val agentContextHistoryBody =
-            "当前这段会话，包括工具调用与结果，随每条消息一起发送，并写入会话文件。"
+            "当前会话的全部消息和工具结果。"
         override val agentContextAuthorTitle = "默认提示词"
-        override val agentContextAuthorSubtitle = "由 PiKit 维护：运行环境、权限分级与规则，随每个版本重写"
+        override val agentContextAuthorSubtitle = "PiKit 维护，随版本更新"
         override val agentContextUserTitle = "用户指令"
-        override val agentContextUserSubtitle = "一开始是空的，只属于你；PiKit 永远不会改它"
-        override val agentContextUserEmpty = "还是空的，点进去写"
+        override val agentContextUserSubtitle = "只属于你，PiKit 永不改写"
+        override val agentContextUserEmpty = "还没有内容，点进去写"
         override val agentContextInstructionsEditable = "可编辑"
         override val agentContextReadOnly = "只读"
         override val agentContextSave = "保存"
@@ -624,18 +607,18 @@ internal object ChineseStrings : Strings {
         override val maxTokensLabel = "最大输出"
         override val modelNumbersNote = "留空表示不改这一项，按上面显示的数值使用。"
 
-        override val workspace = "工作区"
+        override val agentConfig = "Agent 配置"
+        override val agentRunSection = "运行"
+        override val agentStatus = "状态"
         override val defaultWorkspace = "默认工作区"
         override fun defaultWorkspaceSubtitle(name: String) =
             "新对话从 $name 开始"
-        override val process = "进程"
-        override val agentProcess = "Agent 进程"
-        override val restartAgent = "重启 Agent"
+        override val restartAgent = "重启"
         override val restartedAgent = "Agent 已重启"
         override val keepAliveTitle = "后台保活"
         override val keepAliveGranted = "已关闭电池优化"
         override val keepAliveDenied = "仍受电池优化限制"
-        override val keepAliveAsk = "申请保活白名单"
+        override val keepAliveAsk = "去设置"
         override val keepAliveAskBody =
             "系统可能在你息屏或切到后台时回收 Agent 进程，让正在进行的回答中断。把 PiKit " +
                 "加入电池优化白名单可以避免这一点，代价是它会一直驻留后台、略微更耗电。" +

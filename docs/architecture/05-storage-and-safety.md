@@ -156,7 +156,7 @@ is a *previous default* (the marker says so, the author's half is replaced, the 
 starts empty), and an `AGENTS.md` the reader wrote before the split (it becomes the reader's
 half verbatim, and the author's half is written beside it).
 
-Settings → Agent process has one row per half. The author's row offers the default back; the
+Settings → Agent settings → Work mode has one row per half. The author's row offers the default back; the
 reader's does not, because "restore the default" for a document whose promise is that the app
 never rewrites it could only mean "throw my text away".
 

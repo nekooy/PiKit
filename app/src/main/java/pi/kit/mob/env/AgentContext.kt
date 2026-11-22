@@ -17,7 +17,7 @@ import java.io.File
  *
  * ## Once it exists, it is the user's
  *
- * The file is editable from **Settings → Agent process**, and that is why [install]
+ * The composed file is reachable from **Settings → Agent settings**, and that is why [install]
  * writes it only when it is missing. An update that silently replaced the file would
  * throw away the sentences a user added about their own project — and the file's own
  * rules are advice to the model, so a stale default costs a less well-informed agent

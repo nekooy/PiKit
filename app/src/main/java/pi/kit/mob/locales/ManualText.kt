@@ -20,7 +20,7 @@ package pi.kit.mob.locales
  * than after the feature that does it: the first launch, setting up a model, the
  * composer, more than one conversation at once, workspaces and the permission
  * tiers, the files page, the terminal, web search, the settings rows in one
- * table, the agent process, backup and restore, and what to do when something
+ * table, agent settings, backup and restore, and what to do when something
  * fails. A chapter opens with the one sentence that answers it and then uses the
  * shape the answer wants: a table for a comparison (tiers, commands, settings
  * rows), numbered steps for a procedure, bullet lists led by a **bold** phrase,
@@ -322,10 +322,10 @@ in, and the folder the agent may write to.
   workspace for this conversation; **Add a
   workspace** takes any folder, the phone's
   storage included once file access is granted.
-- **The default**: **Settings → Agent process
-  → Default workspace** is where a new
-  conversation starts, and changing it does not
-  move the one on screen.
+- **The default**: **Settings → Agent settings
+  → Work mode → Default workspace** is where a
+  new conversation starts, and changing it does
+  not move the one on screen.
 - **Changing it mid-answer** asks first,
   because pi aborts the running turn when the
   session's directory changes.
@@ -519,7 +519,7 @@ tab: five rows in **Essentials** and four in
 | Personalization | launch, text size, theme, icon, avatars |
 | Language | English, 简体中文, 日本語 |
 | User manual | this page |
-| Agent process | restart, workspace, instructions, chat prompt, keep alive |
+| Agent settings | process, workspace, instructions, chat presets, keep alive |
 | Backup & restore | one archive out, and back in |
 | Maintenance & repair | models, packages, rebuild, storage check |
 | About PiKit | versions, package id, paths, update check |
@@ -537,13 +537,14 @@ tab: five rows in **Essentials** and four in
 > **Tip:** the version and package id a bug report
 > needs are both on **About PiKit**.
 
-## 10. The agent process
+## 10. Agent settings
 
-This page has two halves. **Work mode** owns the
-folder a new conversation starts in, what the
-model is told, and the process that carries
-both. **Chat mode** owns its prompt presets, and
-the one optional tool the reader may lend them.
+This page has three groups. **Runtime** is the
+process every conversation has: its status, the
+restart and the battery exemption. **Work mode**
+owns the folder a new conversation starts in and
+the instruction documents it reads. **Chat
+mode** owns its prompt presets.
 
 ### What work mode gives the model
 
@@ -578,7 +579,7 @@ the one optional tool the reader may lend them.
   is its preset, by default just the current
   time, and if that document is empty, there is
   no leading context at all.
-- **Presets**: the chat half of this page. A
+- **Presets**: the chat card of this page. A
   preset is a system prompt with a name and an
   avatar; whatever it leaves unset is taken from
   the personalization page. The first chip above
@@ -610,11 +611,11 @@ the one optional tool the reader may lend them.
   agent, because pi reads it only when the
   process starts.
 
-### Process and keep-alive
+### Runtime and keep-alive
 
-- **Restart agent** stops and starts pi in one
-  tap; when a start fails, pi's own error is
-  under the row.
+- **Restart** stops and starts pi in one tap;
+  when a start fails, pi's own error is under
+  the row.
 - **Keep alive** is Android's
   battery-optimisation exemption; the row says
   which state it is in and asks only while the
@@ -691,7 +692,7 @@ ones with a way out.
 - **`pi exited with code 1`**: the process
   failed to start, and the chat page shows pi's
   error with **Retry**. If that does not help,
-  restart it on **Settings → Agent process**,
+  restart it on **Settings → Agent settings**,
   then rebuild the runtime under **Maintenance &
   repair**.
 - **A package will not run**: `command not
@@ -707,7 +708,7 @@ ones with a way out.
 - **A bug report needs** the version and
   package id from **About PiKit**, pi's version
   from the same page, and pi's own last error
-  from **Agent process**.
+  from **Agent settings**.
 
 > **Tip:** **Check storage** proves the grant without a
 > terminal, and **Rebuild the environment** is the way

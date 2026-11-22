@@ -54,7 +54,7 @@ internal object EnglishStrings : Strings {
         override val chatTips = listOf(
             "Chat mode loads no tools or workspace files — just talk.",
             "Chat mode still carries this conversation's history.",
-            "To change the persona or where the time goes, open Settings → Agent process → Chat mode.",
+            "To change the persona or where the time goes, open Settings → Agent settings → Chat mode.",
         )
         override val loadingConversation = "Opening the conversation…"
         override val placeholderAttachment = "Add a message for these images…"
@@ -433,87 +433,58 @@ internal object EnglishStrings : Strings {
         override val storageAskOpen = "Grant access"
         override val storageAskLater = "Not now"
 
-        override val agentContextSection = "Context"
         override val modeWork = "Work"
         override val modeChat = "Chat"
         override val workMode = "Work mode"
         override val chatMode = "Chat mode"
-        override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "With the drawer's switch on Chat, no tools, skills or AGENTS.md load. A preset's " +
-                "prompt is the only system text — an empty one sends nothing — unless this " +
-                "conversation's web switch lends it the search and fetch tools"
+            "Sends only the preset's system prompt; loads no tools, skills or AGENTS.md."
         override val chatSystemPromptEditorHint =
-            "What you write here is chat mode's only system prompt. It starts with {{time}}, " +
-                "the current time; leave it empty to send none. Put {{time}} where the time should " +
-                "be injected; it becomes the current time at launch."
+            "Chat mode's only system prompt. {{time}} becomes the current time at launch; " +
+                "leave it empty to send none."
         override val chatSystemPromptRestore = "Restore default"
         override val presetDefaultRow = "Default preset"
-        override val presetDefaultSubtitle =
-            "The preset a new chat conversation starts with"
+        override val presetDefaultSubtitle = "The preset a new chat starts with"
         override val presetDefaultBadge = "Default"
         override val presetAdd = "Add preset"
-        override val presetAddAction = "Add"
         override val presetNewName = "New preset"
         override val presetEditTitle = "Edit preset"
         override val presetName = "Name"
-        override val presetNameHint =
-            "Shown beside the preset's avatar and as the speaker in the transcript. " +
-                "Leave empty to use the personalization name."
+        override val presetNameHint = "Shown beside the avatar and over its answers; leave empty to use the personalization name."
         override val presetAvatarInherit = "Use the personalization avatar"
-        override val presetAvatarInheritHint =
-            "While on, the picture and colour come from the personalization page"
+        override val presetAvatarInheritHint = "The picture and colour come from the personalization page"
         override val presetPrompt = "System prompt"
         override val presetPromptEmpty = "Sends no system prompt"
         override val presetPromptTime = "Sends only the current time"
         override val presetDelete = "Delete preset"
-        override val presetDeleteHint =
-            "The prompt and the picture are removed; conversations that used it fall back " +
-                "to the default"
+        override val presetDeleteHint = "The prompt and picture are removed; conversations that used it fall back to the default"
         override val presetDeleteTitle = "Delete this preset?"
         override val presetDeleteBody =
-            "Its prompt and picture are removed. Conversations that used it start using the " +
+            "Its prompt and picture are removed. Conversations that used it switch to the " +
                 "default preset; their messages stay."
         override val agentContextLead = "With every request, pi sends the model:"
-        override val agentContextLeadTitle = "What the context holds"
+        override val agentContextLeadTitle = "What the model receives"
+        override val agentContextSummary = "System prompt, instruction files, tools and conversation"
         override val agentContextSystemTitle = "System prompt"
         override val agentContextSystemBody =
-            "pi's own role (a coding assistant), its tool list and calling rules (edit replaces " +
-                "exactly, read instead of cat), and pi's documentation index. PiKit does not " +
-                "change it."
+            "pi's own role, tool rules and documentation index. PiKit leaves it alone."
         override val agentContextInstructionsTitle = "Instruction files, AGENTS.md"
         override val agentContextInstructionsBody =
-            "pi reads AGENTS.md automatically, in two places:\n" +
-                "· Global: \$HOME/.pi/agent/AGENTS.md, which PiKit composes from two " +
-                "documents — the default instructions (AGENTS.author.md), written by PiKit " +
-                "and editable, replaced when PiKit's own default changes; and the user's " +
-                "instructions (AGENTS.user.md), empty to begin with and never rewritten by " +
-                "the app;\n" +
-                "· Workspace: an AGENTS.md a project keeps in its own directory, such as " +
-                "~/workspace/AGENTS.md; pi searches upwards from the workspace, so the one " +
-                "nearest the project is the most specific."
+            "The global file is composed from the default instructions and yours; a project's own file is read too."
         override val agentContextRuntimeTitle = "Runtime"
         override val agentContextRuntimeBody =
-            "The model and provider, the thinking level, the session id and its file, this " +
-                "conversation's workspace (PIKIT_WORKSPACE — the base every relative path " +
-                "resolves against, and the only directory the middle tier may write), the " +
-                "permission tier (read from \$HOME/.pikit/permission.json on every tool " +
-                "call: read-only, workspace-write or full access), and the telemetry switch " +
-                "(PI_TELEMETRY=0)."
+            "The model, thinking level, session, workspace and permission tier."
         override val agentContextToolsTitle = "Tools"
         override val agentContextToolsBody =
-            "pi's own read, bash, edit, write, grep, find and ls, plus web_search and " +
-                "web_fetch from the pikit-web extension PiKit ships, and pikit-permissions, " +
-                "which refuses a call the tier does not allow."
+            "pi's read, bash, edit, write, grep, find and ls, plus web search and fetch."
         override val agentContextHistoryTitle = "Conversation"
         override val agentContextHistoryBody =
-            "This session, tool calls and results included, sent with every message and " +
-                "written to the session file."
+            "Every message and tool result in this session."
         override val agentContextAuthorTitle = "Default instructions"
-        override val agentContextAuthorSubtitle = "Maintained by PiKit — the environment, the tiers and the rules, rewritten from each build"
+        override val agentContextAuthorSubtitle = "Maintained by PiKit, rewritten each build"
         override val agentContextUserTitle = "User instructions"
-        override val agentContextUserSubtitle = "Empty to begin with, and only yours; PiKit never rewrites it"
-        override val agentContextUserEmpty = "Still empty — open it and write"
+        override val agentContextUserSubtitle = "Yours alone; PiKit never rewrites it"
+        override val agentContextUserEmpty = "Nothing yet — open it and write"
         override val agentContextInstructionsEditable = "Editable"
         override val agentContextReadOnly = "Read-only"
         override val agentContextSave = "Save"
@@ -665,18 +636,18 @@ internal object EnglishStrings : Strings {
         override val modelNumbersNote =
             "Leave one empty to change nothing: the value shown above is what pi uses."
 
-        override val workspace = "Workspace"
+        override val agentConfig = "Agent settings"
+        override val agentRunSection = "Runtime"
+        override val agentStatus = "Status"
         override val defaultWorkspace = "Default workspace"
         override fun defaultWorkspaceSubtitle(name: String) =
             "New conversations start in $name"
-        override val process = "Process"
-        override val agentProcess = "Agent process"
-        override val restartAgent = "Restart agent"
+        override val restartAgent = "Restart"
         override val restartedAgent = "Agent restarted"
         override val keepAliveTitle = "Keep alive"
         override val keepAliveGranted = "Battery optimisation is off for this app"
         override val keepAliveDenied = "Still subject to battery optimisation"
-        override val keepAliveAsk = "Ask for the exemption"
+        override val keepAliveAsk = "Open settings"
         override val keepAliveAskBody =
             "With the screen off or the app in the background, the system may reclaim the " +
                 "agent and cut a running answer short. Adding PiKit to the battery-optimisation " +

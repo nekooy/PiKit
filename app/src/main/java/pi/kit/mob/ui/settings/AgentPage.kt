@@ -1,6 +1,8 @@
 package pi.kit.mob.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
@@ -24,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -48,6 +53,7 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
@@ -57,35 +63,26 @@ import pi.kit.mob.ui.WorkspacePickerSheet
 import pi.kit.mob.ui.rememberWorkspaceList
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * Working directory, what the model is given, and the process controls.
+ * Agent configuration: the process that carries the conversation, the workspace and
+ * instructions work mode reads, and chat mode's preset list.
  *
- * The working directory keeps saving as it is typed — deliberately unlike the
- * model form. It is a path the user is copying from somewhere else, nothing
- * downstream is invalidated by a half-typed value, and there is no provider to
- * bill for a mistake.
+ * The page is grouped by subject rather than by launch mode. **Run** is the process
+ * every conversation has — a chat conversation is a pi process too, which is why the
+ * process controls no longer sit under Work mode. **Work mode** is the folder and the
+ * instruction documents a work launch reads. **Chat mode** is the presets a chat launch
+ * reads. Three cards, one subject each; the page title can then say what the page really
+ * configures instead of naming one of its groups.
  *
- * Thinking level used to live here, then on the model page. It is a property of
- * the model answering — pi combines it with the model's own reasoning
- * capability, and the two are meaningless apart — and the conversation changes
- * it mid-turn, so the control is the composer's chip.
- *
- * The context description used to be a page of its own. It is a section here
- * now: the answer to "what does the agent know?" sits with the workspace it
- * works in and the process that launches it. The five points open in the same
- * bottom sheet the AGENTS.md row uses — a window over the page, not a wall of
- * prose above the one control the section is for.
- *
- * The page is split by launch mode. The work half keeps its three groups — workspace,
- * the context documents and the process — under `Work mode · …` titles; the chat half
- * is one card holding the system prompt chat launches read. The split is two sets of
- * cards rather than a tab, so changing a workspace does not first ask which mode is
- * being edited.
+ * The context row is a way in, not a control: it opens one card of five short rows that
+ * answer "what does the model actually receive". It used to open five numbered
+ * paragraphs, which is a page of reading before the rows the reader came for.
  *
  * ## The two sheets are windows, not views
  *
@@ -143,8 +140,6 @@ internal fun AgentPage(
     }
     val text = strings
     val toasts = LocalPiToast.current
-    // The composed document is not edited here: the two rows below open the halves.
-    val instructions = remember(session) { AgentContext.file(session.env) }
     LaunchedEffect(agent) {
         if (!restarting) return@LaunchedEffect
         if (agent is AgentStatus.Starting || agent is AgentStatus.Stopped) restartMoved = true
@@ -170,12 +165,7 @@ internal fun AgentPage(
 
     val pageScroll = rememberScrollState()
     PiPage(
-        // The row this page opens reads "Agent process" (`text.settings.agentProcess`),
-        // and so do the manual and this page's own section list; only the old header
-        // said "Agent". Reading the row's key rather than a second string with the same
-        // value is what keeps the two from drifting apart again. The subtitle is the
-        // same status line the row shows, from the same function.
-        title = text.settings.agentProcess,
+        title = text.settings.agentConfig,
         subtitle = agentDescription(agent, text),
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
@@ -185,61 +175,10 @@ internal fun AgentPage(
         overlay = {
             PiSheet(
                 show = showContext,
-                title = text.settings.agentContextSection,
+                title = text.settings.agentContextLeadTitle,
                 onDismiss = { showContext = false },
             ) {
-                // The lead sentence is the row's own subtitle, which the sheet's title has no
-                // slot for; the five points are what the row promised.
-                Text(
-                    text = text.settings.agentContextLead,
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // Bounded and scrolled: five prose blocks are taller than a sheet may
-                        // grow, and the sheet's own ceiling is the status bar. A plain Column
-                        // rather than a lazy list, because these are paragraphs rather than
-                        // rows and a lazy list here would be measured against a bounded height
-                        // for no benefit.
-                        //
-                        // The sheet body is where the page would be, so it takes the page's
-                        // elastic end — on the four-point phone these notes still fit.
-                        .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
-                        .piOverScroll()
-                        .verticalScroll(rememberScrollState())
-                        // Inside the scroll, so the last paragraph travels clear of the gesture
-                        // strip and the sheet's own fill still reaches the window's edge.
-                        .padding(bottom = piSheetBottomInset()),
-                ) {
-                    ContextPoint(
-                        1,
-                        text.settings.agentContextSystemTitle,
-                        text.settings.agentContextSystemBody,
-                    )
-                    ContextPoint(
-                        2,
-                        text.settings.agentContextInstructionsTitle,
-                        text.settings.agentContextInstructionsBody,
-                    )
-                    ContextPoint(
-                        3,
-                        text.settings.agentContextRuntimeTitle,
-                        text.settings.agentContextRuntimeBody,
-                    )
-                    ContextPoint(
-                        4,
-                        text.settings.agentContextToolsTitle,
-                        text.settings.agentContextToolsBody,
-                    )
-                    ContextPoint(
-                        5,
-                        text.settings.agentContextHistoryTitle,
-                        text.settings.agentContextHistoryBody,
-                    )
-                }
+                AgentContextSheet(text)
             }
 
             PiSheet(
@@ -328,54 +267,33 @@ internal fun AgentPage(
         // padding at the end of the scroll: the last row can still be scrolled clear of the
         // gesture handle, which a bottom padding on the viewport would have prevented.
         Column(Modifier.settingsPageScroll(padding, pageScroll)) {
-            PiSection(title = text.settings.workModeSection(text.settings.workspace)) {
-                // The row that used to be a text field for the agent's working directory.
-                // It is a choice now, because the directory is one of a *list* of
-                // workspaces: the composer picks which one a conversation runs in, and
-                // this is the one a new conversation starts from. A typed path could not
-                // say which of two projects a conversation came from, and a workspace
-                // that is not in the list cannot be picked in the composer at all.
-                //
-                // Changing it does not restart the agent: this conversation keeps the
-                // directory it was launched in, and the value applies to the next one —
-                // which is also why there is no "restart to apply" sentence here.
+            PiSection(title = text.settings.agentRunSection) {
+                AgentStatusRow(
+                    agent = agent,
+                    restarting = restarting,
+                    text = text,
+                    onRestart = {
+                        restarting = true
+                        restartMoved = false
+                        session.restartAgent()
+                    },
+                )
+                if (agent is AgentStatus.Failed) {
+                    SettingsNote(text = agent.message, danger = true)
+                }
+                KeepAliveRow(text = text)
+            }
+
+            PiSection(title = text.settings.workMode) {
                 ArrowPreference(
                     title = text.settings.defaultWorkspace,
-                    // The name alone: this row *is* the default, so `（默认）` would be the
-                    // sentence saying the default is the default. The mark lives in the
-                    // list, which is where a reader compares one workspace to another.
-                    // The subtitle already names it; a trailing value repeated the same
-                    // word twice on one row.
                     summary = text.settings.defaultWorkspaceSubtitle(defaultWorkspaceName),
                     onClick = { choosingWorkspace = true },
                 )
-            }
-
-            PiSection(title = text.settings.workModeSection(text.settings.agentContextSection)) {
-                // The five parts live in a sheet, the same panel shape as the AGENTS.md
-                // editor under them. They used to sit open as numbered points of prose,
-                // which is a page of reading before the rows this section is actually
-                // for; the row's title is the question the sheet answers.
-                ArrowPreference(
-                    title = text.settings.agentContextLeadTitle,
-                    onClick = { showContext = true },
-                )
-                // The row part 2 points at — the one thing in this section that is not
-                // prose. The whole path is the subtitle, on its own line: `AGENTS.md`
-                // alone appears in a project directory too, and this is the *global*
-                // one. A path is a machine string, so it is the row's full-width second
-                // line rather than its trailing value, which a third of a row cannot
-                // show.
-                //
                 // Two rows, because the file pi reads is *composed* from two documents:
                 // the app's own prompts — which a newer PiKit replaces — and the reader's,
                 // which nothing here ever writes. One row for both would make "may I edit
                 // this" and "is my text safe" the same question, and they are opposites.
-                // Read-only, and it says so in the value slot: the text is PiKit's
-                // (it names this build's prefix, its tiers and its workspace rules),
-                // and the place for the reader's own rules is the row below it. Tapping
-                // still opens the document — reading it is the point of the row — but
-                // the sheet has no field and no Save.
                 ArrowPreference(
                     title = text.settings.agentContextAuthorTitle,
                     summary = text.settings.agentContextAuthorSubtitle,
@@ -386,7 +304,7 @@ internal fun AgentPage(
                 )
                 ArrowPreference(
                     title = text.settings.agentContextUserTitle,
-                    summary = if (userInstructions.length == 0) {
+                    summary = if (userInstructions.isEmpty()) {
                         text.settings.agentContextUserEmpty
                     } else {
                         text.settings.agentContextUserSubtitle
@@ -399,45 +317,11 @@ internal fun AgentPage(
                     },
                     onClick = { editingDocument = InstructionsDocument.User },
                 )
-            }
-
-            PiSection(title = text.settings.workModeSection(text.settings.process)) {
-                BasicComponent(
-                    title = text.settings.agentProcess,
-                    summary = agentDescription(agent, text),
-                    endActions = {
-                        // One control, and it is the restart: stop-and-start in one tap,
-                        // which is the only thing a reader comes to this row to do. A
-                        // stop button beside it was that same act made into a second,
-                        // destructive-looking one — and a stopped agent is a state
-                        // nobody asks for.
-                        if (restarting) {
-                            SettingsWorking()
-                        } else {
-                            SettingsAction(
-                                text = text.settings.restartAgent,
-                                // `PiAgentSession.restartAgent` and not a coroutine of
-                                // this page's: a scope tied to the composition is
-                                // cancelled when the page leaves, and cancelled between
-                                // the stop and the start it leaves a stopped agent
-                                // behind. The session's scope outlives the page, and
-                                // `restarting` is only this row's spinner — cleared by
-                                // the effect above when the status settles.
-                                onClick = {
-                                    restarting = true
-                                    restartMoved = false
-                                    session.restartAgent()
-                                },
-                            )
-                        }
-                    },
+                ArrowPreference(
+                    title = text.settings.agentContextLeadTitle,
+                    summary = text.settings.agentContextSummary,
+                    onClick = { showContext = true },
                 )
-
-                if (agent is AgentStatus.Failed) {
-                    SettingsNote(text = agent.message, danger = true)
-                }
-
-                KeepAliveRow(text = text)
             }
 
             // The chat half: the reader's personas, their default, and the editor that
@@ -448,35 +332,115 @@ internal fun AgentPage(
             ChatPresetSection(session = session, settings = saved, text = text)
         }
     }
-
 }
 
 /**
- * One numbered point of the description: a title and what it holds.
+ * The status row: one dot for the state, one word for it, and the one control a reader
+ * comes here to use.
  *
- * Deliberately not a row: a row is a control — it has a value slot, an arrow and a press
- * feedback — and four of these five points have nothing to operate. The number is drawn
- * here rather than written into the string, so the three catalogs cannot disagree about
- * how many parts there are.
+ * The dot is the only leading mark this page spends. It is not decoration: "running",
+ * "starting" and "failed" are three states a word alone takes a moment to read, and the
+ * colour answers before the sentence does. The label stays the accessible answer, so the
+ * dot is `contentDescription = null`.
  */
 @Composable
-private fun ContextPoint(number: Int, title: String, body: String) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+private fun AgentStatusRow(
+    agent: AgentStatus,
+    restarting: Boolean,
+    text: Strings,
+    onRestart: () -> Unit,
+) {
+    BasicComponent(
+        title = text.settings.agentStatus,
+        summary = agentDescription(agent, text),
+        startAction = { AgentStatusDot(agent) },
+        endActions = {
+            // One control, and it is the restart: stop-and-start in one tap, which is
+            // the only thing a reader comes to this row to do. A stop button beside it
+            // was that same act made into a second, destructive-looking one — and a
+            // stopped agent is a state nobody asks for.
+            if (restarting) {
+                SettingsWorking()
+            } else {
+                SettingsAction(
+                    text = text.settings.restartAgent,
+                    // `PiAgentSession.restartAgent` and not a coroutine of this page's:
+                    // a scope tied to the composition is cancelled when the page leaves,
+                    // and cancelled between the stop and the start it leaves a stopped
+                    // agent behind. The session's scope outlives the page.
+                    onClick = onRestart,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun AgentStatusDot(agent: AgentStatus) {
+    val color = when (agent) {
+        is AgentStatus.Running -> PiTone.live()
+        is AgentStatus.Starting -> MiuixTheme.colorScheme.primary
+        is AgentStatus.Stopped -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+        is AgentStatus.Failed -> PiTone.error()
+    }
+    Box(
+        Modifier
+            .padding(end = 12.dp)
+            .size(8.dp)
+            .clip(CircleShape)
+            .background(color),
+    )
+}
+
+/**
+ * The context sheet: five short rows, one card, in the order the request is built.
+ *
+ * It used to be five numbered paragraphs of prose, and the numbers made the sheet read
+ * as a chapter rather than as a list of the things the model receives. A row's title is
+ * the word a reader checks for — "system prompt", "tools", "conversation" — and the body
+ * is the one sentence under it. The list is bounded and scrolls: the sheet's own edge is
+ * the window's, and the last row has to clear the gesture strip.
+ */
+@Composable
+private fun AgentContextSheet(text: Strings) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = CONTEXT_NOTES_MAX_HEIGHT)
+            .piOverScroll()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = piSheetBottomInset()),
+    ) {
         Text(
-            text = "$number. $title",
-            style = MiuixTheme.textStyles.body1,
-        )
-        Text(
-            text = body,
+            text = text.settings.agentContextLead,
             style = MiuixTheme.textStyles.body2,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.padding(top = 3.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
         )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = PiCorner.radius,
+        ) {
+            ContextRow(text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
+            ContextRow(
+                text.settings.agentContextInstructionsTitle,
+                text.settings.agentContextInstructionsBody,
+            )
+            ContextRow(text.settings.agentContextRuntimeTitle, text.settings.agentContextRuntimeBody)
+            ContextRow(text.settings.agentContextToolsTitle, text.settings.agentContextToolsBody)
+            ContextRow(text.settings.agentContextHistoryTitle, text.settings.agentContextHistoryBody)
+        }
     }
 }
 
-/** How tall the context sheet's prose may grow before it scrolls itself. */
-private val CONTEXT_NOTES_MAX_HEIGHT = 440.dp
+/** One part of the request: the heading a reader checks, and the sentence under it. */
+@Composable
+private fun ContextRow(title: String, body: String) {
+    BasicComponent(title = title, summary = body)
+}
+
+/** How tall the context sheet's rows may grow before they scroll. */
+private val CONTEXT_NOTES_MAX_HEIGHT = 420.dp
 
 /**
  * The battery-optimisation exemption: the one keep-alive lever the OS owns.
@@ -485,13 +449,7 @@ private val CONTEXT_NOTES_MAX_HEIGHT = 440.dp
  * uses too — this row is the *report* and the way back to it. The exemption is the
  * system's own dialog, which the app cannot draw: the foreground service and the turn
  * wake lock only work if the OS is not allowed to reclaim the process the moment the
- * screen goes off, which is the report "息屏后会直接 terminated", and this row reports
- * whether the exemption is already held and offers the ask.
- *
- * The state is the row's subtitle, because it is a sentence rather than a value: the
- * English one is thirty-eight characters, and as a trailing value it left the title 79px
- * — one glyph per line — where the same text as a subtitle has the row's full width. A
- * value is a short fact about a row; a sentence about its state is a subtitle (§13).
+ * screen goes off.
  */
 @Composable
 private fun KeepAliveRow(text: Strings) {
@@ -528,8 +486,7 @@ private fun KeepAliveRow(text: Strings) {
             // Drawn only while the exemption is missing. It used to be drawn always and
             // disabled once held — which is a button that still exists on screen for a
             // decision that has already been made, and the exemption is not something
-            // there is any reason to ask for twice. The row's subtitle is what reports
-            // the state once it is held, so nothing is lost by the button going away.
+            // there is any reason to ask for twice.
             if (!exempt) {
                 SettingsAction(
                     text = text.settings.keepAliveAsk,
@@ -736,7 +693,6 @@ private fun InstructionsEditor(
         }
     }
 }
-
 
 /**
  * The editor's height bounds.

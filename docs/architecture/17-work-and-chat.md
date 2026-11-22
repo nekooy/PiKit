@@ -280,19 +280,23 @@ conversation. Always-on was rejected because the clean context is the mode's pro
 UI-only switch was rejected for the reason the mode itself was: the tools are declared in
 the request, and a switch that changed no request would be a picture of a decision.
 
-## The settings page has two halves
+## The settings page groups the two modes' sources
 
-The Agent page is split top and bottom. The work half keeps the page's existing three
-groups — workspace, context and instructions, process — under `Work mode · …` titles.
-The chat half is the preset list: a sentence naming what is not loaded, the default-preset
-row (a picker of the list), one row per preset — its disc, its name and the prompt's first
-line, with a tick on the default — and an add row. A row opens the editor: the avatar with
-the inherit switch, the picture and the name, the prompt with a Save, and a delete that
-asks first and is refused for the last preset. The list's Save is explicit and the
-identity saves as it is edited, because a launch reads the prompt once and every keystroke
-would otherwise schedule a relaunch. The split is structural rather than a tab: a reader
-who opens the page to change a workspace should not first have to choose which mode they
-are editing.
+**Agent settings** is three cards, and the grouping follows what a launch reads rather
+than the mode name alone. **Runtime** is the process every conversation has — status,
+restart and the battery exemption — because a chat conversation is a pi process too;
+the controls used to sit under `Work mode · Process`, which was false about who owns
+them. **Work mode** is the default workspace and the two `AGENTS.md` documents, with
+the "what the model receives" row opening a sheet of five short rows. **Chat mode** is
+the preset list: a sentence naming what is not loaded, the default-preset row (a picker
+of the list), one row per preset — its disc leading, its name and the prompt's first
+line, with the default badge at the end — and an add action outside the card. A row
+opens the editor: the avatar with the inherit switch, the picture and the name, the
+prompt with a Save, and a delete that asks first and is refused for the last preset.
+The list's Save is explicit and the identity saves as it is edited, because a launch
+reads the prompt once and every keystroke would otherwise schedule a relaunch. The
+split is structural rather than a tab: a reader who opens the page to change a
+workspace should not first have to choose which mode they are editing.
 
 A UI-only version of chat mode — hiding tools in the composer while launching the same
 agent — was rejected because the model would still receive the tool catalogue,

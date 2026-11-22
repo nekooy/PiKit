@@ -55,7 +55,7 @@ internal object JapaneseStrings : Strings {
         override val chatTips = listOf(
             "会話モードはツールもワークスペースのファイルも読みません。気軽に話しかけてください。",
             "会話モードでも、この会話の履歴は引き継がれます。",
-            "人物設定や時刻の位置は、設定 → エージェントのプロセス → 会話モードで変えられます。",
+            "人物設定や時刻の位置は、設定 → エージェント設定 → 会話モードで変えられます。",
         )
         override val loadingConversation = "会話を開いています…"
         override val placeholderAttachment = "この画像についての指示を入力…"
@@ -424,31 +424,25 @@ internal object JapaneseStrings : Strings {
         override val storageAskOpen = "許可する"
         override val storageAskLater = "あとで"
 
-        override val agentContextSection = "コンテキスト"
         override val modeWork = "仕事"
         override val modeChat = "会話"
         override val workMode = "仕事モード"
         override val chatMode = "会話モード"
-        override fun workModeSection(title: String) = "$workMode · $title"
         override val chatModeSubtitle =
-            "引き出しの切り替えで「会話」を選ぶと、ツール・スキル・AGENTS.md を読み込みません。システムプロンプトはプリセットの一つだけで、空なら何も送りません" +
-                "——この会話のウェブ切り替えが入っている場合を除き、検索と取得のツールが加わります"
+            "プリセットのシステムプロンプトだけを送り、ツール・スキル・AGENTS.md は読み込みません。"
         override val chatSystemPromptEditorHint =
-            "ここに書いた内容が会話モード唯一のシステムプロンプトです。既定は {{time}}（現在時刻）だけで、" +
-                "空なら何も送りません。{{time}} を時刻を入れたい位置に置いてください。起動時に現在時刻へ置き換わります。"
+            "会話モード唯一のシステムプロンプトです。{{time}} は起動時に現在時刻へ置き換わり、空なら何も送りません。"
         override val chatSystemPromptRestore = "既定に戻す"
         override val presetDefaultRow = "既定のプリセット"
-        override val presetDefaultSubtitle = "新しい会話を始めるときに使うプリセット"
+        override val presetDefaultSubtitle = "新しい会話で使うプリセット"
         override val presetDefaultBadge = "既定"
         override val presetAdd = "プリセットを追加"
-        override val presetAddAction = "追加"
         override val presetNewName = "新しいプリセット"
         override val presetEditTitle = "プリセットを編集"
         override val presetName = "名前"
-        override val presetNameHint =
-            "プリセットのアバターの横と、会話の応答者名として表示されます。空なら個人設定の名前を使います。"
+        override val presetNameHint = "アバターの横と応答の上に表示されます。空なら個人設定の名前を使います。"
         override val presetAvatarInherit = "個人設定のアバターを使う"
-        override val presetAvatarInheritHint = "オンの間、画像と色は個人設定ページのものになります"
+        override val presetAvatarInheritHint = "画像と色は個人設定ページのものになります"
         override val presetPrompt = "システムプロンプト"
         override val presetPromptEmpty = "システムプロンプトを送りません"
         override val presetPromptTime = "現在時刻だけを送ります"
@@ -457,42 +451,28 @@ internal object JapaneseStrings : Strings {
         override val presetDeleteTitle = "このプリセットを削除しますか？"
         override val presetDeleteBody =
             "プロンプトと画像が削除されます。使っていた会話は既定のプリセットを使い始め、メッセージは残ります。"
-        override val agentContextLead = "モデルは毎回のリクエストで、pi からこれらを一緒に受け取ります："
-        override val agentContextLeadTitle = "コンテキストの説明"
+        override val agentContextLead = "リクエストのたびに、pi は次の内容をモデルへ送ります："
+        override val agentContextLeadTitle = "モデルが受け取るもの"
+        override val agentContextSummary = "システムプロンプト・指示ファイル・ツール・会話"
         override val agentContextSystemTitle = "システムプロンプト"
         override val agentContextSystemBody =
-            "pi 自身の役割（コーディングアシスタント）、ツール一覧と呼び出し規則（edit は正確な" +
-                "置換、cat の代わりに read など）、pi のドキュメント索引。PiKit は変更しません。"
+            "pi 自身の役割、ツールの規則、ドキュメントの索引。PiKit は変更しません。"
         override val agentContextInstructionsTitle = "指示ファイル AGENTS.md"
         override val agentContextInstructionsBody =
-            "pi は AGENTS.md を自動で読みます。場所は二つ:\n" +
-                "· グローバル: \$HOME/.pi/agent/AGENTS.md。PiKit が二つの文書から合成します——" +
-                "「既定の指示」(AGENTS.author.md) は PiKit が書き、編集できますが、PiKit の" +
-                "既定が変わると置き換わります。「ユーザーの指示」(AGENTS.user.md) は最初は空で、" +
-                "あなただけのもので、アプリは書き換えません;\n" +
-                "· ワークスペース: プロジェクトが自分のディレクトリに置く AGENTS.md（例: " +
-                "~/workspace/AGENTS.md）。pi はワークスペースから上へ探すので、プロジェクトに" +
-                "近いものほど具体的です。"
+            "グローバルは「既定の指示」と「ユーザーの指示」から合成され、プロジェクト自身のファイルも読みます。"
         override val agentContextRuntimeTitle = "実行環境"
         override val agentContextRuntimeBody =
-            "モデルとプロバイダー、思考レベル、セッション ID とそのファイル、この会話の" +
-                "ワークスペース（PIKIT_WORKSPACE——相対パスの基準で、中間ティアが書き込める" +
-                "唯一のディレクトリ）、権限ティア（\$HOME/.pikit/permission.json から" +
-                "ツール呼び出しごとに読み直します: 閲覧のみ・ワークスペース内の読み書き・" +
-                "完全アクセス）、テレメトリのスイッチ（PI_TELEMETRY=0）。"
+            "モデル、思考レベル、セッション、ワークスペース、権限の段階。"
         override val agentContextToolsTitle = "ツール"
         override val agentContextToolsBody =
-            "pi 自身の read、bash、edit、write、grep、find、ls に加えて、PiKit が同梱する " +
-                "pikit-web 拡張の web_search と web_fetch、そして権限の段階に" +
-                "合わない呼び出しを拒否する pikit-permissions。"
+            "pi の read、bash、edit、write、grep、find、ls と、ウェブ検索・取得。"
         override val agentContextHistoryTitle = "会話"
         override val agentContextHistoryBody =
-            "現在のセッションです。ツール呼び出しと結果も含めて毎回のメッセージと一緒に送られ、" +
-                "セッションファイルに書き込まれます。"
+            "このセッションのすべてのメッセージとツールの結果。"
         override val agentContextAuthorTitle = "既定の指示"
-        override val agentContextAuthorSubtitle = "PiKit が管理します：実行環境・権限の段階・ルールを各ビルドで書き直します"
+        override val agentContextAuthorSubtitle = "PiKit が管理し、ビルドごとに更新"
         override val agentContextUserTitle = "ユーザーの指示"
-        override val agentContextUserSubtitle = "最初は空で、あなただけのもの。PiKit は書き換えません"
+        override val agentContextUserSubtitle = "あなただけのもの。PiKit は書き換えません"
         override val agentContextUserEmpty = "まだ空です。開いて書いてください"
         override val agentContextInstructionsEditable = "編集可"
         override val agentContextReadOnly = "読み取り専用"
@@ -639,18 +619,18 @@ internal object JapaneseStrings : Strings {
         override val maxTokensLabel = "最大出力"
         override val modelNumbersNote = "空欄ならこの項目は変更しません。上の値がそのまま使われます。"
 
-        override val workspace = "ワークスペース"
+        override val agentConfig = "エージェント設定"
+        override val agentRunSection = "実行"
+        override val agentStatus = "状態"
         override val defaultWorkspace = "デフォルトのワークスペース"
         override fun defaultWorkspaceSubtitle(name: String) =
             "新しい会話は $name から始まります"
-        override val process = "プロセス"
-        override val agentProcess = "エージェントのプロセス"
-        override val restartAgent = "エージェントを再起動"
+        override val restartAgent = "再起動"
         override val restartedAgent = "エージェントを再起動しました"
         override val keepAliveTitle = "バックグラウンド保護"
         override val keepAliveGranted = "バッテリー最適化はオフです"
         override val keepAliveDenied = "まだバッテリー最適化の対象です"
-        override val keepAliveAsk = "除外を申請する"
+        override val keepAliveAsk = "設定を開く"
         override val keepAliveAskBody =
             "画面オフやバックグラウンド時に OS がエージェントを回収し、実行中の回答が途切れる" +
                 "ことがあります。PiKit をバッテリー最適化の許可リストに入れると防げますが、" +

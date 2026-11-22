@@ -41,6 +41,7 @@ import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
 import pi.kit.mob.ui.kit.PiCorner
+import pi.kit.mob.ui.kit.PiGroupAction
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.piFieldCursor
@@ -56,13 +57,12 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * The Agent page's chat half: the reader's personas, their default, and their editor.
+ * The Agent page's chat group: the reader's personas, their default, and their editor.
  *
- * A section rather than a page because the page already splits by launch mode — the work
- * half above keeps its three groups — and a reader changing a workspace should not first
- * have to choose a mode. The rows are the presets themselves: the name is the label the
- * composer's chip and the transcript show, the summary is the prompt's first line, and
- * the tick on the right is the one new chat conversations start in.
+ * The group is one card of preset rows with the add action under it, outside the card:
+ * the add is an act on the list rather than one more persona in it. The rows lead with
+ * the preset's disc, because that is what the composer's chip and the transcript show;
+ * the default badge stays in the trailing slot, and the row opens the editor.
  *
  * ## What is inherited, and why the switch is a switch
  *
@@ -104,59 +104,56 @@ internal fun ChatPresetSection(
         editorShown = true
     }
 
-    PiSection(title = text.settings.chatMode) {
-        SettingsNote(text = text.settings.chatModeSubtitle)
-        ArrowPreference(
-            title = text.settings.presetDefaultRow,
-            summary = text.settings.presetDefaultSubtitle,
-            endActions = {
-                SettingsValue(
-                    chatPresetName(defaultPreset, settings, text),
-                    emphasised = true,
-                )
-            },
-            onClick = { defaultPicker = true },
+    fun add() {
+        val created = ChatPreset(
+            id = store.newId(),
+            name = text.settings.presetNewName,
         )
-        presets.forEach { preset ->
-            val isDefault = preset.id == defaultId
+        store.upsert(created)
+        open(created)
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        PiSection(title = text.settings.chatMode) {
+            SettingsNote(text = text.settings.chatModeSubtitle)
             ArrowPreference(
-                title = chatPresetName(preset, settings, text),
-                summary = chatPresetSummary(preset, text),
+                title = text.settings.presetDefaultRow,
+                summary = text.settings.presetDefaultSubtitle,
                 endActions = {
-                    // The avatar first, then the word: the disc is what the transcript
-                    // and the composer's chip show, so the row is recognised before it is
-                    // read.
-                    PiAvatar(
-                        speaker = AvatarSpeaker.AGENT,
-                        color = preset.identity(settings).color.seed,
-                        imagePath = preset.identity(settings).image.ifBlank { null },
-                        size = PRESET_ROW_AVATAR,
+                    SettingsValue(
+                        chatPresetName(defaultPreset, settings, text),
+                        emphasised = true,
                     )
-                    if (isDefault) {
-                        SettingsValue(
-                            text.settings.presetDefaultBadge,
-                            emphasised = true,
-                            modifier = Modifier.padding(start = 6.dp),
-                        )
-                    }
                 },
-                onClick = { open(preset) },
+                onClick = { defaultPicker = true },
             )
-        }
-        ArrowPreference(
-            title = text.settings.presetAdd,
-            endActions = {
-                SettingsValue(text.settings.presetAddAction, emphasised = true)
-            },
-            onClick = {
-                val created = ChatPreset(
-                    id = store.newId(),
-                    name = text.settings.presetNewName,
+            presets.forEach { preset ->
+                val identity = preset.identity(settings)
+                ArrowPreference(
+                    title = chatPresetName(preset, settings, text),
+                    summary = chatPresetSummary(preset, text),
+                    startAction = {
+                        PiAvatar(
+                            speaker = AvatarSpeaker.AGENT,
+                            color = identity.color.seed,
+                            imagePath = identity.image.ifBlank { null },
+                            size = PRESET_ROW_AVATAR,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    },
+                    endActions = {
+                        if (preset.id == defaultId) {
+                            SettingsValue(
+                                text.settings.presetDefaultBadge,
+                                emphasised = true,
+                            )
+                        }
+                    },
+                    onClick = { open(preset) },
                 )
-                store.upsert(created)
-                open(created)
-            },
-        )
+            }
+        }
+        PiGroupAction(text = text.settings.presetAdd, onClick = ::add)
     }
 
     SettingsPickerSheet(

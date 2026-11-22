@@ -1149,8 +1149,6 @@ interface Strings {
         val storageAskOpen: String
         val storageAskLater: String
 
-        val agentContextSection: String
-
         /**
          * The two launch modes: the short labels in the drawer's switch and beside the
          * conversation page's drawer disc, and the full names the Agent page's groups use.
@@ -1164,9 +1162,6 @@ interface Strings {
         val modeChat: String
         val workMode: String
         val chatMode: String
-
-        /** "工作模式 · 工作区" — one group of the work half of the Agent page. */
-        fun workModeSection(title: String): String
 
         /**
          * The sentence under the Chat mode group: what the mode does *not* load.
@@ -1201,7 +1196,6 @@ interface Strings {
         val presetDefaultSubtitle: String
         val presetDefaultBadge: String
         val presetAdd: String
-        val presetAddAction: String
         val presetNewName: String
         val presetEditTitle: String
         val presetName: String
@@ -1218,25 +1212,28 @@ interface Strings {
         val presetDeleteTitle: String
         val presetDeleteBody: String
 
-        /** The lead over the numbered points. */
+        /** The lead over the context sheet's rows. */
         val agentContextLead: String
 
         /**
-         * The row that opens the numbered points.
+         * The row that opens the context sheet.
          *
-         * Named for what the row *is* rather than for the sentence it opens: the
-         * row is a description of the context, and a title that repeated the
-         * sentence's first clause described neither the row nor the place it leads.
+         * Named for what the reader gets rather than for the mechanism: the row is
+         * the way into "what does the model actually receive", and that question is
+         * the one the sheet answers.
          */
         val agentContextLeadTitle: String
+
+        /** The row's one-line answer, before the sheet is opened. */
+        val agentContextSummary: String
 
         /**
          * Five parts of the request, each a title and a body.
          *
-         * Points rather than a single sentence: a reader checking whether
-         * something is in the context at all is looking for a heading, not for a
-         * clause in the middle of a run-on list. The number is drawn by the page,
-         * so the catalogs cannot disagree about how many parts there are.
+         * Rows rather than a wall of prose: a reader checking whether something is
+         * in the context at all is looking for a heading, not for a clause in the
+         * middle of a run-on list. The page draws them in one card, so the catalogs
+         * cannot disagree about how many parts there are.
          */
         val agentContextSystemTitle: String
         val agentContextSystemBody: String
@@ -1568,7 +1565,18 @@ interface Strings {
         val modelNumbersNote: String
 
         // Agent page
-        val workspace: String
+        /**
+         * The page's name, on the settings root and in its own bar.
+         *
+         * It used to be "Agent process", which named one of its three groups and left
+         * the instructions and the chat presets outside the name. The page configures
+         * the agent itself, so the name says that and nothing narrower.
+         */
+        val agentConfig: String
+
+        /** The process group: status, restart, and the battery exemption that keeps it alive. */
+        val agentRunSection: String
+        val agentStatus: String
 
         /**
          * The row that used to be "working directory": which workspace a new
@@ -1583,19 +1591,6 @@ interface Strings {
         val defaultWorkspace: String
 
         /**
-         * Its summary: the workspace's name, whether it is the built-in one, and its path.
-         *
-         * [name] is the workspace's own label — [Chat.workspaceChip]'s answer, which
-         * has already appended the default mark to the built-in workspace — so
-         * "whether it is the built-in one" is not a parameter here: a name that
-         * could arrive with or without a mark in it would make this catalog guess
-         * at something the caller knows.
-         *
-         * [path] is given in full because the reason to show a name at all is that
-         * the path is too long to lead with; a reader who has two folders named
-         * `workspace` needs the path to tell them apart.
-         */
-        /**
          * Its summary: which workspace a new conversation starts in.
          *
          * The name only — no path. The dialog behind this row lists every workspace with
@@ -1605,8 +1600,6 @@ interface Strings {
          */
         fun defaultWorkspaceSubtitle(name: String): String
 
-        val process: String
-        val agentProcess: String
         val restartAgent: String
 
         /**
@@ -1648,7 +1641,7 @@ interface Strings {
         val keepAliveAskOpen: String
         val keepAliveAskLater: String
 
-        // Backup & restore: the row between the agent process and the maintenance
+        // Backup & restore: the row between Agent settings and the maintenance
         // pair, and the page behind it.
         //
         // The page exists because uninstalling takes everything with it — the
