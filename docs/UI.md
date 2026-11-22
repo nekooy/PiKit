@@ -123,15 +123,18 @@ that cut the last card in two (§13, *The window's last pixels*).
   insets stay outside the viewport. The modifier also reports the actual elastic
   displacement to `PiPage`: `canScrollBackward` alone misses an upward pull on a
   page that fits. The band recedes when the content returns, not when the drag ends.
-- **A fixed header, when it fades, fades only its scrolling viewport.** The files page
-  passes `contentScrollsUnderBar = false` and puts `PiTopEdgeViewport` below its toolbar
-  and location bar; the drawer uses the same viewport below search. The manual also
-  passes `contentScrollsUnderBar = false`, but it scrolls its prose directly below the
-  contents bar: the bar's opaque surface leaves a fade nothing to hide, and 30dp of blur
-  over 17sp running text made the first lines — including a heading a chapter jump had
-  just targeted — unreadable. Chat is the exception:
-  its header is two floating capsules over a transcript that fades under the page's
-  own hand-drawn four-stop ramp, not a bar's progressive-blur band (§13).
+- **A fixed header over its own scrolling region does not extend the bar's fade into
+  it.** The files page passes `contentScrollsUnderBar = false`: its toolbar and location
+  bar are opaque furniture between the bar and the listing, so the listing starts below
+  them and a top-edge blur would soften the first rows rather than hide an edge. The
+  drawer draws its own hand-drawn three-stop ramp over the conversation list below its
+  search field, in the panel's `background`, with the ramp's 30dp reserved as the list's
+  top content padding. The manual also passes `contentScrollsUnderBar = false`, but it
+  scrolls its prose directly below the contents bar: the bar's opaque surface leaves a
+  fade nothing to hide, and 30dp of blur over 17sp running text made the first lines —
+  including a heading a chapter jump had just targeted — unreadable. Chat is the
+  exception: its header is two floating capsules over a transcript that fades under the
+  page's own hand-drawn four-stop ramp, not a bar's progressive-blur band (§13).
 - **`piOverScroll()` comes *before* `verticalScroll` in the chain, never after.** A
   nested-scroll connection finds its scrollers by walking ancestors; placed after
   the scroller it is downstream and never dispatched to, so the page silently loses

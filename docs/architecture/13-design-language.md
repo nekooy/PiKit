@@ -294,9 +294,11 @@ scroll. The manual's contents label stayed at y=292–306 when jumping to a chap
 the top bar's band blurred it anyway after the jump. These pages pass
 `contentScrollsUnderBar = false`: the bar's buttons still respond to the scroller, but
 the background band (including the gradient fallback) stays off because no moving
-content can pass behind the header. The files page then blurs the top of its list with
-`PiTopEdgeViewport`; the manual does not, because its contents bar is already opaque and
-the band only blurred the first lines of the chapter a jump had just landed on.
+content can pass behind the header. The files page leaves the listing's top edge alone:
+its toolbar and location bar are opaque furniture, so there is no edge for a fade to
+hide and a blur band would only soften the first rows of a list that starts below them.
+The manual's contents bar is likewise opaque, and the band only blurred the first lines
+of the chapter a jump had just landed on.
 
 ### The window's last pixels are a page's, not the system's
 

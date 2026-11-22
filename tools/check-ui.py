@@ -39,10 +39,6 @@ review until a screen is a second material or a fourth palette:
      is genuinely not a menu of rows is judgement, and `docs/UI.md`'s popup section
      is where that is written.
 
-  5. **Top-edge texture blur belongs to the kit.** `PiTopEdgeFade` handles the
-     RuntimeShader fallback. A viewport records its scroll content before drawing
-     the fade as a sibling, keeping the sampler out of its own recording.
-
 A custom-content dialog may still compose `WindowDialog`/`WindowBottomSheet` itself
 (the kit's confirm shape does not fit a field or a crop frame); that is judgement,
 and `docs/UI.md`'s dialog section is where the glass-or-window rule for it is written.
@@ -91,8 +87,6 @@ GLASS_OVERLAY_OWNER = UI / "kit/PiOverlays.kt"
 #: The panel modifier, called only by `PiGlass.panel`.
 GLASS_PANEL = re.compile(r"\bglassPanel\s*\(")
 GLASS_PANEL_OWNER = UI / "kit/PiKitTheme.kt"
-TOP_EDGE_BLUR = re.compile(r"\bprogressiveTextureBlur\s*\(")
-TOP_EDGE_BLUR_OWNER = UI / "kit/PiTopEdgeFade.kt"
 
 #: The OS4 popup components, composed only by the kit's menu surface.
 GLASS_POPUP = re.compile(
@@ -179,7 +173,6 @@ def main() -> int:
     failures += scan("a bar composed outside PiPage", BAR, BAR_OWNER)
     failures += scan("a glass overlay composed outside PiOverlays", GLASS_OVERLAY, GLASS_OVERLAY_OWNER)
     failures += scan("glassPanel called outside PiGlass", GLASS_PANEL, GLASS_PANEL_OWNER)
-    failures += scan("texture blur called outside PiTopEdgeFade", TOP_EDGE_BLUR, TOP_EDGE_BLUR_OWNER)
     failures += scan(
         "an OS4 popup composed outside PiPopupMenu",
         GLASS_POPUP,
