@@ -853,12 +853,25 @@ It now says one of two things: **answering** (the accent, while a turn streams) 
 the one on screen). A turn that ends on the conversation being read marks nothing: the
 reader watched it arrive.
 
-**The drawer's heading is the name, the count, and three controls.** It used to break a
-mixed list with a "Recent" heading under the pinned shelf; the workspace headings already
+**The drawer's heading is the mark, the count, and the selection discs.** It used to break
+a mixed list with a "Recent" heading under the pinned shelf; the workspace headings already
 say where a run of rows came from, and "Recent" was the only label in the panel that
-described nothing — the list is all recent. The selection controls are 36dp with 20dp
-glyphs rather than the library's 40dp: three full-size icon buttons beside the app's name
-were wider than the name, and the panel's heading is not the place to spend that.
+described nothing — the list is all recent. The heading's first object is the app's mark,
+`ic_pi_wordmark` at 32dp, not a typeset name: the drawer is the screen the tapped icon
+opens, and the wordmark is the figure the icon and the heading share (§12.3). Its height
+is fixed rather than following the font scale — at 2× the 54.6:16.8 mark would be 208dp
+wide and run under the controls, which do not scale either.
+
+The heading's controls are glass discs rather than `IconButton`s, and they are siblings of
+the panel's recording, not children of it: the drawer's layer records the heading, the
+search field and the list, and a `GlassIconButton` inside that layer would sample a
+backdrop containing itself — the RenderThread stack overflow `docs/UI.md`'s first red line
+documents. The row repeats the panel's top and horizontal insets and the heading's 6dp top
+padding so the discs centre on the same 48dp band the plain buttons occupied, and the
+trailing gutter is `HEADING_GUTTER` so their right edge lines up with the search field's.
+The discs are the library's 40dp floor rather than the 48dp `IconButton`s they replace:
+a glass disc is a visible object, and three of them at 48dp would have spent the heading's
+whole width; at 40dp plus 4dp gaps they are 128dp, leaving the 32dp wordmark 23dp of air.
 
 ## Shapes, motion, icons
 

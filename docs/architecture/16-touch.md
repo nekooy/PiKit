@@ -145,10 +145,23 @@ stays silent when it is an *action* (`onClick` with no `selected`) or a *fact*
 follows the declaration. Without this the same act ticked in one menu and not in
 another, which is the inconsistency this chapter removes.
 
-**The conversation row in multi-select.** The row is the only target: in selection
-mode its trailing mark is drawn (a 20dp circle, not the library's 48dp `Checkbox`, whose
-touch target grew every row by 12px), and a tap anywhere on the row — mark included —
-calls `toggle()` once. There is no second control to buzz on its own.
+**The conversation row in multi-select.** The row is the only target: in selection mode
+its trailing mark is the library's `Checkbox`, and a tap anywhere on the row — mark
+included — calls `toggle()` once. There is no second control to buzz on its own.
+
+The mark is the official component rather than a hand-drawn circle, because a row of
+cheques that are *almost* Miuix's reads as a bug: the hand-drawn one was a 20dp ring with
+`MiuixIcons.Ok` inside it, while the library's checkbox is a 26dp circle with its own
+stroked tick and trim animation. 26dp would make every conversation taller, so the
+component is scaled to the 20dp the title's line box has always held — `scale` is a
+draw-time transform, so the checkbox's `requiredSize(26)` never reaches the row's
+measurement. `enabled = false` is what makes it state rather than a control: with
+`onClick = null` alone the library's internal `pressable` still toggles and performs its
+own `ToggleOn`/`ToggleOff` on a tap, which would be a second buzz and a tap swallowed
+before the row's handler. The eight colours are the enabled defaults copied into the
+disabled slots, so the mark keeps the official checked blue and unchecked grey instead of
+the library's faded disabled pair, and `clearAndSetSemantics` leaves the row's own
+checkbox semantics as the only one a screen reader announces.
 
 **A dropdown menu's chosen row.** `DropdownImpl` does not tick — measured, above —
 although the same question in a settings list is a radio row that does. The app calls

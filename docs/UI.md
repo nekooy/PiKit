@@ -322,11 +322,18 @@ panel and one arc for both forms, rather than the menu's fade at full size, whic
 the language row's arc reads as no motion at all. `OverlayDropdownPreference` is refused by
 `tools/check-ui.py` for the same reason `OverlayListPopup` is.
 
-**The drawer foot is glass too, and it owns its layer.** The drawer is a panel rather
-than a page, so `SessionsScreen` creates its own backdrop with `rememberPiBackdrop()`
-and paints the panel's `background` as the base; the mode switch is Miuix's
-`GlassSegmentedTabRow` and the settings disc is a `GlassIconButton` with
-`GlassShadows.Float` — both sample that layer and both sit outside it as siblings.
+**The drawer foot and heading are glass too, and they own their layer.** The drawer is a
+panel rather than a page, so `SessionsScreen` creates its own backdrop with
+`rememberPiBackdrop()` and paints the panel's `background` as the base; the mode switch is
+Miuix's `GlassSegmentedTabRow`, the settings disc is a `GlassIconButton` with
+`GlassShadows.Float`, and the heading's selection controls are `GlassIconButton`s
+sized 40dp — all of them sample that layer and all of them sit outside it as siblings, the
+heading's row repeating the panel's insets so the discs land on the same band the plain
+`IconButton`s occupied. The heading itself is the pixel wordmark
+(`R.drawable.ic_pi_wordmark`, 32dp), not the app's name in type: the drawer is the screen
+the tapped icon opens. The row mark in multi-select is Miuix's `Checkbox` (26dp scaled into
+the row's 20dp line box, disabled so the row stays the only target) — do not hand-draw a
+second circle around `MiuixIcons.Ok`.
 `SessionsScreen` also *provides* that backdrop around its windows, so the rename,
 delete and mode questions are glass over the drawer rather than opaque windows: a
 glass dialog draws in the root Scaffold, so it is outside the layer it samples.

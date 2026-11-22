@@ -3,7 +3,6 @@ package pi.kit.mob.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +27,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -52,16 +52,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -75,6 +80,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import pi.kit.mob.R
 import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.Workspace
 import pi.kit.mob.locales.Strings
@@ -99,28 +105,28 @@ import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberPiBackdrop
 import pi.kit.mob.ui.kit.rememberPiMenuAnchor
+import top.yukonga.miuix.kmp.basic.Checkbox
+import top.yukonga.miuix.kmp.basic.CheckboxDefaults
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
-import top.yukonga.miuix.kmp.material.GlassShadows
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Rename
 import top.yukonga.miuix.kmp.icon.extended.Replace
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
-import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.icon.extended.Unpin
+import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
+import top.yukonga.miuix.kmp.material.GlassShadows
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
@@ -487,125 +493,52 @@ fun SessionsScreen(
                         ),
                 ),
         ) {
+            // The width the heading's discs occupy, so the wordmark can never run
+            // under them. The discs are siblings of this row rather than its children
+            // (see the overlay below), so the row has to reserve their band itself; at
+            // the default font scale the 32dp mark is 104dp wide and the three selection
+            // discs plus their 4dp gaps are 128dp, which on a 295dp panel leaves the mark
+            // 23dp of air. A narrower panel gives the mark less: its incoming width is
+            // the constraint that shrinks it, and `Icon` draws through `ContentScale.Fit`,
+            // so it letterboxes rather than distorts.
+            val headingActionsWidth = if (selecting) {
+                DRAWER_ACTION_SIZE * 3 + ACTION_GAP * 2
+            } else {
+                DRAWER_ACTION_SIZE
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = HEADING_GUTTER, end = 4.dp, top = 6.dp),
+                    // The heading keeps the height of the old 48dp icon-button band even
+                    // though those controls are no longer in this row: the glass discs
+                    // are siblings of the recording and are centred on the same band,
+                    // and letting the row collapse would pull the count and the search
+                    // field up by the height the plain IconButtons used to spend.
+                    .padding(
+                        start = HEADING_GUTTER,
+                        end = HEADING_GUTTER + headingActionsWidth,
+                        top = 6.dp,
+                    )
+                    .heightIn(min = HEADING_ACTION_BAND),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = text.root.appName,
-                    style = MiuixTheme.textStyles.title1,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
+                // The app's name is the pixel wordmark the launcher and the setup
+                // screen already use, not a typeset "PiKit": the heading is where the
+                // reader connects the drawer to the icon they tapped. 32dp is title1's
+                // 32sp size at the default font scale, and 54.6:16.8 makes the mark
+                // 104dp wide. It is fixed rather than following the font scale: at 2x
+                // the wordmark would be 208dp and run under the action discs, which do
+                // not scale either. The mark is an image, not a line of text.
+                Icon(
+                    painter = painterResource(R.drawable.ic_pi_wordmark),
+                    // The text this replaced was read aloud as the app's name; the
+                    // wordmark has to keep saying it to a screen reader.
+                    contentDescription = text.root.appName,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .height(HEADING_WORDMARK_HEIGHT)
+                        .width(HEADING_WORDMARK_HEIGHT * WORDMARK_ASPECT),
                 )
-                if (selecting) {
-                    // The three answers selection mode has, in the bar's own order:
-                    // everything, then what happens to it, then out. The list is the same
-                    // list, so the control that starts a selection and the controls that
-                    // end one stand in the same place.
-                    val visiblePaths = visible.map { it.path }.toSet()
-                    val allVisibleSelected =
-                        visiblePaths.isNotEmpty() && visiblePaths.all { it in selected }
-                    // 36dp, not the library's 48: these three are the *same* control
-                    // the single select button was, and a row of three full-size icon
-                    // buttons beside a title wider than the title itself was the reason
-                    // the heading looked crowded rather than the reason it was useful.
-                    IconButton(
-                        modifier = Modifier.size(SELECTION_BUTTON),
-                        onClick = {
-                            // Select-all is a mode flip too: from here every visible
-                            // row is either in the set or out of it, and the button's
-                            // tint says which answer the tap gave. The buzz belongs to
-                            // that transition, not to the redraw.
-                            haptics.toggle(on = !allVisibleSelected)
-                            selected = if (allVisibleSelected) {
-                                selected - visiblePaths
-                            } else {
-                                selected + visiblePaths
-                            }
-                        },
-                        enabled = visiblePaths.isNotEmpty(),
-                    ) {
-                        // One glyph for both answers, told apart by the accent: the
-                        // library's set has a check-the-list mark and no un-check one, and
-                        // the state a reader needs from this button is "what will the tap
-                        // do", which the tint says and the spoken description says out
-                        // loud.
-                        Icon(
-                            imageVector = MiuixIcons.SelectAll,
-                            contentDescription = if (allVisibleSelected) {
-                                text.sessions.deselectAll
-                            } else {
-                                text.sessions.selectAll
-                            },
-                            modifier = Modifier.size(SELECTION_GLYPH),
-                            tint = if (allVisibleSelected) {
-                                MiuixTheme.colorScheme.primary
-                            } else {
-                                MiuixTheme.colorScheme.onBackground
-                            },
-                        )
-                    }
-                    IconButton(
-                        modifier = Modifier.size(SELECTION_BUTTON),
-                        onClick = {
-                            deleteTargets = summaries.filter { it.path in selected }
-                            deleteUp = true
-                        },
-                        enabled = selected.isNotEmpty(),
-                    ) {
-                        Icon(
-                            MiuixIcons.Delete,
-                            contentDescription = text.sessions.deleteSelected,
-                            modifier = Modifier.size(SELECTION_GLYPH),
-                        )
-                    }
-                    IconButton(
-                        modifier = Modifier.size(SELECTION_BUTTON),
-                        onClick = {
-                            // Leaving selection is the same kind of answer as entering
-                            // it: a mode that was on is now off. `exitSelection` is also
-                            // called once a delete completes, which is a result rather
-                            // than a press, so the buzz stays at this tap.
-                            haptics.toggle(on = false)
-                            exitSelection()
-                        },
-                    ) {
-                        Icon(
-                            MiuixIcons.Close,
-                            contentDescription = text.sessions.cancelSelection,
-                            modifier = Modifier.size(SELECTION_GLYPH),
-                        )
-                    }
-                } else {
-                    IconButton(
-                        modifier = Modifier.size(SELECTION_BUTTON),
-                        onClick = {
-                            // The entry into selection is the mode flip a reader feels
-                            // for: the whole list changes shape under the finger, and
-                            // the fill on an icon button is too small to carry that
-                            // alone. Select-all and the close button answer the same
-                            // way; the delete button is an action and stays silent.
-                            haptics.toggle(on = true)
-                            selecting = true
-                        },
-                        // The list on screen, not the directory: the other mode's
-                        // conversations cannot be selected from here, so a lens with
-                        // nothing in it is not a selection the reader can do anything
-                        // with. A search narrows it further, and selecting the matches is
-                        // exactly what this button is for.
-                        enabled = visible.isNotEmpty(),
-                    ) {
-                        Icon(
-                            MiuixIcons.SelectAll,
-                            contentDescription = text.sessions.select,
-                            modifier = Modifier.size(SELECTION_GLYPH),
-                        )
-                    }
-                }
             }
 
             // What the list is doing, under the heading and in the search field's own
@@ -771,6 +704,113 @@ fun SessionsScreen(
                                 1f to Color.Transparent,
                             ),
                         ),
+                )
+            }
+        }
+
+        // The heading's actions are siblings of the recording, not children of it.
+        // `GlassIconButton` samples `drawerBackdrop`; a control inside the layer that
+        // records it makes `RenderNode::prepareTreeImpl` recurse until the RenderThread
+        // stack overflows (docs/UI.md, red line 1; ARCHITECTURE §13). The row repeats the
+        // panel's top and horizontal insets and the heading's 6dp top padding, so the
+        // discs centre on the same 48dp band the plain `IconButton`s occupied; the 20dp
+        // end gutter lines them up with the search field's trailing edge.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(
+                    WindowInsets.systemBars
+                        .union(WindowInsets.displayCutout)
+                        .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                )
+                .padding(top = 6.dp, end = HEADING_GUTTER)
+                .heightIn(min = HEADING_ACTION_BAND),
+            horizontalArrangement = Arrangement.spacedBy(ACTION_GAP),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (selecting) {
+                // The three answers selection mode has, in the bar's own order:
+                // everything, then what happens to it, then out. The list is the same
+                // list, so the control that starts a selection and the controls that
+                // end one stand in the same place.
+                val visiblePaths = visible.map { it.path }.toSet()
+                val allVisibleSelected =
+                    visiblePaths.isNotEmpty() && visiblePaths.all { it in selected }
+                DrawerActionButton(
+                    glyph = MiuixIcons.SelectAll,
+                    // One glyph for both answers, told apart by the accent: the
+                    // library's set has a check-the-list mark and no un-check one, and
+                    // the state a reader needs from this button is "what will the tap
+                    // do", which the tint says and the spoken description says out
+                    // loud.
+                    description = if (allVisibleSelected) {
+                        text.sessions.deselectAll
+                    } else {
+                        text.sessions.selectAll
+                    },
+                    tint = if (allVisibleSelected) {
+                        MiuixTheme.colorScheme.primary
+                    } else {
+                        MiuixTheme.colorScheme.onBackground
+                    },
+                    enabled = visiblePaths.isNotEmpty(),
+                    backdrop = drawerBackdrop,
+                    onClick = {
+                        // Select-all is a mode flip too: from here every visible row is
+                        // either in the set or out of it, and the button's tint says
+                        // which answer the tap gave. The buzz belongs to that
+                        // transition, not to the redraw.
+                        haptics.toggle(on = !allVisibleSelected)
+                        selected = if (allVisibleSelected) {
+                            selected - visiblePaths
+                        } else {
+                            selected + visiblePaths
+                        }
+                    },
+                )
+                DrawerActionButton(
+                    glyph = MiuixIcons.Delete,
+                    description = text.sessions.deleteSelected,
+                    enabled = selected.isNotEmpty(),
+                    backdrop = drawerBackdrop,
+                    onClick = {
+                        deleteTargets = summaries.filter { it.path in selected }
+                        deleteUp = true
+                    },
+                )
+                DrawerActionButton(
+                    glyph = MiuixIcons.Close,
+                    description = text.sessions.cancelSelection,
+                    backdrop = drawerBackdrop,
+                    onClick = {
+                        // Leaving selection is the same kind of answer as entering
+                        // it: a mode that was on is now off. `exitSelection` is also
+                        // called once a delete completes, which is a result rather
+                        // than a press, so the buzz stays at this tap.
+                        haptics.toggle(on = false)
+                        exitSelection()
+                    },
+                )
+            } else {
+                DrawerActionButton(
+                    glyph = MiuixIcons.SelectAll,
+                    description = text.sessions.select,
+                    // The list on screen, not the directory: the other mode's
+                    // conversations cannot be selected from here, so a lens with
+                    // nothing in it is not a selection the reader can do anything
+                    // with. A search narrows it further, and selecting the matches is
+                    // exactly what this button is for.
+                    enabled = visible.isNotEmpty(),
+                    backdrop = drawerBackdrop,
+                    onClick = {
+                        // The entry into selection is the mode flip a reader feels
+                        // for: the whole list changes shape under the finger, and the
+                        // glass disc's fill is too small to carry that alone. Select-all
+                        // and the close button answer the same way; the delete button
+                        // is an action and stays silent.
+                        haptics.toggle(on = true)
+                        selecting = true
+                    },
                 )
             }
         }
@@ -1903,12 +1943,38 @@ private val LIST_FADE = 30.dp
 /** The drawer's gutter: the heading, the field and the group headings share it. */
 private val HEADING_GUTTER = 20.dp
 
-/** The selection controls in the drawer's heading, and their glyphs. */
-// The visible mark stays 20dp; the box is the platform's 48dp touch target. A
-// 36dp box made four adjacent controls (one of them destructive) smaller than a
-// thumb even though their glyphs looked the right size.
-private val SELECTION_BUTTON = 48.dp
+/** The 48dp band the drawer's heading actions have always occupied. */
+private val HEADING_ACTION_BAND = 48.dp
+
+/**
+ * The glass disc's diameter.
+ *
+ * The library's 40dp floor, and the smallest the heading's three controls may be: they
+ * replace 48dp `IconButton`s in the same band, so the heading got *shorter* rather than
+ * longer, and three 40dp discs plus their 4dp gaps are 128dp — 23dp of air beside the
+ * 32dp wordmark on the emulator's 295dp panel. The heading reserves that band, so a
+ * narrower panel shrinks the wordmark rather than letting it run under the discs.
+ */
+private val DRAWER_ACTION_SIZE = 40.dp
+
+/** The gap between two heading discs, the page bar's own 4dp. */
+private val ACTION_GAP = 4.dp
+
+/** The same fade the files bar gives an unavailable glass action. */
+private const val DISABLED_GLYPH_ALPHA = 0.38f
+
+/** `ic_pi_wordmark`'s 54.6 by 16.8, kept in step with PiKitRoot.kt's private copy. */
+private const val WORDMARK_ASPECT = 54.6f / 16.8f
+
+/** The selection controls' glyphs, 20dp as the drawer's heading has always drawn them. */
 private val SELECTION_GLYPH = 20.dp
+
+/** `title1`'s 32sp at the default font scale: the wordmark stands where that text did. */
+private val HEADING_WORDMARK_HEIGHT = 32.dp
+
+/** The row mark's box, and the diameter the library's `Checkbox` actually draws. */
+private val SELECTION_MARK = 20.dp
+private val CHECKBOX_DIAMETER = 26.dp
 
 /** A row's corner, when it is the highlighted one. */
 private val ROW_CORNER = 14.dp
@@ -1958,34 +2024,98 @@ private fun SettingsDisc(
 }
 
 /**
+ * One glass action in the drawer's heading.
+ *
+ * `GlassIconButton` has no `enabled` parameter, so an unavailable action is stated the
+ * way the files bar states it: the ink fades, semantics say disabled so a screen reader
+ * does not offer a control that cannot act, and the click is gated so a dead-looking
+ * disc cannot fire. The callback is passed through untouched — the haptics rules stay at
+ * the call sites, where the mode flip they describe lives.
+ */
+@Composable
+private fun DrawerActionButton(
+    glyph: ImageVector,
+    description: String,
+    backdrop: LayerBackdrop?,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    tint: Color? = null,
+) {
+    GlassIconButton(
+        onClick = { if (enabled) onClick() },
+        // `mergeDescendants` folds the disc's own button semantics, its glyph's
+        // description and this `disabled` into one node; a plain `semantics` node
+        // beside the button's would leave TalkBack reading an enabled control.
+        modifier = Modifier.semantics(mergeDescendants = true) {
+            if (!enabled) disabled()
+        },
+        backdrop = backdrop,
+        material = PiGlass.material(),
+        size = DRAWER_ACTION_SIZE,
+        // The drawer's panel is `#F7F7F7`; the chip-sized shadow disappears on it,
+        // which is why the settings disc at the foot uses the library's Float too.
+        shadow = GlassShadows.Float,
+    ) {
+        Icon(
+            imageVector = glyph,
+            contentDescription = description,
+            tint = if (enabled) {
+                tint ?: MiuixTheme.colorScheme.onBackground
+            } else {
+                (tint ?: MiuixTheme.colorScheme.onBackground)
+                    .copy(alpha = DISABLED_GLYPH_ALPHA)
+            },
+            modifier = Modifier.size(SELECTION_GLYPH),
+        )
+    }
+}
+
+/**
  * The checked/unchecked mark a row wears in multi-select.
  *
  * No touch target of its own: the whole row is the target in this mode, so this is
- * state and not a control. 20dp keeps it inside the title's line box, which is what
- * stops selection from making every conversation taller.
+ * state and not a control. The library's `Checkbox` is used read-only so the mark is the
+ * official 26dp circle, animated checkmark and all, rather than a hand-drawn circle with
+ * `MiuixIcons.Ok` inside it. The title's line box is about 20dp and the row cannot grow,
+ * so the 26dp component is scaled to [SELECTION_MARK] inside a 20dp box: the row sees
+ * the disc's ink is exactly 20dp across. `scale` is a draw-time transform, so it does
+ * not feed the checkbox's 26dp `requiredSize` back into the row.
+ *
+ * `enabled = false` is what makes it read-only. `onClick = null` alone still leaves the
+ * library's internal `pressable` alive: its click handler invokes the callback and then
+ * performs `ToggleOn`/`ToggleOff` unconditionally, so a tap on the mark would buzz once
+ * and be swallowed before the row's own click ran. Disabling the component removes that
+ * handler; the eight colours are the enabled defaults copied into the disabled slots, so
+ * the mark does not turn into the library's faded disabled state while the row remains
+ * the live control. `clearAndSetSemantics` keeps the row's checkbox semantics the only
+ * one a screen reader announces.
  */
 @Composable
 private fun SelectionMark(checked: Boolean) {
-    val accent = MiuixTheme.colorScheme.primary
     Box(
-        modifier = Modifier
-            .size(20.dp)
-            .clip(CircleShape)
-            .background(if (checked) accent else Color.Transparent)
-            .border(
-                width = 1.5.dp,
-                color = if (checked) accent else MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                shape = CircleShape,
-            ),
+        modifier = Modifier.size(SELECTION_MARK),
         contentAlignment = Alignment.Center,
     ) {
-        if (checked) {
-            Icon(
-                imageVector = MiuixIcons.Ok,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(13.dp),
-            )
-        }
+        val colors = CheckboxDefaults.checkboxColors(
+            checkedForegroundColor = MiuixTheme.colorScheme.onPrimary,
+            uncheckedForegroundColor = MiuixTheme.colorScheme.secondary,
+            disabledCheckedForegroundColor = MiuixTheme.colorScheme.onPrimary,
+            disabledUncheckedForegroundColor = MiuixTheme.colorScheme.secondary,
+            checkedBackgroundColor = MiuixTheme.colorScheme.primary,
+            uncheckedBackgroundColor = MiuixTheme.colorScheme.secondary,
+            disabledCheckedBackgroundColor = MiuixTheme.colorScheme.primary,
+            disabledUncheckedBackgroundColor = MiuixTheme.colorScheme.secondary,
+        )
+        Checkbox(
+            state = if (checked) ToggleableState.On else ToggleableState.Off,
+            // The row's `combinedClickable` is the toggle and the only haptic; this
+            // component must not own a second one (see the KDoc).
+            onClick = null,
+            modifier = Modifier
+                .scale(SELECTION_MARK / CHECKBOX_DIAMETER)
+                .clearAndSetSemantics { },
+            colors = colors,
+            enabled = false,
+        )
     }
 }
