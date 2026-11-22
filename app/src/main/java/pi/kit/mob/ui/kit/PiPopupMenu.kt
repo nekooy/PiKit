@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassDropdownPopup
 import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupSizing
 import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
@@ -58,6 +59,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * full size rather than growing from a corner. Glass icon buttons use `GlassTransformPopup`.
  * The composer morphs from the trigger toward a viewport above it, so the menu cannot open
  * over its input field when the IME raises the chip row.
+ *
+ * A **dropdown row's panel is not a menu**, and it is the one panel in this file that does
+ * not take that fade: its alternatives *are* the row's value unfolded, so it opens with the
+ * library's arc out of the value cell, the same motion the plain form of
+ * [PiDropdownPreference] gets from `GlassDropdownPreference`. [PiDropdownPopup] is that
+ * panel. A menu lists actions for a control the reader pressed; a dropdown states what a
+ * value can become, and a value that faded in at full size read as no motion at all beside
+ * the arc of the row next to it.
  *
  * ## Where the panel is drawn, and why it is not where the trigger is
  *
@@ -128,6 +137,57 @@ fun PiPopupMenu(
             anchorContent = anchorContent,
             backdrop = backdrop,
             gap = with(LocalDensity.current) { (openBelow - anchor.top).coerceAtLeast(0f).toDp() },
+            cornerRadius = PiCorner.popup,
+            content = content,
+        )
+    }
+}
+
+/**
+ * A dropdown row's panel: the library's own `GlassDropdownPopup`, hosted by the page.
+ *
+ * This is the popup `GlassDropdownPreference` raises for the plain form of
+ * [PiDropdownPreference], used directly because the summarised form's alternatives are the
+ * app's [PiMenuRow]s rather than the library's `GlassPopupItem`s. Taking the library's
+ * component rather than the anchored menu above is what makes the two forms of one row open
+ * the same way: the panel grows out of the value cell along the library's arc, starting as a
+ * flat capsule at `GlassMotion.ARC_START_WIDTH` (69%) of its settled width, and the value it
+ * replaces is faded out while it is open. Re-deriving that motion on top of [PiAnchoredMenu]
+ * was the alternative and was rejected — the arc is four springs and a frame function in the
+ * library, and a second copy of them would be a second thing to keep in step.
+ *
+ * The panel still samples the page's backdrop, so it has to stay outside the recording that
+ * holds the row (docs/UI.md's first red line). It registers into [PiPopupHostProvider]
+ * through the same machinery [PiPopupMenu] uses, and the host draws it full-window with the
+ * page's backdrop supplied and the panel's corner at [PiCorner.popup].
+ *
+ * @param show whether the panel is open. The panel animates out through this flag, so it
+ *   stays composed while it leaves; the caller keeps the value rather than composing this
+ *   inside `if (show)`.
+ * @param anchor the row's value cell, attached with `Modifier.glassPopupAnchorValue`. It is
+ *   the panel's collapsed endpoint: the arc starts at its bounds and the library hides the
+ *   value it draws while the panel is open.
+ * @param bounds the row's own bounds, reported by [Modifier.piMenuAnchor]. The library falls
+ *   back to them only while the value cell has not been measured.
+ * @param content the rows. [PiMenuRow] is the app's row, at the library's popup metrics.
+ */
+@Composable
+fun PiDropdownPopup(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    anchor: GlassPopupAnchor,
+    bounds: Rect,
+    sizing: GlassPopupSizing = GlassPopupSizing(),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    RegisterPiPopup(anchor) { backdrop ->
+        GlassDropdownPopup(
+            show = show,
+            onDismissRequest = onDismissRequest,
+            anchorBounds = bounds,
+            backdrop = backdrop,
+            anchor = anchor,
+            sizing = sizing,
             cornerRadius = PiCorner.popup,
             content = content,
         )

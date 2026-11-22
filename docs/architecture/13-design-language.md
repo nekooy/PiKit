@@ -382,11 +382,13 @@ Two row rules are behaviour rather than taste:
   `GlassDropdownPreference`, supplies `LocalPiBackdrop` (the row cannot read the local itself,
   and a call site that passed `null` would silently get the opaque fill) and states
   `PiCorner.popup`, so a settings dropdown and a menu are cut the same way. Its `options`
-  overload takes a `PiDropdownOption` per alternative and draws the panel as `PiMenuRow`s —
-  the form for a row whose alternatives each need a sentence, which the library's glass
-  preference cannot express because it takes bare strings. `tools/check-ui.py` refuses
-  `OverlayDropdownPreference`, `WindowDropdownPreference` and the spinner rows for the same
-  reason it refuses `OverlayListPopup`.
+  overload takes a `PiDropdownOption` per alternative and draws the panel as `PiMenuRow`s in
+  the library's own `GlassDropdownPopup` — the form for a row whose alternatives each need a
+  sentence, which the library's glass *preference* cannot express because it takes bare
+  strings. Both forms therefore raise one popup and open one way; the summarised one puts the
+  app's rows inside that popup rather than composing a second panel around them.
+  `tools/check-ui.py` refuses `OverlayDropdownPreference`, `WindowDropdownPreference` and the
+  spinner rows for the same reason it refuses `OverlayListPopup`.
 - **A row that raises a question is inert, and its switch is the control.** The
   storage grants ask every time they are turned on or off, so the row does not toggle
   and the finger has to reach the switch. Backup's switches stay row-toggling, because
@@ -443,8 +445,18 @@ Two row rules are behaviour rather than taste:
   Point and row context menus keep Miuix's logical-end alignment and safe-area fit
   test. Its edge reveal started at 15% of the final width, which read as a new object
   growing from a corner instead of actions for the pressed item. The panel now fades
-  at full size with only 6dp of travel toward the trigger on exit. Summarised preference
-  menus use the same anchored panel.
+  at full size with only 6dp of travel toward the trigger on exit.
+
+  **A dropdown row's panel is not a menu and does not take that fade.** Its alternatives
+  are the row's own value unfolded, so it keeps the library's arc: a flat capsule at 69%
+  of the settled width grows out of the value cell, arcs into place on `GlassMotion`'s
+  four dropdown springs, and fades its own value out underneath itself. The summarised
+  form used to share the menu's anchored panel and fade at full size, which read as no
+  animation at all beside the language row's arc one card away — a fade over a panel that
+  is already at its final size is not motion. `PiDropdownPopup` is that panel: the
+  library's `GlassDropdownPopup` with the app's `PiMenuRow`s inside it, registered into
+  `PiPopupHostProvider` like every other popup so it samples the page from outside the
+  recording.
 
   A glass icon button instead uses `GlassTransformPopup` with the measured button and
   separate decorative glyph, matching [Miuix's guide](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta02/docs/components/glass/glasstransformpopup.md)

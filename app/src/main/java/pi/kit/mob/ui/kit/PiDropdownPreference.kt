@@ -21,6 +21,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.glass.GlassPopupDefaults
 import top.yukonga.miuix.kmp.glass.GlassPopupSizing
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -115,11 +117,14 @@ fun PiDropdownPreference(
  * own summary, where it would describe whichever option happens to be in effect and change
  * as the reader picks.
  *
- * The library has no glass equivalent of the `DropdownEntry`/`DropdownItem` form that
- * carries those summaries, so the row is composed here: [PiMenuRow] for each option at the
- * popup metrics, in a [PiPopupMenu] anchored on the row's own value cell. That is the same
- * pair every other menu in the app uses, so this row and a composer chip open the same
- * panel.
+ * The library has no glass *preference* that carries those summaries, so the row is composed
+ * here — [PiMenuRow] for each option at the popup metrics — but its panel is the library's
+ * own `GlassDropdownPopup` ([PiDropdownPopup]), not the anchored menu a control's actions
+ * open. The two forms of this row are then one panel with one motion: the alternatives grow
+ * out of the value cell along the library's arc and the value fades under them, exactly as
+ * the plain form's do. A menu's fade at full size was tried here and is what this replaced —
+ * beside the language row's arc, the summarised row's panel read as having no animation at
+ * all, because a fade over a panel that is already at its final size is not motion.
  *
  * @param options the alternatives, each with the text the row shows and the sentence under
  *   it.
@@ -139,7 +144,11 @@ fun <T> PiDropdownPreference(
     summaryColor: BasicComponentColors = BasicComponentDefaults.summaryColor(),
     startAction: (@Composable () -> Unit)? = null,
 ) {
-    val anchor = rememberPiMenuAnchor()
+    // Two anchors for one row, because the library asks two questions: the value cell is
+    // where the panel grows from and what it hides (`glassPopupAnchorValue`), while the row's
+    // own bounds are the placement the library falls back to before that cell is measured.
+    val row = rememberPiMenuAnchor()
+    val value = rememberGlassPopupAnchor()
     var expanded by remember { mutableStateOf(false) }
     val current = options.getOrNull(selectedIndex)
     val actualEnabled = enabled && options.isNotEmpty()
@@ -163,10 +172,13 @@ fun <T> PiDropdownPreference(
         startAction = startAction,
         endActions = {
             Row(
-                // The anchor is the value cell rather than the whole row, which is what
-                // the library's own dropdown does (`glassPopupAnchorValue`): the panel
-                // then hangs off the answer it is about instead of off the row's far end.
-                modifier = Modifier.piMenuAnchor(anchor),
+                // The panel's collapsed endpoint is the value cell rather than the whole
+                // row, which is what the library's own dropdown does: the panel then hangs
+                // off the answer it is about instead of off the row's far end, and the value
+                // and chevron fade out under the panel that replaces them.
+                modifier = Modifier
+                    .piMenuAnchor(row)
+                    .glassPopupAnchorValue(value),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (current != null) {
@@ -196,12 +208,13 @@ fun <T> PiDropdownPreference(
     )
 
     // A row that leaves the page takes its panel with it: the registration belongs to this
-    // call site, so the composition that owns the row owns the menu.
+    // call site, so the composition that owns the row owns the popup.
     if (!actualEnabled) return
-    PiPopupMenu(
+    PiDropdownPopup(
         show = expanded,
         onDismissRequest = { expanded = false },
-        anchor = anchor,
+        anchor = value,
+        bounds = row.bounds,
     ) {
         options.forEachIndexed { index, option ->
             PiMenuRow(

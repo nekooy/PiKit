@@ -252,7 +252,9 @@ The architecture is two levels, and the page owns the lower one:
    panel as the menus above, from `DropdownDefaults.dropdownColors()`. The kit's row is
    `GlassDropdownPreference` with `LocalPiBackdrop` supplied and `PiCorner.popup`, and
    its `options` overload (per-option summaries, `PiDropdownOption`) is the form for a
-   row whose alternatives need a sentence each. `tools/check-ui.py` refuses the
+   row whose alternatives need a sentence each, and it raises the library's own
+   `GlassDropdownPopup` with the app's `PiMenuRow`s inside it, so both forms of the row
+   open with the same arc out of the value cell. `tools/check-ui.py` refuses the
    library's preference rows and spinners too.
 
 ## Menus
@@ -301,9 +303,11 @@ page, not the card, because a long conversation recycles cards constantly.
 row shape for "a value with a few alternatives" — the library's `GlassDropdownPreference`
 with the page's backdrop supplied and `PiCorner.popup`, so a settings dropdown's panel and
 a menu's are cut the same way. Its `options` overload takes a `PiDropdownOption` per
-alternative (a label and a sentence) and draws the panel as `PiMenuRow`s, which is the
-form for a row whose alternatives each need explaining. `OverlayDropdownPreference` is
-refused by `tools/check-ui.py` for the same reason `OverlayListPopup` is.
+alternative (a label and a sentence) and draws those rows in the library's own
+`GlassDropdownPopup` (`PiDropdownPopup`), which is the popup the plain form raises — one
+panel and one arc for both forms, rather than the menu's fade at full size, which beside
+the language row's arc reads as no motion at all. `OverlayDropdownPreference` is refused by
+`tools/check-ui.py` for the same reason `OverlayListPopup` is.
 
 **The drawer foot is glass too, and it owns its layer.** The drawer is a panel rather
 than a page, so `SessionsScreen` creates its own backdrop with `rememberPiBackdrop()`
