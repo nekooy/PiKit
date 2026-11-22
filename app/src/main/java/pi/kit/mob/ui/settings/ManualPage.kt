@@ -33,7 +33,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -50,8 +49,6 @@ import pi.kit.mob.ui.MarkdownText
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
-import pi.kit.mob.ui.kit.PiTopEdgeClearance
-import pi.kit.mob.ui.kit.PiTopEdgeViewport
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberLastPresent
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -431,6 +428,12 @@ private const val TAG = "PiKit"
  * "what was the settings row called" — which is exactly the reading a chapter index is
  * for.
  *
+ * The document below it keeps no top-edge fade. The contents bar already paints the
+ * page's surface, so a fade there had nothing to hide: it merely blurred the first
+ * 30dp of the chapter — more than a line of 17sp prose — and made the heading a reader
+ * had just jumped to unreadable. The files listing keeps the kit's fade because its
+ * first row is a card, not running text.
+ *
  * The scroll *target* is measured rather than estimated: each chapter's own
  * `MarkdownText` reports its position inside the scrolling column through
  * `onGloballyPositioned`, so a heading's offset is the layout's own answer and survives
@@ -477,7 +480,6 @@ internal fun ManualPage(onBack: () -> Unit) {
         // viewport: it keeps the last line clear of the gesture handle and still lets a
         // chapter's own text scroll under it.
         val inset = LocalPiNavigationInset.current
-        val chapterClearance = with(LocalDensity.current) { PiTopEdgeClearance.roundToPx() }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -488,36 +490,43 @@ internal fun ManualPage(onBack: () -> Unit) {
                 titles = document.chapters.map { it.title },
                 onJump = { index ->
                     val y = starts[index] ?: return@ManualContents
-                    scope.launch { scroll.animateScrollTo((y - chapterClearance).coerceIn(0, scroll.maxValue)) }
+                    scope.launch { scroll.animateScrollTo(y.coerceIn(0, scroll.maxValue)) }
                 },
             )
-            PiTopEdgeViewport(scroll.canScrollBackward, Modifier.weight(1f).fillMaxWidth()) { reportOverscroll ->
-                Column(Modifier.fillMaxSize().piOverScroll(reportOverscroll).verticalScroll(scroll)) {
-                    Spacer(Modifier.height(PiTopEdgeClearance))
-                    if (document.intro.isNotBlank()) {
-                        ManualProse(document.intro)
-                    }
-                    document.chapters.forEachIndexed { index, chapter ->
-                        MarkdownText(
-                            text = chapter.body,
-                            modifier = Modifier
-                                // Before the measure and the padding: the recorded position
-                                // is then the top of the chapter *including* its own spacing,
-                                // which is where a scroll should put it.
-                                .onGloballyPositioned { coordinates ->
-                                    starts[index] = coordinates.positionInParent().y.roundToInt()
-                                }
-                                .align(Alignment.CenterHorizontally)
-                                .widthIn(max = MANUAL_MEASURE)
-                                .padding(start = 20.dp, end = 20.dp),
-                        )
-                    }
-                    // The bottom inset is the page's own gap above the gesture handle: a
-                    // manual's last line set against the bar reads as a page that was cut
-                    // rather than as one that ended. It is a spacer rather than the last
-                    // chapter's padding because the last chapter ends the prose.
-                    Spacer(Modifier.height(MANUAL_FOOT_SPACE + inset))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    // The manual is this page's body — the contents row above it is the
+                    // page's furniture — so the document takes the page's elastic end.
+                    // A short manual and a long one have to end the same way; see
+                    // `piOverScroll`.
+                    .piOverScroll()
+                    .verticalScroll(scroll),
+            ) {
+                if (document.intro.isNotBlank()) {
+                    ManualProse(document.intro)
                 }
+                document.chapters.forEachIndexed { index, chapter ->
+                    MarkdownText(
+                        text = chapter.body,
+                        modifier = Modifier
+                            // Before the measure and the padding: the recorded position
+                            // is then the top of the chapter *including* its own spacing,
+                            // which is where a scroll should put it.
+                            .onGloballyPositioned { coordinates ->
+                                starts[index] = coordinates.positionInParent().y.roundToInt()
+                            }
+                            .align(Alignment.CenterHorizontally)
+                            .widthIn(max = MANUAL_MEASURE)
+                            .padding(start = 20.dp, end = 20.dp),
+                    )
+                }
+                // The bottom inset is the page's own gap above the gesture handle: a
+                // manual's last line set against the bar reads as a page that was cut
+                // rather than as one that ended. It is a spacer rather than the last
+                // chapter's padding because the last chapter ends the prose.
+                Spacer(Modifier.height(MANUAL_FOOT_SPACE + inset))
             }
         }
     }

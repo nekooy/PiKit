@@ -291,9 +291,12 @@ only hides the tail and leaves the wrong viewport in place.
 
 The manual and files have an inner scroller below fixed controls, not a full-page
 scroll. The manual's contents label stayed at y=292–306 when jumping to a chapter, but
-the band blurred it anyway after the jump. These pages pass `contentScrollsUnderBar = false`:
-the bar's buttons still respond to the scroller, but the background band (including
-the gradient fallback) stays off because no moving content can pass behind the header.
+the top bar's band blurred it anyway after the jump. These pages pass
+`contentScrollsUnderBar = false`: the bar's buttons still respond to the scroller, but
+the background band (including the gradient fallback) stays off because no moving
+content can pass behind the header. The files page then blurs the top of its list with
+`PiTopEdgeViewport`; the manual does not, because its contents bar is already opaque and
+the band only blurred the first lines of the chapter a jump had just landed on.
 
 ### The window's last pixels are a page's, not the system's
 
