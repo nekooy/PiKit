@@ -17,8 +17,8 @@ patterns the change touches.
   the docs and source at the tag matching PiKit's `miuix` pin for implementation
   details such as defaults, layout, and fallback behaviour.
   [Official Miuix documentation](https://compose-miuix-ui.github.io/miuix/) ·
-  [Docs at v0.9.5-beta02](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta02/docs) ·
-  [Source at v0.9.5-beta02](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta02) ·
+  [Docs at v0.9.5-beta03](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta03/docs) ·
+  [Source at v0.9.5-beta03](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta03) ·
   [PiKit version catalog](../gradle/libs.versions.toml)
 - Read Mishka's implementation of the equivalent surface alongside its UI guidelines
   and glass migration guide. Use them for patterns such as backdrop isolation and
@@ -32,7 +32,7 @@ patterns the change touches.
 
 ## The pins the rules are written against
 
-- `compose-miuix-ui/miuix` **0.9.5-beta02** — the second beta of the OS4 material:
+- `compose-miuix-ui/miuix` **0.9.5-beta03** — the third beta of the OS4 material:
   `GlassTextField`, the animated `GlassNavigationRail`/`GlassTabRow`, the refined
   progressive-blur pipeline and the Compose 1.13 API migration. It targets Compose
   Multiplatform 1.13.0-rc01; this project resolves the stable **Compose 1.13.0** line
@@ -44,7 +44,7 @@ patterns the change touches.
   because they animate a child that is already composed and the captured variant is
   for a conditional subtree. `TextFieldState` is available; the app's existing
   Miuix `TextField` call sites keep the value overload because the value is screen
-  state (`ChatComposerState`'s draft, a settings form's field), and beta02's
+  state (`ChatComposerState`'s draft, a settings form's field), and the 0.9.5 beta's
   deprecation is a warning rather than a removal — a new field starts from
   `rememberTextFieldState` and the state-based overload. The strong-skipping compiler
   is on, which is why an unstable parameter is skipped by instance equality and the

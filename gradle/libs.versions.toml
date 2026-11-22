@@ -19,11 +19,11 @@
 # `gradle.properties`: built-in Kotlin, the new DSL, and defaulting a module's
 # `targetSdk` to its `compileSdk`. The last is the dangerous one — 28 is a ceiling
 # for this app, not a conservative choice (§1).
-agp = "9.5.1"
+agp = "9.5.2"
 kotlin = "2.4.21"
 coreKtx = "1.19.1"
 annotation = "1.11.0"
-lifecycle = "2.11.0"
+lifecycle = "2.11.1"
 activityCompose = "1.13.0"
 composeBom = "2026.11.01"
 coroutines = "1.11.0"
@@ -40,13 +40,14 @@ jlatexmath = "0.2.0"
 # snackbars and icons. The `-android` artifacts are the ones its guide names for a
 # Compose-only Android project; the multiplatform coordinates select the same code.
 #
-# 0.9.5-beta02 is the current release: the second beta of the OS4 material, with
-# `GlassTextField`, the animated `GlassNavigationRail`/`GlassTabRow`, the refined
-# progressive-blur pipeline and the `computedStateOf`/`CapturedAnimatedVisibility`
-# migration. It targets Compose Multiplatform 1.13.0-rc01; this project resolves
-# the stable Compose 1.13.0 line through compose-bom 2026.11.01, which is API-
-# compatible with the release candidate the library was compiled against.
-miuix = "0.9.5-beta02"
+# 0.9.5-beta03 is the current release: the third beta of the OS4 material, which
+# restores `GlassTopAppBar`'s band fade and tracks its collapse progress, fixes
+# `GlassTabRow`'s resting opacity inside lists, and cuts recomposition and
+# allocations in `miuix-blur` and `miuix-glass`. It targets Compose Multiplatform
+# 1.13.0-rc01; this project resolves the stable Compose 1.13.0 line through
+# compose-bom 2026.11.01, which is API-compatible with the release candidate the
+# library was compiled against.
+miuix = "0.9.5-beta03"
 junit = "4.13.2"
 
 [libraries]

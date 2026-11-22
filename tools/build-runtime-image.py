@@ -206,9 +206,10 @@ WEB_EXTENSION_METADATA = "share/pikit/web.json"
 #: accident. The extension no longer brings an express/ajv/MCP dependency tree, so
 #: the body-parser/fast-uri/hono floors that existed for `pi-web-access` are gone.
 PACKAGE_OVERRIDES = {
-    # pi 1.4.0 pins 8.10.2; GHSA-4qv8-2p9j-2685 / GHSA-f72v-6w45-q472 /
+    # pi 1.6.0 pins 8.12.4 itself; the floor keeps a cached tree from resolving
+    # below the advisory-fixed line. GHSA-4qv8-2p9j-2685 / GHSA-f72v-6w45-q472 /
     # GHSA-xjj6-f33q-929c name >=8.12.2 fixed.
-    "undici": "8.12.3",
+    "undici": "8.12.4",
 }
 
 #: The content layer: the archive of it, the manifest that says what it owns,

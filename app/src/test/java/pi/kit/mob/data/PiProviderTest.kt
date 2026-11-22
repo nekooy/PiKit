@@ -13,8 +13,8 @@ import org.junit.Test
  * provider reports "no authentication method configured" or answers `401` with a key that
  * is perfectly good — with the wrong variable name nowhere in the message. So the table
  * below is pi's, copied from `getApiKeyEnvVars` in the bundled
- * `@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-GFUN2N5K.js`
- * (the same table pi's help text prints), and this test is what makes a typo in the enum a
+ * `@earendil-works/pi-coding-agent/dist/bundle/chunks` (the same table pi's help
+ * text prints), and this test is what makes a typo in the enum a
  * failing build rather than a support question.
  *
  * The copy is a copy: a pi release that adds a provider does not fail this test, and the

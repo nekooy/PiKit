@@ -232,7 +232,7 @@ fun LightStatusBar() {
 /**
  * The material a floating control is drawn from: OS4 glass over the page's backdrop.
  *
- * Miuix 0.9.5-beta02's `miuix-glass` makes a real backdrop blur possible: [rememberPiBackdrop]
+ * Miuix 0.9.5-beta03's `miuix-glass` makes a real backdrop blur possible: [rememberPiBackdrop]
  * records the page's own drawing into a `LayerBackdrop`, and [glassPanel] samples it
  * behind a shape — the page's cards and text show through the material rather than a
  * flat colour pretending to be one. [LocalPiBackdrop] carries that layer down to the

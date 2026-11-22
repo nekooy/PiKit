@@ -7,7 +7,7 @@ runtime image has to exist at all is in
 
 ## Prerequisites
 
-- **JDK 17 to 26** (built and tested with JDK 21). The wrapper is Gradle 9.9.1, and a
+- **JDK 17 to 26** (built and tested with JDK 21). The wrapper is Gradle 9.9.2, and a
   Gradle release cannot run on a JVM newer than the one it knows about — a too-new
   Java fails before the build script is even read, which is why the error arrives as
   an IDE dialog rather than as a task failure. Android Studio keeps its own choice
@@ -18,7 +18,7 @@ runtime image has to exist at all is in
   `sourceCompatibility`/`targetCompatibility`/`jvmTarget` are all 17.
 - **Android SDK** with `compileSdk 37.2` and its build-tools, plus **NDK r29** — the
   vendored terminal emulator builds a small PTY shim through `ndk-build`. The 37.2 is
-  an AAR floor rather than a preference: Miuix 0.9.5-beta02 and the AndroidX
+  an AAR floor rather than a preference: Miuix 0.9.5-beta03 and the AndroidX
   artifacts this build resolves (core-ktx 1.19.1, Compose 1.13.0) declare
   `minCompileSdk=37.2` in their own metadata, the same mechanism that made 36 the
   floor before it. CI installs exactly

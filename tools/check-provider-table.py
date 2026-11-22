@@ -38,8 +38,14 @@ SETTINGS_STORE = REPO_ROOT / "app/src/main/java/pi/kit/mob/data/SettingsStore.kt
 
 #: `getApiKeyEnvVars` builds one object literal of id -> env var. The ids and the
 #: values are both string literals; bare identifiers (`openai: "OPENAI_API_KEY"`)
-#: appear too, and are folded in by the same pattern with the quotes optional.
-ENV_PAIR = re.compile(r'(?:"([^"]+)"|([A-Za-z0-9_-]+))\s*:\s*"([A-Z][A-Z0-9_]*)"')
+#: appear too, and are folded in by the same pattern with the quotes optional. A
+#: value may also be an array of accepted variables (pi 1.6.0's Qwen Token Plan
+#: entries list a team key before the shared one); the fixture names one variable,
+#: so the comparison accepts any member of that array.
+ENV_PAIR = re.compile(
+    r'(?:"([^"]+)"|([A-Za-z0-9_-]+))\s*:\s*(?:"([A-Z][A-Z0-9_]*)"|\[([^\]]*)\])'
+)
+ENV_NAME = re.compile(r'"([A-Z][A-Z0-9_]*)"')
 
 #: The fixture is a Kotlin map of `"id" to "ENV_VAR"` entries.
 FIXTURE_PAIR = re.compile(r'"([^"]+)"\s+to\s+"([A-Z][A-Z0-9_]*)"')
@@ -77,26 +83,34 @@ def find_provider_chunk() -> Path | None:
     return None
 
 
-def bundled_table(chunk: Path) -> dict[str, str]:
+def bundled_table(chunk: Path) -> dict[str, tuple[str, ...]]:
     """
     The single-key half of pi's `getApiKeyEnvVars` table.
 
     Two providers are answered outside the object literal (`github-copilot` by a
     name check, `anthropic` by a list of three variables) and neither is a
-    single-key provider this app offers, so they are not looked for here.
+    single-key provider this app offers, so they are not looked for here. A value
+    that is an array is kept whole: the fixture names one of its members, because
+    one key field can only fill one variable, and pi accepts any of them.
     """
     text = chunk.read_text(encoding="utf-8", errors="replace")
-    start = text.find("let envVar={")
+    start = text.find("let envVars={")
+    if start < 0:
+        # pi 1.4/1.5 spelled the local `envVar`; keep reading an old cache.
+        start = text.find("let envVar={")
     if start < 0:
         return {}
     end = text.find("}[provider]", start)
     if end < 0:
         return {}
     body = text[start:end]
-    table = dict[str, str]()
+    table = dict[str, tuple[str, ...]]()
     for match in ENV_PAIR.finditer(body):
         key = match.group(1) or match.group(2)
-        table[key] = match.group(3)
+        if match.group(3):
+            table[key] = (match.group(3),)
+        else:
+            table[key] = tuple(ENV_NAME.findall(match.group(4)))
     return table
 
 
@@ -144,7 +158,7 @@ def main() -> int:
     absent = deliberately_absent()
     problems = []
 
-    for provider_id, env_var in sorted(bundled.items()):
+    for provider_id, env_vars in sorted(bundled.items()):
         if provider_id in SPECIAL_CASED:
             continue
         if provider_id in absent:
@@ -159,12 +173,12 @@ def main() -> int:
             continue
         if provider_id not in fixture:
             problems.append(
-                f"pi has {provider_id!r} -> {env_var}, and PiProviderTest's fixture "
+                f"pi has {provider_id!r} -> {env_vars}, and PiProviderTest's fixture "
                 f"does not (the picker cannot offer it)"
             )
-        elif fixture[provider_id] != env_var:
+        elif fixture[provider_id] not in env_vars:
             problems.append(
-                f"pi reads {env_var} for {provider_id!r}, the fixture says "
+                f"pi reads {env_vars} for {provider_id!r}, the fixture says "
                 f"{fixture[provider_id]}"
             )
 

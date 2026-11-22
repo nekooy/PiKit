@@ -23,7 +23,7 @@ tokens into the app's vocabulary. Every screen depended on that vocabulary, and 
 Material upgrade had to be re-read against it.
 
 The rewrite replaced it with a library that already owns the vocabulary:
-`compose-miuix-ui/miuix` 0.9.5-beta02, a Compose Multiplatform component library drawing the
+`compose-miuix-ui/miuix` 0.9.5-beta03, a Compose Multiplatform component library drawing the
 MIUI/HyperOS idiom. Its theme engine ships the two palettes and derives a third
 from a seed colour if asked; its preference components are the rows a settings page
 is made of; its window dialogs,
@@ -54,7 +54,7 @@ maintained alongside every screen.
 
 ## OS4 glass: the material the library draws, and the page it samples
 
-Miuix 0.9.5-beta02 is the release this project builds against — the second beta of
+Miuix 0.9.5-beta03 is the release this project builds against — the third beta of
 `miuix-glass`, the OS4 material (beta01 was the first). The app's chrome — the page
 bar and its action buttons, the chat header's capsules, the composer and its chips,
 the jump-to-latest disc, and a dialog or sheet raised from a page — is drawn from it.
@@ -260,8 +260,9 @@ page's item count is null while a folder is listed, and a line that appeared and
 disappeared once per folder moved the whole page by its height twice.
 
 `PiPage` draws that one line in the bar's **`bottomContent`**, which Miuix includes in
-the fade's coverage. In 0.9.5-beta02 the progressive band is measured as
-`(topInset + CollapsedHeight + bottomContentHeight + 20dp) × 1.2`. Leaving the subtitle
+the fade's coverage. In 0.9.5-beta03 the progressive band is still measured as
+`(topInset + CollapsedHeight + bottomContentHeight + 20dp) × 1.2` (re-read from the
+library's `GlassTopAppBar` measure pass after the bump). Leaving the subtitle
 as a sibling in the `topBar` slot gave pages the same absolute band height, not the
 same fade past the header: `Scaffold` included the line in the body's top inset, but
 Miuix did not include it in the band. On the 420dpi personalization page the subtitle
@@ -274,7 +275,7 @@ compact band's geometry. A previous capture had a two-level step between y=190 a
 191; that is inside the band, not its measured outer edge, and did not recur in the
 comparison at the same density.
 
-The overhang is intentional. The [Miuix documentation](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta02/docs/zh_CN/components/glass/glasstopappbar.md)
+The overhang is intentional. The [Miuix documentation](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta03/docs/zh_CN/components/glass/glasstopappbar.md)
 and the [Mishka migration guide](https://github.com/YuKongA/Mishka/blob/main/docs/miuix-glass-migration.md)
 both say not to clip the bar's parent: the fading tail and the buttons' shadows
 extend beyond its measured height. Both examples give the header inset to the
@@ -461,7 +462,7 @@ Two row rules are behaviour rather than taste:
   recording.
 
   A glass icon button instead uses `GlassTransformPopup` with the measured button and
-  separate decorative glyph, matching [Miuix's guide](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta02/docs/components/glass/glasstransformpopup.md)
+  separate decorative glyph, matching [Miuix's guide](https://github.com/compose-miuix-ui/miuix/blob/v0.9.5-beta03/docs/components/glass/glasstransformpopup.md)
   and [Mishka's sort menu](https://github.com/YuKongA/Mishka/blob/1bc4acc5f76d916957fd3abdda3ba99763df521a/app/src/main/kotlin/top/yukonga/mishka/ui/screen/proxy/ProxyScreen.kt#L519).
   For the terminal roster, `openBelow = LocalPiBarBottom.current` translates the
   destination anchor to the measured bar bottom, not the collapsed button geometry.
@@ -828,7 +829,7 @@ control staying that size, and an inline code chip clamps to `min(radius, height
 where a tall box would otherwise cut into its text. The terminal is a family of its
 own and keeps the library's smaller figure throughout: its key bar is a 26dp pill with
 10dp keys on a 32dp cap, and the on-screen keyboard a 14dp panel with 7dp keys on 34dp.
-There is no theme-level shape local in Miuix 0.9.5-beta02 to hang this on, which is
+There is no theme-level shape local in Miuix 0.9.5-beta03 to hang this on, which is
 why it is per-call-site.
 
 **A hand-drawn rectangular surface is cut with the squircle modifiers, not
