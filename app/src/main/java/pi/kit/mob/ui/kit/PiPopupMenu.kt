@@ -142,9 +142,10 @@ fun PiPopupMenu(
  * through [Modifier.piGlassMenuAnchorContent]; the panel is [PiAnchoredMenu]'s morph, not
  * Miuix's `GlassTransformPopup` — see the file's *Motion and placement follow the trigger*
  * for the dismissal defect that keeps the library's version out of the kit. [anchorContent]
- * is what carries the button's own glyph through that morph: the button is hidden while the
- * menu is on screen and this copy grows into the panel and fades, so the transformation
- * reads as the control becoming its menu.
+ * is what carries the button's own glyph through that morph: the button's glyph is hidden
+ * while the copy is on screen and that copy grows into the panel and fades, so the
+ * transformation reads as the control becoming its menu while the control itself — its
+ * glass, its shadow — stays exactly where the reader left it.
  */
 @Composable
 fun PiPopupMenu(
@@ -263,19 +264,23 @@ class PiGlassMenuAnchor internal constructor(internal val menu: PiMenuAnchor)
 fun rememberPiGlassMenuAnchor(): PiGlassMenuAnchor =
     remember { PiGlassMenuAnchor(PiMenuAnchor()) }
 
-/** Reports this glass icon button's own bounds as the menu's collapsed endpoint, and hides it while its menu is on screen. */
+/** Reports this glass icon button's own bounds as the menu's collapsed endpoint. */
 fun Modifier.piGlassMenuAnchor(anchor: PiGlassMenuAnchor): Modifier =
     onGloballyPositioned { anchor.menu.bounds = it.boundsInWindow() }
-        .graphicsLayer { alpha = if (anchor.menu.contentHidden) 0f else 1f }
 
 /**
- * Reports the glyph's own bounds as the content the collapsed transform grows out of.
+ * Reports the glyph's own bounds as the content the collapsed transform grows out of, and
+ * hides that glyph while the copy in the panel is carrying it.
  *
  * Apply to the icon inside a [Modifier.piGlassMenuAnchor] control. Without it the copy is
  * the whole button, and an icon with padding around it grows from that padding's centre.
+ * Only the glyph is hidden, never the button: the button's own surface stays drawn, so the
+ * end of the closing transform hands the icon back to a control that was there all along
+ * rather than swapping one glass surface for another under the reader's eye.
  */
 fun Modifier.piGlassMenuAnchorContent(anchor: PiGlassMenuAnchor): Modifier =
     onGloballyPositioned { anchor.menu.contentBounds = it.boundsInWindow() }
+        .graphicsLayer { alpha = if (anchor.menu.contentHidden) 0f else 1f }
 
 @Composable
 private fun RegisterPiPopup(anchor: Any, panel: @Composable BoxScope.(Backdrop?) -> Unit) {
@@ -345,9 +350,9 @@ class PiMenuAnchor {
     /**
      * Whether a menu opened from this anchor is on screen, including its exit.
      *
-     * [Modifier.piGlassMenuAnchor] reads this to hide the real button: the glyph copy in
-     * the panel takes its place for the whole transform, and the button reappears only
-     * once that copy has shrunk back onto it.
+     * [Modifier.piGlassMenuAnchorContent] reads this to hide the button's glyph: the copy
+     * in the panel takes its place for the whole transform, and the glyph reappears only
+     * once that copy has shrunk back onto it. The button's own surface is never hidden.
      */
     internal var contentHidden: Boolean by mutableStateOf(false)
 }

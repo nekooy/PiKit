@@ -68,12 +68,14 @@ internal val LocalPiMenuInteractive = staticCompositionLocalOf { true }
  * The kit's own glass menu.
  *
  * Context menus fade at full size; composer menus morph from the trigger. A glass icon
- * button's menu also carries the button's *glyph* through the transform: the real button is
- * hidden while the menu is on screen and a copy of its icon, reported through
+ * button's menu also carries the button's *glyph* through the transform: the real glyph is
+ * hidden while the menu is on screen and a copy of it, reported through
  * [Modifier.piGlassMenuAnchorContent], grows into the panel and fades as the rows arrive.
- * Without that copy the panel merely expanded from behind a button that stayed crisp
- * beside it, which read as a panel appearing next to the control rather than the control
- * becoming the menu.
+ * The button itself — its fill, its stroke, its shadow — is never hidden, so the closing
+ * transform ends on the control the reader started from instead of swapping one glass
+ * surface for another in the last frame. Without the copy the panel merely expanded from
+ * behind a button that stayed crisp beside it, which read as a panel appearing next to
+ * the control rather than the control becoming the menu.
  */
 @Composable
 internal fun BoxScope.PiAnchoredMenu(
@@ -93,8 +95,8 @@ internal fun BoxScope.PiAnchoredMenu(
     val visibility = remember { MutableTransitionState(false) }
     visibility.targetState = open
     val transition = rememberTransition(visibility, label = "anchoredMenu")
-    // Active covers the exit as well: the button stays hidden until the glyph copy has
-    // shrunk back onto it, and the copy is what the reader sees hand the control back.
+    // Active covers the exit as well: the button's glyph stays hidden until the copy has
+    // shrunk back onto it, and the copy is what the reader sees hand the glyph back.
     val active = open || visibility.currentState || !visibility.isIdle
     if (anchorContent != null) {
         SideEffect { anchor.contentHidden = active }
@@ -220,12 +222,8 @@ internal fun BoxScope.PiAnchoredMenu(
             layout(constraints.maxWidth, constraints.maxHeight) {
                 val left = (frame.left - origin.x).roundToInt()
                 val top = (frame.top - origin.y).roundToInt()
-                // A glass button's menu starts as the button itself, so its panel is
-                // opaque from the first frame: the button is hidden, and a fading-in
-                // surface would leave its glyph floating alone for those frames. The
-                // glyph copy then carries the icon out of that circle into the panel.
                 background.placeWithLayer(left, top) {
-                    alpha = if (anchorContent != null) 1f else surface.value.coerceIn(0f, 1f)
+                    alpha = surface.value.coerceIn(0f, 1f)
                 }
                 val scale = if (morph && size.width > 0 && size.height > 0) {
                     minOf(frame.width / size.width, frame.height / size.height)
@@ -247,11 +245,12 @@ internal fun BoxScope.PiAnchoredMenu(
                 }
             }
         }
-        // The button's glyph, handed over to the panel: it starts exactly as the button
+        // The button's glyph, handed over to the panel: it starts exactly on the button
         // (scale 1, no offset, no blur), grows to the settled panel's width and centre,
-        // and fades as the rows arrive. The real button is hidden for as long as this
-        // exists, so the reader sees one glyph becoming the menu rather than a second
-        // icon sitting beside it.
+        // and fades as the rows arrive. The button's own glyph is hidden for as long as
+        // this exists, so the reader sees one figure becoming the menu rather than a
+        // second icon sitting beside it; the button's surface underneath stays drawn,
+        // which is what makes the last frame of the close a hand-back and not a swap.
         val glyph = anchorContent
         if (glyph != null) {
             Layout(

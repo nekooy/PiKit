@@ -291,12 +291,14 @@ ControlChip(
 - **Glass icon buttons** use `rememberPiGlassMenuAnchor` on the button,
   `piGlassMenuAnchor` on the button and `piGlassMenuAnchorContent` on its glyph, and hand
   the same glyph to the `PiPopupMenu` overload as `anchorContent`. The panel morphs out
-  of the button's measured bounds and the glyph copy grows into it and fades, while the
-  real button stays hidden for the whole transform: the control becomes its menu rather
-  than a panel growing behind a button that stays crisp beside it. The kit draws that
-  morph itself: Miuix's `GlassTransformPopup` keeps its full-page dismiss layer composed
-  through the exit spring, so a trigger tapped again before the panel finished leaving
-  lost the tap in the invisible layer. A control in the page bar can pass
+  of the button's measured bounds and the glyph copy grows into it and fades. Only the
+  glyph is hidden during the transform — never the button — so the last frame of the
+  close hands the glyph back to a surface that was drawn all along instead of swapping
+  the panel's glass for the button's in one frame, which read as the button changing
+  colour the moment it settled. The kit draws that morph itself: Miuix's
+  `GlassTransformPopup` keeps its full-page dismiss layer composed through the exit
+  spring, so a trigger tapped again before the panel finished leaving lost the tap in the
+  invisible layer. A control in the page bar can pass
   `openBelow = LocalPiBarBottom.current` to move only the settled placement, clear of the
   subtitle. Files sort is already below that bar.
 - **The rows are `PiMenuRow`**, at the library's popup metrics — see the next section.
