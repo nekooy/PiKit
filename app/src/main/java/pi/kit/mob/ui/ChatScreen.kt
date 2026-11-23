@@ -5489,14 +5489,17 @@ private fun Composer(
                     armed -> MiuixTheme.colorScheme.primary
                     else -> MiuixTheme.colorScheme.onSurface
                 }
-                // The body is glass, so most of the disc is the frame's own white;
-                // the tint is only enough to say which action this is. The glyph keeps
-                // the role's full ink, which is what carries the state: `primary` on
-                // the near-white body measures 3.05:1 and the stop square 5:1, where
-                // the filled disc this replaced had to invert both to white.
+                // The body is glass, so most of the disc is the frame's own white; the
+                // tint is what makes the armed state read as the accent at a glance.
+                // 22% of primary over the frame measures rgb(199,217,244), clearly blue
+                // beside the idle disc's rgb(233,233,233), and still light enough that
+                // the white body and bloom edge stay glass rather than becoming the
+                // solid fill the old button drew. The glyph keeps the role's full ink,
+                // because the tint is a hint of the colour rather than a container to
+                // invert against.
                 val actionTintAlpha = when {
-                    isStreaming -> 0.14f
-                    armed -> 0.04f
+                    isStreaming -> 0.22f
+                    armed -> 0.22f
                     else -> 0.03f
                 }
                 val baseActionMaterial = PiGlass.material()
