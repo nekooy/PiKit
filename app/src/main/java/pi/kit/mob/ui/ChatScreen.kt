@@ -5513,40 +5513,44 @@ private fun Composer(
                 // opaque object in the composer's glass vocabulary — beside a glass
                 // frame, glass chips and glass header. It is the library's
                 // `GlassFloatingActionButton` now, cut from the same `PiGlass.material()`
-                // as the frame it sits in: the white body, the bloom stroke and the
-                // floating shadow are the objects every other control is made of. The
-                // action's colour is a thin third layer over that body rather than the
-                // body itself, so the disc stays glass on the frame and the glyph keeps
-                // the role's ink; below API 33 the fallback is the state's own fill.
+                // as the frame it sits in: the bloom stroke and the floating shadow are
+                // the objects every other control is made of.
+                //
+                // **The action colour is the disc, not a wash on it.** A 22% primary
+                // layer under a primary glyph measured rgb(199,217,244): a pale blue disc
+                // with a blue arrow, which is neither the filled `primary` disc nor the
+                // white `onPrimary` arrow this button had before. The layer is 92% now —
+                // the figure the library's own `GlassFloatingActionButtonDefaults` blends
+                // its primary with — so the disc reads as the action's colour again:
+                // primary while it can send, error while an answer streams. The last 8%
+                // is what keeps the glass body visible, and the glyph takes the role's
+                // on-colour (`onPrimary`/`onError`) exactly as it did on the opaque disc.
+                // The idle state keeps the old `PiTone.inset()` wash and disabled ink;
+                // below API 33 the fallback is the state's solid fill.
                 //
                 // The disc is round by construction: `GlassFloatingActionButton` derives
                 // its shape from the size, so a 40dp button *is* a disc and the shape
                 // cannot drift from the two constants that used to have to stay equal.
                 val armed = enabled && (value.isNotBlank() || attachments.isNotEmpty())
                 val actionLive = isStreaming || armed
-                val actionTint = when {
+                val actionFill = when {
                     isStreaming -> PiTone.error()
                     armed -> MiuixTheme.colorScheme.primary
-                    else -> MiuixTheme.colorScheme.onSurface
+                    else -> PiTone.inset()
                 }
-                // The body is glass, so most of the disc is the frame's own white; the
-                // tint is what makes the armed state read as the accent at a glance.
-                // 22% of primary over the frame measures rgb(199,217,244), clearly blue
-                // beside the idle disc's rgb(233,233,233), and still light enough that
-                // the white body and bloom edge stay glass rather than becoming the
-                // solid fill the old button drew. The glyph keeps the role's full ink,
-                // because the tint is a hint of the colour rather than a container to
-                // invert against.
-                val actionTintAlpha = when {
-                    isStreaming -> 0.22f
-                    armed -> 0.22f
-                    else -> 0.03f
+                val actionInk = when {
+                    isStreaming -> MiuixTheme.colorScheme.onError
+                    armed -> MiuixTheme.colorScheme.onPrimary
+                    else -> MiuixTheme.colorScheme.disabledOnSurface
                 }
+                // The two live states are the action's fill with the library's 92% glass
+                // blend; the idle wash already carries its own 10% in `PiTone.inset()`.
+                val actionLayer = if (actionLive) actionFill.copy(alpha = 0.92f) else actionFill
                 val baseActionMaterial = PiGlass.material()
-                val actionMaterial = remember(baseActionMaterial, actionTint, actionTintAlpha) {
+                val actionMaterial = remember(baseActionMaterial, actionLayer) {
                     baseActionMaterial.copy(
                         third = GlassColorLayer(
-                            color = actionTint.copy(alpha = actionTintAlpha),
+                            color = actionLayer,
                             mode = GlassColorBlendMode.SrcOver,
                         ),
                     )
@@ -5577,11 +5581,7 @@ private fun Composer(
                     shadow = GlassShadows.Float,
                     material = actionMaterial,
                     size = 40.dp,
-                    fill = when {
-                        isStreaming -> PiTone.error()
-                        armed -> MiuixTheme.colorScheme.primary
-                        else -> PiTone.inset()
-                    },
+                    fill = actionFill,
                 ) {
                     Icon(
                         painter = painterResource(
@@ -5594,11 +5594,7 @@ private fun Composer(
                         // about 13dp on the 40dp disc — the same proportion the old pair
                         // drew.
                         modifier = Modifier.size(if (isStreaming) 24.dp else 22.dp),
-                        tint = if (actionLive) {
-                            actionTint
-                        } else {
-                            MiuixTheme.colorScheme.disabledOnSurface
-                        },
+                        tint = actionInk,
                     )
                 }
                     }

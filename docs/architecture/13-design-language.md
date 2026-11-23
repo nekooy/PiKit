@@ -954,9 +954,9 @@ whole interface is cut with the same corner and no surface is one radius while i
 neighbour is another. It is a single number and not a scale on purpose: a second
 step would need a rule for which surface is which, and there is no such rule to
 state. The surfaces that are not cut with it are the ones drawn by their own geometry:
-a copy button and the composer's two discs are half their own size — 14dp on a 28dp
-button, `cornerRadius = 20.dp` on a 40dp disc — so the shape does not depend on the
-control staying that size, and an inline code chip clamps to `min(radius, height / 2)`
+a copy button is 14dp on a 28dp button, and the composer's glass send disc derives its
+round shape from its 40dp size, so the shape does not depend on the control staying that
+size, and an inline code chip clamps to `min(radius, height / 2)`
 where a tall box would otherwise cut into its text. The terminal is a family of its
 own and keeps the library's smaller figure throughout: its key bar is a 26dp pill with
 10dp keys on a 32dp cap, and the on-screen keyboard a 14dp panel with 7dp keys on 34dp.
@@ -1044,9 +1044,9 @@ one decision each makes that the shared vocabulary does not:
   band the field is a raised white frame (`surfaceContainer` at the kit's corner)
   holding the text **and the four controls**, in the order a thumb meets them: the
   command list and the attach control at the field's left corner, the context
-  reading and the send button at its right — a glass disc whose thin colour layer
-  carries the accent's arrow while it can send, and the error role's square while an
-  answer streams (`GlassFloatingActionButton` over the same `PiGlass.material()` as
+  reading and the send button at its right — a glass disc whose 92% colour layer is the
+  accent disc with a white arrow while it can send, and the error disc with a white square
+  while an answer streams (`GlassFloatingActionButton` over the same `PiGlass.material()` as
   the frame). Grouping the two controls that *add something to the message* at the
   field's left is the correction: they are one kind of thing, and the corner a thumb
   rests on is where they belong. The three setting chips above the frame (thinking,
