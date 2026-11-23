@@ -286,7 +286,21 @@ class PiAgentSession internal constructor(
     val catalogueThinkingLevels: StateFlow<Map<String, List<String>>>
         get() = host.catalogueThinkingLevels
 
+    /**
+     * The live client and the job draining it.
+     *
+     * `@Volatile` because they are written and read from different threads and neither side
+     * is a suspension point: `startAgentLocked` publishes a new client from whichever thread
+     * called it, `stopAgent`/`detach` publish the null, and the `runCommand` coroutines and
+     * [attach]'s collector read the field from the session's own scope. Without the fence a
+     * reader can see the previous client — a `sendPrompt` writing into a stream that was
+     * just closed, which surfaces as "pi exited" and an automatic restart rather than as the
+     * lost write it is.
+     */
+    @Volatile
     private var client: PiRpcClient? = null
+
+    @Volatile
     private var recordJob: Job? = null
 
     /**
