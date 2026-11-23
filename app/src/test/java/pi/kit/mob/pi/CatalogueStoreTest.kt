@@ -59,7 +59,7 @@ class CatalogueStoreTest {
     """.trimIndent()
 
     @Test
-    fun `a launch's five readers parse the store once`() {
+    fun `a launch's seven readers parse the store once`() {
         val file = store(document)
 
         // Exactly what one launch asks, in the order it asks it: the active provider's
