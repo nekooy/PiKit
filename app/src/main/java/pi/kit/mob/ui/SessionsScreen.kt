@@ -496,9 +496,9 @@ fun SessionsScreen(
             // The width the heading's discs occupy, so the wordmark can never run
             // under them. The discs are siblings of this row rather than its children
             // (see the overlay below), so the row has to reserve their band itself; at
-            // the default font scale the 32dp mark is 104dp wide and the three selection
+            // the default font scale the 26dp mark is 84.5dp wide and the three selection
             // discs plus their 4dp gaps are 128dp, which on a 295dp panel leaves the mark
-            // 23dp of air. A narrower panel gives the mark less: its incoming width is
+            // 42dp of air. A narrower panel gives the mark less: its incoming width is
             // the constraint that shrinks it, and `Icon` draws through `ContentScale.Fit`,
             // so it letterboxes rather than distorts.
             val headingActionsWidth = if (selecting) {
@@ -524,10 +524,11 @@ fun SessionsScreen(
             ) {
                 // The app's name is the pixel wordmark the launcher and the setup
                 // screen already use, not a typeset "PiKit": the heading is where the
-                // reader connects the drawer to the icon they tapped. 32dp is title1's
-                // 32sp size at the default font scale, and 54.6:16.8 makes the mark
-                // 104dp wide. It is fixed rather than following the font scale: at 2x
-                // the wordmark would be 208dp and run under the action discs, which do
+                // reader connects the drawer to the icon they tapped. It is drawn at
+                // 26dp rather than a page title's size — the mark identifies the panel,
+                // and the list under it is what the panel is for — and 54.6:16.8 makes
+                // the mark 84.5dp wide. It is fixed rather than following the font
+                // scale: at 2x the wordmark would run under the action discs, which do
                 // not scale either. The mark is an image, not a line of text.
                 Icon(
                     painter = painterResource(R.drawable.ic_pi_wordmark),
@@ -1055,7 +1056,7 @@ private fun ConversationList(
         //
         // The top is the fade's own height. The fade exists to dissolve a row that
         // scrolls *under* the search field, and at rest there is no such row; without
-        // this padding the first group heading sat inside the 30dp gradient and read as
+        // this padding the first group heading sat inside the 20dp gradient and read as
         // blurred — its top half washed into the panel. Reserving the strip keeps the
         // first row at full contrast while a scrolled one still crosses the ramp.
         contentPadding = PaddingValues(top = LIST_FADE, bottom = LIST_BOTTOM + bottomInset),
@@ -1938,7 +1939,7 @@ private const val DIALOG_BODY_SHARE = 0.45f
 private val LIST_BOTTOM = 112.dp
 
 /** How far the drawer's list fades into the field above it. */
-private val LIST_FADE = 30.dp
+private val LIST_FADE = 20.dp
 
 /** The drawer's gutter: the heading, the field and the group headings share it. */
 private val HEADING_GUTTER = 20.dp
@@ -1951,8 +1952,8 @@ private val HEADING_ACTION_BAND = 48.dp
  *
  * The library's 40dp floor, and the smallest the heading's three controls may be: they
  * replace 48dp `IconButton`s in the same band, so the heading got *shorter* rather than
- * longer, and three 40dp discs plus their 4dp gaps are 128dp — 23dp of air beside the
- * 32dp wordmark on the emulator's 295dp panel. The heading reserves that band, so a
+ * longer, and three 40dp discs plus their 4dp gaps are 128dp — 42dp of air beside the
+ * 26dp wordmark on the emulator's 295dp panel. The heading reserves that band, so a
  * narrower panel shrinks the wordmark rather than letting it run under the discs.
  */
 private val DRAWER_ACTION_SIZE = 40.dp
@@ -1969,8 +1970,15 @@ private const val WORDMARK_ASPECT = 54.6f / 16.8f
 /** The selection controls' glyphs, 20dp as the drawer's heading has always drawn them. */
 private val SELECTION_GLYPH = 20.dp
 
-/** `title1`'s 32sp at the default font scale: the wordmark stands where that text did. */
-private val HEADING_WORDMARK_HEIGHT = 32.dp
+/**
+ * The wordmark's drawn height.
+ *
+ * The drawer's mark identifies the panel; it is not a page title, and at 32dp it
+ * outweighed the search field and the rows under it. 26dp keeps the 54.6:16.8 mark
+ * legible while leaving the heading's 48dp band mostly air, so the list is what the
+ * panel is about.
+ */
+private val HEADING_WORDMARK_HEIGHT = 26.dp
 
 /** The row mark's box, and the diameter the library's `Checkbox` actually draws. */
 private val SELECTION_MARK = 20.dp

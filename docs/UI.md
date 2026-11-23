@@ -128,7 +128,7 @@ that cut the last card in two (§13, *The window's last pixels*).
   bar are opaque furniture between the bar and the listing, so the listing starts below
   them and a top-edge blur would soften the first rows rather than hide an edge. The
   drawer draws its own hand-drawn three-stop ramp over the conversation list below its
-  search field, in the panel's `background`, with the ramp's 30dp reserved as the list's
+  search field, in the panel's `background`, with the ramp's 20dp reserved as the list's
   top content padding. The manual also passes `contentScrollsUnderBar = false`, but it
   scrolls its prose directly below the contents bar: the bar's opaque surface leaves a
   fade nothing to hide, and 30dp of blur over 17sp running text made the first lines —
@@ -340,7 +340,7 @@ Miuix's `GlassSegmentedTabRow`, the settings disc is a `GlassIconButton` with
 sized 40dp — all of them sample that layer and all of them sit outside it as siblings, the
 heading's row repeating the panel's insets so the discs land on the same band the plain
 `IconButton`s occupied. The heading itself is the pixel wordmark
-(`R.drawable.ic_pi_wordmark`, 32dp), not the app's name in type: the drawer is the screen
+(`R.drawable.ic_pi_wordmark`, 26dp), not the app's name in type: the drawer is the screen
 the tapped icon opens. The row mark in multi-select is Miuix's `Checkbox` (26dp scaled into
 the row's 20dp line box, disabled so the row stays the only target) — do not hand-draw a
 second circle around `MiuixIcons.Ok`.
