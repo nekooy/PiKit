@@ -101,6 +101,7 @@ import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberPiBackdrop
@@ -581,7 +582,8 @@ fun SessionsScreen(
                 onValueChange = { query = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = HEADING_GUTTER, end = HEADING_GUTTER, bottom = 8.dp),
+                    .padding(start = HEADING_GUTTER, end = HEADING_GUTTER, bottom = 8.dp)
+                    .piFieldHeightForPlaceholder(),
                 label = text.sessions.searchHint,
                 useLabelAsPlaceholder = true,
                 singleLine = true,
@@ -1696,7 +1698,8 @@ private fun RenameDialog(
             state = value,
             modifier = Modifier
                 .fillMaxWidth()
-                .focusRequester(focusRequester),
+                .focusRequester(focusRequester)
+                .piFieldHeightForPlaceholder(),
             label = text.sessions.renameLabel,
             useLabelAsPlaceholder = true,
             lineLimits = TextFieldLineLimits.SingleLine,

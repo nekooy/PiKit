@@ -220,6 +220,7 @@ import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.piGlass
 import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
@@ -6796,7 +6797,8 @@ private fun ShellCommandSheet(
             state = line,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = SHEET_GUTTER),
+                .padding(horizontal = SHEET_GUTTER)
+                .piFieldHeightForPlaceholder(),
             label = text.chat.shellCommandPlaceholder,
             useLabelAsPlaceholder = true,
             lineLimits = TextFieldLineLimits.SingleLine,

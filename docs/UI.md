@@ -80,6 +80,7 @@ writing a composition:
 | A floating glass surface | `PiGlass.panel(shape)` / `Modifier.piGlass(shape)` | `glassPanel` called directly |
 | The page's blur layer | `rememberPiBackdrop()` / `LocalPiBackdrop` | a window-wide layer |
 | A text field's colours | `piFieldColors()` **and** `piFieldCursor()` together | the library defaults (a blue ring) |
+| A field whose label is its placeholder | `Modifier.piFieldHeightForPlaceholder()` beside `label` + `useLabelAsPlaceholder` | the bare field, which shrinks 4dp when the first character arrives |
 | The corner | `PiCorner.radius` (20dp) at every `Card`/`Button`/`TextField` | a per-screen radius |
 | A semantic colour | `PiTone.live/done/error/inset/prompt/control` | a role named at the call site, a literal |
 | A buzz | `PiHaptics` (`haptics.hold/toggle/choose/key/tap/action`) | `performHapticFeedback` anywhere else |
@@ -609,10 +610,11 @@ can see are checked by `tools/build-apks.py`'s `checks` list:
   else, and the kit declares exactly the six documented moments.
 - `check-locales.py` — the terminal banners and the catalogs stay in step.
 - `check-ui.py` — the colour families stay closed (no `Color(0x…)` or named hue
-  outside the four files that own one), the bar is composed only in `PiPage`, and the
+  outside the four files that own one), the bar is composed only in `PiPage`, the
   glass overlay pair (`GlassDialog`/`GlassBottomSheet`) and `glassPanel` are called
   only by the kit (`PiOverlays`/`PiKitTheme`) — a screen reaches them through
-  `PiConfirm`/`PiSheet`/`PiGlass`, never directly.
+  `PiConfirm`/`PiSheet`/`PiGlass`, never directly — and every
+  `useLabelAsPlaceholder = true` field carries `piFieldHeightForPlaceholder()`.
 
 A new rule that a regex can hold lands in `check-ui.py` and in that list in the same
 change; a rule that needs judgement stays here and in the chapter that owns it.

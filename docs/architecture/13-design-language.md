@@ -602,14 +602,21 @@ are the library's own pair for that glyph, and the clear button takes the traili
 (8dp/16dp) so the field's two marks sit on the same measured column.
 
 **A field that draws its placeholder through `label`/`useLabelAsPlaceholder` shrinks when
-the first character arrives.** The library draws the label as a `Text` with the platform's
-font padding — a 23dp line box at 17sp — while `BasicTextField` lays the typed line out at
-19dp. Measured on the 720×1280 emulator, the composer's frame was 182px empty against 171px
-after one character, and the drawer's search field 110px against 102px. The composer draws
-its placeholder as a sibling outside the field's measurement (§7.1); the drawer search and the
-files filter still pass the library's `label` and still move by that 4dp, and any other field
-built on the same `useLabelAsPlaceholder` label carries the same line-box difference. A shared
-fix needs a field wrapper or a library change, not one call site's edit.
+the first character arrives, unless its height is floored.** The library draws the label as a
+`Text` with the platform's font padding — a 23dp line box at 17sp — while `BasicTextField`
+lays the typed line out at 19dp. Measured on the 720×1280 emulator, the composer's frame was
+182px empty against 171px after one character, the drawer's search field 110px against 102px,
+and the files filter 110px against 102px. The composer draws its placeholder as a sibling
+outside the field's measurement (§7.1); every other placeholder field passes
+`Modifier.piFieldHeightForPlaceholder()`, which floors the field at the label's line box
+(`24.sp`, allowing for the measured 23–24.5dp of library font padding). After the fix the
+drawer search and files filter measured 110px in both states, and the new-folder dialog
+113px → 112px, the 1px left by rounding.
+
+The rule is mechanical: a `TextField`/`GlassTextField` that passes `label` with
+`useLabelAsPlaceholder = true` also passes `piFieldHeightForPlaceholder()`. A field whose
+`label` floats (the settings forms) keeps the library's own geometry: the label stays drawn
+in both states and does not disappear when the first character arrives.
 
 **A set of alternatives in a sheet is `SettingsChoiceRow`.** The row is a
 `BasicComponent` whose chosen member wears `MiuixIcons.Ok` at its trailing edge — the

@@ -2,6 +2,7 @@ package pi.kit.mob.ui.kit
 
 import android.app.Activity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -19,8 +20,12 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import pi.kit.mob.data.PiSettings
@@ -660,6 +665,29 @@ object PiCorner {
      * a surface belongs to.
      */
     val popup: Dp = 24.dp
+}
+
+/**
+ * The minimum height of a Miuix field that draws its placeholder through `label`.
+ *
+ * The library's label is a 17sp [Text] with the platform's font padding — a 23dp line
+ * box at font scale 1 — while `BasicTextField` lays the typed line out at 19dp. The
+ * label only takes part in the decoration's measurement while the field is empty, so
+ * the field shrinks by 4dp when the first character replaces it: measured 182px → 171px
+ * on the composer and 110px → 102px on the drawer search, both at 2× density.
+ *
+ * The floor is `24.sp`: the library's label measured 23dp on the drawer's field and
+ * 24.5dp in a glass dialog, so 24sp absorbs most of the sub-pixel rounding without
+ * visibly growing the field. `sp`, not `dp`, so the text-size preference scales the
+ * floor with the label it stands in for. Apply it to every `TextField`/`GlassTextField`
+ * that passes `label` with `useLabelAsPlaceholder = true`.
+ */
+@Composable
+fun Modifier.piFieldHeightForPlaceholder(
+    insideMargin: DpSize = TextFieldDefaults.InsideMargin,
+): Modifier {
+    val labelHeight = with(LocalDensity.current) { 24.sp.toDp() }
+    return heightIn(min = labelHeight + insideMargin.height * 2)
 }
 
 /**

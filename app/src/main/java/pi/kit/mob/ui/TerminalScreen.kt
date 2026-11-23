@@ -87,6 +87,7 @@ import pi.kit.mob.ui.kit.PiPopupMenu
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
 import pi.kit.mob.ui.kit.piGlassMenuAnchorContent
 import pi.kit.mob.ui.kit.piSheetBottomInset
@@ -1066,7 +1067,8 @@ private fun ExtraKeysRow(
             cursorBrush = piFieldCursor(),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .piFieldHeightForPlaceholder(),
         )
         Button(
             cornerRadius = PiCorner.radius,

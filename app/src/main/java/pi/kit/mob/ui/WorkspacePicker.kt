@@ -50,6 +50,7 @@ import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.settings.SettingsChoiceRow
@@ -382,7 +383,7 @@ internal fun WorkspacePickerSheet(
     ) {
         GlassTextField(
             state = newName,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().piFieldHeightForPlaceholder(),
             label = text.chat.workspacePickerNewFolderName,
             useLabelAsPlaceholder = true,
             lineLimits = TextFieldLineLimits.SingleLine,

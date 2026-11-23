@@ -96,6 +96,7 @@ import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -819,7 +820,10 @@ fun SettingsPickerSheet(
             if (searchHint != null) {
                 GlassTextField(
                     state = queryState,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .piFieldHeightForPlaceholder(),
                     label = searchHint,
                     useLabelAsPlaceholder = true,
                     lineLimits = TextFieldLineLimits.SingleLine,

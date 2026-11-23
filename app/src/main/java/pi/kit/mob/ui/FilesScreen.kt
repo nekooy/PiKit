@@ -152,6 +152,7 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piGlassMenuAnchor
@@ -673,7 +674,7 @@ private fun ListToolbar(
                 cornerRadius = PiCorner.radius,
                 value = query,
                 onValueChange = onQueryChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).piFieldHeightForPlaceholder(),
                 label = text.files.filterHint,
                 useLabelAsPlaceholder = true,
                 singleLine = true,

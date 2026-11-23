@@ -39,6 +39,13 @@ review until a screen is a second material or a fourth palette:
      is genuinely not a menu of rows is judgement, and `docs/UI.md`'s popup section
      is where that is written.
 
+  5. **A placeholder field is floored at the label's line box.** Miuix draws
+     `label` as a 17sp `Text` with platform font padding (23dp), while the typed
+     line is 19dp; a field that passes `useLabelAsPlaceholder = true` without
+     `Modifier.piFieldHeightForPlaceholder()` shrinks by 4dp when the first
+     character arrives (measured 182px → 171px on the composer and 110px → 102px
+     on the drawer search, §13). The same call must carry the modifier.
+
 A custom-content dialog may still compose `WindowDialog`/`WindowBottomSheet` itself
 (the kit's confirm shape does not fit a field or a crop frame); that is judgement,
 and `docs/UI.md`'s dialog section is where the glass-or-window rule for it is written.
@@ -104,6 +111,12 @@ OLD_POPUP = re.compile(
     r"|OverlaySpinnerPreference|WindowSpinnerPreference)\s*\("
 )
 
+#: A Miuix field that draws its label as the placeholder. The label takes part in the
+#: decoration's measurement only while the field is empty, so the field must pass the
+#: kit's height floor or it shrinks when the first character replaces the label.
+PLACEHOLDER_LABEL = re.compile(r"useLabelAsPlaceholder\s*=\s*true")
+PLACEHOLDER_GUARD = "piFieldHeightForPlaceholder"
+
 
 def kotlin_sources() -> list[Path]:
     return sorted(path for path in SOURCES.rglob("*.kt") if path.is_file())
@@ -163,6 +176,40 @@ def scan(rule: str, pattern: re.Pattern[str], owner: Path | set[Path]) -> int:
     return failures
 
 
+def check_placeholder_height() -> int:
+    """Every `useLabelAsPlaceholder = true` call carries the height floor."""
+    failures = 0
+    for path in kotlin_sources():
+        body = without_comments(path.read_text(encoding="utf-8"))
+        for match in PLACEHOLDER_LABEL.finditer(body):
+            call_start = max(
+                body.rfind("TextField(", 0, match.start()),
+                body.rfind("GlassTextField(", 0, match.start()),
+            )
+            if call_start == -1:
+                continue
+            depth = 0
+            call_end = -1
+            for index in range(call_start, len(body)):
+                char = body[index]
+                if char == "(":
+                    depth += 1
+                elif char == ")":
+                    depth -= 1
+                    if depth == 0:
+                        call_end = index
+                        break
+            if call_end == -1 or PLACEHOLDER_GUARD not in body[call_start:call_end]:
+                failures += 1
+                line = body.count("\n", 0, match.start()) + 1
+                rel = path.relative_to(REPO_ROOT).as_posix()
+                print(
+                    f"  FAIL  {rel}:{line} a placeholder field without "
+                    f"{PLACEHOLDER_GUARD}(): 'useLabelAsPlaceholder = true'",
+                )
+    return failures
+
+
 def main() -> int:
     if not UI.is_dir():
         print(f"{UI.relative_to(REPO_ROOT).as_posix()} is missing")
@@ -180,10 +227,11 @@ def main() -> int:
     )
     # No owner: the pre-OS4 panels are not drawn anywhere any more.
     failures += scan("a pre-OS4 popup panel composed", OLD_POPUP, set())
+    failures += check_placeholder_height()
     if failures == 0:
         print(
             "  the colour families are closed, the bar is PiPage's, the glass pair is the "
-            "kit's, every menu is the kit's glass popup",
+            "kit's, every menu is the kit's glass popup, every placeholder field is floored",
         )
     return 1 if failures else 0
 

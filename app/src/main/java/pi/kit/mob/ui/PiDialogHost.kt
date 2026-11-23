@@ -22,6 +22,7 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
+import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -186,7 +187,11 @@ fun PiDialogHost(
                         // already only be typing into.
                         colors = piFieldColors(),
                         cursorBrush = piFieldCursor(),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = if (placeholder.isNullOrEmpty()) {
+                            Modifier.fillMaxWidth()
+                        } else {
+                            Modifier.fillMaxWidth().piFieldHeightForPlaceholder()
+                        },
                     )
                 }
             }
