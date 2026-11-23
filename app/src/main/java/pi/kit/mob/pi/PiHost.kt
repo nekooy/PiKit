@@ -951,9 +951,22 @@ class PiHost private constructor(context: Context) {
         _sessions.value.forEach { it.scheduleRestart() }
     }
 
-    /** Stops every child, for the maintenance paths that replace the environment. */
+    /**
+     * Stops every child, for the maintenance paths that replace the environment.
+     *
+     * Concurrently, and that is not an optimisation: a graceful close is a grace period per
+     * process (`PiRpcClient.close` gives pi 3 s to flush stdout and exit), so five
+     * conversations stopped one after another is fifteen seconds of a restore or a rebuild
+     * spent waiting on processes that are already independent. The calls do not share
+     * anything — each conversation owns its client and its wake lock — and the snapshot is
+     * taken first so a conversation leaving the pool mid-sweep is not touched twice.
+     */
     suspend fun stopAllAgents() {
-        _sessions.value.forEach { it.stopAgent() }
+        val live = _sessions.value
+        if (live.isEmpty()) return
+        kotlinx.coroutines.coroutineScope {
+            live.forEach { session -> launch { session.stopAgent() } }
+        }
     }
 
     // ------------------------------------------------------ remembered session

@@ -83,10 +83,14 @@ data class BackupReview(
  * conversation, and asking the user to stop the agent first would be a step they
  * cannot take on the chat tab.
  *
- * A restore **stops the agent** and starts it again. pi holds the conversation it
- * has open and rewrites `models.json` and `settings.json` at the start of every
- * launch, so a restore made under a running agent is undone by the next thing the
- * agent does — or, worse, lands in the middle of a turn it is still writing.
+ * A restore **stops every live conversation** and starts this one again. pi holds the
+ * session file it has open and rewrites `models.json` and `settings.json` at the start of
+ * every launch, so a restore made under a running agent is undone by the next thing the
+ * agent does — or, worse, lands in the middle of a turn it is still writing. A live
+ * conversation is one process (ARCHITECTURE §10.1), and the pool can hold several, so
+ * "the agent" here means all of them: the ones that were not on screen are stopped by
+ * `PiHost.stopAllAgents` and reopened from the drawer, which is what an idle conversation
+ * costs anyway.
  *
  * ## Nothing is deleted
  *
@@ -303,7 +307,17 @@ class BackupManager(
      */
     private suspend fun apply(archiveFile: File, categories: Set<BackupCategory>): Int {
         val wasRunning = session.agent.value is AgentStatus.Running
-        session.stopAgent()
+        // **Every** conversation in the pool, not the one whose page this is. A restore
+        // replaces the session files, `models.json` and pi's own `settings.json` under all of
+        // them, and a background conversation is a live `pi` that has one of those session
+        // files open: it keeps appending to a transcript the archive has just replaced, and
+        // it goes on answering from the profile the archive has just changed. Stopping only
+        // this session made the guarantee below true for one conversation out of as many as
+        // the pool holds (eight live, five of them answering, §10.1).
+        // Nothing is lost by stopping the others — a conversation's transcript is pi's, on
+        // disk, and a conversation that was working loses the turn it was in exactly as this
+        // one does, which is the cost the page's own sentence is about.
+        session.host.stopAllAgents()
         val staging = withContext(Dispatchers.IO) { archive.freshStaging() }
         var moved = 0
         try {
