@@ -994,8 +994,10 @@ one decision each makes that the shared vocabulary does not:
   band the field is a raised white frame (`surfaceContainer` at the kit's corner)
   holding the text **and the four controls**, in the order a thumb meets them: the
   command list and the attach control at the field's left corner, the context
-  reading and the send button at its right — a filled disc in the accent while it
-  can send. Grouping the two controls that *add something to the message* at the
+  reading and the send button at its right — a glass disc whose thin colour layer
+  carries the accent's arrow while it can send, and the error role's square while an
+  answer streams (`GlassFloatingActionButton` over the same `PiGlass.material()` as
+  the frame). Grouping the two controls that *add something to the message* at the
   field's left is the correction: they are one kind of thing, and the corner a thumb
   rests on is where they belong. The three setting chips above the frame (thinking,
   model, cache) are values drawn in normal ink, and each opens its dropdown menu at
@@ -1083,8 +1085,8 @@ a code block's header and a tool card's output still use the same control.
   A wash of the surface's own ink is the same relative step everywhere, which is what
   "the same depth" has to mean here.
 - **Everything drawn inside a card obeys the same rule, and the dark ramp is why.** The
-  tool output panel, the reasoning panel, a status pill, the idle send disc, a file-type
-  tile and the reader's own bubble all used to name a step of the surface ramp
+  tool output panel, the reasoning panel, a status pill, the idle send button's fallback
+  fill, a file-type tile and the reader's own bubble all used to name a step of the surface ramp
   (`surfaceContainerHigh`, `surfaceContainerHighest`). Miuix's dark scheme gives
   `surface` black, `surfaceContainer` and `surfaceContainerHigh` **both** #242424 and
   `surfaceContainerHighest` #2D2D2D: each of those panels was a step in the light scheme

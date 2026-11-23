@@ -126,6 +126,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -227,10 +228,14 @@ import pi.kit.mob.ui.kit.rememberPiMenuAnchor
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassFloatingActionButton
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
+import top.yukonga.miuix.kmp.material.GlassColorBlendMode
+import top.yukonga.miuix.kmp.material.GlassColorLayer
 import top.yukonga.miuix.kmp.material.GlassShape
+import top.yukonga.miuix.kmp.material.GlassShadows
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -5458,80 +5463,100 @@ private fun Composer(
                 }
                 Spacer(Modifier.width(4.dp))
                 // The page's one action, and the only fully round control on it: a
-                // filled disc carrying an arrow up, or — while an answer streams — a
-                // red disc carrying a square. The reader is looking for one button in
-                // that corner, not two, and the pair is the one every chat app draws:
-                // an arrow sends, a square stops.
+                // glass disc carrying an arrow up, or — while an answer streams — the
+                // same disc carrying the error role's square. The reader is looking for
+                // one button in that corner, not two, and the pair is the one every chat
+                // app draws: an arrow sends, a square stops.
                 //
-                // **Round, not a pill.** the shape is a circle by construction: the
-                // library's button takes a radius rather than a shape, so 20dp on a
-                // 40dp button *is* a disc, and stating it here stops the shape depending
-                // on two constants staying equal.
+                // **Glass, like every other floating control.** The disc was a Miuix
+                // `IconButton` filled with `primary` or `error`, which made it the one
+                // opaque object in the composer's glass vocabulary — beside a glass
+                // frame, glass chips and glass header. It is the library's
+                // `GlassFloatingActionButton` now, cut from the same `PiGlass.material()`
+                // as the frame it sits in: the white body, the bloom stroke and the
+                // floating shadow are the objects every other control is made of. The
+                // action's colour is a thin third layer over that body rather than the
+                // body itself, so the disc stays glass on the frame and the glyph keeps
+                // the role's ink; below API 33 the fallback is the state's own fill.
                 //
-                // ## What the two discs are filled with, and why it changed
-                //
-                // The idle send disc used to be `surfaceContainerHigh` on the composer's
-                // `surfaceContainer` frame — two roles that are the *same colour* in the
-                // dark scheme (#242424), so the disc disappeared there and the arrow
-                // floated in the corner on its own. `PiTone.inset()` is the fill that is
-                // a step away from whatever it sits on in both schemes (#E6E6E6 on the
-                // white frame, #3D3D3D on the dark one), which is the rule the tool
-                // panels follow. The stop disc has the mirror problem: it was
-                // `errorContainer`, which in the light scheme is #FDF6F4 — a disc the
-                // colour of paper — and in the dark one #2E0603 against a #242424 frame.
-                // It is the error role itself now with a white square on it, which is
-                // what a stop button is in every app that has one.
-                if (isStreaming) {
-                    IconButton(
-                        onClick = {
-                            haptics.action()
-                            onStop()
+                // The disc is round by construction: `GlassFloatingActionButton` derives
+                // its shape from the size, so a 40dp button *is* a disc and the shape
+                // cannot drift from the two constants that used to have to stay equal.
+                val armed = enabled && (value.isNotBlank() || attachments.isNotEmpty())
+                val actionLive = isStreaming || armed
+                val actionTint = when {
+                    isStreaming -> PiTone.error()
+                    armed -> MiuixTheme.colorScheme.primary
+                    else -> MiuixTheme.colorScheme.onSurface
+                }
+                // The body is glass, so most of the disc is the frame's own white;
+                // the tint is only enough to say which action this is. The glyph keeps
+                // the role's full ink, which is what carries the state: `primary` on
+                // the near-white body measures 3.05:1 and the stop square 5:1, where
+                // the filled disc this replaced had to invert both to white.
+                val actionTintAlpha = when {
+                    isStreaming -> 0.14f
+                    armed -> 0.04f
+                    else -> 0.03f
+                }
+                val baseActionMaterial = PiGlass.material()
+                val actionMaterial = remember(baseActionMaterial, actionTint, actionTintAlpha) {
+                    baseActionMaterial.copy(
+                        third = GlassColorLayer(
+                            color = actionTint.copy(alpha = actionTintAlpha),
+                            mode = GlassColorBlendMode.SrcOver,
+                        ),
+                    )
+                }
+                GlassFloatingActionButton(
+                    onClick = {
+                        // The library's FAB has no `enabled` parameter: a tap on a dead
+                        // disc is refused here and said through semantics below, the way
+                        // the drawer's glass actions state an unavailable control.
+                        if (!actionLive) return@GlassFloatingActionButton
+                        haptics.action()
+                        if (isStreaming) onStop() else onSend()
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        // `mergeDescendants` folds the button's own semantics, the
+                        // glyph's description and this `disabled` into one node; a plain
+                        // `semantics` node beside the button's would leave TalkBack
+                        // reading an enabled control.
+                        .semantics(mergeDescendants = true) {
+                            if (!actionLive) disabled()
                         },
-                        modifier = Modifier.size(40.dp),
-                        cornerRadius = 20.dp,
-                        backgroundColor = PiTone.error(),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_stop),
-                            contentDescription = text.chat.stop,
-                            // 24dp of box for the 12 units of ink the square is: about a
-                            // third of the disc, the proportion Material's own stop
-                            // button uses.
-                            modifier = Modifier.size(24.dp),
-                            tint = MiuixTheme.colorScheme.onError,
-                        )
-                    }
-                } else {
-                    val armed = enabled && (value.isNotBlank() || attachments.isNotEmpty())
-                    IconButton(
-                        onClick = {
-                            haptics.action()
-                            onSend()
-                        },
-                        enabled = armed,
-                        modifier = Modifier.size(40.dp),
-                        cornerRadius = 20.dp,
-                        backgroundColor = if (armed) {
-                            MiuixTheme.colorScheme.primary
+                    backdrop = LocalPiBackdrop.current,
+                    // The composer's frame is the same near-white glass as this disc, and
+                    // Miuix's chip-sized shadow disappears on it. `Float` is the drawer's
+                    // answer to the same ground (the settings disc on #F7F7F7), so the
+                    // disc keeps an edge without inventing a second fill.
+                    shadow = GlassShadows.Float,
+                    material = actionMaterial,
+                    size = 40.dp,
+                    fill = when {
+                        isStreaming -> PiTone.error()
+                        armed -> MiuixTheme.colorScheme.primary
+                        else -> PiTone.inset()
+                    },
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (isStreaming) R.drawable.ic_stop else R.drawable.ic_arrow_up,
+                        ),
+                        contentDescription = if (isStreaming) text.chat.stop else text.chat.send,
+                        // 24dp of box for the 12 units of ink the stop square is: about
+                        // a third of the disc, the proportion Material's own stop button
+                        // uses. The send arrow is 22dp for 14 units, so the drawn mark is
+                        // about 13dp on the 40dp disc — the same proportion the old pair
+                        // drew.
+                        modifier = Modifier.size(if (isStreaming) 24.dp else 22.dp),
+                        tint = if (actionLive) {
+                            actionTint
                         } else {
-                            PiTone.inset()
+                            MiuixTheme.colorScheme.disabledOnSurface
                         },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_up),
-                            contentDescription = text.chat.send,
-                            // 22dp: the arrow's ink is 14 of its 24 units, so the drawn
-                            // mark is about 13dp on a 40dp disc — the proportion of the
-                            // arrow in the reference implementations, and the same
-                            // drawn size as the 20dp chevron it replaces.
-                            modifier = Modifier.size(22.dp),
-                            tint = if (armed) {
-                                MiuixTheme.colorScheme.onPrimary
-                            } else {
-                                MiuixTheme.colorScheme.disabledOnSurface
-                            },
-                        )
-                    }
+                    )
                 }
                     }
                 }

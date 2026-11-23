@@ -196,10 +196,10 @@ that cut the last card in two (§13, *The window's last pixels*).
 
 ## Glass: the material, and the red lines
 
-The chrome — the page bar, the chat header's capsules, the composer and its chips,
-the jump-to-latest disc, a dialog or sheet raised from a page — is OS4 glass. A
-settings card is still a Miuix `Card`: glass is a material for controls that *float
-over* the page, not for every rectangle on it (§13).
+The chrome — the page bar, the chat header's capsules, the composer with its chips and
+send/stop disc, the jump-to-latest disc, a dialog or sheet raised from a page — is OS4
+glass. A settings card is still a Miuix `Card`: glass is a material for controls that
+*float over* the page, not for every rectangle on it (§13).
 
 The architecture is two levels, and the page owns the lower one:
 
