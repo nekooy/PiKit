@@ -1,17 +1,13 @@
 package pi.kit.mob.ui
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
-import pi.kit.mob.locales.Lang
-import pi.kit.mob.locales.manualFor
 
 /**
- * The two ways a wrapped body was rendered wrong, and the manual that showed both.
+ * The two ways a wrapped body was rendered wrong, and the documents that showed both.
  *
  * Both bugs were in the wrapper's own bookkeeping rather than in any one feature,
- * and both were visible in this app's manual before they were found by dumping the
+ * and both were visible in long-form text before they were found by dumping the
  * parse of it:
  *
  *  - a paragraph that followed a list had every line after its first appended to
@@ -19,8 +15,7 @@ import pi.kit.mob.locales.manualFor
  *  - every soft line break inside a CJK paragraph came back as a space, so the
  *    Chinese and Japanese bodies read as if a space had been typed inside a word.
  *
- * The fixtures are the smallest text that reproduces each, and the manual check at
- * the end is the one that would have caught both.
+ * The fixtures are the smallest text that reproduces each.
  */
 class MarkdownWrapTest {
 
@@ -30,13 +25,6 @@ class MarkdownWrapTest {
         is MdBlock.ListBlock -> block.items.map { it.text }
         is MdBlock.Quote -> block.blocks.flatMap(::text)
         else -> error("not a text block: $block")
-    }
-
-    /** Every piece of prose in [block], tables flattened and code/formulas skipped. */
-    private fun prose(block: MdBlock): List<String> = when (block) {
-        is MdBlock.Table -> block.header + block.rows.flatten()
-        is MdBlock.Code, is MdBlock.Formula, MdBlock.Rule -> emptyList()
-        else -> text(block)
     }
 
     /** One block's single piece of prose, which is what most of these fixtures make. */
@@ -67,7 +55,7 @@ class MarkdownWrapTest {
 
     @Test
     fun `a soft break inside CJK text adds no space`() {
-        // The manual is wrapped to 48 columns, so this is the common case rather
+        // Long-form text is wrapped to 48 columns, so this is the common case rather
         // than an edge: `重 新授权` was in the shipped Chinese body.
         val parsed = parseMarkdown("首次启动会解包约 200 MB，并询问\n一次文件权限。\n")
         assertEquals("首次启动会解包约 200 MB，并询问一次文件权限。", one(parsed.single()))
@@ -97,88 +85,5 @@ class MarkdownWrapTest {
     fun `a break beside CJK punctuation adds no space`() {
         val parsed = parseMarkdown("`ESC`、`TAB`、\n`C-C` 和几个符号。\n")
         assertEquals("`ESC`、`TAB`、`C-C` 和几个符号。", one(parsed.single()))
-    }
-
-    /**
-     * The check over the real bodies, in all three languages.
-     *
-     * A space with a CJK glyph on both sides is never written deliberately — those
-     * scripts do not use word spaces — so the parsed manual must not contain one.
-     * This is the assertion the two bugs above fail, and it covers every paragraph
-     * the manual has rather than the six examples beside it.
-     */
-    @Test
-    fun `no parsed manual block has a space inside a CJK run`() {
-        for (lang in Lang.entries) {
-            val offending = parseMarkdown(manualFor(lang))
-                .flatMap(::prose)
-                .filter { SPLIT_CJK.containsMatchIn(it) }
-            assertTrue("$lang: $offending", offending.isEmpty())
-        }
-    }
-
-    /** A CJK glyph, a space, another: the artefact this test exists for. */
-    private val SPLIT_CJK = Regex(
-        "[\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef] [\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef]",
-    )
-
-    /**
-     * The three bodies are one manual, so their chapters are the same chapters.
-     *
-     * `ManualText`'s header promises it: "the same headings, in the same order, with the
-     * same table rows and the same number of bullets; only the words differ". Nothing
-     * else checks that promise, and a translation that silently drops a chapter is
-     * exactly the failure it is written against — the terminal is 48 columns wide and a
-     * reader in one language would find a section the others do not have.
-     *
-     * The test it replaces pinned one table of the manual it was written against ("the
-     * start-here steps are the manual's first table"). A full rewrite that moved those
-     * steps to a chapter of their own made it fail without anything being wrong, which
-     * is the difference between a test that pins behaviour and one that mirrors a
-     * document — this one pins the property the document has to keep.
-     */
-    @Test
-    fun `the three manuals have the same chapters in the same order`() {
-        val chapters = Lang.entries.associateWith { lang ->
-            parseMarkdown(manualFor(lang)).filterIsInstance<MdBlock.Heading>().map { it.text }
-        }
-        val reference = chapters.getValue(Lang.ENGLISH)
-        assertTrue("the English manual has chapters", reference.size > 1)
-        for ((lang, headings) in chapters) {
-            assertEquals("$lang chapters", reference.size, headings.size)
-            for ((index, heading) in headings.withIndex()) {
-                // The words differ — a heading is translated — so the check is that the
-                // *shape* matches: every language has a chapter at every position, and
-                // none is blank.
-                assertTrue("$lang chapter $index is blank", heading.isNotBlank())
-            }
-        }
-        // A chapter is a `##` heading — that is what the manual page's chip strip is
-        // built from — and the count is the one cross-language number a translated table
-        // of contents depends on: a chapter that exists in one body and not another is a
-        // section a reader in the other language cannot reach.
-        val chaptersByLevel = Lang.entries.associateWith { lang ->
-            parseMarkdown(manualFor(lang))
-                .filterIsInstance<MdBlock.Heading>()
-                .count { it.level == 2 }
-        }
-        assertEquals(
-            "every language has the same number of chapters",
-            1,
-            chaptersByLevel.values.distinct().size,
-        )
-        assertTrue("the manual has chapters", chaptersByLevel.values.first() > 1)
-    }
-
-    @Test
-    fun `every manual still carries the tables a reader scans`() {
-        for (lang in Lang.entries) {
-            val tables = parseMarkdown(manualFor(lang)).filterIsInstance<MdBlock.Table>()
-            assertTrue("$lang: no tables at all", tables.isNotEmpty())
-            assertTrue(
-                "$lang: a table with no rows",
-                tables.all { it.rows.isNotEmpty() && it.header.isNotEmpty() },
-            )
-        }
     }
 }

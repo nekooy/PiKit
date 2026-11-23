@@ -192,23 +192,22 @@ internal enum class MdAlign { Start, Center, End }
  * would measure only the blocks near the viewport — and it is a crash, twice over,
  * which is what makes this a comment rather than a style preference.
  *
- * `MarkdownText` is not only drawn inside the transcript. `ManualPage` draws it
- * inside a `Column(verticalScroll)` — every settings page body is one, and the
- * manual is the one that hands its text to this composable — and the transcript's
- * own item is inside the page's `LazyColumn`. A vertically scrollable container
- * measured inside another one is measured with `Constraints.Infinity` on the main
- * axis, and `LazyColumn` refuses that outright:
+ * The transcript's own item is inside the page's `LazyColumn`, but the wrapper
+ * around the reply (a `SelectionContainer` around the bubble) hands this column an
+ * infinite main-axis constraint. A `LazyColumn` here would therefore be measured
+ * inside another scrollable container, and it refuses that outright:
  *
  * ```
  * java.lang.IllegalStateException: Vertically scrollable component was measured
  * with an infinity maximum height constraints, which is disallowed.
  * ```
  *
- * That is the reader's "打开设置页用户手册点击也会闪退" — the manual is Markdown and
- * the page body scrolls — and the same fault on the transcript's own path, where a
- * second scrollbar inside a row also fights the transcript for every drag. The
- * saving a lazy list bought was real but it was measured in one place (the tall
- * reply) and paid for in another (a page that cannot be opened at all).
+ * That is the crash a long reply produced when this was made lazy: the wrapper's
+ * infinite constraint reached the `LazyColumn`, and the conversation could not be
+ * opened. A second scrollbar inside a row would also fight the transcript for
+ * every drag. The saving a lazy list bought was real but it was measured in one
+ * place (the tall reply) and paid for in another (a page that cannot be opened at
+ * all).
  *
  * ## Where the scroll cost actually went instead
  *
@@ -235,12 +234,12 @@ internal enum class MdAlign { Start, Center, End }
  * A `LazyColumn` here is the obvious fix for a long reply and it has now been tried
  * **twice**, and it threw
  * `IllegalStateException: Vertically scrollable component was measured with an infinity
- * maximum height constraints` **both times** — once from `ManualPage`, which draws this
- * inside a `Column(verticalScroll)`, and once from the transcript, which
- * one would expect to supply a bounded height because an answer is an item of a
- * `LazyColumn`. Read from `logcat` on the second attempt rather than assumed: the
- * transcript does not, because the item is wrapped in `SelectionContainer` and the bubble,
- * and the constraint that arrives is infinite.
+ * maximum height constraints` both times — the first from a `Column(verticalScroll)`
+ * host, and the second from the transcript, which one would expect to supply a bounded
+ * height because an answer is an item of a `LazyColumn`. Read from `logcat` on the
+ * second attempt rather than assumed: the transcript does not, because the item is
+ * wrapped in `SelectionContainer` and the bubble, and the constraint that arrives is
+ * infinite.
  *
  * So: **do not make this a lazy list.** A caller cannot be trusted to have a bounded
  * height, and the failure is a crash rather than a slow frame. What pays for a long reply
@@ -375,7 +374,7 @@ internal data class InlineStyle(
  * container roles — because the same renderer draws on three different backgrounds and
  * no single role can be a step away from all of them. `secondaryContainer` was the last
  * attempt: it is a fixed #F0F0F0, so on the answer card's white it read as a well, it
- * disappeared on the manual's #F0F0F0 page, and in the dark scheme
+ * disappeared on the app's own #F0F0F0 page, and in the dark scheme
  * `surfaceContainerHigh` (the role before it) *is* the card's own #242424 and the fill
  * disappeared outright. A 10% wash is the same relative step everywhere, in both
  * schemes; `PiTone.inset`'s KDoc has the arithmetic.
@@ -433,14 +432,14 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
         }
 
         is MdBlock.Heading -> {
-            // Chapter titles need to read as breaks, not as body text: `##` is the
-            // manual's section level and is what most of a manual is written in, so
-            // without a step up the ten chapters ran together. The three levels are
+            // Headings need to read as breaks, not as body text: `##` is the level
+            // most long documents are written in, so without a step up the sections
+            // ran together. The three levels are
             // Miuix's own title ladder — 24 / 20 / 18sp — rather than sizes written out
             // here: the library carries hierarchy by *size* (its titles are normal
             // weight, which is what HyperOS titles are), and a hand-picked 19sp for level
             // 2 was a fourth size the scale did not have. The gap above a heading is the
-            // chapter's edge: `BLOCK_GAP` alone left a manual section looking like the
+            // section's edge: `BLOCK_GAP` alone left a section heading looking like the
             // paragraph before it.
             val textStyle = when (block.level) {
                 1 -> MiuixTheme.textStyles.title2
@@ -690,11 +689,9 @@ private fun ScrollableFormula(content: @Composable () -> Unit) {
     // The fade has to be the colour *behind* the formula, because it hides the ink it
     // fades out. `surfaceContainer` is that colour: a formula is drawn inside a card —
     // the answer's, a tool's panel, a prompt's — and every card the transcript draws is
-    // `surfaceContainer`. The manual page's own background used to be the library's
-    // `background` (#FFFFFF / #242424), which equals this role; the page paints
-    // `surface` now, so a formula set directly on the *page* would fade to the card's
-    // colour rather than the page's. None is: the manual's prose carries no math, and
-    // every formula in this app sits in a card.
+    // `surfaceContainer`. A formula set directly on a *page* would fade to the card's
+    // colour rather than the page's; none is, because every formula in this app sits
+    // inside a card.
     val fade = MiuixTheme.colorScheme.surfaceContainer
     val thumb = MiuixTheme.colorScheme.onSurfaceContainerVariant
     Box(
@@ -794,8 +791,8 @@ internal fun clipEntryFor(text: String): ClipEntry =
  * painted past the rounded corner.
  *
  * The fill is a wash rather than a palette role for the reason `PiTone.inset()`'s KDoc
- * gives: the same block is drawn on the answer card, on the manual's page and on the
- * reader's own tinted prompt, and a fixed role is a different step away from each.
+ * gives: the same block is drawn on the answer card, on a page and on the reader's
+ * own tinted prompt, and a fixed role is a different step away from each.
  *
  * The text is monospace at [MONO_LINE_HEIGHT], the one line box every monospace block
  * in the app is drawn at — the tool output panel included — on Miuix's `body2`, the size
@@ -1086,7 +1083,7 @@ private fun TableRow(
             )
             // The same wash the inline chip and the code well use: a table header is
             // an inset on the surface it is drawn on, and a fixed role was a different
-            // step away from the answer card than from the manual page (§13).
+            // step away from the answer card than from a page (§13).
             .background(
                 if (header) PiTone.inset() else Color.Unspecified,
             ),
@@ -1560,17 +1557,16 @@ private fun parseBlocks(lines: List<String>, definitions: Map<String, String>): 
      * Continues the list item above with a wrapped line.
      *
      * Markdown lets a list item's text run onto following lines without
-     * indenting them, and both agent output and this app's own manual are
-     * written that way. Treating such a line as a fresh paragraph flushed it to
+     * indenting them, and both agent output and long documents are written that way. Treating such a line as a fresh paragraph flushed it to
      * the left margin and the item appeared to break in half.
      *
      * It never applies while a paragraph is open, and that check is the whole
      * reason this is not three lines long: after a list, a blank line and a new
      * paragraph, the *last block* is still the list, so every wrapped line of
      * that paragraph was appended to the item above — and the paragraph kept only
-     * its first line. Measured on this app's own manual: section 1 ended with the
-     * sentence "The first launch unpacks about 200 MB and asks once about file
-     * access…" split across item 5 and the paragraph after it.
+     * its first line. Measured on a long document: a section ended with the sentence
+     * "The first launch unpacks about 200 MB and asks once about file access…" split
+     * across a list item and the paragraph after it.
      */
     fun continueList(line: String): Boolean {
         val body = line.trim()
@@ -1773,8 +1769,8 @@ private fun itemOf(body: String, depth: Int): MdBlock.ListBlock.Item {
 /**
  * How deep a list item sits.
  *
- * Two spaces per level, which is what a model writes and what this app's own manual
- * is wrapped to. Four spaces is the CommonMark rule for a *nested item under a
+ * Two spaces per level, which is what a model writes and what long documents use.
+ * Four spaces is the CommonMark rule for a *nested item under a
  * bullet*, and it is also the rule for an indented code block — the two cannot both
  * be honoured by a renderer that does not track the enclosing list's marker width,
  * and the nested list is what actually appears in agent output. A tab counts as
@@ -1817,9 +1813,9 @@ private fun mergeListRuns(blocks: List<MdBlock>): List<MdBlock> {
  * Whether a word space belongs at a soft line break between [before] and [after].
  *
  * False only between two CJK glyphs — the scripts that have no word spaces. The
- * ranges are the ones `tools/reflow-manual.py` and `tools/check-locales.py` use for
- * the same question, so the manual's own fixed-point check and what the reader sees
- * cannot disagree: CJK radicals through unified ideographs and kana (`2E80–9FFF`),
+ * ranges are the ones the Markdown parser and the terminal banner checker use for
+ * the same question, so the parser and the reader cannot disagree: CJK radicals
+ * through unified ideographs and kana (`2E80–9FFF`),
  * compatibility ideographs (`F900–FAFF`) and fullwidth forms including CJK
  * punctuation (`FF00–FFEF`).
  *
@@ -1827,7 +1823,7 @@ private fun mergeListRuns(blocks: List<MdBlock>): List<MdBlock> {
  * a wrap that lands between `设置` and `**。` — or between `权限。` and `**拒绝` —
  * crossed no word boundary at all, and putting a space there drew one inside the
  * emphasis run or between the bold word and the full stop before it. Both spellings
- * were in this app's own manual until this rule was added.
+ * were in a long document until this rule was added.
  */
 internal fun needsSpaceBetween(before: CharSequence, after: CharSequence): Boolean {
     var left = before.length - 1

@@ -362,8 +362,6 @@ internal object EnglishStrings : Strings {
         override val manageProfilesSubtitle = "The key and model Pi answers with"
         override val updateAndRepair = "Maintenance & repair"
         override val updateAndRepairSubtitle = "Model list, repair packages"
-        override val userManual = "User manual"
-        override val userManualSubtitle = "How this app works"
         override val about = "About PiKit"
         override val aboutSubtitle = "Version, licence and app updates"
         override val language = "Language"
@@ -416,7 +414,8 @@ internal object EnglishStrings : Strings {
         override val fontSize = "Text size"
         override val fontSizeSubtitle = "Seven steps, applied when you let go"
         override val essentials = "Essentials"
-        override val advancedSection = "Advanced"
+        override val agentSection = "Agent & data"
+        override val aboutSection = "About"
         override val running = "Running"
         override val starting = "Starting…"
         override val stopped = "Stopped"
@@ -637,6 +636,7 @@ internal object EnglishStrings : Strings {
             "Leave one empty to change nothing: the value shown above is what pi uses."
 
         override val agentConfig = "Agent settings"
+        override val agentPageSubtitle = "Process, workspace and chat presets"
         override val agentRunSection = "Runtime"
         override val agentStatus = "Status"
         override val defaultWorkspace = "Default workspace"
@@ -898,11 +898,6 @@ internal object EnglishStrings : Strings {
 
     }
 
-    override val manual = object : Strings.Manual {
-        override val title = "User manual"
-        override val subtitle = "How this app works, start to finish"
-        override val contents = "Contents"
-    }
 
     override val notes = object : Strings.Notes {
         override val licenceTitle = "Licence"
@@ -958,6 +953,7 @@ internal object EnglishStrings : Strings {
         override val confirm = "Confirm"
         override val retry = "Retry"
         override val clear = "Clear"
+        override val close = "Close"
     }
 }
 

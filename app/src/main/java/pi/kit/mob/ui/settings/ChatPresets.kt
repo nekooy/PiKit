@@ -44,11 +44,11 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiGroupAction
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
@@ -294,7 +294,7 @@ private fun ChatPresetEditor(
             )
         }
 
-        Card(cornerRadius = PiCorner.radius) {
+        PiSheetSection {
             SettingsTextField(
                 value = preset.name,
                 onValueChange = { value ->

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
@@ -58,14 +59,19 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
 import top.yukonga.miuix.kmp.glass.GlassDialog
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import pi.kit.mob.locales.LocalStrings
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
 
@@ -397,6 +403,21 @@ fun <T : Any> rememberLastPresent(value: T?): T? {
 /**
  * A bottom sheet, Miuix's own.
  *
+ * ## The header is the library's, and every sheet uses all of it
+ *
+ * Miuix's sheet already draws the reference's header: a drag handle, a centred
+ * title, and one action slot at each end. A settings sheet is a *window*, and the
+ * reference closes it with an explicit X on the leading side rather than asking
+ * the reader to know that the scrim and the back gesture also dismiss. This wrapper
+ * therefore supplies that X by default whenever the sheet has a title; a caller
+ * with a different leading action — none today — passes [startAction] and owns it.
+ *
+ * The inside margin is 16dp rather than the library's 24dp. The sheet's content is
+ * built from cards, and a card already carries its own 12dp gutter at the page
+ * level; 24dp on top of that made a sheet's rows sit 36dp from the screen edge,
+ * which is the cramped single-column look the previous settings sheets had. 16dp
+ * plus a section card's own 16dp is the density the reference uses.
+ *
  * [content] is a plain composable rather than a `ColumnScope`: Miuix's sheet wraps
  * the content in its own padding and scrolling, and a caller that wants a column
  * still composes one. Passing the scope through would have looked tidier and made
@@ -408,18 +429,29 @@ fun PiSheet(
     title: String?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    startAction: (@Composable () -> Unit)? = null,
+    endAction: (@Composable () -> Unit)? = null,
+    insideMargin: DpSize = PiSheetDefaults.InsideMargin,
     content: @Composable () -> Unit,
 ) {
     val backdrop = LocalPiBackdrop.current
+    val closeAction: (@Composable () -> Unit)? = startAction ?: if (title != null) {
+        { PiSheetCloseButton(onDismiss) }
+    } else {
+        null
+    }
     if (backdrop != null) {
         GlassBottomSheet(
             show = show,
             backdrop = backdrop,
             modifier = modifier,
             title = title,
+            startAction = closeAction,
+            endAction = endAction,
+            insideMargin = insideMargin,
             onDismissRequest = onDismiss,
         ) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Column(Modifier.fillMaxWidth()) {
                 content()
             }
         }
@@ -428,12 +460,45 @@ fun PiSheet(
             show = show,
             modifier = modifier,
             title = title,
+            startAction = closeAction,
+            endAction = endAction,
+            insideMargin = insideMargin,
             onDismissRequest = onDismiss,
         ) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Column(Modifier.fillMaxWidth()) {
                 content()
             }
         }
+    }
+}
+
+/** The metrics every PiKit sheet shares. */
+object PiSheetDefaults {
+    /** A sheet's content gutter: 16dp, the reference's own inset. */
+    val InsideMargin = DpSize(16.dp, 8.dp)
+}
+
+/**
+ * The explicit dismissal a sheet's header carries.
+ *
+ * The glyph is the library's dismiss mark, at 20dp in a 40dp target — the same
+ * relationship the bar's arrow has to its glass disc. It calls [onDismiss] rather
+ * than reading `LocalDismissState`: the caller's flag is what drives the exit
+ * animation, and a sheet that only told the host to dismiss would leave its own
+ * state saying "open" if the same tap were ever wired elsewhere.
+ */
+@Composable
+private fun PiSheetCloseButton(onDismiss: () -> Unit) {
+    IconButton(
+        onClick = onDismiss,
+        modifier = Modifier.size(40.dp),
+    ) {
+        Icon(
+            imageVector = MiuixIcons.Close,
+            contentDescription = LocalStrings.current.common.close,
+            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

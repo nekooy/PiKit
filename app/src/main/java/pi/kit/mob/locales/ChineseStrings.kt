@@ -356,8 +356,6 @@ internal object ChineseStrings : Strings {
         override val manageProfilesSubtitle = "Pi 使用的 Key 与模型"
         override val updateAndRepair = "维护与修复"
         override val updateAndRepairSubtitle = "模型列表、修复软件包"
-        override val userManual = "使用手册"
-        override val userManualSubtitle = "从零开始了解这个应用"
         override val about = "关于 PiKit"
         override val aboutSubtitle = "版本、许可、检查应用更新"
         override val language = "语言"
@@ -410,7 +408,8 @@ internal object ChineseStrings : Strings {
         override val fontSize = "字体大小"
         override val fontSizeSubtitle = "共 7 档，松手即生效"
         override val essentials = "常用设置"
-        override val advancedSection = "高级"
+        override val agentSection = "Agent 与数据"
+        override val aboutSection = "关于"
         override val running = "运行中"
         override val starting = "启动中…"
         override val stopped = "已停止"
@@ -608,6 +607,7 @@ internal object ChineseStrings : Strings {
         override val modelNumbersNote = "留空表示不改这一项，按上面显示的数值使用。"
 
         override val agentConfig = "Agent 配置"
+        override val agentPageSubtitle = "进程、工作区与聊天预设"
         override val agentRunSection = "运行"
         override val agentStatus = "状态"
         override val defaultWorkspace = "默认工作区"
@@ -844,11 +844,6 @@ internal object ChineseStrings : Strings {
 
     }
 
-    override val manual = object : Strings.Manual {
-        override val title = "使用手册"
-        override val subtitle = "从零开始了解这个应用"
-        override val contents = "目录"
-    }
 
     override val notes = object : Strings.Notes {
         override val licenceTitle = "许可证"
@@ -898,5 +893,6 @@ internal object ChineseStrings : Strings {
         override val confirm = "确定"
         override val retry = "重试"
         override val clear = "清空"
+        override val close = "关闭"
     }
 }

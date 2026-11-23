@@ -33,7 +33,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import java.io.File
 import java.util.Locale
@@ -48,11 +47,12 @@ import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
-import pi.kit.mob.ui.kit.PiMenuRow
-import pi.kit.mob.ui.kit.PiTone
+import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
+import pi.kit.mob.ui.settings.SettingsChoiceRow
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -65,8 +65,7 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Home
-import top.yukonga.miuix.kmp.layout.DialogDefaults
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -107,8 +106,15 @@ internal fun rememberWorkspacePaths(context: Context, env: TermuxEnv): Set<Strin
     }
 }
 
-/** A sheet's own side gutter, matching the composer's other sheets. */
-private val PICKER_GUTTER = 16.dp
+/**
+ * The picker's own side gutter.
+ *
+ * Zero because `PiSheet` already spends the sheet's 16dp gutter: adding another 16 here
+ * put the path field and the listing 32dp from the edge, the narrow column the sheet
+ * rewrite removed. The constant stays so a future host with no gutter has one place to
+ * state it.
+ */
+private val PICKER_GUTTER = 0.dp
 
 /**
  * The folder picker: anywhere the app can read, reached by tapping or by typing.
@@ -301,42 +307,51 @@ internal fun WorkspacePickerSheet(
                 creating = true
             }
         }
-        if (listing == null) {
-            // Unreadable rather than empty: listFiles answers null for a directory this
-            // process may not open, which on a phone is almost always the grant missing
-            // for something under /sdcard.
-            if (!granted) {
-                PiMenuRow(title = text.chat.workspacePickerGrant, onClick = onGrant)
+        PiSheetSection {
+            if (listing == null) {
+                // Unreadable rather than empty: listFiles answers null for a directory this
+                // process may not open, which on a phone is almost always the grant missing
+                // for something under /sdcard.
+                if (!granted) {
+                    ArrowPreference(title = text.chat.workspacePickerGrant, onClick = onGrant)
+                }
+                Text(
+                    text = text.chat.workspacePickerUnreadable,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            } else if (directories.isEmpty()) {
+                Text(
+                    text = text.chat.workspacePickerEmpty,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
             }
-            Text(
-                text = text.chat.workspacePickerUnreadable,
-                style = MiuixTheme.textStyles.footnote1,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.padding(horizontal = PICKER_GUTTER, vertical = 12.dp),
-            )
-        } else if (directories.isEmpty()) {
-            Text(
-                text = text.chat.workspacePickerEmpty,
-                style = MiuixTheme.textStyles.footnote1,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.padding(horizontal = PICKER_GUTTER, vertical = 12.dp),
-            )
+            directories.forEach { directory ->
+                val added = directory.absolutePath in existing
+                ArrowPreference(
+                    title = directory.name,
+                    // The trailing badge sits beside the library's own arrow, which is what
+                    // a folder row is: a way into its children. A row already in the list
+                    // still opens (it may have children), and the badge is what stops the
+                    // reader adding it twice.
+                    endActions = if (added) {
+                        {
+                            Text(
+                                text = text.chat.workspacePickerAdded,
+                                style = MiuixTheme.textStyles.footnote1,
+                            )
+                        }
+                    } else {
+                        {}
+                    },
+                    onClick = { go(directory.absolutePath) },
+                )
+            }
         }
-        directories.forEach { directory ->
-            val added = directory.absolutePath in existing
-            PiMenuRow(
-                title = directory.name,
-                // The trailing slot is the badge rather than an arrow: a row that is
-                // already a workspace is still worth opening (it may have children), and
-                // the badge is what stops the reader adding it twice.
-                trailing = if (added) {
-                    { Text(text = text.chat.workspacePickerAdded, style = MiuixTheme.textStyles.footnote1) }
-                } else {
-                    null
-                },
-                onClick = { go(directory.absolutePath) },
-            )
-        }
+
         Button(
             cornerRadius = PiCorner.radius,
             onClick = {
@@ -346,12 +361,10 @@ internal fun WorkspacePickerSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = PICKER_GUTTER, end = PICKER_GUTTER, top = 12.dp),
-            // A secondary button on a glass sheet: the library's default fill is
-            // nearly the panel's own colour at this depth.
-            colors = ButtonDefaults.buttonColors(
-                color = PiTone.control(),
-                contentColor = MiuixTheme.colorScheme.onSurface,
-            ),
+            // The sheet's one committing action, so it is the primary fill rather than
+            // a grey secondary one: "用这个文件夹" is the reason the picker is open, and
+            // the grey fill read as a disabled control under a row of blue shortcuts.
+            colors = ButtonDefaults.buttonColorsPrimary(),
         ) {
             Text(text = text.chat.workspacePickerChoose)
         }
@@ -446,22 +459,28 @@ private fun NavChip(
 }
 
 /**
- * The default workspace, as the app's dialog: the workspaces with one mark under them,
- * an "add" row, and the two answers that close it.
+ * The default workspace, as a bottom sheet of choices.
  *
- * A dialog rather than a menu, because it is a *settings* question: a dropdown anchored
- * to a settings row borrows the shape of a toolbar control's menu, and this app's
- * settings pages answer their choices in a dialog with the answers under the question
- * (the language picker is the same shape, §13). The row that opens it is the agent page's,
- * and the value it writes is what the *next* conversation starts in — this conversation
- * keeps the workspace it was launched in, which is the composer's chip to change.
+ * A settings question is answered in a sheet now, not in a centred dialog: the list
+ * is long enough to scroll, a sheet is what the reference uses for every list of
+ * choices, and the page behind it stays visible at the top instead of being hidden
+ * behind a card. The row that opens it is the agent page's, and the value it writes
+ * is what the *next* conversation starts in — this conversation keeps the workspace
+ * it was launched in, which is the composer's chip to change.
  *
- * The mark moves under the finger and nothing is written until the confirm is tapped, and
- * it is keyed on `show` so a cancelled question does not carry its answer into the next
- * opening — the language dialog's two rules.
+ * **One tap is the answer.** The previous dialog moved a radio mark under the finger
+ * and then asked for a second tap on 确定, so choosing a folder was three taps and a
+ * dismissal. A sheet row that applies immediately is the interaction every settings
+ * list in the reference has, and a selection that changes nothing is a read rather
+ * than an edit — `SettingsChoiceRow` only buzzes when the answer actually changes.
+ *
+ * The built-in workspace cannot be removed, and neither can the default: removing it
+ * would leave the preference pointing at a folder the list no longer offers. A folder
+ * deleted from the file manager needs no bin at all; `WorkspaceStore.list` drops it on
+ * sight.
  */
 @Composable
-internal fun WorkspaceDialog(
+internal fun WorkspaceSheet(
     show: Boolean,
     text: Strings,
     workspaces: List<Workspace>,
@@ -472,74 +491,65 @@ internal fun WorkspaceDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var chosen by remember(show, defaultPath) { mutableStateOf(defaultPath) }
-
-    // The built-in workspace cannot be removed — it is the one every install starts in —
-    // and the default cannot be either: removing it would leave the preference pointing
-    // at a folder the list no longer offers. A folder that is deleted from the file
-    // manager needs no ✕ at all; `WorkspaceStore.list` drops it on sight.
     fun removable(workspace: Workspace): Boolean =
         !workspace.builtIn && workspace.path != defaultPath
 
-    val backdrop = LocalPiBackdrop.current
-    val body: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth()) {
-            workspaces.forEach { workspace ->
-                RadioButtonPreference(
-                    title = text.chat.workspaceChip(workspace.label, workspace.path == defaultPath),
-                    summary = workspace.displayPath(home),
-                    selected = workspace.path == chosen,
-                    onClick = { chosen = workspace.path },
-                    endActions = {
-                        if (removable(workspace)) {
-                            IconButton(
-                                onClick = { onRemove(workspace.path) },
-                                modifier = Modifier.size(32.dp),
-                            ) {
-                                // The bin, at the 16dp a dialog row's trailing mark is
-                                // drawn at: taking a workspace out of the list is the
-                                // same act as taking a model or a saved key out of its
-                                // list, so it wears the same glyph (§13).
-                                Icon(
-                                    imageVector = MiuixIcons.Delete,
-                                    contentDescription = text.chat.workspaceRemove,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                )
-                            }
-                        }
-                    },
-                )
-            }
-            // Adding is a row of its own rather than a third answer beside the two
-            // buttons: it is the one thing here that leaves the dialog, and it must not
-            // read as a way to dismiss the question.
-            PiMenuRow(title = text.chat.addWorkspace, onClick = onAdd)
-            PiDialogAnswers(
-                dismiss = text.common.cancel,
-                onDismiss = onDismiss,
-                confirm = text.common.confirm,
-                onConfirm = { onPick(chosen) },
-                // The answers keep the dialog's own gutter even though the list above them
-                // does not: a button's fill has to stop short of the panel's edge, where a
-                // row's highlight has to reach it.
-                modifier = Modifier.padding(
-                    horizontal = DialogDefaults.insideMargin.width,
-                    vertical = 12.dp,
-                ),
-                glass = backdrop != null,
-            )
-        }
-    }
-    PiCustomDialog(
+    PiSheet(
         show = show,
         title = text.settings.defaultWorkspace,
-        // No horizontal inset for the content, so the rows span the dialog: the
-        // title and the answers are centred and have their own margins, and a row's
-        // press indication is clipped to the bounds it is given.
-        insideMargin = DpSize(0.dp, DialogDefaults.insideMargin.height),
-        onDismissRequest = onDismiss,
+        onDismiss = onDismiss,
     ) {
-        body()
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .piOverScroll()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = piSheetBottomInset()),
+        ) {
+            PiSheetSection {
+                workspaces.forEach { workspace ->
+                    SettingsChoiceRow(
+                        title = text.chat.workspaceChip(
+                            workspace.label,
+                            workspace.path == defaultPath,
+                        ),
+                        summary = workspace.displayPath(home),
+                        selected = workspace.path == defaultPath,
+                        checkAtStart = true,
+                        onClick = { onPick(workspace.path) },
+                        endActions = if (removable(workspace)) {
+                            {
+                                IconButton(
+                                    onClick = { onRemove(workspace.path) },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    // The bin, at the 16dp a sheet row's trailing mark is
+                                    // drawn at: taking a workspace out of the list is the
+                                    // same act as taking a model or a saved key out of its
+                                    // list, so it wears the same glyph (§13).
+                                    Icon(
+                                        imageVector = MiuixIcons.Delete,
+                                        contentDescription = text.chat.workspaceRemove,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    )
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
+            // Adding is a row of its own rather than a third answer beside two buttons:
+            // it is the one thing here that leaves the sheet, and it must not read as a
+            // way to dismiss the question.
+            PiSheetSection {
+                ArrowPreference(
+                    title = text.chat.addWorkspace,
+                    onClick = onAdd,
+                )
+            }
+        }
     }
 }

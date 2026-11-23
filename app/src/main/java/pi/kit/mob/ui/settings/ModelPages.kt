@@ -44,10 +44,10 @@ import pi.kit.mob.ui.kit.PiGroupAction
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import pi.kit.mob.ui.kit.rememberLastPresent
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
@@ -56,7 +56,6 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
@@ -181,13 +180,14 @@ internal fun ModelPage(
             if (profiles.isNotEmpty()) {
                 PiSection(title = text.settings.savedProfiles) {
                     profiles.forEach { profile ->
-                        // The row *is* the switch: a radio says which configuration the
+                        // The row *is* the switch: the tick says which configuration the
                         // agent launches with, and tapping the one already marked is a read
                         // rather than a change. The edit and delete pair sits at the row's
                         // end because a settings row's trailing slot is where its controls
-                        // live, and the mark that says "this is the one" is the radio's own —
-                        // one glyph per meaning rather than a tick beside a button.
-                        RadioButtonPreference(
+                        // live; the tick is the library's checkmark, the same mark the
+                        // picker sheets use for "this one is in effect", rather than a
+                        // radio ring that has to be read as a second kind of selection.
+                        SettingsChoiceRow(
                             title = profile.displayName,
                             summary = subtitleFor(profile, text),
                             selected = profile.id == activeId,
@@ -230,7 +230,9 @@ internal fun ModelPage(
             // under it is the same one the list's foot carries once there is something in
             // it. With profiles saved this is the page's one additive row.
             if (profiles.isEmpty()) {
-                PiSection(title = text.settings.profilesTitle) {
+                // The page's title already says what this list is; a section heading with
+                // the same words over the only paragraph on screen was reading it twice.
+                PiSection {
                     SettingsNote(text.settings.profilesEmptyHint)
                 }
             }
@@ -1187,7 +1189,7 @@ internal fun ModelEditPage(
                 trailing = text.settings.modelCount(models.size),
             ) {
                 models.forEach { model ->
-                    RadioButtonPreference(
+                    SettingsChoiceRow(
                         title = model,
                         // The endpoint, and nothing else. The thinking level used to be
                         // here, clamped per model — a fact about the *app's* preference
@@ -1604,7 +1606,7 @@ private fun ModelNumberBody(
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(bottom = 6.dp),
         )
-        Card(Modifier.fillMaxWidth(), cornerRadius = PiCorner.radius) {
+        PiSheetSection {
             SettingsTextField(
                 value = draft,
                 onValueChange = { draft = tokenDigits(it) },
@@ -1618,11 +1620,11 @@ private fun ModelNumberBody(
         }
         // No dismiss beside the save: the scrim, the back gesture and a downward drag
         // already close a sheet. The one action fills the row — a sheet whose foot is a
-        // single button is a row like any other, and the sheet's own gutter is 12dp.
+        // single button is a row like any other, and the sheet's own gutter is 16dp.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
         ) {
             SettingsButton(

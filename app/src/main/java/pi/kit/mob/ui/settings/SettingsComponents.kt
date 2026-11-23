@@ -25,8 +25,10 @@
  * ## Rows are the library's, not this file's
  *
  * A page builds its rows out of `BasicComponent`, `ArrowPreference`,
- * `SwitchPreference`, `RadioButtonPreference`, `SliderPreference` and `TextField`
- * directly. There is no settings-specific row wrapper any more: one over
+ * `SwitchPreference`, `SliderPreference` and `TextField` directly. The one
+ * settings-specific row is `SettingsChoiceRow`, and it exists for a semantic the
+ * library's radio row does not name: the chosen member of a set, marked with a tick
+ * instead of a ring and an accent title (see its KDoc). A general wrapper over
  * `BasicComponent` would have to re-expose the library's parameters one at a time, and
  * the two would drift apart on the first change to either.
  *
@@ -41,6 +43,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,6 +59,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -66,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -87,17 +92,19 @@ import pi.kit.mob.ui.kit.PiCustomDialog
 import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTitleDefaults
@@ -106,6 +113,10 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Clear
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -162,6 +173,80 @@ fun SettingsValue(
 }
 
 /**
+ * One member of a set, as a settings row: title, an optional sentence, and the
+ * chosen member marked with the library's tick.
+ *
+ * Miuix's `RadioButtonPreference` is the same question but answers it with a radio
+ * ring and tints the whole title in the accent. On a settings sheet that is two
+ * signals too many: the reference gives a chosen row one mark at its trailing edge
+ * and leaves the words in their normal ink, so a list can be scanned for names
+ * before it is read for state. The check is `MiuixIcons.Ok` — the glyph the model
+ * list already uses for "this one is in effect" — not a hand-drawn mark.
+ *
+ * [checkAtStart] exists for the one row shape whose trailing slot is already taken
+ * by a destructive action (a saved workspace with its bin). Everywhere else the
+ * tick sits at the end, where the reference puts it.
+ *
+ * The row performs `PiHaptics.choose()` itself when the tap changes the answer,
+ * because `BasicComponent` — unlike the library's radio — has no haptic of its own.
+ */
+@Composable
+fun SettingsChoiceRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    startAction: (@Composable () -> Unit)? = null,
+    endActions: (@Composable RowScope.() -> Unit)? = null,
+    enabled: Boolean = true,
+    holdDownState: Boolean = false,
+    checkAtStart: Boolean = false,
+) {
+    val haptics = LocalPiHaptics.current
+    val mark: @Composable () -> Unit = {
+        Icon(
+            imageVector = MiuixIcons.Ok,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+    BasicComponent(
+        modifier = modifier.semantics { this.selected = selected },
+        title = title,
+        summary = summary,
+        startAction = if (checkAtStart && selected) {
+            {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    mark()
+                    startAction?.invoke()
+                }
+            }
+        } else {
+            startAction
+        },
+        endActions = {
+            endActions?.invoke(this)
+            if (!checkAtStart && selected) {
+                Spacer(Modifier.width(8.dp))
+                mark()
+            }
+        },
+        onClick = {
+            if (!selected) haptics.choose()
+            onClick()
+        },
+        role = Role.RadioButton,
+        holdDownState = holdDownState,
+        enabled = enabled,
+    )
+}
+
+/**
  * A group whose label carries a fact about the group: a count, a version.
  *
  * `PiSection` — and `SmallTitle` under it — is a label and nothing else, and the one
@@ -185,7 +270,7 @@ fun SettingsSection(
 ) {
     Column(modifier.fillMaxWidth()) {
         if (trailing == null) {
-            SmallTitle(text = title)
+            SmallTitle(text = title, textColor = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         } else {
             Row(
                 modifier = Modifier
@@ -196,7 +281,7 @@ fun SettingsSection(
                 Text(
                     text = title,
                     style = MiuixTheme.textStyles.subtitle,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
@@ -596,11 +681,12 @@ fun SettingsWorking(
 /**
  * One action at the end of a row: "restart", "run", "ask".
  *
- * Miuix's `TextButton` with this app's own padding, and the padding is the whole point:
- * the library's default inside margin (16dp horizontal, 13dp vertical) around a 40dp
- * minimum makes a control that is nearly as wide as the value it sits beside, so three
- * of them on one page read as a toolbar of buttons rather than as each row's own verb.
- * 12/6 keeps the 40dp touch target and gives the label back to the row.
+ * Miuix's `TextButton` with this app's own padding and no container: the library's
+ * default inside margin (16dp horizontal, 13dp vertical) around a 40dp minimum makes a
+ * control that is nearly as wide as the value it sits beside, so three of them on one
+ * page read as a toolbar of buttons rather than as each row's own verb. 12/6 keeps the
+ * 40dp touch target and gives the label back to the row, and the accent ink without a
+ * fill keeps it a verb rather than competing with the row's title.
  *
  * There is no destructive variant. Every action that cannot be taken back is a question
  * first (`PiConfirm(destructive = true)`), and the confirming word of a question is
@@ -621,7 +707,17 @@ fun SettingsAction(
         modifier = modifier,
         enabled = enabled,
         insideMargin = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-        colors = ButtonDefaults.textButtonColorsPrimary(),
+        // A row action is a verb beside its value, not a filled button competing with
+        // the row's title. The filled primary pill this used to draw was the loudest
+        // control on the Agent page — two blue pills in a card of plain rows — and the
+        // reference's answer to the same slot is accent text with no container. The
+        // 40dp touch target stays; only the fill goes.
+        colors = ButtonDefaults.textButtonColors(
+            color = Color.Transparent,
+            disabledColor = Color.Transparent,
+            textColor = MiuixTheme.colorScheme.primary,
+            disabledTextColor = MiuixTheme.colorScheme.disabledOnSecondaryVariant,
+        ),
     )
 }
 
@@ -661,11 +757,11 @@ data class SettingsPick(
  * scrolls, so a dozen rows are fine in it; thirty providers with descriptions are not, and
  * that is what [searchHint] exists for.
  *
- * The rows are `RadioButtonPreference`s when the list *has* a current value, and
- * `ArrowPreference`s when it does not: the radio is Miuix's mark for "one of these is in
+ * The rows are `SettingsChoiceRow`s when the list *has* a current value, and
+ * `ArrowPreference`s when it does not: the tick is the mark for "one of these is in
  * effect", which is the question the provider picker asks, while the add-an-option and
- * fetched-model lists ask "which of these do I want" and a column of unselected radios
- * answered that with the other question's mark. [searchHint] adds a filter field above the
+ * fetched-model lists ask "which of these do I want" and a column of set marks would
+ * answer that with the other question's mark. [searchHint] adds a filter field above the
  * list, for a list of *things that exist* rather than a handful of alternatives.
  *
  * An empty filter result draws no card at all. That is a gap rather than a decision: the
@@ -713,26 +809,45 @@ fun SettingsPickerSheet(
                     text = subtitle,
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 10.dp),
                 )
             }
             if (searchHint != null) {
                 GlassTextField(
                     state = queryState,
-                    // The field is a box on the sheet, not a row on it: without its share
-                    // of the vertical seam its rounded fill touched the card below and the
-                    // two read as one stretched control. A field's own inset is 12dp —
-                    // the figure `SettingsTextField` spends above and below (`FIELD_VERTICAL_INSET`)
-                    // — so the filter sits above its list by the same frame as every other
-                    // field on a card.
-                    modifier = Modifier.fillMaxWidth().padding(bottom = FIELD_VERTICAL_INSET),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     label = searchHint,
                     useLabelAsPlaceholder = true,
                     lineLimits = TextFieldLineLimits.SingleLine,
                     cornerRadius = PiCorner.radius,
-                    // The library's glass field fill, with the focus ring stated as
-                    // transparent for the same reason `piFieldColors` hides it on every
-                    // other field: the ring is the loudest blue rectangle on the sheet.
+                    // The search field is the one control a long picker wears above its
+                    // list: the magnifier says what the field is for before the hint is
+                    // read, and the clear mark appears only while there is something to
+                    // clear. The field is the glass one — this sheet is a glass surface —
+                    // with the focus ring off for the same reason every other field hides
+                    // it.
+                    leadingIcon = {
+                        Icon(
+                            imageVector = MiuixIcons.Search,
+                            contentDescription = null,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(20.dp),
+                        )
+                    },
+                    trailingIcon = if (needle.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { queryState.setTextAndPlaceCursorAtEnd("") }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Clear,
+                                    contentDescription = LocalStrings.current.common.clear,
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    } else {
+                        null
+                    },
                     colors = GlassTextFieldDefaults.textFieldColors(
                         borderColor = Color.Transparent,
                     ),
@@ -743,7 +858,7 @@ fun SettingsPickerSheet(
                 SettingsNote(LocalStrings.current.settings.pickNothingMatches(needle))
             }
             if (shown.isNotEmpty()) {
-                Card(Modifier.fillMaxWidth(), cornerRadius = PiCorner.radius) {
+                PiSheetSection {
                     // The list scrolls *inside* the card, so the card's own rounded clip is
                     // what the rows are cut by: a scroll modifier on the card itself would
                     // put the viewport outside the surface, and the corners would scroll
@@ -758,14 +873,13 @@ fun SettingsPickerSheet(
                             .verticalScroll(rememberScrollState()),
                     ) {
                         shown.forEach { option ->
-                            // A radio only when the list *has* a current value. The sheet
+                            // A check only when the list *has* a current value. The sheet
                             // is used for two different questions: "which of these is in
                             // effect" (the provider, the workflow, the API type) and
                             // "which of these do I want to add" (the extension's options,
-                            // a fetched model), where `selectedId` is null and a column of
-                            // unselected radios says the second thing with the first
-                            // question's mark. The row that opens something is
-                            // `ArrowPreference`, so the add lists use that.
+                            // a fetched model), where `selectedId` is null and a set mark
+                            // would tick an answer nobody gave. The row that opens
+                            // something is `ArrowPreference`, so the add lists use that.
                             if (selectedId == null) {
                                 ArrowPreference(
                                     title = option.label,
@@ -773,7 +887,7 @@ fun SettingsPickerSheet(
                                     onClick = { onPick(option.id) },
                                 )
                             } else {
-                                RadioButtonPreference(
+                                SettingsChoiceRow(
                                     title = option.label,
                                     summary = option.description,
                                     selected = option.id == selectedId,
@@ -789,7 +903,7 @@ fun SettingsPickerSheet(
                     text = footnote,
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp),
                 )
             }
         }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -30,14 +31,14 @@ import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.PiAvatar
-import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDropdownPreference
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiSheetSection
+import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
@@ -418,9 +419,20 @@ private fun AvatarSheet(
         onStored = onChangeImage,
     )
 
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp + piSheetBottomInset())) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .piOverScroll()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = piSheetBottomInset()),
+    ) {
+        // The preview is the thing the sheet edits, so it sits above the cards rather
+        // than inside one: a card is a group of rows, and a picture with nothing to tap
+        // is not a row. The 96dp disc is the size the transcript draws its avatar at
+        // several times over, which is what makes it read as a preview rather than as
+        // another control.
         Box(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp),
             contentAlignment = Alignment.Center,
         ) {
             PiAvatar(
@@ -431,7 +443,7 @@ private fun AvatarSheet(
             )
         }
 
-        Card(cornerRadius = PiCorner.radius) {
+        PiSheetSection {
             ArrowPreference(
                 title = text.settings.avatarPicture,
                 summary = text.settings.avatarPictureHint,
@@ -464,6 +476,9 @@ private fun AvatarSheet(
                     },
                 )
             }
+        }
+
+        PiSheetSection {
             // The name beside the avatar, not the letter inside it: the disc draws the
             // speaker's own figure now, and a name is a word the transcript shows at the
             // start edge (the agent) or the end edge (the reader).
@@ -474,27 +489,16 @@ private fun AvatarSheet(
                 supporting = text.settings.avatarNameHint,
                 singleLine = true,
             )
-            if (picker.failed) {
-                SettingsNote(text.settings.avatarPictureFailed, danger = true)
-            }
-            Text(
-                text = text.settings.avatarColor,
-                style = MiuixTheme.textStyles.footnote2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp),
-            )
+        }
+
+        PiSheetSection(title = text.settings.avatarColor) {
             // Eight swatches on one line, and the line is *measured* rather than scrolled:
-            // 8 x 38dp + 7 x 4dp of gap + 32dp of gutter is 364dp, against 312dp inside a
-            // sheet on a 360dp phone (the sheet supplies 24dp a side and the card 16dp
-            // more), so the last two colours sat past the edge behind a scroll gesture
-            // nothing announced. A palette that has to be dragged to be seen is not read
-            // as a palette. 34dp instead: 8 x 34dp + 7 x 4dp = 300dp against the 312dp a
-            // 360dp phone gives the sheet's card, and this row's own 16dp gutters take
-            // 32dp of that. A 34dp disc is still a 34dp touch target.
+            // the sheet's 16dp gutter and this row's 16dp leave 328dp on a 360dp phone,
+            // and 8 x 34dp + 7 x 4dp = 300dp fits without a scroll nothing announces.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -508,6 +512,10 @@ private fun AvatarSheet(
                     )
                 }
             }
+        }
+
+        if (picker.failed) {
+            SettingsNote(text.settings.avatarPictureFailed, danger = true)
         }
     }
 }

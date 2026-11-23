@@ -147,10 +147,9 @@ internal fun MaintenancePage(
 
     val pageScroll = rememberScrollState()
     PiPage(
-        // The Settings row is "Maintenance & repair" and the manual quotes that
-        // same label; the old header said "Updates & repair". Reading the row's own
-        // key rather than a second string with the same value is what keeps the
-        // two from drifting apart again. The subtitle stays the page's own,
+        // The Settings row is "Maintenance & repair"; the old header said
+        // "Updates & repair". Reading the row's own key rather than a second string
+        // with the same value is what keeps the two from drifting apart again. The subtitle stays the page's own,
         // longer sentence — `StoragePage` splits row and page the same way
         // (`storageTitle` vs `storagePageTitle`).
         title = text.settings.updateAndRepair,

@@ -26,8 +26,8 @@ pikit.versionName=0.6.4
 pikit.versionCode=16
 ```
 
-- **`versionName`** is what the user sees — **Settings → About PiKit**, the in-app
-  manual's subtitle, and the release tag. (It is *not* what a shell sees:
+- **`versionName`** is what the user sees — **Settings → About PiKit**, the About page's
+  subtitle, and the release tag. (It is *not* what a shell sees:
   `TERMUX_VERSION` reports the bundled environment's version — the image's own
   metadata, not this file, and `BundledImageTest` pins the tag parse behind it.)
   It must be a bare
@@ -311,7 +311,7 @@ sentence about one release is wrong in the next.
 
 ### 其他变更
 
-- <the manual, the build, the runtime image — anything the user does not operate>
+- <the documentation, the build, the runtime image — anything the user does not operate>
 
 ### 选哪个文件：
 

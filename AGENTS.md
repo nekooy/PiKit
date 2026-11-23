@@ -79,7 +79,7 @@ the change that fixes it, or it outgrows being read.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 671 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 668 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -181,7 +181,7 @@ a document is exactly the change that forgets them.
     a recurring chore, or the document that chore already owns (`docs/PREVIEW.md` for
     the preview-strip shoot);
   - **anything about working here** — how to drive a device, the emulator's traps,
-    the checker that fails over a hand-wrapped manual — goes in `docs/BUILDING.md`,
+    the checker that catches a stale APK — goes in `docs/BUILDING.md`,
     which is the document a person on a new machine reads.
 
   What legitimately stays out of the tree is the machine's own state: an SDK's
@@ -290,14 +290,13 @@ of one directory.
 and it refuses any path outside the app's private data directory. Do not add
 `File.deleteRecursively` anywhere.
 
-**No vertically scrollable component may be measured with an unbounded height, and
-`MarkdownText` is the one that is shared.** It is a plain `Column`, and it has to stay
-one: it is drawn inside the transcript's `LazyColumn` *and* inside the manual page's
-`Column(verticalScroll)`, where a `LazyColumn` throws `IllegalStateException:
-Vertically scrollable component was measured with an infinity maximum height
-constraints`. The rule is about the *call sites*, not the composable: a shared
-composable's constraints are the union of everywhere it is drawn, so making the
-container lazy again — tempting for a 300-block reply — is still the crash.
+**No vertically scrollable component may be measured with an unbounded height.**
+`MarkdownText` is a plain `Column`, and it has to stay one: the transcript's
+`SelectionContainer` and bubble hand it an infinite main-axis constraint even though
+the transcript itself is a `LazyColumn`, so a lazy list inside a reply throws
+`IllegalStateException: Vertically scrollable component was measured with an infinity
+maximum height constraints`. Making the container lazy again — tempting for a
+300-block reply — is still the crash.
 
 **A formula is typeset by JLaTeXMath, and its line box has to be built around it.** The renderer is
 `ru.noties:jlatexmath-android` (`MathCache.kt`'s `typeset`), and the vertical placement is the
@@ -543,7 +542,7 @@ slice by hunks. The rule now is the opposite shape:
 **One concern per commit.** A turn that answers two questions is two commits rather
 than one whose subject carries an "and": a fix and the documentation that describes
 it are one concern, but two unrelated fixes are not, and neither is a feature plus
-the sentence in the manual that happens to mention it. A file is routinely shared by
+the sentence in the docs that happens to mention it. A file is routinely shared by
 two concerns — a locale catalog, a screen, the installer — and staging selected
 *hunks* (`git add -p`, or `git apply --cached` for a slice of a diff) is worth the
 trouble when the alternative is a subject that lists things.
@@ -638,8 +637,8 @@ prompt, which billed the idle gap to a turn that had already finished.
   design's reasoning.
 - **User-visible text goes through the catalogs**, never inline. `locales/Strings.kt`
   declares the interfaces; the three catalogs implement them, and the compiler
-  refuses one that is missing a member. Prose is the exception: `ManualText*.kt`
-  and `TerminalBanner.kt`, kept concise and parallel across languages.
+  refuses one that is missing a member. Prose is the exception: `TerminalBanner.kt`,
+  kept concise and parallel across languages.
 - **The conversation reducer is pure and Android-free.** `ConversationReducer` takes
   `(ConversationState, PiRecord, now)` and returns state, which is what makes the
   state machine testable on the JVM against captured wire traffic — keep it that
@@ -691,7 +690,7 @@ prompt, which billed the idle gap to a turn that had already finished.
   that refusal is the technical fence — the prose above is not the only guard.
 - **A tier's refusal is a sentence the model can act on, not a wall.** The extension
   matches paths in a command's *text*; a path built at runtime is not caught. Say
-  "checked on every tool call", never "prevented" — the interface and the manual use the
+  "checked on every tool call", never "prevented" — the interface and the docs use the
   same words on purpose.
 - **`pkg install` relocation has two paths** — apt's `DPkg::Pre-Install-Pkgs` hook
   (`pikit-relocate --apt-list`, which reads the archives apt is about to hand to
@@ -763,9 +762,8 @@ prompt, which billed the idle gap to a turn that had already finished.
   or core count.
 - **`appops set <pkg> MANAGE_EXTERNAL_STORAGE deny` is not enough** to revoke "all
   files access": the uid mode stays `allow`. Use `appops set --uid <pkg> … deny`.
-- **The screen is about 48 columns wide** on a 1080px phone — the terminal prints
-  into it and the in-app manual is read on it, which is why `TerminalBanner.kt`
-  pads its command column and the manual is written in short lines.
+- **The screen is about 48 columns wide** on a 1080px phone, which is why
+  `TerminalBanner.kt` pads its command column to that width.
 - **`--refresh-images` rebuilds the image; pi is pinned, not refreshed.**
   The `pi` pin in `tools/image-versions.json` is the release the image vendors (the
   builder reads it as `PI_VERSION`), and the cache records which version it holds, so

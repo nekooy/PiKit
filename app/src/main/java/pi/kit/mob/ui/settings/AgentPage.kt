@@ -53,17 +53,17 @@ import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
+import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
-import pi.kit.mob.ui.WorkspaceDialog
+import pi.kit.mob.ui.WorkspaceSheet
 import pi.kit.mob.ui.rememberWorkspacePaths
 import pi.kit.mob.ui.WorkspacePickerSheet
 import pi.kit.mob.ui.rememberWorkspaceList
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
@@ -166,7 +166,7 @@ internal fun AgentPage(
     val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.agentConfig,
-        subtitle = agentDescription(agent, text),
+        subtitle = text.settings.agentPageSubtitle,
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
         // The page's windows, in the slot that keeps them glass. Written after the
@@ -193,7 +193,7 @@ internal fun AgentPage(
                 InstructionsEditor(document = lastDocument, session = session, text = text)
             }
 
-            WorkspaceDialog(
+            WorkspaceSheet(
                 show = choosingWorkspace,
                 text = text,
                 workspaces = workspaces,
@@ -417,10 +417,7 @@ private fun AgentContextSheet(text: Strings) {
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
         )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = PiCorner.radius,
-        ) {
+        PiSheetSection {
             ContextRow(text.settings.agentContextSystemTitle, text.settings.agentContextSystemBody)
             ContextRow(
                 text.settings.agentContextInstructionsTitle,
@@ -664,8 +661,9 @@ private fun InstructionsEditor(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
-                SettingsAction(
+                SettingsButton(
                     text = text.settings.agentContextSave,
+                    primary = true,
                     onClick = {
                         // Written first, reported after: a save that claims to have
                         // happened and did not is the one outcome this button must not

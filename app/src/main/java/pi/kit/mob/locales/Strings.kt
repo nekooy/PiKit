@@ -22,7 +22,7 @@ enum class Lang(val code: String, val label: String) {
          *
          * Deliberately not the system language. Falling back to the device locale
          * sounds more polite and is worse in practice: an English-locale phone
-         * would then get an English interface whose user manual, in-app help and
+         * would then get an English interface whose in-app help and
          * error text were written for a Chinese-speaking user, and the agent's own
          * replies would keep arriving in whatever language the prompt used. The
          * app has one primary audience, so it starts in their language and the
@@ -65,7 +65,6 @@ interface Strings {
     val terminal: Terminal
     val files: Files
     val settings: Settings
-    val manual: Manual
     val notes: Notes
     val shade: Shade
     val common: Common
@@ -199,8 +198,8 @@ interface Strings {
          * is picked at random each time an empty conversation is drawn ([ChatScreen]).
          *
          * The `!` tip is first because it is the one that changes what the reader can
-         * do from this page: the form is otherwise something they find by reading the
-         * manual.
+         * do from this page: the form is otherwise something they find by opening the
+         * row it belongs to.
          */
         val tips: List<String>
 
@@ -991,8 +990,6 @@ interface Strings {
         val manageProfilesSubtitle: String
         val updateAndRepair: String
         val updateAndRepairSubtitle: String
-        val userManual: String
-        val userManualSubtitle: String
         val about: String
         val aboutSubtitle: String
         val language: String
@@ -1136,7 +1133,8 @@ interface Strings {
         val fontSizeSubtitle: String
 
         val essentials: String
-        val advancedSection: String
+        val agentSection: String
+        val aboutSection: String
         val running: String
         val starting: String
         val stopped: String
@@ -1573,6 +1571,9 @@ interface Strings {
          * the agent itself, so the name says that and nothing narrower.
          */
         val agentConfig: String
+
+        /** The Agent page's one-line subtitle: what the page configures. */
+        val agentPageSubtitle: String
 
         /** The process group: status, restart, and the battery exemption that keeps it alive. */
         val agentRunSection: String
@@ -2056,21 +2057,6 @@ interface Strings {
 
     }
 
-    /** The in-app manual. Prose rather than strings: see [manualFor]. */
-    interface Manual {
-        val title: String
-        val subtitle: String
-
-        /**
-         * The label over the chapter chips at the top of the manual.
-         *
-         * The chapters themselves are read from the prose's own `##` headings, so a
-         * manual in any language gets its own table of contents without a second list
-         * to keep in step. This is the one word that is *not* in the prose.
-         */
-        val contents: String
-    }
-
     /** The About page's long-form notes: the licence and the credits, one page each. */
     interface Notes {
         val licenceTitle: String
@@ -2103,5 +2089,8 @@ interface Strings {
 
         /** Empty a field: the name a search field's clear button is read out as. */
         val clear: String
+
+        /** The dismiss control of a bottom sheet, read out by a screen reader. */
+        val close: String
     }
 }

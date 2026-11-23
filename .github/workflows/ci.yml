@@ -111,9 +111,6 @@ jobs:
       # The same checkers `tools/build-apks.py` runs, minus the ones that need a
       # runtime image or the `.deb` cache that only the image builder fills.
       # `tools/build-apks.py` remains the one command for a full local build.
-      - name: The manual's reflow
-        run: python tools/reflow-manual.py --check
-
       - name: The interface strings
         run: python tools/check-locales.py
 

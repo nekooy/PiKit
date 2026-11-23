@@ -1,11 +1,17 @@
 package pi.kit.mob.ui.settings
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,13 +20,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pi.kit.mob.BuildConfig
+import pi.kit.mob.data.PiSettings
 import pi.kit.mob.locales.Lang
 import pi.kit.mob.locales.Strings
 import pi.kit.mob.locales.strings
@@ -29,12 +39,23 @@ import pi.kit.mob.pi.CatalogueUpdater
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiInstallation
 import pi.kit.mob.pi.StorageSelfTest
+import pi.kit.mob.ui.kit.AvatarSpeaker
 import pi.kit.mob.ui.kit.LocalPiHaptics
-import pi.kit.mob.ui.kit.PiMotion
+import pi.kit.mob.ui.kit.PiAvatar
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiDropdownPreference
+import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPage
 import pi.kit.mob.ui.kit.PiSection
+import pi.kit.mob.ui.kit.PiTone
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 /** Screens reachable from the Settings tab. Navigation state lives here only. */
 internal sealed interface SettingsPage {
@@ -66,8 +87,6 @@ internal sealed interface SettingsPage {
      * of its own.
      */
     data object Agent : SettingsPage
-
-    data object Manual : SettingsPage
 
     data object About : SettingsPage
 
@@ -158,7 +177,10 @@ internal fun decodeSettingsPage(encoded: String): SettingsPage = when {
     // Context is a sheet on the Agent settings page now. A state saved by
     // a build that had its own page lands there rather than at the root.
     encoded == "AgentContext" -> SettingsPage.Agent
-    encoded == "Manual" -> SettingsPage.Manual
+    // The user manual is gone: the app is meant to be read by using it, and the page
+    // was a second, long document that could drift from the interface. A state saved
+    // by a build that had it lands at the root.
+    encoded == "Manual" -> SettingsPage.Root
     encoded == "About" -> SettingsPage.About
     encoded == "Licence" -> SettingsPage.Licence
     encoded == "Credits" -> SettingsPage.Credits
@@ -177,7 +199,6 @@ internal fun SettingsPage.encode(): String = when (this) {
     SettingsPage.Agent -> "Agent"
     SettingsPage.Maintenance -> "Maintenance"
     SettingsPage.Backup -> "Backup"
-    SettingsPage.Manual -> "Manual"
     SettingsPage.About -> "About"
     SettingsPage.Licence -> "Licence"
     SettingsPage.Credits -> "Credits"
@@ -296,8 +317,6 @@ fun SettingsScreen(session: PiAgentSession, onBack: () -> Unit) {
                 onBack = { open(SettingsPage.Root) },
             )
 
-            SettingsPage.Manual -> ManualPage(onBack = { open(SettingsPage.Root) })
-
             SettingsPage.Search -> SearchPage(
                 session = session,
                 onBack = { open(SettingsPage.Root) },
@@ -401,6 +420,18 @@ private fun RootPage(
         contentScrolled = pageScroll.canScrollBackward,
     ) { padding ->
         Column(Modifier.settingsPageScroll(padding, pageScroll)) {
+            // The page opens with the thing it configures, not with a list of nouns:
+            // the agent's mark, the name the transcript gives it, its process state and
+            // the profile answering right now. The card is a way into Agent settings,
+            // which is the page every one of those facts belongs to.
+            SettingsIdentityCard(
+                settings = settings,
+                agent = agent,
+                profileName = activeProfile?.displayName,
+                text = text,
+                onClick = { onOpen(SettingsPage.Agent) },
+            )
+
             PiSection(title = text.settings.essentials) {
                 ArrowPreference(
                     title = text.settings.manageProfiles,
@@ -450,14 +481,9 @@ private fun RootPage(
                         }
                     },
                 )
-                ArrowPreference(
-                    title = text.settings.userManual,
-                    summary = text.settings.userManualSubtitle,
-                    onClick = { onOpen(SettingsPage.Manual) },
-                )
             }
 
-            PiSection(title = text.settings.advancedSection) {
+            PiSection(title = text.settings.agentSection) {
                 // Where it works, what it is told, and the process that carries both.
                 // The storage row used to lead this section; the workspace row on the
                 // agent page answers the same question now, with one answer instead of
@@ -490,10 +516,12 @@ private fun RootPage(
                     },
                     onClick = { onOpen(SettingsPage.Maintenance) },
                 )
-                // Last, and with the app's own version in the value slot: it is the
-                // one row on this page whose fact is about the app rather than about
-                // the agent, and it is the fact a bug report is read against. The page
-                // behind it carries the licence as well.
+            }
+
+            // The app's own facts are a group of their own: the version in this row's
+            // value slot is what a bug report is read against, and putting it beside
+            // the agent's process would make two kinds of fact share one card.
+            PiSection(title = text.settings.aboutSection) {
                 ArrowPreference(
                     title = text.settings.about,
                     summary = text.settings.aboutSubtitle,
@@ -506,6 +534,96 @@ private fun RootPage(
         }
     }
 
+}
+
+/**
+ * The settings root's opening card: the agent the rest of the page configures.
+ *
+ * It answers the three questions a reader has before touching a settings list —
+ * which agent is this, is it running, and what is answering — and it is the first
+ * place the avatar chosen on the personalization page is seen outside the
+ * transcript. The card is the way into Agent settings, so the identity is not
+ * decoration: it is the row for the page that owns every fact on it.
+ */
+@Composable
+private fun SettingsIdentityCard(
+    settings: PiSettings,
+    agent: AgentStatus,
+    profileName: String?,
+    text: Strings,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        cornerRadius = PiCorner.radius,
+        pressFeedbackType = PressFeedbackType.Sink,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PiAvatar(
+                speaker = AvatarSpeaker.AGENT,
+                color = settings.aiAvatarColor.seed,
+                imagePath = settings.aiAvatarImage.ifBlank { null },
+                size = 56.dp,
+            )
+            Column(
+                modifier = Modifier.weight(1f).padding(start = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = settings.aiAvatarName.ifBlank { "PiKit" },
+                    style = MiuixTheme.textStyles.title4,
+                    color = MiuixTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when (agent) {
+                                    is AgentStatus.Running -> PiTone.live()
+                                    is AgentStatus.Starting -> MiuixTheme.colorScheme.primary
+                                    is AgentStatus.Stopped -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                    is AgentStatus.Failed -> PiTone.error()
+                                },
+                            ),
+                    )
+                    Text(
+                        text = agentDescription(agent, text),
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = profileName ?: text.settings.noModelChosen,
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(
+                imageVector = MiuixIcons.Basic.ArrowRight,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
 }
 
 internal fun agentDescription(agent: AgentStatus, text: Strings): String = when (agent) {

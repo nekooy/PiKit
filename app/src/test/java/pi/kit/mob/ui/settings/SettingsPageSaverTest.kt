@@ -29,7 +29,6 @@ class SettingsPageSaverTest {
             SettingsPage.Agent,
             SettingsPage.Maintenance,
             SettingsPage.Backup,
-            SettingsPage.Manual,
             SettingsPage.About,
             SettingsPage.Licence,
             SettingsPage.Credits,
@@ -65,6 +64,7 @@ class SettingsPageSaverTest {
         assertEquals(SettingsPage.Root, decodeSettingsPage("Runtime"))
         assertEquals(SettingsPage.Root, decodeSettingsPage("Advanced"))
         assertEquals(SettingsPage.Root, decodeSettingsPage("Storage"))
+        assertEquals(SettingsPage.Root, decodeSettingsPage("Manual"))
         // Context moved into the agent page rather than to the root, because the page it
         // became still exists. The search page's former second level became rows of the
         // search page itself, so an old save lands there.

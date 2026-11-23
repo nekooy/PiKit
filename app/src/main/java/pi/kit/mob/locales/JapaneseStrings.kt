@@ -354,8 +354,6 @@ internal object JapaneseStrings : Strings {
         override val manageProfilesSubtitle = "Pi が使うキーとモデル"
         override val updateAndRepair = "メンテナンスと修復"
         override val updateAndRepairSubtitle = "モデル一覧、パッケージの修復"
-        override val userManual = "ユーザーマニュアル"
-        override val userManualSubtitle = "このアプリの使い方を最初から"
         override val about = "PiKit について"
         override val aboutSubtitle = "バージョン・ライセンス・アプリの更新確認"
         override val language = "言語"
@@ -408,7 +406,8 @@ internal object JapaneseStrings : Strings {
         override val fontSize = "文字サイズ"
         override val fontSizeSubtitle = "7 段階。指を離すとすぐ反映されます"
         override val essentials = "基本設定"
-        override val advancedSection = "詳細"
+        override val agentSection = "エージェントとデータ"
+        override val aboutSection = "このアプリについて"
         override val running = "実行中"
         override val starting = "起動中…"
         override val stopped = "停止"
@@ -620,6 +619,7 @@ internal object JapaneseStrings : Strings {
         override val modelNumbersNote = "空欄ならこの項目は変更しません。上の値がそのまま使われます。"
 
         override val agentConfig = "エージェント設定"
+        override val agentPageSubtitle = "プロセス・ワークスペース・チャットプリセット"
         override val agentRunSection = "実行"
         override val agentStatus = "状態"
         override val defaultWorkspace = "デフォルトのワークスペース"
@@ -863,11 +863,6 @@ internal object JapaneseStrings : Strings {
 
     }
 
-    override val manual = object : Strings.Manual {
-        override val title = "ユーザーマニュアル"
-        override val subtitle = "このアプリの使い方を最初から"
-        override val contents = "目次"
-    }
 
     override val notes = object : Strings.Notes {
         override val licenceTitle = "ライセンス"
@@ -919,5 +914,6 @@ internal object JapaneseStrings : Strings {
         override val confirm = "OK"
         override val retry = "再試行"
         override val clear = "クリア"
+        override val close = "閉じる"
     }
 }

@@ -209,7 +209,7 @@ and the app defines none of them. What each is used for:
 | Hero number, setup percentage | `title1` (32sp) |
 | Page-opening heading | `title2`–`title4` |
 | A row's title, a menu row's title | `headline1` at medium weight, the library's own row typography |
-| Running prose (a reply, the manual) | `paragraph` (17sp) |
+| Running prose (a reply) | `paragraph` (17sp) |
 | Secondary line, code, table cells | `body2` (14sp) |
 | Captions, dates, fences, key-bar keys | `footnote1`/`footnote2` |
 | Action labels | `button` |
@@ -290,16 +290,13 @@ and reaches y=170–219 on a short scroll. On the personalization page, the subt
 stays at y=211–260 while the first section heading can move above it. A parent clip
 only hides the tail and leaves the wrong viewport in place.
 
-The manual and files have an inner scroller below fixed controls, not a full-page
-scroll. The manual's contents label stayed at y=292–306 when jumping to a chapter, but
-the top bar's band blurred it anyway after the jump. These pages pass
-`contentScrollsUnderBar = false`: the bar's buttons are glass from the first frame like
-every other page's, but the background band (including the gradient fallback) stays off
-because no moving content can pass behind the header. The files page leaves the listing's top edge alone:
-its toolbar and location bar are opaque furniture, so there is no edge for a fade to
-hide and a blur band would only soften the first rows of a list that starts below them.
-The manual's contents bar is likewise opaque, and the band only blurred the first lines
-of the chapter a jump had just landed on.
+The files page has an inner scroller below fixed controls, not a full-page scroll, and
+passes `contentScrollsUnderBar = false`: the bar's buttons are glass from the first
+frame like every other page's, but the background band (including the gradient
+fallback) stays off because no moving content can pass behind the header. The files
+page leaves the listing's top edge alone: its toolbar and location bar are opaque
+furniture, so there is no edge for a fade to hide and a blur band would only soften the
+first rows of a list that starts below them.
 
 ### The window's last pixels are a page's, not the system's
 
@@ -558,7 +555,7 @@ The window-dialog path states the same assignments on its `TextButton` pair.
 
 **Sheets are `PiSheet`** (Miuix's `GlassBottomSheet` when a page backdrop exists, its
 `WindowBottomSheet` otherwise): scrim, back gesture and downward drag all dismiss, and
-the page only owns *which* sheet is open. A picker is a sheet of radio rows with a
+the page only owns *which* sheet is open. A picker is a sheet of choice rows with a
 filter field, not a dropdown, when its content is longer than a few words — a
 dropdown's popup is sized for a list, not for a search. Every sheet body spends
 `piSheetBottomInset()` at its bottom — inside the scroll on a scrolling body — because
@@ -569,6 +566,32 @@ the material and the state-based API new fields start from; a `TextField` with
 `piFieldColors()` is the field for a page or the composer's own frame, not for a sheet.
 The composer itself keeps its hand-built frame — its field is transparent inside the
 glass panel and `GlassTextField`'s tonal wash would be a second material (see §7.1).
+
+**The sheet header is the library's, plus the X the reader expects.** Miuix already
+draws a drag handle and a centred title with one action slot at each end. `PiSheet`
+fills the leading slot with `MiuixIcons.Close` whenever it has a title: a sheet is
+dismissible by scrim, back and drag, but none of those is visible, and a settings list
+that opens and closes without a named control has to be discovered. The X is a 20dp
+glyph in a 40dp target, so it is a control of the header's rank rather than a second
+title.
+
+**A sheet's content is a stack of `PiSheetSection`s.** The page's `PiSection` spends
+`SmallTitle`'s 28dp inset; inside a sheet that already has a 16dp gutter the same inset
+puts a row's text 36dp from the screen edge, which is the cramped column the old sheets
+had. `PiSheetSection` keeps the card and states the smaller label inset the sheet's own
+measure uses. The sheet's inside margin is 16dp rather than Miuix's 24dp for the same
+reason: 16 + the card's 16 is the density the reference uses, and 24 + 16 read as a
+page squeezed into a window. A group's footnote sits outside its card, where prose
+belongs rather than as a row of the list.
+
+**A set of alternatives in a sheet is `SettingsChoiceRow`.** The row is a
+`BasicComponent` whose chosen member wears `MiuixIcons.Ok` at its trailing edge — the
+mark the model list uses for "this one is in effect" — and whose title stays in normal
+ink. `RadioButtonPreference` answers the same question with a ring and an accent title,
+which is two signals for one state; on a list that is scanned for names before it is
+read for state, the checkmark is enough. The row performs the choice haptic itself on a
+change, because `BasicComponent` has none, and passes `checkAtStart` only where the
+trailing slot is already a destructive action (a saved workspace with its bin).
 
 **A window is driven by `show`, never by whether it is composed.** Miuix's window
 components and the glass overlay pair animate in *and out* through that flag, so a
@@ -1037,10 +1060,14 @@ one decision each makes that the shared vocabulary does not:
   is tinted with the secondary container under its own `SmallTitle`, not one lift per
   row, so a run of pinned conversations reads as a group rather than a stack of
   separate selections.
-- **Settings** — `PiSection` groups by subject, rows that act, and a page whose second
-  level is a page rather than a dialog. The rows carry the library's own typography
-  and spacing; what the page decides is *which* group a fact belongs to, not how a
-  row looks.
+- **Settings** — an identity card at the root (the agent's mark, name, state and the
+  profile answering), then `PiSection` groups by subject, rows that act, and pages
+  whose second level is a page rather than a dialog. A settings window is a bottom
+  sheet with the library's header and an explicit X, not a centred dialog; a list of
+  choices is a stack of `PiSheetSection`s with `SettingsChoiceRow`s that apply on one
+  tap. The rows carry the library's own typography and spacing; what the page decides
+  is *which* group a fact belongs to and which of those two window shapes answers it,
+  not how a row looks.
 
 ## What the rewrite kept, and what it removed
 
@@ -1078,10 +1105,10 @@ a code block's header and a tool card's output still use the same control.
 - **The quotation wash.** A code span, a fenced block and an inline chip are filled
   with `PiTone.inset()` — 10% of `onSurface` over whatever surface they are drawn on —
   rather than with a palette role, because the same renderer draws on three different
-  backgrounds (the answer card, the manual page, the reader's own prompt card) and no
-  single role is a step away from all of them. `secondaryContainer` was the last
+  backgrounds (the answer card, the reader's own prompt card) and no single role is a
+  step away from all of them. `secondaryContainer` was the last
   attempt: a fixed #F0F0F0 read as a well on white and disappeared on the #F0F0F0
-  manual, and in the dark scheme `surfaceContainerHigh` *is* the card's own #242424.
+  page, and in the dark scheme `surfaceContainerHigh` *is* the card's own #242424.
   A wash of the surface's own ink is the same relative step everywhere, which is what
   "the same depth" has to mean here.
 - **Everything drawn inside a card obeys the same rule, and the dark ramp is why.** The

@@ -415,12 +415,12 @@ object PiTone {
      * ## Why this is a wash of the surface's own ink
      *
      * A code block and an inline code span are drawn on *three* different
-     * backgrounds — the answer card's `surfaceContainer`, the manual's page
-     * `surface`, and the reader's own `secondaryContainer` prompt — and a single
+     * backgrounds — the answer card's `surfaceContainer`, a page's `surface`, and the
+     * reader's own `secondaryContainer` prompt — and a single
      * palette role cannot be a step away from all three. Measured on the library's
      * own light scheme, `secondaryContainer` (#F0F0F0) is a 15-point step away from
      * the white card and the same colour as the app's `#F0F0F0` page, so the same
-     * block read as a well in the transcript and disappeared in the manual; in the
+     * block read as a well in the transcript and disappeared on a #F0F0F0 page; in the
      * dark scheme `surfaceContainerHigh` *is* the card's own #242424 and the block
      * disappeared outright.
      *

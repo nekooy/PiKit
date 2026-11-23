@@ -433,14 +433,15 @@ internal fun RunActions(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SettingsAction(
+            SettingsButton(
                 text = label,
                 onClick = onAction,
                 modifier = Modifier.weight(1f),
                 enabled = enabled,
+                primary = true,
             )
             if (onDismiss != null && dismissLabel != null) {
-                SettingsAction(
+                SettingsButton(
                     text = dismissLabel,
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f),

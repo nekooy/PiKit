@@ -190,7 +190,11 @@ internal fun SearchPage(
                     SettingsNote(text.settings.searchConfigUnreadable, danger = true)
                 }
             } else {
-                PiSection(title = text.settings.webAccess) {
+                // The page's title already says what this switch is; a second heading
+                // with the same words over the only card on screen was reading it twice.
+                // The chat-mode default sits in the same card because the two answer one
+                // question: what a new conversation may reach for.
+                PiSection {
                     SwitchPreference(
                         title = text.settings.webAccess,
                         summary = text.settings.webAccessSubtitle,
@@ -200,25 +204,18 @@ internal fun SearchPage(
                             session.scheduleRestart()
                         },
                     )
-                }
 
-                // The chat-mode default is not part of `web.json`: the extension never
-                // reads it, `PiAgentSession` does when it builds a chat launch. It sits
-                // on this page because this page is where the reader decides what web
-                // access the agent has, and a new chat conversation's answer to that is
-                // the same question one step earlier. See ARCHITECTURE §9.3 and §17.
-                //
-                // A dropdown row rather than three radios, like every other "which of a
-                // few" on the settings pages. This one keeps its per-option sentence in the
-                // panel (`PiDropdownOption.summary`), and the row's own summary states the
-                // option in effect — the explanation of the current value is exactly what
-                // the row has room for once the alternatives are behind a tap.
-                //
-                // The group has **no** heading: the row is the whole of it, and the title
-                // the three radios used to share with their heading would now be drawn twice
-                // on one card — `PiSection`'s untitled form is the shape for a card that is
-                // obviously one thing.
-                PiSection {
+                    // The chat-mode default is not part of `web.json`: the extension never
+                    // reads it, `PiAgentSession` does when it builds a chat launch. It sits
+                    // on this page because this page is where the reader decides what web
+                    // access the agent has, and a new chat conversation's answer to that is
+                    // the same question one step earlier. See ARCHITECTURE §9.3 and §17.
+                    //
+                    // A dropdown row rather than three radios, like every other "which of a
+                    // few" on the settings pages. This one keeps its per-option sentence in the
+                    // panel (`PiDropdownOption.summary`), and the row's own summary states the
+                    // option in effect — the explanation of the current value is exactly what
+                    // the row has room for once the alternatives are behind a tap.
                     val options = ChatWebAccessDefault.entries
                     val current = appSettings.chatWebAccessDefault
                     // The summarised form: each option carries the sentence that says what

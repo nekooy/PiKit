@@ -67,6 +67,8 @@ writing a composition:
 | A value with a few alternatives | `PiDropdownPreference` (or the summarised `options` form) | `OverlayDropdownPreference`, a radio group on the page, a dialog, a sheet |
 | A long list of choices to search | `SettingsPickerSheet` | a dropdown (its panel has no filter) |
 | A row in a popup menu | `PiMenuRow` (choice / action / fact) | `BasicComponent`, a preference row |
+| A titled group inside a sheet | `PiSheetSection` | a bare `Card`, `PiSection` (its 28dp label inset is for a page) |
+| A chosen member of a set | `SettingsChoiceRow` | `RadioButtonPreference` (a ring and an accent title for one answer) |
 | A popup menu | `PiPopupMenu` + `Modifier.piMenuAnchor(anchor)` | `OverlayListPopup`, `OverlayDropdownPopup`, `GlassIconDropdownMenu`, a `GlassPopup` at the trigger |
 | A question with answers | `PiConfirm` (app) / `PiDialogHost` (pi's questions) | a raw `WindowDialog`/`GlassDialog` |
 | A question with a custom body | `PiCustomDialog` | composing `WindowDialog` or `GlassDialog` at the screen |
@@ -129,11 +131,7 @@ that cut the last card in two (§13, *The window's last pixels*).
   them and a top-edge blur would soften the first rows rather than hide an edge. The
   drawer draws its own hand-drawn three-stop ramp over the conversation list below its
   search field, in the panel's `background`, with the ramp's 20dp reserved as the list's
-  top content padding. The manual also passes `contentScrollsUnderBar = false`, but it
-  scrolls its prose directly below the contents bar: the bar's opaque surface leaves a
-  fade nothing to hide, and 30dp of blur over 17sp running text made the first lines —
-  including a heading a chapter jump had just targeted — unreadable. Chat is the
-  exception: its header is two floating capsules over a transcript that fades under the
+  top content padding. Chat is the exception: its header is two floating capsules over a transcript that fades under the
   page's own hand-drawn four-stop ramp, not a bar's progressive-blur band (§13).
 - **`piOverScroll()` comes *before* `verticalScroll` in the chain, never after.** A
   nested-scroll connection finds its scrollers by walking ancestors; placed after
@@ -143,10 +141,9 @@ that cut the last card in two (§13, *The window's last pixels*).
   a `LazyRow`) keeps no elastic edge of its own.
 - **No vertically scrollable component is measured with an unbounded height.** A
   `LazyColumn` inside a `Column(verticalScroll)` without a height bound throws
-  `IllegalStateException`. `MarkdownText` is the shared one and stays a plain
-  `Column`: it is drawn inside the transcript's `LazyColumn` *and* the manual's
-  scrolling column, and a shared composable's constraints are the union of
-  everywhere it is drawn (AGENTS.md, *Hard constraints*).
+  `IllegalStateException`. `MarkdownText` stays a plain `Column`: the transcript's
+  `SelectionContainer`/bubble chain hands it an infinite main-axis constraint, so a
+  lazy list there still crashes (AGENTS.md, *Hard constraints*).
 - **The chat page draws its own frame** — no `PiPage`, two floating capsules over a
   transcript that runs under them (§13, *Navigation*). That is the one documented
   exception, not a licence for a second page to invent a bar.
@@ -483,7 +480,13 @@ takes the same padding (§9.2).
   edge is the window's, so the last row sits under the gesture bar unless the content
   clears it. On a scrolling body the inset goes *inside* the scroll, so the text
   travels through it and the panel's fill still reaches the window's edge.
-- **A picker longer than a few words is a sheet of radio rows with a filter field**,
+- **A sheet's header carries the explicit X.** `PiSheet` supplies it whenever the
+  sheet has a title: scrim, back and drag are the dismissal gestures, but none is
+  visible, and a settings list must be closable by a named control. The content is a
+  stack of `PiSheetSection`s — never the page's `PiSection`, whose 28dp label inset was
+  measured for a page and puts a row's text 36dp from a sheet's screen edge — and a
+  chosen member of a set is `SettingsChoiceRow`, not a radio ring with an accent title.
+- **A picker longer than a few words is a sheet of choice rows with a filter field**,
   not a dropdown: a dropdown's popup is sized for a list, not for a search (§13). Its
   filter and any other field inside a glass sheet are `GlassTextField` with
   `GlassTextFieldDefaults.textFieldColors(borderColor = Color.Transparent)` and

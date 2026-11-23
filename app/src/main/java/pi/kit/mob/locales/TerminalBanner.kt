@@ -47,7 +47,7 @@ package pi.kit.mob.locales
  * user never sees: a package that installs and runs is the expected case, and the
  * sentence turned a working default into a fact to remember. The sentence that
  * matters when it fails is in **Settings → Maintenance & repair**, next to the
- * button that fixes it, and in the manual.
+ * button that fixes it.
  */
 fun terminalBanner(lang: Lang): String = when (lang) {
     Lang.ENGLISH -> ENGLISH_BANNER

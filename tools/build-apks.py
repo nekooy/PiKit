@@ -19,7 +19,7 @@ It does, in order:
   3. **The tests that can fail here.** The app's unit suite, the vendored VT
      parser's suite, and the tools that check what Gradle cannot see: the images
      (including that the packed relocator still passes its own `--selfcheck`), the
-     relocator against real `.deb` files, the manual's reflow and the terminal
+     relocator against real `.deb` files and the terminal
      banners, and the permission extension's rule table. `--skip-tests` bypasses
      them, which is the only reason that flag exists.
   4. **The four APKs** — `arm64`/`x64` × `debug`/`release` — **one Gradle
@@ -621,7 +621,6 @@ def run_tests() -> bool:
         # phone: the seed stamp must ignore package versions, the content stamp must
         # not ignore the product pins. Pinned here against the builder's functions.
         ("the revision stamps", lambda: python_tool("test-image-revisions.py")),
-        ("the manual's reflow", lambda: python_tool("reflow-manual.py", "--check")),
         ("the terminal banners", lambda: python_tool("check-locales.py")),
         # The provider table is a copy of pi's, and a copy is a thing that drifts:
         # a pi release that adds a provider does not fail `PiProviderTest`, which

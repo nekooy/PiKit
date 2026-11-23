@@ -37,17 +37,6 @@ through `local.properties` or `ANDROID_HOME`), Node and the Gradle wrapper. `npm
 `zstandard` are reported by name too, but only when an image actually has to be
 built — a machine that already has the images can rebuild the APKs without them.
 
-**Editing the in-app manual is a build step, not a text edit.** One checker holds
-`locales/ManualText*.kt`'s raw-string bodies to being a fixed point of
-`tools/reflow-manual.py`, so any edit there has to be followed by that script or
-`build-apks.py` fails on "the manual's reflow". Write the manual *unwrapped* and let the
-tool wrap it: a hand-wrapped line longer than the phone re-wraps into a two-line mess,
-which is the defect the pass exists for. Only CJK paragraphs reflow cleanly — an
-English paragraph containing an em dash (`—`) is **not** idempotent and alternates
-between two wrappings on every run — so write manual English without em dashes.
-`python tools/reflow-manual.py --check` reports the offending lines without rewriting
-anything.
-
 ## One command, or the three
 
 ```bash
@@ -59,7 +48,7 @@ missing rather than failing inside Gradle), assembles the runtime images whose A
 assets do not have them *or whose sources have changed since they were assembled*
 (below), runs the unit suites and the tools that check what Gradle cannot see — the
 images, the vendored documentation, the relocator against real `.deb` files, the
-revision stamps, the manual's reflow, the terminal banners, the provider table, the
+revision stamps, the terminal banners, the provider table, the
 agent's delete guard, the README icon — and then builds
 **`arm64`/`x64` × `debug`/`release`** in **one Gradle invocation**, so the four
 variant pipelines share one configuration phase and run in parallel. A failure
