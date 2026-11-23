@@ -12,6 +12,7 @@ import pi.kit.mob.ui.kit.PiCorner
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -83,6 +84,11 @@ fun PiSection(
  * The footer is the sentence a group of controls needs under it — "this many
  * providers need a key" — and it sits outside the card so the card stays a list of
  * controls and the prose stays prose.
+ *
+ * The card's fill is [PiTone.cardOnGlass], not the default `surfaceContainer`. A sheet's
+ * body is the glass material, measured at rgb(37) in the dark scheme, and the default
+ * card is rgb(36) — one step, so the frame disappeared and the list read as the panel
+ * itself. The wash keeps the group edge in both schemes for the reason its KDoc gives.
  */
 @Composable
 fun PiSheetSection(
@@ -100,7 +106,12 @@ fun PiSheetSection(
                 modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 8.dp),
             )
         }
-        Card(cornerRadius = PiCorner.radius, modifier = Modifier.fillMaxWidth(), content = content)
+        Card(
+            cornerRadius = PiCorner.radius,
+            colors = CardDefaults.defaultColors(color = PiTone.cardOnGlass()),
+            modifier = Modifier.fillMaxWidth(),
+            content = content,
+        )
         if (footer != null) {
             Text(
                 text = footer,

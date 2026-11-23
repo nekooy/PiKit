@@ -582,7 +582,24 @@ had. `PiSheetSection` keeps the card and states the smaller label inset the shee
 measure uses. The sheet's inside margin is 16dp rather than Miuix's 24dp for the same
 reason: 16 + the card's 16 is the density the reference uses, and 24 + 16 read as a
 page squeezed into a window. A group's footnote sits outside its card, where prose
-belongs rather than as a row of the list.
+belongs rather than as a row of the list. **The card's fill is `PiTone.cardOnGlass`, a
+4% wash of the surface ink, not the library's default `surfaceContainer`.** Measured on
+the dark scheme, the sheet's glass body is rgb(37) and the default card rgb(36) — one
+step, so the list had no visible frame and the panel read as one flat surface; the dark
+ramp has no alternative role (`surfaceContainer` and `surfaceContainerHigh` are both
+#242424 against the panel's #252525). Four percent is Mishka's own figure for a card
+inside `GlassBottomSheet`, and it puts the card at rgb(45) on that panel and rgb(227) on
+the light panel's rgb(235), the same relative group step in both schemes.
+`SettingsAlert`'s lines card takes the same fill because it is the one other card drawn
+on a glass window.
+
+**A field with a leading icon spends the icon's own start gutter, because the field has
+none.** Miuix's `TextField` drops its horizontal inside margin on the leading side when a
+leading icon is present — the icon's own box *is* the start padding. The picker's filter
+drew its magnifier at 4dp from the wall while the text beside it kept the field's wide
+gap; `SearchBarDefaults.LeadingIconStartPadding` (16dp) and `LeadingIconEndPadding` (8dp)
+are the library's own pair for that glyph, and the clear button takes the trailing pair
+(8dp/16dp) so the field's two marks sit on the same measured column.
 
 **A set of alternatives in a sheet is `SettingsChoiceRow`.** The row is a
 `BasicComponent` whose chosen member wears `MiuixIcons.Ok` at its trailing edge — the
@@ -1060,14 +1077,12 @@ one decision each makes that the shared vocabulary does not:
   is tinted with the secondary container under its own `SmallTitle`, not one lift per
   row, so a run of pinned conversations reads as a group rather than a stack of
   separate selections.
-- **Settings** — an identity card at the root (the agent's mark, name, state and the
-  profile answering), then `PiSection` groups by subject, rows that act, and pages
-  whose second level is a page rather than a dialog. A settings window is a bottom
-  sheet with the library's header and an explicit X, not a centred dialog; a list of
-  choices is a stack of `PiSheetSection`s with `SettingsChoiceRow`s that apply on one
-  tap. The rows carry the library's own typography and spacing; what the page decides
-  is *which* group a fact belongs to and which of those two window shapes answers it,
-  not how a row looks.
+- **Settings** — `PiSection` groups by subject, rows that act, and pages whose second
+  level is a page rather than a dialog. A settings window is a bottom sheet with the
+  library's header and an explicit X, not a centred dialog; a list of choices is a stack
+  of `PiSheetSection`s with `SettingsChoiceRow`s that apply on one tap. The rows carry
+  the library's own typography and spacing; what the page decides is *which* group a
+  fact belongs to and which of those two window shapes answers it, not how a row looks.
 
 ## What the rewrite kept, and what it removed
 

@@ -480,6 +480,12 @@ takes the same padding (§9.2).
   edge is the window's, so the last row sits under the gesture bar unless the content
   clears it. On a scrolling body the inset goes *inside* the scroll, so the text
   travels through it and the panel's fill still reaches the window's edge.
+- **A card inside a sheet is a glass card.** `PiSheetSection` fills its `Card` with
+  `PiTone.cardOnGlass()` — a 4% wash of the surface ink — not the default
+  `surfaceContainer`: measured in the dark scheme, the sheet's glass body is rgb(37)
+  and the default card rgb(36), so the list had no visible frame. A wash is used
+  rather than a surface-ramp role because the dark ramp has no step above
+  `surfaceContainer`; §13's *Dialogs, sheets* has the numbers.
 - **A sheet's header carries the explicit X.** `PiSheet` supplies it whenever the
   sheet has a title: scrim, back and drag are the dismissal gestures, but none is
   visible, and a settings list must be closable by a named control. The content is a

@@ -410,6 +410,25 @@ object PiTone {
     fun errorContainer(): Color = MiuixTheme.colorScheme.errorContainer
 
     /**
+     * The fill of a card laid on a glass sheet or dialog.
+     *
+     * A `Card` defaults to `surfaceContainer`, and a glass panel's body is very nearly
+     * that colour: measured on the dark scheme, the search-provider sheet drew its panel
+     * at rgb(37) and the card of rows at rgb(36) — one step, so the list had no visible
+     * frame and the sheet read as one flat surface. The ramp has no other role to reach
+     * for: in the dark scheme `background`, `surfaceContainer` and `surfaceContainerHigh`
+     * are all #242424, which is the same trap §13 records for every fill inside a
+     * container. A wash of the surface's own ink is contrast rather than a fixed colour,
+     * so it is the same relative step on the glass in either scheme; 4% is the value
+     * Mishka's own `GlassBottomSheet` cards use (`SpeedDetailSheet`), and it puts the
+     * dark card at rgb(45) on the rgb(37) panel and the light one at rgb(227) on
+     * a panel of about rgb(235) — the group step a card has on a page, without becoming a second
+     * panel inside the sheet.
+     */
+    @Composable
+    fun cardOnGlass(): Color = MiuixTheme.colorScheme.onSurface.copy(alpha = CARD_ON_GLASS_ALPHA)
+
+    /**
      * The fill behind quoted material: a code span, a fenced block, a chip.
      *
      * ## Why this is a wash of the surface's own ink
@@ -572,6 +591,16 @@ private val LIGHT_FIELD = Color(0xFFE8E8E8)
  * controls read.
  */
 private val LIGHT_CONTROL = Color(0xFFE6E6E6)
+
+/**
+ * How much of the surface ink a card on glass is washed with.
+ *
+ * Four percent is Mishka's own figure for a card inside `GlassBottomSheet`; it is small
+ * enough that the card stays a group on the panel rather than a raised rectangle, and
+ * large enough that the one-step dark ramp (`surfaceContainer` #242424 against the
+ * panel's measured rgb(37)) becomes a visible group edge.
+ */
+private const val CARD_ON_GLASS_ALPHA = 0.04f
 
 /**
  * How much of the surface's own ink a quotation's fill is washed with.

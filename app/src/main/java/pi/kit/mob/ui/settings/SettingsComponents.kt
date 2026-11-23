@@ -93,6 +93,7 @@ import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiSection
 import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiSheetSection
+import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piOverScroll
@@ -102,10 +103,12 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
+import top.yukonga.miuix.kmp.basic.SearchBarDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTitleDefaults
 import top.yukonga.miuix.kmp.basic.Text
@@ -544,6 +547,7 @@ fun SettingsAlert(
                 // second pair of each beside them read as a different kind of surface.
                 Card(
                     cornerRadius = PiCorner.radius,
+                    colors = CardDefaults.defaultColors(color = PiTone.cardOnGlass()),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -831,12 +835,28 @@ fun SettingsPickerSheet(
                             imageVector = MiuixIcons.Search,
                             contentDescription = null,
                             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(20.dp),
+                            // The same inset Miuix's own SearchBar gives its magnifier.
+                            // A field with a leading icon drops the field's 16dp start
+                            // padding entirely — the icon's own box is the whole start
+                            // gutter — so the 4dp this used to carry put the glyph
+                            // against the wall while the text beside it kept a wide gap.
+                            modifier = Modifier
+                                .padding(
+                                    start = SearchBarDefaults.LeadingIconStartPadding,
+                                    end = SearchBarDefaults.LeadingIconEndPadding,
+                                )
+                                .size(20.dp),
                         )
                     },
                     trailingIcon = if (needle.isNotEmpty()) {
                         {
-                            IconButton(onClick = { queryState.setTextAndPlaceCursorAtEnd("") }) {
+                            IconButton(
+                                onClick = { queryState.setTextAndPlaceCursorAtEnd("") },
+                                modifier = Modifier.padding(
+                                    start = SearchBarDefaults.TrailingIconStartPadding,
+                                    end = SearchBarDefaults.TrailingIconEndPadding,
+                                ),
+                            ) {
                                 Icon(
                                     imageVector = MiuixIcons.Clear,
                                     contentDescription = LocalStrings.current.common.clear,
