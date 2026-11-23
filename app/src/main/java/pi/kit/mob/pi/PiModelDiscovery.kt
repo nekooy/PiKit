@@ -1218,21 +1218,18 @@ internal fun storeProviderModels(store: File, providerId: String): Map<String, J
         id to if (compat == null) facts else JsonObject(facts + ("compat" to compat))
     }.toMap()
 
-/** The provider ids pi's store describes, in file order. */
-internal fun storeProviders(store: File): List<String> {
-    val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
-    if (text.isNullOrBlank()) return emptyList()
-    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
-        ?: return emptyList()
-    return root.keys.toList()
-}
+/**
+ * The provider ids pi's store describes, in file order.
+ *
+ * Read through [CatalogueStore], like every other reader of this file: one launch asks
+ * four different questions of it, and the document is parsed once per revision.
+ */
+internal fun storeProviders(store: File): List<String> =
+    CatalogueStore.root(store)?.keys?.toList().orEmpty()
 
 /** The provider's model objects out of pi's store, or none when it describes nothing. */
 private fun storeModels(store: File, providerId: String): List<JsonObject> {
-    val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
-    if (text.isNullOrBlank()) return emptyList()
-    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
-        ?: return emptyList()
+    val root = CatalogueStore.root(store) ?: return emptyList()
     val entry = root[providerId] as? JsonObject ?: return emptyList()
     val models = entry["models"] as? JsonArray ?: return emptyList()
     return models.mapNotNull { it as? JsonObject }
@@ -1254,10 +1251,7 @@ private fun storeModels(store: File, providerId: String): List<JsonObject> {
  * does the earlier provider's entry is as good a guess as the later one).
  */
 internal fun anyProviderModelFacts(store: File): Map<String, JsonObject> {
-    val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
-    if (text.isNullOrBlank()) return emptyMap()
-    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
-        ?: return emptyMap()
+    val root = CatalogueStore.root(store) ?: return emptyMap()
     val merged = LinkedHashMap<String, JsonObject>()
     for (value in root.values) {
         val entry = value as? JsonObject ?: continue
@@ -1306,10 +1300,7 @@ internal fun anyProviderModelFacts(store: File): Map<String, JsonObject> {
  */
 internal fun cataloguedThinkingShapes(store: File, protocol: String): Map<String, JsonObject> {
     if (protocol.isBlank()) return emptyMap()
-    val text = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
-    if (text.isNullOrBlank()) return emptyMap()
-    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
-        ?: return emptyMap()
+    val root = CatalogueStore.root(store) ?: return emptyMap()
     val shapes = LinkedHashMap<String, JsonObject>()
     for (value in root.values) {
         val models = (value as? JsonObject)?.get("models") as? JsonArray ?: continue

@@ -485,6 +485,13 @@ class PiHost private constructor(context: Context) {
             // and the reason a launch does not re-download thirty-two catalogues — while
             // a failure buys half an hour so an offline phone does not wait for the
             // timeout every time the agent starts.
+            //
+            // The invalidation is what makes the before/after comparison below mean
+            // anything: this process is the store's only writer, and its rewrite can land
+            // on the same millisecond *and* the same byte count as the document it
+            // replaced (a revalidation moves `checkedAt` and nothing else), which is
+            // exactly the pair the cache keys on. See [CatalogueStore].
+            CatalogueStore.invalidate()
             val succeeded = exit == 0
             cataloguePrefs.edit()
                 .putLong(
@@ -555,9 +562,7 @@ class PiHost private constructor(context: Context) {
      * write to a store that did not exist is a change — which it is: that refresh is
      * the one that fills the overlay in.
      */
-    private fun File.catalogueContent(): String =
-        if (isFile) runCatching { readText() }.getOrNull().let(::catalogueRevision)
-        else CATALOGUE_UNREADABLE
+    private fun File.catalogueContent(): String = catalogueRevisionOf(CatalogueStore.root(this))
 
     // ------------------------------------------------------------------ rebuild
 

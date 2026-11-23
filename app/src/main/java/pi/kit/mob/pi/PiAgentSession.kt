@@ -4227,8 +4227,10 @@ internal const val PIKIT_IMAGE_MAX_EDGE = 3000
 internal fun catalogueBasis(env: TermuxEnv, provider: PiProvider?): String {
     val version = PiInstallation.installedVersion(env).orEmpty()
     val store = File(env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME)
-    val content = if (store.isFile) runCatching { store.readText() }.getOrNull() else null
-    return "${provider?.id.orEmpty()}|$version|${catalogueRevision(content)}"
+    // The document, not its bytes: this runs on the launch path and on the model page, and
+    // the same store is read by four other questions on the same launch. See
+    // [CatalogueStore] for the one-parse-per-revision rule and who invalidates it.
+    return "${provider?.id.orEmpty()}|$version|${catalogueRevisionOf(CatalogueStore.root(store))}"
 }
 
 /**
@@ -4307,10 +4309,8 @@ internal fun needsCatalogueFacts(
  * this app cannot parse is a change, and the worst that can follow is one extra
  * restart. Pure, so the rule is pinned by a test rather than by a device.
  */
-internal fun catalogueRevision(text: String?): String {
-    if (text.isNullOrBlank()) return CATALOGUE_UNREADABLE
-    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
-        ?: return CATALOGUE_UNREADABLE
+internal fun catalogueRevisionOf(root: JsonObject?): String {
+    if (root == null) return CATALOGUE_UNREADABLE
     return buildString {
         root.forEach { (provider, entry) ->
             val fields = entry as? JsonObject ?: return@forEach
@@ -4321,6 +4321,21 @@ internal fun catalogueRevision(text: String?): String {
             append('\n')
         }
     }
+}
+
+/**
+ * [catalogueRevisionOf] a store's **text**, for a caller that has bytes rather than the
+ * parsed document.
+ *
+ * The document form is what the app uses: `CatalogueStore` has already parsed the file, and
+ * parsing it a second time here just to project two fields out of it would put the launch
+ * path's most expensive read back. This one stays for the tests and for a caller holding a
+ * fixture.
+ */
+internal fun catalogueRevision(text: String?): String {
+    if (text.isNullOrBlank()) return CATALOGUE_UNREADABLE
+    val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+    return catalogueRevisionOf(root)
 }
 
 /** The revision of a store that is absent, unreadable or not a JSON object. */
