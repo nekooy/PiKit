@@ -16,6 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -4512,13 +4513,17 @@ private val COMPOSER_FOOT = 10.dp
 
 
 /**
- * The field's own inset: 14dp beside the text and 12dp above and below it.
+ * The field's own inset: 14dp beside the text and 14dp above and below it.
  *
  * Miuix's default is 16dp on both axes, which is a settings field's height; a
- * composer's field is written in, not filled in, and the smaller vertical inset is
- * what keeps a one-line draft a field rather than a box.
+ * composer's field is written in, not filled in, and a smaller vertical inset keeps a
+ * one-line draft a field rather than a box. The vertical figure is 14dp rather than
+ * 12dp because the placeholder is drawn beside the field (see the composer's
+ * `TextField`): the library's label used to carry 2dp of platform font padding above
+ * and below its text, and moving that air into the inset keeps the resting frame the
+ * height it had before the placeholder stopped being measured.
  */
-private val COMPOSER_FIELD_INSET = DpSize(14.dp, 12.dp)
+private val COMPOSER_FIELD_INSET = DpSize(14.dp, 14.dp)
 
 
 /**
@@ -5158,61 +5163,96 @@ private fun Composer(
                     .piGlass(fieldShape),
             ) {
                 Column(Modifier.fillMaxWidth()) {
-                    TextField(
-                        cornerRadius = PiCorner.radius,
-                        value = value,
-                        onValueChange = onValueChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // The frame supplies the page gutter; this is the text's own
-                            // inset inside it, so the caret starts where the glyphs of a
-                            // chip above do rather than on the frame's wall.
-                            .padding(horizontal = 2.dp)
-                            .onFocusChanged { fieldFocused = it.isFocused }
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    // Watched, never consumed — the event still travels on to the
-                                    // field, which is what places the caret and raises the
-                                    // keyboard.
-                                    val down = awaitFirstDown(
-                                        requireUnconsumed = false,
-                                        pass = PointerEventPass.Initial,
-                                    )
-                                    val hadFocus = fieldFocused
-                                    // One gesture, one scope: the down is read on the Initial
-                                    // pass (before the field's own detector), and the gesture
-                                    // ends here on its lift. `down.pressed` is the value it had
-                                    // at the down event and never changes, so a loop on it never
-                                    // ends — the handler this replaced did exactly that, which
-                                    // left the clear below unreachable.
-                                    val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                                    // A *tap*, not a long press. A long press is the gesture that
-                                    // raises the selection, and dismissing the field on its lift
-                                    // closed the toolbar the same press had just opened — text
-                                    // selection in the composer would stop working the moment
-                                    // this handler started working. A gesture shorter than the
-                                    // long-press timeout is a tap; anything else is left alone.
-                                    val tapped = up != null &&
-                                        up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
-                                    if (hadFocus && tapped) fieldFocus.clearFocus()
-                                }
-                            },
-                        enabled = inputEnabled,
-                        // One short line: the hint that explained the `!` convention wrapped
-                        // to two lines in the field and looked like a rendering fault.
-                        label = placeholder,
-                        useLabelAsPlaceholder = true,
-                        maxLines = COMPOSER_MAX_LINES,
-                        insideMargin = COMPOSER_FIELD_INSET,
-                        textStyle = MiuixTheme.textStyles.body1,
-                        // The frame *is* the box: the field paints nothing and its focus
-                        // ring animates to nothing, so the only outline on screen is the
-                        // frame's own fill. `piFieldColors(background = Transparent)`
-                        // states both halves at once — the ring's colour *is* the
-                        // background's in this library.
-                        colors = piFieldColors(background = Color.Transparent),
-                        cursorBrush = piFieldCursor(),
-                    )
+                    // The placeholder is drawn here rather than handed to the library's
+                    // `label` slot. The label is a plain `Text` at 17sp with the platform's
+                    // font padding, while the field's own line has no font padding and is
+                    // 17sp `main`: the empty frame measured 182px against 171px after a
+                    // single character, because the label's line box was 23dp against the
+                    // text's 19dp. The library has no `placeholder` parameter, so the
+                    // placeholder is a sibling that does not take part in the field's
+                    // measurement — same `main` style, font padding off, at the field's own
+                    // inside margin. A one-line hint, because the `!` hint that wrapped to
+                    // two lines looked like a rendering fault.
+                    Box(Modifier.fillMaxWidth()) {
+                        TextField(
+                            cornerRadius = PiCorner.radius,
+                            value = value,
+                            onValueChange = onValueChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // The frame supplies the page gutter; this is the text's own
+                                // inset inside it, so the caret starts where the glyphs of a
+                                // chip above do rather than on the frame's wall.
+                                .padding(horizontal = 2.dp)
+                                .onFocusChanged { fieldFocused = it.isFocused }
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        // Watched, never consumed — the event still travels on to the
+                                        // field, which is what places the caret and raises the
+                                        // keyboard.
+                                        val down = awaitFirstDown(
+                                            requireUnconsumed = false,
+                                            pass = PointerEventPass.Initial,
+                                        )
+                                        val hadFocus = fieldFocused
+                                        // One gesture, one scope: the down is read on the Initial
+                                        // pass (before the field's own detector), and the gesture
+                                        // ends here on its lift. `down.pressed` is the value it had
+                                        // at the down event and never changes, so a loop on it never
+                                        // ends — the handler this replaced did exactly that, which
+                                        // left the clear below unreachable.
+                                        val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                                        // A *tap*, not a long press. A long press is the gesture that
+                                        // raises the selection, and dismissing the field on its lift
+                                        // closed the toolbar the same press had just opened — text
+                                        // selection in the composer would stop working the moment
+                                        // this handler started working. A gesture shorter than the
+                                        // long-press timeout is a tap; anything else is left alone.
+                                        val tapped = up != null &&
+                                            up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
+                                        if (hadFocus && tapped) fieldFocus.clearFocus()
+                                    }
+                                },
+                            enabled = inputEnabled,
+                            label = "",
+                            maxLines = COMPOSER_MAX_LINES,
+                            insideMargin = COMPOSER_FIELD_INSET,
+                            // `main` is the field's own default and the style every other text
+                            // field in the app already uses; the placeholder below is copied
+                            // from the same line box so typing cannot move the frame.
+                            textStyle = MiuixTheme.textStyles.main,
+                            // The frame *is* the box: the field paints nothing and its focus
+                            // ring animates to nothing, so the only outline on screen is the
+                            // frame's own fill. `piFieldColors(background = Transparent)`
+                            // states both halves at once — the ring's colour *is* the
+                            // background's in this library.
+                            colors = piFieldColors(background = Color.Transparent),
+                            cursorBrush = piFieldCursor(),
+                        )
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = MiuixTheme.textStyles.main.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    // The field's own line has no platform font padding; the
+                                    // label's did, which is the height this placeholder would
+                                    // otherwise bring back when the text is empty.
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                ),
+                                color = MiuixTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .fillMaxWidth()
+                                    .padding(
+                                        start = COMPOSER_FIELD_INSET.width + 2.dp,
+                                        end = COMPOSER_FIELD_INSET.width,
+                                        top = COMPOSER_FIELD_INSET.height,
+                                    ),
+                            )
+                        }
+                    }
 
                     Row(
                         modifier = Modifier
