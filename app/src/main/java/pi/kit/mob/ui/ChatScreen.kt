@@ -238,7 +238,6 @@ import top.yukonga.miuix.kmp.material.GlassColorBlendMode
 import top.yukonga.miuix.kmp.material.GlassColorLayer
 import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.material.GlassShadows
-import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -2715,7 +2714,13 @@ private fun ChatPage(
 
         // The Markdown source of the message, in a sheet of its own: what the reader asked
         // for when they chose "select text" is the *text*, not a selection mode they then have
-        // to discover. Everything here is selectable and copyable without a second gesture.
+        // to discover.
+        //
+        // **The sheet carries no copy row.** The menu that opened it already copies this
+        // same source (`itemSource`), so a second copy button in the sheet was the same
+        // action twice, one tap apart, with the same toast. What is left is what the sheet
+        // is for: text a finger can select, and the platform's own toolbar acting on the
+        // selection the reader actually made.
         //
         // The subject is held through the exit: `show` follows `sourceFor`, but the content
         // reads the last non-null value, or dismissing clears the one thing the leaving sheet
@@ -2730,35 +2735,27 @@ private fun ChatPage(
         ) {
             if (sourceItem != null) {
                 val source = itemSource(sourceItem)
-                val sourceClipboard = messageClipboard
-                val sourceScope = messageScope
-                val sourceToast = messageToasts
-                Column(
-                    Modifier
+                SelectionContainer(
+                    modifier = Modifier
                         .fillMaxWidth()
+                        // The sheet's own edge is the window's, so the text clears the
+                        // gesture strip itself (docs/UI.md, *Dialogs, sheets*). There is
+                        // no row under it any more, so the 12dp that used to separate the
+                        // copy row from the panel's edge went with the row: the text's own
+                        // padding is the last air above the inset.
                         .padding(horizontal = 12.dp)
-                        // The sheet's own edge is the window's; the copy row clears the
-                        // gesture strip itself (docs/UI.md, *Dialogs, sheets*).
-                        .padding(bottom = 12.dp + piSheetBottomInset()),
+                        .padding(bottom = piSheetBottomInset()),
                 ) {
-                    SelectionContainer {
-                        Text(
-                            text = source,
-                            style = MiuixTheme.textStyles.body2,
-                            color = MiuixTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 420.dp)
-                                .verticalScroll(rememberScrollState())
-                                .padding(12.dp),
-                        )
-                    }
-                    MessageAction(text.chat.copyMessage, icon = MiuixIcons.Copy) {
-                        sourceScope.launch {
-                            sourceClipboard.setClipEntry(clipEntryFor(source))
-                        }
-                        sourceToast?.show(text.chat.copied)
-                    }
+                    Text(
+                        text = source,
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                    )
                 }
             }
         }
@@ -4233,44 +4230,8 @@ private fun MessageMeta(
 }
 
 /**
- * One row of the message menu.
- *
- * A plain clickable row rather than `PiMenuRow`: that one is built for a popup column
- * measured with an unbounded width (see the note in AGENTS.md), and this list is a
- * column with a known width.
+ * The text a message's menu copies: the source, not its rendering.
  */
-@Composable
-private fun MessageAction(
-    label: String,
-    icon: ImageVector? = null,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .squircleClip(PiCorner.radius)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        icon?.let {
-            Icon(
-                imageVector = it,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MiuixTheme.colorScheme.onSurface,
-            )
-        }
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.body1,
-            color = MiuixTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-/** The text a message's menu copies: the source, not its rendering. */
 private fun itemSource(item: ChatItem): String = when (item) {
     is ChatItem.User -> item.text
     is ChatItem.Assistant -> item.text
@@ -4281,8 +4242,8 @@ private fun itemSource(item: ChatItem): String = when (item) {
 /**
  * The rows a message's menu offers.
  *
- * One list rather than three `MessageAction`s drawn by hand: a menu is a component — its
- * panel, row height, press fill and dismissal are the popup's — and the same
+ * One list of [MenuAction]s rather than three rows drawn by hand: a menu is a component —
+ * its panel, row height, press fill and dismissal are the popup's — and the same
  * [PiPopupMenu] the drawer's row actions and the files page's row menu open. The three
  * actions read as one list: copy the source, open it in a sheet to select text from, or
  * branch the conversation from this message. The branch needs the *count* of message
