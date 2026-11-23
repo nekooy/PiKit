@@ -710,6 +710,15 @@ class PiHost private constructor(context: Context) {
      * the reader switching away, a background turn settling, and a conversation leaving
      * the pool. The sweep is idempotent — a stopped conversation is not in the list — so
      * the three watchers can fire freely.
+     *
+     * **The three watchers are three coroutines, which is why [pendingStops] is guarded.**
+     * They run on `Dispatchers.IO` and a single change of conversation fires two of them at
+     * once — `closeConversation` writes the pool and then the active conversation — so the
+     * map below was written and read by two threads at a time. A plain `HashMap` under that
+     * is a lost entry at best (a grace job nobody records, so the conversation is never
+     * stopped and never cancelled) and a corrupted table at worst; the job bodies also touch
+     * the map when they finish. [stopLock] is what makes the two halves one critical section,
+     * and the whole map — including the launches — is therefore inside it.
      */
     private fun sweepIdleAgents() {
         scope.launch { _active.collect { stopIdleAgents() } }
@@ -730,7 +739,10 @@ class PiHost private constructor(context: Context) {
     /** Conversations waiting out the grace period before their agent is stopped. */
     private val pendingStops = mutableMapOf<PiAgentSession, kotlinx.coroutines.Job>()
 
-    private fun stopIdleAgents() {
+    /** Guards [pendingStops] against the three watchers and the grace jobs' own removals. */
+    private val stopLock = Mutex()
+
+    private suspend fun stopIdleAgents(): Unit = stopLock.withLock {
         val active = _active.value
         // The two most recently used idle conversations stay warm even past the grace.
         // The report that produced this is "switching to a conversation takes several
@@ -764,7 +776,7 @@ class PiHost private constructor(context: Context) {
                     Log.i(TAG, "stopping an idle conversation's agent")
                     idle.stopAgent()
                 }
-                pendingStops.remove(idle)
+                stopLock.withLock { pendingStops.remove(idle) }
             }
         }
     }
