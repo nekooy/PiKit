@@ -996,11 +996,11 @@ interface Strings {
         val languageSubtitle: String
 
         /**
-         * Personalization: how a launch lands, which palette draws it, and which
-         * of the two marks the home screen shows.
+         * Personalization: how a launch lands, which palette and accent draw it, and
+         * which of the two marks the home screen shows.
          *
-         * None of the three is about the agent, so they share one page rather than
-         * sitting as three one-row pages on the root.
+         * None of them is about the agent, so they share one page rather than sitting
+         * as a row of one-row pages on the root.
          */
         val personalization: String
         val personalizationSubtitle: String
@@ -1037,14 +1037,23 @@ interface Strings {
         /**
          * Light, dark, or the system's own answer.
          *
-         * The palette itself is Miuix's and is not offered: there is no accent to
-         * name and no wallpaper switch, because the interface is drawn in the
-         * library's own light and dark schemes (`PiKitMiuixTheme`).
+         * The neutrals are Miuix's and are not offered; the one hue the reader may
+         * move is [accentColor], and `PiKitMiuixTheme` derives only its roles.
          */
         val theme: String
         val themeSystem: String
         val themeLight: String
         val themeDark: String
+
+        /**
+         * The interface's accent, as a row of the eight swatches under a named value.
+         *
+         * The subtitle names what the hue actually moves — the library's focus,
+         * selection and action controls — rather than saying "the theme colour",
+         * because the neutrals do not follow it.
+         */
+        val accentColor: String
+        val accentColorSubtitle: String
 
         /**
          * The launcher icon: the black mark or the white one.
@@ -1066,7 +1075,7 @@ interface Strings {
          * by the app, not stored — so the two never look alike and neither has to be
          * set up before the first message. A speaker's name is a word beside that mark,
          * never text inside the disc; blank means "no name", and a chosen picture wins
-         * over the mark.
+         * over the mark. The disc's colour follows the accent until a swatch is chosen.
          */
         val avatars: String
         val showAvatars: String
@@ -1100,11 +1109,21 @@ interface Strings {
         val avatarColor: String
 
         /**
-         * The spoken name of one swatch.
+         * In the avatar sheet: whether the disc follows the interface's accent.
          *
-         * A swatch is a colour and no words, so this is its only accessible name: eight
-         * unnamed circles are eight buttons a screen-reader user cannot tell apart. The
-         * mapping is written in each language rather than derived from the enum's
+         * On is the default, and the hint says what turning it off means — a swatch
+         * pins one of the eight and the disc stops following the accent.
+         */
+        val avatarFollowAccent: String
+        val avatarFollowAccentHint: String
+
+        /**
+         * The spoken name of one colour swatch.
+         *
+         * Shared by the avatar sheet and the accent row, because they are the same eight
+         * seeds. A swatch is a colour and no words, so this is its only accessible name:
+         * eight unnamed circles are eight buttons a screen-reader user cannot tell apart.
+         * The mapping is written in each language rather than derived from the enum's
          * identifier, and the enum's order is still the order the swatches are offered.
          */
         fun avatarColorName(color: AvatarColor): String

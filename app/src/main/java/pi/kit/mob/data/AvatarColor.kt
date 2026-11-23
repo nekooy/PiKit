@@ -5,19 +5,17 @@ import androidx.compose.ui.graphics.Color
 /**
  * The eight colours a transcript avatar may be drawn in.
  *
- * ## Why this is no longer the interface's accent
+ * ## A content colour, and the accent's palette
  *
- * It used to be: the same enum seeded the palette's whole accent ramp, and the
- * personalization page offered it as swatches under a "theme colour" heading. The
- * interface now takes Miuix's own palette whole — the library's `lightColorScheme()`
- * and `darkColorScheme()` — so there is no accent for a user to choose, and this
- * enum has one job left: the disc behind an avatar's label or picture.
+ * A disc is *content*, not a scheme role: it has to stay tellable from the seven
+ * beside it and from the surface it sits on, and it deliberately does not follow the
+ * light/dark switch — a red avatar is red in both, the way a photograph is. Which is
+ * also why these are hand-picked: a derivation from one seed would give eight shades
+ * of one hue, and eight shades are not eight choices.
  *
- * That is a *content* colour, not a scheme role. It has to stay tellable from the
- * seven beside it and from the surface it sits on, and it deliberately does not
- * follow the light/dark switch — a red avatar is red in both, the way a photograph
- * is. Which is also why these are hand-picked: a derivation from one seed would
- * give eight shades of one hue, and eight shades are not eight choices.
+ * The same eight seeds are the interface's accent choices ([AccentColor]). An accent
+ * is a hue rather than a disc, so the theme fills in its light and dark roles from
+ * one seed; the discs stay exactly these colours in both schemes.
  *
  * [BLUE] is [DEFAULT] so a fresh install's agent avatar is the app's own blue, and
  * the enum's order is the order the swatches are offered in.
@@ -43,5 +41,16 @@ enum class AvatarColor(
 
         fun fromCode(code: String?): AvatarColor =
             entries.firstOrNull { it.code == code } ?: DEFAULT
+
+        /**
+         * The stored colour, or null when the reader has never chosen one.
+         *
+         * The settings' two avatar colours use this rather than [fromCode]: an absent
+         * or blank value is the "follow the accent colour" state, which is not the
+         * same as having chosen [DEFAULT].
+         */
+        fun fromCodeOrNull(code: String?): AvatarColor? =
+            code?.takeIf { it.isNotBlank() }
+                ?.let { value -> entries.firstOrNull { it.code == value } }
     }
 }

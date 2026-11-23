@@ -33,8 +33,9 @@ import kotlinx.serialization.json.jsonPrimitive
  *   the reason `PiSettings.chatSystemPrompt` was: a rendered timestamp would be stale by
  *   the next process and the placeholder's position would be impossible to move.
  * @param avatarColor one of [AvatarColor]'s codes, or blank to inherit the
- *   personalization page's colour. A code rather than the enum so a value written by a
- *   build that knows a colour this one does not still round-trips instead of throwing.
+ *   personalization page's colour — which may itself be following the accent. A code
+ *   rather than the enum so a value written by a build that knows a colour this one
+ *   does not still round-trips instead of throwing.
  * @param avatarImage an absolute path to a picture this app owns
  *   ([AvatarStore]'s copy), or blank to inherit the personalization page's picture.
  */
@@ -54,7 +55,7 @@ data class ChatPreset(
     fun identity(settings: PiSettings): ChatIdentity = ChatIdentity(
         name = name.ifBlank { settings.aiAvatarName },
         image = avatarImage.ifBlank { settings.aiAvatarImage },
-        color = color ?: settings.aiAvatarColor,
+        color = color ?: settings.aiAvatarDisc,
     )
 }
 

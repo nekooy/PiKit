@@ -167,21 +167,29 @@ A page assembled from the library's components is still drawn in the colours tho
 components were drawn for; the page's two groups are the price of removing the shadows
 without losing the layers.
 
-**An accent picker and a wallpaper switch were tried and removed.** The rewrite
-first kept both: a `ThemeColor` seed went in as `keyColor` and the library's
-material-colour engine derived all hundred and forty roles from it, with dynamic
-colour expressed as "no key colour" so the platform's wallpaper palette answered.
-It compiled, it looked plausible, and it was the wrong thing to own — a derived
-scheme is a *different* palette wearing the library's component shapes, so the
-container steps and the disabled pairs no longer sat where the library's own
-screens put them. The measured consequence is small and real: a seeded tonal-spot
-scheme paints `secondary` as a tinted grey, so `PiTone.live()` — a role this app
-names — had to move to the tertiary pair, where the library's own scheme keeps a
-quiet blue.
+**The accent is one hue, and it does not re-decide the palette.** The rewrite first
+fed a `ThemeColor` seed to the library's `keyColor` and let its material-colour engine
+derive all hundred and forty roles, with the wallpaper expressed as "no key colour".
+It compiled, it looked plausible, and it was the wrong thing to own — a derived scheme
+is a *different* palette wearing the library's component shapes, so the container
+steps and the disabled pairs no longer sat where the library's own screens put them.
+The measured consequence is small and real: a seeded tonal-spot scheme paints
+`secondary` as a tinted grey. The wallpaper switch stays removed for that reason.
 
-The eight-colour enum outlived the picker as `AvatarColor`: an avatar's disc is
-*content*, not a scheme role, and a red avatar is red in both schemes the way a
-photograph is.
+What came back is narrower: `AccentColor` (the same eight seeds as the avatars) goes
+through `accentRoles`, which derives only the primary pair and its containers, the
+disabled fills, the tertiary pair and the slider's key points, at the library's own
+lightness and saturation weights. Every neutral, error and surface role stays exactly
+what `lightColorScheme()` / `darkColorScheme()` said; `AccentColor.BLUE` is returned
+whole rather than derived, so the default appearance is still the palette the rewrite
+settled on. The accent's ink is chosen from the fill's luminance rather than pinned to
+white, because the amber and green at the blue's lightness do not carry it.
+
+The eight-colour enum is now two roles over one palette. `AvatarColor` is the disc:
+*content*, red in both schemes the way a photograph is. `AccentColor` is the scheme
+role: its seed is turned into the light and dark accent roles and moves with the
+palette. Both are hand-picked for the same reason the old enum was — a derivation from
+one seed gives eight shades of one hue, and eight shades are not eight choices.
 
 Two roles the app names itself, both taken from the library's scheme rather than
 invented:
@@ -189,8 +197,9 @@ invented:
 - **`PiTone.live()` / `liveContainer()`** — the colour that means *a turn is
   streaming*, *an agent is working*, *a process is still going*. Miuix has no
   "live" role; the kit maps it to the `tertiaryContainer` / `onTertiaryContainer`
-  pair, which is the palette's quiet blue — tellable from an action without being a
-  second accent.
+  pair. The accent derivation fills that pair with a pale wash of the chosen hue, so
+  the pill is a quieter neighbour of the accent rather than a second colour; under the
+  default it is the library's quiet blue.
 - **`PiTone.error()` / `errorContainer()`** — the scheme's error pair, re-exported so
   a call site says *danger* rather than naming a role.
 
@@ -1052,7 +1061,8 @@ one decision each makes that the shared vocabulary does not:
   holding the text **and the four controls**, in the order a thumb meets them: the
   command list and the attach control at the field's left corner, the context
   reading and the send button at its right — a glass disc whose 92% colour layer is the
-  accent disc with a white arrow while it can send, and the error disc with a white square
+  accent disc with the `onPrimary` arrow while it can send (white under the default blue,
+  black under a bright accent), and the error disc with a white square
   while an answer streams (`GlassFloatingActionButton` over the same `PiGlass.material()` as
   the frame). Grouping the two controls that *add something to the message* at the
   field's left is the correction: they are one kind of thing, and the corner a thumb

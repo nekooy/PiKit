@@ -425,6 +425,10 @@ takes the same padding (§9.2).
   the panel has no filter field, so thirty-odd provider ids are a sheet and three alternatives
   are a row. The library ticks when the panel opens and is silent on the pick, so the call
   site performs `PiHaptics.choose()` — and only when the pick changes something.
+  **The one alternative set that is not a dropdown is a colour.** The accent row and
+  the avatar editor draw `SettingsSwatch` discs, because a colour is recognised before
+  it is read; the row above them (`BasicComponent` for the accent, the sheet's own
+  title for an avatar) carries the name of the answer, which a ring cannot.
 - **A row that raises a question is inert; its switch is the control.** The storage
   grants ask every time they flip, so the row does not toggle and the finger reaches
   the switch. A row that asks nothing (backup's switches) stays row-toggling.
@@ -552,7 +556,9 @@ schemes, its own sixteen colours), the setup screen's `SETUP_*` constants
 (`PiKitRoot.kt` — the launcher icon's black and white, fixed because that screen is
 dark while the app may be light), and `data/AvatarColor.kt` (the eight hand-picked
 disc colours — an avatar is *content*, red in both schemes the way a photograph is,
-so it does not follow the light/dark switch; §13). Everywhere else the colour is
+so it does not follow the light/dark switch. `data/AccentColor.kt` reuses those same
+seeds for the accent choices; it owns no literal, and `PiKitTheme` derives the accent
+roles from them; §13). Everywhere else the colour is
 `MiuixTheme.colorScheme.*` or a `PiTone` role. A screen that names a role directly
 where a semantic exists (`error` instead of `PiTone.error()`) is saying *which
 component* rather than *what it means*; a screen that invents a literal is the drift

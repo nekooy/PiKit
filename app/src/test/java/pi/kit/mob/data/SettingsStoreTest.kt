@@ -5,6 +5,7 @@ import android.content.ContextWrapper
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 import pi.kit.mob.locales.Lang
 import java.io.File
@@ -61,6 +62,7 @@ class SettingsStoreTest {
             language = Lang.JAPANESE,
             openNewOnLaunch = false,
             themeMode = ThemeMode.DARK,
+            accentColor = AccentColor.TEAL,
             fontSize = FontSize.XL,
             launcherIcon = LauncherIcon.DARK,
             permissionMode = PermissionMode.FULL_ACCESS,
@@ -140,6 +142,42 @@ class SettingsStoreTest {
 
         assertFalse("the history list starts without a date on every row", store.read().showHistoryTime)
         assertEquals("a message starts with its time", true, store.read().showMessageTime)
+    }
+
+    @Test
+    fun `a fresh install follows the accent for both avatars`() {
+        val store = newStore()
+
+        assertEquals(AccentColor.DEFAULT, store.read().accentColor)
+        assertNull("the agent has not chosen a disc colour", store.read().aiAvatarColor)
+        assertNull("the reader has not chosen a disc colour", store.read().userAvatarColor)
+        assertEquals(
+            "the disc in effect is the accent's",
+            AccentColor.DEFAULT.avatar,
+            store.read().aiAvatarDisc,
+        )
+        assertEquals(AccentColor.DEFAULT.avatar, store.read().userAvatarDisc)
+    }
+
+    @Test
+    fun `a chosen avatar colour stops following a changed accent`() {
+        val preferences = FakeSharedPreferences()
+        val files = tempDir()
+        val store = SettingsStore(FakeContext(preferences, files))
+
+        store.update {
+            it.copy(accentColor = AccentColor.PURPLE, aiAvatarColor = AvatarColor.RED)
+        }
+        val rebuilt = SettingsStore(FakeContext(preferences, files))
+
+        assertEquals(
+            "the accent is the reader's choice",
+            AccentColor.PURPLE,
+            rebuilt.read().accentColor,
+        )
+        assertEquals("the chosen disc is kept", AvatarColor.RED, rebuilt.read().aiAvatarDisc)
+        assertNull("the other avatar still follows", rebuilt.read().userAvatarColor)
+        assertEquals(AccentColor.PURPLE.avatar, rebuilt.read().userAvatarDisc)
     }
 
     @Test

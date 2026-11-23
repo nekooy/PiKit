@@ -1812,6 +1812,7 @@ private fun ChatPage(
     val presetIdentity = activePreset?.identity(saved)
     val avatars = remember(
         saved.showAvatars,
+        saved.accentColor,
         saved.aiAvatarName,
         saved.aiAvatarImage,
         saved.aiAvatarColor,
@@ -1832,14 +1833,14 @@ private fun ChatPage(
                 // makes a translator preset sign its answers as itself.
                 aiName = (presetIdentity?.name ?: saved.aiAvatarName).ifBlank { null },
                 aiImage = (presetIdentity?.image ?: saved.aiAvatarImage).ifBlank { null },
-                aiColor = (presetIdentity?.color ?: saved.aiAvatarColor).seed,
+                aiColor = (presetIdentity?.color ?: saved.aiAvatarDisc).seed,
                 // The reader's blank is the person figure for the same reason: the two
                 // speakers must not fall back to the same figure, and the figure is the
                 // personalization page's — the page that lets the reader replace it is
                 // the one that decides what it is when they have not.
                 userName = saved.userAvatarName.ifBlank { null },
                 userImage = saved.userAvatarImage.ifBlank { null },
-                userColor = saved.userAvatarColor.seed,
+                userColor = saved.userAvatarDisc.seed,
             )
         }
     }

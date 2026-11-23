@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import pi.kit.mob.data.AccentColor
 import pi.kit.mob.data.PiSettings
 import pi.kit.mob.data.ThemeMode
 import top.yukonga.miuix.kmp.basic.TextFieldColors
@@ -42,28 +43,38 @@ import top.yukonga.miuix.kmp.material.GlassShadow
 import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.Colors
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import kotlin.math.abs
 
 /**
- * The interface's theme: the library's palette, one page step deeper, and the reader's
- * light/dark choice.
+ * The interface's theme: the library's palette, one page step deeper, the reader's
+ * light/dark choice, and one hue of their own.
  *
- * ## Why there is no accent here
+ * ## What the accent moves, and what it leaves alone
  *
- * The app used to derive its palette from a chosen hue: a `ThemeColor` seed went
- * into a `ThemeController` as its `keyColor`, and the library's material-colour
- * engine turned that one colour into a hundred and forty roles. It worked, and it
- * was still the wrong thing to own — the palette a Miuix screen is designed against
- * is *this* palette, the one the library ships, and a derived scheme is a different
- * one wearing its component shapes. The accent picker and the wallpaper switch are
- * therefore gone, and this function passes no seed and no colour spec.
+ * A `ThemeColor` seed used to go into a `ThemeController` as its `keyColor`, and the
+ * library's material-colour engine derived all hundred and forty roles from it. That
+ * was the wrong thing to own: a seeded tonal-spot scheme paints the neutrals as
+ * tinted greys and the containers at tones tuned for Material's screens, so a page
+ * was no longer drawn in the colours its components were designed for.
  *
- * What that buys is the thing the rewrite was for: a page assembled from library
- * components is drawn in the colours those components were drawn for. What it
- * costs is the one thing a seed gave — a hue of one's own — and the app no longer
- * has a reason to want it.
+ * The accent is back, with a narrower job. [accentRoles] derives only the roles the
+ * accent owns — the primary pair and its containers, the disabled fills, the
+ * tertiary container that draws *live*, and the slider's key points — at the
+ * library's own lightness and saturation weights, and every neutral, error and
+ * surface role stays exactly what `lightColorScheme()` / `darkColorScheme()` said.
+ * [AccentColor.BLUE] is the default and is not derived at all: the library's blue is
+ * returned whole, so a reader who never opens the swatches sees the palette the
+ * rewrite settled on.
+ *
+ * The derivation is HSL on purpose. The one judgement a hue needs is its chroma;
+ * lightness is what makes a filled button readable under `onPrimary`, and the
+ * numbers below are the library's own light/dark pair (#3482FF / #277AF7) stated as
+ * relationships rather than copied as literals.
  *
  * ## The light scheme's two groups
  *
@@ -96,22 +107,13 @@ fun PiKitMiuixTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val controller = remember(mode) {
+    val lightColors = remember(settings.accentColor) { appLightScheme(settings.accentColor) }
+    val darkColors = remember(settings.accentColor) { appDarkScheme(settings.accentColor) }
+    val controller = remember(mode, lightColors, darkColors) {
         ThemeController(
             colorSchemeMode = ColorSchemeMode.System,
-            lightColors = lightColorScheme(
-                surface = LIGHT_PAGE,
-                background = LIGHT_CARD,
-                surfaceContainer = LIGHT_CARD,
-                surfaceContainerHighest = Color.White,
-                secondaryContainer = LIGHT_FIELD,
-                // The library's own #F0F0F0 is *this app's page*, so every filled
-                // secondary control — a group's "new configuration", a form's Cancel,
-                // the fetch beside Add — drew its label on a rectangle of its own page
-                // and disappeared. See `LIGHT_CONTROL`.
-                secondaryVariant = LIGHT_CONTROL,
-                disabledSecondaryVariant = LIGHT_CONTROL,
-            ),
+            lightColors = lightColors,
+            darkColors = darkColors,
             isDark = mode,
         )
     }
@@ -157,6 +159,194 @@ fun PiKitMiuixTheme(
             MiuixTheme(controller = controller, content = content)
         }
     }
+}
+
+/**
+ * The light scheme: the library's roles, the app's two surface groups, and the accent.
+ *
+ * The surface roles are applied *after* the accent so a hue can never move the page,
+ * card or control groups — the step that made the light scheme two groups is the one
+ * thing the accent is not allowed to touch.
+ */
+private fun appLightScheme(accent: AccentColor): Colors =
+    lightColorScheme()
+        .withAccent(accent, dark = false)
+        .copy(
+            surface = LIGHT_PAGE,
+            background = LIGHT_CARD,
+            surfaceContainer = LIGHT_CARD,
+            surfaceContainerHighest = Color.White,
+            secondaryContainer = LIGHT_FIELD,
+            // The library's own #F0F0F0 is *this app's page*, so every filled
+            // secondary control — a group's "new configuration", a form's Cancel,
+            // the fetch beside Add — drew its label on a rectangle of its own page
+            // and disappeared. See `LIGHT_CONTROL`.
+            secondaryVariant = LIGHT_CONTROL,
+            disabledSecondaryVariant = LIGHT_CONTROL,
+        )
+
+/**
+ * The dark scheme: the library's, with the accent's roles when one was chosen.
+ *
+ * The dark palette already has the two surface groups (the page and cards share
+ * `#242424`, the floating controls are `#2D2D2D`), so there is nothing to override.
+ */
+private fun appDarkScheme(accent: AccentColor): Colors =
+    darkColorScheme().withAccent(accent, dark = true)
+
+/**
+ * Replaces the roles the accent owns and nothing else.
+ *
+ * [AccentColor.BLUE] returns the scheme unchanged: the library's blue *is* the
+ * default accent, and deriving a near-copy of it would move the app's default
+ * appearance for no answer the reader asked for.
+ */
+private fun Colors.withAccent(accent: AccentColor, dark: Boolean): Colors {
+    if (accent == AccentColor.BLUE) return this
+    val roles = accentRoles(accent.seed, dark)
+    return copy(
+        primary = roles.primary,
+        onPrimary = roles.onPrimary,
+        primaryVariant = roles.primaryVariant,
+        onPrimaryVariant = roles.onPrimaryVariant,
+        disabledPrimary = roles.disabledPrimary,
+        disabledOnPrimary = roles.disabledOnPrimary,
+        disabledPrimaryButton = roles.disabledPrimaryButton,
+        disabledOnPrimaryButton = roles.disabledOnPrimaryButton,
+        disabledPrimarySlider = roles.disabledPrimarySlider,
+        primaryContainer = roles.primaryContainer,
+        onPrimaryContainer = roles.onPrimaryContainer,
+        tertiaryContainer = roles.tertiaryContainer,
+        onTertiaryContainer = roles.onTertiaryContainer,
+        tertiaryContainerVariant = roles.tertiaryContainer,
+        sliderKeyPoint = roles.sliderKeyPoint,
+        sliderKeyPointForeground = roles.sliderKeyPointForeground,
+    )
+}
+
+/** The accent's own roles, after [accentRoles] has derived them for one scheme. */
+private data class AccentRoles(
+    val primary: Color,
+    val onPrimary: Color,
+    val primaryVariant: Color,
+    val onPrimaryVariant: Color,
+    val disabledPrimary: Color,
+    val disabledOnPrimary: Color,
+    val disabledPrimaryButton: Color,
+    val disabledOnPrimaryButton: Color,
+    val disabledPrimarySlider: Color,
+    val primaryContainer: Color,
+    val onPrimaryContainer: Color,
+    val tertiaryContainer: Color,
+    val onTertiaryContainer: Color,
+    val sliderKeyPoint: Color,
+    val sliderKeyPointForeground: Color,
+)
+
+/**
+ * One seed's accent roles for one scheme.
+ *
+ * ## The lightness is the library's, the hue is the reader's
+ *
+ * The default light/dark pair is HSL(217°, 100%, 60%) and HSL(216°, 93%, 56%) — the
+ * same hue, saturation and a lightness three points apart. Every other accent keeps
+ * its own hue and uses the same lightness, with its saturation clamped so a nearly
+ * grey seed (green) still reads as a colour and a fully saturated one (teal) does
+ * not turn into a neon sign.
+ *
+ * The container, disabled and live roles are fixed steps of that hue rather than
+ * Material's tonal palette: the point is that the library's component shapes keep
+ * the weights they were drawn with, so only the chroma moves.
+ *
+ * ## The ink is chosen, not pinned
+ *
+ * Miuix's own blue is dark enough for white, but an amber or a green at the same
+ * lightness is not. [inkOn] asks the fill's luminance and returns the side of the
+ * contrast pair that is legible, which is the same rule `PiAvatar` uses for its
+ * discs.
+ */
+private fun accentRoles(seed: Color, dark: Boolean): AccentRoles {
+    val (hue, sourceSaturation, _) = seed.toHsl()
+    val saturation = sourceSaturation.coerceIn(0.45f, 0.85f)
+    // The library's own light/dark weights: #3482FF is L60, #277AF7 is L56.
+    val primary = hsl(hue, saturation, if (dark) 0.56f else 0.60f)
+
+    return if (dark) {
+        val container = hsl(hue, saturation * 0.55f, 0.45f)
+        AccentRoles(
+            primary = primary,
+            onPrimary = inkOn(primary),
+            primaryVariant = hsl(hue, saturation, 0.50f),
+            onPrimaryVariant = hsl(hue, saturation * 0.45f, 0.80f),
+            disabledPrimary = hsl(hue, saturation * 0.35f, 0.30f),
+            disabledOnPrimary = hsl(hue, saturation * 0.25f, 0.50f),
+            disabledPrimaryButton = hsl(hue, saturation * 0.35f, 0.30f),
+            disabledOnPrimaryButton = hsl(hue, saturation * 0.25f, 0.55f),
+            disabledPrimarySlider = hsl(hue, saturation * 0.35f, 0.38f),
+            primaryContainer = container,
+            onPrimaryContainer = inkOn(container),
+            tertiaryContainer = hsl(hue, saturation * 0.45f, 0.26f),
+            onTertiaryContainer = hsl(hue, saturation * 0.70f, 0.78f),
+            sliderKeyPoint = primary.copy(alpha = 0.50f),
+            sliderKeyPointForeground = primary,
+        )
+    } else {
+        val container = hsl(hue, saturation * 0.70f, 0.68f)
+        AccentRoles(
+            primary = primary,
+            onPrimary = inkOn(primary),
+            primaryVariant = primary,
+            onPrimaryVariant = hsl(hue, saturation * 0.35f, 0.84f),
+            disabledPrimary = hsl(hue, saturation * 0.40f, 0.88f),
+            disabledOnPrimary = hsl(hue, saturation * 0.20f, 0.96f),
+            disabledPrimaryButton = hsl(hue, saturation * 0.40f, 0.88f),
+            disabledOnPrimaryButton = hsl(hue, saturation * 0.30f, 0.72f),
+            disabledPrimarySlider = hsl(hue, saturation * 0.40f, 0.82f),
+            primaryContainer = container,
+            onPrimaryContainer = inkOn(container),
+            tertiaryContainer = hsl(hue, saturation * 0.45f, 0.94f),
+            onTertiaryContainer = hsl(hue, saturation * 0.85f, 0.42f),
+            sliderKeyPoint = primary.copy(alpha = 0.30f),
+            sliderKeyPointForeground = primary,
+        )
+    }
+}
+
+/** The ink a filled accent control carries; see [accentRoles]'s KDoc. */
+private fun inkOn(background: Color): Color =
+    if (background.luminance() > 0.35f) Color.Black else Color.White
+
+/** One colour's hue in degrees and its saturation, the two inputs an accent keeps. */
+private fun Color.toHsl(): Triple<Float, Float, Float> {
+    val max = maxOf(red, green, blue)
+    val min = minOf(red, green, blue)
+    val lightness = (max + min) / 2f
+    val delta = max - min
+    if (delta == 0f) return Triple(0f, 0f, lightness)
+    val saturation = delta / (1f - abs(2f * lightness - 1f))
+    val hue = when (max) {
+        red -> 60f * (((green - blue) / delta) % 6f)
+        green -> 60f * (((blue - red) / delta) + 2f)
+        else -> 60f * (((red - green) / delta) + 4f)
+    }
+    return Triple(if (hue < 0f) hue + 360f else hue, saturation.coerceIn(0f, 1f), lightness)
+}
+
+/** The inverse of [toHsl]. */
+private fun hsl(hue: Float, saturation: Float, lightness: Float): Color {
+    val chroma = (1f - abs(2f * lightness - 1f)) * saturation
+    val sector = (((hue % 360f) + 360f) % 360f) / 60f
+    val second = chroma * (1f - abs(sector % 2f - 1f))
+    val (r, g, b) = when (sector.toInt()) {
+        0 -> Triple(chroma, second, 0f)
+        1 -> Triple(second, chroma, 0f)
+        2 -> Triple(0f, chroma, second)
+        3 -> Triple(0f, second, chroma)
+        4 -> Triple(second, 0f, chroma)
+        else -> Triple(chroma, 0f, second)
+    }
+    val match = lightness - chroma / 2f
+    return Color(r + match, g + match, b + match, 1f)
 }
 
 /**
@@ -223,11 +413,12 @@ fun LightStatusBar() {
  * controls — *is this still running* and *did this fail*. Both are drawn from roles
  * the library does own, so nothing here invents a colour:
  *
- * - **Live** is the tertiary pair — the light blue wash with the accent's own ink.
- *   It used to be the `secondary` pair, which was a hue back when the scheme was
- *   derived from a seed; in the library's own scheme `secondary` is a grey, so the
- *   pill's dot and label would have been grey on grey. The tertiary pair is the
- *   palette's quiet blue, which is exactly what "in progress, not a result" is.
+ * - **Live** is the tertiary pair — a pale wash of the accent with the accent's own
+ *   ink. It used to be the `secondary` pair, which is a grey in the library's own
+ *   scheme (a live pill on it was grey on grey); the accent derivation fills the
+ *   tertiary container, so "in progress" is a quieter neighbour of the reader's own
+ *   hue rather than a second colour. Under the default accent it is the library's
+ *   pale blue.
  * - **Error** is the scheme's error pair, re-exported so a call site says *danger*
  *   rather than naming a role.
  * - **Inset** is the fill a *quotation* sits in — a code span, a fenced block, a
@@ -482,18 +673,18 @@ object PiTone {
      *
      * The prompt bubble is the one object on the transcript that is not a card in the
      * palette's sense: it is the reader's half of the conversation, and the reader's
-     * half is read as *blue* in every chat app the page is read beside. The palette's
-     * blue containers are `primaryContainer` (#5D9BFF light, #338FE4 dark) and
-     * `tertiaryContainer` (#EAF2FF, #2B3B54) — the first is a filled control that
-     * wants a white knockout ink, and the prompt must keep the same ink as the answer
-     * beside it; the second is so pale in the light scheme that it is nearly the page.
+     * half is read as *their own hue* in every chat app the page is read beside. The
+     * palette's containers are `primaryContainer` (a filled control that wants a
+     * knockout ink, not the answer's ink) and `tertiaryContainer` (so pale in the
+     * light scheme that it is nearly the page), so neither can be the bubble.
      *
-     * So the fill is composed: the palette's `surfaceContainer` (the colour an answer
+     * The fill is composed: the palette's `surfaceContainer` (the colour an answer
      * card is) with `primary` mixed into it, at a share chosen from how much the base
      * can absorb — [PROMPT_SHARE_LIGHT] on white, [PROMPT_SHARE_DARK] on the dark
-     * scheme's #242424. That lands at #DEEBFF and #25416C: one pale blue, one navy,
-     * both unmistakably the accent's hue and both legible in `onSurface` (15:1 and
-     * 7.4:1).
+     * scheme's #242424. Under the default blue that lands at #DEEBFF and #25416C: one
+     * pale blue, one navy, both unmistakably the accent's hue and both legible in
+     * `onSurface` (15:1 and 7.4:1). Another accent gives the same two steps of its own
+     * hue.
      *
      * ## Why not a translucent wash
      *

@@ -670,13 +670,20 @@ enum class FontSize(val code: String, val scale: Float) {
     /**
      * Light, dark, or the system's own answer.
      *
-     * Persisted here because it is not part of a profile. The *palette* is not a
-     * preference: it is Miuix's own, taken whole from the library, which is what
-     * "drawn by Miuix" means — see `PiKitMiuixTheme`. The two fields this data class
-     * used to carry (an accent seed and a wallpaper switch) are gone with the hand-
-     * kept scheme they fed.
+     * Persisted here because it is not part of a profile. The neutral palette is still
+     * Miuix's own, taken whole from the library; the one hue the reader may move is
+     * [accentColor], and `PiKitMiuixTheme` applies it to the accent roles only.
      */
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
+    /**
+     * The hue the interface's actions, selections and marks are drawn in.
+     *
+     * Persisted here for the same reason [themeMode] is. `PiKitMiuixTheme` derives the
+     * light and dark accent roles from [AccentColor.seed] and leaves every neutral,
+     * error and surface role at the library's own value; [AccentColor.DEFAULT] keeps
+     * the library's blue roles exactly, so the default appearance is unchanged.
+     */
+    val accentColor: AccentColor = AccentColor.DEFAULT,
     /**
      * The interface's text size. Persisted here for the same reason [themeMode] is:
      * it is not part of a profile, and it applies to the app rather than to a launch.
@@ -753,10 +760,16 @@ enum class FontSize(val code: String, val scale: Float) {
      * avatar that pointed at one would be a blank circle on the next launch; the
      * copy in `files/avatars/` is what survives, and it is what a backup carries
      * (the archive's `SETTINGS` category includes that directory).
+     *
+     * **Null is "follow the accent colour".** A fresh install leaves both colours null,
+     * so the discs track [accentColor]; tapping a swatch in the avatar editor stores
+     * one of the eight and the disc stops following. The blank string in preferences
+     * is that null, which is why the three states ([AvatarColor] chosen, follow, and
+     * an old install whose stored value predates this one) stay distinguishable.
      */
     val aiAvatarName: String = "",
     val aiAvatarImage: String = "",
-    val aiAvatarColor: AvatarColor = AvatarColor.INDIGO,
+    val aiAvatarColor: AvatarColor? = null,
     /**
      * The reader's avatar, the same three. No picture is the person silhouette rather
      * than the agent's mark, so the two speakers never fall back to the same figure, and
@@ -765,8 +778,20 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val userAvatarName: String = "",
     val userAvatarImage: String = "",
-    val userAvatarColor: AvatarColor = AvatarColor.TEAL,
+    val userAvatarColor: AvatarColor? = null,
 ) {
+    /**
+     * The agent's disc colour in effect: the reader's choice, or the accent when the
+     * avatar has never been given one.
+     *
+     * The accent's seed *is* one of [AvatarColor]'s eight, so following costs no new
+     * drawing rule: the avatar keeps reading a colour and a disc.
+     */
+    val aiAvatarDisc: AvatarColor get() = aiAvatarColor ?: accentColor.avatar
+
+    /** The reader's disc colour in effect; see [aiAvatarDisc]. */
+    val userAvatarDisc: AvatarColor get() = userAvatarColor ?: accentColor.avatar
+
     /**
      * Whether the agent can actually be started with this.
      *
@@ -894,6 +919,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            accentColor = AccentColor.fromCode(prefs.getString(KEY_ACCENT, null)),
             fontSize = fontStep(),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             availableThinkingLevels = levelsFromPreference(prefs.getString(KEY_LEVELS, null)),
@@ -904,10 +930,12 @@ class SettingsStore(context: Context) {
             showMessageTime = prefs.getBoolean(KEY_SHOW_MESSAGE_TIME, true),
             aiAvatarName = prefs.getString(KEY_AI_AVATAR_NAME, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
-            aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
+            aiAvatarColor = AvatarColor.fromCodeOrNull(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
             userAvatarName = prefs.getString(KEY_USER_AVATAR_NAME, "").orEmpty(),
             userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
-            userAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
+            userAvatarColor = AvatarColor.fromCodeOrNull(
+                prefs.getString(KEY_USER_AVATAR_COLOR, null),
+            ),
         ),
     )
 
@@ -984,6 +1012,7 @@ class SettingsStore(context: Context) {
             .putString(KEY_LANGUAGE, next.language.code)
             .putBoolean(KEY_OPEN_NEW_ON_LAUNCH, next.openNewOnLaunch)
             .putString(KEY_THEME, next.themeMode.code)
+            .putString(KEY_ACCENT, next.accentColor.code)
             .putString(KEY_FONT_SIZE, next.fontSize.code)
             .putString(KEY_LAUNCHER_ICON, next.launcherIcon.code)
                         .putBoolean(KEY_SHOW_AVATARS, next.showAvatars)
@@ -991,10 +1020,10 @@ class SettingsStore(context: Context) {
             .putBoolean(KEY_SHOW_MESSAGE_TIME, next.showMessageTime)
             .putString(KEY_AI_AVATAR_NAME, next.aiAvatarName)
             .putString(KEY_AI_AVATAR_IMAGE, next.aiAvatarImage)
-            .putString(KEY_AI_AVATAR_COLOR, next.aiAvatarColor.code)
+            .putString(KEY_AI_AVATAR_COLOR, next.aiAvatarColor?.code.orEmpty())
             .putString(KEY_USER_AVATAR_NAME, next.userAvatarName)
             .putString(KEY_USER_AVATAR_IMAGE, next.userAvatarImage)
-            .putString(KEY_USER_AVATAR_COLOR, next.userAvatarColor.code)
+            .putString(KEY_USER_AVATAR_COLOR, next.userAvatarColor?.code.orEmpty())
             .apply()
         // The model fields are read back from the active profile rather than
         // taken from `next`, which keeps one source of truth for them. Every
@@ -1014,6 +1043,7 @@ class SettingsStore(context: Context) {
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
             themeMode = next.themeMode,
+            accentColor = next.accentColor,
             fontSize = next.fontSize,
             launcherIcon = next.launcherIcon,
             permissionMode = next.permissionMode,
@@ -1107,6 +1137,7 @@ class SettingsStore(context: Context) {
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
             themeMode = ThemeMode.fromCode(prefs.getString(KEY_THEME, null)),
+            accentColor = AccentColor.fromCode(prefs.getString(KEY_ACCENT, null)),
             fontSize = fontStep(),
             launcherIcon = LauncherIcon.fromCode(prefs.getString(KEY_LAUNCHER_ICON, null)),
             permissionMode = PermissionMode.fromCode(prefs.getString(KEY_PERMISSION, null)),
@@ -1115,10 +1146,12 @@ class SettingsStore(context: Context) {
             showMessageTime = prefs.getBoolean(KEY_SHOW_MESSAGE_TIME, true),
             aiAvatarName = prefs.getString(KEY_AI_AVATAR_NAME, "").orEmpty(),
             aiAvatarImage = prefs.getString(KEY_AI_AVATAR_IMAGE, "").orEmpty(),
-            aiAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
+            aiAvatarColor = AvatarColor.fromCodeOrNull(prefs.getString(KEY_AI_AVATAR_COLOR, null)),
             userAvatarName = prefs.getString(KEY_USER_AVATAR_NAME, "").orEmpty(),
             userAvatarImage = prefs.getString(KEY_USER_AVATAR_IMAGE, "").orEmpty(),
-            userAvatarColor = AvatarColor.fromCode(prefs.getString(KEY_USER_AVATAR_COLOR, null)),
+            userAvatarColor = AvatarColor.fromCodeOrNull(
+                prefs.getString(KEY_USER_AVATAR_COLOR, null),
+            ),
         )
     }
 
@@ -1139,6 +1172,7 @@ class SettingsStore(context: Context) {
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
         themeMode: ThemeMode = current.get().themeMode,
+        accentColor: AccentColor = current.get().accentColor,
         fontSize: FontSize = current.get().fontSize,
         launcherIcon: LauncherIcon = current.get().launcherIcon,
         permissionMode: PermissionMode = current.get().permissionMode,
@@ -1147,10 +1181,10 @@ class SettingsStore(context: Context) {
         showMessageTime: Boolean = current.get().showMessageTime,
         aiAvatarName: String = current.get().aiAvatarName,
         aiAvatarImage: String = current.get().aiAvatarImage,
-        aiAvatarColor: AvatarColor = current.get().aiAvatarColor,
+        aiAvatarColor: AvatarColor? = current.get().aiAvatarColor,
         userAvatarName: String = current.get().userAvatarName,
         userAvatarImage: String = current.get().userAvatarImage,
-        userAvatarColor: AvatarColor = current.get().userAvatarColor,
+        userAvatarColor: AvatarColor? = current.get().userAvatarColor,
     ): PiSettings {
         val next = current.updateAndGet {
             it.copy(
@@ -1169,6 +1203,7 @@ class SettingsStore(context: Context) {
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
                 themeMode = themeMode,
+                accentColor = accentColor,
                 fontSize = fontSize,
                 launcherIcon = launcherIcon,
                 permissionMode = permissionMode,
@@ -1273,6 +1308,9 @@ class SettingsStore(context: Context) {
         /** [ThemeMode.code]; absent means [ThemeMode.DEFAULT]. */
         private const val KEY_THEME = "theme_mode"
 
+        /** [AccentColor.code]; absent means [AccentColor.DEFAULT]. */
+        private const val KEY_ACCENT = "accent_color"
+
         /** [FontSize.code]; absent means [FontSize.DEFAULT] — the fourth of seven. */
         private const val KEY_FONT_SIZE = "font_size"
 
@@ -1306,7 +1344,12 @@ class SettingsStore(context: Context) {
         /** Whether a transcript message shows its date and time; on unless switched off. */
         private const val KEY_SHOW_MESSAGE_TIME = "show_message_time"
 
-        /** The two avatars' labels (blank = the built-in mark) and their colours. */
+        /**
+         * The two avatars' labels (blank = the built-in mark) and their colours.
+         *
+         * A blank colour is the "follow the accent" state, so an old install whose
+         * stored value predates the accent keeps that value and a fresh one follows.
+         */
         private const val KEY_AI_AVATAR_NAME = "ai_avatar_name"
         private const val KEY_AI_AVATAR_COLOR = "ai_avatar_color"
         private const val KEY_USER_AVATAR_NAME = "user_avatar_name"

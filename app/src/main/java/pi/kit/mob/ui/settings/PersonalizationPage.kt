@@ -1,5 +1,6 @@
 package pi.kit.mob.ui.settings
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import pi.kit.mob.data.AccentColor
 import pi.kit.mob.data.AvatarColor
 import pi.kit.mob.data.AvatarSlot
 import pi.kit.mob.data.AvatarStore
@@ -38,6 +40,7 @@ import pi.kit.mob.ui.kit.PiSheet
 import pi.kit.mob.ui.kit.PiSheetSection
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -56,10 +59,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * page because a page each would be five rows deep — the same mistake the old
  * "Advanced" group made.
  *
- * The *palette* is not on this page at all any more. The interface is drawn in
- * Miuix's own light and dark schemes, so "follow the system / light / dark" is the
- * whole of the colour choice, and an accent would be the app re-deciding a scheme the
- * library has already decided. `PiKitMiuixTheme` carries the reasoning.
+ * The *neutral* palette is not on this page: the interface is drawn in Miuix's own
+ * light and dark schemes, so "follow the system / light / dark" is the whole of that
+ * choice. The accent is the one hue the reader may move, and it is a row of swatches
+ * because a colour is recognised before it is read. `PiKitMiuixTheme` carries what
+ * moves and what deliberately does not.
  *
  * The switch is **on** when a cold start opens a *new* conversation. That is the
  * default because a launch is usually a new question, and the previous
@@ -141,6 +145,7 @@ internal fun PersonalizationPage(
                         imagePath = settings.aiAvatarImage,
                         speaker = AvatarSpeaker.AGENT,
                         color = settings.aiAvatarColor,
+                        accent = settings.accentColor,
                         onChangeLabel = { value ->
                             session.settingsStore.update { it.copy(aiAvatarName = value) }
                         },
@@ -159,6 +164,7 @@ internal fun PersonalizationPage(
                         imagePath = settings.userAvatarImage,
                         speaker = AvatarSpeaker.READER,
                         color = settings.userAvatarColor,
+                        accent = settings.accentColor,
                         onChangeLabel = { value ->
                             session.settingsStore.update { it.copy(userAvatarName = value) }
                         },
@@ -213,17 +219,18 @@ internal fun PersonalizationPage(
                 )
             }
 
-            // One section, three rows: the text size, the theme and the launcher mark are the
-            // whole of "how the app looks", and they used to be three groups with the theme and
-            // the mark as radio lists under headings of their own.
+            // One section, four controls: the text size, the theme, the accent and the launcher
+            // mark are the whole of "how the app looks", and they used to be separate groups
+            // with the theme and the mark as radio lists under headings of their own.
             //
-            // The two are one row each now, not a radio group. They used to argue for visible
-            // radios — three palettes are a *set*, and a set is better read at once than one at
-            // a time behind a scrim — and that argument was about the *scrim*, not about the
-            // list: Miuix's dropdown opens a panel over the row with no scrim at all, so the
-            // row being changed stays in sight, the alternatives are one tap away, and the page
-            // is three rows shorter. That is the shape every MIUI settings list gives a value
-            // with a handful of options.
+            // The theme and the mark are one row each now, not a radio group. They used to
+            // argue for visible radios — three palettes are a *set*, and a set is better read
+            // at once than one at a time behind a scrim — and that argument was about the
+            // *scrim*, not about the list: Miuix's dropdown opens a panel over the row with no
+            // scrim at all, so the row being changed stays in sight, the alternatives are one
+            // tap away, and the page is shorter. The accent keeps its swatches because a colour
+            // is recognised before it is read; eight rows of colour names would be the longest
+            // group on the page for the least information.
             PiSection(title = text.settings.personalizationAppearance) {
                 FontSizeRow(
                     current = settings.fontSize,
@@ -246,6 +253,16 @@ internal fun PersonalizationPage(
                             session.settingsStore.update { it.copy(themeMode = mode) }
                         }
                     },
+                )
+                AccentColorRow(
+                    current = settings.accentColor,
+                    onChange = { chosen ->
+                        // The swatch performs `PiHaptics.choose()` itself when the tap
+                        // changes the answer; a second buzz here would be the double
+                        // charge `PiHaptics` forbids.
+                        session.settingsStore.update { it.copy(accentColor = chosen) }
+                    },
+                    text = text,
                 )
                 PiDropdownPreference(
                     items = LauncherIcon.entries.map { launcherIconLabel(it, text) },
@@ -283,7 +300,7 @@ internal fun PersonalizationPage(
                     endActions = {
                         PiAvatar(
                             speaker = AvatarSpeaker.AGENT,
-                            color = settings.aiAvatarColor.seed,
+                            color = settings.aiAvatarDisc.seed,
                             imagePath = settings.aiAvatarImage.ifBlank { null },
                         )
                     },
@@ -297,7 +314,7 @@ internal fun PersonalizationPage(
                     endActions = {
                         PiAvatar(
                             speaker = AvatarSpeaker.READER,
-                            color = settings.userAvatarColor.seed,
+                            color = settings.userAvatarDisc.seed,
                             // No picture draws the silhouette — the reader's default mark.
                             imagePath = settings.userAvatarImage.ifBlank { null },
                         )
@@ -371,12 +388,67 @@ private fun FontSizeRow(
 }
 
 /**
+ * The accent, as a named value over the eight swatches.
+ *
+ * A colour is recognised before it is read, which is why the choice is discs rather
+ * than eight rows of colour names; the row above them is what names the answer,
+ * because a ring can say *which* one is chosen but not *which colour* it is.
+ *
+ * The swatches scroll rather than clip as a safety: eight 34dp discs and their seven
+ * 4dp gaps are 300dp, which fits the narrowest page this app targets, and a larger
+ * font scale or a longer translation cannot push one off the edge.
+ */
+@Composable
+private fun AccentColorRow(
+    current: AccentColor,
+    onChange: (AccentColor) -> Unit,
+    text: Strings,
+) {
+    BasicComponent(
+        title = text.settings.accentColor,
+        summary = text.settings.accentColorSubtitle,
+        endActions = {
+            SettingsValue(
+                text.settings.avatarColorName(current.avatar),
+                emphasised = true,
+            )
+        },
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AccentColor.entries.forEach { entry ->
+            SettingsSwatch(
+                color = entry.seed,
+                selected = entry == current,
+                onClick = { onChange(entry) },
+                label = text.settings.avatarColorName(entry.avatar),
+                size = ACCENT_SWATCH_SIZE,
+            )
+        }
+    }
+}
+
+/**
  * The avatar editor: a large preview, the picture, the label field, and the eight
  * colours.
  *
  * Saves as it is typed and on a swatch tap, like the working directory and the text size
  * — none of them restarts anything, and the sheet is dismissed by the scrim, the drag and
  * back, so a second "done" control would be the third of three.
+ *
+ * ## The colour follows the accent until it is chosen
+ *
+ * A null [color] is the default and means "draw the accent's disc". The switch above the
+ * swatches states that state and is the way back to it; a swatch tap stores one of the
+ * eight and the disc stops following, which is the "默认跟随，改过就不变" half of the
+ * feature. The preview above uses the same resolved colour, so the disc the sheet shows
+ * is the disc the transcript will draw.
  *
  * Everything is inside one card, which is what keeps the sheet on a single column: the
  * sheet's own 24dp gutter plus a card's 16dp is where the rows' text starts, and the
@@ -401,10 +473,11 @@ private fun AvatarSheet(
     label: String,
     imagePath: String,
     speaker: AvatarSpeaker,
-    color: AvatarColor,
+    color: AvatarColor?,
+    accent: AccentColor,
     onChangeLabel: (String) -> Unit,
     onChangeImage: (String) -> Unit,
-    onChangeColor: (AvatarColor) -> Unit,
+    onChangeColor: (AvatarColor?) -> Unit,
     text: Strings,
 ) {
     val context = LocalContext.current
@@ -437,7 +510,7 @@ private fun AvatarSheet(
         ) {
             PiAvatar(
                 speaker = speaker,
-                color = color.seed,
+                color = color?.seed ?: accent.seed,
                 imagePath = imagePath.ifBlank { null },
                 size = AVATAR_PREVIEW_SIZE,
             )
@@ -492,6 +565,19 @@ private fun AvatarSheet(
         }
 
         PiSheetSection(title = text.settings.avatarColor) {
+            // Null is "follow the accent", and the switch is how that state is chosen
+            // again after a swatch. While it is on the swatches stay visible but
+            // disabled, the same shape the chat preset editor uses for its own
+            // inheritance: the row keeps its height and the choice stays legible as the
+            // one that is not in force.
+            SwitchPreference(
+                title = text.settings.avatarFollowAccent,
+                summary = text.settings.avatarFollowAccentHint,
+                checked = color == null,
+                onCheckedChange = { follow ->
+                    onChangeColor(if (follow) null else accent.avatar)
+                },
+            )
             // Eight swatches on one line, and the line is *measured* rather than scrolled:
             // the sheet's 16dp gutter and this row's 16dp leave 328dp on a 360dp phone,
             // and 8 x 34dp + 7 x 4dp = 300dp fits without a scroll nothing announces.
@@ -505,10 +591,11 @@ private fun AvatarSheet(
                 AvatarColor.entries.forEach { entry ->
                     SettingsSwatch(
                         color = entry.seed,
-                        selected = entry == color,
+                        selected = color == entry,
                         onClick = { onChangeColor(entry) },
                         label = text.settings.avatarColorName(entry),
                         size = SWATCH_SIZE,
+                        enabled = color != null,
                     )
                 }
             }
@@ -522,6 +609,15 @@ private fun AvatarSheet(
 
 /** The swatch's diameter: eight of them and the seven 4dp gaps between them are 300dp. */
 private val SWATCH_SIZE = 34.dp
+
+/**
+ * The accent row's swatches are the same discs.
+ *
+ * The row scrolls, so this is a fit figure rather than a measurement: at 34dp the
+ * eight and their gaps are 300dp, the width the avatar sheet already proves fits a
+ * 360dp phone.
+ */
+private val ACCENT_SWATCH_SIZE = 34.dp
 
 /** The most characters an avatar *name* holds before it is cut. */
 private const val AVATAR_NAME_MAX = 16
