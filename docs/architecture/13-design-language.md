@@ -825,6 +825,20 @@ Two consequences of that order are worth naming. The card's corner is set on its
 radius there would cut the screen's own corners. And neither half carries a shadow: the
 palette step at the seam is the whole of the depth, in both schemes.
 
+**The corner is the page's, not a card's.** It was 24dp — `PiCorner.popup`, the menu
+panel's figure — and a window cut with a panel's corner reads as a small object's radius
+carried over: the card's trailing pair of corners is the whole of the "this is a card"
+signal while the drawer is out, so the card is cut at **32dp** now, one step above the
+popup family rather than in it, because this is the only surface in the app as large as
+the window and a corner has to scale with what it cuts (drawn at 30.4dp through the
+layer's 0.95 scale). 32dp is also the figure at which the card's curve stays concentric
+with the chrome it cuts past: the composer's field frame keeps the band's 12dp gutter and
+12dp of air above the card's bottom, so its own 20dp corner arc is centred
+12 + 20 = 32dp from the card's corner — the same centre the card's 32dp corner has — and
+the two arcs run a constant 12dp apart. A larger figure pulls them together: at 40dp the
+centres separate and the closest points come to about 9dp, which is the card's corner
+beginning to reach the control.
+
 Opening a conversation from the list closes the drawer *before* the page is rebuilt: the
 open/closed answer is published when the settle starts, not when it ends, because the
 rebuild that follows the tap reads it. That ordering was measured — with the answer

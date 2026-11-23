@@ -356,7 +356,10 @@ the library's own `miuix-squircle` modifiers; the app draws one step larger,
 `PiCorner.radius` (20dp), passed at every `Card`/`Button`/`TextButton`/`TextField`
 call site so the whole interface is cut with the same corner (§13, *Shapes*). The
 glass renderer's `GlassShape` carries its own corner smoothing, so a glass panel is
-already continuous-cornered.
+already continuous-cornered. The one surface larger than that family — the
+conversation while the drawer is out — is cut at its own figure, `PAGE_CARD_CORNER`
+(32dp) in `ChatScreen.kt`: it is the size of the window, so its corner is a step above
+the menus' `PiCorner.popup` rather than one of the page's cards (§13, *Navigation*).
 
 **A hand-drawn rectangular surface uses the squircle modifiers, not
 `RoundedCornerShape`.** A `clip(RoundedCornerShape(20.dp))` beside a Miuix card is a

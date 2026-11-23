@@ -3762,8 +3762,26 @@ private val DRAWER_MAX_WIDTH = 420.dp
  */
 private const val CHAT_SHRINK = 0.05f
 
-/** The radius the conversation is cut with while it is a card over the drawer. */
-private val PAGE_CARD_CORNER = 24.dp
+/**
+ * The radius the conversation is cut with while it is a card over the drawer.
+ *
+ * 32dp, up from the 24dp the card was drawn at first. 24dp is the *menu* panel's figure
+ * (`PiCorner.popup`), and a surface the size of the window cut with a panel's corner reads
+ * as a small object's radius carried over: the card's trailing pair of corners is the whole
+ * of the "this is a card" signal while the drawer is out, so it is cut to the page rather
+ * than to a card in a list.
+ *
+ * One step above [PiCorner.popup] rather than beside it, because this is the only surface
+ * in the app as large as the window and a corner has to scale with what it cuts. 32dp is
+ * also the figure at which the card's curve stays concentric with the chrome it cuts past:
+ * the composer's field frame keeps the band's 12dp gutter and [BAND_AIR] above the card's
+ * bottom, so its own [PiCorner.radius] corner arc is centred 12 + 20 = 32dp from the card's
+ * corner — the same centre a 32dp card corner has — and the two arcs run a constant 12dp
+ * apart. A larger figure pulls them together: at 40dp the centres separate and the closest
+ * points are about 9dp apart, which is the card's corner starting to reach the control. The
+ * layer's [CHAT_SHRINK] scale draws the curve at 30.4dp on screen.
+ */
+private val PAGE_CARD_CORNER = 32.dp
 
 /**
  * The composer band's bottom inset. The surface that fills it is the band's own
