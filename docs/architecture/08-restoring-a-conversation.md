@@ -2,6 +2,35 @@
 
 *[Architecture](../ARCHITECTURE.md) §8.*
 
+## The file is read on the tap, and that is a cost with a number
+
+`PiHost.openConversation` rebuilds the transcript synchronously, on the thread that handled
+the tap: `SessionTranscript.payload` parses every message line, and
+`ConversationReducer.replaceWithMessages` folds them — including one SHA-1 per picture, over
+the base64 pi echoed back (§7.1). Measured on the desktop JVM on a synthetic session of 200
+messages:
+
+| picture payload | file | `payload` | fold (pictures hashed) |
+| --- | --- | --- | --- |
+| none | 170 KB | 3.8 ms | 1.4 ms |
+| 2 × 1.2 MB | 3.4 MB | 11.9 ms | 4.2 ms |
+| 6 × 1.2 MB | 9.8 MB | 24.1 ms | 10.8 ms |
+
+A phone is several times slower per core and its storage slower again, so a picture-heavy
+conversation costs a few hundred milliseconds of frozen frame on the tap that opens it — and
+`SessionTranscript`'s own ceiling is 32 MB, which is roughly a second of it. `forkAt` has the
+same shape twice: it reads the whole session into memory to copy its records, and then the
+conversation it opens reads the copy back.
+
+This is recorded rather than fixed, and the reason is not the size of the work: it is where
+the *state* would have to go. `ConversationState.loadingSession` exists for exactly this
+(§10.1's handshake), and its contract is that `switchSessionTo` is its only writer — a
+drawer open that came back a moment later would have to make the page draw "opening the
+conversation" for a conversation the reader has already been told is instant, and the
+drawer's own current-row mark keys on `sessionFile`, which the parse is what produces. A
+change that moves the read off the tap is therefore a change to this section's promise, not
+a `withContext(IO)` around one call.
+
 pi persists every session as JSONL, and a conversation opened from the drawer is rebuilt
 from that file (`SessionTranscript.payload`) without a process: the records are in the same
 shape `get_messages` answers with. What the file cannot rebuild is the **turns** — pi stores
