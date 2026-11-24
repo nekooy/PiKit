@@ -122,9 +122,9 @@ fun PiDropdownPreference(
  * own `GlassDropdownPopup` ([PiDropdownPopup]), not the anchored menu a control's actions
  * open. The two forms of this row are then one panel with one motion: the alternatives grow
  * out of the value cell along the library's arc and the value fades under them, exactly as
- * the plain form's do. A menu's fade at full size was tried here and is what this replaced —
- * beside the language row's arc, the summarised row's panel read as having no animation at
- * all, because a fade over a panel that is already at its final size is not motion.
+ * the plain form's do. A full-size fade was tried here and is what this replaced — beside
+ * the language row's arc, the summarised row's panel read as having no animation at all,
+ * because a fade over a panel that is already at its final size is not motion.
  *
  * @param options the alternatives, each with the text the row shows and the sentence under
  *   it.

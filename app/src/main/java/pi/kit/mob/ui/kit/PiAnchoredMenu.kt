@@ -34,12 +34,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -68,16 +73,17 @@ internal val LocalPiMenuInteractive = staticCompositionLocalOf { true }
 /**
  * The kit's own glass menu.
  *
- * Context menus fade at full size; composer menus morph from the trigger. A glass icon
- * button's menu is the button becoming the menu: the button is hidden for the whole
- * transform and the panel's first frame *is* that button — a copy of its glyph, reported
- * through [Modifier.piGlassMenuAnchorContent], grows into the panel and fades as the rows
- * arrive, and the panel's surface starts at the button's own surface. That surface is the
- * panel's glass at both ends because the button samples a backdrop of its own — its bar's,
- * or the ground its call site records — so neither end of the transform swaps one surface
- * for another. The button is hidden only because the panel's first frame is it: a second
- * copy left under the glass showed through as a ghost, and a copy left beside the growing
- * frame read as a pill standing next to its own menu.
+ * Context menus take Miuix's `GlassPopup` edge reveal; composer menus and a glass icon
+ * button's menu are the library's transform. A glass icon button's menu is the button
+ * becoming the menu: the button is hidden for the whole transform and the panel's first
+ * frame *is* that button — a copy of its glyph, reported through
+ * [Modifier.piGlassMenuAnchorContent], grows into the panel and fades as the rows arrive,
+ * and the panel's surface starts at the button's own surface. That surface is the panel's
+ * glass at both ends because the button samples a backdrop of its own — its bar's, or the
+ * ground its call site records — so neither end of the transform swaps one surface for
+ * another. The button is hidden only because the panel's first frame is it: a second copy
+ * left under the glass showed through as a ghost, and a copy left beside the growing frame
+ * read as a pill standing next to its own menu.
  */
 @Composable
 internal fun BoxScope.PiAnchoredMenu(
@@ -92,6 +98,7 @@ internal fun BoxScope.PiAnchoredMenu(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val trigger = anchor.bounds
+    // `Auto` is the library's own edge reveal; the other two grow out of the control.
     val morph = placement != PiPopupPlacement.Auto
     val open = show && if (morph) !trigger.isEmpty else trigger != Rect.Zero
     val visibility = remember { MutableTransitionState(false) }
@@ -125,6 +132,11 @@ internal fun BoxScope.PiAnchoredMenu(
     } else {
         surface
     }
+    // The library's popup blur: 40px at the start of the reveal, sharp by the time the
+    // rows are readable. It is what carries an edge reveal that has no glyph to hand over.
+    val sharpness = transition.animateFloat({ GlassMotion.popupMorphBlur() }, label = "sharpness") {
+        if (it) 1f else 0f
+    }
     val dismiss by rememberUpdatedState(onDismissRequest)
     BackHandler(enabled = open) { dismiss() }
 
@@ -145,14 +157,13 @@ internal fun BoxScope.PiAnchoredMenu(
     // same pass; the copy's layer re-runs because it also reads the animation states.
     val travel = remember { TransformTravel() }
     val copyRect = anchor.contentBounds.takeUnless { it.isEmpty } ?: trigger
-    val radius = if (morph) {
-        with(density) {
-            lerp(trigger.minDimension / 2, PiCorner.popup.toPx(), geometry.value.coerceIn(0f, 1f)).toDp()
-        }
-    } else {
-        PiCorner.popup
-    }
-    val shape = remember(radius) { GlassShape(radius) }
+    // One shape for the whole transition: the 24dp corner is clamped to half the smaller
+    // side while the frame is still small, so the collapsed endpoint is the trigger's own
+    // capsule — and the corner is not read from the animation in composition (docs/UI.md,
+    // *State, and what a frame may not cost*).
+    val shape = remember { GlassShape(PiCorner.popup) }
+    val menuClip = remember { MenuClip() }
+    val clipRadius = with(density) { PiCorner.popup.toPx() }
     val material = glassSurface(backdrop, GlassPopupDefaults.visuals())
 
     Box(Modifier.matchParentSize().zIndex(if (open) 1f else 0f)) {
@@ -160,7 +171,9 @@ internal fun BoxScope.PiAnchoredMenu(
             Box(Modifier.matchParentSize().pointerInput(Unit) { detectTapGestures { dismiss() } })
         }
         Layout(
-            modifier = Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow() },
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { origin = it.positionInWindow() },
             content = {
                 // The panel surface, and — for a button that has no backdrop of its own —
                 // the button's opaque fill on top of it. The fill is opaque at the first
@@ -186,9 +199,32 @@ internal fun BoxScope.PiAnchoredMenu(
                 val scroll = rememberScrollState()
                 CompositionLocalProvider(LocalPiMenuInteractive provides open) {
                     Column(
-                        Modifier.width(IntrinsicSize.Max)
+                        Modifier
+                            .width(IntrinsicSize.Max)
                             .then(if (open) Modifier.verticalScroll(scroll) else Modifier.retainedMenuScroll(scroll))
-                            .padding(vertical = GlassPopupDefaults.ContentPaddingVertical),
+                            .padding(vertical = GlassPopupDefaults.ContentPaddingVertical)
+                            // The rows keep their settled size while an edge-revealed
+                            // panel unfolds; the panel's frame is what clips them, the
+                            // same division `GlassPopup` draws.
+                            .then(
+                                if (morph) Modifier else Modifier.drawWithContent {
+                                    val rect = menuClip.content
+                                    if (rect.width > 0.5f && rect.height > 0.5f) {
+                                        menuClip.path.rewind()
+                                        menuClip.path.addRoundRect(
+                                            RoundRect(
+                                                rect = rect,
+                                                cornerRadius = CornerRadius(
+                                                    minOf(clipRadius, minOf(rect.width, rect.height) / 2f),
+                                                ),
+                                            ),
+                                        )
+                                        clipPath(menuClip.path) { this@drawWithContent.drawContent() }
+                                    } else {
+                                        drawContent()
+                                    }
+                                },
+                            ),
                         content = content,
                     )
                 }
@@ -215,6 +251,7 @@ internal fun BoxScope.PiAnchoredMenu(
             }
             val maxHeight = minOf(sizing.maxHeight.roundToPx(), availableHeight)
             if (maxWidth <= 0 || maxHeight <= 0) {
+                menuClip.content = Rect.Zero
                 return@Layout layout(constraints.maxWidth, constraints.maxHeight) {}
             }
             val foreground = children[1].measure(
@@ -225,10 +262,14 @@ internal fun BoxScope.PiAnchoredMenu(
                 ),
             )
             val size = Size(foreground.width.toFloat(), foreground.height.toFloat())
+            var contextPlacement: ContextMenuPlacement? = null
             val settled = when (placement) {
                 PiPopupPlacement.Above -> placeUpwardMenu(trigger, size, safe, margin, gap, direction)
-                PiPopupPlacement.Auto, PiPopupPlacement.FromAnchor ->
-                    placeContextMenu(settleTrigger, size, safe, margin, direction)
+                PiPopupPlacement.Auto -> placeContextMenuPlacement(settleTrigger, size, safe, margin, direction)
+                    .also { contextPlacement = it }
+                    .rect
+
+                PiPopupPlacement.FromAnchor -> placeContextMenu(settleTrigger, size, safe, margin, direction)
             }
             travel.centerX = settled.center.x
             travel.centerY = settled.center.y
@@ -236,32 +277,57 @@ internal fun BoxScope.PiAnchoredMenu(
             val frame = if (morph) {
                 popupMorphBounds(trigger, settled, geometry.value, center.value)
             } else {
-                popupRevealBounds(settled, trigger, safe, 6.dp.toPx(), geometry.value)
+                popupEdgeRevealBounds(
+                    settled = settled,
+                    direction = direction,
+                    alignTop = contextPlacement?.alignTop ?: true,
+                    progress = geometry.value,
+                )
+            }
+            val contentScale = if (morph) 1f else popupContentScale(geometry.value)
+            menuClip.content = if (!morph && contentScale > 0f) {
+                Rect(
+                    left = 0f,
+                    top = 0f,
+                    right = size.width,
+                    bottom = (frame.height / contentScale).coerceAtMost(size.height),
+                )
+            } else {
+                Rect.Zero
             }
             val background = children[0].measure(Constraints.fixed(frame.width.roundToInt(), frame.height.roundToInt()))
             layout(constraints.maxWidth, constraints.maxHeight) {
                 val left = (frame.left - origin.x).roundToInt()
                 val top = (frame.top - origin.y).roundToInt()
                 background.placeWithLayer(left, top) {
-                    // A glyph menu's surface is opaque from its first frame — the button
-                    // it replaces — and the fill above fades out under the glass; every
-                    // other mode fades the whole panel in.
-                    alpha = if (anchorContent != null) 1f else surface.value.coerceIn(0f, 1f)
+                    // The edge-reveal panel is glass from its first frame, as `GlassPopup`
+                    // draws it; a glyph menu's surface is opaque from its first frame too
+                    // — the button it replaces — and fades out under the glass. Only the
+                    // composer's transform fades a whole panel in.
+                    alpha = if (morph && anchorContent == null) surface.value.coerceIn(0f, 1f) else 1f
                 }
                 val scale = if (morph && size.width > 0 && size.height > 0) {
                     minOf(frame.width / size.width, frame.height / size.height)
                 } else {
-                    1f
+                    contentScale
                 }
                 foreground.placeWithLayer(left, top) {
                     transformOrigin = TransformOrigin(0f, 0f)
                     scaleX = scale
                     scaleY = scale
-                    translationX = (frame.width - size.width * scale) / 2
-                    translationY = (frame.height - size.height * scale) / 2
+                    if (morph) {
+                        translationX = (frame.width - size.width * scale) / 2
+                        translationY = (frame.height - size.height * scale) / 2
+                    }
                     val fraction = rows.value.coerceIn(0f, 1f)
                     alpha = fraction
-                    val blur = if (morph) GlassMotion.TRANSFORM_BLUR_PX * (1f - fraction) else 0f
+                    val blur = if (morph) {
+                        GlassMotion.TRANSFORM_BLUR_PX * (1f - fraction)
+                    } else {
+                        // The rest of Miuix's edge reveal: the rows are out of focus while
+                        // the panel is small and sharpen as it reaches its own size.
+                        GlassMotion.POPUP_MORPH_BLUR_PX * (1f - sharpness.value.coerceIn(0f, 1f))
+                    }
                     renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
                     clip = true
                     this.shape = shape
@@ -326,6 +392,18 @@ private class TransformTravel {
     val center: Offset get() = Offset(centerX, centerY)
 }
 
+/**
+ * The part of a menu's settled content that its current frame shows, in the content's own
+ * coordinates, written while the panel is measured.
+ *
+ * Not snapshot state: a write during measure must not invalidate that same pass. The
+ * draw pass reads it behind the animation state that moved the frame.
+ */
+private class MenuClip {
+    var content: Rect = Rect.Zero
+    val path: Path = Path()
+}
+
 /** The glyph copy's offset from, and growth over, the button it starts as. */
 internal data class AnchorCopyMotion(val translation: Offset, val scale: Float)
 
@@ -383,14 +461,27 @@ internal fun placeUpwardMenu(
     return Rect(left, bottom - size.height, left + size.width, bottom)
 }
 
-internal fun placeContextMenu(trigger: Rect, size: Size, safe: Rect, margin: Float, direction: LayoutDirection): Rect {
+/** A context menu's settled rectangle and which of its horizontal edges is pinned. */
+internal data class ContextMenuPlacement(val rect: Rect, val alignTop: Boolean)
+
+internal fun placeContextMenu(trigger: Rect, size: Size, safe: Rect, margin: Float, direction: LayoutDirection): Rect =
+    placeContextMenuPlacement(trigger, size, safe, margin, direction).rect
+
+internal fun placeContextMenuPlacement(
+    trigger: Rect,
+    size: Size,
+    safe: Rect,
+    margin: Float,
+    direction: LayoutDirection,
+): ContextMenuPlacement {
     val left = endAlignedMenuLeft(trigger, size, safe, margin, direction)
     val minTop = maxOf(safe.top, minOf(safe.top + margin, trigger.top))
     val below = safe.bottom - margin - trigger.top
     val above = trigger.bottom - minTop
-    val wantedTop = if (size.height <= below || below >= above) trigger.top else trigger.bottom - size.height
+    val alignTop = size.height <= below || below >= above
+    val wantedTop = if (alignTop) trigger.top else trigger.bottom - size.height
     val top = wantedTop.coerceIn(minTop, (safe.bottom - margin - size.height).coerceAtLeast(minTop))
-    return Rect(Offset(left, top), size)
+    return ContextMenuPlacement(Rect(Offset(left, top), size), alignTop)
 }
 
 /**
@@ -411,12 +502,34 @@ private fun clampedMenuLeft(wanted: Float, size: Size, safe: Rect, margin: Float
     return wanted.coerceIn(minLeft, (safe.right - margin - size.width).coerceAtLeast(minLeft))
 }
 
-internal fun popupRevealBounds(settled: Rect, trigger: Rect, safe: Rect, travel: Float, progress: Float): Rect {
-    val towardTrigger = if (settled.center.y < trigger.center.y) travel else -travel
-    val top = (settled.top + towardTrigger * (1f - progress.coerceIn(0f, 1f)))
-        .coerceIn(safe.top, (safe.bottom - settled.height).coerceAtLeast(safe.top))
-    return settled.translate(0f, top - settled.top)
+/**
+ * Miuix's `GlassPopup` edge reveal: a flat capsule on the anchor's logical end grows to the
+ * settled panel on two springs — width first, then height.
+ *
+ * The fixed edges are the ones the reveal happens *from*: the logical end stays put, and so
+ * does the horizontal edge the panel was placed against. `progress` is deliberately not
+ * clamped above 1: `GlassMotion.popupMorph()` overshoots, and the panel and its rows must
+ * rebound together rather than the frame being pinned while the content overshoots.
+ */
+internal fun popupEdgeRevealBounds(
+    settled: Rect,
+    direction: LayoutDirection,
+    alignTop: Boolean,
+    progress: Float,
+): Rect {
+    val t = progress.coerceAtLeast(0f)
+    val width = settled.width * (GlassMotion.POPUP_START_WIDTH + (1f - GlassMotion.POPUP_START_WIDTH) * t)
+    val endRatio = if (settled.width > 0f) settled.height / settled.width else 1f
+    val ratio = GlassMotion.POPUP_START_RATIO + (endRatio - GlassMotion.POPUP_START_RATIO) * t
+    val height = width * ratio
+    val left = if (direction == LayoutDirection.Ltr) settled.right - width else settled.left
+    val top = if (alignTop) settled.top else settled.bottom - height
+    return Rect(Offset(left, top), Size(width, height))
 }
+
+/** The fraction of its settled width a `GlassPopup`'s rows start at. */
+internal fun popupContentScale(progress: Float): Float =
+    GlassMotion.POPUP_START_WIDTH + (1f - GlassMotion.POPUP_START_WIDTH) * progress.coerceAtLeast(0f)
 
 internal fun popupMorphBounds(trigger: Rect, settled: Rect, sizeProgress: Float, centerProgress: Float): Rect {
     val width = lerp(trigger.width, settled.width, sizeProgress).coerceAtLeast(0f)

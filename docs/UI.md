@@ -284,8 +284,11 @@ ControlChip(
   layer, never the scene that contains it (red line 1). The conversation and history
   drawer share this host so a drawer menu is above the translated chat card too.
   Do not draw an unhosted menu in place: a list item offers unbounded height.
-- **Point and row context menus** use `Auto`: fade and slide a few pixels at full
-  size, with Miuix's logical-end alignment and safe-area fit test.
+- **Point and row context menus** use `Auto`: Miuix's `GlassPopup` edge reveal —
+  the panel starts at 15% of its settled width and a 0.2 height-to-width ratio on the
+  logical end, opens on `GlassMotion.popupMorph()`, and its rows fade in on
+  `popupMorphFade()` while a `POPUP_MORPH_BLUR_PX` blur resolves — with Miuix's
+  logical-end alignment and safe-area fit test.
 - **Composer menus** use `Above`: they grow from the measured trigger and settle above
   it, 8dp clear of it and aligned at logical start. The scroll viewport is bounded to
   the available area above the trigger, not the space below it behind the IME. Closing
@@ -326,8 +329,8 @@ with the page's backdrop supplied and `PiCorner.popup`, so a settings dropdown's
 a menu's are cut the same way. Its `options` overload takes a `PiDropdownOption` per
 alternative (a label and a sentence) and draws those rows in the library's own
 `GlassDropdownPopup` (`PiDropdownPopup`), which is the popup the plain form raises — one
-panel and one arc for both forms, rather than the menu's fade at full size, which beside
-the language row's arc reads as no motion at all. `OverlayDropdownPreference` is refused by
+panel and one arc for both forms, rather than a full-size fade, which beside the
+language row's arc reads as no motion at all. `OverlayDropdownPreference` is refused by
 `tools/check-ui.py` for the same reason `OverlayListPopup` is.
 
 **The drawer foot and heading are glass too, and they own their layer.** The drawer is a

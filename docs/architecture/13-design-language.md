@@ -455,15 +455,25 @@ Two row rules are behaviour rather than taste:
   long conversation recycles cards and a menu that vanished mid-read would be unusable.
 
   Point and row context menus keep Miuix's logical-end alignment and safe-area fit
-  test. Its edge reveal started at 15% of the final width, which read as a new object
-  growing from a corner instead of actions for the pressed item. The panel now fades
-  at full size with only 6dp of travel toward the trigger on exit.
+  test. They take `GlassPopup`'s own edge reveal rather than a fade: the panel starts
+  at 15% of its settled width and a 0.2 height-to-width ratio against the logical end,
+  grows on `GlassMotion.popupMorph()`, and its rows fade in on `popupMorphFade()` while
+  a 40 px `popupMorphBlur()` resolves. The full-size fade is the losing design and the
+  reason is kept here: with the panel's rectangle already settled and only 6 dp of
+  travel, the rows switched on instead of the panel unfolding, and beside a dropdown
+  row's arc one card away it read as no animation at all. The opposite trade-off is
+  recorded too — the same edge reveal was once rejected as "a new object growing from
+  a corner"; what keeps the official motion from reading that way is that the panel's
+  rows scale with its frame and the blur carries the opening, so the surface is the
+  control unfolding rather than a second object appearing beside it. Every `Auto` menu
+  — the drawer's row menu, the files row's and the transcript card's — is this one
+  path, so the three cannot drift apart.
 
-  **A dropdown row's panel is not a menu and does not take that fade.** Its alternatives
+  **A dropdown row's panel is not a menu and does not take that edge reveal.** Its alternatives
   are the row's own value unfolded, so it keeps the library's arc: a flat capsule at 69%
   of the settled width grows out of the value cell, arcs into place on `GlassMotion`'s
   four dropdown springs, and fades its own value out underneath itself. The summarised
-  form used to share the menu's anchored panel and fade at full size, which read as no
+  form used to share the menu's anchored panel with its old full-size fade, which read as no
   animation at all beside the language row's arc one card away — a fade over a panel that
   is already at its final size is not motion. `PiDropdownPopup` is that panel: the
   library's `GlassDropdownPopup` with the app's `PiMenuRow`s inside it, mounted in

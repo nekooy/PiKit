@@ -54,11 +54,13 @@ import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.PopupLayout
  *
  * ## Motion and placement follow the trigger
  *
- * Context menus fade in at full size; the composer and a glass icon button morph from
- * their measured trigger. The composer's endpoint is a viewport above it, so the menu
- * cannot open over its input field when the IME raises the chip row. A glass icon
- * button's endpoint is the bar it belongs to, or the button itself when no bar bottom
- * is supplied.
+ * Context menus take Miuix's `GlassPopup` edge reveal: a flat capsule at 15% of the
+ * settled width on the logical end grows on `GlassMotion.popupMorph()` while its rows
+ * fade in and sharpen from `POPUP_MORPH_BLUR_PX`. The composer and a glass icon button
+ * morph from their measured trigger. The composer's endpoint is a viewport above it, so
+ * the menu cannot open over its input field when the IME raises the chip row. A glass
+ * icon button's endpoint is the bar it belongs to, or the button itself when no bar
+ * bottom is supplied.
  *
  * The morph is the kit's own rather than Miuix's `GlassTransformPopup`: the library's
  * popup keeps its full-page dismiss layer composed through the exit spring, and that
@@ -69,12 +71,12 @@ import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.PopupLayout
  * is still playing.
  *
  * A **dropdown row's panel is not a menu**, and it is the one panel in this file that does
- * not take that fade: its alternatives *are* the row's value unfolded, so it opens with the
- * library's arc out of the value cell, the same motion the plain form of
+ * not take that edge reveal: its alternatives *are* the row's value unfolded, so it opens
+ * with the library's arc out of the value cell, the same motion the plain form of
  * [PiDropdownPreference] gets from `GlassDropdownPreference`. [PiDropdownPopup] is that
  * panel. A menu lists actions for a control the reader pressed; a dropdown states what a
- * value can become, and a value that faded in at full size read as no motion at all beside
- * the arc of the row next to it.
+ * value can become, and a full-size fade read as no motion at all beside the arc of the
+ * row next to it.
  *
  * ## Where the panel is drawn, and why it is not where the trigger is
  *
