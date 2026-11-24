@@ -197,7 +197,9 @@ fun PiCustomDialog(
             onDismissRequest = onDismissRequest,
             onDismissFinished = onDismissFinished,
         ) {
-            content()
+            CompositionLocalProvider(LocalPiGlassSurface provides true) {
+                content()
+            }
         }
     } else {
         WindowDialog(
@@ -451,8 +453,10 @@ fun PiSheet(
             insideMargin = insideMargin,
             onDismissRequest = onDismiss,
         ) {
-            Column(Modifier.fillMaxWidth()) {
-                content()
+            CompositionLocalProvider(LocalPiGlassSurface provides true) {
+                Column(Modifier.fillMaxWidth()) {
+                    content()
+                }
             }
         }
     } else {

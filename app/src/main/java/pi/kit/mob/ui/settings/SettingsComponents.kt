@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import pi.kit.mob.locales.LocalStrings
 import pi.kit.mob.ui.kit.LocalPiBackdrop
+import pi.kit.mob.ui.kit.LocalPiGlassSurface
 import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiNavigationInset
 import pi.kit.mob.ui.kit.LocalPiPageOverscroll
@@ -954,6 +955,12 @@ private val PICKER_LIST_MAX = 420.dp
  * the mark costs the label nothing and the two buttons beside each other do not move
  * when a run starts — which is what the text-swapping this replaces did ("fetch" became
  * "fetching…" and pushed its neighbour sideways).
+ *
+ * A secondary button inside a glass sheet takes [PiTone.control] instead of the
+ * scheme's `secondaryVariant`: the light `#E6E6E6` is lighter than the sheet body and
+ * disappears into it. The glass flag comes from [LocalPiGlassSurface], which `PiSheet`
+ * and `PiCustomDialog` raise around their content, so a call site does not state the
+ * surface it is drawn on.
  */
 @Composable
 fun SettingsButton(
@@ -964,15 +971,23 @@ fun SettingsButton(
     primary: Boolean = false,
     busy: Boolean = false,
 ) {
+    val onGlass = LocalPiGlassSurface.current
     Button(
         cornerRadius = PiCorner.radius,
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        colors = if (primary) {
-            ButtonDefaults.buttonColorsPrimary()
-        } else {
-            ButtonDefaults.buttonColors()
+        colors = when {
+            primary -> ButtonDefaults.buttonColorsPrimary()
+            onGlass -> ButtonDefaults.buttonColors(
+                color = PiTone.control(),
+                disabledColor = PiTone.control(),
+                contentColor = MiuixTheme.colorScheme.onSurface,
+                disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
+                    alpha = GLASS_CONTROL_DISABLED_INK,
+                ),
+            )
+            else -> ButtonDefaults.buttonColors()
         },
     ) {
         if (busy) {
@@ -984,6 +999,9 @@ fun SettingsButton(
                     // refusing taps — which it does for the length of the run.
                     foregroundColor = when {
                         !enabled && primary -> MiuixTheme.colorScheme.disabledOnPrimaryButton
+                        !enabled && onGlass -> MiuixTheme.colorScheme.onSurface.copy(
+                            alpha = GLASS_CONTROL_DISABLED_INK,
+                        )
                         !enabled -> MiuixTheme.colorScheme.disabledOnSecondaryVariant
                         primary -> MiuixTheme.colorScheme.onPrimary
                         else -> MiuixTheme.colorScheme.onSurface
@@ -1000,4 +1018,7 @@ fun SettingsButton(
 /** The spinner inside a busy [SettingsButton], and the gap between it and the label. */
 private val BUTTON_SPINNER_SIZE = 16.dp
 private val BUTTON_SPINNER_GAP = 8.dp
+
+/** The ink of a disabled secondary button on glass: the fill stays, the label fades. */
+private const val GLASS_CONTROL_DISABLED_INK = 0.45f
 

@@ -567,7 +567,11 @@ answer palette: dismiss is `PiTone.control()` — a 15% wash of the surface ink 
 on that panel) with full `onSurface` ink — primary is `primary` / `onPrimary`, and a
 destructive confirm is `error` / `onError` — the error role as a solid control rather
 than a red word floating on the glass. The same `PiTone.control()` is the secondary
-answer on every glass sheet, because a sheet's body is the same glass family. The
+answer on every glass sheet, because a sheet's body is the same glass family. Measured
+on the preset editor's sheet, the light body is rgb(235) and the scheme's
+`secondaryVariant` (`#E6E6E6`, rgb 230) sits five steps from it — the same failure one
+surface over — so `SettingsButton` takes its fill from `LocalPiGlassSurface`, which
+`PiSheet`/`PiCustomDialog` raise, instead of the library's default. The
 disabled state keeps the 15% rectangle and fades only the label to 45% ink, so a
 rename whose field is empty still reads as a button rather than as a missing control.
 The window-dialog path states the same assignments on its `TextButton` pair.

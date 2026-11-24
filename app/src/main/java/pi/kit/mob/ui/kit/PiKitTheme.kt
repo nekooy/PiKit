@@ -552,6 +552,19 @@ fun Modifier.piGlass(shape: Shape, alpha: Float = 1f): Modifier =
 val LocalPiBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
 /**
+ * Whether this composition draws on a glass panel rather than on a page card.
+ *
+ * [PiSheet] and [PiCustomDialog] raise it around their content when they take the glass
+ * path. A neutral filled control cannot ask the scheme for its fill there: the light
+ * scheme's `secondaryVariant` (`#E6E6E6`, rgb 230) is *lighter* than the sheet body
+ * (measured around rgb 235) and only five steps from it, so a secondary button reads as
+ * a word with no rectangle under it. [PiTone.control] is the fill that keeps the control
+ * shape on glass. The flag is separate from [LocalPiBackdrop] because a page body
+ * provides that backdrop too — a button on a page card must keep `secondaryVariant`.
+ */
+val LocalPiGlassSurface = staticCompositionLocalOf { false }
+
+/**
  * Records this subtree into a backdrop the page's glass controls can sample.
  *
  * The layer is created only when the device supports the shader: `rememberLayerBackdrop`
