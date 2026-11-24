@@ -12,10 +12,10 @@ PiKit 把 [pi](https://pi.dev) 编程 Agent 跑在 Android 手机上。Termux �
 `pi` 命令行都打包在 APK 里，首次启动解包即用，无需软件源或额外下载——唯一要连的是模型供应商。
 
 <p align="center">
-  <img src="docs/assets/preview-0.8.0.webp" width="90%" alt="PiKit 0.8.0——对话列表、对话、终端、文件和设置页面">
+  <img src="docs/assets/preview-0.8.5.webp" width="90%" alt="PiKit 0.8.5——对话、对话列表、终端、文件和设置页面">
 </p>
 
-<p align="center"><sub>PiKit 0.8.0 界面预览</sub></p>
+<p align="center"><sub>PiKit 0.8.5 界面预览</sub></p>
 
 ## 特色
 

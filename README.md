@@ -14,10 +14,10 @@ first launch — no repository to reach, no package to fetch. The only connectio
 needed is one that can reach the model provider.
 
 <p align="center">
-  <img src="docs/assets/preview-0.8.0.webp" width="90%" alt="PiKit 0.8.0 — the conversation list, a conversation, the terminal, the files page and the settings">
+  <img src="docs/assets/preview-0.8.5.webp" width="90%" alt="PiKit 0.8.5 — a conversation, the conversation list, the terminal, the files page and the settings">
 </p>
 
-<p align="center"><sub>PiKit 0.8.0 interface preview</sub></p>
+<p align="center"><sub>PiKit 0.8.5 interface preview</sub></p>
 
 ## Features
 
