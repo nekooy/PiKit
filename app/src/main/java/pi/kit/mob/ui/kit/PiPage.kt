@@ -178,7 +178,7 @@ fun PiPage(
                 // Always scrolled, so the bar's controls hold the material from the
                 // first frame: `GlassTopAppBar` turns this one flag into
                 // `materialProgress` — the pill's alpha, its edge stroke and its shadow —
-                // and into `maskProgress`, the band's 100ms fade. Miuix 0.9.5-beta03 has
+                // and into `maskProgress`, the band's 100ms fade. Miuix 0.9.5-beta04 has
                 // no way to raise the first without the second at the call site:
                 // `GlassIconButton` takes no progress parameter, `inheritTopBarMaterial =
                 // false` only opts out of the bar's backdrop and material (the shared

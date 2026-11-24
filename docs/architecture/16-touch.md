@@ -14,7 +14,7 @@ and not a scroll, and that a gesture was recognised rather than ignored.
 
 ## What the library does, measured
 
-Read out of `miuix-ui-android` 0.9.5-beta03's own source, because the library documents
+Read out of `miuix-ui-android` 0.9.5-beta04's own source, because the library documents
 none of it and a second buzz is the failure this chapter exists to prevent:
 
 | Component | Performs |

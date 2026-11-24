@@ -17,8 +17,8 @@ patterns the change touches.
   the docs and source at the tag matching PiKit's `miuix` pin for implementation
   details such as defaults, layout, and fallback behaviour.
   [Official Miuix documentation](https://compose-miuix-ui.github.io/miuix/) ·
-  [Docs at v0.9.5-beta03](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta03/docs) ·
-  [Source at v0.9.5-beta03](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta03) ·
+  [Docs at v0.9.5-beta04](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta04/docs) ·
+  [Source at v0.9.5-beta04](https://github.com/compose-miuix-ui/miuix/tree/v0.9.5-beta04) ·
   [PiKit version catalog](../gradle/libs.versions.toml)
 - Read Mishka's implementation of the equivalent surface alongside its UI guidelines
   and glass migration guide. Use them for patterns such as backdrop isolation and
@@ -32,12 +32,12 @@ patterns the change touches.
 
 ## The pins the rules are written against
 
-- `compose-miuix-ui/miuix` **0.9.5-beta03** — the third beta of the OS4 material:
-  `GlassTextField`, the animated `GlassNavigationRail`/`GlassTabRow`, the refined
-  progressive-blur pipeline and the Compose 1.13 API migration. It targets Compose
-  Multiplatform 1.13.0-rc01; this project resolves the stable **Compose 1.13.0** line
-  through BOM 2026.11.01, which is API-compatible with the candidate the library was
-  compiled against.
+- `compose-miuix-ui/miuix` **0.9.5-beta04** — the fourth beta of the OS4 material:
+  `GlassCard`, popup alignment, HyperOS-aligned dialog and sheet motion, and a
+  recomposition/allocation pass across `miuix-blur`, `miuix-squircle` and
+  `miuix-glass`. It targets Compose Multiplatform 1.13.0-rc01; this project resolves
+  the stable **Compose 1.13.0** line through BOM 2026.11.01, which is API-compatible
+  with the candidate the library was compiled against.
 - Compose **BOM 2026.11.01** (the 1.13 line), Kotlin **2.4.21**. So: `computedStateOf`
   replaces `derivedStateOf`; `CapturedAnimatedVisibility` is available, but the two
   cross-fades (`PiOverlays`' toast, `ChatPictures`' chrome) keep `AnimatedVisibility`
@@ -154,7 +154,7 @@ that cut the last card in two (§13, *The window's last pixels*).
   control in the bar — the back arrow and the action pills — is glass from the first
   frame, the same control whether the page is at rest or scrolled. `PiPage` reports the
   bar as always scrolled to Miuix and hands the real scroll state to `backgroundAlpha`,
-  because 0.9.5-beta03 ties a button's material to the bar's `isContentScrolled` with no
+  because 0.9.5-beta04 ties a button's material to the bar's `isContentScrolled` with no
   call-site override, and a band that appeared at rest would be the wrong half to keep.
   Reaching the same trigger through `surfaceAlpha` does not work: Miuix's `glass` treats
   alpha as the colour layers' multiplier and keeps the blur, so the pill still shows as a

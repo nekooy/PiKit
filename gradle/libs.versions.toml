@@ -40,14 +40,15 @@ jlatexmath = "0.2.0"
 # snackbars and icons. The `-android` artifacts are the ones its guide names for a
 # Compose-only Android project; the multiplatform coordinates select the same code.
 #
-# 0.9.5-beta03 is the current release: the third beta of the OS4 material, which
-# restores `GlassTopAppBar`'s band fade and tracks its collapse progress, fixes
-# `GlassTabRow`'s resting opacity inside lists, and cuts recomposition and
-# allocations in `miuix-blur` and `miuix-glass`. It targets Compose Multiplatform
-# 1.13.0-rc01; this project resolves the stable Compose 1.13.0 line through
-# compose-bom 2026.11.01, which is API-compatible with the release candidate the
-# library was compiled against.
-miuix = "0.9.5-beta03"
+# 0.9.5-beta04 is the current release: the fourth beta of the OS4 material, which
+# adds `GlassCard` and a popup alignment parameter, aligns dialog and sheet motion
+# with HyperOS, and cuts recomposition and allocations across `miuix-blur`,
+# `miuix-squircle` and `miuix-glass`. Its only breaking change is two glass-icon
+# renames (`XiaominListen`, `CeditSelection`) that this project does not use. It
+# targets Compose Multiplatform 1.13.0-rc01; this project resolves the stable
+# Compose 1.13.0 line through compose-bom 2026.11.01, which is API-compatible with
+# the release candidate the library was compiled against.
+miuix = "0.9.5-beta04"
 junit = "4.13.2"
 
 [libraries]
