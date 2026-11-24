@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the Android emulator with the settings this project needs.
+"""Start a fresh Android emulator instance with the settings this project needs.
 
 The emulator has two traps that make PiKit look much worse than it is:
 
@@ -13,19 +13,26 @@ The emulator has two traps that make PiKit look much worse than it is:
   UI. The default here is quickboot, and `stop` saves the snapshot; `--cold`
   is only for testing the boot path itself.
 
-One AVD, several independent slots. The AVD name is machine state, not repository
-state: pass it explicitly, set `pikit.avd` in local.properties, or set PIKIT_AVD. The
-AVD itself lives under the ignored `pikit.avdHome` (default `.tooling/avd`), and this
-tool exports `ANDROID_AVD_HOME` only to the emulator it launches — a bare
-`emulator -avd <name>` cannot find it. `start` takes the first free of two slots
-(emulator-5554, emulator-5556) and runs that slot **read-only** from the one AVD, so a
-second session gets its own process, its own ADB serial and its own screen instead of a
-refusal. The read-only flag is what lets several instances of one AVD coexist; nothing a
-slot installs survives its own exit, and `benchmark` installs the APK it measures. Each
-slot is leased by the calling session (`--owner`, defaulting to DSH_SESSION_ID); `status`
-lists the two slots and any unmanaged emulator, and `stop --port` releases one. `stop
---force` takes over an abandoned slot only after the process check has proven the owner
-gone.
+One AVD, one fresh instance per start. The AVD name is machine state, not
+repository state: pass it explicitly, set `pikit.avd` in local.properties, or set
+PIKIT_AVD. The AVD itself lives under the ignored `pikit.avdHome` (default
+`.tooling/avd`), and this tool exports `ANDROID_AVD_HOME` only to the emulator it
+launches — a bare `emulator -avd <name>` cannot find it.
+
+`start` always launches a new instance and gives it the first free console port in
+the emulator's own 5554-5584 range. It deliberately does not reuse an emulator that
+is already booted: a running guest is probably another session's work, and its lease
+belongs to that session. The tool imposes no count of its own: it takes the next free
+console port until the emulator's own 16-port range runs out. Each guest is 2048 MB, so
+the host's memory is the practical ceiling. Instances are started **read-only**, which
+is what lets any number of them share the one AVD: nothing a guest installs survives
+its own exit, and `benchmark` installs the APK it measures. Every instance is leased
+by the calling session (`--owner`, defaulting to DSH_SESSION_ID); `status` lists all
+live instances and any emulator without a lease.
+
+The rule is use-and-close: `stop` stops every instance this session owns, and
+`stop --port` stops one. Never stop another session's instance; `--force` is only
+for a lease whose owning process is already gone.
 
 Usage:
   python tools/emulator.py start --avd <name>
@@ -43,6 +50,7 @@ import argparse
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -50,7 +58,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLING = ROOT / ".tooling"
-SLOT_PORTS = (5554, 5556)
+PORT_MIN = 5554
+PORT_MAX = 5584
+PORT_STEP = 2
 
 
 def caller() -> str:
@@ -79,7 +89,7 @@ def read_instance(port: int) -> dict:
 
 
 def claim_instance(instance: dict) -> bool:
-    """Create one slot's lease with O_EXCL, so two `start` calls cannot both win it."""
+    """Create one instance's lease with O_EXCL, so two `start` calls cannot both win it."""
     TOOLING.mkdir(exist_ok=True)
     try:
         descriptor = os.open(state_path(instance["port"]), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -102,18 +112,46 @@ def clear_instance(port: int) -> None:
     state_path(port).unlink(missing_ok=True)
 
 
+def state_ports() -> list[int]:
+    """Every port that has a lease file, whether or not its process is still alive."""
+    ports: list[int] = []
+    if not TOOLING.is_dir():
+        return ports
+    for path in TOOLING.glob("emulator-*.state"):
+        match = re.fullmatch(r"emulator-(\d+)\.state", path.name)
+        if match:
+            ports.append(int(match.group(1)))
+    return sorted(ports)
+
+
+def candidate_ports() -> list[int]:
+    return list(range(PORT_MIN, PORT_MAX + 1, PORT_STEP))
+
+
+def port_free(port: int) -> bool:
+    """The console port and the ADB port it implies must both be bindable."""
+    for candidate in (port, port + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind(("0.0.0.0", candidate))
+            except OSError:
+                return False
+    return True
+
+
 def instance_alive(sdk: Path, instance: dict) -> bool:
-    # pid 0 means `start` has claimed the slot but not spawned the emulator yet.
+    # pid 0 means `start` has claimed the instance but not spawned the emulator yet.
     starting = not instance.get("pid") and (time.time() - float(instance.get("started") or 0)) < 120
     return starting or process_alive(int(instance.get("pid") or 0)) or booted(sdk, int(instance["port"]))
 
 
 def live_instances(sdk: Path) -> dict[int, dict]:
-    """The slots that are still alive, dropping state left by a dead process."""
+    """The instances that are still alive, dropping state left by a dead process."""
     live: dict[int, dict] = {}
-    for port in SLOT_PORTS:
+    for port in state_ports():
         instance = read_instance(port)
         if not instance:
+            clear_instance(port)
             continue
         if instance_alive(sdk, instance):
             live[port] = instance
@@ -199,10 +237,12 @@ def booted(sdk: Path, port: int) -> bool:
     return result.returncode == 0 and result.stdout.strip() == "1"
 
 
-def wait_boot(sdk: Path, port: int, timeout: float) -> float:
+def wait_boot(sdk: Path, port: int, timeout: float, process: subprocess.Popen[str] | None = None) -> float:
     started = time.monotonic()
     deadline = started + timeout
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(f"emulator-{port} exited before booting (code {process.returncode})")
         if booted(sdk, port):
             return time.monotonic() - started
         time.sleep(1.0)
@@ -215,44 +255,54 @@ def tail(path: Path, lines: int = 30) -> str:
     return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:])
 
 
+def new_state(args: argparse.Namespace, port: int, owner: str) -> dict:
+    return {
+        "avd": args.avd,
+        "port": port,
+        "owner": owner,
+        "pid": 0,
+        "started": time.time(),
+        "read_only": True,
+    }
+
+
 def start(args: argparse.Namespace) -> int:
     sdk = sdk_root()
     if not emulator_exe(sdk).is_file():
         raise SystemExit(f"emulator not found under {sdk}")
     owner = args.owner or caller()
-    mine = owner_instances(sdk, owner)
-    if mine:
-        print(f"emulator-{next(iter(mine))} is already booted for this session")
-        return 0
-
     live = live_instances(sdk)
-    unmanaged = unmanaged_ports(sdk, live)
-    if unmanaged:
-        listed = ", ".join(f"emulator-{port}" for port in sorted(unmanaged))
-        raise SystemExit(
-            f"unmanaged emulator(s) already booted without a slot lease: {listed}. "
-            "Run `python tools/emulator.py status`, stop them, then start through this tool."
-        )
+    adb_ports = adb_emulator_ports(sdk)
+
     if args.port is not None:
         port = args.port
+        if port % PORT_STEP or not (PORT_MIN <= port <= PORT_MAX):
+            raise SystemExit(f"--port must be an even number between {PORT_MIN} and {PORT_MAX}")
         if port in live:
             raise SystemExit(
                 f"emulator-{port} is held by {live[port].get('owner', 'another session')}; "
-                "choose another --port or stop that slot first."
+                "choose another --port or stop that instance first."
             )
+        if port in adb_ports or not port_free(port):
+            raise SystemExit(f"port {port} is already in use on this host; choose another --port")
+        state = new_state(args, port, owner)
+        if not claim_instance(state):
+            holder = read_instance(port).get("owner", "another session")
+            raise SystemExit(f"emulator-{port} was just taken by {holder}")
     else:
-        if len(live) >= len(SLOT_PORTS):
-            holders = ", ".join(f"emulator-{p} ({i.get('owner', '?')})" for p, i in sorted(live.items()))
+        port = 0
+        for candidate in candidate_ports():
+            if candidate in live or candidate in adb_ports or not port_free(candidate):
+                continue
+            state = new_state(args, candidate, owner)
+            if claim_instance(state):
+                port = candidate
+                break
+        if not port:
             raise SystemExit(
-                f"all {len(SLOT_PORTS)} emulator slots are in use: {holders}. "
-                "Stop one with `stop --port <port>`; the 16 GB profile deliberately keeps two."
+                f"no free emulator port in {PORT_MIN}-{PORT_MAX}; stop an instance with "
+                "`python tools/emulator.py status` then `stop --port <port>`"
             )
-        port = next(p for p in SLOT_PORTS if p not in live)
-
-    state = {"avd": args.avd, "port": port, "owner": owner, "pid": 0, "started": time.time(), "read_only": True}
-    if not claim_instance(state):
-        holder = read_instance(port).get("owner", "another session")
-        raise SystemExit(f"emulator-{port} was just taken by {holder}")
 
     TOOLING.mkdir(exist_ok=True)
     log = TOOLING / f"emulator-{port}.log"
@@ -284,8 +334,8 @@ def start(args: argparse.Namespace) -> int:
     state["pid"] = process.pid
     write_instance(state)
     try:
-        elapsed = wait_boot(sdk, port, args.timeout)
-    except (TimeoutError, OSError) as error:
+        elapsed = wait_boot(sdk, port, args.timeout, process)
+    except (TimeoutError, OSError, RuntimeError) as error:
         print(f"{error}\n--- {log} ---\n{tail(log)}", file=sys.stderr)
         if process.poll() is None:
             process.terminate()
@@ -293,6 +343,7 @@ def start(args: argparse.Namespace) -> int:
         return 1
     print(f"booted emulator-{port} in {elapsed:.1f}s (owner: {owner}, read-only)")
     print(f"log: {log.relative_to(ROOT)}")
+    print(f"stop it when done: python tools/emulator.py stop --port {port}")
     return 0
 
 
@@ -300,25 +351,29 @@ def stop(args: argparse.Namespace) -> int:
     sdk = sdk_root()
     owner = args.owner or caller()
     live = live_instances(sdk)
-    if args.all:
-        targets = sorted(port for port, instance in live.items() if args.force or instance.get("owner") == owner)
-    elif args.port is not None:
+    if args.port is not None:
         targets = [args.port]
     else:
-        mine = sorted(port for port, instance in live.items() if instance.get("owner") == owner)
-        if not mine:
-            raise SystemExit("no emulator slot belongs to this session; `status` lists the slots")
-        if len(mine) > 1:
-            raise SystemExit(f"this session owns several slots ({', '.join(map(str, mine))}); pass --port or --all")
-        targets = mine
+        if args.all and args.force:
+            targets = sorted(live)
+        else:
+            targets = sorted(port for port, instance in live.items() if instance.get("owner") == owner)
+        if not targets:
+            raise SystemExit("no emulator instance belongs to this session; `status` lists them")
 
     for port in targets:
         instance = read_instance(port)
+        if not instance and not args.force:
+            raise SystemExit(
+                f"emulator-{port} has no lease in this checkout; it may belong to another session "
+                "or to a bare emulator. Refusing to stop it without --force."
+            )
         if instance and instance.get("owner") != owner and not args.force:
             raise SystemExit(
-                f"emulator-{port} is held by {instance.get('owner')}; pass --force only after checking that session is gone."
+                f"emulator-{port} is held by {instance.get('owner')}; "
+                "pass --force only after checking that session is gone."
             )
-        # `emu kill` is a normal exit; read-only slots leave the base AVD unchanged.
+        # `emu kill` is a normal exit; read-only instances leave the base AVD unchanged.
         adb(sdk, port, "emu", "kill")
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
@@ -338,7 +393,7 @@ def status(args: argparse.Namespace) -> int:
     sdk = sdk_root()
     live = live_instances(sdk)
     if not live:
-        print("no emulator slots")
+        print("no leased emulator instances")
     for port, instance in sorted(live.items()):
         print(
             f"emulator-{port}: avd={instance.get('avd', '?')} owner={instance.get('owner', '?')} "
@@ -346,7 +401,7 @@ def status(args: argparse.Namespace) -> int:
             f"read_only={str(bool(instance.get('read_only'))).lower()}"
         )
     for port in sorted(unmanaged_ports(sdk, live)):
-        print(f"unmanaged: emulator-{port} is booted without a slot lease")
+        print(f"unmanaged: emulator-{port} is booted without a lease (another session or a bare emulator)")
     return 0
 
 
@@ -362,13 +417,16 @@ def benchmark(args: argparse.Namespace) -> int:
     if port is None:
         mine = owner_instances(sdk, owner)
         if not mine:
-            raise SystemExit("no emulator slot belongs to this session; run `start` first")
-        port = next(iter(mine))
+            raise SystemExit("no emulator instance belongs to this session; run `start` first")
+        port = max(mine, key=lambda candidate: float(mine[candidate].get("started") or 0))
     else:
         instance = read_instance(port)
-        if instance and instance.get("owner") != owner:
+        if not instance:
+            raise SystemExit(f"emulator-{port} has no lease in this checkout; start your own with `start`")
+        if instance.get("owner") != owner:
             raise SystemExit(
-                f"emulator-{port} is held by {instance.get('owner')}; benchmark in that session or choose another slot."
+                f"emulator-{port} is held by {instance.get('owner')}; "
+                "benchmark in that session or choose another instance."
             )
     apk = Path(args.apk)
     if not apk.is_absolute():
@@ -412,7 +470,7 @@ def benchmark(args: argparse.Namespace) -> int:
         print(f"ready text not found within {args.ready_timeout:.0f}s", file=sys.stderr)
         return 1
     print(f"ready: {ready:.1f}s (includes uiautomator's own dump latency)")
-    print(f"`python tools/emulator.py stop --port {port}` releases this read-only slot")
+    print(f"`python tools/emulator.py stop --port {port}` stops this instance when you are done")
     return 0
 
 
@@ -421,12 +479,17 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def port_argument(target: argparse.ArgumentParser) -> None:
-        target.add_argument("--port", type=int, default=None, help="slot port; auto-picks 5554/5556 when omitted")
+        target.add_argument(
+            "--port",
+            type=int,
+            default=None,
+            help="console port; defaults to the first free port from 5554",
+        )
 
     def owner_argument(target: argparse.ArgumentParser) -> None:
         target.add_argument("--owner", default=None, help="lease owner; defaults to DSH_SESSION_ID")
 
-    p_start = sub.add_parser("start", help="start a read-only emulator slot")
+    p_start = sub.add_parser("start", help="start a fresh read-only emulator instance")
     p_start.add_argument("--avd", default=avd_default())
     port_argument(p_start)
     owner_argument(p_start)
@@ -437,14 +500,18 @@ def main() -> int:
     p_start.add_argument("--visible", action="store_true", help="show the emulator window")
     p_start.set_defaults(func=start)
 
-    p_stop = sub.add_parser("stop", help="stop one emulator slot")
+    p_stop = sub.add_parser("stop", help="stop this session's emulator instance(s)")
     port_argument(p_stop)
     owner_argument(p_stop)
-    p_stop.add_argument("--all", action="store_true", help="stop every slot owned by this session")
+    p_stop.add_argument(
+        "--all",
+        action="store_true",
+        help="stop every instance owned by this session (the default); with --force, every live instance",
+    )
     p_stop.add_argument("--force", action="store_true", help="stop despite another session's lease")
     p_stop.set_defaults(func=stop)
 
-    p_status = sub.add_parser("status", help="list emulator slots and unmanaged emulators")
+    p_status = sub.add_parser("status", help="list leased instances and unmanaged emulators")
     p_status.set_defaults(func=status)
 
     p_bench = sub.add_parser("benchmark", help="install an APK and report launch/first-frame timings")

@@ -669,25 +669,25 @@ prompt, which billed the idle gap to a turn that had already finished.
 
 ## Things that will waste your time if you do not know them
 
-- **An empty `adb devices` means start the one AVD, not report a missing device.** Start
-  it with `python tools/emulator.py start` (the AVD name lives in the ignored
-  `local.properties` as `pikit.avd`, or in `PIKIT_AVD`) and wait for
-  `adb shell getprop sys.boot_completed` to answer `1`. `start` takes a free read-only
-  slot (`emulator-5554` or `emulator-5556`), so a second session gets its own process;
-  `python tools/emulator.py status` lists both owners. If both slots are in use, stop one;
-  never point two sessions at one serial. On software rasterisation
+- **An empty `adb devices` means start your own AVD, not report a missing device.** Run
+  `python tools/emulator.py start` (the AVD name lives in the ignored `local.properties`
+  as `pikit.avd`, or in `PIKIT_AVD`) and wait for `adb shell getprop sys.boot_completed`
+  to answer `1`. Every call starts a fresh instance on the first free port and prints its
+  serial; it never reuses one that is already booted, because that one is probably
+  another session's work. Stop yours when the task is done (`python tools/emulator.py
+  stop`); the tool does not cap how many run, so a forgotten instance is the only thing
+  that piles up. On software rasterisation
   (`-gpu swiftshader_indirect`) the GPU context times out
   (`dumpsys gfxinfo`: `GPU Context timeout: 10`, frames at 4950 ms) and the app's window
   never finishes its first draw, while `dumpsys window` calls it visible and
   `dumpsys input` calls it `NOT_VISIBLE, alpha=0` with a blank `screencap` — and
   `uiautomator dump` still returns a correct tree, so it looks like a broken instrument
   rather than a broken backend.
-- **An emulator outside `tools/emulator.py` is unmanaged, not a shortcut.** A bare
-  `emulator -avd …` cannot find the private `pikit.avdHome`; one that sets
-  `ANDROID_AVD_HOME` explicitly bypasses the two-slot registry. `start` refuses to add a
-  slot while `adb devices` shows an emulator without a slot lease
-  (`unmanaged: emulator-…`), and `status` prints it. Stop it and start through the tool;
-  that refusal is the technical fence — the prose above is not the only guard.
+- **An emulator without a lease is not yours to stop.** A bare `emulator -avd …` cannot
+  find the private `pikit.avdHome`; one that sets `ANDROID_AVD_HOME` explicitly runs
+  outside the lease registry. `status` prints `unmanaged: emulator-… is booted without a
+  lease`, `start` ignores it and adds its own instance, and `stop` only touches this
+  session's leases — `--force` is only for an owner process already gone.
 - **A tier's refusal is a sentence the model can act on, not a wall.** The extension
   matches paths in a command's *text*; a path built at runtime is not caught. Say
   "checked on every tool call", never "prevented" — the interface and the docs use the
