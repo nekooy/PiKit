@@ -80,6 +80,13 @@ internal object EnglishStrings : Strings {
         override val imageAttached = "Image attached"
         override val codeBlockFallback = "code"
         override val toolFallback = "tool"
+        override val toolShell = "Terminal"
+        override val toolRead = "Read"
+        override val toolEdit = "Edit"
+        override val toolSearch = "Search"
+        override val toolWeb = "Web"
+        override val toolAgent = "Agent"
+        override val toolTodo = "Todo"
 
         override fun stepsSummary(steps: Int) =
             if (steps == 1) "1 step" else "$steps steps"

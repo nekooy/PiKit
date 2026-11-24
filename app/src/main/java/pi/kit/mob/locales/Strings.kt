@@ -265,6 +265,23 @@ interface Strings {
         val codeBlockFallback: String
         val toolFallback: String
 
+        /**
+         * The category a tool call belongs to, as the step list names it.
+         *
+         * The raw tool name is pi's own spelling (`bash`, `read`, `web_fetch`) and is
+         * not a word the interface should make the reader learn. A step row says what
+         * *kind* of work it was — `终端 ls -la`, `读取 gradle.properties` — and the
+         * unknown case keeps the name it was given rather than filing it under a
+         * category that would be a guess.
+         */
+        val toolShell: String
+        val toolRead: String
+        val toolEdit: String
+        val toolSearch: String
+        val toolWeb: String
+        val toolAgent: String
+        val toolTodo: String
+
         /** The row that hides a finished turn's intermediate steps. */
         fun stepsSummary(steps: Int): String
 

@@ -3690,18 +3690,14 @@ private fun TranscriptCardView(
                 // container.
                 colors = CardDefaults.defaultColors(),
             ) {
-                card.rows.forEachIndexed { index, row ->
-                    Column(Modifier.padding(top = rowGap(card.rows.getOrNull(index - 1), row))) {
-                        TranscriptCardRow(
-                            row = row,
-                            text = text,
-                            expandedTurns = expandedTurns,
-                            onToggleTurn = onToggleTurn,
-                            onShowExtras = onShowExtras,
-                            onOpenPictures = onOpenPictures,
-                        )
-                    }
-                }
+                AnswerCardRows(
+                    rows = card.rows,
+                    text = text,
+                    expandedTurns = expandedTurns,
+                    onToggleTurn = onToggleTurn,
+                    onShowExtras = onShowExtras,
+                    onOpenPictures = onOpenPictures,
+                )
             }
             // The turn's own answer is the one row that wears the pair (see
             // `TranscriptRow.Message.showMeta`), so the card asks which row that is and
@@ -3717,6 +3713,167 @@ private fun TranscriptCardView(
         }
     }
 }
+
+/**
+ * One answer card's rows: the turn's work as a step spine, then the answer.
+ *
+ * ## What the spine is
+ *
+ * ZCode's transcript draws a run of agent work as one group: a summary header, then
+ * the individual steps under it, offset eight pixels from a one-pixel vertical rule,
+ * with the text starting at twenty-four. PiKit's turn band already *is* the summary
+ * header — `8 个步骤` above the rows it folds — so the missing half was the list under
+ * it, which used to be a stack of filled pills. This is that half: every step row a
+ * plain line in a 24dp text column, one hairline down the left, and the final answer
+ * left on the card's own margin so the reader can always tell where "what the agent
+ * did" stops and "what it says" begins.
+ *
+ * The answer is found as the **last assistant row that carries text**, not by
+ * `showMeta`: while a reply streams, `showMeta` is false on every row — the row that
+ * is becoming the answer included — and using it would make the answer jump out of
+ * the spine at the end of the turn. The last text-bearing row is the answer from the
+ * first token, so the layout is stable while it streams.
+ *
+ * ## Why this is not the old step rail
+ *
+ * A previous design inset every tool row by 12dp and joined them with a 2dp bar. It
+ * was removed because it cost width on every row of a turn and put every tool's mark
+ * 12dp right of every other row's text. This one is different in every part that made
+ * that one wrong: it is 1dp rather than 2dp, it exists only inside one answer card's
+ * work section rather than on every tool row everywhere, and its 24dp column is the
+ * same column the turn band's own 16dp mark and 8dp gap already use — so the group
+ * header and its children share one text margin instead of acquiring a second one.
+ * The final answer and every notice stay outside it.
+ */
+@Composable
+private fun AnswerCardRows(
+    rows: List<TranscriptRow>,
+    text: Strings,
+    expandedTurns: Set<Int>,
+    onToggleTurn: (Int) -> Unit,
+    onShowExtras: (PromptExtras) -> Unit,
+    onOpenPictures: (PictureTarget) -> Unit,
+) {
+    val answerIndex = answerRowIndex(rows)
+
+    var previous: TranscriptRow? = null
+    var index = 0
+    while (index < rows.size) {
+        val row = rows[index]
+        if (index != answerIndex && row.isStepRow()) {
+            val start = index
+            while (index < rows.size && index != answerIndex && rows[index].isStepRow()) {
+                index++
+            }
+            val group = rows.subList(start, index)
+            Column(Modifier.padding(top = rowGap(previous, group.first()))) {
+                StepGroup(
+                    rows = group,
+                    text = text,
+                    expandedTurns = expandedTurns,
+                    onToggleTurn = onToggleTurn,
+                    onShowExtras = onShowExtras,
+                    onOpenPictures = onOpenPictures,
+                )
+            }
+            previous = group.last()
+        } else {
+            Column(Modifier.padding(top = rowGap(previous, row))) {
+                TranscriptCardRow(
+                    row = row,
+                    text = text,
+                    expandedTurns = expandedTurns,
+                    onToggleTurn = onToggleTurn,
+                    onShowExtras = onShowExtras,
+                    onOpenPictures = onOpenPictures,
+                )
+            }
+            previous = row
+            index++
+        }
+    }
+}
+
+/** A tool call or an assistant fragment: one step of the turn's work. */
+private fun TranscriptRow.isStepRow(): Boolean = when (this) {
+    is TranscriptRow.Message -> item is ChatItem.Tool || item is ChatItem.Assistant
+    is TranscriptRow.TurnSummary -> false
+}
+
+/**
+ * The index of the row that is the turn's answer: the last assistant row carrying text.
+ *
+ * The last one rather than the first because a tool-using turn can narrate while it
+ * works (`我先看一下项目结构。`) and only the final text is the answer. `showMeta` is
+ * deliberately not consulted: while an answer streams it is false on every row, and a
+ * layout that keyed on it would move the answer out of the step spine on the turn's
+ * last token.
+ */
+internal fun answerRowIndex(rows: List<TranscriptRow>): Int = rows.indexOfLast { row ->
+    val item = (row as? TranscriptRow.Message)?.item
+    item is ChatItem.Assistant && item.text.isNotBlank()
+}
+
+/**
+ * A run of steps under one vertical rule.
+ *
+ * The rule is drawn in the outer column so the 24dp content inset does not move it;
+ * the last row's bottom and the first row's top are the group's own bounds, which is
+ * where ZCode's group rule stops too. A group of one row draws no rule — a line beside
+ * a single line of text is a bracket around nothing.
+ */
+@Composable
+private fun StepGroup(
+    rows: List<TranscriptRow>,
+    text: Strings,
+    expandedTurns: Set<Int>,
+    onToggleTurn: (Int) -> Unit,
+    onShowExtras: (PromptExtras) -> Unit,
+    onOpenPictures: (PictureTarget) -> Unit,
+) {
+    val rail = MiuixTheme.colorScheme.onSurface.copy(alpha = STEP_RAIL_ALPHA)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                if (rows.size > 1) {
+                    drawLine(
+                        color = rail,
+                        start = Offset(STEP_RAIL_X.toPx(), 0f),
+                        end = Offset(STEP_RAIL_X.toPx(), size.height),
+                        strokeWidth = STEP_RAIL_WIDTH.toPx(),
+                    )
+                }
+            }
+            .padding(start = STEP_GROUP_INSET),
+    ) {
+        rows.forEachIndexed { groupIndex, step ->
+            Column(
+                Modifier.padding(
+                    top = if (groupIndex == 0) 0.dp else rowGap(rows[groupIndex - 1], step),
+                ),
+            ) {
+                TranscriptCardRow(
+                    row = step,
+                    text = text,
+                    expandedTurns = expandedTurns,
+                    onToggleTurn = onToggleTurn,
+                    onShowExtras = onShowExtras,
+                    onOpenPictures = onOpenPictures,
+                    nested = true,
+                )
+            }
+        }
+    }
+}
+
+/** The step spine's geometry: the rule, its column, and the text it opens onto. */
+private val STEP_GROUP_INSET = 24.dp
+private val STEP_RAIL_X = 8.dp
+private val STEP_RAIL_WIDTH = 1.dp
+
+/** How much ink the rule carries: a hairline, not a divider. */
+private const val STEP_RAIL_ALPHA = 0.14f
 
 /**
  * The row of an answer card that carries the time and the copy button, or null.
@@ -3907,13 +4064,21 @@ private fun TranscriptCardRow(
     onToggleTurn: (Int) -> Unit,
     onShowExtras: (PromptExtras) -> Unit,
     onOpenPictures: (PictureTarget) -> Unit,
+    /**
+     * Whether the row is drawn inside the turn's step spine.
+     *
+     * The spine owns the left rule and the 24dp text column; a nested step does not
+     * repeat its family mark, because the group already says that these rows are one
+     * run of work. See [StepGroup].
+     */
+    nested: Boolean = false,
 ) {
     when (row) {
         is TranscriptRow.Message -> when (val item = row.item) {
             is ChatItem.User -> PromptBody(item, text, onShowExtras, onOpenPictures)
 
             is ChatItem.Assistant ->
-                AssistantBlock(item, text, row.showReasoning)
+                AssistantBlock(item, text, row.showReasoning, nested)
 
             is ChatItem.Tool -> ToolCallRow(item = item, text = text)
 
@@ -4385,6 +4550,7 @@ private fun AssistantBlock(
     item: ChatItem.Assistant,
     text: Strings,
     showReasoning: Boolean = true,
+    nested: Boolean = false,
 ) {
     // `rememberSaveable`: a `LazyColumn` disposes the rows that scroll out of its
     // viewport, so a plain `remember` lost the opened reasoning block — the reader
@@ -4431,6 +4597,7 @@ private fun AssistantBlock(
                 chars = item.thinking.length,
                 text = text,
                 onToggle = { showThinking = !showThinking },
+                nested = nested,
             )
             if (showThinking) {
                 // The gap is the point: previously the control and the block it

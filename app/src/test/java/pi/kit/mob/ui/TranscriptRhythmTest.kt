@@ -175,4 +175,21 @@ class TranscriptRhythmTest {
         assertFalse(notice().drawsNothing())
         assertFalse(summary().drawsNothing())
     }
+
+    @Test
+    fun `the answer is the last assistant row that carries text`() {
+        val preamble = assistant(key = "a1", text = "我先看一下项目结构。", thinking = "…")
+        val call = tool()
+        val answer = assistant(key = "a2", text = "已经改好了。")
+        assertEquals(3, answerRowIndex(listOf(summary(), preamble, call, answer)))
+
+        // A thinking-only row is work, not the answer; a turn that produced no text
+        // has no answer row to keep outside the step spine.
+        assertEquals(-1, answerRowIndex(listOf(summary(), assistant(thinking = "…"), call)))
+
+        // The answer is the answer while it streams too: `showMeta` is false until the
+        // turn settles, and keying on it would move the row out of the spine on the
+        // last token.
+        assertEquals(0, answerRowIndex(listOf(assistant(key = "s", text = "half a sen", streaming = true))))
+    }
 }

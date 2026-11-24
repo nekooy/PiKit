@@ -81,6 +81,13 @@ internal object JapaneseStrings : Strings {
         override val imageAttached = "画像を添付しました"
         override val codeBlockFallback = "コード"
         override val toolFallback = "ツール"
+        override val toolShell = "ターミナル"
+        override val toolRead = "読み取り"
+        override val toolEdit = "編集"
+        override val toolSearch = "検索"
+        override val toolWeb = "ウェブ"
+        override val toolAgent = "エージェント"
+        override val toolTodo = "タスク"
 
         override fun stepsSummary(steps: Int) = "${steps} ステップ"
         override val stepsShow = "表示"

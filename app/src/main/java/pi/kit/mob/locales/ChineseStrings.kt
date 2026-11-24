@@ -88,6 +88,13 @@ internal object ChineseStrings : Strings {
         override val imageAttached = "已添加图片"
         override val codeBlockFallback = "代码"
         override val toolFallback = "工具"
+        override val toolShell = "终端"
+        override val toolRead = "读取"
+        override val toolEdit = "编辑"
+        override val toolSearch = "搜索"
+        override val toolWeb = "网页"
+        override val toolAgent = "代理"
+        override val toolTodo = "待办"
 
         override fun stepsSummary(steps: Int) = "$steps 个步骤"
         override val stepsShow = "展开"

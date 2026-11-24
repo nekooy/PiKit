@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -67,7 +68,7 @@ import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -351,62 +352,107 @@ internal data class TurnSummaryData(
 )
 
 /**
- * One tool call: one pill for every state it can be in.
+ * One tool call: a step of the turn's work, drawn as a line of text rather than a pill.
  *
- * ## One shape, and only the mark inside it changes
+ * ## The shape, and what it replaced
  *
- * A call wears the screen's state pill ([ChatStatusPill]) from the moment it starts
- * until the reader opens its output — the same pill, in the same place, at the same
- * height, and of the same width. While it runs the pill carries the live mark
- * ([PiTone.live], the palette's secondary pair, reserved for "this is still going"
- * and for nothing else). When it settles the mark is swapped for the app's own tick
- * or cross: the tick on a success, on a muted [ChatTone.Neutral] pill, and the cross
- * on a failure, on [ChatTone.Danger] — the one red mark in a turn. The argument stays
- * beside the pill as one line of muted monospace, because for a call that has not
- * finished yet the argument is the only thing that says *what* it is doing — `ls -la`
- * is the answer, the tool's name is not — and keeping it there once the call is done
- * is what leaves the argument in the same place when it ends.
+ * A call used to wear a filled [ChatStatusPill] — the tool's raw name in a capsule whose
+ * fill was the state: a live container while it ran, a grey one when it succeeded, a red
+ * one when it failed. Six steps in one turn therefore drew six filled capsules of
+ * different widths and colours, and the loudest object on each row was the tool's *name*
+ * rather than the argument that says what the call is doing. On a page whose transcript
+ * is otherwise bare text, those capsules were the only stack of coloured boxes in the
+ * conversation.
  *
- * The settled pill is also the row's control: it carries the disclosure chevron and
- * a tap on it opens the call's output, or closes it again. A running call is not
- * tappable — there is nothing to open yet. The chevron is drawn after the argument
- * rather than inside the pill, so it takes its 4dp gap and 16dp glyph out of the
- * weighted line's share: a long argument may ellipsise a little sooner once the call
- * has ended, and the pill stays exactly where it was. Reserving that space while the
- * call runs would either put an arrow over a row that cannot be tapped or leave a
- * 20dp hole where one is about to appear — and the line it would come out of is the
- * whole description of a call still in flight.
+ * ZCode's agent transcript draws a step as one quiet line, and that is the shape adopted
+ * here: a 16dp mark for the tool's family, the family's own word, the argument, and only
+ * the state that is worth saying — a live dot while the call is out, a red cross when it
+ * failed, **nothing** when it succeeded. One text size, one line height and no fill, so
+ * a run of six steps reads as six lines of one list rather than six controls. The mark
+ * still changes with the state ([ToolFamily.ink]), which keeps the one thing the pill
+ * did well — "is this still running?" is answerable without reading — while dropping the
+ * container that made it loud.
  *
- * ## What this replaced
+ * ## The hierarchy
  *
- * A finished call used to *drop* the pill and become a dense 22dp row: a bare 14dp
- * mark beside the tool's name, on the row radius and with no fill of its own. So the
- * same call changed shape — and its name moved — at the instant it ended, and the
- * height change was doing the work of saying "this step finished". The pill is now
- * kept and the tick says it in place instead; the reader's rule is one shape per
- * step, with only the mark inside it changing. The live pill's 28dp against the old
- * dense row's 22dp is the measurement behind the reflow that is gone.
+ * The family word (`终端`, `读取`, `编辑`) is the quietest part, in
+ * `onSurfaceVariantSummary`; the argument is the line's subject. A file name is drawn in
+ * `onSurface` because it is what the reader is looking for, while a shell command keeps
+ * the summary grey and monospace — a command is technical detail, not a title. ZCode
+ * makes the same distinction between folder/file text and a command summary.
  *
- * Two devices removed for reasons that still hold:
+ * The raw tool name is pi's spelling (`bash`, `web_fetch`), not a word the interface
+ * should make anyone learn, so [toolFamilyOf] turns it into a category and
+ * [toolKindLabel] translates that category. An unknown tool keeps its own name rather
+ * than being filed under a guess.
  *
- *  - **The step rail.** Consecutive calls used to be inset 12dp and joined by a 2dp
- *    bar down their left edge, so that a run read as one turn's steps. The rail cost
- *    the reader 12dp of width on every row of a turn and — because the inset
- *    existed on *all* tool rows, rail or not — moved every tool's mark 12dp right of
- *    every other row's text. The rows now start at the card's own margin, like the
- *    thinking and the answer they belong to.
- *  - **The ripple.** See [DisclosureRow].
+ * ## Where the mark went
  *
- * The state mark is the app's own tick and cross — [MiuixIcons.Ok] and
- * [MiuixIcons.Close], the glyphs the model list marks an active profile and its
- * remove button with — rather than the `✓`/`✕` characters this used to draw. At
- * `footnote2` a text check is a thin diagonal that reads as a stray punctuation
- * mark beside the bold icons on every other row in the app.
+ * A turn's steps are drawn inside the answer card's `StepGroup`, whose header carries
+ * the list mark and whose one-pixel rule frames the rows. A step itself is words only:
+ * the rule and the header already say "this is one run of work", and a column of
+ * sixteen icons beside them was what the old pills were.
  *
- * The collapsed line is exactly one text line tall and the summary is ellipsised
- * rather than wrapped, so a card cannot change height as an argument streams in
- * one character at a time.
+ * The chevron stays at the end of the line, after the argument, and is only present
+ * once the call has settled — a running call has nothing to open. It is 16dp and takes
+ * its colour from the same summary grey, so the row's one control does not become a
+ * second object.
  */
+internal enum class ToolFamily { Shell, Read, Edit, Search, Web, Agent, Todo, Other }
+
+/**
+ * The family a pi tool belongs to, from its wire name.
+ *
+ * pi names its tools after what they do (`bash`, `read`, `edit`, `grep`, `web_fetch`),
+ * and a provider can add its own spelling. The match is deliberately a substring one:
+ * `TodoWrite` must be a todo before `write` makes it an edit, and `web_search` is a web
+ * call before `search` claims it. The order of the branches is the rule.
+ */
+internal fun toolFamilyOf(name: String): ToolFamily {
+    val normalized = name.lowercase()
+    return when {
+        normalized.contains("bash") || normalized.contains("shell") ||
+            normalized.contains("exec") || normalized.contains("terminal") -> ToolFamily.Shell
+
+        normalized.contains("todo") -> ToolFamily.Todo
+        normalized.contains("fetch") || normalized.contains("web") -> ToolFamily.Web
+        normalized.contains("agent") || normalized.contains("subagent") ||
+            normalized == "task" || normalized.startsWith("task") -> ToolFamily.Agent
+
+        normalized.contains("grep") || normalized.contains("glob") ||
+            normalized.contains("search") -> ToolFamily.Search
+
+        normalized.contains("edit") || normalized.contains("write") ||
+            normalized.contains("patch") -> ToolFamily.Edit
+
+        normalized.contains("read") || normalized == "ls" || normalized == "find" ||
+            normalized.contains("view") -> ToolFamily.Read
+
+        else -> ToolFamily.Other
+    }
+}
+
+/** The family's word in the interface's language, or the tool's own name when unknown. */
+internal fun toolKindLabel(family: ToolFamily, name: String, text: Strings): String =
+    when (family) {
+        ToolFamily.Shell -> text.chat.toolShell
+        ToolFamily.Read -> text.chat.toolRead
+        ToolFamily.Edit -> text.chat.toolEdit
+        ToolFamily.Search -> text.chat.toolSearch
+        ToolFamily.Web -> text.chat.toolWeb
+        ToolFamily.Agent -> text.chat.toolAgent
+        ToolFamily.Todo -> text.chat.toolTodo
+        ToolFamily.Other -> name.ifBlank { text.chat.toolFallback }
+    }
+
+/** The ink a step wears: live while it runs, red when it failed, quiet otherwise. */
+@Composable
+private fun ToolFamily.ink(state: ToolState): Color = when (state) {
+    ToolState.Failed -> PiTone.error()
+    ToolState.Pending, ToolState.Running -> PiTone.live()
+    ToolState.Succeeded -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+}
+
 @Composable
 internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
     // `rememberSaveable`, not `remember`: a `LazyColumn` disposes the items that
@@ -420,15 +466,8 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
 
-    val tone = when (item.state) {
-        ToolState.Failed -> ChatTone.Danger
-        ToolState.Succeeded -> ChatTone.Neutral
-        else -> ChatTone.Live
-    }
-    // Pending and Running share one shape — the live pill — because from the
-    // reader's side they are one fact: the call has not come back yet.
     val running = item.state == ToolState.Pending || item.state == ToolState.Running
-
+    val family = remember(item.name) { toolFamilyOf(item.name) }
     val summary = remember(item.argumentsJson) { toolSummary(item) }
     // Counted once per output rather than once per recomposition: a tool that dumps
     // thousands of lines streams `output` a chunk at a time, so an unremembered
@@ -440,12 +479,6 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
     val lines = remember(item.output) { item.output.lineSequence().count() }
 
     Column(Modifier.fillMaxWidth()) {
-        // One shape for every state of the call — the app's state pill. While the
-        // call runs it is the live indicator; once it settles the indicator becomes
-        // the tick or the cross and the pill becomes the row's control, opening the
-        // output on a tap. The settled call used to drop the pill for a bare 14dp
-        // mark, which moved its name and changed the row's height the moment it
-        // ended; the reader's rule is one shape per step.
         // Only the header row toggles the card. Making the whole card clickable would
         // be tidier, but a clickable consumes the long-press, which would leave the
         // output impossible to select or copy — the opposite of what a tool result is
@@ -457,67 +490,70 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
             onClickLabel = if (expanded) text.chat.collapse else text.chat.expand,
             onClick = { expanded = !expanded },
         ) {
-            // The mark answers "did it work", which is the question a reader has
-            // about a step they did not open, and the pill's label already says which
-            // tool ran. There is no per-tool glyph (a magnifier for a read, a terminal
-            // for a shell) and that is deliberate.
-            ChatStatusPill(
-                label = item.name.ifBlank { text.chat.toolFallback },
-                tone = tone,
-                mark = when (item.state) {
-                    ToolState.Failed -> {
-                        {
-                            Icon(
-                                imageVector = MiuixIcons.Close,
-                                contentDescription = null,
-                                modifier = Modifier.size(TOOL_MARK_SIZE),
-                            )
-                        }
-                    }
-
-                    ToolState.Succeeded -> {
-                        {
-                            Icon(
-                                imageVector = MiuixIcons.Ok,
-                                contentDescription = null,
-                                modifier = Modifier.size(TOOL_MARK_SIZE),
-                            )
-                        }
-                    }
-
-                    else -> null
-                },
+            Text(
+                text = toolKindLabel(family, item.name, text),
+                style = MiuixTheme.textStyles.footnote1,
+                color = family.ink(item.state),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             // The one-line preview of what the call was made with: the whole of the
             // closed row's content, and the reason it is the argument rather than the
             // output — `ls -la` says what the call is, and the first two lines of a
-            // directory listing do not.
+            // directory listing do not. It starts after the family word, not in a pill.
             if (summary.isNotBlank()) {
-                // `weight(1f, fill = false)` — not `fill = true`: the line takes only
-                // what it needs, so the chevron sits at the end of the text the way it
-                // does on the reasoning row, and `fill = false` still lets a long path
-                // use the whole remainder before it ellipsises. Weighted children are
-                // measured last, so the chevron is never pushed off the row.
                 Text(
                     text = summary,
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .padding(start = 6.dp),
-                    // `footnote1`, not `footnote2`: the preview is a *command*, and
-                    // 11sp monospace on a phone is the size at which a path or a flag
-                    // has to be read twice. The same size the expanded panel prints
-                    // it at, so opening the card does not resize the text the reader
-                    // was already looking at.
-                    style = MiuixTheme.textStyles.footnote1.copy(
-                        lineHeight = MONO_LINE_HEIGHT,
-                    ),
-                    fontFamily = FontFamily.Monospace,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        .padding(start = STEP_TEXT_GAP),
+                    // `footnote1`, not `footnote2`: the preview is a *command* or a path,
+                    // and 11sp monospace on a phone is the size at which a path or a flag
+                    // has to be read twice. The same size the expanded panel prints it
+                    // at, so opening the card does not resize the text the reader was
+                    // already looking at.
+                    style = if (family == ToolFamily.Shell) {
+                        MiuixTheme.textStyles.footnote1.copy(lineHeight = MONO_LINE_HEIGHT)
+                    } else {
+                        MiuixTheme.textStyles.footnote1
+                    },
+                    fontFamily = if (family == ToolFamily.Shell) {
+                        FontFamily.Monospace
+                    } else {
+                        FontFamily.Default
+                    },
+                    // File names are the one argument that is the line's subject;
+                    // a command is technical detail and stays in the summary grey.
+                    color = if (family == ToolFamily.Read || family == ToolFamily.Edit) {
+                        MiuixTheme.colorScheme.onSurface
+                    } else {
+                        MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            } else if (!running) {
+            } else {
                 Spacer(Modifier.weight(1f))
+            }
+            // Running and failed are the only states worth a mark. A success tick on
+            // every row would make a finished turn a column of ticks, which is exactly
+            // the noise ZCode's step list avoids: a settled step is the quiet default.
+            if (running) {
+                Box(
+                    Modifier
+                        .padding(start = STEP_STATUS_GAP)
+                        .size(LIVE_DOT_SIZE)
+                        .background(PiTone.live(), CircleShape),
+                )
+            } else if (item.state == ToolState.Failed) {
+                Icon(
+                    imageVector = MiuixIcons.Close,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(start = STEP_STATUS_GAP)
+                        .size(TOOL_MARK_SIZE),
+                    tint = PiTone.error(),
+                )
             }
             if (!running) {
                 DisclosureChevron(
@@ -610,6 +646,16 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
         }
     }
 }
+
+/** One size for the turn band's mark and a standalone reasoning row's, with its gap. */
+internal val STEP_MARK_SIZE = 16.dp
+internal val STEP_MARK_GAP = 8.dp
+
+/** Between a step's family word and its argument: one word-space at the reading size. */
+private val STEP_TEXT_GAP = 8.dp
+
+/** Between an argument and the state mark that ends it. */
+private val STEP_STATUS_GAP = 8.dp
 
 /** The status mark: a step up from the 11sp text glyph it replaced. */
 private val TOOL_MARK_SIZE = 14.dp
@@ -788,30 +834,28 @@ private const val CHEVRON_TURN_MILLIS = 160
  *
  * ## What it says
  *
- * One line — the brain, `Thinking · 1.2k chars`, a chevron — in the same shape as
- * the tool rows under it and the turn band above them, so the three read as one
- * kind of thing: a row that opens. The first draft of this row said
- * `Show reasoning` with the count pushed to the far right, and both halves of that
- * were wrong for the same reason: the label was a *verb* where the reader wanted a
- * *fact*, and the one number they wanted was a screen's width away from the word it
- * belonged to. The reference implementations put the count in the label
- * (`Thought for 1.2s`); PiKit's own turn band says `Worked 47s · 5 steps`, so the
- * count is what goes after the middot and the verb moves to the control's
- * `onClickLabel`, where a screen reader looks for it.
+ * One line — the brain, `思考 · 1.2k 字`, a chevron — in the same shape as the tool
+ * rows under it and the turn band above them, so the three read as one kind of thing:
+ * a row that opens. The first draft of this row said `Show reasoning` with the count
+ * pushed to the far right, and both halves of that were wrong for the same reason: the
+ * label was a *verb* where the reader wanted a *fact*, and the one number they wanted
+ * was a screen's width away from the word it belonged to. The reference
+ * implementations put the count in the label (`Thought for 1.2s`); PiKit's own turn
+ * band says `工作 47 秒 · 5 个步骤`, so the count is what goes in the label and the
+ * verb moves to the control's `onClickLabel`, where a screen reader looks for it.
  *
- * The count updates while the reasoning streams. It was hidden during streaming
- * before, on the theory that a number changing on every token is noise — it is not:
- * it is the only thing on the row that moves, and it is what tells the reader the
- * block they are waiting for is filling up.
+ * ## Why the mark is muted now
  *
- * ## Why it is still distinct from the turn band
+ * The brain used to be the accent's blue, on the argument that "thinking" is a mode
+ * the composer's chip also wears in primary. In ZCode's transcript the thought row is
+ * the quietest row of the turn, not an accent: the label and the brain sit in the
+ * summary grey, and the reader's eye goes to the reasoning text only when they open
+ * it. The blue was making the control louder than the answer beside it, which is the
+ * same mistake the old tool pills made.
  *
- * The two disclosures mean different things and sit a few lines apart, so they are
- * separated by position (the band sits at the turn's boundary, this sits inside a
- * message), by the mark in front of the label (the band has none, this has the
- * brain) and by the chevron's tint (the band's is `primary`). They are the *same*
- * shape otherwise, deliberately: the reader should not have to work out that two
- * rows that open are the same gesture.
+ * A nested row (inside the answer card's `StepGroup`) draws no brain: the group's
+ * left rule already marks it as one of the turn's steps, and the label still says
+ * `思考`.
  */
 @Composable
 internal fun ReasoningToggle(
@@ -819,6 +863,7 @@ internal fun ReasoningToggle(
     chars: Int,
     text: Strings,
     onToggle: () -> Unit,
+    nested: Boolean = false,
 ) {
     // 180 degrees rather than a second glyph: one icon that turns is a smaller
     // visual change per frame than swapping two vectors, and it reads as the same
@@ -828,20 +873,18 @@ internal fun ReasoningToggle(
         onClickLabel = if (expanded) text.chat.hideReasoning else text.chat.showReasoning,
         onClick = onToggle,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_thinking),
-            contentDescription = null,
-            modifier = Modifier.size(TOOL_MARK_SIZE),
-            // The app's own accent: the thinking mark is primary everywhere it
-            // appears — this row, the composer's thinking-level chip — so the mark
-            // means "reasoning" before the label beside it is read.
-            tint = MiuixTheme.colorScheme.primary,
-        )
+        if (!nested) {
+            Icon(
+                painter = painterResource(R.drawable.ic_thinking),
+                contentDescription = null,
+                modifier = Modifier.size(STEP_MARK_SIZE),
+                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+            Spacer(Modifier.width(STEP_MARK_GAP))
+        }
         Text(
             text = text.chat.reasoningLabel(chars),
-            modifier = Modifier.padding(start = 6.dp),
             style = MiuixTheme.textStyles.footnote1,
-            fontWeight = FontWeight.Medium,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -954,8 +997,8 @@ internal fun turnSummaryLabel(summary: TurnSummaryData, text: Strings): String {
  * block, and asking a height-constrained row for its intrinsic height to get that is
  * a measurement the text has already told us the answer to. This is the one element
  * on the page whose rail means "this is program output", so it stays a rail —
- * the *process* rail on a turn's steps is drawn by the row wrapper and is a
- * different statement.
+ * the *process* rail on a turn's steps is drawn by the answer card's `StepGroup`
+ * and is a different statement.
  */
 @Composable
 internal fun NoticeCard(item: ChatItem.Notice) {
@@ -1033,8 +1076,8 @@ internal fun durationSeconds(millis: Long): Long = (millis / 1000).coerceAtLeast
  * from a session file whose messages carry no timestamps has no duration either and
  * shows the step count alone: `0 秒` there would be an invention. A turn that has
  * neither — restored *and* hiding nothing — says nothing at all, which is
- * [turnSummaryLabel]'s last case: an empty label is an empty 6dp line, not the words
- * `0 个步骤`.
+ * [turnSummaryLabel]'s last case: the row is not drawn, rather than printing the
+ * words `0 个步骤`.
  */
 @Composable
 internal fun TurnSummaryRow(
@@ -1045,12 +1088,27 @@ internal fun TurnSummaryRow(
 ) {
     val foldable = summary.stepCount > 0
     val label = turnSummaryLabel(summary, text)
+    // A restored turn with no timestamps and nothing hidden has no fact to state.
+    // Drawing the group header's mark around an empty label would leave a 16dp icon
+    // standing over a blank line — the "empty is not a zero" rule, made visible.
+    if (label.isEmpty()) return
 
     DisclosureRow(
         enabled = foldable,
         onClickLabel = if (expanded) text.chat.stepsHide else text.chat.stepsShow,
         onClick = onToggle,
     ) {
+        // The header's 16dp mark plus 8dp gap is the 24dp text column the StepGroup
+        // indents its children to, so the header's label and every step share one
+        // margin: the list reads as one block rather than as a label with an
+        // unrelated indented list.
+        Icon(
+            imageVector = MiuixIcons.ListView,
+            contentDescription = null,
+            modifier = Modifier.size(STEP_MARK_SIZE),
+            tint = ChatTone.Accent.ink(),
+        )
+        Spacer(Modifier.width(STEP_MARK_GAP))
         Text(
             text = label,
             // One style for both cases, and that is a correction rather than a
@@ -1108,9 +1166,9 @@ internal enum class ChatTone {
     fun container(): Color = when (this) {
         // The wash, not `surfaceContainerHigh`: a status pill is drawn *on* the answer
         // card, and in the dark scheme the high surface step is the card's own #242424
-        // — the pill the tool's name sits in had no fill of its own there, so the name
-        // read as bare text with a tick after it. `inset()` is a step on whatever it is
-        // drawn over, which is the property a pill needs.
+        // — the pill had no fill of its own there, so its label read as bare text with
+        // a dot after it. `inset()` is a step on whatever it is drawn over, which is
+        // the property a pill needs.
         Neutral -> PiTone.inset()
         Accent -> MiuixTheme.colorScheme.primaryContainer
         Live -> PiTone.liveContainer()
@@ -1147,34 +1205,29 @@ internal enum class ChatTone {
 }
 
 /**
- * A small state, on a pill: the tool card's name and state, and the two "something is
- * running" rows at the foot of the transcript.
+ * A small state, on a pill: the two "something is running" rows at the foot of the
+ * transcript.
+ *
+ * The tool rows used to wear this pill too, with the tool's name inside it and the
+ * fill as the state. It is kept for the two rows that are a *state and nothing else* —
+ * "opening the conversation" and "compacting the context" — because those have no
+ * step row to live in. A tool call is a step of the turn and is drawn bare in
+ * [ToolCallRow]; a filled capsule was the only decoration in a list of text.
  *
  * A [Surface] rather than a hand-drawn background, so the pill is clipped and filled
  * by the same code every other Miuix surface is. The radius is a full round rather
- * than a [top.yukonga.miuix.kmp.basic.Button]'s 16dp because a pill is the app's
- * shape for a *state*, and 28dp is the height the tool rows were measured at: two
- * rows in a turn are one glance, not two settings rows.
+ * than a button's 16dp because a pill is the app's shape for a *state*, and 28dp is
+ * the height the transcript's status rows are measured at.
  *
- * [mark] is the state inside the label — the tick, the cross — and it is the only
- * thing about the pill that changes when a call settles. A live pill with no mark of
- * its own draws the running dot, which is what says "this has not come back yet"
- * without a word of its own; that is the same job the old design system's morphing
- * indicator had, done with the one palette role that means it.
- *
- * The mark is the only difference, and that is true of the pill's **width** only
- * because the mark occupies a box of one size in every state: `TOOL_MARK_SIZE`, the
- * 14dp status mark, with a narrower mark centred in it. Sizing the box by the mark
- * instead — the 6dp dot against the 14dp tick — made a running pill 8dp narrower than
- * the same settled pill, which moved its label and the argument beside it.
- * ARCHITECTURE §7.3 has the arithmetic.
+ * A live pill draws the running dot, which says "this has not come back yet" without
+ * a word of its own; that is the same job the old design system's morphing indicator
+ * had, done with the one palette role that means it.
  */
 @Composable
 internal fun ChatStatusPill(
     label: String,
     tone: ChatTone,
     modifier: Modifier = Modifier,
-    mark: (@Composable () -> Unit)? = null,
 ) {
     val ink = tone.ink()
     Surface(
@@ -1183,42 +1236,24 @@ internal fun ChatStatusPill(
         modifier = modifier.heightIn(min = PILL_HEIGHT),
         shape = RoundedCornerShape(percent = 50),
         color = tone.container(),
-        // The pill's ink, for its label and for whatever mark the caller draws: a
-        // mark passed in is an `Icon`, and Miuix's own `Icon` takes the tint from
-        // the content colour its container provides.
         contentColor = ink,
     ) {
-        // No `fillMaxWidth` anywhere here, and it is not tidiness: this pill is a
-        // child of a row that has other children (the tool card's argument, its
-        // chevron), so a minimum width asked for in here would push both off the
-        // row — the two-word-prompt-as-a-slab defect, one level down.
         Row(
             modifier = Modifier.padding(horizontal = PILL_INSET),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // One box for the mark in every state, with the mark centred in it. Sized
-            // by the mark instead, a running pill measured 10 + 6 + 5 + label + 10
-            // against a settled pill's 10 + 14 + 5 + label + 10 — `LIVE_DOT_SIZE`
-            // against `TOOL_MARK_SIZE` — so the label, and the tool's argument beside
-            // it, jumped 8dp right at the instant the call ended. The height never
-            // differed: both marks are shorter than `PILL_HEIGHT`, so the pill's
-            // height is its one label line's or that minimum's in both states.
-            if (mark != null || tone == ChatTone.Live) {
+            if (tone == ChatTone.Live) {
                 Box(
                     modifier = Modifier
                         .padding(end = PILL_MARK_GAP)
                         .size(TOOL_MARK_SIZE),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (mark != null) {
-                        mark()
-                    } else {
-                        Box(
-                            Modifier
-                                .size(LIVE_DOT_SIZE)
-                                .background(ink, CircleShape),
-                        )
-                    }
+                    Box(
+                        Modifier
+                            .size(LIVE_DOT_SIZE)
+                            .background(ink, CircleShape),
+                    )
                 }
             }
             Text(

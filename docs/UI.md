@@ -67,6 +67,7 @@ writing a composition:
 | A value with a few alternatives | `PiDropdownPreference` (or the summarised `options` form) | `OverlayDropdownPreference`, a radio group on the page, a dialog, a sheet |
 | A long list of choices to search | `SettingsPickerSheet` | a dropdown (its panel has no filter) |
 | A row in a popup menu | `PiMenuRow` (choice / action / fact) | `BasicComponent`, a preference row |
+| A step in an agent reply | `ToolCallRow` / `ReasoningToggle` inside the answer card's `StepGroup` | `ChatStatusPill`, a filled tool card, a per-row success tick |
 | A titled group inside a sheet | `PiSheetSection` | a bare `Card`, `PiSection` (its 28dp label inset is for a page) |
 | A chosen member of a set | `RadioButtonPreference` | a hand-built tick row, a second selection vocabulary |
 | A popup menu | `PiPopupMenu` + `Modifier.piMenuAnchor(anchor)` | `OverlayListPopup`, `OverlayDropdownPopup`, `GlassIconDropdownMenu`, a `GlassPopup` at the trigger |
@@ -455,6 +456,14 @@ takes the same padding (§9.2).
   long-press haptic, and the row whose menu is open is lit with `PiTone.inset()`
   (§13). A press light that follows the finger is right on a button and wrong on a
   row whose gesture opens a panel over itself.
+- **A tool call is a step, not a card.** An answer card's intermediate work — tool
+  calls and the assistant's own thinking fragments — is drawn by `StepGroup` as one
+  list under the turn band: a 1dp rule at 8dp and a 24dp text column shared with the
+  band's 16dp mark and 8dp gap. `ToolCallRow` is a bare line (`终端 ls -la`,
+  `读取 gradle.properties`): the family word, the argument, and only a live dot or a
+  failure cross as state. No fill, no pill and no tick on every successful row — a
+  finished step is the quiet default. The final answer stays on the card's own
+  margin, outside the spine (§7.3).
 
 ## Dialogs, sheets, and the one message
 
