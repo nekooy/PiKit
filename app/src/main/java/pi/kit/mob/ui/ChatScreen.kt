@@ -6806,7 +6806,9 @@ private fun ShellCommandSheet(
             // default secondary fill is almost the panel's own colour there.
             colors = ButtonDefaults.buttonColors(
                 color = PiTone.control(),
+                disabledColor = PiTone.control(),
                 contentColor = MiuixTheme.colorScheme.onSurface,
+                disabledContentColor = PiTone.disabledControlInk(),
             ),
         ) {
             Text(text = text.common.ok)

@@ -216,7 +216,9 @@ internal fun FilePreviewSheet(entry: FileEntry) {
                 // default secondary fill is nearly the panel's own colour there.
                 colors = ButtonDefaults.textButtonColors(
                     color = PiTone.control(),
+                    disabledColor = PiTone.control(),
                     textColor = MiuixTheme.colorScheme.onSurface,
+                    disabledTextColor = PiTone.disabledControlInk(),
                 ),
             )
             Button(

@@ -287,9 +287,7 @@ fun PiDialogAnswers(
                     color = PiTone.control(),
                     disabledColor = PiTone.control(),
                     contentColor = MiuixTheme.colorScheme.onSurface,
-                    disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
-                        alpha = DIALOG_DISABLED_INK_ALPHA,
-                    ),
+                    disabledContentColor = PiTone.disabledControlInk(),
                 ),
             ) {
                 Text(text = dismiss, style = MiuixTheme.textStyles.button)
@@ -304,9 +302,7 @@ fun PiDialogAnswers(
                     color = PiTone.control(),
                     disabledColor = PiTone.control(),
                     textColor = MiuixTheme.colorScheme.onSurface,
-                    disabledTextColor = MiuixTheme.colorScheme.onSurface.copy(
-                        alpha = DIALOG_DISABLED_INK_ALPHA,
-                    ),
+                    disabledTextColor = PiTone.disabledControlInk(),
                 ),
             )
         }
@@ -334,18 +330,14 @@ fun PiDialogAnswers(
                             color = MiuixTheme.colorScheme.error,
                             disabledColor = PiTone.control(),
                             contentColor = MiuixTheme.colorScheme.onError,
-                            disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
-                                alpha = DIALOG_DISABLED_INK_ALPHA,
-                            ),
+                            disabledContentColor = PiTone.disabledControlInk(),
                         )
                     } else {
                         ButtonDefaults.buttonColors(
                             color = MiuixTheme.colorScheme.primary,
                             disabledColor = PiTone.control(),
                             contentColor = MiuixTheme.colorScheme.onPrimary,
-                            disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
-                                alpha = DIALOG_DISABLED_INK_ALPHA,
-                            ),
+                            disabledContentColor = PiTone.disabledControlInk(),
                         )
                     },
                 ) {
@@ -363,16 +355,12 @@ fun PiDialogAnswers(
                             color = MiuixTheme.colorScheme.error,
                             disabledColor = PiTone.control(),
                             textColor = MiuixTheme.colorScheme.onError,
-                            disabledTextColor = MiuixTheme.colorScheme.onSurface.copy(
-                                alpha = DIALOG_DISABLED_INK_ALPHA,
-                            ),
+                            disabledTextColor = PiTone.disabledControlInk(),
                         )
                     } else {
                         ButtonDefaults.textButtonColorsPrimary(
                             disabledColor = PiTone.control(),
-                            disabledTextColor = MiuixTheme.colorScheme.onSurface.copy(
-                                alpha = DIALOG_DISABLED_INK_ALPHA,
-                            ),
+                            disabledTextColor = PiTone.disabledControlInk(),
                         )
                     },
                 )
@@ -668,9 +656,6 @@ private fun rememberLastMessage(message: PiToast.Message?): String {
 
 /** How long a message stays up: long enough to read a sentence, short enough to ignore. */
 private const val TOAST_MILLIS = 2_600L
-
-/** The label of a disabled answer: the rectangle is the state, the ink still reads. */
-private const val DIALOG_DISABLED_INK_ALPHA = 0.45f
 
 /** The gap between the composer's band and the capsule above it. */
 private val TOAST_BAND_GAP = 12.dp

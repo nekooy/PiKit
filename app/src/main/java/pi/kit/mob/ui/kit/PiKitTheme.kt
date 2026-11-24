@@ -680,6 +680,18 @@ object PiTone {
     fun control(): Color = MiuixTheme.colorScheme.onSurface.copy(alpha = CONTROL_ALPHA)
 
     /**
+     * The label ink of a disabled neutral control on glass.
+     *
+     * The 15% fill stays; only the ink fades. Overriding only `color` leaves the
+     * library's `disabledSecondaryVariant` as the disabled fill — `#E6E6E6` in this
+     * app's light scheme, lighter than the sheet body — so the control returns to the
+     * same "rectangle missing" state [control] exists to avoid.
+     */
+    @Composable
+    fun disabledControlInk(): Color =
+        MiuixTheme.colorScheme.onSurface.copy(alpha = CONTROL_DISABLED_INK_ALPHA)
+
+    /**
      * The fill behind the reader's own message: the accent, mixed into the card colour.
      *
      * ## Why an accent mix rather than a container role
@@ -741,6 +753,9 @@ private const val PROMPT_SHARE_DARK = 0.34f
  * library's `secondaryVariant` gives a button on a `#F7` card.
  */
 private const val CONTROL_ALPHA = 0.15f
+
+/** How much of a disabled neutral control's label survives on glass. */
+private const val CONTROL_DISABLED_INK_ALPHA = 0.45f
 
 /**
  * Where a base counts as dark, for the two shares above.

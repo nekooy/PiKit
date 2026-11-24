@@ -1093,7 +1093,9 @@ private fun ExtraKeysRow(
             // A secondary button on the sheet's glass body.
             colors = ButtonDefaults.buttonColors(
                 color = PiTone.control(),
+                disabledColor = PiTone.control(),
                 contentColor = MiuixTheme.colorScheme.onSurface,
+                disabledContentColor = PiTone.disabledControlInk(),
             ),
         ) {
             Text(text = text.terminal.keysMessageSend)

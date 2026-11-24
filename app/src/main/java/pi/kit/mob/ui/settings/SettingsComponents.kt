@@ -907,9 +907,7 @@ fun SettingsButton(
                 color = PiTone.control(),
                 disabledColor = PiTone.control(),
                 contentColor = MiuixTheme.colorScheme.onSurface,
-                disabledContentColor = MiuixTheme.colorScheme.onSurface.copy(
-                    alpha = GLASS_CONTROL_DISABLED_INK,
-                ),
+                disabledContentColor = PiTone.disabledControlInk(),
             )
             else -> ButtonDefaults.buttonColors()
         },
@@ -923,9 +921,7 @@ fun SettingsButton(
                     // refusing taps — which it does for the length of the run.
                     foregroundColor = when {
                         !enabled && primary -> MiuixTheme.colorScheme.disabledOnPrimaryButton
-                        !enabled && onGlass -> MiuixTheme.colorScheme.onSurface.copy(
-                            alpha = GLASS_CONTROL_DISABLED_INK,
-                        )
+                        !enabled && onGlass -> PiTone.disabledControlInk()
                         !enabled -> MiuixTheme.colorScheme.disabledOnSecondaryVariant
                         primary -> MiuixTheme.colorScheme.onPrimary
                         else -> MiuixTheme.colorScheme.onSurface
@@ -942,7 +938,4 @@ fun SettingsButton(
 /** The spinner inside a busy [SettingsButton], and the gap between it and the label. */
 private val BUTTON_SPINNER_SIZE = 16.dp
 private val BUTTON_SPINNER_GAP = 8.dp
-
-/** The ink of a disabled secondary button on glass: the fill stays, the label fades. */
-private const val GLASS_CONTROL_DISABLED_INK = 0.45f
 

@@ -502,7 +502,8 @@ takes the same padding (§9.2).
   `secondaryVariant` is `#E6E6E6` (rgb 230) — the button is lighter than the panel and
   five steps from it, reading as a word with no rectangle. `SettingsButton` takes the
   fill from `LocalPiGlassSurface`, which `PiSheet` and `PiCustomDialog` raise around
-  their glass content; a call site does not restate the surface.
+  their glass content; a call site does not restate the surface. A disabled neutral
+  control keeps that fill and fades only its label.
 - **A sheet's header carries the explicit X.** `PiSheet` supplies it whenever the
   sheet has a title: scrim, back and drag are the dismissal gestures, but none is
   visible, and a settings list must be closable by a named control. The content is a
