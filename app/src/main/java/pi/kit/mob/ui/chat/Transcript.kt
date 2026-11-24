@@ -66,9 +66,6 @@ import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -345,8 +342,8 @@ internal data class TurnSummaryData(
      * a row whose whole job is "there is more behind this" report a second,
      * unrelated fact, and the reader's report was that the fold button should say
      * what it folds and nothing else. A failed step is not hidden by it either:
-     * the failure is in the transcript, one tap away, with the tool card's own
-     * cross on it.
+     * the failure is in the transcript, one tap away, with the failed step's red
+     * family word on it.
      */
     val failedSteps: Int,
 )
@@ -365,13 +362,13 @@ internal data class TurnSummaryData(
  * conversation.
  *
  * ZCode's agent transcript draws a step as one quiet line, and that is the shape adopted
- * here: a 16dp mark for the tool's family, the family's own word, the argument, and only
- * the state that is worth saying — a live dot while the call is out, a red cross when it
- * failed, **nothing** when it succeeded. One text size, one line height and no fill, so
- * a run of six steps reads as six lines of one list rather than six controls. The mark
- * still changes with the state ([ToolFamily.ink]), which keeps the one thing the pill
- * did well — "is this still running?" is answerable without reading — while dropping the
- * container that made it loud.
+ * here: the family's own word, the argument, and only the state that is worth saying — a
+ * live dot while the call is out, the family word in red when it failed, **nothing** when
+ * it succeeded. One text size, one line height and no fill, so a run of six steps reads
+ * as six lines of one list rather than six controls. The ink still changes with the state
+ * ([ToolFamily.ink]), which keeps the one thing the pill did well — "is this still
+ * running?" is answerable without reading — while dropping the container that made it
+ * loud.
  *
  * ## The hierarchy
  *
@@ -388,10 +385,9 @@ internal data class TurnSummaryData(
  *
  * ## Where the mark went
  *
- * A turn's steps are drawn inside the answer card's `StepGroup`, whose header carries
- * the list mark and whose one-pixel rule frames the rows. A step itself is words only:
- * the rule and the header already say "this is one run of work", and a column of
- * sixteen icons beside them was what the old pills were.
+ * A turn's steps are drawn inside the answer card's `StepGroup`, whose one-pixel rule
+ * frames the rows. A step itself is words only: the rule already says "this is one run
+ * of work", and a column of sixteen icons beside them was what the old pills were.
  *
  * The chevron stays at the end of the line, after the argument, and is only present
  * once the call has settled — a running call has nothing to open. It is 16dp and takes
@@ -535,24 +531,16 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
             } else {
                 Spacer(Modifier.weight(1f))
             }
-            // Running and failed are the only states worth a mark. A success tick on
-            // every row would make a finished turn a column of ticks, which is exactly
-            // the noise ZCode's step list avoids: a settled step is the quiet default.
+            // Running is the only state worth a mark. A success tick on every row
+            // would make a finished turn a column of ticks, and a cross beside a
+            // failed row repeats what its red family word already says — the ink is
+            // the state, and a settled step is the quiet default.
             if (running) {
                 Box(
                     Modifier
                         .padding(start = STEP_STATUS_GAP)
                         .size(LIVE_DOT_SIZE)
                         .background(PiTone.live(), CircleShape),
-                )
-            } else if (item.state == ToolState.Failed) {
-                Icon(
-                    imageVector = MiuixIcons.Close,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .padding(start = STEP_STATUS_GAP)
-                        .size(TOOL_MARK_SIZE),
-                    tint = PiTone.error(),
                 )
             }
             if (!running) {
@@ -647,7 +635,7 @@ internal fun ToolCallRow(item: ChatItem.Tool, text: Strings) {
     }
 }
 
-/** One size for the turn band's mark and a standalone reasoning row's, with its gap. */
+/** A standalone reasoning row's mark, and its gap to the label. */
 internal val STEP_MARK_SIZE = 16.dp
 internal val STEP_MARK_GAP = 8.dp
 
@@ -657,8 +645,8 @@ private val STEP_TEXT_GAP = 8.dp
 /** Between an argument and the state mark that ends it. */
 private val STEP_STATUS_GAP = 8.dp
 
-/** The status mark: a step up from the 11sp text glyph it replaced. */
-private val TOOL_MARK_SIZE = 14.dp
+/** The status pill's mark cell: 14dp in every state, so a dot does not narrow the pill. */
+private val PILL_MARK_SIZE = 14.dp
 
 /** Between the preview and the chevron: the two were reading as one word. */
 private val TOOL_CHEVRON_GAP = 4.dp
@@ -1088,9 +1076,8 @@ internal fun TurnSummaryRow(
 ) {
     val foldable = summary.stepCount > 0
     val label = turnSummaryLabel(summary, text)
-    // A restored turn with no timestamps and nothing hidden has no fact to state.
-    // Drawing the group header's mark around an empty label would leave a 16dp icon
-    // standing over a blank line — the "empty is not a zero" rule, made visible.
+    // A restored turn with no timestamps and nothing hidden has no fact to state,
+    // and a blank line is not a row — the "empty is not a zero" rule, made visible.
     if (label.isEmpty()) return
 
     DisclosureRow(
@@ -1098,17 +1085,9 @@ internal fun TurnSummaryRow(
         onClickLabel = if (expanded) text.chat.stepsHide else text.chat.stepsShow,
         onClick = onToggle,
     ) {
-        // The header's 16dp mark plus 8dp gap is the 24dp text column the StepGroup
-        // indents its children to, so the header's label and every step share one
-        // margin: the list reads as one block rather than as a label with an
-        // unrelated indented list.
-        Icon(
-            imageVector = MiuixIcons.ListView,
-            contentDescription = null,
-            modifier = Modifier.size(STEP_MARK_SIZE),
-            tint = ChatTone.Accent.ink(),
-        )
-        Spacer(Modifier.width(STEP_MARK_GAP))
+        // No leading glyph: the duration and the count are a statement about the
+        // turn, not another line of its work. The step list keeps the 24dp indent,
+        // which is what makes the steps read as the thing this line opens.
         Text(
             text = label,
             // One style for both cases, and that is a correction rather than a
@@ -1246,7 +1225,7 @@ internal fun ChatStatusPill(
                 Box(
                     modifier = Modifier
                         .padding(end = PILL_MARK_GAP)
-                        .size(TOOL_MARK_SIZE),
+                        .size(PILL_MARK_SIZE),
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(

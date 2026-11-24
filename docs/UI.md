@@ -458,12 +458,12 @@ takes the same padding (§9.2).
   row whose gesture opens a panel over itself.
 - **A tool call is a step, not a card.** An answer card's intermediate work — tool
   calls and the assistant's own thinking fragments — is drawn by `StepGroup` as one
-  list under the turn band: a 1dp rule at 8dp and a 24dp text column shared with the
-  band's 16dp mark and 8dp gap. `ToolCallRow` is a bare line (`终端 ls -la`,
-  `读取 gradle.properties`): the family word, the argument, and only a live dot or a
-  failure cross as state. No fill, no pill and no tick on every successful row — a
-  finished step is the quiet default. The final answer stays on the card's own
-  margin, outside the spine (§7.3).
+  list under the turn band: a 1dp rule at 8dp and a 24dp text column indented from the
+  band's label. The band itself has no leading glyph. `ToolCallRow` is a bare line
+  (`终端 ls -la`, `读取 gradle.properties`): the family word, the argument, and a live
+  dot as the only state mark; a failure turns the family word red. No fill, no pill,
+  no cross and no tick on every successful row — a finished step is the quiet default.
+  The final answer stays on the card's own margin, outside the spine (§7.3).
 
 ## Dialogs, sheets, and the one message
 
