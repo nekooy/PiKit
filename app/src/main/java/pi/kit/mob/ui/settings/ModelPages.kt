@@ -54,7 +54,6 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -70,23 +69,25 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
 /**
- * The saved model configurations, with the active one marked.
+ * The saved model configurations. **This page stores; it does not choose.**
  *
- * Selecting a configuration is a separate tap from editing it: editing writes on
- * Save, so making "activate" an implicit part of opening the form would leave the
- * user unable to look at one without switching to it.
+ * Which configuration answers a conversation is decided by the composer's model chip,
+ * which lists every saved profile's models and switches the running agent to the one
+ * tapped. A second selection control here would be a second place that decides the same
+ * thing — it would compete with the chip and make "what am I about to send with?"
+ * ambiguous. So no row on this page is ticked, and tapping one opens its form rather
+ * than activating it; a profile becomes active when the chat chip picks one of its
+ * models (and the first saved configuration is active because there is nothing else to
+ * launch).
  *
- * Thinking level is deliberately not a *control* on this page. It used to be the row
- * at the top, beside the configuration it applies to — but the composer's chip is
- * where a conversation changes it, and two controls for one setting are two places to
- * look. The chip's sheet is the only one. It is read here, though, in each row's own
- * line: the level that configuration's model would run at is a fact about the model,
- * and a fact belongs beside the model it is about.
+ * Thinking level is the same rule: it is the composer's chip alone. It used to be the
+ * row at the top of this page, and then a fact on each row's line, but the chip is where
+ * a conversation changes it and two controls for one setting are two places to look.
  *
  * The shell is Miuix's top bar, whose subtitle is the count of saved configurations —
  * what the page is. A row states the rest: the configuration's name (its model id until
- * the user names it), the provider it is an endpoint and a key for, the level its model
- * runs at, and whether a key is saved.
+ * the user names it), the provider it is an endpoint and a key for, and whether a key is
+ * saved.
  */
 @Composable
 internal fun ModelPage(
@@ -139,7 +140,7 @@ internal fun ModelPage(
     val pageScroll = rememberScrollState()
     PiPage(
         title = text.settings.profilesTitle,
-        subtitle = text.settings.modelCount(profiles.size),
+        subtitle = text.settings.profileCount(profiles.size),
         onBack = onBack,
         contentScrolled = pageScroll.canScrollBackward,
         // Deleting a configuration takes the model out of the list and discards what the
@@ -180,25 +181,16 @@ internal fun ModelPage(
             if (profiles.isNotEmpty()) {
                 PiSection(title = text.settings.savedProfiles) {
                     profiles.forEach { profile ->
-                        // The row *is* the switch: the tick says which configuration the
-                        // agent launches with, and tapping the one already marked is a read
-                        // rather than a change. The edit and delete pair sits at the row's
-                        // end because a settings row's trailing slot is where its controls
-                        // live; the tick is the library's checkmark, the same mark the
-                        // picker sheets use for "this one is in effect", rather than a
-                        // radio ring that has to be read as a second kind of selection.
-                        SettingsChoiceRow(
+                        // A saved configuration is a row that opens its form. There is no
+                        // tick and no tap-to-activate here: which profile answers is the
+                        // composer's model chip to decide, and a second selection control
+                        // on this page was two places deciding one thing. The bin sits at
+                        // the row's end because a settings row's trailing slot is where its
+                        // controls live.
+                        ArrowPreference(
                             title = profile.displayName,
                             summary = subtitleFor(profile, text),
-                            selected = profile.id == activeId,
                             endActions = {
-                                IconButton(onClick = { onEdit(profile.id) }) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Edit,
-                                        contentDescription = text.settings.editProfile,
-                                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    )
-                                }
                                 IconButton(onClick = { pendingDelete = profile }) {
                                     Icon(
                                         imageVector = MiuixIcons.Delete,
@@ -207,19 +199,7 @@ internal fun ModelPage(
                                     )
                                 }
                             },
-                            onClick = {
-                                // Tapping the profile that is already active is a read, not
-                                // a switch: restarting there tore down a healthy agent (and
-                                // any turn that was streaming) to change nothing.
-                                if (profile.id != activeId) {
-                                    store.setActive(profile.id)
-                                    // Provider, model and key are only read when the
-                                    // process is spawned, so the running agent has to be
-                                    // replaced for the switch to be real. The page itself
-                                    // needs no reload: it is collecting the store.
-                                    session.scheduleRestart()
-                                }
-                            },
+                            onClick = { onEdit(profile.id) },
                         )
                     }
                 }
@@ -329,12 +309,13 @@ internal fun ModelEditPage(
     // existed already did.
     var api by remember { mutableStateOf(existing?.api.orEmpty()) }
 
-    // The models this provider may answer with, and which of them the agent is
-    // launched with. Held as a list rather than as one field because a provider is
-    // an endpoint and a key: wanting a second model from the same account is not a
-    // reason to type the key again.
+    // The models this provider may answer with. Held as a list rather than as one
+    // field because a provider is an endpoint and a key: wanting a second model from
+    // the same account is not a reason to type the key again. Which one answers is
+    // *not* a field here: that is the composer's model chip to choose, and this page
+    // only stores the set. The stored `modelId` is carried through Save when it is
+    // still in the list (see [save]).
     var models by remember { mutableStateOf(existing?.selectableModels.orEmpty()) }
-    var activeModel by remember { mutableStateOf(existing?.modelId.orEmpty()) }
     // What the user has said about each model pi's catalogue does not contain: whether it
     // takes images, and the two numbers pi's `models.json` entry has to name. Held here
     // until Save, like every other field, and an id with nothing said about it has no
@@ -530,7 +511,7 @@ internal fun ModelEditPage(
     val dirty = if (existing == null) {
         name.isNotBlank() || provider != null || apiKey.isNotBlank() || baseUrl.isNotBlank() ||
             api.isNotBlank() ||
-            models.isNotEmpty() || activeModel.isNotBlank() || settings.isNotEmpty() ||
+            models.isNotEmpty() || settings.isNotEmpty() ||
             draft.isNotBlank()
     } else {
         name != existing.name ||
@@ -539,7 +520,6 @@ internal fun ModelEditPage(
             baseUrl != existing.baseUrl ||
             api != existing.api ||
             models != existing.selectableModels ||
-            activeModel != existing.modelId ||
             settings != existing.modelSettings ||
             draft.isNotBlank()
     }
@@ -547,12 +527,9 @@ internal fun ModelEditPage(
     /**
      * Puts [raw] into this provider's model list and returns the new list.
      *
-     * A model already in the list is not added twice: picking the same one again is
-     * a way of choosing it, not of duplicating the row. Re-adding an existing id
-     * therefore *selects* it; a **new** id is only appended and leaves the tick on
-     * the model already chosen — taking it would make every fetch-list pick steal
-     * the selection from the model the user was actually using. It becomes active
-     * only when nothing was selected yet.
+     * A model already in the list is not added twice: this page stores a set, and
+     * re-adding an id is a no-op rather than a second way to choose it. The set has no
+     * order of preference; which member answers is the composer chip's business.
      *
      * [prefill] fills the three parameter controls from a catalogue or `/models`
      * answer. For a custom endpoint that is the difference between a row that says
@@ -563,9 +540,7 @@ internal fun ModelEditPage(
     fun addModel(raw: String, prefill: ModelSettings? = null): List<String> {
         val model = raw.trim()
         if (model.isBlank()) return models
-        val already = model in models
-        models = if (already) models else models + model
-        if (already || activeModel.isBlank()) activeModel = model
+        if (model !in models) models = models + model
         if (prefill != null && model !in settings) {
             settings = settings + (model to prefill)
         }
@@ -596,11 +571,12 @@ internal fun ModelEditPage(
     }
 
     /**
-     * Drops [model] from the list, moving the active mark if it was on it.
+     * Drops [model] from the list and returns the new list.
      *
-     * Removing the active model does not silently pick another one: with nothing
-     * marked the page says so, and Save refuses until the user chooses. Picking for
-     * them would make a removal look like a switch.
+     * There is no "active" row to move here. If the removed id was the one the chat chip
+     * had last picked, [save] drops that stale choice and falls back to the first model
+     * still stored — a stored choice that names a model the profile no longer offers
+     * cannot be launched and would leave the chip ticking nothing.
      */
     fun removeModel(model: String) {
         models = models.filterNot { it == model }
@@ -608,7 +584,6 @@ internal fun ModelEditPage(
         // entry in pi's own catalog. `writtenModels` is what makes the entry come *out* of
         // pi's file rather than stay in it.
         settings = settings - model
-        if (activeModel == model) activeModel = ""
     }
 
     /**
@@ -644,10 +619,10 @@ internal fun ModelEditPage(
                     if (isCustomEndpoint) CustomApi.fromId(api).id else "",
                 ).isEmpty() ->
                 text.settings.invalidBaseUrl
-            // A provider with a list but nothing ticked would launch with no model. The
-            // row's mark is the choice, so this asks for one rather than picking for the
-            // user — and the id typed in the field counts, because Save adds it.
-            draft.isBlank() && (models.isEmpty() || activeModel.isBlank()) -> text.settings.needModel
+            // A profile with no model at all cannot be launched. The id typed in the
+            // field counts, because Save adds it; which of the stored models answers is
+            // the composer chip's choice, not this form's.
+            draft.isBlank() && models.isEmpty() -> text.settings.needModel
             else -> null
         }
     }
@@ -672,7 +647,12 @@ internal fun ModelEditPage(
             draft,
             prefill = if (isCustomEndpoint) prefillFrom(customIdFacts[draft.trim()]) else null,
         )
-        val wasActive = store.activeId == existing?.id
+        // The stored choice survives an edit that keeps its id in the list. When the id
+        // is gone — the row was removed, or a switch changed the provider and emptied the
+        // list — the choice goes with it, and the first remaining model is the sensible
+        // launch default. This is storage maintenance rather than a selection control:
+        // the composer's chip is what changes the choice while the profile is in use.
+        val chosenModel = existing?.modelId?.takeIf { it in listed } ?: listed.firstOrNull().orEmpty()
         // Everything the user has said about every id still in the list, catalogued or not.
         // Which *mechanism* carries each statement — a `models` entry that has to stand
         // alone, or a `modelOverrides` entry that pi merges — is decided at launch time by
@@ -736,7 +716,7 @@ internal fun ModelEditPage(
                 name = name.trim(),
                 provider = chosen.id,
                 apiKey = apiKey.trim(),
-                modelId = activeModel,
+                modelId = chosenModel,
                 models = listed,
                 baseUrl = baseUrl.trim(),
                 api = if (isCustomEndpoint) api else "",
@@ -772,12 +752,13 @@ internal fun ModelEditPage(
                 knownCatalogueIds = known,
             ),
         )
-        // A brand-new profile becomes the active one: creating a
-        // profile and then having to activate it separately is a
-        // step with no purpose.
-        val nowActive = isNew || wasActive
+        // Only the profile the running agent was launched with has anything to restart.
+        // A new profile is not activated here: `ProfileStore.upsert` makes the first one
+        // active because there is nothing else to launch, and every later one waits for
+        // the composer's model chip — saving a provider must not take the conversation
+        // off the model it is currently answering with. This page stores; the chip picks.
+        val nowActive = store.activeId == saved.id
         if (nowActive) {
-            store.setActive(saved.id)
             // Provider, model and API key are read once, when pi
             // is spawned: `--provider` / `--model` on the command
             // line and the key through the environment. Without a
@@ -790,7 +771,7 @@ internal fun ModelEditPage(
             // rewrite a label no process looks at.
             val launchChanged = existing == null ||
                 chosen.id != existing.provider ||
-                activeModel != existing.modelId ||
+                chosenModel != existing.modelId ||
                 apiKey.trim() != existing.apiKey ||
                 baseUrl.trim() != existing.baseUrl ||
                 listed != existing.selectableModels ||
@@ -880,7 +861,6 @@ internal fun ModelEditPage(
                         // deliberately *not* cleared — switching to the same account's other
                         // endpoint is the case this page exists for.
                         models = emptyList()
-                        activeModel = ""
                         // The three declarations are keyed by *model id* and nothing else, so
                         // they cannot tell one provider's `gpt-4o` from another's: carrying
                         // them across a switch applied the window and the image switch the
@@ -1170,26 +1150,21 @@ internal fun ModelEditPage(
                 )
             }
 
-            // What this provider can answer with. Choosing one — the row's whole surface —
-            // is what makes it the model the agent answers with; the ✕ takes one out of the
-            // list without touching the provider's key.
+            // What this provider can answer with. This is a stored set, not a choice: the
+            // rows carry no tick and no tap action, because the composer's model chip is
+            // where one of them is picked. The bin takes a model out without touching the
+            // provider's key, and the capability rows for each model are below.
             //
-            // The row carries **no switch**, and that is the fix rather than a
-            // simplification: a clickable row with a switch in its trailing slot runs both
-            // the row's tap and the switch's for one press, so the image switch also moved
-            // the selection — and, when the two cancelled out, looked like it did nothing.
-            // The capability has its own section below, on rows of its own.
-            //
-            // Every row states the provider and the level its model would run at: the level
-            // is clamped *per model* (`thinkingLevelFor`), so two models of one provider can
-            // legitimately show two different ones, and a model row is the only place that
-            // fact can appear beside the id it is about.
+            // The row carries **no switch**: a clickable row with a switch in its trailing
+            // slot runs both the row's tap and the switch's for one press, and the image
+            // switch once also moved the selection — when the two cancelled out, looked
+            // like it did nothing. The capability has its own section, on rows of its own.
             SettingsSection(
                 title = text.settings.models,
                 trailing = text.settings.modelCount(models.size),
             ) {
                 models.forEach { model ->
-                    SettingsChoiceRow(
+                    BasicComponent(
                         title = model,
                         // The endpoint, and nothing else. The thinking level used to be
                         // here, clamped per model — a fact about the *app's* preference
@@ -1197,7 +1172,6 @@ internal fun ModelEditPage(
                         // value the Agent page owns. See `subtitleFor` for the same
                         // removal on the list behind this form.
                         summary = provider?.label,
-                        selected = model == activeModel,
                         endActions = {
                             // `Delete`, like every other control that removes something:
                             // the app has one delete mark and varies only its size and
@@ -1214,7 +1188,6 @@ internal fun ModelEditPage(
                                 )
                             }
                         },
-                        onClick = { activeModel = model },
                     )
                 }
 

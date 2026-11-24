@@ -484,8 +484,9 @@ internal object JapaneseStrings : Strings {
         override val agentContextFailed = "保存できませんでした。ファイルは変更されていません"
 
         override val profilesTitle = "モデルとプロバイダー"
+        override fun profileCount(count: Int) = "$count 個のプロファイル"
         override val profilesEmptyHint =
-            "Pi が答えるにはプロファイルが必要です。キーとモデルを 1 つずつ選ぶだけで使えます。"
+            "Pi が答えるにはプロファイルが必要です。キーとモデル ID を 1 つずつ登録するだけで使えます。"
         override val savedProfiles = "保存済みのプロファイル"
         override val editProfile = "プロファイルを編集"
         override val deleteProfile = "プロファイルを削除"

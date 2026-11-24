@@ -368,7 +368,6 @@ private fun RootPage(
     // profile is reflected the moment the store publishes it.
     val settings by session.settingsStore.settings.collectAsStateWithLifecycle()
     val config by session.settingsStore.profiles.snapshots.collectAsStateWithLifecycle()
-    val activeProfile = config.activeProfile
     // Read on the IO dispatcher inside the effect. `initialValue` used to call
     // `installedVersion` itself, and a `produceState` argument is evaluated on every
     // recomposition of a page that recomposes on every store emission — a file open and
@@ -402,7 +401,9 @@ private fun RootPage(
                     title = text.settings.manageProfiles,
                     summary = text.settings.manageProfilesSubtitle,
                     endActions = {
-                        SettingsValue(activeProfile?.displayName ?: text.settings.none)
+                        // A count, not the active profile's name: the settings page stores
+                        // configurations, and which one answers is the chat chip's state.
+                        SettingsValue(text.settings.profileCount(config.profiles.size))
                     },
                     onClick = { onOpen(SettingsPage.Model) },
                 )

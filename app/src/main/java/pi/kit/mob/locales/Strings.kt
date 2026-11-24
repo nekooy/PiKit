@@ -1291,6 +1291,8 @@ interface Strings {
 
         // Model profiles
         val profilesTitle: String
+        /** The model page's subtitle: how many saved configurations the page stores. */
+        fun profileCount(count: Int): String
         /** What the page says when no profile exists yet — the first-run empty state. */
         val profilesEmptyHint: String
         val savedProfiles: String

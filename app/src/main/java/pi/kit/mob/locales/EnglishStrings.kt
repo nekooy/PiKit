@@ -495,8 +495,9 @@ internal object EnglishStrings : Strings {
         override val agentContextFailed = "Could not save; the file is unchanged"
 
         override val profilesTitle = "Model & provider"
+        override fun profileCount(count: Int) = if (count == 1) "1 profile" else "$count profiles"
         override val profilesEmptyHint =
-            "Save a profile before Pi can answer — a key and one model is enough."
+            "Save a profile before Pi can answer — a key and one model id is enough."
         override val savedProfiles = "Saved profiles"
         override val editProfile = "Edit profile"
         override val deleteProfile = "Delete profile"

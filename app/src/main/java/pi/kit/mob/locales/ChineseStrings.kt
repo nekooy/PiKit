@@ -486,7 +486,8 @@ internal object ChineseStrings : Strings {
         override val agentContextFailed = "保存失败，文件没有改动"
 
         override val profilesTitle = "模型与供应商"
-        override val profilesEmptyHint = "先保存一个配置，Pi 才能开始回答。填一个 Key、选一个模型就好。"
+        override fun profileCount(count: Int) = "$count 个配置"
+        override val profilesEmptyHint = "先保存一个配置，Pi 才能开始回答。填一个 Key、加一个模型 ID 就好。"
         override val savedProfiles = "已保存的配置"
         override val editProfile = "编辑配置"
         override val deleteProfile = "删除配置"
