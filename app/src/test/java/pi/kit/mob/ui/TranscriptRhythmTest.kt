@@ -191,5 +191,9 @@ class TranscriptRhythmTest {
         // turn settles, and keying on it would move the row out of the spine on the
         // last token.
         assertEquals(0, answerRowIndex(listOf(assistant(key = "s", text = "half a sen", streaming = true))))
+
+        // A narration sentence followed by the tool calls it announces is not the
+        // answer: the answer is still to come, so every row is work.
+        assertEquals(-1, answerRowIndex(listOf(preamble, call)))
     }
 }

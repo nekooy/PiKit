@@ -3728,11 +3728,12 @@ private fun TranscriptCardView(
  * left on the card's own margin so the reader can always tell where "what the agent
  * did" stops and "what it says" begins.
  *
- * The answer is found as the **last assistant row that carries text**, not by
- * `showMeta`: while a reply streams, `showMeta` is false on every row — the row that
- * is becoming the answer included — and using it would make the answer jump out of
- * the spine at the end of the turn. The last text-bearing row is the answer from the
- * first token, so the layout is stable while it streams.
+ * The answer is the **last work row when that row is an assistant row carrying text**,
+ * not by `showMeta`: while a reply streams, `showMeta` is false on every row — the row
+ * that is becoming the answer included — and using it would make the answer jump out
+ * of the spine at the end of the turn. The end-of-list test also keeps a narration
+ * sentence (`我先看一下项目结构。`) in the spine while the tool calls it announces are
+ * still arriving; only the text that follows them is the answer.
  *
  * ## Why this is not the old step rail
  *
@@ -3801,17 +3802,24 @@ private fun TranscriptRow.isStepRow(): Boolean = when (this) {
 }
 
 /**
- * The index of the row that is the turn's answer: the last assistant row carrying text.
+ * The index of the row that is the turn's answer, or -1 while there is none.
  *
- * The last one rather than the first because a tool-using turn can narrate while it
- * works (`我先看一下项目结构。`) and only the final text is the answer. `showMeta` is
- * deliberately not consulted: while an answer streams it is false on every row, and a
- * layout that keyed on it would move the answer out of the step spine on the turn's
- * last token.
+ * The answer is the **last work row** when that row is an assistant row carrying text.
+ * Two failures are avoided by looking at the end rather than at every assistant row.
+ * A tool-using turn narrates while it works (`我先看一下项目结构。`), and that sentence is
+ * followed by the tool calls it announces, so it is not the answer — an `indexOfLast`
+ * over every text-bearing assistant row would lift it out of the spine and drop it back
+ * when the real answer arrived. And a turn that has not produced its answer yet ends in
+ * a tool row, so there is no answer row to keep outside the spine until the last row is
+ * actually text. `showMeta` is deliberately not consulted: while an answer streams it
+ * is false on every row, and a layout that keyed on it would move the answer out of the
+ * spine on the turn's last token.
  */
-internal fun answerRowIndex(rows: List<TranscriptRow>): Int = rows.indexOfLast { row ->
-    val item = (row as? TranscriptRow.Message)?.item
-    item is ChatItem.Assistant && item.text.isNotBlank()
+internal fun answerRowIndex(rows: List<TranscriptRow>): Int {
+    val lastWork = rows.indexOfLast { it.isStepRow() }
+    if (lastWork < 0) return -1
+    val item = (rows[lastWork] as? TranscriptRow.Message)?.item
+    return if (item is ChatItem.Assistant && item.text.isNotBlank()) lastWork else -1
 }
 
 /**
