@@ -68,7 +68,7 @@ writing a composition:
 | A long list of choices to search | `SettingsPickerSheet` | a dropdown (its panel has no filter) |
 | A row in a popup menu | `PiMenuRow` (choice / action / fact) | `BasicComponent`, a preference row |
 | A titled group inside a sheet | `PiSheetSection` | a bare `Card`, `PiSection` (its 28dp label inset is for a page) |
-| A chosen member of a set | `SettingsChoiceRow` | `RadioButtonPreference` (a ring and an accent title for one answer) |
+| A chosen member of a set | `RadioButtonPreference` | a hand-built tick row, a second selection vocabulary |
 | A popup menu | `PiPopupMenu` + `Modifier.piMenuAnchor(anchor)` | `OverlayListPopup`, `OverlayDropdownPopup`, `GlassIconDropdownMenu`, a `GlassPopup` at the trigger |
 | A question with answers | `PiConfirm` (app) / `PiDialogHost` (pi's questions) | a raw `WindowDialog`/`GlassDialog` |
 | A question with a custom body | `PiCustomDialog` | composing `WindowDialog` or `GlassDialog` at the screen |
@@ -508,7 +508,9 @@ takes the same padding (§9.2).
   visible, and a settings list must be closable by a named control. The content is a
   stack of `PiSheetSection`s — never the page's `PiSection`, whose 28dp label inset was
   measured for a page and puts a row's text 36dp from a sheet's screen edge — and a
-  chosen member of a set is `SettingsChoiceRow`, not a radio ring with an accent title.
+  chosen member of a set is the library's `RadioButtonPreference`: its radio mark at
+  the leading edge and the accent title are Miuix's own statement of one answer, and
+  the app draws no second tick row.
 - **A picker longer than a few words is a sheet of choice rows with a filter field**,
   not a dropdown: a dropdown's popup is sized for a list, not for a search (§13). Its
   filter and any other field inside a glass sheet are `GlassTextField` with

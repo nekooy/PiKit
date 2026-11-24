@@ -25,12 +25,12 @@
  * ## Rows are the library's, not this file's
  *
  * A page builds its rows out of `BasicComponent`, `ArrowPreference`,
- * `SwitchPreference`, `SliderPreference` and `TextField` directly. The one
- * settings-specific row is `SettingsChoiceRow`, and it exists for a semantic the
- * library's radio row does not name: the chosen member of a set, marked with a tick
- * instead of a ring and an accent title (see its KDoc). A general wrapper over
- * `BasicComponent` would have to re-expose the library's parameters one at a time, and
- * the two would drift apart on the first change to either.
+ * `RadioButtonPreference`, `SwitchPreference`, `SliderPreference` and `TextField`
+ * directly. There is no settings-specific selection row: a chosen member of a set is
+ * the library's own `RadioButtonPreference`, whose radio mark and accent title are the
+ * one selection vocabulary the app uses. A general wrapper over `BasicComponent` would
+ * have to re-expose the library's parameters one at a time, and the two would drift
+ * apart on the first change to either.
  *
  */
 package pi.kit.mob.ui.settings
@@ -43,7 +43,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,7 +69,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -101,7 +99,7 @@ import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -120,7 +118,6 @@ import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Clear
-import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -174,80 +171,6 @@ fun SettingsValue(
         fontFamily = if (monospace) FontFamily.Monospace else null,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-    )
-}
-
-/**
- * One member of a set, as a settings row: title, an optional sentence, and the
- * chosen member marked with the library's tick.
- *
- * Miuix's `RadioButtonPreference` is the same question but answers it with a radio
- * ring and tints the whole title in the accent. On a settings sheet that is two
- * signals too many: the reference gives a chosen row one mark at its trailing edge
- * and leaves the words in their normal ink, so a list can be scanned for names
- * before it is read for state. The check is `MiuixIcons.Ok` — the glyph the model
- * list already uses for "this one is in effect" — not a hand-drawn mark.
- *
- * [checkAtStart] exists for the one row shape whose trailing slot is already taken
- * by a destructive action (a saved workspace with its bin). Everywhere else the
- * tick sits at the end, where the reference puts it.
- *
- * The row performs `PiHaptics.choose()` itself when the tap changes the answer,
- * because `BasicComponent` — unlike the library's radio — has no haptic of its own.
- */
-@Composable
-fun SettingsChoiceRow(
-    title: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    summary: String? = null,
-    startAction: (@Composable () -> Unit)? = null,
-    endActions: (@Composable RowScope.() -> Unit)? = null,
-    enabled: Boolean = true,
-    holdDownState: Boolean = false,
-    checkAtStart: Boolean = false,
-) {
-    val haptics = LocalPiHaptics.current
-    val mark: @Composable () -> Unit = {
-        Icon(
-            imageVector = MiuixIcons.Ok,
-            contentDescription = null,
-            tint = MiuixTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-    BasicComponent(
-        modifier = modifier.semantics { this.selected = selected },
-        title = title,
-        summary = summary,
-        startAction = if (checkAtStart && selected) {
-            {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    mark()
-                    startAction?.invoke()
-                }
-            }
-        } else {
-            startAction
-        },
-        endActions = {
-            endActions?.invoke(this)
-            if (!checkAtStart && selected) {
-                Spacer(Modifier.width(8.dp))
-                mark()
-            }
-        },
-        onClick = {
-            if (!selected) haptics.choose()
-            onClick()
-        },
-        role = Role.RadioButton,
-        holdDownState = holdDownState,
-        enabled = enabled,
     )
 }
 
@@ -763,12 +686,13 @@ data class SettingsPick(
  * scrolls, so a dozen rows are fine in it; thirty providers with descriptions are not, and
  * that is what [searchHint] exists for.
  *
- * The rows are `SettingsChoiceRow`s when the list *has* a current value, and
- * `ArrowPreference`s when it does not: the tick is the mark for "one of these is in
- * effect", which is the question the provider picker asks, while the add-an-option and
- * fetched-model lists ask "which of these do I want" and a column of set marks would
- * answer that with the other question's mark. [searchHint] adds a filter field above the
- * list, for a list of *things that exist* rather than a handful of alternatives.
+ * The rows are `RadioButtonPreference`s when the list *has* a current value, and
+ * `ArrowPreference`s when it does not: the radio is the library's mark for "one of
+ * these is in effect", which is the question the provider picker asks, while the
+ * add-an-option and fetched-model lists ask "which of these do I want" and a column of
+ * radio marks would answer that with the other question's mark. [searchHint] adds a
+ * filter field above the list, for a list of *things that exist* rather than a handful
+ * of alternatives.
  *
  * An empty filter result draws no card at all. That is a gap rather than a decision: the
  * catalog has no "no matches" member on `Strings.Settings` — the sentence belongs to
@@ -898,12 +822,12 @@ fun SettingsPickerSheet(
                             .verticalScroll(rememberScrollState()),
                     ) {
                         shown.forEach { option ->
-                            // A check only when the list *has* a current value. The sheet
+                            // A radio only when the list *has* a current value. The sheet
                             // is used for two different questions: "which of these is in
                             // effect" (the provider, the workflow, the API type) and
                             // "which of these do I want to add" (the extension's options,
-                            // a fetched model), where `selectedId` is null and a set mark
-                            // would tick an answer nobody gave. The row that opens
+                            // a fetched model), where `selectedId` is null and a radio
+                            // would mark an answer nobody gave. The row that opens
                             // something is `ArrowPreference`, so the add lists use that.
                             if (selectedId == null) {
                                 ArrowPreference(
@@ -912,7 +836,7 @@ fun SettingsPickerSheet(
                                     onClick = { onPick(option.id) },
                                 )
                             } else {
-                                SettingsChoiceRow(
+                                RadioButtonPreference(
                                     title = option.label,
                                     summary = option.description,
                                     selected = option.id == selectedId,

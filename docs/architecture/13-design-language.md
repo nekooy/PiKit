@@ -641,14 +641,16 @@ The rule is mechanical: a `TextField`/`GlassTextField` that passes `label` with
 `label` floats (the settings forms) keeps the library's own geometry: the label stays drawn
 in both states and does not disappear when the first character arrives.
 
-**A set of alternatives in a sheet is `SettingsChoiceRow`.** The row is a
-`BasicComponent` whose chosen member wears `MiuixIcons.Ok` at its trailing edge — the
-mark the model list uses for "this one is in effect" — and whose title stays in normal
-ink. `RadioButtonPreference` answers the same question with a ring and an accent title,
-which is two signals for one state; on a list that is scanned for names before it is
-read for state, the checkmark is enough. The row performs the choice haptic itself on a
-change, because `BasicComponent` has none, and passes `checkAtStart` only where the
-trailing slot is already a destructive action (a saved workspace with its bin).
+**A set of alternatives is Miuix's `RadioButtonPreference`.** The row is the library's
+own: a radio mark at its leading edge, the chosen title and summary in the accent, and
+the library's own choice haptic. The app used to draw a `BasicComponent` with
+`MiuixIcons.Ok` at the trailing edge instead — a hand-built tick row — and that was a
+second selection vocabulary beside the radio rows Miuix draws in dialogs: the same
+"which one is in effect" question had two marks of different shapes and weights. It is
+gone everywhere, including the model and workspace lists, so one row shape answers that
+question on every page and sheet. A row whose trailing slot carries a destructive
+action (a saved workspace with its bin) keeps the radio at the leading edge, where it
+does not compete with the bin.
 
 **A window is driven by `show`, never by whether it is composed.** Miuix's window
 components and the glass overlay pair animate in *and out* through that flag, so a
@@ -1135,9 +1137,9 @@ one decision each makes that the shared vocabulary does not:
 - **Settings** — `PiSection` groups by subject, rows that act, and pages whose second
   level is a page rather than a dialog. A settings window is a bottom sheet with the
   library's header and an explicit X, not a centred dialog; a list of choices is a stack
-  of `PiSheetSection`s with `SettingsChoiceRow`s that apply on one tap. The rows carry
-  the library's own typography and spacing; what the page decides is *which* group a
-  fact belongs to and which of those two window shapes answers it, not how a row looks.
+  of `PiSheetSection`s with `RadioButtonPreference`s that apply on one tap. The rows
+  carry the library's own typography and spacing; what the page decides is *which* group
+  a fact belongs to and which of those two window shapes answers it, not how a row looks.
 
 ## What the rewrite kept, and what it removed
 

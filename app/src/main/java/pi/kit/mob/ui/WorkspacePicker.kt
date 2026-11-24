@@ -53,7 +53,6 @@ import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.piSheetBottomInset
-import pi.kit.mob.ui.settings.SettingsChoiceRow
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -67,6 +66,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -472,8 +472,8 @@ private fun NavChip(
  * **One tap is the answer.** The previous dialog moved a radio mark under the finger
  * and then asked for a second tap on 确定, so choosing a folder was three taps and a
  * dismissal. A sheet row that applies immediately is the interaction every settings
- * list in the reference has, and a selection that changes nothing is a read rather
- * than an edit — `SettingsChoiceRow` only buzzes when the answer actually changes.
+ * list in the reference has: the row is the library's `RadioButtonPreference`, whose
+ * own radio mark and haptic are the selection vocabulary the rest of the settings use.
  *
  * The built-in workspace cannot be removed, and neither can the default: removing it
  * would leave the preference pointing at a folder the list no longer offers. A folder
@@ -509,14 +509,13 @@ internal fun WorkspaceSheet(
         ) {
             PiSheetSection {
                 workspaces.forEach { workspace ->
-                    SettingsChoiceRow(
+                    RadioButtonPreference(
                         title = text.chat.workspaceChip(
                             workspace.label,
                             workspace.path == defaultPath,
                         ),
                         summary = workspace.displayPath(home),
                         selected = workspace.path == defaultPath,
-                        checkAtStart = true,
                         onClick = { onPick(workspace.path) },
                         endActions = if (removable(workspace)) {
                             {
