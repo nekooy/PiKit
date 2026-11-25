@@ -31,9 +31,13 @@
  * its own `Paint` is set up by `AndroidGraphics2D`. [formulaScale] is that arithmetic, byte for
  * byte: `min(bounds / icon)` when either axis overflows, `(size * scale + 0.5f).toInt()` for the
  * drawn size, and the remainder split above and below. The icon itself is built by the same
- * library calls the library's drawable makes — `TeXFormula.createTeXIcon(STYLE_DISPLAY, size)`,
- * `setForeground`, and `setInsets` with the same padding — so `MathCache`'s geometry contract
- * (`widthPx`/`heightPx`/`depthPx`) and the 0.42 ms typesetting measurement are unchanged.
+ * library calls the library's drawable makes — `TeXFormula.createTeXIcon(style, size)`, with the
+ * style the caller's `MathSpec` chose: `STYLE_TEXT` for an inline formula and `STYLE_DISPLAY` for
+ * one that owns its block — `setForeground`, and `setInsets` with the same padding — so `MathCache`'s
+ * geometry contract (`widthPx`/`heightPx`/`depthPx`) and the 0.42 ms typesetting measurement are
+ * unchanged. The style choice is the fix for the measured defect: every formula used to be built in
+ * display style, which made `\frac{1}{2}` 106px tall at 17sp where the text style's fraction is 70px
+ * and is what a 26sp prose line is built around.
  *
  * The drawable stays immutable once built and only its bounds are set before a draw, which is what
  * lets one entry of the cache be drawn by every block that uses that formula. `setAlpha` and
@@ -46,7 +50,6 @@ import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
-import org.scilab.forge.jlatexmath.TeXConstants
 import org.scilab.forge.jlatexmath.TeXFormula
 import org.scilab.forge.jlatexmath.TeXIcon
 import ru.noties.jlatexmath.awt.AndroidGraphics2D
@@ -107,17 +110,17 @@ internal class MathDrawable private constructor(
 
     internal companion object {
         /**
-         * Lays [body] out at [sizePx] and draws it in [ink], with [padding] on each side.
+         * Lays [body] out at [sizePx], in [ink], with [padding] on each side, using the TeX [style].
          *
-         * The construction is the library's own, in the library's own order: a `TeXFormula`, the
-         * display-style icon at the size the caller asked for, its foreground colour, then the
-         * insets that carry the padding. `setInsets` is the one-argument overload on purpose —
-         * it is the one `JLatexMathDrawable` calls, and it adds the renderer's own vertical padding
-         * on top of the caller's, which is what the geometry `MathCache` reads back was measured
-         * with.
+         * The construction is the library's own, in the library's own order: a `TeXFormula`, an
+         * icon at [style] — `STYLE_TEXT` for an inline formula, `STYLE_DISPLAY` for a display one —
+         * the size the caller asked for, its foreground colour, then the insets that carry the
+         * padding. `setInsets` is the one-argument overload on purpose — it is the one
+         * `JLatexMathDrawable` calls, and it adds the renderer's own vertical padding on top of the
+         * caller's, which is what the geometry `MathCache` reads back was measured with.
          */
-        fun build(body: String, sizePx: Float, ink: Int, padding: Int): MathDrawable {
-            val icon = TeXFormula(body).createTeXIcon(TeXConstants.STYLE_DISPLAY, sizePx)
+        fun build(body: String, sizePx: Float, ink: Int, padding: Int, style: Int): MathDrawable {
+            val icon = TeXFormula(body).createTeXIcon(style, sizePx)
             icon.setForeground(Color(ink))
             icon.setInsets(Insets(padding, padding, padding, padding))
             return MathDrawable(icon)

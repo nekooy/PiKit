@@ -68,6 +68,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.scilab.forge.jlatexmath.TeXConstants
 import java.util.Collections
 
 /**
@@ -88,16 +89,24 @@ internal class Formula(
      * How far the formula's baseline is above the drawable's bottom, in pixels.
      *
      * The baseline of a formula is not its bottom: `\frac{1}{2}` hangs below the line it is
-     * written on. An inline placeholder is placed by its *bottom*, so the height it declares is
-     * [heightPx] plus this, and the bitmap is drawn at the top of that box — which lands the
-     * formula's own baseline exactly on the line's.
+     * written on. An inline placeholder is centred on the text's centre (`MathView.kt`), and this
+     * depth is what lets the drawable be offset inside that box until the formula's own baseline
+     * lands on the line's.
      */
     val depthPx: Int,
 )
 
-/** What a formula is typeset with: the size in pixels, and the ink it is drawn in. */
+/**
+ * What a formula is typeset with: the size in pixels, the ink it is drawn in, and whether it is a
+ * display formula.
+ *
+ * [display] is not a drawing preference: it selects `TeXConstants.STYLE_DISPLAY` or
+ * `TeXConstants.STYLE_TEXT` at typeset time, and the two are different sizes for the same body —
+ * `\frac{1}{2}` at 17sp / 44.6px is 106px tall in display style against 70px in text style. It is
+ * part of [MathCache]'s key because the same formula at the same size is two different boxes.
+ */
 @androidx.compose.runtime.Immutable
-internal data class MathSpec(val sizePx: Float, val ink: Int)
+internal data class MathSpec(val sizePx: Float, val ink: Int, val display: Boolean = false)
 
 /**
  * The formulas that have been typeset, and the worker that typesets the rest.
@@ -109,7 +118,7 @@ internal data class MathSpec(val sizePx: Float, val ink: Int)
 internal object MathCache {
 
     /**
-     * Typeset formulas, keyed by the LaTeX body, the size and the ink.
+     * Typeset formulas, keyed by the LaTeX body, the size, the ink and the TeX style.
      *
      * A `SnapshotStateMap` rather than a plain map: a read of it during composition is what makes
      * a later write recompose the block that asked. Nothing else in here is observable by Compose,
@@ -118,7 +127,9 @@ internal object MathCache {
     private val measured: SnapshotStateMap<String, Formula> = mutableStateMapOf()
 
     /** The formulas already queued or typeset, so a recomposition does not queue twice. */
-    private val requested: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())    /**
+    private val requested: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+
+    /**
      * A counter per cache key, bumped when that formula's measurement lands.
      *
      * This exists because reading [measured] *inside* the `remember` that builds a block's
@@ -139,7 +150,8 @@ internal object MathCache {
     private val worker = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
     /** The key a formula is cached and queued under. */
-    private fun key(body: String, spec: MathSpec) = "$body\u0000${spec.sizePx}\u0000${spec.ink}"
+    private fun key(body: String, spec: MathSpec) =
+        "$body\u0000${spec.sizePx}\u0000${spec.ink}\u0000${spec.display}"
 
     /**
      * The combined version of the formulas in one block, for that block's `remember` key.
@@ -201,8 +213,10 @@ internal object MathCache {
      * Typesets every formula in [text], without waiting for a composition to ask.
      *
      * The point is to fill the cache *before* the reply is first drawn, so the common case —
-     * opening a saved conversation — draws formulas rather than their source. Everything here is
-     * cheap string work; the typesetting itself happens on the worker.
+     * opening a saved conversation — draws formulas rather than their source. Because a formula's
+     * TeX style is part of its cache key, a reply that holds display formulas needs this called
+     * once with each [MathSpec.display] value; `MarkdownText` does exactly that. Everything here
+     * is cheap string work; the typesetting itself happens on the worker.
      */
     fun prefetch(text: String, spec: MathSpec) {
         // The tokeniser is linear and pure, and `containsInlineMath` runs it; calling it again per
@@ -265,13 +279,19 @@ private fun typeset(body: String, spec: MathSpec): Formula {
 }
 
 /**
- * One formula, laid out by JLaTeXMath, at the size and in the ink the caller asked for.
+ * One formula, laid out by JLaTeXMath, at the size, ink and TeX style the caller asked for.
  *
  * Split out of [typeset] so that a body the renderer refuses can be rewritten and built again
  * without the geometry below being written twice.
  */
 private fun buildDrawable(body: String, spec: MathSpec): MathDrawable =
-    MathDrawable.build(body = body, sizePx = spec.sizePx, ink = spec.ink, padding = PAD)
+    MathDrawable.build(
+        body = body,
+        sizePx = spec.sizePx,
+        ink = spec.ink,
+        padding = PAD,
+        style = if (spec.display) TeXConstants.STYLE_DISPLAY else TeXConstants.STYLE_TEXT,
+    )
 
 /**
  * Every LaTeX body in [text], by the same tokeniser the renderer uses.

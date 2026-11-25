@@ -22,13 +22,19 @@
  * instead of on the axis, and its integral could only be scaled by a fudge factor because the
  * glyph has no larger cut to select.
  *
- * ## The two shapes
+ * ## The two shapes, and the two TeX styles
  *
  *  - **A display formula** — `$$…$$`, `\[…\]`, `\begin{aligned}` — is a block of its own, drawn
  *    as a `Text` whose whole content is one placeholder, so the transcript's selection treats it
- *    like any other run of prose and a formula wider than the screen can be scrolled.
+ *    like any other run of prose and a formula wider than the screen can be scrolled. It is
+ *    typeset at `TeXConstants.STYLE_DISPLAY`, which is what a formula on a line of its own means.
  *  - **Inside a paragraph**, the formula is an `InlineTextContent` of exactly the typeset size,
- *    which is what lets a stacked fraction or a radical appear mid-sentence.
+ *    which is what lets a stacked fraction or a radical appear mid-sentence. It is typeset at
+ *    `TeXConstants.STYLE_TEXT`. That distinction is not decoration: the display style sets every
+ *    fraction and large operator at full size — measured, `\frac{1}{2}` at 17sp / 44.6px is 106px
+ *    tall in display style against 70px in text style — and a 106px formula cannot fit the 26sp
+ *    line the reply's prose is set in. Every formula used to take the display style, inline ones
+ *    included, which is what made a fraction mid-sentence overflow its line.
  *
  * ## The baseline and the line box, which are the two numbers this file has to get right
  *
@@ -53,9 +59,15 @@
  * grows the two sides until it fits. This file therefore computes, per formula, the **smallest box
  * centred on the text's centre that contains the formula's ink** —
  * `half = max(|inkTop - centre|, |inkBottom - centre|)` — and then draws the drawable inside it at
- * the offset that puts the formula's own baseline on the line's. A formula no taller than the text
- * leaves the line height alone; a stacked fraction grows its own line, which is what a stacked
- * fraction has to do.
+ * the offset that puts the formula's own baseline on the line's.
+ *
+ * **The grown placeholder is not enough on its own.** Compose's `LineHeightSpan.chooseHeight`
+ * overwrites the ascent and descent a placeholder reported with the `TextStyle`'s fixed
+ * `lineHeight` whenever the style names one, and the reply's style does: 26sp. The placeholder still
+ * draws at its true height, so a 106px fraction's box was laid out inside a 68px line and hung over
+ * the line below, where the display formula's horizontal scroller clipped it. [withMathLineHeight]
+ * therefore raises the style's `lineHeight` to the tallest placeholder in the block before the
+ * `Text` is measured; a formula that fits leaves the style unchanged.
  *
  * The text's centre comes from a `TextMeasurer` measurement of the same style, because it is the
  * only place the font's ascent and descent are readable — the same measurement the inline code
@@ -110,13 +122,26 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * scale change is a different size in pixels and must therefore be a different entry. The
  * conversion is done once, in composition, where `LocalDensity` — which carries the font scale —
  * is available.
+ *
+ * ## Why the style is part of the spec
+ *
+ * A formula is typeset either as display mathematics or as text mathematics, and the renderer picks
+ * the size of fractions, sums and limits from that choice. At the same font size `\frac{1}{2}` is
+ * 106px tall in display style and 70px in text style; only the text style's fraction belongs in a
+ * 26sp prose line, and the display style's is one and a half times the line. The flag is part of
+ * [MathSpec] — and therefore of the cache key — because the same body at the same size is two
+ * different drawings.
  */
 @Composable
-internal fun mathSpec(fontSize: TextUnit): MathSpec {
+internal fun mathSpec(fontSize: TextUnit, display: Boolean = false): MathSpec {
     val ink = MiuixTheme.colorScheme.onSurface
     val density = LocalDensity.current
-    return remember(fontSize, ink, density) {
-        MathSpec(sizePx = with(density) { fontSize.toPx() }, ink = ink.toArgb())
+    return remember(fontSize, ink, density, display) {
+        MathSpec(
+            sizePx = with(density) { fontSize.toPx() },
+            ink = ink.toArgb(),
+            display = display,
+        )
     }
 }
 
@@ -155,7 +180,44 @@ internal val LocalFormulaWidth = compositionLocalOf { Float.POSITIVE_INFINITY }
 internal class MathInline(
     val text: AnnotatedString,
     val inlineContent: Map<String, InlineTextContent>,
-)
+) {
+    /**
+     * The tallest placeholder box in this run, or `TextUnit.Unspecified` when it holds none.
+     *
+     * The placeholders are in sp, because that is the unit `InlineTextContent` takes, so this is
+     * directly usable as a `TextStyle.lineHeight`. It exists because a placeholder's grown ascent
+     * and descent are overwritten by Compose's `LineHeightSpan.chooseHeight` when the style fixes a
+     * line height — see [withMathLineHeight].
+     */
+    val requiredLineHeight: TextUnit
+        get() = inlineContent.values
+            .map { it.placeholder.height }
+            .maxByOrNull { it.value }
+            ?: TextUnit.Unspecified
+}
+
+/**
+ * [this] with its `lineHeight` raised to fit [math]'s tallest formula, when the formula needs it.
+ *
+ * Compose's `LineHeightSpan.chooseHeight` overwrites the ascent and descent a placeholder reports
+ * with the `TextStyle`'s fixed `lineHeight`; the placeholder itself still draws at its true height.
+ * A 26sp line is 68px at this app's density, and a 106px fraction's box was squeezed into it while
+ * the ink still drew at 106px, hanging over the line below and clipped by the display formula's
+ * horizontal scroller. Raising the style's line height is the only way to keep the line box and the
+ * placeholder's box the same number.
+ *
+ * A style with no line height (`TextUnit.Unspecified`) adopts the placeholder's; a formula that fits
+ * leaves the style exactly as it was. `Placeholder.height` is in sp, so the result stays in sp.
+ */
+internal fun TextStyle.withMathLineHeight(math: MathInline): TextStyle {
+    val required = math.requiredLineHeight
+    if (required == TextUnit.Unspecified) return this
+    val current = lineHeight
+    return when {
+        current == TextUnit.Unspecified || required > current -> copy(lineHeight = required)
+        else -> this
+    }
+}
 
 /**
  * A paragraph's inline text, with any mathematics in it typeset.
@@ -177,7 +239,9 @@ internal fun rememberMathInline(
     textStyle: TextStyle,
     /**
      * True for a display formula: its block is the formula and scrolls horizontally, so it must
-     * **not** be scaled down to the line the way an inline one is.
+     * **not** be scaled down to the line the way an inline one is, and it is typeset at
+     * `TeXConstants.STYLE_DISPLAY`. Every other formula is `TeXConstants.STYLE_TEXT`, whose smaller
+     * fractions are what let one sit in a sentence.
      */
     display: Boolean = false,
 ): MathInline {
@@ -187,7 +251,7 @@ internal fun rememberMathInline(
 
     // Remembered inside the branch so that a paragraph with no formula in it never
     // builds one.
-    val spec = mathSpec(textStyle.fontSize)
+    val spec = mathSpec(textStyle.fontSize, display = display)
     // The placeholder's size is in `sp`, so the conversion back out of pixels depends on the
     // density as well as on the formula: a font-scale change arrives as a new `Density`, and a
     // key that missed it would draw every formula at the old size. The font metrics are read here
@@ -352,9 +416,9 @@ private const val MIN_FORMULA_SCALE = 0.5f
  */
 @Composable
 internal fun WarmFormulaRenderer() {
-    // The paragraph style's size, because that is the size a reply's prose is set in and
-    // therefore the size most formulas will be asked for — warming any other size would
-    // fill the cache with an entry nothing draws.
+    // The paragraph style's size in the text style, because that is the size a reply's prose is
+    // set in and therefore the size most formulas will be asked for — inline mathematics
+    // outnumbers display, and warming any other entry would fill the cache with one nothing draws.
     val spec = mathSpec(MiuixTheme.textStyles.paragraph.fontSize)
     LaunchedEffect(spec) { MathCache.warm(spec) }
 }

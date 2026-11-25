@@ -256,16 +256,24 @@ fun MarkdownText(
     val style = inlineStyle()
     val blocks = rememberStableBlocks(text)
     // Fill the formula cache before the blocks are drawn, on a worker, so the common case —
-    // opening a saved conversation — draws formulas rather than their source. The delay is
-    // the streaming fix: this effect is keyed on the text, so a streamed answer relaunches
-    // it once per token, and the tokenise inside is O(the whole reply) — enough to pay the
-    // parse again on the composition thread for every delta. Waiting for a pause means it
+    // opening a saved conversation — draws formulas rather than their source. Both specs are
+    // prefetched because the TeX style is part of a formula's cache key: a display block asks for
+    // the display-style entry, so prefetching only the paragraph's text-style one left every
+    // display formula drawn as its source until that block itself came on screen.
+    //
+    // The delay is the streaming fix: this effect is keyed on the text, so a streamed answer
+    // relaunches it once per token, and the tokenise inside is O(the whole reply) — enough to pay
+    // the parse again on the composition thread for every delta. Waiting for a pause means it
     // runs once on the settled reply, which is what it was added for; the block on screen
     // requests its own formulas meanwhile.
-    val spec = mathSpec(bodyStyle().fontSize)
-    LaunchedEffect(text, spec) {
+    val inlineSpec = mathSpec(bodyStyle().fontSize)
+    val displaySpec = mathSpec(bodyStyle().fontSize, display = true)
+    LaunchedEffect(text, inlineSpec, displaySpec) {
         delay(MATH_PREFETCH_SETTLE_MS)
-        withContext(Dispatchers.Default) { MathCache.prefetch(text, spec) }
+        withContext(Dispatchers.Default) {
+            MathCache.prefetch(text, inlineSpec)
+            MathCache.prefetch(text, displaySpec)
+        }
     }
     // One subcomposition for the whole reply, because the width every formula is fitted to is the
     // *reply's* width and not each block's — see `LocalFormulaWidth`. A `BoxWithConstraints` per
@@ -422,10 +430,11 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
 
     when (block) {
         is MdBlock.Paragraph -> {
-            val rendered = rememberMathInline(block.text, style, bodyStyle())
+            val textStyle = bodyStyle()
+            val rendered = rememberMathInline(block.text, style, textStyle)
             CodeChipText(
                 text = rendered.text,
-                style = bodyStyle(),
+                style = textStyle.withMathLineHeight(rendered),
                 background = style.codeBackground,
                 inlineContent = rendered.inlineContent,
             )
@@ -454,7 +463,7 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
             val rendered = rememberMathInline(block.text, style, textStyle)
             CodeChipText(
                 text = rendered.text,
-                style = textStyle,
+                style = textStyle.withMathLineHeight(rendered),
                 background = style.codeBackground,
                 inlineContent = rendered.inlineContent,
                 modifier = Modifier.padding(top = topGap),
@@ -504,11 +513,12 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
             // formula when it is ready and its own source until then. Deferring the *draw*
             // as well was tried and is gone: with the measurement already deferred it bought
             // nothing but a scrollbar that settled late.
-            val rendered = rememberMathInline("$$${block.body}$$", style, bodyStyle(), display = true)
+            val textStyle = bodyStyle()
+            val rendered = rememberMathInline("$$${block.body}$$", style, textStyle, display = true)
             ScrollableFormula {
                 Text(
                     rendered.text,
-                    style = bodyStyle(),
+                    style = textStyle.withMathLineHeight(rendered),
                     textAlign = TextAlign.Center,
                     softWrap = false,
                     inlineContent = rendered.inlineContent,
@@ -566,10 +576,11 @@ private fun MarkdownList(block: MdBlock.ListBlock, style: InlineStyle) {
                     modifier = Modifier.width(LIST_MARKER_WIDTH),
                 )
                 Box(Modifier.weight(1f)) {
-                    val rendered = rememberMathInline(item.text, style, bodyStyle())
+                    val textStyle = bodyStyle()
+                    val rendered = rememberMathInline(item.text, style, textStyle)
                     CodeChipText(
                         text = rendered.text,
-                        style = bodyStyle(),
+                        style = textStyle.withMathLineHeight(rendered),
                         background = style.codeBackground,
                         textDecoration = if (item.checked == true) {
                             TextDecoration.LineThrough
@@ -923,22 +934,24 @@ private fun MarkdownTable(block: MdBlock.Table, style: InlineStyle) {
         row.map { rememberMathInline(it, measureStyle, cellStyle) }
     }
 
+    // A table cell is typeset at the *cell's* font size, which is not the size `MarkdownText`
+    // prefetched for — so its formulas have to be asked for at their own size or they are never
+    // typeset at all and the cell shows its source forever. The size is per cell style, so the
+    // header's formulas and the body's are two different entries rather than one. Both are the
+    // inline (text) style: a table cell cannot hold a display formula.
+    val headerSpec = mathSpec(headerStyle.fontSize)
+    val cellSpec = mathSpec(cellStyle.fontSize)
+
     // The cells' rendered text changes when a formula of theirs lands in the cache, and
     // `rememberMathInline` returns a new `MathInline` when it does — but this `remember` was
     // keyed only on the word lists, so the width it computed from a cold cache was kept.
     // Reading each cell's formula version in composition is what re-runs it: without this a
     // table keeps drawing `$\frac{1}{2}$` in a cell after the formula has been measured.
-    val cellVersions = block.header.sumOf { MathCache.versionOf(it, mathSpec(headerStyle.fontSize)) } +
+    val cellVersions = block.header.sumOf { MathCache.versionOf(it, headerSpec) } +
         block.rows.sumOf { row ->
-            row.sumOf { MathCache.versionOf(it, mathSpec(cellStyle.fontSize)) }
+            row.sumOf { MathCache.versionOf(it, cellSpec) }
         }
 
-    // A table cell is typeset at the *cell's* font size, which is not the size `MarkdownText`
-    // prefetched for — so its formulas have to be asked for at their own size or they are never
-    // typeset at all and the cell shows its source forever. The size is per cell style, so the
-    // header's formulas and the body's are two different entries rather than one.
-    val headerSpec = mathSpec(headerStyle.fontSize)
-    val cellSpec = mathSpec(cellStyle.fontSize)
     LaunchedEffect(block, headerSpec, cellSpec) {
         block.header.forEach { MathCache.prefetch(it, headerSpec) }
         block.rows.forEach { row -> row.forEach { MathCache.prefetch(it, cellSpec) } }
@@ -1101,7 +1114,7 @@ private fun TableRow(
             // old table asked for `labelLarge` plus a semibold weight on top.
             Text(
                 text = cell.text,
-                style = textStyle,
+                style = textStyle.withMathLineHeight(cell),
                 textAlign = when (aligns.getOrNull(column)) {
                     MdAlign.Center -> TextAlign.Center
                     MdAlign.End -> TextAlign.End
