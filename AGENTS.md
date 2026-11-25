@@ -85,9 +85,9 @@ python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
 
 Build daemons retire themselves: `gradle.properties` runs Kotlin in-process and retires
-the Gradle daemon 60 seconds after the last task. If `Get-Process java` still shows one
-right after a build, wait a minute — do not ask the user to stop it, and do not leave a
-second `KotlinCompileDaemon` behind.
+the Gradle daemon five minutes after the last task. If `Get-Process java` still shows one
+right after a build, wait a few minutes — do not ask the user to stop it, and do not leave
+a second `KotlinCompileDaemon` behind.
 
 There is no `:app:testDebugUnitTest`: the ABI is a product flavor, so that task's name
 carries it. (`:terminal-emulator:testDebugUnitTest` exists — the vendored VT parser is

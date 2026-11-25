@@ -40,6 +40,7 @@ before anything is packaged.
 
 from __future__ import annotations
 
+import argparse
 import io
 import os
 import re
@@ -95,10 +96,19 @@ def find_aar(cache: Path) -> Path | None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--flavor",
+        choices=("arm64", "x64"),
+        help="check only this flavour's release APK (default: every release APK)",
+    )
+    args = parser.parse_args()
+
     cache = Path(
         os.environ.get("GRADLE_USER_HOME") or Path.home() / ".gradle"
     ) / "caches"
-    apks = sorted(APK_ROOT.glob("*/release/*.apk"))
+    pattern = f"{args.flavor}/release/*.apk" if args.flavor else "*/release/*.apk"
+    apks = sorted(APK_ROOT.glob(pattern))
 
     if not apks:
         print(f"skip no release APK under {APK_ROOT.relative_to(REPO_ROOT)} "

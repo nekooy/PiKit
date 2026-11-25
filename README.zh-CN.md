@@ -55,6 +55,7 @@ Android 8.0+，`arm64-v8a` 或 `x86_64`。JDK 17–26、带 NDK r29 的 Android 
 
 ```bash
 python tools/build-apks.py    # checks, tests, then all four APKs
+python tools/build-apks.py --debug-only --flavor x64   # one APK for the emulator
 ```
 
 运行时镜像是生成物而不是提交物（每个 ABI 约 110 MB 的归档，解包后约 300 MB），所以那条命令

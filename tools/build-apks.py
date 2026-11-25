@@ -43,6 +43,8 @@ terminal. The summary at the end is the list of files to install.
     python tools/build-apks.py --skip-tests     # just build
     python tools/build-apks.py --debug-only     # the two debug APKs
     python tools/build-apks.py --release-only   # the two release APKs
+    python tools/build-apks.py --flavor x64     # only the x64 APKs
+    python tools/build-apks.py --debug-only --flavor x64   # one APK, the usual dev loop
     python tools/build-apks.py --refresh-images # rebuild the runtime image first
     python tools/build-apks.py --clean          # drop APK outputs first
 """
@@ -416,12 +418,13 @@ def image_dirs() -> dict[str, Path]:
     }
 
 
-def missing_flavors() -> list[str]:
-    """The flavours whose runtime image is incomplete, in ABI order."""
+def missing_flavors(flavors: tuple[str, ...] = tuple(ABI_DIRS)) -> list[str]:
+    """The requested flavours whose runtime image is incomplete, in ABI order."""
+    directories = image_dirs()
     return [
         flavor
-        for flavor, directory in image_dirs().items()
-        if not all((directory / name).is_file() for name in IMAGE_FILES)
+        for flavor in flavors
+        if not all((directories[flavor] / name).is_file() for name in IMAGE_FILES)
     ]
 
 
@@ -457,15 +460,15 @@ def newest_image_input(after: float) -> tuple[str, float] | None:
     return newest
 
 
-def stale_image_flavors() -> list[str]:
+def stale_image_flavors(flavors: tuple[str, ...] = tuple(ABI_DIRS)) -> list[str]:
     """
-    The flavours whose image is older than a file it is built from, in ABI order.
+    The requested flavours whose image is older than a file it is built from, in ABI order.
 
     A flavour with no complete image is not reported here — [missing_flavors] owns that —
     so the two reasons a build has to run are never confused in the log.
     """
     stale: list[str] = []
-    for flavor in image_dirs():
+    for flavor in flavors:
         built = image_build_time(flavor)
         if built is None:
             continue
@@ -526,7 +529,9 @@ def run_image_builder(arguments: list[str]) -> bool:
     return True
 
 
-def ensure_images(refresh: bool, rebuilt: list[str]) -> bool:
+def ensure_images(
+    refresh: bool, rebuilt: list[str], flavors: tuple[str, ...] = tuple(ABI_DIRS)
+) -> bool:
     """
     Builds the runtime images when they are missing or out of date, or when asked to.
 
@@ -548,18 +553,19 @@ def ensure_images(refresh: bool, rebuilt: list[str]) -> bool:
             log(f"FAILED: {error}")
         return False
 
-    missing = missing_flavors()
-    stale = [flavor for flavor in stale_image_flavors() if flavor not in missing]
+    missing = missing_flavors(flavors)
+    stale = [flavor for flavor in stale_image_flavors(flavors) if flavor not in missing]
 
     if not refresh and not missing and not stale:
-        log("both runtime images are present and newer than everything they are built from")
+        log("the requested runtime image(s) are present and newer than everything they are built from")
         return True
 
     if refresh:
-        log("rebuilding the runtime images (--refresh-images)")
-        if not run_image_builder(["--all"]):
-            return False
-        rebuilt.extend(sorted(image_dirs()))
+        log("rebuilding the runtime image(s) (--refresh-images)")
+        for flavor in flavors:
+            if not run_image_builder(["--arch", ARCH_NAMES[flavor], "--flavor", flavor]):
+                return False
+            rebuilt.append(flavor)
         return True
 
     prerequisites = image_builder_prerequisites()
@@ -598,8 +604,9 @@ def ensure_images(refresh: bool, rebuilt: list[str]) -> bool:
     return True
 
 
-def run_tests() -> bool:
+def run_tests(flavors: tuple[str, ...] = tuple(ABI_DIRS)) -> bool:
     banner("tests")
+    started = time.monotonic()
     failures: list[str] = []
 
     # The app's unit tests are ABI-independent — one flavour's task runs all of them
@@ -608,8 +615,20 @@ def run_tests() -> bool:
     # short independent process, and under a multi-minute Gradle suite their wall
     # time is free. They capture their output, so the streaming above is still only
     # Gradle's.
+    # One verifier per ABI, run concurrently by the pool below. The verifier
+    # decompresses every member of the three archives to look for an old prefix;
+    # splitting it lets the two ABIs overlap instead of walking 196 MB serially.
+    image_checks = [
+        (
+            f"the runtime images ({flavor})",
+            lambda abi=ABI_DIRS[flavor]: python_tool(
+                "verify-runtime-image.py", "--abi", abi
+            ),
+        )
+        for flavor in flavors
+    ]
     checks = [
-        ("the runtime images", lambda: python_tool("verify-runtime-image.py")),
+        *image_checks,
         # The rule that decides whether the agent's manual — and the rest of pi's
         # documentation — reaches the phone at all. It is a `keep` argument and one
         # `unlink` away from being silently wrong, and a device shows nothing when it
@@ -743,7 +762,7 @@ def run_tests() -> bool:
     if failures:
         log("FAILED: " + ", ".join(failures))
         return False
-    log("all tests passed")
+    log(f"all tests passed in {time.monotonic() - started:.0f}s")
     return True
 
 
@@ -884,6 +903,11 @@ def main() -> int:
     parser.add_argument("--debug-only", action="store_true", help="build only the debug APKs")
     parser.add_argument("--release-only", action="store_true", help="build only the release APKs")
     parser.add_argument(
+        "--flavor",
+        choices=sorted(ABI_DIRS),
+        help="build only this ABI's APKs instead of both (arm64 or x64)",
+    )
+    parser.add_argument(
         "--refresh-images",
         action="store_true",
         help="rebuild the runtime images even when they are already present",
@@ -895,6 +919,7 @@ def main() -> int:
         parser.error("--debug-only and --release-only are mutually exclusive")
 
     started = time.monotonic()
+    flavors = (args.flavor,) if args.flavor else tuple(ABI_DIRS)
     log(f"repository {REPO_ROOT}")
 
     missing = check_prerequisites()
@@ -907,11 +932,18 @@ def main() -> int:
 
     if args.clean:
         banner("clean")
-        log(f"removed {clear_apk_outputs()} existing APK(s)")
+        clean_variants = tuple(
+            (flavor, build_type)
+            for flavor, build_type in VARIANTS
+            if flavor in flavors
+        )
+        log(f"removed {clear_apk_outputs(clean_variants)} existing APK(s)")
 
     # Always ensured: the app cannot be built without them, with or without tests.
+    # Only the flavours being built: a machine with no arm64 image can still make
+    # the x64 APK, and `--flavor x64` must not spend minutes rebuilding the other ABI.
     rebuilt: list[str] = []
-    if not ensure_images(args.refresh_images, rebuilt):
+    if not ensure_images(args.refresh_images, rebuilt, flavors):
         return 1
 
     if args.skip_tests:
@@ -921,13 +953,14 @@ def main() -> int:
         if rebuilt:
             log("--skip-tests: the rebuilt runtime image(s) ("
                 + ", ".join(rebuilt) + ") will not be verified")
-    elif not run_tests():
+    elif not run_tests(flavors):
         return 1
 
     variants = [
         (flavor, build_type)
         for flavor, build_type in VARIANTS
-        if not (args.debug_only and build_type != "debug")
+        if flavor in flavors
+        and not (args.debug_only and build_type != "debug")
         and not (args.release_only and build_type != "release")
     ]
 
@@ -940,18 +973,27 @@ def main() -> int:
     # *release* build? — is about an artifact that only now exists. The debug build
     # typesetting a formula says nothing about the release one, which is how a reader
     # came to report "只有第一块渲染正常了" about an APK that had been built and shipped.
-    banner("verify what was built")
-    code, output = python_tool("check-release-math.py")
-    verdict = next(
-        (line.strip() for line in reversed(output.splitlines()) if line.strip()),
-        "ok",
+    #
+    # Only when a release APK was actually built: a debug-only run reads whatever
+    # release APK happens to be left from an earlier build, and asks a question about
+    # the previous tree. `--skip-tests` promises no checks, so it skips this one too.
+    release_flavors = sorted(
+        {flavor for flavor, build_type in variants if build_type == "release"}
     )
-    if code == 0:
-        log(f"ok   {verdict}")
-    else:
-        print(output)
-        log("FAILED: a release APK cannot typeset what the formula library defines")
-        return 1
+    if not args.skip_tests and release_flavors:
+        banner("verify what was built")
+        check_arguments = ("--flavor", release_flavors[0]) if len(release_flavors) == 1 else ()
+        code, output = python_tool("check-release-math.py", *check_arguments)
+        verdict = next(
+            (line.strip() for line in reversed(output.splitlines()) if line.strip()),
+            "ok",
+        )
+        if code == 0:
+            log(f"ok   {verdict}")
+        else:
+            print(output)
+            log("FAILED: a release APK cannot typeset what the formula library defines")
+            return 1
 
     banner("done")
     for apk in built:

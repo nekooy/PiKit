@@ -64,8 +64,13 @@ debug device can see (ARCHITECTURE §12.2).
 | --- | --- |
 | `--skip-tests` | build without running any check |
 | `--debug-only`, `--release-only` | two APKs instead of four |
+| `--flavor arm64`, `--flavor x64` | one ABI's APKs; `--debug-only --flavor x64` is the one-APK dev loop |
 | `--refresh-images` | rebuild the runtime image even when it is already there |
 | `--clean` | delete the built APKs first |
+
+The full four-APK command is the release gate. For a single-device loop,
+`--debug-only --flavor x64` builds the one APK the emulator installs and skips the
+other ABI's compile, dex and package work.
 
 `gradle.properties` turns the **configuration cache** on: the second and later
 builds of the same task set skip Gradle's configuration phase. A build script edit
@@ -77,13 +82,16 @@ for the same reason — closing over `Project` or a variant object is what the c
 refuses to serialize.
 
 **The build does not leave daemons behind.** `gradle.properties` sets
-`org.gradle.daemon.idletimeout=60000` and `kotlin.compiler.execution.strategy=in-process`:
-the Kotlin compiler runs inside the Gradle daemon, and that daemon exits 60 seconds
-after the last task. One full compile here peaked at one Gradle JVM of about 1.7 GB,
-and `./gradlew --status` reported no daemons once the minute had passed — there is no
-second `KotlinCompileDaemon` and no manual `gradlew --stop` in the ordinary workflow.
-If a build is interrupted, `./gradlew --stop` is the recovery; do not leave an idle
-4 GB JVM behind just because the machine has memory to spare.
+`org.gradle.daemon.idletimeout=300000` and `kotlin.compiler.execution.strategy=in-process`:
+the Kotlin compiler runs inside the Gradle daemon, and that daemon exits five minutes
+after the last task. The five-minute window is the measured edit-build loop: a cold
+Gradle daemon costs about 8-14 seconds before the first task, while a warm one answers
+in about 2 seconds, so the old 60-second timeout made almost every build after a short
+edit pay the startup again. One full compile here peaked at one Gradle JVM of about
+1.7 GB, and `./gradlew --status` reported no daemons once the window had passed — there
+is no second `KotlinCompileDaemon` and no manual `gradlew --stop` in the ordinary
+workflow. If a build is interrupted, or the machine needs the memory back before the
+window ends, `./gradlew --stop` is the recovery.
 
 It also repairs the one failure the packaging guard is known to catch: if a
 variant fails with a stale APK (see *The size of an APK is checked*), it deletes

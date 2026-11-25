@@ -65,6 +65,7 @@ whole story.
 
 ```bash
 python tools/build-apks.py    # checks, tests, then all four APKs
+python tools/build-apks.py --debug-only --flavor x64   # one APK for the emulator
 ```
 
 The runtime images are generated rather than committed (~110 MB of archives per ABI,
