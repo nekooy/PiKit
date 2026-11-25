@@ -218,6 +218,18 @@ interface Strings {
 
         val send: String
         val stop: String
+
+        /** Under an answer the reader stopped: a state, not a failure. */
+        val answerStopped: String
+
+        /** The answer's own menu: send the same prompt to a fresh branch. */
+        val regenerate: String
+        val editAndResend: String
+
+        /** The edit dialog: its title, its field label, and what a branch costs. */
+        val editPromptTitle: String
+        val editPromptField: String
+        val editPromptSummary: String
         val sessions: String
         val newSession: String
         val compacting: String
@@ -655,6 +667,12 @@ interface Strings {
         /** Shown in the page header while the content scan is reading transcripts. */
         val searching: String
 
+        /** Chat history's time headings; work history names workspaces instead. */
+        val chatGroupToday: String
+        val chatGroupYesterday: String
+        val chatGroupWeek: String
+        val chatGroupMonth: String
+
         /** The snippet line's spoken name; the visible text is the match itself. */
         fun contentMatch(snippet: String): String
         val select: String
@@ -1050,6 +1068,13 @@ interface Strings {
          */
         val showMessageTime: String
         val showMessageTimeSubtitle: String
+
+        /**
+         * Whether a conversation is named by a short model-generated title after its
+         * first successful answer. Off by default because it costs one small request.
+         */
+        val chatTitle: String
+        val chatTitleSubtitle: String
 
         /**
          * Light, dark, or the system's own answer.
@@ -2116,6 +2141,12 @@ interface Strings {
         val stop: String
         val channelName: String
         val channelDescription: String
+
+        /** The second channel: an answer that finished while the app was away. */
+        val doneChannelName: String
+        val doneChannelDescription: String
+        val doneTitle: String
+        val doneFallback: String
     }
 
     interface Common {

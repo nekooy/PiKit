@@ -72,6 +72,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.io.File
 import pi.kit.mob.R
 import pi.kit.mob.data.AgentMode
 import pi.kit.mob.env.BatteryOptimisation
@@ -84,6 +85,7 @@ import pi.kit.mob.locales.strings
 import pi.kit.mob.locales.stringsFor
 import pi.kit.mob.pi.AgentStatus
 import pi.kit.mob.pi.PiAgentSession
+import pi.kit.mob.pi.SessionMetadata
 import pi.kit.mob.pi.PiHost
 import pi.kit.mob.pi.RuntimeStatus
 import pi.kit.mob.ui.kit.DarkNavigationBar
@@ -706,6 +708,33 @@ private fun ChatTab(
             rootScope.launch { opened?.startAgent() }
         }
     }
+    // A completion notification names a session file; the root is the only place
+    // that can open one (the pool and the launch effect are here). The active
+    // conversation is not reopened as a second process: a tap on the notification of
+    // the conversation already on screen just clears its unread mark.
+    LaunchedEffect(host) {
+        host.pendingOpen.collect { path ->
+            val wanted = path ?: return@collect
+            if (host.active.value.sessionPath == wanted) {
+                host.active.value.markSeen()
+                host.consumeOpen()
+                return@collect
+            }
+            open(
+                PiAgentSession.SessionSummary(
+                    path = wanted,
+                    title = "",
+                    hasExplicitName = false,
+                    messageCount = 0,
+                    modifiedAt = 0L,
+                    pinned = false,
+                    workspace = SessionMetadata.workspaceOf(File(wanted)),
+                ),
+            )
+            host.consumeOpen()
+        }
+    }
+
     /**
      * Opens an empty conversation in [wanted] and makes it the active one.
      *

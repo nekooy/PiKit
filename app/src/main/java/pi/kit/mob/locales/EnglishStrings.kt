@@ -60,6 +60,13 @@ internal object EnglishStrings : Strings {
         override val placeholderAttachment = "Add a message for these images…"
         override val send = "Send"
         override val stop = "Stop"
+
+        override val answerStopped = "Generation stopped"
+        override val regenerate = "Regenerate"
+        override val editAndResend = "Edit and resend"
+        override val editPromptTitle = "Edit message"
+        override val editPromptField = "Message"
+        override val editPromptSummary = "A new conversation branches before this message; the original is kept."
         override val sessions = "Conversations"
         override val newSession = "New conversation"
         override val compacting = "Compacting context…"
@@ -247,6 +254,11 @@ internal object EnglishStrings : Strings {
         override fun saved(count: Int) = "$count saved"
         override val searchHint = "Search titles or content"
         override val searching = "Searching conversations…"
+
+        override val chatGroupToday = "Today"
+        override val chatGroupYesterday = "Yesterday"
+        override val chatGroupWeek = "Previous 7 days"
+        override val chatGroupMonth = "Previous 30 days"
         override fun contentMatch(snippet: String) = "Matched in the conversation: $snippet"
         override val select = "Select conversations"
         override val selectAll = "Select all"
@@ -383,6 +395,9 @@ internal object EnglishStrings : Strings {
         override val showHistoryTimeSubtitle = "The date and time at the end of each history row"
         override val showMessageTime = "Show message times"
         override val showMessageTimeSubtitle = "The date and time under each message"
+
+        override val chatTitle = "Generate conversation titles"
+        override val chatTitleSubtitle = "A short title after the first answer, at the cost of one small model request"
         override val theme = "Theme"
         override val themeSystem = "Follow system"
         override val themeLight = "Light"
@@ -956,6 +971,11 @@ internal object EnglishStrings : Strings {
         override val stop = "Stop"
         override val channelName = "Agent"
         override val channelDescription = "Shown only while the agent is writing an answer."
+
+        override val doneChannelName = "Answer ready"
+        override val doneChannelDescription = "Tells you when a conversation finishes an answer in the background. Tap to return to it."
+        override val doneTitle = "Answer ready"
+        override val doneFallback = "Open PiKit to read it"
     }
 
     override val common = object : Strings.Common {

@@ -1,6 +1,7 @@
 package pi.kit.mob.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import pi.kit.mob.data.AgentMode
 import pi.kit.mob.data.Workspace
@@ -56,17 +57,26 @@ class SessionGroupingTest {
         chip = ::chip,
     )
 
+    private val now = 1_700_000_000_000L
+
     private fun history(
         mode: AgentMode,
         sessions: List<SessionSummary>,
+        clock: Long = now,
     ) = historyGroups(
         mode = mode,
         sessions = sessions,
         workspaces = workspaces,
         defaultPath = builtIn,
         unknownLabel = "No workspace recorded",
-        chatLabel = "Chat",
+        chatLabels = ChatGroupLabels(
+            today = "Today",
+            yesterday = "Yesterday",
+            week = "Previous 7 days",
+            month = "Previous 30 days",
+        ),
         chip = ::chip,
+        now = clock,
     )
 
     @Test
@@ -141,22 +151,31 @@ class SessionGroupingTest {
     }
 
     @Test
-    fun `chat history is one section and names no workspace`() {
+    fun `chat history is grouped by time and names no workspace`() {
         // A chat conversation converted from work still records the project's `cwd`;
         // the list must not resurrect that folder as a heading in a mode that loads no
-        // workspace at all.
+        // workspace at all. Time is the one fact left that describes the conversation.
+        val day = 86_400_000L
         val sections = history(
             AgentMode.CHAT,
             listOf(
-                summary("$home/a.jsonl", added, modifiedAt = 10),
-                summary("$home/b.jsonl", builtIn, modifiedAt = 20),
-                summary("$home/c.jsonl", null, modifiedAt = 5),
+                summary("$home/a.jsonl", added, modifiedAt = now - 60_000L),
+                summary("$home/b.jsonl", builtIn, modifiedAt = now - day),
+                summary("$home/c.jsonl", null, modifiedAt = now - 3 * day),
+                summary("$home/d.jsonl", added, modifiedAt = now - 10 * day),
+                summary("$home/e.jsonl", builtIn, modifiedAt = now - 60 * day),
             ),
         )
 
-        assertEquals(listOf("Chat"), sections.map { it.label })
-        assertEquals(listOf(3), sections.map { it.sessions.size })
-        assertEquals("chat", sections.single().key)
+        assertEquals(
+            listOf("Today", "Yesterday", "Previous 7 days", "Previous 30 days"),
+            sections.take(4).map { it.label },
+        )
+        assertEquals(5, sections.size)
+        assertEquals(1, sections[0].sessions.size)
+        assertEquals("chat-today", sections[0].key)
+        // No heading is a workspace path, whatever the rows recorded.
+        assertTrue(sections.none { it.key.startsWith("/") })
     }
 
     @Test

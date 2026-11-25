@@ -1757,6 +1757,11 @@ class PiAgentSession internal constructor(
                     // `active` is the host's answer to "which conversation is on screen".
                     // The mark is only news when it is not the one being read.
                     _finishedUnseen.value = host.active.value !== this@PiAgentSession
+                    // A title is asked for once, on the first answer that settled
+                    // without an error. `maybeGenerate` is cheap when the switch is
+                    // off and when the conversation already has a name.
+                    host.titleGenerator.maybeGenerate(this@PiAgentSession)
+                    host.onTurnFinished(this@PiAgentSession)
                 }
                 was = now
             }
@@ -1799,7 +1804,7 @@ class PiAgentSession internal constructor(
     fun forkAt(messages: Int): String? {
         val path = sessionPath ?: return null
         val file = File(path)
-        if (messages <= 0 || !file.isFile) return null
+        if (messages < 0 || !file.isFile) return null
         val lines = runCatching { file.readLines() }.getOrNull() ?: return null
         if (lines.size < 2) return null
         val kept = ArrayList<String>(lines.size)

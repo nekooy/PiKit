@@ -8,7 +8,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,6 +111,62 @@ class PiHost private constructor(context: Context) {
      */
     internal val chatPresets: ChatPresetStore by lazy {
         ChatPresetStore(appContext, settingsStore.read().chatSystemPrompt)
+    }
+
+    /** The one-shot title request a conversation may make after its first answer. */
+    internal val titleGenerator: TitleGenerator by lazy { TitleGenerator(this) }
+
+    /**
+     * Turns that finished with an answer while the app was in the background.
+     *
+     * The service is the only consumer: it posts one notification per conversation,
+     * and a turn that errored or was stopped is not an event here — there is nothing
+     * to come back to. The event carries the file and the name the drawer would show;
+     * the service adds the sentence, because only it knows the interface language.
+     */
+    private val _turnCompletions = MutableSharedFlow<TurnCompleted>(extraBufferCapacity = 8)
+    internal val turnCompletions = _turnCompletions.asSharedFlow()
+
+    /** Called by a conversation when its stream goes idle. */
+    internal fun onTurnFinished(session: PiAgentSession) {
+        val state = session.conversation.value
+        if (state.lastError != null) return
+        // The turn's own final reply, not "the last assistant row": a tool-only
+        // message leaves the previous answer as the last assistant, and a completion
+        // notification for a turn that said nothing is a false alarm.
+        val turn = state.turns.lastOrNull()?.takeIf { it.isComplete } ?: return
+        val answer = state.items.firstOrNull { it.key == turn.finalReplyKey } as? ChatItem.Assistant
+            ?: return
+        if (answer.status != ReplyStatus.Done || answer.text.isBlank()) return
+        val path = session.sessionPath ?: return
+        val title = state.sessionName?.takeIf { it.isNotBlank() }
+            ?: state.items.filterIsInstance<ChatItem.User>().firstOrNull()
+                ?.let { parsePromptExtras(it.text).displayText }
+                ?.take(60)
+                ?.takeIf { it.isNotBlank() }
+        _turnCompletions.tryEmit(TurnCompleted(path, title))
+    }
+
+    /** One conversation that finished a turn with an answer. */
+    internal data class TurnCompleted(val path: String, val title: String?)
+
+    /**
+     * A conversation a notification asked to open.
+     *
+     * The service cannot open one itself — conversations are the UI's to open, and the
+     * pool lives behind [PiKitRoot]'s launch effect — so the path is left here for the
+     * root to consume. A new value replaces an unread one: two taps are one destination,
+     * the one that was tapped last.
+     */
+    private val _pendingOpen = MutableStateFlow<String?>(null)
+    val pendingOpen: StateFlow<String?> = _pendingOpen.asStateFlow()
+
+    fun requestOpen(path: String) {
+        _pendingOpen.value = path
+    }
+
+    fun consumeOpen() {
+        _pendingOpen.value = null
     }
 
     /**

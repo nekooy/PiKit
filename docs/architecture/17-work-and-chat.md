@@ -49,8 +49,11 @@ each run of rows came from, because the workspace is the fact that groups a codi
 conversation. Chat mode loads no workspace files, no `AGENTS.md` and no tools, and a
 conversation converted from work still carries its old project's `cwd` in the session
 file; drawing that folder over a chat list would put a workspace back into the mode
-whose promise is that it has none. The chat list is therefore one section under the
-pinned shelf, and its heading is the mode's own name — `聊天 · 3`, not `project · 3`.
+whose promise is that it has none. The chat list is therefore grouped by **time** —
+today, yesterday, the last seven days, the last thirty, then the month itself — under the
+pinned shelf. Time is a fact about the conversation rather than about a folder it no longer
+has, and it keeps the promise the workspace heading would break. The pinned shelf is above
+every time section, because a pin is a decision about a conversation, not a date.
 
 ## The switch starts a conversation; the row menu converts one
 

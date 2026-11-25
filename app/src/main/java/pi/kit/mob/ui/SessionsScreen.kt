@@ -49,15 +49,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -102,7 +109,6 @@ import pi.kit.mob.ui.kit.PiTone
 import pi.kit.mob.ui.kit.piFieldColors
 import pi.kit.mob.ui.kit.piFieldCursor
 import pi.kit.mob.ui.kit.piFieldHeightForPlaceholder
-import pi.kit.mob.ui.kit.piMenuAnchor
 import pi.kit.mob.ui.kit.piOverScroll
 import pi.kit.mob.ui.kit.rememberPiBackdrop
 import pi.kit.mob.ui.kit.rememberPiMenuAnchor
@@ -131,6 +137,7 @@ import top.yukonga.miuix.kmp.material.GlassShadows
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -1037,7 +1044,12 @@ private fun ConversationList(
         workspaces = workspaces,
         defaultPath = defaultPath,
         unknownLabel = text.sessions.groupUnknown,
-        chatLabel = text.settings.modeChat,
+        chatLabels = ChatGroupLabels(
+            today = text.sessions.chatGroupToday,
+            yesterday = text.sessions.chatGroupYesterday,
+            week = text.sessions.chatGroupWeek,
+            month = text.sessions.chatGroupMonth,
+        ),
         // The folder's own name, without the composer chip's `（默认）` marker: a
         // heading is read once at the top of a run of rows, and the marker is about a
         // choice the reader made elsewhere. Two workspaces with the same name are told
@@ -1172,16 +1184,25 @@ internal fun sessionsInMode(
     modeOf: (String) -> AgentMode,
 ): List<PiAgentSession.SessionSummary> = sessions.filter { modeOf(it.path) == mode }
 
+/** The four fixed headings of chat history; a month names itself. */
+internal data class ChatGroupLabels(
+    val today: String,
+    val yesterday: String,
+    val week: String,
+    val month: String,
+)
+
 /**
- * The sections the drawer draws for [mode], pinned rows excluded (the caller owns that
- * shelf).
+ * The sections the drawer draws for [mode], pinned rows excluded (the caller owns the
+ * pinned shelf).
  *
  * Work mode groups its conversations by the workspace each one ran in. Chat mode does
  * not: it loads no `AGENTS.md`, no tools and no workspace files (§17), and a chat
  * conversation converted from work still carries the old project's `cwd` in its session
  * file. Grouping that row under the project it was converted from would put a workspace
- * back into a mode whose promise is that it has none, so the whole chat list is one
- * section named with the mode itself.
+ * back into a mode whose promise is that it has none, so chat rows are grouped by
+ * **time** — today, yesterday, the last week, the last month, then the month itself —
+ * which is a fact about the conversation rather than about a folder it no longer has.
  */
 internal fun historyGroups(
     mode: AgentMode,
@@ -1189,16 +1210,53 @@ internal fun historyGroups(
     workspaces: List<Workspace>,
     defaultPath: String,
     unknownLabel: String,
-    chatLabel: String,
+    chatLabels: ChatGroupLabels,
     chip: (String, Boolean) -> String,
+    now: Long = System.currentTimeMillis(),
 ): List<SessionGroup> = when (mode) {
     AgentMode.WORK -> sessionGroups(sessions, workspaces, defaultPath, unknownLabel, chip)
-    AgentMode.CHAT -> if (sessions.isEmpty()) {
-        emptyList()
-    } else {
-        listOf(SessionGroup(key = "chat", label = chatLabel, sessions = sessions))
+    AgentMode.CHAT -> chatGroups(sessions, chatLabels, now)
+}
+
+/** The chat list's sections, in the order the already-sorted list arrives. */
+private fun chatGroups(
+    sessions: List<PiAgentSession.SessionSummary>,
+    labels: ChatGroupLabels,
+    now: Long,
+): List<SessionGroup> {
+    if (sessions.isEmpty()) return emptyList()
+    val day = 86_400_000L
+    val today = startOfDay(now)
+    val groups = LinkedHashMap<String, Pair<String, MutableList<PiAgentSession.SessionSummary>>>()
+    for (session in sessions) {
+        val diff = ((today - startOfDay(session.modifiedAt)).coerceAtLeast(0) / day).toInt()
+        val heading = when {
+            diff == 0 -> "chat-today" to labels.today
+            diff == 1 -> "chat-yesterday" to labels.yesterday
+            diff < 7 -> "chat-week" to labels.week
+            diff < 30 -> "chat-month" to labels.month
+            else -> {
+                val month = SimpleDateFormat("LLLL yyyy", Locale.getDefault())
+                    .format(Date(session.modifiedAt))
+                "chat-month-$month" to month
+            }
+        }
+        groups.getOrPut(heading.first) { heading.second to mutableListOf() }
+            .second.add(session)
+    }
+    return groups.map { (key, value) ->
+        SessionGroup(key = key, label = value.first, sessions = value.second)
     }
 }
+
+/** Local midnight of [time], the unit a "today" heading is counted in. */
+private fun startOfDay(time: Long): Long = Calendar.getInstance().apply {
+    timeInMillis = time
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
 
 /**
  * The conversations by the workspace they came from, most recently used group first.
@@ -1327,12 +1385,39 @@ private fun ConversationRow(
     // list row, and it samples the drawer's backdrop without containing itself. What the
     // row contributes is where it is — see `rowAnchor`.
     val rowAnchor = rememberPiMenuAnchor()
+    // The menu opens at the finger, not at the row's own rectangle. A row is the
+    // width of the drawer, and an edge reveal from that rectangle unfolded across
+    // the whole list instead of out of the thing the reader held. The press point
+    // is read on the initial pass without consuming it, so the row's click and
+    // long-press still belong to `combinedClickable`.
+    var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     Box {
         Box(
             Modifier
                 .fillMaxWidth()
-                .piMenuAnchor(rowAnchor)
+                .onGloballyPositioned { rowCoords = it }
+                .pointerInput(item.path) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial,
+                        )
+                        val coords = rowCoords
+                        if (coords?.isAttached == true) {
+                            val point = coords.localToWindow(down.position)
+                            if (point.x.isFinite() && point.y.isFinite()) {
+                                rowAnchor.bounds = Rect(point.x, point.y, point.x, point.y)
+                            }
+                        }
+                        // Observe the rest of the gesture without consuming it, so
+                        // this detector restarts cleanly for the next press.
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (event.changes.none { it.pressed }) break
+                        }
+                    }
+                }
                 // The margin is outside the fill: a highlighted row has to be inset from
                 // the panel's edge to read as a highlight rather than as a band across it.
                 .padding(horizontal = 8.dp)

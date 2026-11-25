@@ -217,6 +217,17 @@ internal fun PersonalizationPage(
                         session.settingsStore.update { it.copy(showMessageTime = on) }
                     },
                 )
+                // A title is generated once, after the first successful answer, by a
+                // small request to the same provider. Off is the default because it is
+                // the only switch on this page that spends tokens.
+                SwitchPreference(
+                    title = text.settings.chatTitle,
+                    summary = text.settings.chatTitleSubtitle,
+                    checked = settings.chatTitleEnabled,
+                    onCheckedChange = { on ->
+                        session.settingsStore.update { it.copy(chatTitleEnabled = on) }
+                    },
+                )
             }
 
             // One section, four controls: the text size, the theme, the accent and the launcher

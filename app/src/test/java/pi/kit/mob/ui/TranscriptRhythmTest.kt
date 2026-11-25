@@ -39,7 +39,7 @@ class TranscriptRhythmTest {
             key = key,
             text = text,
             thinking = thinking,
-            isStreaming = streaming,
+            status = if (streaming) pi.kit.mob.pi.ReplyStatus.Streaming else pi.kit.mob.pi.ReplyStatus.Done,
             error = error,
         ),
     )

@@ -716,4 +716,59 @@ class ConversationReducerTest {
 
         assertEquals(ToolState.Failed, state.tools().single().state)
     }
+
+    /**
+     * The reader's Stop is a partial answer they asked to keep, not a failure. pi
+     * reports it as `stopReason: "aborted"`; the original reducer turned that into
+     * `error = "Aborted"` and drew it in the error ink under the answer.
+     */
+    @Test
+    fun `a stop is a stopped answer, not an error`() {
+        val state = fold(
+            """{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"write it"}]}}""",
+            """{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"half"}}""",
+            """{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"half"}],"stopReason":"aborted","errorMessage":"Aborted"}}""",
+        )
+
+        val answer = state.assistants().single()
+        assertEquals(ReplyStatus.Stopped, answer.status)
+        assertNull("a stop carries no error", answer.error)
+        assertFalse(answer.isStreaming)
+        assertEquals("aborted", answer.stopReason)
+    }
+
+    /** A process that went away leaves the last answer streaming; idle closes it. */
+    @Test
+    fun `a settled turn closes an answer whose end never arrived`() {
+        val state = fold(
+            """{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending"}}""",
+            """{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"partial"}}""",
+            """{"type":"agent_settled"}""",
+        )
+
+        val answer = state.assistants().single()
+        assertEquals(ReplyStatus.Stopped, answer.status)
+        assertFalse(answer.isStreaming)
+    }
+
+    /** The same answer read back from pi's file keeps its stopped state. */
+    @Test
+    fun `a restored aborted answer is stopped`() {
+        val history = kotlinx.serialization.json.Json.parseToJsonElement(
+            """
+            {"messages":[
+              {"role":"user","content":[{"type":"text","text":"write it"}],"timestamp":1000},
+              {"role":"assistant","content":[{"type":"text","text":"half"}],
+                "stopReason":"aborted","errorMessage":"Aborted","timestamp":2000}
+            ]}
+            """.trimIndent(),
+        )
+
+        val state = ConversationReducer.replaceWithMessages(ConversationState(), history)
+
+        val answer = state.assistants().single()
+        assertEquals(ReplyStatus.Stopped, answer.status)
+        assertNull(answer.error)
+    }
 }

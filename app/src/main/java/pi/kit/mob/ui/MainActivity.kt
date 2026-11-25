@@ -1,6 +1,7 @@
 package pi.kit.mob.ui
 
 import android.app.ActivityManager
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val host = PiHost.of(applicationContext)
+        openFromNotification(host, intent)
 
         setContent {
             // The theme is assembled from the preferences here rather than inside
@@ -147,6 +149,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // The activity is single-top for this intent; the new destination replaces the
+        // one the activity was launched with, so a later rotation does not reopen it.
+        setIntent(intent)
+        openFromNotification(PiHost.of(applicationContext), intent)
+    }
+
     override fun onStart() {
         super.onStart()
         // A window is in front: the shade's "running" marker is noise the reader
@@ -158,6 +168,19 @@ class MainActivity : ComponentActivity() {
         PiAgentService.onUiVisible(this, false)
         super.onStop()
     }
+}
+
+/**
+ * Hands a completion notification's session to the root, once, and clears it.
+ *
+ * The activity may already be alive when the notification is tapped, so this runs
+ * from both `onCreate` and `onNewIntent`; removing the extra afterwards is what keeps
+ * a rotation from opening the same conversation a second time.
+ */
+private fun openFromNotification(host: PiHost, intent: Intent?) {
+    val path = intent?.getStringExtra(PiAgentService.EXTRA_SESSION_PATH) ?: return
+    intent.removeExtra(PiAgentService.EXTRA_SESSION_PATH)
+    host.requestOpen(path)
 }
 
 /**

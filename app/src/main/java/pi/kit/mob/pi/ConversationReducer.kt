@@ -17,6 +17,16 @@ enum class ToolState { Pending, Running, Succeeded, Failed }
 
 enum class NoticeKind { Info, Warning, Error }
 
+/**
+ * How one answer ended.
+ *
+ * A reader's Stop is not a failure: pi reports it as `stopReason: "aborted"`, and
+ * that is a partial answer they asked to keep — drawing it in the error ink made a
+ * deliberate stop look like the app had broken. The four settled states are the
+ * same ones chat-demo's reply engine has ([Pending]/[Streaming] are live).
+ */
+enum class ReplyStatus { Pending, Streaming, Done, Stopped, Error }
+
 /** One row in the transcript. */
 sealed interface ChatItem {
     val key: String
@@ -56,10 +66,16 @@ sealed interface ChatItem {
         override val key: String,
         val text: String = "",
         val thinking: String = "",
-        val isStreaming: Boolean = true,
+        val status: ReplyStatus = ReplyStatus.Done,
         val error: String? = null,
+        /** pi's own `stopReason` for this message, kept for the menu and the next turn. */
+        val stopReason: String? = null,
         override val createdAt: Long = 0L,
-    ) : ChatItem
+    ) : ChatItem {
+        /** True while a message is still arriving; a stopped answer is not. */
+        val isStreaming: Boolean
+            get() = status == ReplyStatus.Pending || status == ReplyStatus.Streaming
+    }
 
     /**
      * A tool call.
@@ -495,12 +511,20 @@ object ConversationReducer {
                     }
                     if (text.isNotEmpty() || thinking.isNotEmpty()) {
                         val key = "history-assistant-${seq++}"
+                        val stopReason = message.str("stopReason")
+                        val errorMessage = message.str("errorMessage")
+                        val status = when {
+                            stopReason == "aborted" -> ReplyStatus.Stopped
+                            errorMessage != null || stopReason == "error" -> ReplyStatus.Error
+                            else -> ReplyStatus.Done
+                        }
                         items += ChatItem.Assistant(
                             key = key,
                             text = text,
                             thinking = thinking,
-                            isStreaming = false,
-                            error = message.str("errorMessage"),
+                            status = status,
+                            error = if (status == ReplyStatus.Error) errorMessage else null,
+                            stopReason = stopReason,
                             createdAt = at,
                         )
                         // The answer is the last message with text, so a later
@@ -685,6 +709,7 @@ object ConversationReducer {
             "agent_settled" -> state
                 // Idle means nothing is running any more, so a card still on its
                 // live pill is one whose end record is never coming.
+                .settleUnfinishedAssistants()
                 .settleUnfinishedTools()
                 .copy(
                     isStreaming = false,
@@ -812,7 +837,13 @@ object ConversationReducer {
 
             "assistant" -> {
                 val key = "assistant-${state.seq}"
-                state.append(ChatItem.Assistant(key = key, createdAt = at))
+                state.append(
+                    ChatItem.Assistant(
+                        key = key,
+                        status = ReplyStatus.Streaming,
+                        createdAt = at,
+                    ),
+                )
                     .copy(seq = state.seq + 1, currentAssistantKey = key)
             }
 
@@ -918,11 +949,17 @@ object ConversationReducer {
         // settle events, which is what makes the header count live.
         val usage = message.obj("usage")?.let(::parseUsage)
 
+        val status = when {
+            stopReason == "aborted" -> ReplyStatus.Stopped
+            errorMessage != null || stopReason == "error" -> ReplyStatus.Error
+            else -> ReplyStatus.Done
+        }
         val next = state
             .updateAssistant(key) {
                 it.copy(
-                    isStreaming = false,
-                    error = errorMessage ?: if (stopReason == "aborted") "Aborted" else null,
+                    status = status,
+                    error = if (status == ReplyStatus.Error) errorMessage else null,
+                    stopReason = stopReason,
                     text = it.text.ifEmpty { extractContentText(message["content"]) },
                     thinking = it.thinking.ifEmpty { extractThinkingText(message["content"]) },
                 )
@@ -1068,6 +1105,7 @@ object ConversationReducer {
      */
     fun finalizeInterruptedTurn(state: ConversationState, now: Long): ConversationState =
         state
+            .settleUnfinishedAssistants()
             .settleUnfinishedTools()
             .copy(
                 isStreaming = false,
@@ -1078,6 +1116,24 @@ object ConversationReducer {
                 followUpQueue = emptyList(),
                 turns = state.turns.closeAt(now, state.items),
             )
+
+    /**
+     * Closes an answer whose end record is not coming.
+     *
+     * A process that died mid-turn, an app that was killed, or an `agent_settled`
+     * after a dropped `message_end` all leave an assistant row in Streaming. It is
+     * a stopped answer, not an error: bytes arrived and the reader can keep them,
+     * and the menu offers to regenerate from the prompt that produced it.
+     */
+    private fun ConversationState.settleUnfinishedAssistants(): ConversationState =
+        copy(items = items.map { item ->
+            val assistant = item as? ChatItem.Assistant ?: return@map item
+            if (assistant.status == ReplyStatus.Pending || assistant.status == ReplyStatus.Streaming) {
+                assistant.copy(status = ReplyStatus.Stopped, stopReason = assistant.stopReason ?: "aborted")
+            } else {
+                item
+            }
+        })
 
     /**
      * Gives every unfinished tool card its final state.

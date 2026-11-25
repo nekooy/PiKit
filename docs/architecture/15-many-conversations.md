@@ -156,6 +156,34 @@ The wake lock is split the same way as before: a turn lock per conversation
 (`holdCpuDuringTurn`, acquired on `agent_start`, released on `agent_settled`) and one
 "the reader left while something was being written" lock in the service.
 
+## The name: the first prompt, and one generated title
+
+A conversation pi never names is titled by its first user turn, which is what the drawer
+has always drawn and what pi's own picker does. Since a title is a sentence about the
+conversation rather than part of it, the drawer can also ask a model for one: the
+**Generate conversation titles** switch (`PiSettings.chatTitleEnabled`, off by default)
+makes the first answer that settles without an error send the conversation's first prompt
+to the same provider, once, and write the returned line with `set_session_name`. The
+policy — one line, the messages' language, about five words or ten CJK characters, no
+Markdown or commentary — is DSH's first-prompt title instruction, which is the version
+measured to produce stable drawer-sized names; `TitleGenerator` carries the exact
+instruction and the parser that takes the first non-empty line, unwraps emphasis and
+clips the result to 40 characters and 80 bytes.
+
+The request is written by the app rather than asked of pi. There is no title command in
+pi's RPC, and spawning a second `pi` just to ask for five words would cost a Node start
+and ~120 MB for one small POST. The direct call is deliberately the only one the app
+makes: no streaming, no tools, no session, an eight-second connect and twenty-second read
+timeout, and a failure is logged by status only and never retried for that conversation.
+The prompt is capped at two thousand characters, which is the opening question rather than
+the transcript.
+
+Two rules keep the feature from surprising the reader. It runs only while the title switch
+is on, and it never overwrites a name: the write happens only if `sessionName` is still
+blank, so a rename made while the request is in flight wins. The profile must carry a key
+and a model, and a provider whose chat base this app does not know is skipped rather than
+guessed — a guessed URL would send the reader's key to somebody else's server.
+
 ## A new conversation appears in the drawer when its file does
 
 A conversation has no row until pi has written its session file, and that moment is the

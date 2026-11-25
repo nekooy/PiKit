@@ -646,6 +646,16 @@ enum class FontSize(val code: String, val scale: Float) {
      */
     val lastChatWebAccess: Boolean = false,
     /**
+     * Whether a conversation's title is generated after its first successful turn.
+     *
+     * Off by default: the feature costs one small provider request per conversation,
+     * and a title is a convenience rather than part of the transcript. On, the first
+     * answer that settles without an error sends the first prompt to the same
+     * provider and writes the returned line with `set_session_name`; a name the
+     * reader set is never overwritten (see `TitleGenerator`).
+     */
+    val chatTitleEnabled: Boolean = false,
+    /**
      * The chat prompt the single-document editor stored before presets existed.
      *
      * **Read once, as a migration input.** The prompt is a [ChatPreset]'s now
@@ -915,6 +925,7 @@ class SettingsStore(context: Context) {
                 prefs.getString(KEY_CHAT_WEB_DEFAULT, null),
             ),
             lastChatWebAccess = prefs.getBoolean(KEY_LAST_CHAT_WEB_ACCESS, false),
+            chatTitleEnabled = prefs.getBoolean(KEY_CHAT_TITLE_ENABLED, false),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -1007,6 +1018,7 @@ class SettingsStore(context: Context) {
             .putString(KEY_AGENT_MODE, next.agentMode.code)
             .putString(KEY_CHAT_WEB_DEFAULT, next.chatWebAccessDefault.code)
             .putBoolean(KEY_LAST_CHAT_WEB_ACCESS, next.lastChatWebAccess)
+            .putBoolean(KEY_CHAT_TITLE_ENABLED, next.chatTitleEnabled)
             .putString(KEY_CHAT_SYSTEM_PROMPT, next.chatSystemPrompt)
             .putString(KEY_PERMISSION, next.permissionMode.code)
             .putString(KEY_LANGUAGE, next.language.code)
@@ -1039,6 +1051,7 @@ class SettingsStore(context: Context) {
             agentMode = next.agentMode,
             chatWebAccessDefault = next.chatWebAccessDefault,
             lastChatWebAccess = next.lastChatWebAccess,
+            chatTitleEnabled = next.chatTitleEnabled,
             chatSystemPrompt = next.chatSystemPrompt,
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
@@ -1133,6 +1146,7 @@ class SettingsStore(context: Context) {
                 prefs.getString(KEY_CHAT_WEB_DEFAULT, null),
             ),
             lastChatWebAccess = prefs.getBoolean(KEY_LAST_CHAT_WEB_ACCESS, false),
+            chatTitleEnabled = prefs.getBoolean(KEY_CHAT_TITLE_ENABLED, false),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -1168,6 +1182,7 @@ class SettingsStore(context: Context) {
         agentMode: AgentMode = current.get().agentMode,
         chatWebAccessDefault: ChatWebAccessDefault = current.get().chatWebAccessDefault,
         lastChatWebAccess: Boolean = current.get().lastChatWebAccess,
+        chatTitleEnabled: Boolean = current.get().chatTitleEnabled,
         chatSystemPrompt: String = current.get().chatSystemPrompt,
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
@@ -1199,6 +1214,7 @@ class SettingsStore(context: Context) {
                 agentMode = agentMode,
                 chatWebAccessDefault = chatWebAccessDefault,
                 lastChatWebAccess = lastChatWebAccess,
+                chatTitleEnabled = chatTitleEnabled,
                 chatSystemPrompt = chatSystemPrompt,
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
@@ -1296,6 +1312,7 @@ class SettingsStore(context: Context) {
 
         /** The last chat conversation's network-tools switch; see [PiSettings.lastChatWebAccess]. */
         private const val KEY_LAST_CHAT_WEB_ACCESS = "last_chat_web_access"
+        private const val KEY_CHAT_TITLE_ENABLED = "chat_title_enabled"
 
         /** The chat prompt template; see [PiSettings.chatSystemPrompt]. */
         private const val KEY_CHAT_SYSTEM_PROMPT = "chat_system_prompt"

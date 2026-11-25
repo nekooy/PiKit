@@ -68,6 +68,13 @@ internal object ChineseStrings : Strings {
         override val placeholderAttachment = "给这些图片补充说明…"
         override val send = "发送"
         override val stop = "停止"
+
+        override val answerStopped = "已停止生成"
+        override val regenerate = "重新生成"
+        override val editAndResend = "编辑并重发"
+        override val editPromptTitle = "编辑消息"
+        override val editPromptField = "消息内容"
+        override val editPromptSummary = "将从此消息之前分出一条新对话，原对话保留。"
         override val sessions = "历史对话"
         override val newSession = "新对话"
         override val compacting = "正在压缩上下文…"
@@ -246,6 +253,11 @@ internal object ChineseStrings : Strings {
         override fun saved(count: Int) = "共 $count 个"
         override val searchHint = "搜索标题或内容"
         override val searching = "正在搜索对话…"
+
+        override val chatGroupToday = "今天"
+        override val chatGroupYesterday = "昨天"
+        override val chatGroupWeek = "最近 7 天"
+        override val chatGroupMonth = "最近 30 天"
         override fun contentMatch(snippet: String) = "匹配到对话内容：$snippet"
         override val select = "批量选择"
         override val selectAll = "全选"
@@ -377,6 +389,9 @@ internal object ChineseStrings : Strings {
         override val showHistoryTimeSubtitle = "在对话名右侧显示日期和时间"
         override val showMessageTime = "显示消息时间"
         override val showMessageTimeSubtitle = "在每条消息下面显示日期和时间"
+
+        override val chatTitle = "自动生成对话标题"
+        override val chatTitleSubtitle = "首轮回答后生成一个简短标题（会额外产生一次很小的模型请求）"
         override val theme = "主题"
         override val themeSystem = "跟随系统"
         override val themeLight = "浅色"
@@ -896,6 +911,11 @@ internal object ChineseStrings : Strings {
         override val stop = "停止"
         override val channelName = "Agent"
         override val channelDescription = "只在 Agent 输出回答时显示。"
+
+        override val doneChannelName = "回答完成"
+        override val doneChannelDescription = "会话在后台完成回答时提醒；点按可回到该会话。"
+        override val doneTitle = "回答已完成"
+        override val doneFallback = "打开 PiKit 查看"
     }
 
     override val common = object : Strings.Common {

@@ -61,6 +61,13 @@ internal object JapaneseStrings : Strings {
         override val placeholderAttachment = "この画像についての指示を入力…"
         override val send = "送信"
         override val stop = "停止"
+
+        override val answerStopped = "生成を停止しました"
+        override val regenerate = "再生成"
+        override val editAndResend = "編集して再送信"
+        override val editPromptTitle = "メッセージを編集"
+        override val editPromptField = "メッセージ内容"
+        override val editPromptSummary = "このメッセージの前で新しい会話に分岐します。元の会話は残ります。"
         override val sessions = "会話履歴"
         override val newSession = "新しい会話"
         override val compacting = "コンテキストを圧縮中…"
@@ -246,6 +253,11 @@ internal object JapaneseStrings : Strings {
         override fun saved(count: Int) = "全 $count 件"
         override val searchHint = "タイトルと内容を検索"
         override val searching = "会話を検索中…"
+
+        override val chatGroupToday = "今日"
+        override val chatGroupYesterday = "昨日"
+        override val chatGroupWeek = "過去 7 日間"
+        override val chatGroupMonth = "過去 30 日間"
         override fun contentMatch(snippet: String) = "会話の内容に一致：$snippet"
         override val select = "複数選択"
         override val selectAll = "すべて選択"
@@ -375,6 +387,9 @@ internal object JapaneseStrings : Strings {
         override val showHistoryTimeSubtitle = "会話名の右に日付と時刻を表示します"
         override val showMessageTime = "メッセージの日時を表示"
         override val showMessageTimeSubtitle = "各メッセージの下に日付と時刻を表示します"
+
+        override val chatTitle = "会話タイトルを自動生成"
+        override val chatTitleSubtitle = "最初の回答後に短いタイトルを生成します（小さなモデルリクエストが 1 回増えます）"
         override val theme = "テーマ"
         override val themeSystem = "システムに合わせる"
         override val themeLight = "ライト"
@@ -917,6 +932,11 @@ internal object JapaneseStrings : Strings {
         override val stop = "停止"
         override val channelName = "Agent"
         override val channelDescription = "Agent が回答を出力している間だけ表示されます。"
+
+        override val doneChannelName = "回答完了"
+        override val doneChannelDescription = "バックグラウンドで会話の回答が完了したときに通知します。タップでその会話に戻ります。"
+        override val doneTitle = "回答が完了しました"
+        override val doneFallback = "PiKit を開いて確認"
     }
 
     override val common = object : Strings.Common {

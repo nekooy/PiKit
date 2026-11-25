@@ -65,6 +65,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -88,6 +89,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -99,6 +101,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -121,6 +125,7 @@ import kotlinx.coroutines.CoroutineScope
 import pi.kit.mob.ui.kit.PiToast
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
@@ -173,6 +178,7 @@ import pi.kit.mob.pi.ModelInfo
 import pi.kit.mob.pi.PiAgentSession
 import pi.kit.mob.pi.PiLaunchOptions
 import pi.kit.mob.pi.PromptExtras
+import pi.kit.mob.pi.ReplyStatus
 import pi.kit.mob.pi.clampThinkingLevel
 import pi.kit.mob.pi.parsePromptExtras
 import pi.kit.mob.pi.thinkingLevelsFor
@@ -207,6 +213,8 @@ import pi.kit.mob.ui.kit.LocalPiHaptics
 import pi.kit.mob.ui.kit.LocalPiToast
 import pi.kit.mob.ui.kit.PiAvatar
 import pi.kit.mob.ui.kit.PiConfirm
+import pi.kit.mob.ui.kit.PiCustomDialog
+import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiMenuAnchor
@@ -255,6 +263,7 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Sidebar
@@ -262,6 +271,7 @@ import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Photos
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Show
@@ -1785,6 +1795,7 @@ private fun ChatPage(
     overlay: @Composable () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
+    val appContext = LocalContext.current
     val focusManager = LocalFocusManager.current
     val toasts = LocalPiToast.current
     // The toast capsule is anchored to this page's composer band while it is on
@@ -1967,6 +1978,13 @@ private fun ChatPage(
     val headerSpace = topInset + HEADER_CLEARANCE
     // The message menu, and the one message that is in selection mode.
     var menuFor by remember { mutableStateOf<ChatItem?>(null) }
+    // The prompt this card belongs to, and how many message records came before
+    // it: a branch is copied up to that count. Both are captured on the press
+    // because the lazy list may recycle the card before the action runs.
+    var menuPrompt by remember { mutableStateOf<ChatItem.User?>(null) }
+    var menuForkCount by remember { mutableIntStateOf(0) }
+    // The edit dialog's subject. Kept while the dialog leaves, like every window.
+    var editingPrompt by remember { mutableStateOf<EditPrompt?>(null) }
     var selectionKey by remember { mutableStateOf<String?>(null) }
     // Where the finger went down, in **window** coordinates, and how many message records
     // came before the card it landed on. The menu is drawn by the page's popup host, so
@@ -2293,7 +2311,6 @@ private fun ChatPage(
                                                                 bottom = inWindow.y,
                                                             )
                                                             haptics.hold()
-                                                            menuFor = menuTarget
                                                             // The count of message records before
                                                             // this card is the branch point's
                                                             // coordinate, and it is computed on the
@@ -2307,6 +2324,26 @@ private fun ChatPage(
                                                                             row.item is ChatItem.Assistant)
                                                                 }
                                                             }
+                                                            // A turn's prompt and answer can
+                                                            // be split across two cards by the
+                                                            // fold, so the prompt is found by
+                                                            // walking back through the flat
+                                                            // rows rather than inside this card.
+                                                            // Its index in that list is exactly
+                                                            // the count of message records before
+                                                            // it, which is the branch point.
+                                                            val messagesBefore = rows
+                                                                .take(index + 1)
+                                                                .filterIsInstance<TranscriptRow.Message>()
+                                                                .mapNotNull { row ->
+                                                                    (row.item as? ChatItem.User) ?: (row.item as? ChatItem.Assistant)
+                                                                }
+                                                            val promptIndex = messagesBefore
+                                                                .indexOfLast { it is ChatItem.User }
+                                                            menuPrompt = messagesBefore
+                                                                .getOrNull(promptIndex) as? ChatItem.User
+                                                            menuForkCount = promptIndex.coerceAtLeast(0)
+                                                            menuFor = menuTarget
                                                             selectionKey = null
                                                         }
                                                     },
@@ -2692,6 +2729,8 @@ private fun ChatPage(
                 messageMenuItems(
                     target = menuSubject,
                     counted = menuCounted,
+                    prompt = menuPrompt,
+                    forkCount = menuForkCount,
                     streaming = state.isStreaming,
                     text = text,
                     session = session,
@@ -2701,6 +2740,24 @@ private fun ChatPage(
                     toasts = messageToasts,
                     onDismiss = { menuFor = null },
                     onSelectSource = { sourceFor = it },
+                    onEdit = { prompt, count ->
+                        menuFor = null
+                        editingPrompt = EditPrompt(prompt, count)
+                    },
+                    onRegenerate = { prompt, count ->
+                        menuFor = null
+                        forkAndSend(
+                            appContext,
+                            messageScope,
+                            session,
+                            currentWorkspace,
+                            count,
+                            prompt.text,
+                            prompt.imageKeys,
+                            messageToasts,
+                            text.chat.forkFailed,
+                        )
+                    },
                 ).forEach { action ->
                     PiMenuRow(
                         title = action.title,
@@ -2710,6 +2767,50 @@ private fun ChatPage(
                 }
             }
         }
+        }
+
+        // The edit dialog: the prompt's own words, and what a branch costs. The
+        // subject is held through the exit for the same reason every window keeps its
+        // last value (docs/UI.md) — the field must not blank while the panel leaves.
+        val editSubject = rememberLastPresent(editingPrompt)
+        if (editSubject != null) {
+            EditPromptDialog(
+                show = editingPrompt != null,
+                text = text,
+                initial = parsePromptExtras(editSubject.prompt.text).displayText,
+                hasImages = editSubject.prompt.imageKeys.isNotEmpty(),
+                onDismiss = { editingPrompt = null },
+                onConfirm = { edited ->
+                    val request = editSubject
+                    editingPrompt = null
+                    val extras = parsePromptExtras(request.prompt.text)
+                    val body = edited.trim()
+                    // The file paths are machinery the prompt already carried. They
+                    // are kept — the copies still exist in `files/attachments` — and
+                    // re-stated in the app's own header so the model still receives
+                    // what the edited sentence is about.
+                    val withPaths = if (extras.filePaths.isEmpty()) {
+                        body
+                    } else {
+                        buildString {
+                            append(text.chat.addressHeader)
+                            extras.filePaths.forEach { append('\n').append(it) }
+                            if (body.isNotBlank()) append("\n\n").append(body)
+                        }
+                    }
+                    forkAndSend(
+                        appContext,
+                        messageScope,
+                        session,
+                        currentWorkspace,
+                        request.forkCount,
+                        withPaths,
+                        request.prompt.imageKeys,
+                        messageToasts,
+                        text.chat.forkFailed,
+                    )
+                },
+            )
         }
 
         // The Markdown source of the message, in a sheet of its own: what the reader asked
@@ -4412,6 +4513,131 @@ private fun itemSource(item: ChatItem): String = when (item) {
     is ChatItem.Notice -> item.text
 }
 
+/** The subject of the edit dialog: which prompt, and where its branch starts. */
+private data class EditPrompt(val prompt: ChatItem.User, val forkCount: Int)
+
+/**
+ * Copies the conversation up to [count] and sends [text] into the copy.
+ *
+ * pi's sessions are append-only, so "regenerate" and "edit" cannot replace a
+ * message in place: the branch is a new file whose history ends before the prompt,
+ * and the prompt is sent again. The original conversation is untouched, which is
+ * what makes the action safe to try — the old answer is still in the drawer.
+ */
+private fun forkAndSend(
+    appContext: Context,
+    scope: CoroutineScope,
+    session: pi.kit.mob.pi.PiAgentSession,
+    workspace: String,
+    count: Int,
+    text: String,
+    imageKeys: List<String>,
+    toasts: PiToast?,
+    failed: String,
+) {
+    scope.launch {
+        val path = withContext(Dispatchers.IO) { session.forkAt(count) }
+        if (path == null) {
+            toasts?.show(failed)
+            return@launch
+        }
+        val opened = session.host.openConversation(path, workspace)
+        if (opened == null) {
+            toasts?.show(failed)
+            return@launch
+        }
+        val images = withContext(Dispatchers.IO) { cachedImages(appContext, imageKeys) }
+        opened.sendPrompt(text, images)
+    }
+}
+
+/**
+ * The prompt's pictures, as the wire takes them, from the app's own copies.
+ *
+ * The session file holds the base64 pi echoed, but the cache is the same bytes
+ * named by the digest of that text, so a branch can send the picture that was
+ * sent without reading a multi-megabyte record. A picture whose copy is gone is
+ * omitted: a branch with one fewer attachment is better than a send that fails.
+ */
+private fun cachedImages(context: Context, keys: List<String>): List<ImageAttachment> =
+    keys.mapNotNull { key ->
+        val file = ChatPictureCache.file(context.filesDir, key)
+        if (!file.isFile) return@mapNotNull null
+        val bytes = runCatching { file.readBytes() }.getOrNull() ?: return@mapNotNull null
+        val mime = when {
+            bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() ->
+                "image/png"
+
+            bytes.size >= 12 && bytes[0] == 'R'.code.toByte() && bytes[8] == 'W'.code.toByte() ->
+                "image/webp"
+
+            else -> "image/jpeg"
+        }
+        ImageAttachment(Base64.encodeToString(bytes, Base64.NO_WRAP), mime)
+    }
+
+/**
+ * The prompt, in a field, with the branch it will start stated underneath.
+ *
+ * The field is the message's own words — the machinery chip's paths and image
+ * notes are not prose — and the pictures travel with it separately. Confirm sends
+ * into a fork; the original conversation is never modified.
+ */
+@Composable
+private fun EditPromptDialog(
+    show: Boolean,
+    text: Strings,
+    initial: String,
+    hasImages: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    val value = remember { TextFieldState(initial) }
+    val typed = value.text.toString()
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(show) {
+        if (show) {
+            value.setTextAndPlaceCursorAtEnd(initial)
+            withFrameNanos { }
+            withFrameNanos { }
+            focus.requestFocus()
+            keyboard?.show()
+        }
+    }
+    PiCustomDialog(
+        show = show,
+        title = text.chat.editPromptTitle,
+        summary = text.chat.editPromptSummary,
+        onDismissRequest = onDismiss,
+    ) {
+        GlassTextField(
+            state = value,
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focus)
+                .piFieldHeightForPlaceholder(),
+            label = text.chat.editPromptField,
+            useLabelAsPlaceholder = true,
+            lineLimits = TextFieldLineLimits.MultiLine(2, 6),
+            cornerRadius = PiCorner.radius,
+            colors = GlassTextFieldDefaults.textFieldColors(
+                borderColor = Color.Transparent,
+            ),
+            cursorBrush = piFieldCursor(),
+        )
+        PiDialogAnswers(
+            dismiss = text.common.cancel,
+            onDismiss = onDismiss,
+            confirm = text.chat.send,
+            onConfirm = { onConfirm(typed) },
+            confirmEnabled = typed.isNotBlank() || hasImages,
+            modifier = Modifier.padding(top = 12.dp),
+            glass = LocalPiBackdrop.current != null,
+        )
+    }
+}
+
 /**
  * The rows a message's menu offers.
  *
@@ -4430,6 +4656,8 @@ private fun itemSource(item: ChatItem): String = when (item) {
 private fun messageMenuItems(
     target: ChatItem,
     counted: Int,
+    prompt: ChatItem.User?,
+    forkCount: Int,
     streaming: Boolean,
     text: Strings,
     session: pi.kit.mob.pi.PiAgentSession,
@@ -4439,6 +4667,8 @@ private fun messageMenuItems(
     toasts: PiToast?,
     onDismiss: () -> Unit,
     onSelectSource: (ChatItem) -> Unit,
+    onEdit: (ChatItem.User, Int) -> Unit,
+    onRegenerate: (ChatItem.User, Int) -> Unit,
 ): List<MenuAction> = buildList {
     add(
         MenuAction(
@@ -4474,6 +4704,34 @@ private fun messageMenuItems(
             },
         ),
     )
+    // The answer's own action: the prompt that produced it is re-sent to a fresh
+    // branch, which is the closest pi's append-only session can get to chat-demo's
+    // "another answer under the same question". A running turn has no finished file
+    // to copy, so neither action is offered while it streams.
+    if (!streaming && prompt != null && target is ChatItem.Assistant) {
+        add(
+            MenuAction(
+                title = text.chat.regenerate,
+                leading = { Icon(MiuixIcons.Refresh, contentDescription = null) },
+                onClick = {
+                    onDismiss()
+                    onRegenerate(prompt, forkCount)
+                },
+            ),
+        )
+    }
+    if (!streaming && prompt != null) {
+        add(
+            MenuAction(
+                title = text.chat.editAndResend,
+                leading = { Icon(MiuixIcons.Edit, contentDescription = null) },
+                onClick = {
+                    onDismiss()
+                    onEdit(prompt, forkCount)
+                },
+            ),
+        )
+    }
     if (!streaming && counted > 0) {
         add(
             MenuAction(
@@ -4590,7 +4848,8 @@ private fun AssistantBlock(
     // with nothing in it would compose to a blank `Column` — and the list would
     // still measure it and pay its `rowGap`. Same test as `drawsNothing`, which is
     // what the row filter uses before this is ever called.
-    val hasBody = item.thinking.isNotBlank() || item.text.isNotBlank() || item.error != null
+    val hasBody = item.thinking.isNotBlank() || item.text.isNotBlank() ||
+        item.error != null || item.status == ReplyStatus.Stopped
     if (!hasBody) return
 
     // No `fillMaxWidth`: this is a module *of* a card, and the card's own width is
@@ -4644,10 +4903,22 @@ private fun AssistantBlock(
             MarkdownText(item.text)
         }
 
-        item.error?.let {
+        if (item.status == ReplyStatus.Error) {
+            item.error?.let {
+                Text(
+                    text = it,
+                    color = PiTone.error(),
+                    style = MiuixTheme.textStyles.footnote1,
+                )
+            }
+        }
+        if (item.status == ReplyStatus.Stopped) {
+            // A stop is a state the reader chose, not a failure: the partial answer
+            // above is theirs, and the menu offers to regenerate it. The line is the
+            // quiet ink a fact uses, not the error role.
             Text(
-                text = it,
-                color = PiTone.error(),
+                text = text.chat.answerStopped,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 style = MiuixTheme.textStyles.footnote1,
             )
         }
@@ -5880,7 +6151,8 @@ internal fun transcriptTailKey(items: List<ChatItem>): Triple<Int, Int, Int> {
  */
 internal fun TranscriptRow.drawsNothing(): Boolean {
     val item = (this as? TranscriptRow.Message)?.item as? ChatItem.Assistant ?: return false
-    return item.thinking.isBlank() && item.text.isBlank() && item.error == null
+    return item.thinking.isBlank() && item.text.isBlank() && item.error == null &&
+        item.status != ReplyStatus.Stopped
 }
 
 /**

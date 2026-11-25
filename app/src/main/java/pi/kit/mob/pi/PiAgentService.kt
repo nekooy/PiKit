@@ -101,6 +101,15 @@ class PiAgentService : LifecycleService() {
         lifecycleScope.launch {
             host.streamingConversations.collect { syncNotification() }
         }
+        // A turn that finished with an answer while the app was away: the reader
+        // asked to be told about the thing they left running, not only while it is
+        // running. The foreground entry stays the "working" marker; this is a
+        // separate, dismissible entry per conversation.
+        lifecycleScope.launch {
+            host.turnCompletions.collect { completed ->
+                if (!uiVisible.get()) notifyCompleted(completed)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -191,6 +200,60 @@ class PiAgentService : LifecycleService() {
     }
 
     /**
+     * One dismissible entry for a conversation that finished an answer.
+     *
+     * A conversation is the unit the reader comes back to, so the id is derived from
+     * the session file: two completions of one conversation update one entry rather
+     * than stacking, and two conversations get two entries. Tapping opens that file
+     * through `PiHost.pendingOpen`, which the root consumes once it has a page.
+     */
+    private fun notifyCompleted(completed: PiHost.TurnCompleted) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // A channel created by an older build cannot gain a sound later; this id
+            // is new, so its importance is stated once with the default sound.
+            ensureDoneChannel()
+        }
+        val text = stringsFor(host.settingsStore.read().language)
+        val open = PendingIntent.getActivity(
+            this,
+            completed.path.hashCode(),
+            Intent(this, MainActivity::class.java)
+                .putExtra(EXTRA_SESSION_PATH, completed.path)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_DONE_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(text.shade.doneTitle)
+            .setContentText(completed.title ?: text.shade.doneFallback)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .build()
+        getSystemService(NotificationManager::class.java)
+            ?.notify(DONE_NOTIFICATION_ID + (completed.path.hashCode() and 0x0FFFFFFF), notification)
+    }
+
+    private fun ensureDoneChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        if (manager.getNotificationChannel(CHANNEL_DONE_ID) != null) return
+        val text = stringsFor(host.settingsStore.read().language)
+        val channel = NotificationChannel(
+            CHANNEL_DONE_ID,
+            text.shade.doneChannelName,
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = text.shade.doneChannelDescription
+            setShowBadge(true)
+        }
+        manager.createNotificationChannel(channel)
+    }
+
+    /**
      * The ongoing marker, drawn while answers are arriving.
      *
      * `PRIORITY_MIN` + a `MIN`-importance channel means no peek, no sound, no
@@ -233,7 +296,14 @@ class PiAgentService : LifecycleService() {
         const val EXTRA_VISIBLE = "visible"
 
         private const val CHANNEL_ID = "pikit_agent"
+        private const val CHANNEL_DONE_ID = "pikit_done"
         private const val NOTIFICATION_ID = 1
+
+        /** A namespace of its own, so a completion never replaces the working entry. */
+        private const val DONE_NOTIFICATION_ID = 100_000
+
+        /** The extra a completion notification carries: the session file to reopen. */
+        const val EXTRA_SESSION_PATH = "pikit.session.path"
 
         /** True while a window of this app is in front. */
         private val uiVisible = AtomicBoolean(false)
@@ -260,6 +330,18 @@ class PiAgentService : LifecycleService() {
                 enableVibration(false)
             }
             manager.createNotificationChannel(channel)
+            // The completion channel is created here too, so system settings can show
+            // and silence it before the first answer finishes rather than only after.
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_DONE_ID,
+                    text.shade.doneChannelName,
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = text.shade.doneChannelDescription
+                    setShowBadge(true)
+                },
+            )
         }
 
         /** Brings the supervising service up, or re-syncs one that already is. */
