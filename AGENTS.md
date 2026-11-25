@@ -79,7 +79,7 @@ the change that fixes it, or it outgrows being read.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 680 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 692 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -688,6 +688,13 @@ prompt, which billed the idle gap to a turn that had already finished.
   outside the lease registry. `status` prints `unmanaged: emulator-… is booted without a
   lease`, `start` ignores it and adds its own instance, and `stop` only touches this
   session's leases — `--force` is only for an owner process already gone.
+- **A clip computed during measure is recorded once into the layer it clips.** The
+  edge-revealed glass menu built its rounded clip path in the `Layout` measure block;
+  the rows' layer was recorded on the first frame, when the panel was one row tall, and
+  grew without re-recording the path, so a four-row menu drew only its first row while
+  `uiautomator dump` listed all four. Compute an animated clip in `drawWithContent` from
+  the animation state, not in measure — and treat an accessibility tree that sees a row
+  as no evidence that the row is drawn.
 - **A tier's refusal is a sentence the model can act on, not a wall.** The extension
   matches paths in a command's *text*; a path built at runtime is not caught. Say
   "checked on every tool call", never "prevented" — the interface and the docs use the

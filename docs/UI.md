@@ -315,6 +315,11 @@ ControlChip(
   invisible layer. A control in the page bar can pass
   `openBelow = LocalPiBarBottom.current` to move only the settled placement, clear of the
   subtitle. Files sort is already below that bar.
+- **An animated clip is computed in the draw pass, never in measure.** The edge
+  reveal clips the settled rows to the growing panel; a path built during measure is
+  recorded into the row layer once and the panel then grows around a stale clip, so
+  only the first row is drawn while accessibility lists every row. `PiAnchoredMenu`
+  reads the reveal state in `drawWithContent` and derives the clip height from it.
 - **The rows are `PiMenuRow`**, at the library's popup metrics — see the next section.
   Do not wrap them in `ListPopupColumn` and do not hand `GlassPopup` a panel of your own.
 - **The material is the library's**: the corner is `PiCorner.popup` (24dp), and the

@@ -205,17 +205,26 @@ internal fun BoxScope.PiAnchoredMenu(
                             .padding(vertical = GlassPopupDefaults.ContentPaddingVertical)
                             // The rows keep their settled size while an edge-revealed
                             // panel unfolds; the panel's frame is what clips them, the
-                            // same division `GlassPopup` draws.
+                            // same division `GlassPopup` draws. The clip is computed
+                            // from the animation state in the draw pass: a path built
+                            // during measure is recorded once into the row layer and
+                            // never re-recorded, which left only the first row visible.
                             .then(
                                 if (morph) Modifier else Modifier.drawWithContent {
-                                    val rect = menuClip.content
-                                    if (rect.width > 0.5f && rect.height > 0.5f) {
+                                    val settled = menuClip.settled
+                                    if (settled.width > 0.5f && settled.height > 0.5f) {
+                                        val t = geometry.value.coerceAtLeast(0f)
+                                        val endRatio = settled.height / settled.width
+                                        val ratio = GlassMotion.POPUP_START_RATIO +
+                                            (endRatio - GlassMotion.POPUP_START_RATIO) * t
+                                        val height = (settled.width * ratio)
+                                            .coerceIn(0f, size.height)
                                         menuClip.path.rewind()
                                         menuClip.path.addRoundRect(
                                             RoundRect(
-                                                rect = rect,
+                                                rect = Rect(0f, 0f, size.width, height),
                                                 cornerRadius = CornerRadius(
-                                                    minOf(clipRadius, minOf(rect.width, rect.height) / 2f),
+                                                    minOf(clipRadius, minOf(size.width, height) / 2f),
                                                 ),
                                             ),
                                         )
@@ -251,7 +260,7 @@ internal fun BoxScope.PiAnchoredMenu(
             }
             val maxHeight = minOf(sizing.maxHeight.roundToPx(), availableHeight)
             if (maxWidth <= 0 || maxHeight <= 0) {
-                menuClip.content = Rect.Zero
+                menuClip.settled = Rect.Zero
                 return@Layout layout(constraints.maxWidth, constraints.maxHeight) {}
             }
             val foreground = children[1].measure(
@@ -271,6 +280,7 @@ internal fun BoxScope.PiAnchoredMenu(
 
                 PiPopupPlacement.FromAnchor -> placeContextMenu(settleTrigger, size, safe, margin, direction)
             }
+            menuClip.settled = settled
             travel.centerX = settled.center.x
             travel.centerY = settled.center.y
             travel.width = size.width
@@ -284,17 +294,6 @@ internal fun BoxScope.PiAnchoredMenu(
                     progress = geometry.value,
                 )
             }
-            val contentScale = if (morph) 1f else popupContentScale(geometry.value)
-            menuClip.content = if (!morph && contentScale > 0f) {
-                Rect(
-                    left = 0f,
-                    top = 0f,
-                    right = size.width,
-                    bottom = (frame.height / contentScale).coerceAtMost(size.height),
-                )
-            } else {
-                Rect.Zero
-            }
             val background = children[0].measure(Constraints.fixed(frame.width.roundToInt(), frame.height.roundToInt()))
             layout(constraints.maxWidth, constraints.maxHeight) {
                 val left = (frame.left - origin.x).roundToInt()
@@ -306,6 +305,7 @@ internal fun BoxScope.PiAnchoredMenu(
                     // composer's transform fades a whole panel in.
                     alpha = if (morph && anchorContent == null) surface.value.coerceIn(0f, 1f) else 1f
                 }
+                val contentScale = if (morph) 1f else popupContentScale(geometry.value)
                 val scale = if (morph && size.width > 0 && size.height > 0) {
                     minOf(frame.width / size.width, frame.height / size.height)
                 } else {
@@ -400,7 +400,8 @@ private class TransformTravel {
  * draw pass reads it behind the animation state that moved the frame.
  */
 private class MenuClip {
-    var content: Rect = Rect.Zero
+    /** The panel's settled rectangle, in window coordinates. Written during measure. */
+    var settled: Rect = Rect.Zero
     val path: Path = Path()
 }
 

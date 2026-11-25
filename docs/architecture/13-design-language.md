@@ -443,6 +443,11 @@ Two row rules are behaviour rather than taste:
   its host beside the list rather than around it; the in-place fallback received the
   row's unbounded height and crashed in `GlassPopupSurface` with
   `Size(853 x 2147483647) is out of range`. There is no in-place fallback now.
+  The clip that hides the rows outside the growing panel is computed **in the draw
+  pass** from the reveal animation, never in measure: a path built during measure is
+  recorded into the row layer once, so the panel grew while the clip stayed at its first
+  frame and only the first row was drawn. The height is `settled.width × ratio`, which is
+  the frame's height divided by the row scale, so the clip and the silhouette agree.
   `PiPopupHostProvider` records the scene in an outer layer and renders the menu as its
   sibling. Bar, composer and drawer controls still sample their inner body or transcript
   layers; none sample the scene that contains them. The drawer and the chat card share
