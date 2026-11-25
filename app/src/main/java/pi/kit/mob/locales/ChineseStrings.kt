@@ -390,7 +390,7 @@ internal object ChineseStrings : Strings {
         override val showMessageTimeSubtitle = "在每条消息下面显示日期和时间"
 
         override val chatTitle = "自动生成对话标题"
-        override val chatTitleSubtitle = "首轮回答后生成一个简短标题（会额外产生一次很小的模型请求）"
+        override val chatTitleSubtitle = "用当前模型为新对话生成简短标题，会联网并消耗少量 token"
         override val thinkingAutoExpand = "思考时自动展开"
         override val thinkingAutoExpandSubtitle = "当前步骤在思考时展开显示，该步骤完成后自动折叠"
         override val theme = "主题"
@@ -564,6 +564,7 @@ internal object ChineseStrings : Strings {
                 "localhost:11434 这种写法缺少协议头。"
         override val apiType = "API 协议"
         override val apiTypeSubtitle = "选错会解析失败"
+        override val modelRouteUnavailable = "无法确认对话使用的模型和服务地址。请检查服务商、模型、API 地址和密钥，或重新选择模型。"
         override val modelsJsonWriteFailed =
             "无法写入 pi 的 models.json，本次配置的接口地址和模型设置不会生效。" +
                 "请检查接口地址和应用存储权限，然后点重试。"
@@ -590,20 +591,30 @@ internal object ChineseStrings : Strings {
                 "${problem.provider} 没有 pi 已知的模型列表接口，列表改从 pi 自带目录读取——" +
                     "如果缺少你要的模型，可手动输入 ID。"
             is DiscoveryProblem.HttpRejected -> {
-                val head = "${problem.host} 拒绝了请求：HTTP ${problem.code}" + problem.detail
-                if (problem.viaOverride) {
+                val head = "${problem.host} 拒绝了请求：HTTP ${problem.code}"
+                if (problem.code in 300..399) {
+                    head + " 未跟随重定向；请填写最终的 API 地址。"
+                } else if (problem.viaOverride && problem.code in listOf(401, 403)) {
                     head + "\n\n这是配置里「接口地址」指向的地址。地址写错也会返回 401，" +
                         "和 Key 错误看起来一样——请先核对基础地址" +
                         "（应当是 API 根地址，例如 https://relay.example.com/v1），再考虑换 Key。"
+                } else if (problem.code == 401 || problem.code == 403) {
+                    head + " 请检查密钥以及它是否有权访问该模型或接口。"
                 } else {
                     head
                 }
             }
             is DiscoveryProblem.NoModelIds ->
-                "${problem.host} 有响应，但没有解析出模型 ID。可能改过返回格式；" +
-                    "改用 pi 自带的模型目录。"
+                "${problem.host} 有响应，但没有解析出模型 ID。可手动输入已知 ID。"
             is DiscoveryProblem.Unreachable ->
-                "无法连接 ${problem.host}：${problem.cause}"
+                "无法连接 ${problem.host}。" + when (problem.cause) {
+                    ProviderNetworkFailure.Certificate -> "证书验证失败。请检查设备时间、服务端证书链和受信任的证书颁发机构。"
+                    ProviderNetworkFailure.Hostname -> "服务端证书与主机名不匹配。请核对 API 地址。"
+                    ProviderNetworkFailure.Tls -> "TLS 握手失败。请检查 API 地址、服务端 TLS 配置以及 VPN 或代理。"
+                    ProviderNetworkFailure.Dns -> "无法解析主机名。请检查地址、网络连接和 DNS。"
+                    ProviderNetworkFailure.Timeout -> "请求超时。请检查网络与服务是否可达。"
+                    ProviderNetworkFailure.Connection -> "请检查 API 地址、网络连接以及 VPN 或代理。"
+                }
             is DiscoveryProblem.PiRefused ->
                 "pi 拒绝列出模型：${problem.detail}"
             is DiscoveryProblem.CatalogEmpty ->

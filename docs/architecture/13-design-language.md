@@ -443,44 +443,35 @@ Two row rules are behaviour rather than taste:
   its host beside the list rather than around it; the in-place fallback received the
   row's unbounded height and crashed in `GlassPopupSurface` with
   `Size(853 x 2147483647) is out of range`. There is no in-place fallback now.
-  The clip that hides the rows outside the growing panel is computed **in the draw
-  pass** from the reveal animation, never in measure: a path built during measure is
-  recorded into the row layer once, so the panel grew while the clip stayed at its first
-  frame and only the first row was drawn. The height is `settled.width × ratio`, which is
-  the frame's height divided by the row scale, so the clip and the silhouette agree.
   `PiPopupHostProvider` records the scene in an outer layer and renders the menu as its
   sibling. Bar, composer and drawer controls still sample their inner body or transcript
   layers; none sample the scene that contains them. The drawer and the chat card share
-  an outer host, so placement and outside taps cover both. `PiPopupMenu` registers into
-  `PiPopupHostProvider` through a `DisposableEffect`, which also keeps the menu owned by
-  the composition that raised it — a row that leaves its list takes its menu with it.
-  The transcript's card menu is the exception and is registered by the page, because a
-  long conversation recycles cards and a menu that vanished mid-read would be unusable.
+  an outer host, so placement and outside taps cover both. The registration's composition
+  owns the panel's lifetime. Transcript menus register at the page because cards recycle;
+  history registers at the drawer and retains the immutable action target and row bounds
+  because pinning, deleting, or reloading can move or dispose the lazy item during exit.
 
-  Point and row context menus keep Miuix's logical-end alignment and safe-area fit
-  test. They take `GlassPopup`'s own edge reveal rather than a fade: the panel starts
-  at 15% of its settled width and a 0.2 height-to-width ratio against the logical end,
-  grows on `GlassMotion.popupMorph()`, and its rows fade in on `popupMorphFade()` while
-  a 40 px `popupMorphBlur()` resolves. The full-size fade is the losing design and the
-  reason is kept here: with the panel's rectangle already settled and only 6 dp of
-  travel, the rows switched on instead of the panel unfolding, and beside a dropdown
-  row's arc one card away it read as no animation at all. The opposite trade-off is
-  recorded too — the same edge reveal was once rejected as "a new object growing from
-  a corner"; what keeps the official motion from reading that way is that the panel's
-  rows scale with its frame and the blur carries the opening, so the surface is the
-  control unfolding rather than a second object appearing beside it. Every `Auto` menu
-  — the drawer's row menu, the files row's and the transcript card's — is this one
-  path, so the three cannot drift apart. **The exit is a fade in place, not the reveal
-  reversed.** Reversing the edge reveal emptied the panel first: the rows faded out on a
-  150 ms tween while the frame kept its size on a 300 ms spring, so the last quarter-second
-  was an empty glass rectangle shrinking into the row. `PiAnchoredMenu` now holds the
-  geometry at its settled value for an `Auto` menu that is leaving and fades the whole
-  surface with its rows; the morph menus (a composer chip, a glass icon button) still
-  reverse their transform, because there the panel is the trigger unfolding and shrinking
-  it back is the control being handed back. A closing `Auto` menu also stays sharp: blurring
-  it while it fades left a smeared ghost over the page for the length of the exit.
+  Point and row context menus keep Miuix's logical-end fit against the safe window.
+  `Auto` uses the library's `GlassPopup` opening: a capsule at 15% of the settled
+  width and a 0.2 height-to-width ratio grows out of the row's end edge on
+  `GlassMotion.popupMorph`, while the rows arrive on the 200 ms fade and clear a
+  40 px blur. The panel's size, its aspect ratio and the rows are three separate
+  animations, which is what makes the opening read as a panel pulled out of the row
+  rather than a rectangle scaling up.
 
-  **A dropdown row's panel is not a menu and does not take that edge reveal.** Its alternatives
+  An earlier version of this reveal used the same entry spring on exit and blurred
+  the departure too. That left the rows gone after their 150 ms fade while an empty,
+  smeared shell kept shrinking on a roughly 300 ms spring. The exit now runs
+  `GlassMotion.popupExit` (0.95 damping, 0.2 response) and sets its blur to zero, so
+  the silhouette is gone before the row fade finishes. The same transition state
+  reverses an interrupted opening or closing in place; the menu is non-interactive
+  from dismissal, while its content and scroll offset stay in the exit image.
+
+  A context menu offers actions at a target; a value selector or an icon morph needs
+  to return to the actual control, so the dropdown arc and the button morph keep
+  their own motions rather than sharing this one.
+
+  **A dropdown row's panel is not a context menu.** Its alternatives
   are the row's own value unfolded, so it keeps the library's arc: a flat capsule at 69%
   of the settled width grows out of the value cell, arcs into place on `GlassMotion`'s
   four dropdown springs, and fades its own value out underneath itself. The summarised
@@ -901,19 +892,16 @@ long as its menu is open: measured in the light scheme under the same dim, that 
 rgb(160) where its neighbours read rgb(178), which is `inset`'s 10% of the ink with the
 scrim over it.
 
-**The row's menu is anchored on the row, not on the press point.** A point anchor made the
-panel spring out of a finger's location, which reads as a menu about that spot rather than
-about the conversation all four actions act on; it also changed shape with the grip. The
-row reports its own `boundsInWindow()` when the hold lands, so the edge reveal's collapsed
-endpoint is the row's rounded rectangle. The transcript's card menu keeps its point anchor:
-there the press is about one sentence inside a document, and the card is the whole message
-rather than the thing being acted on.
+**The row's menu is anchored on the row, not on the press point.** The four actions
+belong to the conversation. A point anchor changed placement with the reader's grip.
+The hold captures the laid-out, inset row's `boundsInWindow()` and a snapshot of the
+conversation at the drawer, so the menu neither tracks the touch nor follows a list
+reorder. Its bounds are fit against the safe window, on the logical end of the row.
+The transcript keeps its point anchor for a particular spot in the message (§7.3).
 
-The drawer's travel is kept in pixels, so a window that changes size has to re-anchor it:
-after one rotation an open drawer kept the portrait width and drew about 170px off the
-leading edge, cutting its own title in half. The size callback now re-derives the offset
-from the *answer* (open or closed) rather than from the old number, and the panel's width
-is capped at 420dp, so a tablet shows a drawer and not a second page.
+The drawer's travel is normalized. Its width is measured and capped at 420dp; a size
+change reprojects the current progress rather than snapping to the chosen destination.
+A pull and its settle therefore share the same visual position when the window resizes.
 
 Two marks are drawn for this app rather than borrowed, because Miuix's set has neither:
 the terminal's (a chevron and an underscore) and the drawer's (a long rule over a short

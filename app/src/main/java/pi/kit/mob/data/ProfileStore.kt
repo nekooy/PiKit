@@ -10,6 +10,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 
 /**
  * What the user has said about one model id pi's own catalogue does not contain.
@@ -349,9 +353,9 @@ object PiConfigFile {
         return try {
             val parsed = json.decodeFromString(PiConfigSnapshot.serializer(), file.readText())
             parsed.copy(
-                activeProfileId = parsed.activeProfileId.ifBlank {
-                    parsed.profiles.firstOrNull()?.id.orEmpty()
-                },
+                activeProfileId = parsed.activeProfileId
+                    .takeIf { id -> id.isNotBlank() && parsed.profiles.any { it.id == id } }
+                    ?: parsed.profiles.firstOrNull()?.id.orEmpty(),
                 // A profile written before `writtenBaseUrl` existed still has an
                 // override in pi's file. Seeding the record from the field is what
                 // lets the next clear withdraw that override instead of leaving a
@@ -376,19 +380,27 @@ object PiConfigFile {
      * the caller reports instead of pretending the change was saved.
      */
     fun save(file: File, snapshot: PiConfigSnapshot): Boolean = try {
-        val parent = file.parentFile
-        parent?.mkdirs()
-        val temporary = File(parent, "$FILE_NAME.tmp")
-        temporary.writeText(json.encodeToString(PiConfigSnapshot.serializer(), snapshot))
-        // Some Android filesystems refuse to rename onto an existing file, so
-        // the first attempt is followed by a delete-and-retry.
-        temporary.renameTo(file) || run {
-            file.delete()
-            temporary.renameTo(file)
-        }
-    } catch (t: Throwable) {
+        replaceConfigFile(file, json.encodeToString(PiConfigSnapshot.serializer(), snapshot))
+        true
+    } catch (t: Exception) {
         Log.e(TAG, "Could not write $FILE_NAME", t)
         false
+    }
+}
+
+/** Replace a document in place. A failed write must never remove the last good copy. */
+internal fun replaceConfigFile(file: File, text: String) {
+    val parent = requireNotNull(file.absoluteFile.parentFile)
+    parent.mkdirs()
+    val temporary = File.createTempFile(".${file.name}.", ".tmp", parent)
+    try {
+        FileOutputStream(temporary).use { stream ->
+            stream.write(text.toByteArray(Charsets.UTF_8))
+            stream.fd.sync()
+        }
+        Files.move(temporary.toPath(), file.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+    } finally {
+        temporary.delete()
     }
 }
 
@@ -453,9 +465,7 @@ class ProfileStore(
             return loaded
         }
         val migrated = migrateFromPreferences()
-        // Written immediately so the migration happens once. A failure here is
-        // harmless: the same values are still in SharedPreferences.
-        PiConfigFile.save(file, migrated)
+        if (PiConfigFile.save(file, migrated)) legacy.clearModelKeys()
         return migrated
     }
 
@@ -478,11 +488,11 @@ class ProfileStore(
             apiKey = apiKey,
             modelId = modelId,
         )
-        legacy.clearModelKeys()
         return PiConfigSnapshot(profiles = listOf(profile), activeProfileId = profile.id)
     }
 
     /** Applies the active profile to the values the agent launcher reads. */
+    @Synchronized
     fun applyActive() {
         applyToSettings(activeProfile)
     }
@@ -501,26 +511,31 @@ class ProfileStore(
      * [upsert], [setActive] or [delete], and that is what keeps this class the
      * file's one writer.
      */
+    @Synchronized
     fun reload() {
         _snapshot.value = loadOrMigrate()
+        lastWriteFailed = false
         applyActive()
     }
 
     private fun commit(next: PiConfigSnapshot): Boolean {
-        _snapshot.value = next
-        applyActive()
+        if (next == _snapshot.value && !lastWriteFailed) return true
         val persisted = PiConfigFile.save(file, next)
         lastWriteFailed = !persisted
+        if (persisted) {
+            _snapshot.value = next
+            applyActive()
+        }
         return persisted
     }
 
     /**
      * Whether the most recent commit failed to reach disk.
      *
-     * The snapshot has already moved either way — see [upsert] — so this is the
-     * only way a caller can tell a save that will survive the process from one
-     * that will not. Cleared by the next successful write.
+     * A failed write keeps using the last published snapshot. Cleared by the next
+     * successful write.
      */
+    @Volatile
     var lastWriteFailed: Boolean = false
         private set
 
@@ -530,12 +545,10 @@ class ProfileStore(
      * Passing a profile with a blank id appends a new one; the returned profile
      * carries the generated id so the caller can select what it just created.
      *
-     * The in-memory snapshot always moves — the launcher must not keep running
-     * against a profile the user just left — but a caller that cares whether the
-     * change survives the process can read [lastWriteFailed]. `upsert` used to
-     * drop [PiConfigFile.save]'s answer on the floor, so a full disk looked
-     * exactly like a successful save until the next launch re-read the old file.
+     * On failure [lastWriteFailed] is set and the new profile is not published.
+     * The returned value is the attempted profile, including its generated id.
      */
+    @Synchronized
     fun upsert(profile: ModelProfile): ModelProfile {
         val stored = if (profile.id.isBlank()) profile.copy(id = newId()) else profile
         val current = _snapshot.value
@@ -550,9 +563,24 @@ class ProfileStore(
         return stored
     }
 
+    @Synchronized
     fun setActive(id: String): Boolean {
         if (profiles.none { it.id == id }) return false
         return commit(_snapshot.value.copy(activeProfileId = id))
+    }
+
+    /** A picker supplies an identity, not a cached copy of the key or endpoint. */
+    @Synchronized
+    internal fun selectModel(expected: ModelProfile, model: String): Boolean {
+        val current = _snapshot.value.profiles.firstOrNull { it.id == expected.id } ?: return false
+        if (current.copy(modelId = expected.modelId, models = expected.models) != expected) return false
+        val next = profileSelection(_snapshot.value, expected.id, model) ?: return false
+        return commit(next)
+    }
+
+    @Synchronized
+    internal fun updateActive(expected: ModelProfile, transform: (ModelProfile) -> ModelProfile) {
+        if (activeProfile == expected) upsert(transform(expected))
     }
 
     /**
@@ -560,6 +588,7 @@ class ProfileStore(
      * the agent would be launched with no provider and no key, which reads to
      * the user as "the app broke".
      */
+    @Synchronized
     fun delete(id: String): Boolean {
         val current = _snapshot.value
         if (current.profiles.size <= 1) return false
@@ -577,5 +606,19 @@ class ProfileStore(
     fun isUsable(profile: ModelProfile): Boolean =
         profile.providerEntry != null && profile.modelId.isNotBlank()
 
-    private fun newId(): String = java.util.UUID.randomUUID().toString().take(8)
+    private fun newId(): String = java.util.UUID.randomUUID().toString()
+}
+
+internal fun profileSelection(snapshot: PiConfigSnapshot, id: String, model: String): PiConfigSnapshot? {
+    val selected = snapshot.profiles.firstOrNull { it.id == id } ?: return null
+    if (model.isBlank() || model !in selected.selectableModels) return null
+    return snapshot.copy(
+        activeProfileId = id,
+        profiles = snapshot.profiles.map { profile ->
+            if (profile.id != id) profile else profile.copy(
+                modelId = model,
+                models = profile.selectableModels,
+            )
+        },
+    )
 }

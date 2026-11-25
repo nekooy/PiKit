@@ -74,11 +74,12 @@ class ChatFoldTest {
         assertEquals("There are two files.", (reply as ChatItem.Assistant).text)
 
         // The tool card is hidden, and the summary says how much is behind it.
-        // Two rows, not one: the assistant message that carried only the tool call
-        // has no text either, so it is part of what the fold collapses.
+        // One row, not two: the assistant message that carried only the tool call has
+        // no body and is dropped from the transcript, so it is not a step the reader
+        // could ever see when the turn is expanded.
         assertTrue("the tool card is folded away", shown.none { it is ChatItem.Tool })
         val summary = rows.summaries().single()
-        assertEquals("the tool call and its empty message are hidden", 2, summary.summary.stepCount)
+        assertEquals("the visible tool call is the whole step count", 1, summary.summary.stepCount)
         assertTrue("a turn takes time", (summary.summary.elapsedMs ?: 0) > 0)
         assertEquals("nothing failed", 0, summary.summary.failedSteps)
     }

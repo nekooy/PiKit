@@ -3,6 +3,7 @@ package pi.kit.mob.pi
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +17,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.serialization.json.JsonObject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -26,8 +27,9 @@ import pi.kit.mob.data.ChatPresetStore
 import pi.kit.mob.data.ProfileAddressing
 import pi.kit.mob.data.SessionModeStore
 import pi.kit.mob.data.SettingsStore
-import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.catalogueRefreshEnvironment
+import pi.kit.mob.data.replaceConfigFile
+import pi.kit.mob.env.SafeDelete
 import pi.kit.mob.env.BootstrapInstaller
 import pi.kit.mob.env.PackageMirror
 import pi.kit.mob.env.StorageAccess
@@ -112,9 +114,6 @@ class PiHost private constructor(context: Context) {
     internal val chatPresets: ChatPresetStore by lazy {
         ChatPresetStore(appContext, settingsStore.read().chatSystemPrompt)
     }
-
-    /** The one-shot title request a conversation may make after its first answer. */
-    internal val titleGenerator: TitleGenerator by lazy { TitleGenerator(this) }
 
     /**
      * Turns that finished with an answer while the app was in the background.
@@ -456,186 +455,71 @@ class PiHost private constructor(context: Context) {
         if (levels.isNotEmpty()) _catalogueThinkingLevels.value = levels
     }
 
-    /**
-     * Refreshes pi's own model catalogue when the copy on disk is old enough.
-     *
-     * Runs off the launch path, and nothing waits on it: this is a network round trip
-     * and the launch is a tap. See [refreshCatalogueNow] for what it costs and why the
-     * window exists.
-     *
-     * @param workingDir the directory pi is run from, which `update` inherits. The
-     *   *active* conversation's, because a refresh started from a conversation keeps
-     *   that conversation's environment; the answer is the same for all of them.
-     */
-    internal suspend fun refreshCatalogueIfStale(workingDir: File) {
-        val due = catalogueRefreshDue(System.currentTimeMillis())
-        // A profile whose `models.json` entry cannot be built without catalogue facts is a
-        // reason to refresh *now*, even inside the retry window: the refresh is what makes
-        // that entry possible, and the failures that empty a store are the ones that wrote
-        // the window. See [needsCatalogueFacts].
-        if (!due && !savedProfilesNeedCatalogueFacts()) return
-        refreshCatalogueNow(workingDir)
-    }
-
-    /** Whether the launch path would refresh the catalogue at [now]. */
-    private fun catalogueRefreshDue(now: Long): Boolean =
-        catalogueRefreshDue(now, cataloguePrefs.getLong(KEY_CATALOGUE_DUE_AT, 0L))
-
-    /** [needsCatalogueFacts] against the store on disk. */
-    private fun savedProfilesNeedCatalogueFacts(): Boolean {
-        val profiles = settingsStore.profiles.profiles
-        if (profiles.isEmpty()) return false
-        val store = File(env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME)
-        val cache = HashMap<String, Map<String, JsonObject>>()
-        return needsCatalogueFacts(profiles) { providerId ->
-            cache.getOrPut(providerId) { storeModelFacts(store, providerId) }
+    /** Background metadata only; a missing route does not bypass the retry window. */
+    internal suspend fun refreshCatalogueIfStale() {
+        if (catalogueRefreshDue(System.currentTimeMillis(), cataloguePrefs.getLong(KEY_CATALOGUE_DUE_AT, 0L))) {
+            runCatching { requestCatalogueRefresh() }.onFailure {
+                if (it is CancellationException) throw it
+                Log.w(TAG, "Pi catalogue refresh did not finish: ${it.javaClass.simpleName}")
+            }
         }
     }
 
-    /**
-     * Runs the catalogue refresh, whatever the deadline says, and reports what it found.
-     *
-     * The one entry point for both callers: the launch path
-     * ([refreshCatalogueIfStale], which checks the window first) and the maintenance
-     * page's own button ([requestCatalogueRefresh]). They have to behave identically —
-     * one refresh in flight at a time, the same deadline written back, the same
-     * "did anything change" test — or the button and the window would disagree about
-     * what the store on disk means.
-     *
-     * @return true when the refresh succeeded *and* the catalogue it wrote differs from
-     *   the one the agent would otherwise have resolved from.
-     */
-    private suspend fun refreshCatalogueNow(workingDir: File): Boolean {
+    /** The maintenance action bypasses the deadline, not the single writer. */
+    internal suspend fun requestCatalogueRefresh(): Boolean {
         if (!catalogueRefreshRunning.compareAndSet(false, true)) return false
         val now = System.currentTimeMillis()
+        var succeeded = false
         try {
-            val cliEntry = PiInstallation.cliEntry(env)?.absolutePath ?: return false
-            val store = File(env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME)
-            val before = store.catalogueContent()
-            val settings = settingsStore.read()
-            val exit = withContext(Dispatchers.IO) {
-                runCatching {
-                    PiProcessLauncher.refreshCatalogue(
+            return withContext(Dispatchers.IO) {
+                val cliEntry = PiInstallation.cliEntry(env) ?: error("Pi CLI is unavailable")
+                val store = File(env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME)
+                val scratch = Files.createTempDirectory(env.filesDir.toPath(), "catalogue-refresh-").toFile()
+                try {
+                    val candidate = File(scratch, store.name)
+                    val before = if (store.isFile) store.readText() else null
+                    if (before != null) candidate.writeText(before)
+                    val exit = PiProcessLauncher.refreshCatalogue(
                         context = appContext,
                         env = env,
-                        options = settings.toLaunchOptions(
+                        options = PiLaunchOptions(
                             nodePath = env.node.absolutePath,
-                            cliEntry = cliEntry,
-                            workingDir = workingDir.absolutePath,
-                            // Not used by `update --models` (the argv it builds has no
-                            // `--session-dir`), but the environment is shared with the
-                            // agent launch and a `pi` that writes a session somewhere
-                            // unexpected is worse than one that writes it here.
-                            sessionDir = env.sessionDir.absolutePath,
-                            // `update --models` reads neither: its argv is built by
-                            // `buildCatalogueCommand`, and the credential it needs comes
-                            // from `extraEnv` below.
-                            providerId = null,
-                            credentials = emptyMap(),
+                            cliEntry = cliEntry.absolutePath,
+                            workingDir = scratch.absolutePath,
+                            sessionDir = null,
+                            agentDir = scratch.absolutePath,
                         ),
-                        // Every built-in provider, not only the profile's: the point of
-                        // this scan is the providers the user is *not* currently on, which
-                        // is where the model they cannot select lives. The profile's own
-                        // key still wins for the provider it names — see
-                        // `catalogueRefreshEnvironment` and [PiLaunchOptions.extraEnv].
-                        //
-                        // The saved profiles' variables go on top, and they are not
-                        // optional: `models.json` now names `$PIKIT_KEY_…` for every
-                        // profile it registers, and pi resolves a provider's credential
-                        // while refreshing — an unresolvable one aborts the whole refresh
-                        // (`Could not refresh model catalogs: deepseek: Failed to resolve
-                        // API key … PIKIT_KEY_…`), which is how a launch path that could
-                        // not read the catalogue started building entries with no facts.
-                        extraEnv = catalogueRefreshEnvironment() +
-                            ProfileAddressing.providerEnvironment(
-                                settingsStore.profiles.snapshots.value,
-                            ),
+                        extraEnv = catalogueRefreshEnvironment(),
                     )
-                }.getOrNull()
+                    val after = candidate.takeIf { it.isFile }?.readText()
+                    val revision = catalogueRevision(after)
+                    check(exit == 0 && after != null && revision != CATALOGUE_UNREADABLE) {
+                        "Pi could not refresh the model catalogue"
+                    }
+                    val published = launchFileLock.withLock {
+                        val current = store.takeIf { it.isFile }?.readText()
+                        if (before != current) return@withLock false
+                        if (current != after) replaceConfigFile(store, after)
+                        CatalogueStore.invalidate()
+                        true
+                    }
+                    succeeded = true
+                    reloadCatalogueThinkingLevels()
+                    published && revision != catalogueRevision(before)
+                } finally {
+                    SafeDelete.recursively(scratch, env.filesDir)
+                }
             }
-            // Scheduled from the attempt: a success is trusted for the full window
-            // [PiAgentSession.CATALOGUE_REFRESH_WINDOW_MS] — pi's own freshness window,
-            // and the reason a launch does not re-download thirty-two catalogues — while
-            // a failure buys half an hour so an offline phone does not wait for the
-            // timeout every time the agent starts.
-            //
-            // The invalidation is what makes the before/after comparison below mean
-            // anything: this process is the store's only writer, and its rewrite can land
-            // on the same millisecond *and* the same byte count as the document it
-            // replaced (a revalidation moves `checkedAt` and nothing else), which is
-            // exactly the pair the cache keys on. See [CatalogueStore].
-            CatalogueStore.invalidate()
-            val succeeded = exit == 0
+        } finally {
             cataloguePrefs.edit()
                 .putLong(
                     KEY_CATALOGUE_DUE_AT,
-                    now + if (succeeded) {
-                        PiAgentSession.CATALOGUE_REFRESH_WINDOW_MS
-                    } else {
-                        PiAgentSession.CATALOGUE_RETRY_MS
-                    },
+                    now + if (succeeded) PiAgentSession.CATALOGUE_REFRESH_WINDOW_MS else PiAgentSession.CATALOGUE_RETRY_MS,
                 )
                 .apply()
-            if (!succeeded) return false
-            // What the composer reads ahead of pi is this file, so it is re-read on
-            // every successful refresh — including the one whose revision did not move,
-            // which on a first run is the read that fills it.
-            reloadCatalogueThinkingLevels()
-            // The file is rewritten by every refresh; the catalogue is not. See the
-            // note in `PiAgentSession`: comparing the file made this a restart loop.
-            if (store.catalogueContent() == before) return false
-            // Every live conversation reads the store at *its* startup, so every one of
-            // them is stale — but only the idle ones are restarted: a turn in flight is
-            // worth more than a correct level list, and the fresh catalogue is on disk
-            // for the next launch either way.
-            var restarted = false
-            for (session in sessions.value) {
-                if (session.turnInFlight) {
-                    Log.i(TAG, "model catalogue changed; a live conversation keeps the old one until it restarts")
-                    continue
-                }
-                session.scheduleRestart()
-                restarted = true
-            }
-            if (restarted) Log.i(TAG, "model catalogue changed; restarting the idle conversations to read it")
-            return restarted
-        } finally {
             catalogueRefreshRunning.set(false)
         }
     }
-
-    /**
-     * The maintenance page's manual catalogue refresh, run to completion.
-     *
-     * The button is the *only* thing this adds over the launch path: pi's own
-     * freshness window is four hours ([PiAgentSession.CATALOGUE_REFRESH_WINDOW_MS]), so
-     * a model published an hour ago is not due for another three by the clock. Pressing
-     * the button skips that test — nothing else about the refresh is different, which is
-     * why this delegates to the same function the launch path uses.
-     *
-     * Only [refreshCatalogueNow] running is a failure here: the launch path was
-     * already refreshing, so the answer the button was about to buy is on its way.
-     * A refresh that succeeded without changing anything is a success — the model the
-     * user was looking for may simply not exist yet.
-     *
-     * @return true when the catalogue actually moved, which is also the case where the
-     *   agent is restarted to read it.
-     */
-    internal suspend fun requestCatalogueRefresh(): Boolean {
-        val workspace = active.value.workspace.value
-        val workingDir = File(workspace.ifBlank { WorkspaceStore.default(appContext, env).path })
-        Log.i(TAG, "manual model catalogue refresh requested")
-        return refreshCatalogueNow(workingDir)
-    }
-
-    /**
-     * The catalogue the agent would resolve from, as a comparable string.
-     *
-     * An absent or unreadable file both read as [CATALOGUE_UNREADABLE], so the first
-     * write to a store that did not exist is a change — which it is: that refresh is
-     * the one that fills the overlay in.
-     */
-    private fun File.catalogueContent(): String = catalogueRevisionOf(CatalogueStore.root(this))
 
     // ------------------------------------------------------------------ rebuild
 
@@ -961,11 +845,6 @@ class PiHost private constructor(context: Context) {
         // should inherit.
         if (shownMode == AgentMode.CHAT) session.rememberChatWebAccess()
         session.rememberAsLastConversation()
-        // A saved conversation may carry turns but no title — either it predates the
-        // title switch or the switch was turned on after it was written. Opening it is
-        // the moment the reader asks for its name, so the one-shot request is made
-        // here as well as on a settle. It is a no-op for a fresh conversation.
-        titleGenerator.maybeGenerate(session)
     }
 
     /**

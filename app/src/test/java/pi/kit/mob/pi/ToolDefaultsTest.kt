@@ -186,18 +186,14 @@ class ToolDefaultsTest {
     }
 
     @Test
-    fun `an existing retry object is replaced, not merged`() {
+    fun `an existing retry object is preserved`() {
         val existing = settings(
             """{"retry":{"enabled":true,"maxRetries":1,"baseDelayMs":500,"provider":{"maxRetries":2}}}""",
         )
 
         val result = merged(existing, PiSettings())
 
-        // pi's own advice is to leave `retry.provider.*` alone, and the merge
-        // cannot honour a user's `provider` sub-object without also honouring a
-        // `maxRetries` of 1 — the impatience this write exists to fix. The whole
-        // object is PiKit's, the way `defaultProvider` is.
-        assertEquals(RETRY_PATIENCE, result["retry"])
+        assertEquals(existing["retry"], result["retry"])
     }
 
     // ---------------------------------------------------- the bundled extension

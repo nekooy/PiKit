@@ -1,5 +1,6 @@
 package pi.kit.mob.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -48,6 +49,25 @@ class PageDragClaimTest {
         assertFalse(claimsPageDrag(-300f, 0f, slop))
         assertTrue(claimsPageDrag(-30f, 2f, slop, PageDragDirection.Left))
         assertFalse(claimsPageDrag(30f, 2f, slop, PageDragDirection.Left))
+    }
+
+    @Test
+    fun `either direction can pick up a drawer between its anchors`() {
+        assertTrue(claimsPageDrag(32f, 4f, slop, PageDragDirection.Both))
+        assertTrue(claimsPageDrag(-32f, 4f, slop, PageDragDirection.Both))
+        assertFalse(claimsPageDrag(-32f, 31f, slop, PageDragDirection.Both))
+    }
+
+    @Test
+    fun `a sparse moving stream still has a signed fling velocity`() {
+        assertEquals(1800f, pageDragVelocity(1800f, 150f, 150L, 8L), 0f)
+        assertEquals(-1000f, pageDragVelocity(0f, -150f, 150L, 8L), 0f)
+    }
+
+    @Test
+    fun `a pause before release cancels even a fast previous move`() {
+        assertEquals(0f, pageDragVelocity(2400f, 150f, 320L, 140L), 0f)
+        assertEquals(0f, pageDragVelocity(0f, 150f, 320L, 140L), 0f)
     }
 
     @Test

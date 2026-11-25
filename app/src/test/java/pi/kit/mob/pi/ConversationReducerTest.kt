@@ -574,6 +574,8 @@ class ConversationReducerTest {
         assertTrue("the tool card is folded away", state.tools().single().key in hidden)
         assertFalse("the reply stays visible", turn.finalReplyKey in hidden)
         assertFalse("the prompt stays visible", turn.promptKey in hidden)
+        val noticed = ConversationReducer.notice(state, "retry")
+        assertFalse("a notice is never folded", noticed.items.last().key in noticed.foldedKeys())
     }
 
     /**

@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pi.kit.mob.locales.strings
@@ -252,9 +254,10 @@ internal enum class MdAlign { Start, Center, End }
 fun MarkdownText(
     text: String,
     modifier: Modifier = Modifier,
+    streaming: Boolean = false,
 ) {
     val style = inlineStyle()
-    val blocks = rememberStableBlocks(text)
+    val blocks = rememberStableBlocks(text, streaming)
     // Fill the formula cache before the blocks are drawn, on a worker, so the common case —
     // opening a saved conversation — draws formulas rather than their source. Both specs are
     // prefetched because the TeX style is part of a formula's cache key: a display block asks for
@@ -266,9 +269,10 @@ fun MarkdownText(
     // the parse again on the composition thread for every delta. Waiting for a pause means it
     // runs once on the settled reply, which is what it was added for; the block on screen
     // requests its own formulas meanwhile.
-    val inlineSpec = mathSpec(bodyStyle().fontSize)
-    val displaySpec = mathSpec(bodyStyle().fontSize, display = true)
-    LaunchedEffect(text, inlineSpec, displaySpec) {
+    val inlineSpec = mathSpec(transcriptBodyStyle().fontSize)
+    val displaySpec = mathSpec(transcriptBodyStyle().fontSize, display = true)
+    LaunchedEffect(text, streaming, inlineSpec, displaySpec) {
+        if (streaming) return@LaunchedEffect
         delay(MATH_PREFETCH_SETTLE_MS)
         withContext(Dispatchers.Default) {
             MathCache.prefetch(text, inlineSpec)
@@ -305,18 +309,20 @@ fun MarkdownText(
  * back means their composables are skipped instead of redrawn.
  */
 @Composable
-private fun rememberStableBlocks(text: String): List<MdBlock> {
+private fun rememberStableBlocks(text: String, streaming: Boolean): List<MdBlock> {
     var blocks by remember { mutableStateOf(parseMarkdown(text)) }
     var parsedText by remember { mutableStateOf(text) }
     val latest = rememberUpdatedState(text)
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(MARKDOWN_PARSE_INTERVAL_MS)
+    LaunchedEffect(streaming) {
+        snapshotFlow { latest.value }.conflate().collect { observed ->
+            if (observed == parsedText) return@collect
+            if (streaming) delay(MARKDOWN_PARSE_INTERVAL_MS)
             val wanted = latest.value
-            if (wanted == parsedText) continue
-            val next = withContext(Dispatchers.Default) { parseMarkdown(wanted) }
-            blocks = reuseBlocks(blocks, next)
-            parsedText = wanted
+            if (wanted != parsedText) {
+                val next = withContext(Dispatchers.Default) { parseMarkdown(wanted) }
+                blocks = reuseBlocks(blocks, next)
+                parsedText = wanted
+            }
         }
     }
     return blocks
@@ -406,17 +412,12 @@ internal fun inlineStyle(): InlineStyle = InlineStyle(
  * own box (about 1.17em for a Latin face), and the inline code fill below is drawn
  * from the font's box outwards with 1dp of breathing room — inside a 1.2em line a
  * chip and the line above it touch, which is the "two lines of code joined" defect
- * `CodeChip.kt` exists to prevent. 26sp keeps that pad inside the line. It is set
- * *here* rather than in a theme, because it is a property of a block of agent prose
- * and not of the application's type scale: a settings row at 26sp would be a
- * different mistake.
+ * `CodeChip.kt` exists to prevent. 26sp keeps that pad inside the line and uses
+ * the same unit as math's placeholder height. The prompt shares it; settings rows do not.
  */
 @Composable
-private fun bodyStyle(): TextStyle =
-    MiuixTheme.textStyles.paragraph.copy(lineHeight = BODY_LINE_HEIGHT)
-
-/** The reply's line box — see [bodyStyle] for why it is not the style's own. */
-private val BODY_LINE_HEIGHT = 26.sp
+internal fun transcriptBodyStyle(): TextStyle =
+    MiuixTheme.textStyles.paragraph.copy(lineHeight = 26.sp)
 
 /**
  * One parsed block.
@@ -430,7 +431,7 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
 
     when (block) {
         is MdBlock.Paragraph -> {
-            val textStyle = bodyStyle()
+            val textStyle = transcriptBodyStyle()
             val rendered = rememberMathInline(block.text, style, textStyle)
             CodeChipText(
                 text = rendered.text,
@@ -513,7 +514,7 @@ private fun MdBlockView(block: MdBlock, style: InlineStyle) {
             // formula when it is ready and its own source until then. Deferring the *draw*
             // as well was tried and is gone: with the measurement already deferred it bought
             // nothing but a scrollbar that settled late.
-            val textStyle = bodyStyle()
+            val textStyle = transcriptBodyStyle()
             val rendered = rememberMathInline("$$${block.body}$$", style, textStyle, display = true)
             ScrollableFormula {
                 Text(
@@ -571,12 +572,12 @@ private fun MarkdownList(block: MdBlock.ListBlock, style: InlineStyle) {
             ) {
                 Text(
                     text = marker,
-                    style = bodyStyle(),
+                    style = transcriptBodyStyle(),
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     modifier = Modifier.width(LIST_MARKER_WIDTH),
                 )
                 Box(Modifier.weight(1f)) {
-                    val textStyle = bodyStyle()
+                    val textStyle = transcriptBodyStyle()
                     val rendered = rememberMathInline(item.text, style, textStyle)
                     CodeChipText(
                         text = rendered.text,

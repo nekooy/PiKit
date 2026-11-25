@@ -217,9 +217,9 @@ internal fun PersonalizationPage(
                         session.settingsStore.update { it.copy(showMessageTime = on) }
                     },
                 )
-                // A title is generated once, after the first successful answer, by a
-                // small request to the same provider; the switch is on by default
-                // because a drawer of first prompts is hard to scan.
+                // A title is generated once, from the first prompt, by a small
+                // request to the model this conversation answers from; the switch is
+                // on by default because a drawer of first prompts is hard to scan.
                 SwitchPreference(
                     title = text.settings.chatTitle,
                     summary = text.settings.chatTitleSubtitle,

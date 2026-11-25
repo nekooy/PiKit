@@ -54,13 +54,18 @@ import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.PopupLayout
  *
  * ## Motion and placement follow the trigger
  *
- * Context menus take Miuix's `GlassPopup` edge reveal: a flat capsule at 15% of the
- * settled width on the logical end grows on `GlassMotion.popupMorph()` while its rows
- * fade in and sharpen from `POPUP_MORPH_BLUR_PX`. The composer and a glass icon button
- * morph from their measured trigger. The composer's endpoint is a viewport above it, so
- * the menu cannot open over its input field when the IME raises the chip row. A glass
- * icon button's endpoint is the bar it belongs to, or the button itself when no bar
- * bottom is supplied.
+ * Context menus keep Miuix's safe-area fit and logical-end alignment, and open as the
+ * library's `GlassPopup`: a 15%-wide, 0.2-height capsule at the row's end edge grows into
+ * the settled panel on `GlassMotion.popupMorph`, while the rows arrive on the 200 ms fade
+ * and clear a 40 px blur. The exit runs the faster `popupExit` spring and has no blur, so
+ * the silhouette is gone before the row fade finishes. An earlier edge reveal used the
+ * entry spring for both directions and blurred the exit; that left an empty, smeared shell
+ * shrinking after its rows had gone.
+ *
+ * The composer and a glass icon button still morph from their measured trigger. The
+ * composer's endpoint is a viewport above it, so the menu cannot open over its input
+ * field when the IME raises the chip row. A glass icon button's endpoint is the bar it
+ * belongs to, or the button itself when no bar bottom is supplied.
  *
  * The morph is the kit's own rather than Miuix's `GlassTransformPopup`: the library's
  * popup keeps its full-page dismiss layer composed through the exit spring, and that
@@ -70,8 +75,8 @@ import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.PopupLayout
  * the moment `open` turns false, so the trigger underneath answers again while the exit
  * is still playing.
  *
- * A **dropdown row's panel is not a menu**, and it is the one panel in this file that does
- * not take that edge reveal: its alternatives *are* the row's value unfolded, so it opens
+ * A **dropdown row's panel is not a menu**: its alternatives *are* the row's value
+ * unfolded, so it opens
  * with the library's arc out of the value cell, the same motion the plain form of
  * [PiDropdownPreference] gets from `GlassDropdownPreference`. [PiDropdownPopup] is that
  * panel. A menu lists actions for a control the reader pressed; a dropdown states what a
@@ -92,13 +97,10 @@ import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.PopupLayout
  * `show` flag — and the placement is the host's. That is the same division Miuix's own
  * `OverlayListPopup` makes (its panel is drawn in the root `Scaffold`'s popup host).
  *
- * A menu still belongs to the composition that raised it: a row that leaves its list takes
- * its menu with it, because the registration is a `DisposableEffect` on that call site.
- * That is the right answer for a row's own actions — the panel is about a row the reader
- * can no longer see. The transcript's card menu is the exception, and it is why that one is
- * registered by the page rather than by the card: a long conversation recycles cards
- * constantly, and a menu that vanished mid-read because its card scrolled one screen away
- * would be a menu the reader cannot use.
+ * A menu's lifetime follows its registration. Keep a context menu that can outlive its
+ * row's layout at a stable owner: history registers at the drawer and snapshots the
+ * row's measured bounds and action target on hold, while the transcript registers at
+ * the page and retains its point anchor. Neither list can dispose the leaving panel.
  *
  * ## The fallback is the library's, and it is opaque
  *

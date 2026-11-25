@@ -71,7 +71,7 @@ class ProfileProviderEntryTest {
         assertEquals("openai-completions", entry["api"]!!.jsonPrimitive.content)
         // The reference, not the key: the value lives in the environment every launch and
         // every terminal shell carries, so pi's file never holds a secret.
-        assertEquals("${'$'}PIKIT_KEY_b", entry["apiKey"]!!.jsonPrimitive.content)
+        assertEquals(pi.kit.mob.data.ProfileAddressing.apiKeyReference(profile()), entry["apiKey"]!!.jsonPrimitive.content)
     }
 
     @Test

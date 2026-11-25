@@ -396,7 +396,7 @@ internal object EnglishStrings : Strings {
         override val showMessageTimeSubtitle = "The date and time under each message"
 
         override val chatTitle = "Generate conversation titles"
-        override val chatTitleSubtitle = "A short title after the first answer, at the cost of one small model request"
+        override val chatTitleSubtitle = "Name new conversations with the current model (uses the network and a few tokens)"
         override val thinkingAutoExpand = "Expand thinking while it streams"
         override val thinkingAutoExpandSubtitle = "Open the current step's reasoning while it thinks, and fold it when the step ends"
         override val theme = "Theme"
@@ -581,6 +581,7 @@ internal object EnglishStrings : Strings {
                 "https://relay.example.com/v1. `localhost:11434` is missing its scheme."
         override val apiType = "API"
         override val apiTypeSubtitle = "The wrong choice fails to parse"
+        override val modelRouteUnavailable = "The model and endpoint for this conversation could not be verified. Check the provider, model, API URL, and key, or select the model again."
         override val modelsJsonWriteFailed =
             "Could not write pi's models.json, so this profile's endpoint and model " +
                 "settings will not reach pi. Check the endpoint URL and the app's " +
@@ -613,22 +614,31 @@ internal object EnglishStrings : Strings {
                     "list comes from pi's own catalog — type the id by hand if it is missing."
             is DiscoveryProblem.HttpRejected -> {
                 val head =
-                    "${problem.host} rejected the request: HTTP ${problem.code}" +
-                        problem.detail
-                if (problem.viaOverride) {
+                    "${problem.host} rejected the request: HTTP ${problem.code}"
+                if (problem.code in 300..399) {
+                    head + " A redirect was not followed. Enter the final API URL."
+                } else if (problem.viaOverride && problem.code in listOf(401, 403)) {
                     head + "\n\nThis is the endpoint from the profile's URL field. A wrong " +
                         "URL answers 401 just like a wrong key does — check the base URL " +
                         "(it must be the API root, for example https://relay.example.com/v1) " +
                         "before replacing the key."
+                } else if (problem.code == 401 || problem.code == 403) {
+                    head + " Check the API key and whether it can access this model or endpoint."
                 } else {
                     head
                 }
             }
             is DiscoveryProblem.NoModelIds ->
-                "${problem.host} answered with no model ids. It may have changed its " +
-                    "response format; pi's own catalog is used instead."
+                "${problem.host} responded, but no model IDs could be read. You can enter a known ID manually."
             is DiscoveryProblem.Unreachable ->
-                "Could not reach ${problem.host}: ${problem.cause}"
+                "Could not connect to ${problem.host}. " + when (problem.cause) {
+                    ProviderNetworkFailure.Certificate -> "Certificate verification failed. Check the device clock and the server's certificate chain or trusted CA."
+                    ProviderNetworkFailure.Hostname -> "The server certificate does not match the endpoint hostname. Check the API URL."
+                    ProviderNetworkFailure.Tls -> "The TLS handshake failed. Check the API URL, server TLS configuration, and any VPN or proxy."
+                    ProviderNetworkFailure.Dns -> "The hostname could not be resolved. Check the address, connection, and DNS."
+                    ProviderNetworkFailure.Timeout -> "The request timed out. Check the connection and whether the server is reachable."
+                    ProviderNetworkFailure.Connection -> "Check the API URL, network connection, and any VPN or proxy."
+                }
             is DiscoveryProblem.PiRefused ->
                 "pi refused to list models: ${problem.detail}"
             is DiscoveryProblem.CatalogEmpty ->

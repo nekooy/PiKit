@@ -66,8 +66,8 @@ disagree about is not a conversation's fact.
 | --- | --- | --- |
 | The unpacked image, its stamps and `RuntimeStatus` | `PiHost` | One install of ~285 MB. Two cold starts racing would unpack over each other; the lock is the host's. |
 | `SettingsStore`, the permission tier, the terminal's PTYs | `PiHost` | A setting is about the app. A shell outlives the transcript that opened it — `pkg upgrade` must not die because the reader switched conversation. |
-| pi's model catalogue and its refresh window | `PiHost` | One `models-store.json`. Two refreshes would be two `pi update --models` processes writing one file; the deadline is persisted once. |
-| `models.json` and pi's `settings.json` | `PiHost.launchFileLock` around the write **and** the spawn | The files are one set for the whole app, and pi reads a torn document as `Unknown provider` and exits. The lock is held across the spawn so a second launch cannot observe a document being replaced. |
+| Pi's model catalogue and its refresh window | `PiHost` | One published `models-store.json` and one deadline. Refresh runs with an isolated scratch agent dir and publishes atomically without restarting a conversation. |
+| `models.json` and Pi's `settings.json` | `PiHost.launchFileLock` through the handshake | Startup files and credential environment come from one snapshot. A successful spawn does not mean the child has finished reading those files. |
 | The session directory's listing and its per-file metadata cache | `SessionListingCache` | The files are one directory. A cache owned by a conversation was emptied by every switch, so the drawer re-parsed every session file the reader had — and drew its spinner while it did (below). |
 | The child, its RPC client, `ConversationState`, the workspace, the model, the wake lock | `PiAgentSession` | One process, one transcript. |
 
@@ -159,45 +159,47 @@ The wake lock is split the same way as before: a turn lock per conversation
 ## The name: the first prompt, and one generated title
 
 A conversation pi never names is titled by its first user turn, which is what the drawer
-has always drawn and what pi's own picker does. Since a title is a sentence about the
-conversation rather than part of it, the drawer can also ask a model for one: the
-**Generate conversation titles** switch (`PiSettings.chatTitleEnabled`, on by default)
-makes the first answer that settles without an error send the conversation's first prompt
-to the same provider, once, and write the returned line with `set_session_name`. The
-policy — one line, the messages' language, about five words or ten CJK characters, no
-Markdown or commentary — is DSH's first-prompt title instruction, which is the version
-measured to produce stable drawer-sized names; `TitleGenerator` carries the exact
-instruction and the parser that takes the first non-empty line, unwraps emphasis and
-clips the result to 40 characters and 80 bytes.
+has always drawn and what pi's own picker does. With **Generate conversation titles** on,
+a fresh conversation also gets a stored name from that opening prompt: `TitleGenerator`
+hands the prompt to a one-shot `pi --print` child running the same model, with DSH's
+first-prompt title policy — one line in the messages' language, about five words or ten
+CJK characters, no Markdown or commentary — and writes the returned line with
+`set_session_name`. The line is normalized (first non-empty line, emphasis and quotes
+stripped) and clipped to 40 code points and 80 UTF-8 bytes before it becomes a drawer
+row. The request runs when the first live user `message_end` arrives
+rather than after the first answer: the title describes the question, and waiting for a
+turn that may fail or be stopped would waste the one moment the prompt is certain.
 
-The request is written by the app rather than asked of pi. There is no title command in
-pi's RPC, and spawning a second `pi` just to ask for five words would cost a Node start
-and ~120 MB for one small POST. The direct call is deliberately the only one the app
-makes: no streaming, no tools, no session, an eight-second connect and twenty-second read
-timeout, and a failure is logged by status only and never retried for that conversation.
-The prompt is capped at two thousand characters, which is the opening question rather than
-the transcript.
+The request is one throwaway `pi --print` process. Pi has no title command in its RPC,
+but its print mode is exactly the missing piece: the process starts, runs one prompt and
+writes the final assistant text to stdout. It reaches every provider pi supports —
+built-in or a custom `models.json` endpoint — through the same model layer the
+conversation uses, so the app does not carry a second provider table with its own URL,
+authentication and response-shape gaps. A hand-written direct request was tried and
+removed: it covered four envelopes and returned an empty answer on a reasoning model
+whose thinking consumed the output budget. `--thinking off` is what makes a title cost a
+few tokens instead of hundreds; `--no-session` keeps the run out of the history list;
+`--no-tools`, `--no-extensions`, `--no-skills`, `--no-prompt-templates`,
+`--no-context-files`, `--no-mcp` and `--no-approve` close every ambient resource door so
+an installed extension cannot turn a title into another agent run. The price is one
+Node start per new conversation — measured at 1.87 s on the host — paid once, in the
+background, on a feature that is already optional. The prompt is capped at two thousand
+characters, which is the opening question rather than the transcript, and a failed run is
+logged by exit status only and never retried for that conversation.
 
-**An opening is a trigger as well as a settle.** A saved conversation whose last turn
-completed while the switch was off, or before the feature existed, has no later settle to
-wait for; activating it — from the drawer or the cold-start restore — therefore asks for
-the missing title too. The host's `attempted` set still admits one request per file per
-process, so opening a conversation after its title landed is free. **A drawer-opened
-conversation has no child process**, so the name is appended to its session file with the
-same `session_info` record a saved row's rename uses; the RPC is only for a live
-conversation. `openFromDisk` reads that record back into the page's title, which it did not
-do before: the header drew the app's name and the generator saw an unnamed conversation
-even after a title had been written. The title is written
-into the session file, not the transcript, so `PiHost.sessionListingRevision` is bumped
-when it lands and the drawer re-runs its file scan; without that the row kept drawing the
-first prompt from a listing that had been read before the write.
-
-Three rules keep the feature from surprising the reader. It runs only while the title switch
-is on, it never overwrites a name, and a failed request is not retried on every later
-turn: the write happens only if `sessionName` is still blank, so a rename made while the
-request is in flight wins. The profile must carry a key
-and a model, and a provider whose chat base this app does not know is skipped rather than
-guessed — a guessed URL would send the reader's key to somebody else's server.
+Only a conversation this app started itself is title-eligible: a fresh launch with
+nothing to restore, `new_session`, or the new child a dead process has to spawn. That
+mark is explicit state on the conversation, not a `File.exists()` test at handshake
+time. Pi names the session file in its handshake but may create the empty header later;
+the old test could therefore decide a brand-new session already existed and skip every
+title. The mark is consumed by the first live user `message_end` — Pi persists that
+record before handling another RPC — and history, forks and cold-start restores clear it,
+so an unnamed existing conversation is never renamed on a follow-up prompt. The live child
+persists the generated name with its own `set_session_name`; the path and name are checked
+again at the write so a reset, rename or a replaced process cannot receive a stale title.
+The header reads that name from the session state, and `PiHost.sessionListingRevision`
+refreshes an already cached drawer row. The session file remains the only stored title,
+so conversation export and backup do not need another file.
 
 ## A new conversation appears in the drawer when its file does
 

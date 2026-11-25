@@ -285,11 +285,14 @@ ControlChip(
   layer, never the scene that contains it (red line 1). The conversation and history
   drawer share this host so a drawer menu is above the translated chat card too.
   Do not draw an unhosted menu in place: a list item offers unbounded height.
-- **Point and row context menus** use `Auto`: Miuix's `GlassPopup` edge reveal —
-  the panel starts at 15% of its settled width and a 0.2 height-to-width ratio on the
-  logical end, opens on `GlassMotion.popupMorph()`, and its rows fade in on
-  `popupMorphFade()` while a `POPUP_MORPH_BLUR_PX` blur resolves — with Miuix's
-  logical-end alignment and safe-area fit test.
+- **Point and row context menus** use `Auto`: Miuix's logical-end fit against safe
+  window bounds, and the library's `GlassPopup` opening. A 15%-wide, 0.2-height capsule
+  at the row's end edge grows into the settled panel on `GlassMotion.popupMorph`;
+  the rows arrive on the 200 ms fade and clear a 40 px blur. Closing runs the faster
+  `popupExit` spring so the silhouette is gone before the row fade ends, and the exit
+  has no blur. Geometry is read in the panel's graphics layer and layout, not in row
+  measurement or composition. History snapshots the inset row bounds on hold;
+  transcript menus keep their press-point anchor.
 - **Composer menus** use `Above`: they grow from the measured trigger and settle above
   it, 8dp clear of it and aligned at logical start. The scroll viewport is bounded to
   the available area above the trigger, not the space below it behind the IME. Closing
@@ -315,19 +318,15 @@ ControlChip(
   invisible layer. A control in the page bar can pass
   `openBelow = LocalPiBarBottom.current` to move only the settled placement, clear of the
   subtitle. Files sort is already below that bar.
-- **An animated clip is computed in the draw pass, never in measure.** The edge
-  reveal clips the settled rows to the growing panel; a path built during measure is
-  recorded into the row layer once and the panel then grows around a stale clip, so
-  only the first row is drawn while accessibility lists every row. `PiAnchoredMenu`
-  reads the reveal state in `drawWithContent` and derives the clip height from it.
 - **The rows are `PiMenuRow`**, at the library's popup metrics — see the next section.
   Do not wrap them in `ListPopupColumn` and do not hand `GlassPopup` a panel of your own.
 - **The material is the library's**: the corner is `PiCorner.popup` (24dp), and the
   scroll viewport is capped at `GlassPopupDefaults.MaxHeight` (416dp).
 
-A menu belongs to the composition that raised it: a row that leaves its list takes its
-menu with it. The transcript's card menu is the exception — it is registered by the
-page, not the card, because a long conversation recycles cards constantly.
+A menu belongs to the composition that registers it. Keep a history or transcript
+menu at the drawer or page, not inside a lazy item: the item can recycle, move or
+vanish before its exit completes. Keep the last target and bounds while `show` is
+false; the host removes the dismiss target, scroll gesture and row actions immediately.
 
 **A settings row with alternatives is the same material.** `PiDropdownPreference` is the
 row shape for "a value with a few alternatives" — the library's `GlassDropdownPreference`
@@ -461,14 +460,14 @@ takes the same padding (§9.2).
   long-press haptic, and the row whose menu is open is lit with `PiTone.inset()`
   (§13). A press light that follows the finger is right on a button and wrong on a
   row whose gesture opens a panel over itself.
-- **A tool call is a step, not a card.** An answer card's intermediate work — tool
+- **A tool call is a step, not a card.** An answer's intermediate work — tool
   calls and the assistant's own thinking fragments — is drawn by `StepGroup` as one
   list under the turn band: a 1dp rule at 8dp and a 24dp text column indented from the
   band's label. The band itself has no leading glyph. `ToolCallRow` is a bare line
   (`终端 ls -la`, `读取 gradle.properties`): the family word, the argument, and a live
   dot as the only state mark; a failure turns the family word red. No fill, no pill,
   no cross and no tick on every successful row — a finished step is the quiet default.
-  The final answer stays on the card's own margin, outside the spine (§7.3).
+  The final answer stays on the document's prose margin, outside the spine (§7.3).
 
 ## Dialogs, sheets, and the one message
 

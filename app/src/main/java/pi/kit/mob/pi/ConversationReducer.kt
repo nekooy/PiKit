@@ -350,6 +350,11 @@ data class ConversationState(
             }
             val turn = open ?: continue
             if (!turn.isComplete) continue
+            // A notice is out-of-band information — a retry, a compaction, a failure
+            // summary — and the fold is about the agent's work, not about what happened
+            // to it. Hiding it made a warning disappear with the steps that happened to
+            // surround it.
+            if (item is ChatItem.Notice) continue
             if (turn.finalReplyKey == null || turn.finalReplyKey == item.key) continue
             hidden += item.key
         }

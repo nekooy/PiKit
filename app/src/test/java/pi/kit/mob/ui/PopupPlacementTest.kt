@@ -4,16 +4,13 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.LayoutDirection
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import pi.kit.mob.ui.kit.anchorCopyMotion
+import pi.kit.mob.ui.kit.contextMenuRevealFrame
 import pi.kit.mob.ui.kit.menuSettleTrigger
 import pi.kit.mob.ui.kit.placeContextMenu
-import pi.kit.mob.ui.kit.placeContextMenuPlacement
 import pi.kit.mob.ui.kit.placeUpwardMenu
-import pi.kit.mob.ui.kit.popupContentScale
-import pi.kit.mob.ui.kit.popupEdgeRevealBounds
 import pi.kit.mob.ui.kit.popupMorphBounds
 import pi.kit.mob.ui.kit.upwardMenuMaxHeight
 
@@ -45,63 +42,38 @@ class PopupPlacementTest {
     }
 
     @Test
-    fun aContextMenuUnfoldsFromItsLogicalEndAtFifteenPercentWidth() {
+    fun pointContextMenuRemainsAtThePressedSpot() {
         val point = Rect(700f, 900f, 700f, 900f)
-        val placement = placeContextMenuPlacement(point, menu, safe, margin, LayoutDirection.Ltr)
-        val settled = placement.rect
-        assertTrue(placement.alignTop)
-
-        val start = popupEdgeRevealBounds(settled, LayoutDirection.Ltr, placement.alignTop, 0f)
-        assertEquals(settled.right, start.right, 1e-4f)
-        assertEquals(settled.top, start.top, 1e-4f)
-        assertEquals(menu.width * 0.15f, start.width, 1e-4f)
-        assertEquals(start.width * 0.2f, start.height, 1e-4f)
-        assertEquals(settled, popupEdgeRevealBounds(settled, LayoutDirection.Ltr, placement.alignTop, 1f))
-        val rebound = popupEdgeRevealBounds(settled, LayoutDirection.Ltr, placement.alignTop, 1.1f)
-        assertTrue(rebound.width > settled.width)
-        assertTrue(rebound.height > settled.height)
+        assertEquals(Rect(220f, 900f, 700f, 1140f), placeContextMenu(point, menu, safe, margin, LayoutDirection.Ltr))
     }
 
     @Test
-    fun aContextMenuAtTheSafeTopRevealsDownward() {
-        val point = Rect(700f, safe.top + 2f, 700f, safe.top + 2f)
-        val placement = placeContextMenuPlacement(point, menu, safe, margin, LayoutDirection.Ltr)
-        val start = popupEdgeRevealBounds(placement.rect, LayoutDirection.Ltr, placement.alignTop, 0f)
-        assertEquals(placement.rect.top, start.top, 1e-4f)
-        assertTrue(start.bottom <= placement.rect.bottom)
+    fun historyContextMenuAlignsWithTheRowInsteadOfTheFinger() {
+        val row = Rect(100f, 900f, 820f, 1010f)
+        assertEquals(Rect(340f, 900f, 820f, 1140f), placeContextMenu(row, menu, safe, margin, LayoutDirection.Ltr))
+        assertEquals(Rect(100f, 900f, 580f, 1140f), placeContextMenu(row, menu, safe, margin, LayoutDirection.Rtl))
     }
 
     @Test
-    fun aContextMenuNearTheBottomFitsAboveAndRevealsUpwardFromItsBottomEdge() {
+    fun rowContextMenuFitsUpwardAtTheBottom() {
         val row = Rect(100f, 2160f, 1020f, 2270f)
-        val ltr = placeContextMenuPlacement(row, menu, safe, margin, LayoutDirection.Ltr)
-        assertEquals(Rect(540f, 2030f, 1020f, 2270f), ltr.rect)
-        assertFalse(ltr.alignTop)
-        val ltrStart = popupEdgeRevealBounds(ltr.rect, LayoutDirection.Ltr, ltr.alignTop, 0f)
-        assertEquals(ltr.rect.bottom, ltrStart.bottom, 1e-4f)
-        assertEquals(ltr.rect.right, ltrStart.right, 1e-4f)
-
-        val rtl = placeContextMenuPlacement(row, menu, safe, margin, LayoutDirection.Rtl)
-        assertEquals(Rect(100f, 2030f, 580f, 2270f), rtl.rect)
-        val rtlStart = popupEdgeRevealBounds(rtl.rect, LayoutDirection.Rtl, rtl.alignTop, 0f)
-        assertEquals(rtl.rect.bottom, rtlStart.bottom, 1e-4f)
-        assertEquals(rtl.rect.left, rtlStart.left, 1e-4f)
+        assertEquals(Rect(540f, 2030f, 1020f, 2270f), placeContextMenu(row, menu, safe, margin, LayoutDirection.Ltr))
+        assertEquals(Rect(100f, 2030f, 580f, 2270f), placeContextMenu(row, menu, safe, margin, LayoutDirection.Rtl))
     }
 
     @Test
-    fun aContextMenuUnfoldsFromTheLogicalStartInRtl() {
-        val row = Rect(100f, 900f, 1020f, 1100f)
-        val placement = placeContextMenuPlacement(row, menu, safe, margin, LayoutDirection.Rtl)
-        val start = popupEdgeRevealBounds(placement.rect, LayoutDirection.Rtl, placement.alignTop, 0f)
-        assertEquals(placement.rect.left, start.left, 1e-4f)
-        assertEquals(placement.rect.left + menu.width * 0.15f, start.right, 1e-4f)
-    }
-
-    @Test
-    fun aContextMenusRowsStartAtTheOfficialFractionOfTheirSettledSize() {
-        assertEquals(0.15f, popupContentScale(0f), 1e-4f)
-        assertEquals(1f, popupContentScale(1f), 1e-4f)
-        assertTrue(popupContentScale(1.05f) > 1f)
+    fun aContextMenuPopsOutOfItsAnchorEdge() {
+        val row = Rect(100f, 900f, 820f, 1010f)
+        val settled = placeContextMenu(row, menu, safe, margin, LayoutDirection.Ltr)
+        val start = contextMenuRevealFrame(settled, menu, 0f, LayoutDirection.Ltr, alignTop = true)
+        assertEquals("the end edge stays put", settled.right, start.right, 1e-4f)
+        assertEquals("the top edge stays put", settled.top, start.top, 1e-4f)
+        assertEquals("it starts at the library's 15% width", settled.width * 0.15f, start.width, 1e-4f)
+        assertTrue("and much flatter than it settles", start.height < settled.height * 0.3f)
+        assertEquals(settled, contextMenuRevealFrame(settled, menu, 1f, LayoutDirection.Ltr, alignTop = true))
+        val rtl = placeContextMenu(row, menu, safe, margin, LayoutDirection.Rtl)
+        val rtlStart = contextMenuRevealFrame(rtl, menu, 0f, LayoutDirection.Rtl, alignTop = true)
+        assertEquals("in RTL the start edge stays put", rtl.left, rtlStart.left, 1e-4f)
     }
 
     @Test

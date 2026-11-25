@@ -2,10 +2,8 @@ package pi.kit.mob.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import pi.kit.mob.pi.ChatItem
 import pi.kit.mob.ui.chat.FollowScrollEvent
 import pi.kit.mob.ui.chat.FollowTailState
 
@@ -170,45 +168,17 @@ class FollowTailTest {
         assertFalse(state.follows)
     }
 
-    // --------------------------------------------- what the follow effect keys on
-
-    private fun assistant(text: String = "", thinking: String = "") =
-        ChatItem.Assistant(key = "row", text = text, thinking = thinking)
-
     @Test
-    fun `thinking that streams moves the tail key, with no answer text yet`() {
-        // The bug this pins: the key was the answer's length alone, so a reasoning model's
-        // whole thinking phase left it unchanged — no re-run, no snap to the end, and the
-        // "back to the bottom" button on screen over a list that was only growing. The
-        // effect is a `LaunchedEffect`, and its keys are the only thing that makes it run.
-        val first = transcriptTailKey(listOf(assistant(thinking = "Let me think")))
-        val more = transcriptTailKey(listOf(assistant(thinking = "Let me think about it")))
-
-        assertNotEquals("thinking has to be part of the key", first, more)
+    fun `async layout growth after an answer settles keeps follow enabled`() {
+        val following = FollowTailState()
+        val overflowed = following.onScroll(FollowScrollEvent(scrolling = false, atBottom = false, programmatic = false))
+        assertTrue(overflowed.follows)
     }
 
     @Test
-    fun `answer text that streams moves the tail key`() {
-        val first = transcriptTailKey(listOf(assistant(text = "The answer")))
-        val more = transcriptTailKey(listOf(assistant(text = "The answer is 4")))
-
-        assertNotEquals("so does the answer", first, more)
-    }
-
-    @Test
-    fun `a new item moves the tail key, and an unchanged transcript does not`() {
-        val one = listOf(assistant(text = "done"))
-        assertEquals("no change, no re-run", transcriptTailKey(one), transcriptTailKey(one))
-        assertNotEquals(
-            "a new row is a change even with an identical-looking tail",
-            transcriptTailKey(one),
-            transcriptTailKey(one + assistant(text = "done")),
-        )
-        // A thinking-only item and an empty one are different states of the same row, which
-        // is the case the old key could not tell apart from "nothing happened".
-        assertEquals(
-            transcriptTailKey(listOf(assistant(thinking = "x"))),
-            transcriptTailKey(listOf(assistant(thinking = "x"))),
-        )
+    fun `async layout growth while reading history does not re-enable follow`() {
+        val browsing = FollowTailState(follows = false)
+        val overflowed = browsing.onScroll(FollowScrollEvent(scrolling = false, atBottom = false, programmatic = false))
+        assertFalse(overflowed.follows)
     }
 }

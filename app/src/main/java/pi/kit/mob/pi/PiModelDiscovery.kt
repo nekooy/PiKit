@@ -22,6 +22,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import java.nio.file.Files
+import kotlinx.coroutines.CancellationException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
@@ -70,8 +72,7 @@ sealed interface ModelDiscovery {
      * the provider's *own* address, which is the only place one means the key.
      * The same status from a user-supplied proxy is just as often a wrong path
      * — gateways answer `401` where a well-behaved server answers `404` — so it
-     * is neither fatal nor a verdict on the key, and the provider's own endpoint
-     * is still worth asking. See [ModelsEndpoint.isOverride].
+     * is neither fatal nor a verdict on the key; only paths at that endpoint are tried. See [ModelsEndpoint.isOverride].
      */
     data class Failure(
         val problems: List<DiscoveryProblem> = emptyList(),
@@ -245,6 +246,9 @@ class ModelDiscoveryClient(
             }
         }
         val override = normalizeApiBaseUrl(baseUrl, protocol)
+        if (baseUrl.isNotBlank() && endpointHost(override) == null) {
+            return ModelDiscovery.Failure(listOf(DiscoveryProblem.InvalidBaseUrl))
+        }
 
         // A user-supplied endpoint is asked first: for a custom provider it is the only
         // one, and for a built-in it is the proxy the profile is pointed at. Several
@@ -293,37 +297,14 @@ class ModelDiscoveryClient(
             }
         }
 
-        // A user-supplied override that failed is not the end of a built-in provider:
-        // its own models endpoint is still there, and a proxy typo should not cost the
-        // user the real list. A rejected credential is — it is rejected everywhere.
-        if (!isCustom && override.isNotEmpty() && !rejectedCredential) {
-            provider.modelsEndpoint()?.let { endpoint ->
-                when (val result = fetchFromProvider(endpoint, key)) {
-                    is ModelDiscovery.Success -> return result
-                    is ModelDiscovery.Failure -> {
-                        failures += result.problems
-                        if (result.credentialRejected) rejectedCredential = true
-                    }
-                }
+        // A supplied endpoint is the only network destination for its key. A native
+        // catalogue is not evidence of what a relay serves and cannot validate that key.
+        if (!isCustom && override.isEmpty() && !rejectedCredential) {
+            val catalogue = catalogueProbe(provider)
+            if (catalogue != null && catalogue.ids.isNotEmpty()) {
+                return ModelDiscovery.Success(catalogue.ids.map { DiscoveredModel(it, source = ModelSource.PI_CATALOG) })
             }
-        }
-
-        // pi's own catalog is meaningless for a relay: it lists built-in
-        // providers' models, none of which the relay is serving.
-        if (isCustom) {
-            return ModelDiscovery.Failure(failures, credentialRejected = rejectedCredential)
-        }
-
-        // A rejected credential is rejected here too, and `fetchFromPiCatalog`
-        // pays a node start (seconds, on a slow phone) to discover that. The
-        // catalogue lists models the key cannot use — the whole reason
-        // [discover] asks the provider first — so skipping it is both faster
-        // and the more honest answer.
-        if (!rejectedCredential) {
-            when (val result = fetchFromPiCatalog(provider, key)) {
-                is ModelDiscovery.Success -> return result
-                is ModelDiscovery.Failure -> failures += result.problems
-            }
+            catalogue?.error?.let { failures += it }
         }
 
         return ModelDiscovery.Failure(
@@ -411,19 +392,10 @@ class ModelDiscoveryClient(
      *   one mistake that would make the app write an entry over a model pi's catalogue
      *   describes.
      *
-     * ## The key field being empty is not a reason to refuse
-     *
-     * It used to be one, and that was a bug with a report behind it: with the field empty
-     * the answer came back empty for a reason that has nothing to do with the models —
-     * nothing *failed*, so the page could not even say what was wrong, and the catalogue it
-     * claimed not to be able to read was sitting on disk the whole time. What is being
-     * asked is a question about pi's bundle, so when the user has not typed a key yet this
-     * hands pi [PROBE_API_KEY] instead: a credential only has to *resolve* for pi to
-     * compose the provider's catalogue, and the catalogue's contents do not depend on the
-     * key's value. `auth.json` is not in the scratch directory and is not touched; the key
-     * exists for the length of one process and writes nothing.
+     * A public placeholder makes Pi include the provider in its available models. The
+     * probe never sees the profile's key or `auth.json` and launches offline.
      */
-    suspend fun catalogueProbe(provider: PiProvider, apiKey: String): CatalogueProbe? =
+    suspend fun catalogueProbe(provider: PiProvider): CatalogueProbe? =
         withContext(Dispatchers.IO) {
             // Read before the process is started: see [CatalogueProbe.basis].
             val basis = catalogueBasis(env, provider)
@@ -462,7 +434,7 @@ class ModelDiscoveryClient(
             try {
                 val result = fetchFromPiCatalog(
                     provider = provider,
-                    apiKey = apiKey.ifBlank { PROBE_API_KEY },
+                    apiKey = PROBE_API_KEY,
                     agentDir = scratch.absolutePath,
                     modelId = PROBE_MODEL_ID,
                     onState = { state -> fallback = state },
@@ -510,16 +482,15 @@ class ModelDiscoveryClient(
      * no `models.json`. See [catalogueProbe].
      */
     private fun scratchAgentDir(): File? = runCatching {
-        val dir = File(env.filesDir, SCRATCH_AGENT_DIR)
-        // A probe interrupted by the app being closed leaves one behind, so the
-        // directory is replaced rather than reused.
-        if (dir.exists()) SafeDelete.recursively(dir, env.filesDir)
-        check(dir.mkdirs() || dir.isDirectory) { "could not create $SCRATCH_AGENT_DIR" }
-        val store = File(env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME)
-        if (store.isFile) {
-            store.copyTo(File(dir, PiAgentSession.CATALOGUE_STORE_NAME), overwrite = true)
+        val dir = Files.createTempDirectory(env.filesDir.toPath(), "$SCRATCH_AGENT_DIR-").toFile()
+        try {
+            val store = File(env.piConfigDir, PiAgentSession.CATALOGUE_STORE_NAME)
+            if (store.isFile) store.copyTo(File(dir, store.name))
+            dir
+        } catch (error: Exception) {
+            SafeDelete.recursively(dir, env.filesDir)
+            throw error
         }
-        dir
     }.onFailure { Log.w(TAG, "could not prepare a scratch agent directory", it) }.getOrNull()
 
     /**
@@ -571,18 +542,14 @@ class ModelDiscoveryClient(
             val response = get(endpoint, key)
             when {
                 response.code == 401 || response.code == 403 -> {
-                    // A proxy's 401 is not a verdict on the key. Gateways answer
-                    // 401 for a path they do not serve where a well-behaved server
-                    // answers 404, so the path walk continues and — for a built-in
-                    // provider — the provider's own endpoint is still asked. Only
-                    // the provider's own address can say the key is wrong.
+                    // Some relays reject an unknown path with 401 rather than 404. A
+                    // second path on the same host is allowed, never another origin.
                     val fromOverride = endpoint.isOverride
                     ModelDiscovery.Failure(
                         listOf(
                             DiscoveryProblem.HttpRejected(
                                 host = endpoint.host(),
                                 code = response.code,
-                                detail = detailFrom(response.body),
                                 viaOverride = fromOverride,
                             ),
                         ),
@@ -596,7 +563,6 @@ class ModelDiscoveryClient(
                         DiscoveryProblem.HttpRejected(
                             host = endpoint.host(),
                             code = response.code,
-                            detail = detailFrom(response.body),
                             viaOverride = endpoint.isOverride,
                         ),
                     ),
@@ -621,33 +587,23 @@ class ModelDiscoveryClient(
                     }
                 }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            // A refused connection or a timeout is worth one more path, not a
-            // second identical wait: `fatal` is left false so a `/v1` candidate
-            // can still be tried after a bare `/models` hung up. A name that does
-            // not resolve or a TLS handshake that fails is the *host*, not the
-            // path — every candidate under it is the same host — so the walk
-            // stops instead of paying two more connect timeouts for the same
-            // `ENOTFOUND`.
-            val hostLevel = e is java.net.UnknownHostException || e is javax.net.ssl.SSLException
             ModelDiscovery.Failure(
-                listOf(
-                    DiscoveryProblem.Unreachable(
-                        host = endpoint.host(),
-                        cause = e.message ?: e::class.java.simpleName,
-                    ),
-                ),
-                fatal = hostLevel,
+                listOf(DiscoveryProblem.Unreachable(endpoint.host(), providerNetworkFailure(e))),
+                fatal = true,
             )
         }
     }
 
-    private class HttpResult(val code: Int, val message: String, val body: String)
+    private class HttpResult(val code: Int, val body: String)
 
     private fun get(endpoint: ModelsEndpoint, key: String): HttpResult {
         val connection = URL(endpoint.url(key)).openConnection() as HttpURLConnection
         return try {
             connection.requestMethod = "GET"
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = CONNECT_TIMEOUT_MS
             connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty("Accept", "application/json")
@@ -655,9 +611,8 @@ class ModelDiscoveryClient(
                 connection.setRequestProperty(name, value)
             }
             val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            HttpResult(code, connection.responseMessage.orEmpty(), body)
+            val body = if (code in 200..299) connection.inputStream.bufferedReader().use { it.readText() } else ""
+            HttpResult(code, body)
         } finally {
             connection.disconnect()
         }
@@ -676,12 +631,6 @@ class ModelDiscoveryClient(
 
     private fun JsonObject.string(key: String): String? =
         this[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-
-    /** A short excerpt of an error body: providers explain themselves there. */
-    private fun detailFrom(body: String): String {
-        val text = body.trim().replace(Regex("\\s+"), " ")
-        return if (text.isEmpty()) "" else "\n${text.take(300)}"
-    }
 
     // ---------------------------------------------------------------- catalog
 
@@ -773,6 +722,8 @@ class ModelDiscoveryClient(
                     ModelDiscovery.Success(models)
                 }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (t: Throwable) {
             Log.w(TAG, "pi catalog lookup failed", t)
             ModelDiscovery.Failure(

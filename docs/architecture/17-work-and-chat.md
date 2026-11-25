@@ -194,7 +194,8 @@ default**, which restores the time token rather than an unremovable example.
 Saving while chat mode is in force calls `scheduleRestart`, not `restartAgent`: pi reads
 its prompt once at process start, and an answer that is being written must not be cut
 for a settings save. Work mode reads no prompt, so a save there changes nothing until
-the reader switches.
+the reader switches. A prompt-setting restart retains that conversation's own selected
+route rather than taking a profile another window chose (§7.2).
 
 ## Presets: the prompt with a name
 

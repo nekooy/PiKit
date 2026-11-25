@@ -129,7 +129,7 @@ internal fun ModelPage(
     LaunchedEffect(activeProvider?.id) {
         val chosen = activeProvider ?: return@LaunchedEffect
         if (chosen in PiProvider.needsBaseUrl) return@LaunchedEffect
-        discovery.catalogueProbe(chosen, "")
+        discovery.catalogueProbe(chosen)
     }
 
     // What the thinking row used to show lived here — the live levels, the
@@ -165,7 +165,7 @@ internal fun ModelPage(
                         // The last profile cannot go: pi would have nothing to launch with.
                         // A toast rather than a strip under the list, because it is the
                         // answer to the press and the list itself is unchanged.
-                        toasts?.show(text.settings.lastProfile)
+                        toasts?.show(if (store.lastWriteFailed) text.settings.saveFailed else text.settings.lastProfile)
                     }
                     pendingDelete = null
                 },
@@ -482,7 +482,7 @@ internal fun ModelEditPage(
         // was opened even though no process was running. The probe's own process is closed
         // on every path by `fetchFromPiCatalog`'s `finally`, so this is only about the row.
         try {
-            val probe = discovery.catalogueProbe(chosen, apiKey)
+            val probe = discovery.catalogueProbe(chosen)
             // A check that answered is used even when it found nothing; one that did *not*
             // answer leaves the ids null, which is what keeps the controls off screen — an
             // empty set from a failed check would mean "pi knows none of your models" and
@@ -752,6 +752,10 @@ internal fun ModelEditPage(
                 knownCatalogueIds = known,
             ),
         )
+        if (store.lastWriteFailed) {
+            toasts?.show(text.settings.saveFailed)
+            return false
+        }
         // Only the profile the running agent was launched with has anything to restart.
         // A new profile is not activated here: `ProfileStore.upsert` makes the first one
         // active because there is nothing else to launch, and every later one waits for
@@ -771,19 +775,13 @@ internal fun ModelEditPage(
             // rewrite a label no process looks at.
             val launchChanged = existing == null ||
                 chosen.id != existing.provider ||
+                saved.api != existing.api ||
                 chosenModel != existing.modelId ||
                 apiKey.trim() != existing.apiKey ||
                 baseUrl.trim() != existing.baseUrl ||
                 listed != existing.selectableModels ||
                 kept != existing.modelSettings
             if (launchChanged) session.scheduleRestart()
-        }
-        // A write that reached memory but not disk looks exactly like a save
-        // until the next launch re-reads the old file. Say so here rather than
-        // leave the page claiming success.
-        if (store.lastWriteFailed) {
-            toasts?.show(text.settings.saveFailed)
-            return false
         }
         return true
     }

@@ -4,98 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import pi.kit.mob.data.ModelProfile
 
 /**
- * The title request is the app's only direct provider call, so its pure parts are
- * pinned here: where each provider's endpoint is built, what each envelope's text
- * looks like, and how a model's answer becomes one drawer-sized line.
+ * The title request is one `pi --print` process, so the parts pinned here are the
+ * prompt it is given, the one line its output becomes, and the rule that only a fresh
+ * conversation's opening prompt can ask for a title.
  */
 class TitleGeneratorTest {
-
-    private fun profile(
-        provider: String,
-        model: String = "test-model",
-        baseUrl: String = "",
-        api: String = "",
-    ) = ModelProfile(
-        id = "p1",
-        provider = provider,
-        apiKey = "secret",
-        modelId = model,
-        baseUrl = baseUrl,
-        api = api,
-    )
-
-    @Test
-    fun `deepseek is an OpenAI-compatible endpoint`() {
-        val endpoint = titleEndpoint(profile("deepseek"))!!
-        assertEquals(TitleApi.OpenAiCompletions, endpoint.api)
-        assertEquals("https://api.deepseek.com/v1/chat/completions", endpoint.url)
-        assertEquals("Bearer secret", endpoint.headers["Authorization"])
-    }
-
-    @Test
-    fun `anthropic posts to its own messages path`() {
-        val endpoint = titleEndpoint(profile("anthropic"))!!
-        assertEquals(TitleApi.AnthropicMessages, endpoint.api)
-        assertEquals("https://api.anthropic.com/v1/messages", endpoint.url)
-        assertEquals("secret", endpoint.headers["x-api-key"])
-    }
-
-    @Test
-    fun `a bare custom base gains the OpenAI version segment`() {
-        val endpoint = titleEndpoint(
-            profile("pikit-custom", baseUrl = "https://relay.example.com", api = "openai-completions"),
-        )!!
-        assertEquals("https://relay.example.com/v1/chat/completions", endpoint.url)
-    }
-
-    @Test
-    fun `a custom Anthropic base is not doubled at the version segment`() {
-        val endpoint = titleEndpoint(
-            profile("pikit-custom", baseUrl = "https://relay.example.com/v1", api = "anthropic-messages"),
-        )!!
-        assertEquals("https://relay.example.com/v1/messages", endpoint.url)
-    }
-
-    @Test
-    fun `an unknown provider with no base URL is refused rather than guessed`() {
-        assertNull(titleEndpoint(profile("kimi-coding")))
-        assertNull(titleEndpoint(profile("pikit-custom", baseUrl = "")))
-    }
-
-    @Test
-    fun `each envelope's text is read`() {
-        assertEquals(
-            "Fix login redirects",
-            titleFromResponse(
-                TitleApi.OpenAiCompletions,
-                """{"choices":[{"message":{"content":"Fix login redirects"}}]}""",
-            ),
-        )
-        assertEquals(
-            "Fix login redirects",
-            titleFromResponse(
-                TitleApi.AnthropicMessages,
-                """{"content":[{"type":"text","text":"Fix login redirects"}]}""",
-            ),
-        )
-        assertEquals(
-            "Fix login redirects",
-            titleFromResponse(
-                TitleApi.OpenAiResponses,
-                """{"output":[{"content":[{"type":"output_text","text":"Fix login redirects"}]}]}""",
-            ),
-        )
-        assertEquals(
-            "Fix login redirects",
-            titleFromResponse(
-                TitleApi.GoogleGenerative,
-                """{"candidates":[{"content":{"parts":[{"text":"Fix login redirects"}]}}]}""",
-            ),
-        )
-    }
 
     @Test
     fun `a title is one line with the markdown a model adds removed`() {
@@ -103,6 +18,7 @@ class TitleGeneratorTest {
         assertEquals("Fix login redirects", normalizeTitle("Title: \"Fix login redirects\""))
         assertEquals("Fix login redirects", normalizeTitle("  Fix   login  redirects  "))
         assertEquals("修复登录跳转", normalizeTitle("「修复登录跳转」"))
+        assertEquals("", normalizeTitle("\n\n"))
     }
 
     @Test
@@ -111,14 +27,43 @@ class TitleGeneratorTest {
         val title = normalizeTitle(long)
         assertTrue(title.length <= 40)
         assertTrue(title.toByteArray(Charsets.UTF_8).size <= 80)
+        assertEquals("🧭".repeat(19) + "…", normalizeTitle("🧭".repeat(30)))
     }
 
     @Test
-    fun `the body carries the prompt and asks for a short answer`() {
-        val endpoint = titleEndpoint(profile("deepseek"))!!
-        val request = titleRequestBody(endpoint, "帮我写一个快速排序")
-        assertTrue(request.contains("帮我写一个快速排序"))
-        assertTrue(request.contains("\"max_tokens\":64"))
-        assertTrue(request.contains("plain text of natural language"))
+    fun `the system prompt asks for a bare one-line title in the messages' language`() {
+        val prompt = titleSystemPrompt()
+        assertTrue(prompt.contains("Return only the title on one line"))
+        assertTrue(prompt.contains("Use the language of the messages"))
+    }
+
+    @Test
+    fun `only the opening prompt of a fresh unnamed conversation can supply a title`() {
+        val opening = ChatItem.User(key = "user-0", text = "检查模型路由", imageCount = 0)
+        val firstTurn = ChatTurn(promptKey = opening.key, finalReplyKey = null, startedAt = 1)
+        val first = ConversationState(sessionFile = "/fresh.jsonl", items = listOf(opening), turns = listOf(firstTurn))
+        assertEquals("检查模型路由", firstPromptText(first, "/fresh.jsonl", enabled = true))
+        // The prompt item is the fact; the turn record may not have reached the
+        // reducer yet when the first user `message_end` is folded.
+        assertEquals("检查模型路由", firstPromptText(first.copy(turns = emptyList()), "/fresh.jsonl", enabled = true))
+        assertNull(firstPromptText(first, "/fresh.jsonl", enabled = false))
+        assertNull(firstPromptText(first.copy(sessionName = "Manual"), "/fresh.jsonl", enabled = true))
+        assertNull(firstPromptText(first.copy(sessionFile = "/history.jsonl"), "/fresh.jsonl", enabled = true))
+        val followup = opening.copy(key = "user-1", text = "跟进一下")
+        val later = first.copy(items = listOf(opening, followup), turns = listOf(firstTurn, firstTurn.copy(promptKey = followup.key)))
+        assertNull(firstPromptText(later, "/fresh.jsonl", enabled = true))
+    }
+
+    @Test
+    fun `attachment machinery is not part of the prompt used for a title`() {
+        val attachments = "These files are ready; read them by path:\n/data/data/pi.kit.mob/files/attachments/a.txt\n\n"
+        val note = "[Image: original 1200x2670, displayed at 900x2000]"
+        val opening = ChatItem.User(key = "user-0", text = attachments + note, imageCount = 1)
+        assertNull(firstPromptText(ConversationState(sessionFile = "/fresh.jsonl", items = listOf(opening)), "/fresh.jsonl", true))
+        val withWords = opening.copy(text = attachments + note + "\nReview this example")
+        assertEquals(
+            "Review this example",
+            firstPromptText(ConversationState(sessionFile = "/fresh.jsonl", items = listOf(withWords)), "/fresh.jsonl", true),
+        )
     }
 }

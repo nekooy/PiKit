@@ -44,7 +44,6 @@ sealed interface DiscoveryProblem {
     data class HttpRejected(
         val host: String,
         val code: Int,
-        val detail: String,
         val viaOverride: Boolean,
     ) : DiscoveryProblem
 
@@ -52,7 +51,7 @@ sealed interface DiscoveryProblem {
     data class NoModelIds(val host: String) : DiscoveryProblem
 
     /** The request did not complete: DNS, TLS, connection, or timeout. */
-    data class Unreachable(val host: String, val cause: String) : DiscoveryProblem
+    data class Unreachable(val host: String, val cause: ProviderNetworkFailure) : DiscoveryProblem
 
     /** pi started but refused `get_available_models`. */
     data class PiRefused(val detail: String) : DiscoveryProblem
@@ -73,3 +72,6 @@ sealed interface DiscoveryProblem {
     /** The scratch agent directory [catalogueProbe][pi.kit.mob.pi.ModelDiscoveryClient.catalogueProbe] needs could not be created. */
     data object ScratchDirFailed : DiscoveryProblem
 }
+
+/** A connection failure stripped of any endpoint paths, response bodies, or secrets. */
+enum class ProviderNetworkFailure { Certificate, Hostname, Tls, Dns, Timeout, Connection }

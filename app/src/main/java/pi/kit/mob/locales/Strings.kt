@@ -1068,10 +1068,7 @@ interface Strings {
         val showMessageTime: String
         val showMessageTimeSubtitle: String
 
-        /**
-         * Whether a conversation is named by a short model-generated title after its
-         * first successful answer. On by default; the request costs one small call.
-         */
+        /** Whether to ask the current model for a short title from a new conversation's first message. */
         val chatTitle: String
         val chatTitleSubtitle: String
 
@@ -1476,6 +1473,8 @@ interface Strings {
          * every prompt answered `401` from the official address. Either reads as
          * "the key is wrong", for a write that failed underneath.
          */
+        val modelRouteUnavailable: String
+
         val modelsJsonWriteFailed: String
 
         /** Shown when the profile reached memory but not disk; the change is gone on relaunch. */

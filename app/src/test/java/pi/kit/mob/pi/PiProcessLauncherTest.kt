@@ -375,4 +375,30 @@ class PiProcessLauncherTest {
             refresh.extraEnv.size,
         )
     }
+
+    @Test
+    fun `a title run is a closed print-mode process with thinking off`() {
+        val command = PiProcessLauncher.buildTitleCommand(
+            options(provider = "pikit-profile-test", modelId = "deepseek-v4-flash"),
+            systemPrompt = "Return only the title",
+        )
+
+        assertEquals("/prefix/bin/node", command[0])
+        assertEquals("/prefix/cli.js", command[1])
+        assertTrue("print mode", command.contains("--print"))
+        assertFalse("not rpc mode", command.contains("--mode"))
+        assertTrue("no session", command.contains("--no-session"))
+        assertTrue("no tools", command.contains("--no-tools"))
+        assertTrue("no extensions", command.contains("--no-extensions"))
+        assertTrue("no skills", command.contains("--no-skills"))
+        assertTrue("no prompt templates", command.contains("--no-prompt-templates"))
+        assertTrue("no context files", command.contains("--no-context-files"))
+        assertTrue("no mcp", command.contains("--no-mcp"))
+        assertTrue("no project trust", command.contains("--no-approve"))
+        assertTrue("no startup network", command.contains("--offline"))
+        assertEquals("thinking off", "off", command.valueOf("--thinking"))
+        assertEquals("pikit-profile-test", command.valueOf("--provider"))
+        assertEquals("deepseek-v4-flash", command.valueOf("--model"))
+        assertEquals("Return only the title", command.valueOf("--system-prompt"))
+    }
 }

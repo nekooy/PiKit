@@ -48,6 +48,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -81,6 +84,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import pi.kit.mob.R
@@ -223,6 +227,7 @@ fun SessionsScreen(
      * looked at.
      */
     open: Boolean,
+    drawerVisible: Boolean,
 ) {
     val text = strings
     // The first frame comes from the last listing, not from an empty list. The drawer is
@@ -271,6 +276,9 @@ fun SessionsScreen(
     // conversation that merely had a child.
     val streamingPaths by session.host.streamingPaths.collectAsStateWithLifecycle()
     val unreadPaths by session.host.unreadPaths.collectAsStateWithLifecycle()
+    val rowMenuAnchor = rememberPiMenuAnchor()
+    var rowMenuTarget by remember { mutableStateOf<HistoryMenuTarget?>(null) }
+    var rowMenuOpen by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<PiAgentSession.SessionSummary?>(null) }
     var renameUp by remember { mutableStateOf(false) }
     var deleteTargets by remember {
@@ -290,34 +298,27 @@ fun SessionsScreen(
     val toasts = LocalPiToast.current
     val haptics = LocalPiHaptics.current
 
-    LaunchedEffect(reload, listingRevision) {
-        // Only a drawer with nothing to show draws the spinner. With a listing already
-        // on screen the scan is a refresh, and raising `loading` for it is what put an
-        // empty panel over rows the reader had seen a frame earlier.
-        if (summaries.isEmpty()) loading = true
-        summaries = session.listSessions()
-        loading = false
+    val committedOpen by rememberUpdatedState(open)
+    val panelVisible by rememberUpdatedState(drawerVisible)
+    // An empty cache starts warming on the first pull; otherwise defer stale listings
+    // until an open is committed. Serial scans survive brief reversals without restarting.
+    LaunchedEffect(session) {
+        var scannedFor: Pair<Int, Int>? = null
+        snapshotFlow {
+            if (committedOpen || (panelVisible && summaries.isEmpty())) {
+                Triple(reload, listingRevision, activeSessionFile)
+            } else null
+        }.filterNotNull().collect { (requestedReload, revision, path) ->
+            val request = requestedReload to revision
+            if (scannedFor != request || (path != null && summaries.none { it.path == path })) {
+                if (summaries.isEmpty()) loading = true
+                summaries = session.listSessions()
+                loading = false
+                scannedFor = request
+            }
+        }
     }
-
-    // A conversation that has just sent its first message gets its session file from
-    // pi at that moment, and the drawer has to show it without being reopened. The
-    // drawer is composed once and parked at progress zero, so the scan below runs
-    // when the drawer is first drawn and on an explicit reload — neither of which
-    // happens between a new conversation's first prompt and the reader pulling the
-    // drawer out. The row was therefore missing until the app was restarted or some
-    // other action bumped `reload`.
-    //
-    // Two triggers, because the file and the opening are independent moments: the path
-    // appearing (a message sent while the drawer is already out, or a relaunch that
-    // adopts a fresh file) and the drawer opening (the file was written while the
-    // drawer was closed, and the listing was scanned before pi flushed it). The
-    // membership test keeps a file the scan already found from starting a second scan
-    // on every recomposition.
-    LaunchedEffect(open, activeSessionFile) {
-        if (!open) return@LaunchedEffect
-        val path = activeSessionFile ?: return@LaunchedEffect
-        if (summaries.none { it.path == path }) reload++
-    }
+    LaunchedEffect(open) { if (!open) rowMenuOpen = false }
 
     // The mode a saved conversation belongs to; a file with no record is work.
     fun modeOf(path: String): AgentMode = session.host.sessionModes.modeFor(path)
@@ -457,7 +458,49 @@ fun SessionsScreen(
     // a closed drawer then did nothing, and the double-press exit was unreachable.
     // `enabled` makes the two handlers disjoint, so the dispatcher's order cannot
     // decide which one answers.
-    BackHandler(enabled = open, onBack = onBack)
+    BackHandler(enabled = drawerVisible, onBack = onBack)
+
+    // The drawer, not a lazy item, retains the subject and its bounds through exit.
+    val menu = rowMenuTarget
+    if (menu != null) {
+        fun takeAction(action: (PiAgentSession.SessionSummary) -> Unit) {
+            if (!rowMenuOpen || !committedOpen || rowMenuTarget !== menu) return
+            rowMenuOpen = false
+            action(menu.item)
+        }
+        PiPopupMenu(
+            show = rowMenuOpen && open,
+            onDismissRequest = { rowMenuOpen = false },
+            anchor = rowMenuAnchor,
+        ) {
+            PiMenuRow(
+                title = text.sessions.rename,
+                icon = MiuixIcons.Rename,
+                onClick = { takeAction { renameTarget = it; renameUp = true } },
+            )
+            PiMenuRow(
+                title = if (menu.item.pinned) text.sessions.unpin else text.sessions.pin,
+                icon = if (menu.item.pinned) MiuixIcons.Unpin else MiuixIcons.Pin,
+                onClick = { takeAction(::togglePinned) },
+            )
+            PiMenuRow(
+                title = if (menu.mode == AgentMode.CHAT) text.sessions.switchToWorkMode else text.sessions.switchToChatMode,
+                icon = MiuixIcons.Replace,
+                onClick = { takeAction(::switchRowMode) },
+            )
+            PiMenuRow(
+                title = text.sessions.delete,
+                icon = MiuixIcons.Delete,
+                titleColor = MiuixTheme.colorScheme.error,
+                onClick = {
+                    takeAction {
+                        deleteTargets = listOf(it)
+                        deleteUp = true
+                    }
+                },
+            )
+        }
+    }
 
     // The drawer is a surface pulled over the conversation, not a page: the window's own
     // insets are its only frame, so the panel reaches the window's last pixel and the list
@@ -680,16 +723,13 @@ fun SessionsScreen(
                             if (item.path != activeSessionFile) onOpenConversation(item)
                             onOpened()
                         },
-                        onRename = {
-                            renameTarget = it
-                            renameUp = true
-                        },
-                        onTogglePin = ::togglePinned,
-                        modeOf = { path -> modeOf(path) },
-                        onSwitchMode = { item -> switchRowMode(item) },
-                        onDelete = {
-                            deleteTargets = listOf(it)
-                            deleteUp = true
+                        menuPath = rowMenuTarget?.item?.path?.takeIf { rowMenuOpen && open },
+                        onMenu = { item, bounds ->
+                            if (open) {
+                                rowMenuTarget = HistoryMenuTarget(item, modeOf(item.path))
+                                rowMenuAnchor.bounds = bounds
+                                rowMenuOpen = true
+                            }
                         },
                         bottomInset = navigationInset,
                         modifier = Modifier.fillMaxWidth().fillMaxHeight(),
@@ -1022,41 +1062,30 @@ private fun ConversationList(
     currentPath: String?,
     onToggle: (String) -> Unit,
     onOpen: (PiAgentSession.SessionSummary) -> Unit,
-    onRename: (PiAgentSession.SessionSummary) -> Unit,
-    onTogglePin: (PiAgentSession.SessionSummary) -> Unit,
-    /** The launch mode a saved conversation belongs to, read from the per-file record. */
-    modeOf: (String) -> AgentMode,
-    /** Converts one conversation to the other mode; the menu row is the only caller. */
-    onSwitchMode: (PiAgentSession.SessionSummary) -> Unit,
-    onDelete: (PiAgentSession.SessionSummary) -> Unit,
+    menuPath: String?,
+    onMenu: (PiAgentSession.SessionSummary, Rect) -> Unit,
     /** The navigation strip the panel now draws through, as the list's own end padding. */
     bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val pinnedVisible = visible.filter { it.pinned }
-    val otherVisible = visible.filterNot { it.pinned }
-    // The pinned shelf stays above every section: pinning is a decision about a
-    // conversation that crosses workspaces, and burying a pinned row inside the group
-    // it happens to come from is how it stops being findable. What the remaining rows
-    // are grouped by belongs to the mode — see `historyGroups`.
-    val groups = historyGroups(
-        mode = mode,
-        sessions = otherVisible,
-        workspaces = workspaces,
-        defaultPath = defaultPath,
-        unknownLabel = text.sessions.groupUnknown,
-        chatLabels = ChatGroupLabels(
-            today = text.sessions.chatGroupToday,
-            yesterday = text.sessions.chatGroupYesterday,
-            week = text.sessions.chatGroupWeek,
-            month = text.sessions.chatGroupMonth,
-        ),
-        // The folder's own name, without the composer chip's `（默认）` marker: a
-        // heading is read once at the top of a run of rows, and the marker is about a
-        // choice the reader made elsewhere. Two workspaces with the same name are told
-        // apart by their conversations, not by which of them is the default.
-        chip = { label, _ -> label },
-    )
+    val pinnedVisible = remember(visible) { visible.filter { it.pinned } }
+    val today = if (mode == AgentMode.CHAT) startOfDay(System.currentTimeMillis()) else 0L
+    val groups = remember(mode, visible, workspaces, defaultPath, text, today) {
+        historyGroups(
+            mode = mode,
+            sessions = visible.filterNot { it.pinned },
+            workspaces = workspaces,
+            defaultPath = defaultPath,
+            unknownLabel = text.sessions.groupUnknown,
+            chatLabels = ChatGroupLabels(
+                today = text.sessions.chatGroupToday,
+                yesterday = text.sessions.chatGroupYesterday,
+                week = text.sessions.chatGroupWeek,
+                month = text.sessions.chatGroupMonth,
+            ),
+            chip = { label, _ -> label },
+        )
+    }
 
     LazyColumn(
         state = listState,
@@ -1096,13 +1125,10 @@ private fun ConversationList(
                     pinned = true,
                     current = item.path == currentPath,
                     showTime = showTimes,
-                    mode = modeOf(item.path),
+                    actionsUp = item.path == menuPath,
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
-                    onRename = { onRename(item) },
-                    onTogglePin = { onTogglePin(item) },
-                    onSwitchMode = { onSwitchMode(item) },
-                    onDelete = { onDelete(item) },
+                    onMenu = { bounds -> onMenu(item, bounds) },
                 )
             }
         }
@@ -1122,13 +1148,10 @@ private fun ConversationList(
                     pinned = false,
                     current = item.path == currentPath,
                     showTime = showTimes,
-                    mode = modeOf(item.path),
+                    actionsUp = item.path == menuPath,
                     onToggleChecked = { onToggle(item.path) },
                     onOpen = { onOpen(item) },
-                    onRename = { onRename(item) },
-                    onTogglePin = { onTogglePin(item) },
-                    onSwitchMode = { onSwitchMode(item) },
-                    onDelete = { onDelete(item) },
+                    onMenu = { bounds -> onMenu(item, bounds) },
                 )
             }
         }
@@ -1318,6 +1341,11 @@ internal fun sessionGroups(
     }
 }
 
+private data class HistoryMenuTarget(
+    val item: PiAgentSession.SessionSummary,
+    val mode: AgentMode,
+)
+
 /**
  * One conversation as the question it was.
  *
@@ -1357,54 +1385,30 @@ private fun ConversationRow(
     current: Boolean,
     /** Whether the row draws its date and time; the personalization switch owns it. */
     showTime: Boolean,
-    /** The launch mode this row's conversation belongs to. */
-    mode: AgentMode,
+    actionsUp: Boolean,
     onToggleChecked: () -> Unit,
     onOpen: () -> Unit,
-    onRename: () -> Unit,
-    onTogglePin: () -> Unit,
-    onSwitchMode: () -> Unit,
-    onDelete: () -> Unit,
+    onMenu: (Rect) -> Unit,
 ) {
     // Locale.getDefault() follows the interface language because the root applies it,
     // so a date under a Chinese interface reads as Chinese.
     val formatter = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
-    // The menu is the row's own state: it is anchored on this row, it dies with the row,
-    // and a row that scrolls out of the list with its menu open takes the menu with it.
-    var actionsUp by remember(item.path) { mutableStateOf(false) }
-    // The hold's own acknowledgement. The row paints no press state (see below), so
-    // without this the 500 ms before the menu appears is a hold with no answer at all —
-    // the same reason the transcript answers with this haptic (§7.3).
     val haptics = LocalPiHaptics.current
-
-    // The menu is the drawer's own, not the row's: it is registered with the drawer's
-    // popup host so the panel is measured against the window rather than clipped to a
-    // list row, and it samples the drawer's backdrop without containing itself. What the
-    // row contributes is where it is — see `rowAnchor`.
-    val rowAnchor = rememberPiMenuAnchor()
-    // The menu is anchored on the row itself, not at the finger. A row is the subject of
-    // the question — the four actions all apply to this conversation — and a panel that
-    // sprang out of a point in the list looked like it belonged to the touch rather than
-    // to the row. The row's own bounds are recorded once per layout; the menu's collapsed
-    // endpoint is then the row's rounded rectangle, which is the same object a tap on it
-    // is about.
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val hold = {
-        haptics.hold()
-        rowCoords?.takeIf { it.isAttached }?.let { coords ->
-            rowAnchor.bounds = coords.boundsInWindow()
+    val hold: () -> Unit = {
+        val bounds = rowCoords?.takeIf { it.isAttached }?.boundsInWindow()
+        if (bounds != null && !bounds.isEmpty) {
+            haptics.hold()
+            onMenu(bounds)
         }
-        actionsUp = true
     }
 
-    Box {
+    // Let the inset wrapper own the gutter. The inner node reports the visible card.
+    Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned { rowCoords = it }
-                // The margin is outside the fill: a highlighted row has to be inset from
-                // the panel's edge to read as a highlight rather than as a band across it.
-                .padding(horizontal = 8.dp)
                 // The row's fill and its clip are one continuous-corner surface, like the
                 // cards beside it; `RoundedCornerShape` here drew a circular corner on a
                 // list whose every other shape is a squircle (docs/UI.md, *Shapes*).
@@ -1563,84 +1567,6 @@ private fun ConversationRow(
             }
         }
 
-        // The four things a conversation can have done to it, as a floating menu at
-        // the row that was held (§7.1): four short actions on one conversation do not
-        // need a panel from the bottom edge, and the row is the thing the question is
-        // about — the menu lands on it instead of covering the list it came from.
-        //
-        // The mode conversion is here rather than at the drawer's foot because the row
-        // names the conversation it acts on. The foot's switch starts a new conversation
-        // in the mode it is tapped toward; this row is the one control that changes what
-        // an *existing* conversation runs as, and it can therefore not be mistaken for a
-        // filter over the transcript behind the drawer.
-        //
-        // The label names what can be done; there is no title inside the menu and no
-        // cancel row, because a menu is dismissed by the scrim, the back gesture or a
-        // tap outside. The gate inside each item keeps a second tap — aimed at the page
-        // behind a menu that is already leaving — from running an action twice.
-        PiPopupMenu(
-            show = actionsUp,
-            onDismissRequest = { actionsUp = false },
-            anchor = rowAnchor,
-        ) {
-            PiMenuRow(
-                title = text.sessions.rename,
-                icon = MiuixIcons.Rename,
-                onClick = {
-                    if (actionsUp) {
-                        actionsUp = false
-                        onRename()
-                    }
-                },
-            )
-            PiMenuRow(
-                title = if (item.pinned) text.sessions.unpin else text.sessions.pin,
-                icon = if (item.pinned) MiuixIcons.Unpin else MiuixIcons.Pin,
-                onClick = {
-                    if (actionsUp) {
-                        actionsUp = false
-                        onTogglePin()
-                    }
-                },
-            )
-            // The conversation's launch mode, converted here rather than by the
-            // drawer's switch. The row names the mode it *starts*, so it reads as
-            // a change of this conversation even before it is applied; the switch
-            // at the drawer's foot used to write the very same record from over a
-            // live transcript, where a stray tap converted what was on screen.
-            //
-            // The mark is `Replace`, Miuix's two arrows swapping places, and the
-            // label says which way: the action is one *conversion* either way, so
-            // the glyph does not change with the target. It used to be `Messages`
-            // for both directions, which is the mark of the mode being left rather
-            // than of the change — a filled bubble beside "switch to work mode"
-            // named the thing the reader was converting away from.
-            PiMenuRow(
-                title = if (mode == AgentMode.CHAT) {
-                    text.sessions.switchToWorkMode
-                } else {
-                    text.sessions.switchToChatMode
-                },
-                icon = MiuixIcons.Replace,
-                onClick = {
-                    if (actionsUp) {
-                        actionsUp = false
-                        onSwitchMode()
-                    }
-                },
-            )
-            PiMenuRow(
-                title = text.sessions.delete,
-                icon = MiuixIcons.Delete,
-                titleColor = MiuixTheme.colorScheme.error,
-                onClick = {
-                    if (actionsUp) {
-                        actionsUp = false
-                        onDelete()
-                    }
-                },
-            )
-        }
     }
 }
 

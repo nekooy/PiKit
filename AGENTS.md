@@ -79,7 +79,7 @@ the change that fixes it, or it outgrows being read.
 
 ```bash
 python tools/build-apks.py                   # tests + all four APKs, one command
-./gradlew :app:testX64DebugUnitTest          # 696 tests, fast, no device
+./gradlew :app:testX64DebugUnitTest          # 705 tests, fast, no device
 ./gradlew :app:compileX64DebugKotlin         # quick check for a Kotlin-only change
 python tools/build-runtime-image.py --all    # the image alone, without an APK
 ```
@@ -291,9 +291,9 @@ and it refuses any path outside the app's private data directory. Do not add
 `File.deleteRecursively` anywhere.
 
 **No vertically scrollable component may be measured with an unbounded height.**
-`MarkdownText` is a plain `Column`, and it has to stay one: the transcript's
-`SelectionContainer` and bubble hand it an infinite main-axis constraint even though
-the transcript itself is a `LazyColumn`, so a lazy list inside a reply throws
+`MarkdownText` is a plain `Column`, and it has to stay one: a transcript item is
+measured with an infinite main-axis constraint by the outer `LazyColumn`, so a lazy
+list inside a reply throws
 `IllegalStateException: Vertically scrollable component was measured with an infinity
 maximum height constraints`. Making the container lazy again — tempting for a
 300-block reply — is still the crash.
@@ -407,10 +407,13 @@ rather than composed at its trigger. The host records the scene and draws menus 
 separate full-window sibling. Chat and history share that host: a lazy history row has
 unbounded height and the in-place fallback crashed in `GlassPopupSurface`.
 `tools/check-ui.py` refuses the old panels, the old preference rows and a `GlassPopup`
-or `GlassTransformPopup` composed anywhere but the kit. Context menus fade in at full
-size; glass icon buttons use the native morph with the button's own radius. The composer's
-chips and toolbar use `PiPopupPlacement.Above` to morph from the real trigger to a
-viewport above it despite the IME, releasing touch as soon as dismissal starts.
+or `GlassTransformPopup` composed anywhere but the kit. Context menus open as Miuix's
+`GlassPopup` edge reveal (15% start width on `popupMorph`, a 40px blur clearing) and close
+on the faster `popupExit` spring without blur; history registers at the drawer and snapshots
+the row bounds at hold.
+Glass icon buttons morph from the button. The composer's chips and toolbar use
+`PiPopupPlacement.Above` to morph from the real trigger to a viewport above it despite
+the IME. These menus release touch as soon as dismissal starts.
 A control in the page bar passes
 `openBelow = LocalPiBarBottom.current` to move the expanded endpoint clear of the subtitle.
 ARCHITECTURE §13, *Menus*, has the distinction.
@@ -709,39 +712,28 @@ prompt, which billed the idle gap to a turn that had already finished.
   `NEW_ID`, every archive is "already relocated", and no package installs. Run
   `node tools/pikit-relocate.js --selfcheck` after touching the build (ARCHITECTURE
   §4).
-- **A saved profile's provider id is `ProfileAddressing.runtimeProviderId`, and the
-  launch, `set_model` and its `models.json` entry must all name that one answer.** pi
-  keys one credential and one `baseUrl` per provider id, so the first profile of a
-  built-in provider keeps pi's own id, a second one becomes `pikit-<profile id>` and a
-  custom endpoint `pikit-custom-<profile id>`. Everything under `pikit-` that is no
-  longer wanted is withdrawn; a provider the user wrote never is. ARCHITECTURE §7.2
-  has the scheme.
-- **Every saved profile is loaded at launch**, because switching models without a
-  relaunch depends on it: each key goes into the launch environment as
-  `PIKIT_KEY_<profile id>` and each `models.json` entry names it as
-  `apiKey: "$PIKIT_KEY_…"` — pi 1.4.0 interpolates that (ARCHITECTURE §6.1 records
-  both measurements, including the older one that contradicted it). `--api-key` is
-  still passed for the launched profile as pi's first-precedence credential, and the
-  terminal's login shell is handed the same map plus `PI_CODING_AGENT_SESSION_DIR`, so
-  a hand-run `pi` sees the same profiles and the same conversations.
-- **A `pikit-` id is named only when `models.json` defines it, and every variable an
-  entry references must resolve.** `ProfileAddressing.launchProviderId` falls back to
-  pi's own provider id when a profile's entry could not be built — launching an id
-  nothing defines is `Unknown provider …` plus `process.exit(1)`, measured on a device
-  as a chat page that could not start. The catalogue refresh carries the same
-  `PIKIT_KEY_*` map, because pi resolves provider credentials while refreshing and one
-  unresolvable variable aborts the whole run, and the launch forces that refresh when a
-  saved profile's entry needs facts the store lacks (`needsCatalogueFacts`) — which
-  covers a provider's **first** profile too, because a provider pi's package does not
-  catalogue (`xiaomi`) resolves through `buildFallbackModel` and answers `["off"]` for
-  every thinking level while the store is empty (pi.dev's catalogue makes it
-  `["off","high"]`). `--api-key` is passed only beside `--model`, which pi requires.
-- **A second profile's entry is built from `storeProviderModels`, not `storeModelFacts`.**
-  The stripped reader is the *model* half of a catalogue entry, which is what a relay
-  inherits; `builtInProviderObject` needs the provider-level `api` and `baseUrl`, which
-  only the whole one carries. Reading the stripped map left both blank and the function
-  answered null, so the entry was never written and that profile restarted on every
-  switch while its provider's first profile switched in place.
+- **A profile always owns its own Pi provider id and credential variable.**
+  `ProfileAddressing.runtimeProviderId` is used by `models.json`, launch, `set_model`
+  and terminal defaults. It includes the profile id, provider, endpoint and API, not
+  its key, its model, or its position. Native ids are never app aliases: one official
+  profile and one relay with the same model id must never share a credential or URL.
+- **Build the projection and the environment from the same `PiConfigSnapshot`.**
+  The host lock spans atomic publication through the RPC handshake. Keys are passed
+  as `$PIKIT_KEY_…` references, never `--api-key` and never native environment
+  variables. `ProfileRoutes` verifies provider, model, API and base URL; a missing
+  route is a refusal, not a fallback to the native provider. Re-check after session
+  replacement and before prompting. A failed or ambiguous `prompt` is not replayed.
+- **The live conversation owns its profile choice.** An unrelated window's picker
+  change is not a reason to change this child's route. Use the child's loaded
+  projection for an RPC switch; a key or endpoint edit needs a new child, not a
+  second `set_model` under the old environment. Persist profile changes before
+  publishing them and reject stale picker rows.
+- **Catalogue updates do not launch or restart agents.** RPC agents and probes use
+  `--offline` to disable automatic catalogue-network updates, not model requests.
+  `pi update --models` runs in its own scratch agent dir with public placeholders,
+  not the app profiles or `auth.json`. The launcher reads Pi's bundled provider
+  facts and the cached catalogue; `storeModelFacts` is intentionally stripped of
+  route fields and cannot be used to recover a native endpoint. ARCHITECTURE §7.2.
 - **The emulator's DNS comes and goes.** Measured on the Medium_Phone AVD
   (Play-Store `user` build): `ping api.deepseek.com` and `ping github.com` both
   resolve, and a `pi` run by hand reached the provider and got a real `401` back —

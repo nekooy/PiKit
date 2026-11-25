@@ -51,8 +51,8 @@ using captured traffic.
   the same event plus its own refresh.
 - **Nothing is asked for that is not used.** `get_available_models` was asked on every
   handshake for a test that no longer exists — every model of every configured provider
-  with costs, windows and thinking maps, on a phone, at startup. §6.2, "The override half,
-  which is now the half for models pi knows", has the rest; the catalogue is refreshed
+  with costs, windows and thinking maps, on a phone, at startup. §6.2 describes where the
+  model page gets those facts instead; the catalogue is refreshed
   instead by pi's own `update --models`, for every built-in provider, on a four-hour
   freshness window (§7.2, "The model catalogue is pi's, and stale is the default").
 - **The agent-level retry is made to outlast a network change.** Pi retries transient
@@ -60,7 +60,7 @@ using captured traffic.
   shows as notices) and ships with the feature on — but three attempts on a 2 s base
   delay give up in about fourteen seconds, and switching Wi-Fi to mobile takes longer.
   A streaming answer died mid-turn on every such switch, and the reader had to re-send
-  by hand. `settingsWithPiDefaults` therefore writes pi's own `retry` key
+  by hand. `settingsWithPiDefaults` seeds pi's own `retry` key if absent
   (`enabled: true, maxRetries: 8, baseDelayMs: 3000` — 3 s, 6 s, 12 s, 24 s, 48 s, then
   the 60 s ceiling, roughly four and a half minutes of patience), merged into
   `$HOME/.pi/agent/settings.json` next to the tool defaults it already writes.
@@ -78,7 +78,7 @@ The agent is launched as:
 
 ```
 node $PREFIX/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js \
-     --mode rpc --approve \
+     --mode rpc --offline --approve \
      --session-dir <app files>/pi-sessions ...
 ```
 
@@ -88,26 +88,17 @@ and a system-prompt file replacing pi's own preamble: `--no-tools`, `--no-extens
 `--system-prompt <rendered prompt file>`. §17 has the mode's design and the editor behind
 the template; the work launch keeps exactly the command above.
 
-`--offline` used to be passed here, and is not any more. It sets `PI_OFFLINE=1` and
-`PI_SKIP_VERSION_CHECK=1` for the whole process, and pi reads the first as **the model
-catalogue has no network** (`ModelRuntime`'s constructor: `modelNetworkEnabled =
-process.env.PI_OFFLINE === undefined`) as well as "skip the update check, the package
-checks and the install telemetry" — on a phone, the model list never moves. The privacy
-promise the flag also carried is kept by `PI_TELEMETRY=0`. Two app-side changes go with
-it: the catalogue refresh runs on pi's own four-hour **freshness window** (§7.2), with a
-button on the maintenance page to force it, and **pi itself is never updated on the
-device** — it is an input of the runtime image, so a new pi arrives with a new PiKit.
-The button that used to run pi's own `npm install -g` in the live prefix was removed
-after an interrupted run left a tree with no `jiti` in it, which 0.86.x loads the bundled
-TypeScript extension through: every agent start then failed with
-`Failed to load extension "…": Cannot find module 'jiti'`. The API key is passed through the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for every
-provider Pi already knows, because argv is readable by other processes; the launch carries
-**every** saved profile's key this way, under `PIKIT_KEY_<profile id>` for the ones registered
-through `models.json` (§7.2). `--provider` names the id that profile is registered under, which
-is pi's own id for the first profile of a built-in provider and an id of this app's own
-otherwise (`ProfileAddressing.runtimeProviderId`). The launched profile's key also goes on the
-command line as `--api-key`, which is pi's first-precedence credential; that flag used to be the
-*only* way a custom endpoint could authenticate, and §6.1 records both measurements.
+`--offline` sets `PI_OFFLINE=1` and `PI_SKIP_VERSION_CHECK=1`. In Pi 1.6.0 this
+turns off the runtime's automatic catalogue network, version and package checks, not
+explicit model requests. PiKit refreshes public model data separately (§7.2) and delivers
+new Pi versions with the runtime image. An on-device `npm install -g` was removed after an
+interruption left the bundle without `jiti`, preventing extension loads and agent starts.
+
+`--provider` and `--model` name the exact generated route. Each saved, usable profile
+has its own `$PIKIT_KEY_…` environment reference in `models.json`; no key is sent via
+`--api-key` or assigned to the native provider's shared key variable (§6.1, §7.2).
+The launch lock covers projection and the handshake, so a successful spawn alone is
+not accepted as evidence that the child loaded the right route.
 
 ### Why the built-in tool list is not `--tools`
 
@@ -142,7 +133,7 @@ own settings empty. That is not a terminal bug — the fix is to keep them, in p
 - `$HOME/.pi/agent/settings.json` gains `defaultProvider`, `defaultModel` and
   `defaultThinkingLevel`, merged (never replacing the document) and only when a
   profile is configured. They are the values the app itself launches pi with — including
-  the *runtime* provider id, so a relay's `pikit-custom-<profile id>` is a name that
+  the *runtime* provider id, so an alias `pikit-profile-…` is a name that
   exists in `models.json` — so the two cannot disagree; `defaultTools` and the bundled
   extension's `packages` entry are written by the same merge, which is also where the
   exclusion-list reasoning for `models.json` lives (§6.1).
@@ -154,7 +145,8 @@ own settings empty. That is not a terminal bug — the fix is to keep them, in p
   is written to pi's `auth.json`: that would put the secret on disk permanently, when the
   agent's own environment already carries it (§6.1).
 - Only new shells see a changed key or directory. A session that is already open keeps the
-  environment it was born with, which is the honest behaviour for a PTY.
+  environment it was born with. An edited endpoint has a different alias and variable,
+  so an old shell cannot send its old key to that endpoint.
 
 ## Why not drive the interactive TUI through a PTY?
 

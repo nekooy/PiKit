@@ -645,16 +645,7 @@ enum class FontSize(val code: String, val scale: Float) {
      * rest of the preferences.
      */
     val lastChatWebAccess: Boolean = false,
-    /**
-     * Whether a conversation's title is generated after its first successful turn.
-     *
-     * On by default: a drawer of first prompts is hard to scan, and the request is one
-     * small call per conversation rather than one per turn. The first answer that
-     * settles without an error, and the opening of a saved conversation whose title
-     * was never generated, send the first prompt to the same provider and write the
-     * returned line with `set_session_name`; a name the reader set is never overwritten
-     * (see `TitleGenerator`).
-     */
+    /** Whether to ask the current model for a short title from a new conversation's first message (§15). */
     val chatTitleEnabled: Boolean = true,
     /**
      * Whether the current step's reasoning opens while it streams and folds when it ends.
@@ -823,6 +814,13 @@ enum class FontSize(val code: String, val scale: Float) {
      * reason: pi will start, answer every prompt with an auth error, and the
      * chat page has no way to point at the empty field.
      */
+    internal fun withProfile(profile: ModelProfile?): PiSettings = copy(
+        provider = profile?.providerEntry,
+        modelId = profile?.modelId.orEmpty(),
+        apiKey = profile?.apiKey.orEmpty(),
+        baseUrl = profile?.baseUrl.orEmpty(),
+    )
+
     val isConfigured: Boolean
         get() = provider != null &&
             modelId.isNotBlank() &&
@@ -997,7 +995,7 @@ class SettingsStore(context: Context) {
 
     val settings: StateFlow<PiSettings> = _settings.asStateFlow()
 
-    fun read(): PiSettings = current.get()
+    fun read(): PiSettings = current.get().withProfile(profiles.activeProfile)
 
     /**
      * Updates the settings.
@@ -1008,18 +1006,23 @@ class SettingsStore(context: Context) {
      * config file like every other edit.
      */
     fun update(transform: (PiSettings) -> PiSettings): PiSettings {
-        val currentSettings = current.get()
+        val active = profiles.activeProfile
+        val currentSettings = current.get().withProfile(active)
         val next = transform(currentSettings)
 
-        val active = profiles.activeProfile
-        if (active != null) {
-            val edited = active.copy(
-                provider = next.provider?.id.orEmpty(),
-                modelId = next.modelId,
-                apiKey = next.apiKey,
-                baseUrl = next.baseUrl,
-            )
-            if (edited != active) profiles.upsert(edited)
+        if (active != null && (
+                next.provider != currentSettings.provider || next.modelId != currentSettings.modelId ||
+                    next.apiKey != currentSettings.apiKey || next.baseUrl != currentSettings.baseUrl
+                )
+        ) {
+            profiles.updateActive(active) {
+                it.copy(
+                    provider = next.provider?.id.orEmpty(),
+                    modelId = next.modelId,
+                    apiKey = next.apiKey,
+                    baseUrl = next.baseUrl,
+                )
+            }
         }
 
         prefs.edit()

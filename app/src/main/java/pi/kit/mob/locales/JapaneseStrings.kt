@@ -388,7 +388,7 @@ internal object JapaneseStrings : Strings {
         override val showMessageTimeSubtitle = "各メッセージの下に日付と時刻を表示します"
 
         override val chatTitle = "会話タイトルを自動生成"
-        override val chatTitleSubtitle = "最初の回答後に短いタイトルを生成します（小さなモデルリクエストが 1 回増えます）"
+        override val chatTitleSubtitle = "現在のモデルで新しい会話のタイトルを生成します（通信と少量のトークンを使用）"
         override val thinkingAutoExpand = "思考中は自動で展開"
         override val thinkingAutoExpandSubtitle = "現在のステップが思考中の間は展開し、完了したら折りたたみます"
         override val theme = "テーマ"
@@ -568,6 +568,7 @@ internal object JapaneseStrings : Strings {
                 "（例：https://relay.example.com/v1）。localhost:11434 はスキームがありません。"
         override val apiType = "API"
         override val apiTypeSubtitle = "誤るとパースに失敗します"
+        override val modelRouteUnavailable = "この会話のモデルと接続先を確認できません。プロバイダー、モデル、API URL、キーを確認するか、モデルを選び直してください。"
         override val modelsJsonWriteFailed =
             "pi の models.json を書き込めなかったため、このプロフィールのエンドポイントと" +
                 "モデル設定は pi に届きません。エンドポイントとアプリの保存領域を確認してから" +
@@ -599,22 +600,31 @@ internal object JapaneseStrings : Strings {
                 "${problem.provider} には pi が知るモデル一覧のルートがないため、" +
                     "pi のカタログから読みます——必要なモデルがなければ ID を手入力できます。"
             is DiscoveryProblem.HttpRejected -> {
-                val head = "${problem.host} がリクエストを拒否しました：HTTP ${problem.code}" +
-                    problem.detail
-                if (problem.viaOverride) {
+                val head = "${problem.host} がリクエストを拒否しました：HTTP ${problem.code}"
+                if (problem.code in 300..399) {
+                    head + " リダイレクトには従いませんでした。最終的な API URL を入力してください。"
+                } else if (problem.viaOverride && problem.code in listOf(401, 403)) {
                     head + "\n\nこれはプロフィールの URL 欄に設定したエンドポイントです。" +
                         "URL の誤りもキーの誤りと同じく 401 を返します——キーを変える前に" +
                         "ベース URL（API のルート。例：https://relay.example.com/v1）を" +
                         "確認してください。"
+                } else if (problem.code == 401 || problem.code == 403) {
+                    head + " API キーと、このモデルやエンドポイントへのアクセス権を確認してください。"
                 } else {
                     head
                 }
             }
             is DiscoveryProblem.NoModelIds ->
-                "${problem.host} は応答しましたが、モデル ID を読み取れませんでした。" +
-                    "応答形式が変わった可能性があります。pi のカタログを使います。"
+                "${problem.host} は応答しましたが、モデル ID を読み取れません。既知の ID は手入力できます。"
             is DiscoveryProblem.Unreachable ->
-                "${problem.host} に接続できませんでした：${problem.cause}"
+                "${problem.host} に接続できませんでした。" + when (problem.cause) {
+                    ProviderNetworkFailure.Certificate -> "証明書を検証できませんでした。端末の時刻、サーバーの証明書チェーン、信頼する CA を確認してください。"
+                    ProviderNetworkFailure.Hostname -> "サーバーの証明書がホスト名と一致しません。API URL を確認してください。"
+                    ProviderNetworkFailure.Tls -> "TLS ハンドシェイクに失敗しました。API URL、サーバーの TLS 設定、VPN やプロキシを確認してください。"
+                    ProviderNetworkFailure.Dns -> "ホスト名を解決できません。アドレス、ネットワーク接続、DNS を確認してください。"
+                    ProviderNetworkFailure.Timeout -> "リクエストがタイムアウトしました。ネットワークとサーバーへの接続を確認してください。"
+                    ProviderNetworkFailure.Connection -> "API URL、ネットワーク接続、VPN やプロキシを確認してください。"
+                }
             is DiscoveryProblem.PiRefused ->
                 "pi がモデル一覧の取得を拒否しました：${problem.detail}"
             is DiscoveryProblem.CatalogEmpty ->

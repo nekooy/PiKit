@@ -11,7 +11,6 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.activity.compose.BackHandler
@@ -66,8 +65,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
-import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -77,7 +74,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -86,9 +82,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,9 +130,11 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -147,11 +148,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pi.kit.mob.R
@@ -218,7 +218,6 @@ import pi.kit.mob.ui.kit.PiDialogAnswers
 import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiMenuRow
 import pi.kit.mob.ui.kit.PiMenuAnchor
-import pi.kit.mob.ui.kit.PiMotion
 import pi.kit.mob.ui.kit.PiPopupHostProvider
 import pi.kit.mob.ui.kit.rememberLastPresent
 import pi.kit.mob.ui.kit.PiPopupMenu
@@ -355,55 +354,6 @@ internal class ChatComposerState {
     val transcriptPlaced = mutableStateOf(false)
 }
 
-/**
- * The conversation drawer's motion, held above the conversation switch.
- *
- * `key(session)` rebuilds the chat page when the reader opens another conversation, and
- * every `remember` inside it — the offset, the panel's width, whether the panel is still
- * composed — went with it. That produced two defects at once, and both were measured on
- * the emulator before this state moved:
- *
- *  - **The tap jumped instead of moving.** Opening a row starts the drawer's close
- *    animation and, in the same gesture, swaps the page behind it. The animation ran in
- *    the *old* page's scope and was cancelled by the rebuild, while the new page started
- *    at offset zero, so the panel disappeared between two frames. A page whose own
- *    conversation was replaced had no way to show that the drawer it came from was
- *    *leaving*; the motion now belongs to a scope that outlives the page.
- *  - **The chosen row's highlight blinked.** The peer of that defect: the rebuilt page
- *    started with `reachable = false`, so the list was dropped and re-created on the
- *    next swipe — a frame of the freshly built list before its rows were filled. With
- *    the panel kept composed across the switch, the row the reader tapped is drawn
- *    filled on the first frame of the new page and stays that way.
- *
- * The offset is in pixels and the width is measured by the page, so both live here rather
- * than being passed as parameters: a rotation while the drawer is open must re-anchor the
- * same number the drag wrote.
- */
-internal class ConversationDrawerState {
-    /** The panel's measured width in pixels; zero until the first layout. */
-    var width by mutableIntStateOf(0)
-
-    /** How far out the panel is, in pixels, from 0 (closed) to [width] (fully out). */
-    var offset by mutableFloatStateOf(0f)
-
-    /**
-     * Whether the panel is composed at all.
-     *
-     * Once opened it stays true for the life of the app: the list scans the session
-     * directory and keeps its rows, so dropping it on close made a quick re-open a blank
-     * panel and a second scan. The state is hoisted with the offset so a conversation
-     * switch cannot drop it either.
-     */
-    var reachable by mutableStateOf(false)
-
-    /** The settle animation, run on the root's scope so a page rebuild cannot cancel it. */
-    var job: Job? = null
-
-    /** How far out the panel is as a fraction of its width. */
-    val progress: Float
-        get() = if (width > 0) (offset / width).coerceIn(0f, 1f) else 0f
-}
-
 /** Refused above this size; pi would take it, but the JSONL line becomes absurd. */
 private const val MAX_IMAGE_BYTES = 4 * 1024 * 1024
 
@@ -452,24 +402,6 @@ private enum class ComposerSheet {
 
 
 
-/**
- * The release velocity a drawer settle may start with.
- *
- * A spring at a boundary with the thumb's velocity still attached does not know the
- * edge is the end of the range: it travels past it and comes back, which is the bounce
- * a leftward pull on the closed page and a rightward pull on the fully open drawer both
- * showed. No travel means no velocity; a velocity pointing away from the target is not
- * a reason to go there either.
- */
-internal fun drawerSettleVelocity(fromPx: Float, targetPx: Float, velocity: Float): Float {
-    val delta = targetPx - fromPx
-    return when {
-        abs(delta) < 0.5f -> 0f
-        delta * velocity <= 0f -> 0f
-        else -> velocity
-    }
-}
-
 @Composable
 internal fun ChatScreen(
     session: PiAgentSession,
@@ -497,8 +429,6 @@ internal fun ChatScreen(
      * the switch creates the conversation the reader asked for instead.
      */
     onNewConversationInMode: (AgentMode) -> Boolean,
-    /** Whether the conversation drawer is out; owned by `RootContent`. */
-    historyOpen: Boolean,
     /**
      * The drawer's own motion — offset, measured width, composition flag.
      *
@@ -518,7 +448,6 @@ internal fun ChatScreen(
     currentPath: String?,
     /** The drawer's own scroll position, held by the root so a conversation change keeps it. */
     historyListState: LazyListState,
-    onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -537,119 +466,17 @@ internal fun ChatScreen(
     // it — see [ChatComposerState] for what that cost and why `rememberSaveable` is not
     // the fix.
     val listState = composer.listState
-    // How far the drawer has been pulled out: [ConversationDrawerState.offset] in pixels
-    // of its own width — the number the panel and the conversation behind it are both
-    // drawn at, and the number a drag moves. Hoisted above the conversation switch, so
-    // the close a tap starts is still moving when the new page is composed.
     val density = LocalDensity.current
-    // Used by the drawer's gestures: opening it drops the composer's keyboard.
     val focus = LocalFocusManager.current
-    // Whether the touch-blocking layer over the card exists at all. A composition read
-    // of `drawer.progress` here would make every pixel of a drag recompose the whole
-    // conversation page — the transcript, the composer and the drawer — sixty times a
-    // second. `computedStateOf` only invalidates this body when the answer crosses zero,
-    // which is the one frame the layer has to appear or disappear; the motion itself is
-    // read inside the `graphicsLayer` lambdas below, in the draw phase.
-    val drawerVisible by remember { computedStateOf { drawer.progress > 0f } }
-
-    // Arrives with the drawer already out when the page is rebuilt on the way back from
-    // the settings page, which is where `historyOpen` came from; the width is only known
-    // after the first measure, so the offset is placed then. The other way round — a page
-    // rebuilt while its drawer is closing — needs nothing here: the settle animation runs
-    // on the root's scope and keeps writing [drawer]'s offset across the rebuild.
-    LaunchedEffect(drawer.width) {
-        if (historyOpen && drawer.width > 0 && drawer.offset == 0f) {
-            drawer.offset = drawer.width.toFloat()
-        }
-    }
-
-    // Settles at [target], from wherever the thumb left it, continuing at [velocity]
-    // pixels a second when the caller has one.
-    //
-    // The open/closed *answer* is published before the animation runs rather than after
-    // it, because the rebuild that follows a tap reads it and a page that still believed
-    // the drawer was out would draw the panel over the conversation just chosen. The
-    // animation itself is the root's, not this page's: the rebuild would otherwise cancel
-    // it at offset zero and the drawer would vanish between two frames instead of sliding
-    // out over the conversation the tap opened. Published answer, surviving motion —
-    // both halves are needed, and they are two different owners.
-    //
-    // The release velocity is handed to the spring rather than dropped: a `tween` from
-    // rest made every flick stop dead for a frame and then start again, which is the
-    // hitch a drawer shows most clearly because the finger has just been moving at
-    // 1000+ px a second. A tap passes zero; a drag passes the tracker's own number.
-    //
-    // **A velocity that points away from the target is not a reason to travel.** A drag
-    // that ended against an edge — leftward on the closed page, rightward on the fully
-    // open drawer — has nowhere the gesture can move it, but the spring used to take the
-    // release speed anyway and shoot past the edge before coming back, which is the
-    // bounce the reader saw on both sides. The boundary case gets no travel at all, and
-    // every animated frame is clamped to the drawer's own `[0, width]` range so a fast
-    // settle can never paint outside it.
-    val settlePage: (Float, Float) -> Unit = { target, velocity ->
-        drawer.job?.cancel()
-        onHistoryOpenChange(target > 0f)
-        // Every move of the drawer puts the keyboard away. The drawer is composed once
-        // and parked at progress zero, so its search field otherwise keeps the focus —
-        // and the platform keeps the IME up for a field that is still composed, three
-        // hundred pixels off the leading edge. Opening has the same problem from the
-        // other side: a focused composer keeps the keyboard up over a drawer that it
-        // covers — measured, the foot switch sat under the emoji row, so the drawer
-        // could not be switched without dismissing the keyboard by hand. Clearing the
-        // window's focus is the same call the drawer's own drag makes on its first
-        // frame, and it clears the composer too, which is what a page the drawer has
-        // just uncovered wants.
+    // Composition only depends on the committed answer, not on the moving progress:
+    // the panel's own drawing reads `progress` in its graphics layer. Using
+    // `progress > 0` here flipped semantics and the drawer's BackHandler on the very
+    // last frame of a close, which recomposed the whole drawer exactly as the spring
+    // landed — the other half of the end-of-animation hitch.
+    val drawerVisible = drawer.open
+    val settlePage: (open: Boolean) -> Unit = { open ->
+        drawer.settleTo(open, velocity = 0f, scope = rootScope)
         focus.clearFocus()
-        // The panel is **never dropped once it has been opened**. Letting it leave the
-        // composition on close threw away its rows and its scan, so a quick re-open
-        // rebuilt the drawer from nothing — measured: swipe out, swipe back in within a
-        // second, and the panel was empty while it rescanned — and every re-open paid for
-        // a scan it had already done. It now stays composed, parked off the leading edge
-        // at progress zero, which is what makes the second open instant.
-        drawer.reachable = true
-        val from = drawer.offset
-        val targetPx = target * drawer.width
-        val delta = targetPx - from
-        if (abs(delta) < 0.5f) {
-            // Already there: no animation, and in particular no velocity to overshoot
-            // a boundary the gesture never actually crossed.
-            drawer.offset = targetPx
-        } else {
-            val launchVelocity = drawerSettleVelocity(from, targetPx, velocity)
-            drawer.job = rootScope.launch {
-                animate(
-                    initialValue = from,
-                    targetValue = targetPx,
-                    initialVelocity = launchVelocity,
-                    animationSpec = PiMotion.drawerSettle,
-                ) { value, _ ->
-                    drawer.offset = value.coerceIn(0f, drawer.width.toFloat())
-                }
-            }
-        }
-    }
-
-    /**
-     * Whether a released drag should complete, by the rule the platform's own paged
-     * gestures use: more than half the distance, **or** a fling faster than the
-     * minimum in the direction it was going — with a flick having to have moved at
-     * least a twentieth of the width so a twitch is not a fling.
-     *
-     * A rightward drag opens. The two rounds of hand-tuned fractions this replaces
-     * (`1/3` with a 5% "last delta" flick, then `1/4` with 2.5%) were both guesses at
-     * the same two numbers the platform already defines, and both were wrong in the
-     * same direction: a quick thumb covers about a fifth of a 1080px screen, so any
-     * distance threshold above that reads as a gesture that has to be *completed*.
-     */
-    fun commitPage(distance: Float, velocity: Float, minFling: Float): Float {
-        val travelled = distance / drawer.width.coerceAtLeast(1)
-        val flung = abs(velocity) > minFling && abs(travelled) > FLING_MIN_TRAVEL
-        return when {
-            travelled >= 0.5f || (flung && velocity > 0) -> 1f
-            travelled <= -0.5f || (flung && velocity < 0) -> 0f
-            // Neither: settle to whichever side is nearer.
-            else -> if (drawer.progress >= 0.5f) 1f else 0f
-        }
     }
 
     // A workspace picked while the agent is answering. Switching starts a new
@@ -1019,7 +846,7 @@ internal fun ChatScreen(
     // `isStreaming` is a key of its own: `transcriptRows` reads it through
     // `turnSettled`, and `applySessionState` can change it while `items` and `turns`
     // stay the same instances — a turn that settles would otherwise keep
-    // `showMeta = false` and never grow its time and copy button.
+    // `showMeta = false` and never gain its timestamp.
     val rows = remember(state.items, state.turns, state.isStreaming, expandedTurns) {
         transcriptRows(state, expandedTurns)
     }
@@ -1057,30 +884,24 @@ internal fun ChatScreen(
             // are one field, and the conversation is the only card on it.
             .background(MiuixTheme.colorScheme.background)
             .onSizeChanged {
-                val was = drawer.width
-                // Capped as well as shared out: on a tablet a panel of 79% of the window
-                // is a page, and a drawer that covers the conversation is not a drawer.
                 drawer.width = minOf(
                     (it.width * DRAWER_SHARE).roundToInt(),
                     with(density) { DRAWER_MAX_WIDTH.roundToPx() },
                 )
-                // The offset is in pixels, so a window that changes size leaves it
-                // pointing somewhere the panel is not: measured after one rotation, an
-                // open drawer kept the portrait width and drew 170px off the leading
-                // edge, cutting the title in half. Re-anchored to the same *answer*
-                // rather than to the old number.
-                if (was > 0 && drawer.width != was) {
-                    drawer.offset = if (historyOpen) drawer.width.toFloat() else 0f
-                    drawer.reachable = historyOpen
-                }
-            },
+            }
+            .pageDrag(
+                direction = drawer::allowedDirection,
+                onStart = {
+                    drawer.beginDrag().also { focus.clearFocus() }
+                },
+                onDrag = drawer::dragBy,
+                onRelease = { owner, distance, velocity, minFling ->
+                    drawer.releaseDrag(owner, distance, velocity, minFling, rootScope)
+                },
+                onCancel = { drawer.cancelDrag(it, rootScope) },
+            ),
     ) {
-        // Composed only while it is on screen: the list scans the session directory, and
-        // doing that behind every conversation would be a cost paid on every chat frame
-        // for a page the reader is not looking at. Kept composed across a conversation
-        // switch by the state rather than by this `if` alone: the page is rebuilt on the
-        // way out of the list, and a flag remembered here was re-created with it — which
-        // is the frame the chosen row's fill spent missing.
+        // Retain the warm list offscreen, but don't paint or expose its controls while parked.
         if (drawer.reachable) {
             Box(
                 Modifier
@@ -1097,7 +918,12 @@ internal fun ChatScreen(
                     // on every frame of the drag. Measured on the emulator, the drawer's
                     // open/close animation was 90-100% janky frames; a graphics layer only
                     // moves what was already rasterised.
-                    .graphicsLayer { translationX = (-1f + drawer.progress) * drawer.width }
+                    .graphicsLayer {
+                        val progress = drawer.progress
+                        translationX = (progress - 1f) * drawer.width
+                        alpha = if (progress > 0f) 1f else 0f
+                    }
+                    .then(if (drawerVisible) Modifier else Modifier.clearAndSetSemantics {})
                     // `background`, not `surface`: the card over this panel is `surface`
                     // and the dark scheme's `surface` is black, so a surface panel made
                     // the two halves of the screen one colour. `background` is #242424
@@ -1107,32 +933,13 @@ internal fun ChatScreen(
                     // The box this panel is drawn in paints the same role, so the strips
                     // of ground around the card belong to the same field: the panel is
                     // not a second colour, it is where that field is widest.
-                    .background(MiuixTheme.colorScheme.background)
-
-                    // The way out, from the page the drawer is next to as well as from the
-                    // conversation: once the panel is out, its own width is where the
-                    // thumb is, and dragging it left is the same gesture that closes it.
-                    .pageDrag(
-                        width = drawer.width,
-                        onStart = {
-                            drawer.job?.cancel()
-                            focus.clearFocus()
-                        },
-                        onDrag = { delta ->
-                            drawer.offset =
-                                (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
-                        },
-                        onRelease = { distance, velocity, minFling ->
-                            settlePage(commitPage(distance, velocity, minFling), velocity)
-                        },
-                        direction = PageDragDirection.Left,
-                    ),
+                    .background(MiuixTheme.colorScheme.background),
             ) {
                 SessionsScreen(
                     session = session,
                     listState = historyListState,
-                    onBack = { settlePage(0f, 0f) },
-                    onOpened = { settlePage(0f, 0f) },
+                    onBack = { settlePage(false) },
+                    onOpened = { settlePage(false) },
                     onOpenConversation = onOpenConversation,
                     onOpenSettings = onOpenSettings,
                     mode = mode,
@@ -1142,11 +949,12 @@ internal fun ChatScreen(
                             // drawer closes exactly as a tapped row does. A refusal (the
                             // pool is full) keeps the panel out, where the toast that
                             // explains it can be read.
-                            if (created) settlePage(0f, 0f)
+                            if (created) settlePage(false)
                         }
                     },
                     currentPath = currentPath,
-                    open = historyOpen,
+                    open = drawer.open,
+                    drawerVisible = drawerVisible,
                 )
             }
         }
@@ -1180,36 +988,7 @@ internal fun ChatScreen(
                 // And opaque, which it has to be: the page's top and bottom are gradients
                 // into `surface`, so with the panel behind them those gradients would
                 // dissolve into the conversation list instead of into the page.
-                .background(MiuixTheme.colorScheme.surface)
-                .pageDrag(
-                    width = drawer.width,
-                    onStart = {
-                        drawer.job?.cancel()
-                        drawer.reachable = true
-                        // The drawer takes the screen, so the composer gives up the
-                        // keyboard on the first frame of the gesture: a keyboard that
-                        // stayed up would resize the page the drawer is sliding over, and
-                        // its focus belongs to a field that is no longer reachable.
-                        focus.clearFocus()
-                        // The root's caption hides from the first frame of the gesture
-                        // rather than at its end: it is composed above the drawer, and a
-                        // caption left floating over a panel being pulled out is the one
-                        // piece of the page that would not get out of the way.
-                        onHistoryOpenChange(true)
-                    },
-                    // Rightward is positive in Compose's coordinates and rightward is
-                    // what pulls the drawer out, so the number grows by the delta itself.
-                    // A leftward drag with the drawer shut moves it by nothing: the clamp
-                    // at zero is the whole of that answer.
-                    onDrag = { delta ->
-                        drawer.offset =
-                            (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
-                    },
-                    onRelease = { distance, velocity, minFling ->
-                        settlePage(commitPage(distance, velocity, minFling), velocity)
-                    },
-                    direction = PageDragDirection.Right,
-                ),
+                .background(MiuixTheme.colorScheme.surface),
         ) {
             ChatPage(
                 session = session,
@@ -1250,11 +1029,8 @@ internal fun ChatScreen(
                     pictures = target
                     viewerUp = true
                 },
-                historyOpen = historyOpen,
-                onOpenSessions = {
-                    drawer.reachable = true
-                    settlePage(1f, 0f)
-                },
+                historyOpen = drawerVisible,
+                onOpenSessions = { settlePage(true) },
                 onNewSession = ::newSession,
                 mode = mode,
                 currentWorkspace = currentWorkspace,
@@ -1468,21 +1244,9 @@ internal fun ChatScreen(
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer { translationX = drawer.offset }
-                    .pointerInput(drawer.width) {
-                        detectTapGestures { settlePage(0f, 0f) }
-                    }
-                    .pageDrag(
-                        width = drawer.width,
-                        onStart = { drawer.job?.cancel() },
-                        onDrag = { delta ->
-                            drawer.offset =
-                                (drawer.offset + delta).coerceIn(0f, drawer.width.toFloat())
-                        },
-                        onRelease = { distance, velocity, minFling ->
-                            settlePage(commitPage(distance, velocity, minFling), velocity)
-                        },
-                        direction = PageDragDirection.Left,
-                    ),
+                    .pointerInput(drawer, focus, rootScope) {
+                        detectTapGestures { settlePage(false) }
+                    },
             )
         }
 
@@ -1871,6 +1635,8 @@ private fun ChatPage(
     // measures one item per turn instead of one per message. See [transcriptCards].
     val cards = remember(drawn) { transcriptCards(drawn) }
 
+    val messageItems = rememberUpdatedState(state.items)
+
     // What the composer shows, projected out of the state. The projection is keyed on
     // the facts that can change it, so a streamed token that only grows `items` hands
     // the composer an equal value and Compose skips its chip row, field and menus.
@@ -1886,31 +1652,7 @@ private fun ChatPage(
         state.composerFacts()
     }
 
-    // Follow the tail of the transcript, including while text streams into the
-    // last item (whose identity does not change, only its length).
-    //
-    // A snap rather than an animation: this runs on every streamed token, and a
-    // new animation cancelling the previous one every few milliseconds is what
-    // made a long answer feel like it was fighting the finger during a scroll.
-    // Whether it runs at all is the follow rule's answer, and that rule lives in
-    // `chat/Transcript.kt` so it can be tested.
-    //
-    // It stands aside while a scroll of our own is in flight: the button below
-    // enables the follow *and* animates to the end, and this effect re-runs on the
-    // flag that flips — a snap here cancelled the slide and the reader saw the
-    // transcript jump instead of travel.
-    //
-    val tailKey = transcriptTailKey(state.items)
-    LaunchedEffect(tailKey, state.turns.size, follow.follows) {
-        if (state.items.isNotEmpty() && follow.follows && !programmatic.value) {
-            programmatic.value = true
-            try {
-                listState.scrollToEnd(itemCount = cards.size, animate = false)
-            } finally {
-                programmatic.value = false
-            }
-        }
-    }
+    FollowTranscriptEnd(listState, follow, programmatic, hasMessages = cards.isNotEmpty())
 
     // One scroll position belongs to one conversation.
     //
@@ -1979,22 +1721,9 @@ private fun ChatPage(
     var fieldTopPx by remember { mutableFloatStateOf(0f) }
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val headerSpace = topInset + HEADER_CLEARANCE
-    // The message menu, and the one message that is in selection mode.
-    var menuFor by remember { mutableStateOf<ChatItem?>(null) }
-    // The prompt this card belongs to, and how many message records came before
-    // it: a branch is copied up to that count. Both are captured on the press
-    // because the lazy list may recycle the card before the action runs.
-    var menuPrompt by remember { mutableStateOf<ChatItem.User?>(null) }
-    var menuForkCount by remember { mutableIntStateOf(0) }
-    // The edit dialog's subject. Kept while the dialog leaves, like every window.
+    var menuFor by remember { mutableStateOf<MessageActionPoint?>(null) }
     var editingPrompt by remember { mutableStateOf<EditPrompt?>(null) }
-    var selectionKey by remember { mutableStateOf<String?>(null) }
-    // Where the finger went down, in **window** coordinates, and how many message records
-    // came before the card it landed on. The menu is drawn by the page's popup host, so
-    // the press has to travel as a window rectangle rather than as an offset inside a card
-    // that the list may recycle before the panel closes.
     val menuAnchor = rememberPiMenuAnchor()
-    var menuCounted by remember { mutableIntStateOf(0) }
     // The message whose Markdown source is open in the reader sheet.
     var sourceFor by remember { mutableStateOf<ChatItem?>(null) }
     ExitBackHandler(enabled = !historyOpen)
@@ -2055,45 +1784,12 @@ private fun ChatPage(
                     detectTapGestures(
                         onTap = {
                             focusManager.clearFocus()
-                            // A message in selection mode goes back to being a message:
-                            // the mode has to have a way out that does not need a menu.
-                            selectionKey = null
                         },
                     )
                 },
         ) {
-            // One container for the whole transcript, not one per row.
-            //
-            // Compose keeps the 复制/全选 toolbar up for as long as a selection
-            // exists, and it clears the selection when a tap lands inside the same
-            // container but outside the selected text. With a container per row the
-            // only tap that dismissed the toolbar was a tap on the row that produced
-            // it; tapping any other message left it on screen.
-            //
-            // The weight sits on this Box rather than on the container: a
-            // SelectionContainer sizes itself to its content instead of taking the
-            // space it is offered, so a weight applied to it is ignored and the
-            // transcript collapses to nothing.
             Box(Modifier.fillMaxSize()) {
-                // The transcript is capped and centred on a window wide enough to need
-                // it, and uncapped on a phone.
-                //
-                // A line of the reading style (Miuix's `paragraph`, 17sp) on a 411dp
-                // phone inside the 12dp gutters is about 45 Latin characters — the
-                // bottom of the 45–75 band, so nothing needs fixing there. A tablet at
-                // 800dp is about 88, and for this app the count that matters is the
-                // CJK one: a Han glyph is a full em, so 800dp is 47 of them against the
-                // 40 that WCAG's visual-presentation criterion allows.
-                // [MAX_TRANSCRIPT_WIDTH] caps the column well inside that, and the cap
-                // has to be the *prose* measure rather than the column's width, which is
-                // why the answer card's own inset is added to it: an answer that
-                // measured the cap in text inside a 16dp frame would be that much text
-                // one step too wide.
-                //
-                // The cap used to sit on a `Box` that also held the turn rail beside the
-                // list; with the rail gone the wrapper had one child and no job of its
-                // own, so the cap is on the selection container itself and the tree is a
-                // level shorter.
+                // Centre the prose measure on wide windows without moving the chrome.
                 BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
@@ -2120,8 +1816,7 @@ private fun ChatPage(
                     // long press: a press on a bubble raised the platform's copy
                     // toolbar, which is the behaviour this page no longer wants. The
                     // gesture belongs to the message now — a long press opens the page's
-                    // own menu — and selection is one of that menu's answers, applied to
-                    // the one message that asked for it (see `selectionKey`).
+                    // own menu. Selection opens the message's source in its own sheet.
                     Box(
                         modifier = if (maxWidth >= WIDE_TRANSCRIPT_WINDOW) {
                             Modifier.widthIn(max = MAX_TRANSCRIPT_WIDTH)
@@ -2169,7 +1864,7 @@ private fun ChatPage(
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier
-                                    .fillMaxWidth()
+                                    .fillMaxSize()
                                     // The transcript is the only thing in the page's
                                     // backdrop. The layer lives on the `BoxWithConstraints`
                                     // above, so the empty state is recorded too; the
@@ -2224,7 +1919,11 @@ private fun ChatPage(
                                 // and its answer read as one undifferentiated stream.
                                 verticalArrangement = Arrangement.spacedBy(0.dp),
                             ) {
-                                itemsIndexed(cards, key = { _, card -> card.key }) { index, card ->
+                                itemsIndexed(
+                                    items = cards,
+                                    key = { _, card -> card.key },
+                                    contentType = { _, card -> card is TranscriptCard.Prompt },
+                                ) { index, card ->
                                     // No `animateItem` here, and that is a fix rather
                                     // than an omission. `Modifier.animateItem` replays
                                     // its appearance animation **every time an item
@@ -2244,33 +1943,40 @@ private fun ChatPage(
                                     // conversation is readable through are unchanged.
                                     Column(
                                         Modifier.padding(
-                                            top = rowGap(
-                                                cards.getOrNull(index - 1)?.rows?.lastOrNull(),
-                                                card.rows.first(),
-                                            ),
+                                            top = rowGap(cards.getOrNull(index - 1)?.rows?.lastOrNull(), card.rows.first()),
                                         ),
                                     ) {
-                                        // The long press is the message's gesture: the menu
-                                        // that opens from it carries the actions that used to
-                                        // live under the bubble. The bubble itself paints no
-                                        // pressed state — a fill that followed a hold was tried
-                                        // and removed, because a tap is this page's most
-                                        // frequent touch and any fill that tracked the finger
-                                        // read as noise; the haptic is the acknowledgement.
-                                        val menuTarget = card.rows
-                                            .filterIsInstance<TranscriptRow.Message>()
-                                            .lastOrNull {
-                                                it.item is ChatItem.User || it.item is ChatItem.Assistant
+                                        val targetKey = card.rows.asReversed().firstNotNullOfOrNull { row ->
+                                            (row as? TranscriptRow.Message)?.item?.let { item ->
+                                                item.key.takeIf { item is ChatItem.User || item is ChatItem.Assistant }
                                             }
-                                            ?.item
-                                        // The card's own place in the window, written by the
-                                        // measure pass that lays it out. The long press
-                                        // reports a point in *this card's* coordinates and the
-                                        // menu is placed in the window's, so the translation
-                                        // has to come from a node that is still attached when
-                                        // the press lands.
+                                        }
+                                        val latestTargetKey = rememberUpdatedState(targetKey)
                                         var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-                                        val cardBody: @Composable () -> Unit = {
+                                        val openMenu: (Offset?) -> Boolean = open@{ press ->
+                                            val coords = cardCoords?.takeIf { it.isAttached } ?: return@open false
+                                            val action = messageActionPoint(messageItems.value, latestTargetKey.value)
+                                                ?: return@open false
+                                            val origin = press ?: Offset(coords.size.width / 2f, coords.size.height / 2f)
+                                            val at = coords.localToWindow(origin)
+                                            if (!at.x.isFinite() || !at.y.isFinite()) return@open false
+                                            menuAnchor.bounds = Rect(at, at)
+                                            haptics.hold()
+                                            menuFor = action
+                                            true
+                                        }
+                                        val latestOpenMenu = rememberUpdatedState(openMenu)
+                                        Box(
+                                            Modifier
+                                                .onGloballyPositioned { cardCoords = it }
+                                                .then(
+                                                    if (targetKey != null) Modifier.semantics { onLongClick { openMenu(null) } }
+                                                    else Modifier,
+                                                )
+                                                .pointerInput(card.key) {
+                                                    detectTapGestures(onLongPress = { latestOpenMenu.value(it) })
+                                                },
+                                        ) {
                                             TranscriptCardView(
                                                 card = card,
                                                 text = text,
@@ -2282,94 +1988,6 @@ private fun ChatPage(
                                                 onShowExtras = onShowPromptExtras,
                                                 onOpenPictures = onOpenPictures,
                                             )
-                                        }
-                                        Box(
-                                            Modifier
-                                                .onGloballyPositioned { cardCoords = it }
-                                                .pointerInput(card.key, menuTarget) {
-                                                detectTapGestures(
-                                                    onLongPress = { press ->
-                                                        // Inside the test, not above it: a card
-                                                        // whose rows are only tool calls and
-                                                        // notices has no menu target, and a hold
-                                                        // that raises nothing must not buzz —
-                                                        // `hold()` is "a surface is about to
-                                                        // appear" (§16), not "a finger rested here".
-                                                        val coords = cardCoords
-                                                        if (menuTarget != null && coords?.isAttached == true) {
-                                                            // The press arrives in this card's
-                                                            // own coordinates; the panel is placed
-                                                            // in the window's. The card's own node
-                                                            // is the translation, so the menu opens
-                                                            // where the finger was rather than at
-                                                            // the card's corner. A press with no
-                                                            // coordinates yet cannot be placed, so
-                                                            // the menu is not raised at all rather
-                                                            // than opening at the window's corner.
-                                                            val inWindow = coords.localToWindow(press)
-                                                            if (!inWindow.x.isFinite() || !inWindow.y.isFinite()) return@detectTapGestures
-                                                            menuAnchor.bounds = Rect(
-                                                                left = inWindow.x,
-                                                                top = inWindow.y,
-                                                                right = inWindow.x,
-                                                                bottom = inWindow.y,
-                                                            )
-                                                            haptics.hold()
-                                                            // The count of message records before
-                                                            // this card is the branch point's
-                                                            // coordinate, and it is computed on the
-                                                            // frame that opens the menu: it is a scan
-                                                            // of every earlier turn, which every card
-                                                            // would otherwise pay for on every token.
-                                                            menuCounted = cards.take(index + 1).sumOf { c ->
-                                                                c.rows.count { row ->
-                                                                    row is TranscriptRow.Message &&
-                                                                        (row.item is ChatItem.User ||
-                                                                            row.item is ChatItem.Assistant)
-                                                                }
-                                                            }
-                                                            // A turn's prompt and answer can
-                                                            // be split across two cards by the
-                                                            // fold, so the prompt is found by
-                                                            // walking back through the flat
-                                                            // rows rather than inside this card.
-                                                            // Its index in that list is exactly
-                                                            // the count of message records before
-                                                            // it, which is the branch point.
-                                                            val messagesBefore = rows
-                                                                .take(index + 1)
-                                                                .filterIsInstance<TranscriptRow.Message>()
-                                                                .mapNotNull { row ->
-                                                                    (row.item as? ChatItem.User) ?: (row.item as? ChatItem.Assistant)
-                                                                }
-                                                            val promptIndex = messagesBefore
-                                                                .indexOfLast { it is ChatItem.User }
-                                                            menuPrompt = messagesBefore
-                                                                .getOrNull(promptIndex) as? ChatItem.User
-                                                            menuForkCount = promptIndex.coerceAtLeast(0)
-                                                            menuFor = menuTarget
-                                                            selectionKey = null
-                                                        }
-                                                    },
-                                                )
-                                            },
-                                        ) {
-                                            // Selecting is a *mode*: the message the reader
-                                            // asked to select wears the container, and the
-                                            // rest of the transcript is not selectable, which
-                                            // is what keeps a long press meaning "actions".
-                                            if (selectionKey == card.key) {
-                                                SelectionContainer { cardBody() }
-                                            } else {
-                                                cardBody()
-                                            }
-                                            // The menu is the page's, not the card's: it is
-                                            // registered by the page's popup host so the
-                                            // panel is measured against the window and
-                                            // samples the transcript's layer without
-                                            // containing itself. What the card contributes
-                                            // is where the finger went down, in window
-                                            // coordinates — see `menuAnchor`.
                                         }
                                     }
                                 }
@@ -2731,10 +2349,10 @@ private fun ChatPage(
                 anchor = menuAnchor,
             ) {
                 messageMenuItems(
-                    target = menuSubject,
-                    counted = menuCounted,
-                    prompt = menuPrompt,
-                    forkCount = menuForkCount,
+                    target = menuSubject.target,
+                    counted = menuSubject.throughTarget,
+                    prompt = menuSubject.prompt,
+                    forkCount = menuSubject.beforePrompt,
                     streaming = state.isStreaming,
                     text = text,
                     session = session,
@@ -3198,24 +2816,10 @@ internal sealed interface TranscriptRow {
          */
         val showReasoning: Boolean = true,
         /**
-         * Whether this row draws the copy button and the timestamp under it.
-         *
-         * False for the step replies in the middle of a turn, and false for every
-         * assistant row while the turn is still streaming — including the one
-         * `finalReplyKey` currently names, which is the newest *finished* fragment
-         * and not yet the answer. Nothing reads it but the assistant row, so a
-         * prompt (which always wears both) and a row that draws no meta row at all
-         * — a tool card, a notice — are left at its default. A tool-using turn is
-         * several assistant messages — "let me look", a tool card, "here it is" —
-         * and the sentence in the middle is a fragment of the answer rather than an
-         * answer, so a copy glyph and a time under each of them made one answer read
-         * as three. The row that keeps both is the turn's own
-         * [pi.kit.mob.pi.ChatTurn.finalReplyKey], once the turn has settled (or the
-         * agent stopped), which is what folding already collapses a finished turn to:
-         * a collapsed turn and an expanded one then agree about which message is the
-         * answer.
-         *
-         * See [MessageMeta] for what that costs.
+         * Whether this assistant row provides its turn's timestamp. A time under every
+         * work fragment made one answer read as several. Only the settled turn's own
+         * [pi.kit.mob.pi.ChatTurn.finalReplyKey] carries the time, so the fold cannot
+         * change where it belongs.
          */
         val showMeta: Boolean = true,
         /**
@@ -3404,7 +3008,19 @@ internal fun transcriptRows(
     items.forEachIndexed { index, item ->
         val turn = turnOfItem[index]
         if (turn < 0) return@forEachIndexed
-        if (item.key in hidden) hiddenPerTurn[turn]++
+        // Count only rows that are *drawn* as steps. The live reducer appends an
+        // assistant row on `message_start` before it knows the message carries only a
+        // tool call; that row has no body and is dropped by `drawsNothing`, so counting
+        // it made a turn with one tool call say "2 个步骤" and then show one row when
+        // expanded. Notices are never folded, so they are not steps either.
+        val step = when (item) {
+            is ChatItem.Tool -> true
+            is ChatItem.Assistant ->
+                item.thinking.isNotBlank() || item.text.isNotBlank() ||
+                    item.error != null || item.status == ReplyStatus.Stopped
+            else -> false
+        }
+        if (step && item.key in hidden) hiddenPerTurn[turn]++
         if (item is ChatItem.Tool && item.state == pi.kit.mob.pi.ToolState.Failed) failedPerTurn[turn]++
         if (item is ChatItem.Notice && item.kind == pi.kit.mob.pi.NoticeKind.Error) failedPerTurn[turn]++
     }
@@ -3412,7 +3028,7 @@ internal fun transcriptRows(
     val now = System.currentTimeMillis()
     val rows = ArrayList<TranscriptRow>(items.size + state.turns.size)
 
-    // The rows that may draw the copy button and the timestamp: every turn's own
+    // The rows that may draw a timestamp: every turn's own
     // answer, which is the key folding already collapses to. Nothing else about the
     // turn is needed for the decision — `finalReplyKey` is by definition the last
     // message with text inside the turn — so this is a set lookup on the row rather
@@ -3499,44 +3115,6 @@ internal fun transcriptRows(
 }
 
 /**
- * The transcript's text-selection menu, with "Select all" taken out of it.
- *
- * ## The flash this exists for
- *
- * Tapping an empty part of the transcript to give up a selection made a **"Select
- * all" button appear by itself and vanish again**. It is not this app's rendering:
- * on the tap, Compose's `SelectionManager` clears the selection
- * (`onClearSelectionRequested` → `onRelease`), and then that same tap's selection
- * update *ends*, which sets `showToolbar = true`. The toolbar is requested with an
- * empty selection, so the only item left enabled is "Select all" — "Copy" is
- * included disabled, and the platform drops it — and it is drawn over the transcript
- * for a frame or two before the manager hides it again. Reproduced on the emulator
- * with a 40-frame capture of one tap: the selection is on screen for ten frames, the
- * "Select all" button alone for the next, and the dismissed transcript after that.
- *
- * The selection itself is not readable from here — `SelectionContainer`'s controlled
- * form and `Selection` are both internal in this version of Compose — so the menu is
- * what this app can change. Dropping the item is therefore the fix *and* the
- * argument below.
- *
- * ## Why "Select all" is dropped outright
- *
- * The transcript is a `LazyColumn`, and Compose's own documentation for
- * `SelectionContainer` says a select-all cannot reach items that are not composed:
- * it would select the part of the conversation that happens to be on screen and look
- * as if it had selected the whole thing. A control that quietly copies half of what
- * it names is worse than one that is not there — and every message carries its own
- * copy button, which copies that message's *source*, Markdown and all.
- *
- * What is left is "Copy" and the platform's own classifier items (Translate, Read
- * aloud), which act on the selection the reader actually made.
- */
-private fun Modifier.transcriptContextMenu(): Modifier =
-    filterTextContextMenuComponents { component ->
-        component.key != TextContextMenuKeys.SelectAllKey
-    }
-
-/**
  * How many lines of a failure a notice shows.
  *
  * Three: enough for the reason plus a stack frame or two, short enough that the
@@ -3606,16 +3184,10 @@ private fun SpeakerName(name: String) {
 /**
  * The avatar's drawn size and the air between it and the card under it.
  *
- * 34dp, up from 26. The avatar is a *name* for the speaker, and at 26dp a two-character
- * label was legible but the figure was not — the transcript is read at arm's length, and
- * the mark has to be tellable from the other speaker's at a glance rather than by looking
- * for it. (The label is gone; the size it forced is what the figure and the name beside it
- * inherited.) 34dp is the size the agent's mark is drawn at in the process row
- * (`PiAgentMark`'s 28dp is inside a container; this is the whole badge), and it clears the
- * answer card's own 16dp inset without competing with the text's first line.
- *
- * The 8dp gap is the inside-module gap — it belongs to the card's own top edge, not
- * to the transcript's `rowGap`, which is the space between two turns.
+ * 34dp for both speakers. The prompt mark was 24dp while it sat in the bubble's
+ * footer; once it returned above the bubble it had to carry the same "who is
+ * speaking" weight as the answer's mark, and two sizes on two sides of one exchange
+ * read as two different components.
  */
 private val AVATAR_SIZE = 34.dp
 private val AVATAR_GAP = 8.dp
@@ -3623,52 +3195,10 @@ private val AVATAR_GAP = 8.dp
 /**
  * One card of the transcript, drawn: the prompt, or the answer it produced.
  *
- * ## Two widths, and that is the whole of the difference between them
- *
- * A **prompt** is sized to what the reader wrote and sits at the *end* edge. The
- * card is a Miuix [Card], whose own `Box` passes its minimum constraint through
- * (`propagateMinConstraints`), so under a loose `0..max` it settles at its content's
- * width; the cap and the side come from a `BoxWithConstraints` around it, and there
- * is deliberately no `fillMaxWidth` anywhere inside it — `fillMaxWidth` sets the
- * *minimum*, so one on the card or on a child of it is what turns "ok" into a
- * full-width slab. That is the same defect this page has already been through once —
- * a two-word prompt drawn as an 86%-wide bar — and the shape of the fix is that the
- * *parent* leaves the minimum at zero and the cap sits on the parent. (The component
- * changed from a `Surface` to a Miuix `Card`; the measurement and the trap did not.)
- *
- * `MessageMeta` used to carry a `fillMaxWidth` of its own, which was the same defect
- * one level down while the row was drawn *inside* the frame: the meta row's minimum
- * became the card's maximum, so every prompt *was* a full-width card, in the reader's
- * own words but with no side to read. The row is drawn outside the frame now and asks
- * for no width at all — the column that holds it decides the side — so the defect
- * cannot come back from there.
- *
- * An **answer** is a body of text laid out as a document, so its card is the
- * transcript's full measure: `fillMaxWidth` on that card means "the column is the
- * measure", which is a statement about the answer rather than about its content.
- *
- * The two cards are the same rounded rectangle and differ in surface step, width and
- * side: a question and its answer are two halves of one exchange, and the reader's
- * own words take `secondaryContainer` at the end edge — a container the page's own
- * controls also wear (the composer's chips, the jump-to-latest button), so the
- * question reads as *the reader's* half by the colour a control on this page already
- * uses rather than by a role nothing else on the page has. The side and the width cap do
- * the rest, and they are what the "heading of a section" treatment could not replace:
- * a question that is not distinguishable from its answer at a glance makes the
- * transcript unreadable at speed.
- *
- * ## Each card's own furniture is drawn under it
- *
- * A card holds what was *said*; the time and the copy glyph are drawn under the frame
- * by the card view itself, mirrored to the side the message sits on. See [MessageMeta].
- *
- * ## The rhythm inside a card is the rhythm between cards
- *
- * Every row is spaced by `rowGap` — the same pure function the list used between
- * two bare rows, and the same three numbers, so nothing about the transcript's
- * vertical rhythm changed when the frames arrived. What changed is where the rows
- * are drawn: the modules of a turn (a fold band, a thought, a call, its answer, a
- * notice) are now inside one card instead of loose in the list.
+ * Both sides are framed. The prompt is content-sized at the end edge; the answer is
+ * the transcript's full measure. Each speaker's mark and optional name sit **above**
+ * their card, never below it — the mark opens the message, and the card is what they
+ * said.
  */
 @Composable
 private fun TranscriptCardView(
@@ -3685,27 +3215,15 @@ private fun TranscriptCardView(
     onOpenPictures: (PictureTarget) -> Unit,
 ) {
     when (card) {
-        // The prompt is measured against the transcript's own width so the cap can
-        // be a share of it: a dp width is not knowable before the constraint, and
-        // `widthIn(max = …)` needs a dp. `contentAlignment = CenterEnd` is what
-        // puts the card against the end edge without a second full-width child —
-        // the inner `Box` holds the cap, the card holds the content.
         is TranscriptCard.Prompt -> BoxWithConstraints(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.CenterEnd,
         ) {
             Box(Modifier.widthIn(max = maxWidth * PROMPT_MAX_SHARE)) {
                 Column(horizontalAlignment = Alignment.End) {
-                    // The reader's own mark, over the bubble and on the reader's
-                    // side — the two things that say who is speaking without a name
-                    // line. See [PiAvatar]: the speaker's figure is decided there and
-                    // nowhere else, so this circle and the personalization page's
-                    // draw the same person, and a stored label or picture replaces it
-                    // in both.
                     avatars?.let { marks ->
-                        // The reader's name sits to the *left* of their mark, because the
-                        // mark is on the trailing edge: mark-then-name on this side would
-                        // put the name against the screen's edge.
+                        // The reader's name sits to the left of their mark because the
+                        // mark is on the trailing edge.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -3723,37 +3241,13 @@ private fun TranscriptCardView(
                     Card(
                         cornerRadius = PiCorner.radius,
                         insideMargin = PROMPT_CARD_PADDING,
-                        // The reader's own half of the conversation, in the accent's
-                        // hue — `PiTone.prompt()` is that wash and states why a wash
-                        // rather than one of the palette's blue containers: the bubble
-                        // has to keep the *same ink* as the answer beside it, so the
-                        // background cannot be a role that wants a white knockout.
-                        //
-                        // The ink is stated too, rather than inherited: the card used to
-                        // hand out `onSecondaryContainer`, which is #A9A9A9 in the light
-                        // scheme — a summary grey on the message the reader wrote
-                        // themselves. Their words are the one thing on this page that
-                        // must never be muted, so both halves are explicit.
                         colors = CardDefaults.defaultColors(
                             color = PiTone.prompt(),
                             contentColor = MiuixTheme.colorScheme.onSurface,
                         ),
                     ) {
-                        TranscriptCardRow(
-                            row = card.row,
-                            text = text,
-                            expandedTurns = expandedTurns,
-                            onToggleTurn = onToggleTurn,
-                            thinkingAutoExpand = thinkingAutoExpand,
-                            onShowExtras = onShowExtras,
-                            onOpenPictures = onOpenPictures,
-                        )
+                        PromptBody(card.row.item as ChatItem.User, text, onShowExtras, onOpenPictures)
                     }
-                    // Outside the card, and that is the rule for both sides: the time
-                    // and the copy glyph are furniture *under* a message rather than
-                    // part of what was said, and drawn inside the fill they read as a
-                    // second line of the message. [MessageMeta] has the placement and
-                    // the mirroring between the two sides.
                     MessageMeta(
                         item = card.row.item,
                         text = text,
@@ -3765,13 +3259,7 @@ private fun TranscriptCardView(
         }
 
         is TranscriptCard.Answer -> Column(Modifier.fillMaxWidth()) {
-            // The agent's mark, over the turn's card at the start edge. One per turn
-            // rather than per row: the card *is* the turn, and the folded steps inside
-            // it are the same speaker.
             avatars?.let { marks ->
-                // The agent's fallback is the app's own PiKit mark ([PiAvatar]), so the
-                // speaker answering is named by the product's logo rather than by two
-                // letters standing in for one.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -3783,8 +3271,6 @@ private fun TranscriptCardView(
                         imagePath = marks.aiImage,
                         size = AVATAR_SIZE,
                     )
-                    // The agent's name to the *right* of its mark: the mark opens the
-                    // answer at the start edge, so the word follows it into the page.
                     marks.aiName?.let { SpeakerName(it) }
                 }
             }
@@ -3792,10 +3278,6 @@ private fun TranscriptCardView(
                 cornerRadius = PiCorner.radius,
                 modifier = Modifier.fillMaxWidth(),
                 insideMargin = PaddingValues(ANSWER_CARD_INSET),
-                // The answer's card is the palette's standard surface step — one step
-                // off the page behind it — because it is *the page's* content rather
-                // than a bubble, and the reader's own half is the one that wears a
-                // container.
                 colors = CardDefaults.defaultColors(),
             ) {
                 AnswerCardRows(
@@ -3808,9 +3290,6 @@ private fun TranscriptCardView(
                     onOpenPictures = onOpenPictures,
                 )
             }
-            // The turn's own answer is the one row that wears the pair (see
-            // `TranscriptRow.Message.showMeta`), so the card asks which row that is and
-            // draws it once, under the frame, mirrored against the prompt's row.
             metaItemOf(card.rows)?.let { answered ->
                 MessageMeta(
                     item = answered,
@@ -3891,15 +3370,17 @@ private fun AnswerCardRows(
             previous = group.last()
         } else {
             Column(Modifier.padding(top = rowGap(previous, row))) {
-                TranscriptCardRow(
-                    row = row,
-                    text = text,
-                    expandedTurns = expandedTurns,
-                    onToggleTurn = onToggleTurn,
-                    thinkingAutoExpand = thinkingAutoExpand,
-                    onShowExtras = onShowExtras,
-                    onOpenPictures = onOpenPictures,
-                )
+                key(row.key) {
+                    TranscriptCardRow(
+                        row = row,
+                        text = text,
+                        expandedTurns = expandedTurns,
+                        onToggleTurn = onToggleTurn,
+                        thinkingAutoExpand = thinkingAutoExpand,
+                        onShowExtras = onShowExtras,
+                        onOpenPictures = onOpenPictures,
+                    )
+                }
             }
             previous = row
             index++
@@ -3979,16 +3460,18 @@ private fun StepGroup(
                     top = if (groupIndex == 0) 0.dp else rowGap(rows[groupIndex - 1], step),
                 ),
             ) {
-                TranscriptCardRow(
-                    row = step,
-                    text = text,
-                    expandedTurns = expandedTurns,
-                    onToggleTurn = onToggleTurn,
-                    thinkingAutoExpand = thinkingAutoExpand,
-                    onShowExtras = onShowExtras,
-                    onOpenPictures = onOpenPictures,
-                    nested = nested,
-                )
+                key(step.key) {
+                    TranscriptCardRow(
+                        row = step,
+                        text = text,
+                        expandedTurns = expandedTurns,
+                        onToggleTurn = onToggleTurn,
+                        thinkingAutoExpand = thinkingAutoExpand,
+                        onShowExtras = onShowExtras,
+                        onOpenPictures = onOpenPictures,
+                        nested = nested,
+                    )
+                }
             }
         }
     }
@@ -4003,7 +3486,7 @@ private val STEP_RAIL_WIDTH = 1.dp
 private const val STEP_RAIL_ALPHA = 0.14f
 
 /**
- * The row of an answer card that carries the time and the copy button, or null.
+ * The message in an answer document that carries the time, or null.
  *
  * The last such row rather than the first: a turn's intermediate steps are fragments
  * and `showMeta` is false for them, so there is normally exactly one — and taking the
@@ -4022,7 +3505,7 @@ private fun metaItemOf(rows: List<TranscriptRow>): ChatItem? = rows
  * the panel reads as a layer rather than as a page: a drawer that covered the screen would
  * be a second screen. It was 0.86 when the drawer was first drawn; the wider strip is
  * deliberate, because the card's rounded edge needs to fit in the part of it
- * the reader can see. The prompt bubble's own cap is unrelated (0.86) and stays.
+ * the reader can see. The prompt bubble's width cap is independent of the drawer.
  */
 private const val DRAWER_SHARE = 0.79f
 
@@ -4164,21 +3647,17 @@ private const val PROMPT_MAX_SHARE = 0.86f
 /**
  * The prompt card's inset.
  *
- * Tighter than the answer card's own 16dp inset, which is sized for a paragraph: a
- * prompt is a sentence or two, and a frame wider than its content is a box with a
- * word in it.
- * 14dp is still more than the copy glyph's own invisible margin, which is what the
- * meta row is pulled out by at its foot.
+ * Tighter than the answer card's 16dp inset: a prompt is a sentence or two, and a
+ * frame wider than its content is a box with a word in it.
  */
 private val PROMPT_CARD_PADDING = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
 
 /**
  * The answer card's own inset, on every side.
  *
- * [Card]'s default inside margin is zero, so the card states its own; and
- * [MAX_TRANSCRIPT_WIDTH] has to add it back, because the transcript's cap is a
- * statement about the *prose* measure and the card's frame is around that measure
- * rather than out of it.
+ * [Card]'s default inside margin is zero, so the card states its own, and
+ * [MAX_TRANSCRIPT_WIDTH] adds it back because the transcript's cap is a statement
+ * about the prose measure rather than about the frame around it.
  */
 private val ANSWER_CARD_INSET = 16.dp
 
@@ -4298,19 +3777,9 @@ private fun PromptBody(
             Text(
                 text = extras.displayText,
                 modifier = Modifier.padding(
-                    top = when {
-                        showExtrasChip || item.imageCount > 0 -> 6.dp
-                        else -> 0.dp
-                    },
+                    top = if (showExtrasChip || item.imageCount > 0) 6.dp else 0.dp,
                 ),
-                // The transcript's reading style, and the same one `MarkdownText`
-                // draws an answer in: the question and its answer are one block of
-                // text, and a prompt a size smaller than its reply reads as a caption.
-                //
-                // No colour: the card provides its own content colour (`onSurface`,
-                // stated explicitly rather than inherited), and the reader's own words
-                // are the one thing on this page that must never be muted.
-                style = MiuixTheme.textStyles.paragraph,
+                style = transcriptBodyStyle(),
             )
         }
     }
@@ -4445,29 +3914,18 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
 }
 
 /**
- * The time under a message, and nothing else.
+ * The time under a message.
  *
- * It carried a copy button for a while, and the button was two things at once: a
- * 28dp target that had to be aligned by its ink rather than its box, and a second way
- * to do what the transcript's `SelectionContainer` already does with a long press.
- * Both are gone with it — a message's actions belong on the message (a long press),
- * not on a control that floats under it.
+ * The stamp starts one corner radius in from the card's side on the message's own
+ * edge, not flush with it: the card is a rounded rectangle and the stamp is drawn
+ * *under* it, so a line starting at the card's left edge reads as though it begins
+ * inside the bottom-left arc. The flat part of the bottom edge begins one
+ * [PiCorner.radius] in, and that is where the first glyph stands; on the reader's
+ * own card the same inset is taken off its trailing edge so the last glyph ends on
+ * the flat part there.
  *
- * ## Where it starts
- *
- * One corner radius in from the card's side on the message's own edge, not flush with
- * it. The card is a rounded rectangle and the stamp is drawn *under* it, so a line
- * starting at the card's left edge reads as though it begins inside the bottom-left
- * arc — the corner cuts the imaginary column the text is on. The flat part of the
- * bottom edge begins one [PiCorner.radius] in, and that is where the first glyph
- * stands; on the reader's own card the same inset is taken off its trailing edge so
- * the last glyph ends on the flat part there. The two sides are mirrored rather than
- * padded on both, because the stamp belongs to the message's edge, not to the middle.
- *
- * ## Why the row is the accent colour
- *
- * The timestamp is furniture a finished turn wears, next to the turn's own
- * `工作 X 秒 · N 个步骤`, and the two read as one accent.
+ * Grey, deliberately not the accent: the accent belongs to what is live and to the
+ * turn's own work line; a finished message's time is furniture.
  */
 @Composable
 private fun MessageMeta(
@@ -4479,18 +3937,15 @@ private fun MessageMeta(
     show: Boolean,
 ) {
     if (!show) return
-    if (item is ChatItem.Assistant && item.isStreaming) return
-    if (item is ChatItem.Assistant && item.text.isBlank()) return
+    if (item is ChatItem.Assistant && (item.isStreaming || item.text.isBlank())) return
 
-    // The stamp is the whole row now, so an item with no time draws nothing rather than
+    // The stamp is the whole row, so an item with no time draws nothing rather than
     // an empty line: the space belongs to the message, not to a missing label.
     val now = remember { System.currentTimeMillis() }
     val stamp = remember(item.createdAt, now) {
         if (item.createdAt > 0L) text.chat.messageTime(item.createdAt, now) else null
     } ?: return
 
-    // Read once from the shared radius: the stamp has to begin where the card's curved
-    // corner has ended, and that distance is the corner's own definition.
     val flatEdge = PiCorner.radius
     val onEnd = alignment == Alignment.End
     Row(
@@ -4504,10 +3959,6 @@ private fun MessageMeta(
         Text(
             text = stamp,
             style = MiuixTheme.textStyles.footnote2,
-            // Grey, and deliberately not the accent even though the request that made a
-            // turn's `Worked 47s · 5 steps` line accent named the timestamp among the
-            // things to colour: the accent is for what is live (a streaming turn's
-            // working line), and a finished message's time is furniture.
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             maxLines = 1,
         )
@@ -4522,6 +3973,34 @@ private fun itemSource(item: ChatItem): String = when (item) {
     is ChatItem.Assistant -> item.text
     is ChatItem.Tool -> item.output.ifBlank { item.argumentsJson }
     is ChatItem.Notice -> item.text
+}
+
+internal data class MessageActionPoint(
+    val target: ChatItem,
+    val throughTarget: Int,
+    val prompt: ChatItem.User?,
+    val beforePrompt: Int,
+)
+
+/** Resolve against the unfolded message order, not the mixed list of cards, bands and steps. */
+internal fun messageActionPoint(items: List<ChatItem>, key: String?): MessageActionPoint? {
+    if (key == null) return null
+    var count = 0
+    var prompt: ChatItem.User? = null
+    var beforePrompt = 0
+    for (item in items) {
+        when (item) {
+            is ChatItem.User -> {
+                prompt = item
+                beforePrompt = count
+            }
+            is ChatItem.Assistant -> Unit
+            else -> continue
+        }
+        count++
+        if (item.key == key) return MessageActionPoint(item, count, prompt, beforePrompt)
+    }
+    return null
 }
 
 /** The subject of the edit dialog: which prompt, and where its branch starts. */
@@ -4750,9 +4229,11 @@ private fun messageMenuItems(
                 leading = { Icon(MiuixIcons.Share, contentDescription = null) },
                 onClick = {
                     onDismiss()
-                    val path = session.forkAt(counted)
-                    val opened = path?.let { session.host.openConversation(it, workspace) }
-                    if (opened == null) toasts?.show(text.chat.forkFailed)
+                    scope.launch {
+                        val path = withContext(Dispatchers.IO) { session.forkAt(counted) }
+                        val opened = path?.let { session.host.openConversation(it, workspace) }
+                        if (opened == null) toasts?.show(text.chat.forkFailed)
+                    }
                 },
             ),
         )
@@ -4928,12 +4409,7 @@ private fun AssistantBlock(
         }
 
         if (item.text.isNotBlank()) {
-            // No `fillMaxWidth`: `MarkdownText` is a `BoxWithConstraints` over a
-            // `Column` that fills its own width, so it takes the card's measure
-            // without being asked — and asking would be the one `fillMaxWidth` that
-            // could travel back out of the card, which passes its minimum
-            // constraint through (`propagateMinConstraints`).
-            MarkdownText(item.text)
+            MarkdownText(item.text, streaming = item.isStreaming)
         }
 
         if (item.status == ReplyStatus.Error) {
@@ -6145,38 +5621,10 @@ private val MODULE_GAP = 8.dp
  * measure costs nothing on a phone. See the note at the transcript's own
  * `BoxWithConstraints`.
  *
- * The cap is the **prose's** measure, so the answer card's own 16dp inset on each
- * side is added to it rather than taken out of it: a column capped at 560dp draws an
- * answer that is 528dp of text. Capping the *column* so that the text lands on 560dp
- * keeps one number doing one job, and the prompt card (sized to its content) is
- * inside the same measure either way.
+ * The cap leaves 560dp for prose after both the list padding and document gutters.
  */
 private val WIDE_TRANSCRIPT_WINDOW = 600.dp
 private val MAX_TRANSCRIPT_WIDTH = 560.dp + ANSWER_CARD_INSET * 2
-
-/**
- * What the follow-the-tail effect keys on: everything that grows while an answer streams,
- * and nothing else.
- *
- * A compose `LaunchedEffect` re-runs when its keys *change*, and the last item of a
- * streaming answer never changes identity — only its text does. So the key has to be the
- * lengths, and it has to be **both** of them.
- *
- * Leaving `thinking` out is a bug with a reader behind it. A reasoning model streams its
- * thinking first and its answer afterwards, and during the whole of that phase
- * `Assistant.text` is empty: the key did not move, the effect did not re-run, the list was
- * never snapped to the end, `LazyListState.canScrollForward` went true, and the "back to
- * the bottom" button was drawn — for as long as the thinking lasted, over a list that was
- * doing nothing but growing. The button's own condition is right and is not the thing to
- * change: it is honest at every moment, and it was the *scrolling* that had stopped.
- *
- * Pure and top-level so the rule is pinned on the JVM rather than by watching a phone: the
- * failure is invisible in a still screenshot and only appears while an answer streams.
- */
-internal fun transcriptTailKey(items: List<ChatItem>): Triple<Int, Int, Int> {
-    val last = items.lastOrNull() as? ChatItem.Assistant
-    return Triple(items.size, last?.text?.length ?: 0, last?.thinking?.length ?: 0)
-}
 
 /**
  * True for a row whose composable would return without drawing anything.
@@ -6263,6 +5711,30 @@ private val TRANSCRIPT_TAIL_SPACE = 26.dp
  * point.
  */
 private const val TRANSCRIPT_END_REQUEST = 100_000
+
+/** Follow the measured end, including layout changes that arrive after the last token. */
+@Composable
+private fun FollowTranscriptEnd(
+    listState: LazyListState,
+    follow: FollowTailController,
+    programmatic: State<Boolean>,
+    hasMessages: Boolean,
+) {
+    LaunchedEffect(listState, follow, programmatic, hasMessages) {
+        if (!hasMessages) return@LaunchedEffect
+        snapshotFlow {
+            if (follow.follows && !programmatic.value && !listState.isScrollInProgress && listState.canScrollForward) {
+                listState.layoutInfo.totalItemsCount
+            } else {
+                0
+            }
+        }.collect { count ->
+            if (count > 0 && follow.follows && !programmatic.value && !listState.isScrollInProgress) {
+                listState.requestScrollToItem(count - 1, TRANSCRIPT_END_REQUEST)
+            }
+        }
+    }
+}
 
 /**
  * How full the context window is, as the number the ring draws and its tooltip states.

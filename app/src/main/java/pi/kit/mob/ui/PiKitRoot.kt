@@ -336,11 +336,6 @@ private fun RootContent(
     // the chat page rather than a mix of two transcripts.
     val session by host.active.collectAsStateWithLifecycle()
     var destination by remember { mutableStateOf(Destination.Chat) }
-    // Whether the conversation drawer is out. Held up here rather than inside the chat
-    // page because the settings page is reached from the drawer's own foot, and the way
-    // back from it has to land on the list it was opened from — a drawer that closed
-    // itself on the way to the settings would make every visit two taps.
-    var historyOpen by remember { mutableStateOf(false) }
     // The drawer's scroll position, held **above** the conversation key. `key(session)`
     // rebuilds the chat page when the conversation changes, and a list state remembered
     // inside it was recreated with it — which is why coming back to the drawer showed its
@@ -523,12 +518,10 @@ private fun RootContent(
                     drawer = drawer,
                     rootScope = scope,
                     historyListState = historyListState,
-                    historyOpen = historyOpen,
-                    onHistoryOpenChange = { historyOpen = it },
                     onOpenTerminal = { destination = Destination.Terminal },
                     onOpenFiles = { destination = Destination.Files },
                     onOpenSettings = {
-                        historyOpen = true
+                        drawer.snapTo(open = true)
                         destination = Destination.Settings
                     },
                 )
@@ -541,7 +534,7 @@ private fun RootContent(
                 }
 
                 // Back from the settings returns to the drawer it was opened from:
-                // `historyOpen` is still true, and the chat page composes with it out.
+                // the root still holds its open anchor, so the rebuilt page draws it out.
                 Destination.Settings -> KeyboardLifted(density, ime, padding) {
                     SettingsScreen(
                         session = session,
@@ -630,8 +623,6 @@ private fun ChatTab(
     host: PiHost,
     session: PiAgentSession,
     composer: ChatComposerState,
-    /** Whether the conversation drawer is out; owned by [RootContent] — see there. */
-    historyOpen: Boolean,
     /**
      * The drawer's motion, owned by [RootContent] so it survives `key(session)`.
      *
@@ -645,7 +636,6 @@ private fun ChatTab(
      */
     rootScope: kotlinx.coroutines.CoroutineScope,
     historyListState: androidx.compose.foundation.lazy.LazyListState,
-    onHistoryOpenChange: (Boolean) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenFiles: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -780,12 +770,10 @@ private fun ChatTab(
             // other side would be created into a list the reader is not looking at.
             onNewConversation = { openNew(session.mode.value) },
             onNewConversationInMode = { mode -> openNew(mode) },
-            historyOpen = historyOpen,
             drawer = drawer,
             rootScope = rootScope,
             currentPath = state.sessionFile ?: openedPath,
             historyListState = historyListState,
-            onHistoryOpenChange = onHistoryOpenChange,
             onOpenTerminal = onOpenTerminal,
             onOpenFiles = onOpenFiles,
             onOpenSettings = onOpenSettings,

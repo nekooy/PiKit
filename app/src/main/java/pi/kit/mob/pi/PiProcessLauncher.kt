@@ -7,7 +7,8 @@ import pi.kit.mob.env.TermuxEnv
 import java.io.File
 
 /**
- * Everything needed to start one `pi --mode rpc` process.
+ * Everything needed to start one pi process — an RPC agent, a catalogue refresh,
+ * or the one-shot title print.
  *
  * @param nodePath absolute path to the bundled Node binary. This is *not*
  *   resolved through `PATH`: `execvp` consults the caller's environment, not
@@ -88,24 +89,9 @@ data class PiLaunchOptions(
      */
     val agentDir: String? = null,
     /**
-     * Pass `--offline`, which stops every network operation pi would otherwise start by
-     * itself. False for the agent, where the flag was removed on purpose: it also turns off
-     * pi's update and catalogue checks, and the report that asked for them back was about a
-     * `pi` the user had installed. True for the two throwaway processes that only *read*
-     * pi's catalogue (`ModelDiscoveryClient`), where it is not a preference but a
-     * correctness condition and a cost:
-     *
-     *  * pi's RPC mode starts a fire-and-forget `modelRuntime.refresh()` at launch
-     *    (`main()`: `!offlineMode && appMode==="rpc"`), which fetches pi.dev's per-provider
-     *    catalogue and publishes it into the running process. That is a refresh the app's
-     *    own launch path has already done, it is a network round trip per provider on a
-     *    phone, and — because it is published while the process is alive — it can move the
-     *    answer out from under the question. With `--offline` the answer is a function of
-     *    the catalogue state the caller recorded, which is what makes the recorded basis
-     *    mean anything.
-     *  * it also sets `PI_SKIP_VERSION_CHECK=1`, and pi's version check is a network call.
-     *
-     * A read-only question must not have the side effect of updating what it is reading.
+     * Pass `--offline` to keep Pi's startup catalogue checks from replacing the model
+     * snapshot in the background. Explicit prompts and tools can still use the network.
+     * The terminal does not use this launcher; hand-run Pi keeps its own refresh policy.
      */
     val offline: Boolean = false,
     /**
@@ -440,10 +426,15 @@ object PiProcessLauncher {
         command: List<String>,
         options: PiLaunchOptions,
         mergeStreams: Boolean,
+        logCommand: Boolean = true,
     ): Process {
         // Logged with the key masked, because the arguments are otherwise exactly
-        // what settles a disagreement between the header and Settings.
-        android.util.Log.i(TAG, "launching: " + command.joinToString(" ") { maskKey(it) })
+        // what settles a disagreement between the header and Settings. A title's
+        // command is not logged: its system prompt is noise and its stdin carries
+        // the reader's words.
+        if (logCommand) {
+            android.util.Log.i(TAG, "launching: " + command.joinToString(" ") { maskKey(it) })
+        }
         val builder = ProcessBuilder(command)
 
         builder.directory(File(options.workingDir))
@@ -486,21 +477,110 @@ object PiProcessLauncher {
         options.agentDir?.takeIf { it.isNotBlank() }?.let {
             environment[AGENT_DIR_VAR] = it
         }
-        // The key's *length* and the variable it went into, never the key. An
-        // authentication failure that the app causes rather than the provider is
-        // otherwise indistinguishable from a bad key, and this is the one fact
-        // that separates them. Measured: a custom provider registered in
-        // `models.json` rejects the environment variable and needs `--api-key`, and
-        // this line is what made that visible.
-        android.util.Log.i(
-            TAG,
-            "credentials: env=${options.apiKeyEnvVar ?: "none"} " +
-                "envLen=${options.apiKeyEnvVar?.let { environment[it]?.length } ?: 0} " +
-                "argvLen=${options.apiKey?.length ?: 0} " +
-                "flagPassed=${command.contains("--api-key")}",
-        )
-
         return builder.start()
+    }
+
+    /**
+     * Runs one title prompt through a throwaway `pi --print` process.
+     *
+     * ## Why a process instead of a hand-written HTTP call
+     *
+     * A title has to reach whatever model the conversation is using, and pi already
+     * knows every provider's endpoint, protocol, authentication and response shape.
+     * Rebuilding that here would be a second provider layer with its own gaps — the
+     * first version covered four envelopes and guessed the rest, then returned nothing
+     * on a reasoning model whose thinking consumed the output budget. `--print` is
+     * pi's own one-shot mode; `--thinking off` makes a title cost a few tokens, and
+     * `--no-session` keeps the request out of the history list. The price is one short
+     * Node process per new conversation (measured at 1.87 s and a small title answer on
+     * the host), paid once, in the background, on a feature that is already optional.
+     *
+     * Every ambient resource door is closed: no tools, extensions, skills, prompt
+     * templates, AGENTS.md, MCP servers, theme or project trust. The system prompt and
+     * the opening message are the whole input, so an installed extension cannot turn a
+     * title request into another agent run.
+     *
+     * @return stdout of the one-shot run, or null when pi cannot start, exits without
+     *   text, or runs past [timeoutMs]. Errors are logged by exit status only: stderr
+     *   can quote the prompt back.
+     */
+    fun generateTitle(
+        context: Context,
+        env: TermuxEnv,
+        options: PiLaunchOptions,
+        prompt: String,
+        systemPrompt: String,
+        timeoutMs: Long = TITLE_TIMEOUT_MS,
+    ): String? {
+        val process = spawn(
+            context = context,
+            env = env,
+            command = buildTitleCommand(options, systemPrompt),
+            options = options.copy(noSession = true),
+            mergeStreams = false,
+            logCommand = false,
+        )
+        // The opening prompt travels on stdin rather than in argv: it is the reader's
+        // own text, and argv is visible in `/proc` and in the launcher's log.
+        try {
+            process.outputStream.use { it.write(prompt.toByteArray(Charsets.UTF_8)) }
+        } catch (error: Exception) {
+            process.destroyForcibly()
+            android.util.Log.w(TAG, "title pi could not receive the prompt", error)
+            return null
+        }
+        val output = StringBuilder()
+        val errors = StringBuilder()
+        val outDrain = Thread {
+            runCatching { process.inputStream.bufferedReader().forEachLine { output.appendLine(it) } }
+        }.apply { isDaemon = true; start() }
+        val errDrain = Thread {
+            runCatching { process.errorStream.bufferedReader().forEachLine { errors.appendLine(it) } }
+        }.apply { isDaemon = true; start() }
+        val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        if (!finished) {
+            process.destroyForcibly()
+            android.util.Log.w(TAG, "title pi ran past ${timeoutMs}ms and was killed")
+            return null
+        }
+        outDrain.join(DRAIN_JOIN_MS)
+        errDrain.join(DRAIN_JOIN_MS)
+        val code = process.exitValue()
+        if (code != 0) {
+            android.util.Log.w(TAG, "title pi exited with $code (${errors.length} bytes on stderr)")
+        }
+        return output.toString().trim().takeIf { it.isNotEmpty() }
+    }
+
+    /** Exposed for tests and docs: the exact argv of one title run. */
+    fun buildTitleCommand(
+        options: PiLaunchOptions,
+        systemPrompt: String,
+    ): List<String> = buildList {
+        add(options.nodePath)
+        add(options.cliEntry)
+        add("--print")
+        add("--no-session")
+        add("--no-tools")
+        add("--no-extensions")
+        add("--no-skills")
+        add("--no-prompt-templates")
+        add("--no-context-files")
+        add("--no-mcp")
+        add("--offline")
+        add("--no-approve")
+        add("--thinking")
+        add("off")
+        options.provider?.takeIf { it.isNotBlank() }?.let {
+            add("--provider")
+            add(it)
+        }
+        options.modelId?.takeIf { it.isNotBlank() }?.let {
+            add("--model")
+            add(it)
+        }
+        add("--system-prompt")
+        add(systemPrompt)
     }
 
     /**
@@ -522,11 +602,6 @@ object PiProcessLauncher {
         add(options.cliEntry)
         add("--mode")
         add("rpc")
-        // No `--offline` for the agent, deliberately: it set `PI_OFFLINE=1` for the whole
-        // process, which turned off pi's model *network* flag as well. See the
-        // note on [PiLaunchOptions.offline] — and on the read-only launches, which do pass
-        // it, because for them the flag is what makes the answer a function of the
-        // catalogue state the caller recorded.
         if (options.offline) add("--offline")
         // The throwaway launches never send a prompt, so there is nothing to save and a
         // session file in pi's default directory would show up as an empty conversation.
@@ -718,4 +793,12 @@ object PiProcessLauncher {
 
     /** How long the output drain may take to finish after the process has exited. */
     private const val DRAIN_JOIN_MS = 500L
+
+    /**
+     * How long one title run may take before it is killed.
+     *
+     * The process is background work, so a slow radio costs a thread asleep rather than
+     * a frame; a process that never exits must still not live for ever.
+     */
+    private const val TITLE_TIMEOUT_MS = 45_000L
 }

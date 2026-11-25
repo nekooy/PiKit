@@ -18,10 +18,9 @@ import pi.kit.mob.data.SettingsStore
 import pi.kit.mob.data.WorkspaceStore
 import pi.kit.mob.data.apiName
 import pi.kit.mob.data.baseUrlName
-import pi.kit.mob.data.catalogueRefreshEnvironment
 import pi.kit.mob.data.normalizeApiBaseUrl
 import pi.kit.mob.data.renderChatSystemPrompt
-import pi.kit.mob.data.withThinkingShapes
+import pi.kit.mob.data.replaceConfigFile
 import pi.kit.mob.env.BootstrapInstaller
 import pi.kit.mob.env.BundledExtension
 import pi.kit.mob.env.BundledImage
@@ -31,10 +30,12 @@ import pi.kit.mob.env.PrefixPatcher
 import pi.kit.mob.env.StorageAccess
 import pi.kit.mob.env.TermuxEnv
 import pi.kit.mob.locales.stringsFor
+import pi.kit.mob.locales.DiscoveryProblem
 import pi.kit.mob.pi.NoticeKind
 import pi.kit.mob.terminal.TerminalSessionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -71,6 +72,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.Duration.Companion.seconds
 
 /** Progress of unpacking the bundled Termux environment. */
 sealed interface RuntimeStatus {
@@ -303,15 +306,14 @@ class PiAgentSession internal constructor(
     @Volatile
     private var recordJob: Job? = null
 
-    /**
-     * The provider ids the `models.json` this process was launched from defines.
-     *
-     * Written once per launch, before the file is written, and read by [selectProfile]:
-     * a profile whose id is not here has no entry pi could resolve, so `set_model` to it
-     * would be answered from whichever id *is* registered — the wrong credential — and
-     * the switch has to be a relaunch instead. See [ProfileAddressing.launchProviderId].
-     */
-    private var registeredProviderIds: Set<String> = emptySet()
+    @Volatile
+    private var launchedRoutes: ProfileRoutes? = null
+
+    @Volatile
+    private var confirmedRoute: ProfileRoute? = null
+
+    @Volatile
+    private var conversationProfile: Pair<String, String>? = null
 
     /**
      * True between a deliberate [stopAgent] and the next [startAgent].
@@ -354,6 +356,25 @@ class PiAgentSession internal constructor(
     @Volatile
     private var restoreTarget: String? = boundSession
 
+    /**
+     * The fresh session file whose opening prompt may still name it, or null.
+     *
+     * Set only for a session this conversation started itself — a fresh launch, a
+     * `new_session`, or the new child `ensureModelForPrompt` has to spawn because the
+     * old one is gone. [openFromDisk] and [switchSessionTo] clear it: an existing
+     * conversation is never renamed by the title rule, even when it has no name.
+     *
+     * The path is kept separately from [autoTitleCandidate] because pi names the file
+     * in its handshake before the file exists, and the first user message is what
+     * creates it. Waiting for `File.exists()` at handshake time is therefore a race:
+     * on a device where pi has already flushed an empty header the file exists, and
+     * the title was never attempted. The flag is what makes the decision, not the
+     * filesystem.
+     */
+    private val autoTitlePath = AtomicReference<String?>(null)
+    @Volatile
+    private var autoTitleCandidate = false
+
     /** When the screen was last on this conversation, for [PiHost.makeRoom]'s eviction. */
     @Volatile
     internal var lastUsedAt: Long = System.currentTimeMillis()
@@ -362,7 +383,7 @@ class PiAgentSession internal constructor(
      * Serialises [startAgent], so the "already running" guard cannot be read by two
      * callers before either of them has written `Starting`. See that function.
      */
-    private val startLock = Mutex()
+    private val modelCommandLock = Mutex()
 
     /** Where pi writes a conversation; the path lives in [TermuxEnv] with the rest. */
     val sessionDir: File get() = env.sessionDir
@@ -397,10 +418,9 @@ class PiAgentSession internal constructor(
     fun openFromDisk(path: String): Boolean {
         val file = File(path)
         val payload = SessionTranscript.payload(file) ?: return false
-        // The drawer's row is built from the same scan, but the page's own title comes
-        // from the conversation state. Without this the header redrew the app's name and
-        // `TitleGenerator` saw an unnamed conversation every time a saved row was opened
-        // — even one whose title the file already carried.
+        autoTitlePath.set(null)
+        autoTitleCandidate = false
+        // Use the stored name in both the drawer and the header, without naming history.
         val base = ConversationState(
             sessionFile = path,
             sessionName = payload.name,
@@ -693,17 +713,17 @@ class PiAgentSession internal constructor(
      * as the host's environment lock and must not be: `ensureEnvironment()` takes that one, and
      * nesting them in the other order somewhere else would be the deadlock.
      */
-    suspend fun startAgent(): Boolean {
+    suspend fun startAgent(): Boolean = modelCommandLock.withLock { startAgentSerialized() }
+
+    private suspend fun startAgentSerialized(): Boolean {
         // Whether *this* call got past the guard and owns the `Starting` it may have
         // written. A caller that is cancelled while waiting for the mutex must not
         // clear the state of the start it was waiting behind.
         var claimed = false
         return try {
-            startLock.withLock {
-                claimed = _agent.value !is AgentStatus.Running &&
-                    _agent.value !is AgentStatus.Starting
-                startAgentLocked()
-            }
+            claimed = _agent.value !is AgentStatus.Running &&
+                _agent.value !is AgentStatus.Starting
+            startAgentLocked()
         } catch (c: CancellationException) {
             // The caller is often a page's own coroutine, and a swipe disposes that
             // page while the launch is still unpacking the environment or waiting for
@@ -737,87 +757,27 @@ class PiAgentSession internal constructor(
         }
 
         _agent.value = AgentStatus.Starting
-        // The launch files, off the caller's thread. This path is taken on every
-        // launch, on every `scheduleRestart` and on every settings change, and its
-        // caller is the service's `lifecycleScope` — `Dispatchers.Main.immediate` —
-        // so before this it parsed and rewrote `models.json` and `settings.json` and
-        // wrote `web.json` on the main thread, between the user's tap and
-        // the next frame. Everything below is filesystem work; the `_agent` writes
-        // above and below are safe from any thread.
-        //
-        // Under the host's launch-file lock, because these files are one set for the
-        // whole app: a second conversation starting at the same moment would otherwise
-        // write `models.json` while this one is reading it back for pi to launch on,
-        // and pi reads a torn document as an `Unknown provider` exit.
-        val (settings, workingDir, modelsJsonFailure) = host.launchFileLock.withLock {
-            withContext(Dispatchers.IO) {
-                val settings = settingsStore.read()
-                val profileSnapshot = settingsStore.profiles.snapshots.value
-                // The ids the file will define, and therefore the only ones a launch may name.
-                // See [ProfileAddressing.launchProviderId] for why a launch must not name one
-                // that is missing.
-                val entries = profileProviderEntries(profileSnapshot)
-                registeredProviderIds = entries.keys
-                // The pair that decides whether a model switch is a `set_model` or a
-                // relaunch, in one line: an id models.json defines can be switched to, and a
-                // profile whose entry is missing falls back to pi's own id (see
-                // [ProfileAddressing.launchProviderId]). A report of "switching restarts"
-                // is answered by these two lists rather than by guesswork — the store's, in
-                // particular, is the one nothing else logs, and an empty one is what an
-                // offline phone has.
-                if (Log.isLoggable(TAG, Log.INFO)) {
-                    Log.i(
-                        TAG,
-                        "models.json defines ${entries.keys}; store describes " +
-                            storeProviders(File(env.piConfigDir, CATALOGUE_STORE_NAME)),
-                    )
-                }
-                // Same lifecycle as `models.json`: rewritten on every launch, because
-                // these files live in `$HOME` while the profile lives in the app's
-                // config, and a user who edits one by hand would otherwise have no way
-                // back. A write that had to land and did not stops the launch here —
-                // see [writeModelsJson]'s return contract for why the alternative is
-                // an `Unknown provider` exit or a `401` that reads as a bad key.
-                val modelsJsonFailure = writeModelsJson(settings, profileSnapshot, entries)
-                writePiDefaults(settings)
-                // The extension reads its file on every tool call, and the page may never
-                // be opened; seeding the fresh-install document before pi starts is what
-                // makes a new conversation's first search work without a settings visit.
-                webSearch.ensureDocument()
-                // `$HOME/workspace`, not `$HOME`: see [TermuxEnv.workspace]. The reader may
-                // have started this conversation in another workspace ([WorkspaceStore]),
-                // and the extension is told the same path through `PIKIT_WORKSPACE`, so "the
-                // workspace" and where pi actually runs can never be two different
-                // directories.
-                val workingDir = File(launchWorkspace())
-                workingDir.mkdirs()
-                // The tier the reader last chose, written before the process starts so the
-                // first tool call of the launch is already judged by it: the preference is
-                // authoritative, and a restored backup or an interrupted write could have
-                // left the file behind.
-                PermissionPolicy.write(env, settings.permissionMode)
-                sessionDir.mkdirs()
-                Triple(settings, workingDir, modelsJsonFailure)
-            }
-        }
-
-        if (modelsJsonFailure != null) {
-            // The write that had to land did not. Starting pi anyway is what used
-            // to happen, and it produced the two symptoms this replaces: `Unknown
-            // provider "pikit-custom"` with a `pi exit with code 1` banner, or a
-            // built-in provider whose relay URL never reached pi and answered
-            // `401` from the official address — which reads as "the key is wrong".
-            Log.e(TAG, "models.json write failed; not starting the agent", modelsJsonFailure)
-            _agent.value = AgentStatus.Failed(
-                stringsFor(settingsStore.read().language).settings.modelsJsonWriteFailed,
-            )
-            return false
-        }
-
+        val workingDir = File(launchWorkspace())
+        val snapshot = settingsStore.profiles.snapshots.value
         var launched: Process? = null
         return try {
-            val process = host.launchFileLock.withLock {
+            val active = selectedProfile(snapshot)
+            val settings = settingsStore.read().withProfile(active)
+            val (newClient, sessionState) = host.launchFileLock.withLock {
                 withContext(Dispatchers.IO) {
+                    val routes = profileRoutes(snapshot)
+                    val wanted = routes.route(active)
+                    if (active?.modelId?.isNotBlank() == true && wanted == null) {
+                        host.scope.launch { host.refreshCatalogueIfStale() }
+                        throw modelRouteError()
+                    }
+                    writeModelsJson(snapshot, routes.entries)
+                    writePiDefaults(settingsStore.read().withProfile(snapshot.activeProfile), routes.route(snapshot.activeProfile)?.provider)
+                    webSearch.ensureDocument()
+                    workingDir.mkdirs()
+                    PermissionPolicy.write(env, settings.permissionMode)
+                    sessionDir.mkdirs()
+                    launchedRoutes = routes
                     // Written under the launch lock immediately before the child that
                     // reads it, so another launch cannot replace the file between the
                     // write and the spawn. Work mode leaves it null.
@@ -865,7 +825,7 @@ class PiAgentSession internal constructor(
                     } else {
                         null
                     }
-                    PiProcessLauncher.launch(
+                    val process = PiProcessLauncher.launch(
                         context = appContext,
                         env = env,
                         options = settings.toLaunchOptions(
@@ -873,39 +833,24 @@ class PiAgentSession internal constructor(
                             cliEntry = cliEntry.absolutePath,
                             workingDir = workingDir.absolutePath,
                             sessionDir = sessionDir.absolutePath,
-                            // The id this profile is registered under, and every saved
-                            // profile's credential: the launch is the only moment either
-                            // can be handed to pi, and pi decides what is usable from them.
-                            providerId = settingsStore.profiles.activeProfile?.let { active ->
-                                ProfileAddressing.launchProviderId(
-                                    active,
-                                    settingsStore.profiles.profiles,
-                                    registeredProviderIds,
-                                )
-                            },
-                            credentials = ProfileAddressing.providerEnvironment(
-                                settingsStore.profiles.snapshots.value,
-                            ) + ("PIKIT_WEB_CONFIG" to File(env.home, WebSearchSettings.FILE_NAME).absolutePath),
+                            providerId = wanted?.provider,
+                            credentials = ProfileAddressing.providerEnvironment(snapshot) +
+                                ("PIKIT_WEB_CONFIG" to File(env.home, WebSearchSettings.FILE_NAME).absolutePath),
                             chatPromptFile = chatPromptFile,
                             chatPromptExtension = chatPromptExtension,
                             chatWebExtension = chatWebExtension,
                             mode = _mode.value,
                         ),
                     ).also { launched = it }
+                    val live = PiRpcClient.from(process).also { it.start() }
+                    client = live
+                    attach(live)
+                    val state = live.handshake()
+                    if (!state.success || (wanted != null && !wanted.matches(state.reportedModel()))) throw modelRouteError()
+                    confirmedRoute = wanted
+                    live to state
                 }
             }
-            val newClient = PiRpcClient.from(process).also { it.start() }
-            client = newClient
-            attach(newClient)
-
-            // There is no handshake in this protocol; `get_state` doubles as the
-            // readiness probe and as the first load of session metadata.
-            //
-            // The response is consumed by the request rather than forwarded to
-            // the record stream, so it has to be folded into the conversation
-            // state by hand — otherwise the UI never learns which model is in
-            // use and sits on "Loading model…" forever.
-            val sessionState = newClient.handshake()
             logSessionState("handshake", sessionState)
             // Which session the launch binds to is decided *before* the handshake is
             // folded in, because the answer changes what the fold may write. Every
@@ -934,7 +879,11 @@ class PiAgentSession internal constructor(
             // prompt after a restart landed in that fresh file — the report of
             // "同一界面，但是实际上已经新开了对话". See [restoreAfterLaunch].
             restoreAfterLaunch(opened, restoreTargetPath)
-
+            if (client !== newClient) throw modelRouteError()
+            if (restoreTargetPath != null && active != null && active.modelId.isNotBlank()) {
+                confirmModel(newClient, active)
+            }
+            if (active != null && active.modelId.isNotBlank()) conversationProfile = active.id to active.modelId
             _agent.value = AgentStatus.Running
             // The foreground service is what keeps this process alive while the
             // UI is backgrounded. `MainActivity` starts one on every launch, but
@@ -973,7 +922,7 @@ class PiAgentSession internal constructor(
             }
             // Off the launch path, and nothing waits on it: this is a network round
             // trip and the launch is a tap. See [PiHost.refreshCatalogueIfStale].
-            host.scope.launch { host.refreshCatalogueIfStale(workingDir) }
+            host.scope.launch { host.refreshCatalogueIfStale() }
             true
         } catch (e: PiProcessExitedException) {
             // pi writes nothing to stdout before its first response, so a
@@ -1005,7 +954,12 @@ class PiAgentSession internal constructor(
             }
             Log.e(TAG, "Starting the agent failed", t)
             _agent.value = failure
+            val failed = client
             detach()
+            withContext(NonCancellable + Dispatchers.IO) {
+                if (failed != null) runCatching { failed.close() }
+                else launched?.destroyForcibly()
+            }
             false
         }
     }
@@ -1014,7 +968,9 @@ class PiAgentSession internal constructor(
         recordJob?.cancel()
         recordJob = scope.launch {
             source.records.collect { record ->
-                _conversation.update { ConversationReducer.reduce(it, record) }
+                if (client !== source) return@collect
+                val presented = if (record is PiRecord.Event) presentProviderFailure(record) else record
+                _conversation.update { ConversationReducer.reduce(it, presented) }
                 // The CPU has to stay awake for the length of a turn: without a
                 // partial wake lock the device sleeps when the screen goes off,
                 // the child's stdout stops being drained, and the answer looks
@@ -1023,18 +979,13 @@ class PiAgentSession internal constructor(
                     when (record.type) {
                         "agent_start" -> holdCpuDuringTurn()
                         "agent_settled" -> releaseCpuDuringTurn()
-                        // pi changed the model by itself — a `/model` command typed into the
-                        // composer, a scoped-model cycle, an extension calling
-                        // `pi.setModel`. Every model-shaped fact the app holds came from a
-                        // `get_state` reply that nothing else re-asks for, so the context
-                        // meter kept reporting the previous model's window and the thinking
-                        // picker kept offering the previous model's levels. `model_select` is
-                        // emitted by `session.setModel` (`agent-session.js`,
-                        // `_emitModelSelect`) and streamed like any other event, so one
-                        // refresh here covers every way the model can move. The app's own
-                        // switch is the same event plus its own refresh, which is one small
-                        // round trip on a rare action rather than a correctness question.
-                        "model_select" -> refreshState()
+                        "message_end" -> if (record.raw.obj("message")?.str("role") == "user") {
+                            nameFirstPrompt(source)
+                        }
+                        "model_select" -> {
+                            confirmedRoute = null
+                            refreshState()
+                        }
                     }
                 }
             }
@@ -1073,22 +1024,51 @@ class PiAgentSession internal constructor(
         }
     }
 
+    private fun presentProviderFailure(event: PiRecord.Event): PiRecord.Event {
+        if (event.type != "message_end") return event
+        val message = event.raw.obj("message") ?: return event
+        if (message.string("role") != "assistant") return event
+        val error = message.string("errorMessage") ?: return event
+        val route = confirmedRoute ?: return event
+        val host = endpointHost(route.baseUrl) ?: return event
+        val network = providerNetworkFailure(error)
+        val status = providerAuthStatus(error)
+        val problem = when {
+            network != null -> DiscoveryProblem.Unreachable(host, network)
+            status != null -> DiscoveryProblem.HttpRejected(host, status, viaOverride = false)
+            else -> return event
+        }
+        val presented = stringsFor(settingsStore.read().language).settings.discoveryProblem(problem)
+        return event.copy(raw = JsonObject(event.raw + ("message" to JsonObject(
+            message + ("errorMessage" to JsonPrimitive(presented)),
+        ))))
+    }
+
     private fun detach() {
         recordJob?.cancel()
         recordJob = null
         client = null
+        confirmedRoute = null
+        launchedRoutes = null
     }
 
     /** Stops the agent gracefully. Closing stdin is the only clean shutdown. */
-    suspend fun stopAgent() {
+    suspend fun stopAgent() = modelCommandLock.withLock { stopAgentSerialized() }
+
+    private suspend fun stopAgentSerialized() {
         stopRequested = true
         autoRestartJob?.cancel()
         autoRestartJob = null
         releaseCpuDuringTurn()
         val current = client ?: return
         detach()
-        withContext(Dispatchers.IO) { current.close() }
-        _agent.value = AgentStatus.Stopped
+        withContext(NonCancellable + Dispatchers.IO) {
+            try {
+                current.close()
+            } finally {
+                _agent.value = AgentStatus.Stopped
+            }
+        }
     }
 
     // -------------------------------------------------------------- commands
@@ -1096,37 +1076,78 @@ class PiAgentSession internal constructor(
     fun sendPrompt(text: String, images: List<ImageAttachment> = emptyList()) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() && images.isEmpty()) return
-        runCommand {
-            // A dead connection used to be a silent no-op (`client?.request` on
-            // null) and, after a bare relaunch, a prompt into a *new* session.
-            // Come back first — [startAgent] restores the remembered session —
-            // and only then deliver.
-            if (client == null && !startAgent()) {
-                val reason = stringsFor(settingsStore.read().language).chat.agentStopped
-                _conversation.update { it.copy(lastError = reason) }
-                return@runCommand
-            }
-            val live = client
-            if (live == null) {
-                val reason = stringsFor(settingsStore.read().language).chat.agentStopped
-                _conversation.update { it.copy(lastError = reason) }
-                return@runCommand
-            }
-            // `turnInFlight` rather than bare `isStreaming`: a process that died
-            // mid-turn left the flag up, and the next prompt was sent as `steer`
-            // into a session that was not running anything.
-            val busy = turnInFlight
-            // pi rejects a plain prompt while streaming and requires an explicit
-            // queueing behaviour, so only the idle case may omit it.
-            live.request("prompt", timeout = null) { id ->
-                PiCommand.prompt(
-                    id = id,
-                    message = trimmed,
-                    streamingBehaviour = if (busy) "steer" else null,
-                    images = images,
-                )
+        runModelCommand {
+            val wanted = selectedProfile() ?: throw modelRouteError()
+            val live = ensureModelForPrompt(wanted) ?: return@runModelCommand
+            val state = live.requestOrThrow("get_state") { PiCommand.getState(it) }
+            val route = launchedRoutes?.route(wanted) ?: throw modelRouteError()
+            val reported = state.data as? JsonObject
+            if (selectedProfile() != wanted || client !== live || !route.matches(state.reportedModel()) ||
+                reported.string("sessionFile") != _conversation.value.sessionFile
+            ) throw modelRouteError()
+            val busy = turnInFlight || reported?.get("isStreaming") == JsonPrimitive(true)
+            live.requestOrThrow("prompt", timeout = null) { id ->
+                PiCommand.prompt(id, trimmed, if (busy) "steer" else null, images)
             }
         }
+    }
+
+    private suspend fun ensureModelForPrompt(profile: ModelProfile): PiRpcClient? {
+        val loaded = launchedRoutes
+        val live = client
+        if (_agent.value is AgentStatus.Running && live != null && loaded?.canUse(profile) == true) {
+            if (confirmedRoute == loaded.route(profile)) return live
+            if (turnInFlight) throw modelRouteError()
+            try {
+                confirmModel(live, profile)
+                return live
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: PiRpcException) {
+                // No prompt has been submitted. Rebuilding the child is safe here.
+            }
+        }
+        if (turnInFlight) throw modelRouteError()
+        stopAgentSerialized()
+        if (!startAgentSerialized()) return null
+        val current = client ?: throw modelRouteError()
+        val routes = launchedRoutes ?: throw modelRouteError()
+        if (!routes.canUse(profile) || confirmedRoute != routes.route(profile)) throw modelRouteError()
+        return current
+    }
+
+    private fun selectedProfile(snapshot: PiConfigSnapshot = settingsStore.profiles.snapshots.value): ModelProfile? {
+        val (id, model) = conversationProfile ?: return snapshot.activeProfile
+        val profile = snapshot.profiles.firstOrNull { it.id == id } ?: throw modelRouteError()
+        if (model !in profile.selectableModels) throw modelRouteError()
+        return profile.copy(modelId = model)
+    }
+
+    private fun modelRouteError(): PiRpcException = PiRpcException(
+        stringsFor(settingsStore.read().language).settings.modelRouteUnavailable,
+    )
+
+    private fun PiRecord.Response.reportedModel(): JsonObject? =
+        (data as? JsonObject)?.get("model") as? JsonObject
+
+    private suspend fun confirmModel(live: PiRpcClient, profile: ModelProfile) {
+        val routes = launchedRoutes ?: throw modelRouteError()
+        if (!routes.canUse(profile)) throw modelRouteError()
+        val wanted = routes.route(profile) ?: throw modelRouteError()
+        confirmedRoute = null
+        val state = live.requestOrThrow("get_state") { PiCommand.getState(it) }
+        if (!wanted.matches(state.reportedModel())) {
+            val set = live.requestOrThrow("set_model") { PiCommand.setModel(it, wanted.provider, wanted.model) }
+            if (!wanted.matches(set.data as? JsonObject)) throw modelRouteError()
+            stateThinkingLevel(live, wanted.model, piLevel = null)
+            val confirmed = live.requestOrThrow("get_state") { PiCommand.getState(it) }
+            if (!wanted.matches(confirmed.reportedModel())) throw modelRouteError()
+            applyState(live, confirmed)
+        } else {
+            applyState(live, state)
+        }
+        if (client !== live) throw modelRouteError()
+        confirmedRoute = wanted
     }
 
     /**
@@ -1175,75 +1196,20 @@ class PiAgentSession internal constructor(
      */
     fun newSession(interrupt: Boolean = false) {
         if (turnInFlight && !interrupt) return
-        runCommand {
-            val response = client?.requestOrThrow("new_session") { PiCommand.newSession(it) }
-                ?: return@runCommand
-            // A `session_before_switch` extension handler can refuse the switch, and
-            // pi answers `success: true` with `data.cancelled: true` when it does
-            // (`docs/rpc.md`, `new_session`). Clearing the transcript and re-reading
-            // state on a session that never changed threw away the conversation the
-            // user was looking at — the app's own view of the session is only
-            // refreshed when the session actually moved.
-            if (response.cancelled()) return@runCommand
-            _conversation.value = ConversationState()
-            // The replacement landed on the profile this process was *launched* with,
-            // which is not necessarily the one the reader is on — see [modelToState].
-            // Stating it is the same `set_model` the picker sends, so a new conversation
-            // starts on the model the chip names, and on its credential. This also reads
-            // the new session's state, which is what `refreshState` would have done.
-            stateActiveModel()
-        }
-    }
-
-    /**
-     * Tells a pi that has just replaced its session which model this app is on.
-     *
-     * Called after `new_session`, because pi answers a new session from its launch
-     * arguments rather than from the switch the running session had applied
-     * ([modelToState] has the measurement). The state is read *first* and awaited, so the
-     * comparison is against pi's own answer for the session it just opened rather than
-     * against the state this call cleared — the first version raced its own
-     * fire-and-forget refresh and therefore stated the model on every new conversation.
-     *
-     * Two details are the same ones [selectProfile] states for a tap on the picker:
-     *
-     *  - the provider is the id `models.json` defines ([ProfileAddressing.launchProviderId]),
-     *    because `set_model` matches on `m.provider === command.provider`;
-     *  - pi answers a switch with the model's own remembered thinking level, so the
-     *    reader's choice is stated again afterwards.
-     *
-     * A refused `set_model` falls back to a relaunch, which reads the same store and so
-     * cannot land on the wrong profile either.
-     */
-    private suspend fun stateActiveModel() {
-        val live = client ?: return
-        applyState(live)
-        val profiles = settingsStore.profiles.profiles
-        val active = settingsStore.profiles.activeProfile ?: return
-        val provider = ProfileAddressing.launchProviderId(active, profiles, registeredProviderIds)
-        val running = _conversation.value.model
-        val wanted = modelToState(
-            runningProvider = running?.provider,
-            runningModel = running?.id,
-            wantedProvider = provider,
-            wantedModel = active.modelId,
-        ) ?: return
-        Log.i(
-            TAG,
-            "new session opened on ${running?.provider}/${running?.id}; " +
-                "stating ${wanted.first}/${wanted.second}",
-        )
-        val applied = runCatching {
-            live.requestOrThrow("set_model") {
-                PiCommand.setModel(it, wanted.first, wanted.second)
+        runModelCommand {
+            val live = client ?: return@runModelCommand
+            if (turnInFlight && !interrupt) return@runModelCommand
+            confirmedRoute = null
+            val response = live.requestOrThrow("new_session") { PiCommand.newSession(it) }
+            if (!response.cancelled()) {
+                _conversation.value = ConversationState()
+                autoTitlePath.set(null)
+                autoTitleCandidate = true
             }
-        }.isSuccess
-        if (!applied) {
-            scheduleRestart()
-            return
+            applyState(live)
+            val profile = selectedProfile()
+            if (profile != null && profile.modelId.isNotBlank()) ensureModelForPrompt(profile)
         }
-        stateThinkingLevel(live, wanted.second, piLevel = null)
-        applyState(live)
     }
 
     /**
@@ -1443,19 +1409,38 @@ class PiAgentSession internal constructor(
         val name = newName.replace(Regex("[\\r\\n]+"), " ").trim()
         if (name.isEmpty()) return Result.failure(IllegalArgumentException("Name cannot be empty"))
 
-        if (target.path == _conversation.value.sessionFile) {
-            return runCatching {
-                client?.requestOrThrow("set_session_name") { PiCommand.setSessionName(it, name) }
-                _conversation.update { it.copy(sessionName = name) }
-            }
-        }
-
         return withContext(Dispatchers.IO) {
-            runCatching { appendSessionInfo(File(target.path), name) }
+            try {
+                val owner = host.sessionFor(target.path)
+                if (owner == null) {
+                    appendSessionInfo(File(target.path), name)
+                    host.notifySessionListingChanged()
+                } else {
+                    owner.renameOwnedSession(target.path, name)
+                }
+                Result.success(Unit)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
         }
     }
 
+    private suspend fun renameOwnedSession(path: String, name: String) = modelCommandLock.withLock {
+        check(matchesPath(path)) { "Pi's current conversation changed" }
+        val live = client
+        if (live == null) {
+            appendSessionInfo(File(path), name)
+        } else {
+            check(nameState(live).str("sessionFile") == path) { "Pi's current conversation changed" }
+            live.requestOrThrow("set_session_name", 2.seconds) { PiCommand.setSessionName(it, name) }
+        }
+        publishSessionName(path, name)
+    }
+
     private fun appendSessionInfo(file: File, name: String) {
+        if (!file.isFile) throw java.io.FileNotFoundException(file.name)
         val entry = buildJsonObject {
             put("type", "session_info")
             put("id", randomEntryId())
@@ -1544,17 +1529,20 @@ class PiAgentSession internal constructor(
      * shown afterwards must come from `get_messages`, not from what the UI still held.
      */
     private suspend fun switchSessionTo(path: String) {
-        val live = client ?: return
+        val live = client ?: throw modelRouteError()
+        // A conversation opened from the drawer or restored after a restart owns its
+        // name already. Clearing the candidate here is what keeps "never title an
+        // existing conversation" true even when the file has no name.
+        autoTitlePath.set(null)
+        autoTitleCandidate = false
+        confirmedRoute = null
         val response = live.requestOrThrow("switch_session") {
             PiCommand.switchSession(it, path)
         }
         // Refused by a `session_before_switch` handler: pi still answers
         // `success: true`, so without this the transcript on screen was replaced
         // by the messages of a session pi never opened.
-        if (response.cancelled()) {
-            adoptSessionPath(_conversation.value.sessionFile)
-            return
-        }
+        if (response.cancelled()) throw modelRouteError()
         // A transcript already belonging to **this** file is the answer: clearing it and
         // asking the process for the same messages again is what made a conversation
         // flash empty when its agent finally started. `sessionFile` covers a live
@@ -1564,7 +1552,8 @@ class PiAgentSession internal constructor(
             _conversation.value.items.isNotEmpty()
         if (!alreadyLoaded) _conversation.value = ConversationState(loadingSession = true)
         try {
-            val state = live.request("get_state") { PiCommand.getState(it) }
+            val state = live.requestOrThrow("get_state") { PiCommand.getState(it) }
+            if ((state.data as? JsonObject).string("sessionFile") != path) throw modelRouteError()
             _conversation.update { ConversationReducer.reduce(it, state) }
             refreshThinkingLevels()
             if (!alreadyLoaded) loadCurrentMessages(live)
@@ -1583,11 +1572,6 @@ class PiAgentSession internal constructor(
         }.getOrNull()
         _conversation.update { ConversationReducer.replaceWithMessages(it, messages?.data) }
         adoptSessionPath(_conversation.value.sessionFile)
-        // A conversation restored by the launch path has its title request's other
-        // trigger here: `activate` saw no turns when this process was created, and no
-        // turn will settle until the reader asks something. A name the file already
-        // carries, or one the host has already tried, makes this a no-op.
-        host.titleGenerator.maybeGenerate(this)
     }
 
     /**
@@ -1599,6 +1583,7 @@ class PiAgentSession internal constructor(
      */
     private fun adoptSessionPath(path: String?) {
         if (path.isNullOrBlank()) return
+        if (autoTitleCandidate && autoTitlePath.get() == null) autoTitlePath.set(path)
         restoreTarget = path
         // The file is this conversation's identity from here on, so the mode record
         // belongs to it: a chat conversation that just wrote its first file would
@@ -1682,6 +1667,11 @@ class PiAgentSession internal constructor(
     private suspend fun restoreAfterLaunch(opened: String?, target: String?) {
         val live = client ?: return
         if (target == null) {
+            // No saved conversation is being rebound, so this child is a fresh
+            // conversation: its first prompt may name it. The candidate is set before
+            // the path is adopted because the handshake has already named the file even
+            // though pi has not written it yet.
+            autoTitleCandidate = true
             adoptSessionPath(opened)
             if (_conversation.value.items.isEmpty() && opened != null) {
                 loadCurrentMessages(live)
@@ -1770,10 +1760,6 @@ class PiAgentSession internal constructor(
                     // `active` is the host's answer to "which conversation is on screen".
                     // The mark is only news when it is not the one being read.
                     _finishedUnseen.value = host.active.value !== this@PiAgentSession
-                    // A title is asked for once, on the first answer that settled
-                    // without an error. `maybeGenerate` is cheap when the switch is
-                    // off and when the conversation already has a name.
-                    host.titleGenerator.maybeGenerate(this@PiAgentSession)
                     host.onTurnFinished(this@PiAgentSession)
                 }
                 was = now
@@ -1880,7 +1866,7 @@ class PiAgentSession internal constructor(
      * `get_state`, folded into the conversation and awaited by the caller.
      *
      * The suspend half of [refreshState], for the one caller that must see the answer
-     * before deciding anything: [stateActiveModel] cannot tell which model a replaced
+     * before deciding anything: [confirmModel] cannot tell which model a replaced
      * session opened on without it, and a fire-and-forget refresh let it decide against
      * an empty state and state the model on every new conversation.
      *
@@ -1888,8 +1874,9 @@ class PiAgentSession internal constructor(
      * caller's `runCommand`, which is what marks a dead pi `Failed` and schedules the one
      * automatic recovery.
      */
-    private suspend fun applyState(live: PiRpcClient) {
-        val response = live.request("get_state") { PiCommand.getState(it) }
+    private suspend fun applyState(live: PiRpcClient, state: PiRecord.Response? = null) {
+        val response = state ?: live.requestOrThrow("get_state") { PiCommand.getState(it) }
+        if (client !== live) return
         logSessionState("refresh", response)
         _conversation.update { ConversationReducer.reduce(it, response) }
         // The session in force is whatever this reply names: a `new_session`
@@ -1970,111 +1957,21 @@ class PiAgentSession internal constructor(
         runCommand { client?.requestOrThrow("set_thinking_level") { PiCommand.setThinkingLevel(it, level) } }
     }
 
-    /**
-     * Switches the answering model without restarting the agent.
-     *
-     * The model chip above the composer is the reason this exists. The obvious
-     * implementation — make the profile active and call [scheduleRestart] — costs
-     * a process teardown, a `pi` startup and a fresh handshake (seconds, and the
-     * whole transcript is re-read), to change one field that pi accepts over RPC
-     * while it is running. The alternative, a restart that is merely *fast*, is
-     * still a restart: the running turn, the queue and the terminal's view of the
-     * session all go with it.
-     *
-     * So the switch is applied over RPC, and the restart is only a fallback for
-     * when pi refuses. Two details are load-bearing:
-     *
-     *  - The provider is sent as **pi's own provider id** (`deepseek`,
-     *    `pikit-custom`), because `set_model` looks the model up in the snapshot
-     *    of models pi already knows and matches `m.provider === command.provider`
-     *    — checked against pi 0.85.1's `rpc-mode.js`, which answers
-     *    `Model not found: <provider>/<id>` for anything else. The *environment
-     *    variable* name is the same string for the built-in providers but not the
-     *    same concept, and sending `DEEPSEEK_API_KEY` here is a lookup that always
-     *    misses.
-     *  - The profile is committed to the store first, so the setting survives a
-     *    later restart even if the RPC call below is rejected.
-     *
-     * [model] is a parameter rather than `profile.modelId` because a profile holds
-     * *several* models — the provider is the endpoint and the key, and the model is
-     * a choice made against it. The chosen one is written back into the profile
-     * before the call, so the store, the picker's tick and the composer's chip
-     * agree on the answer whichever way the call goes.
-     *
-     * A miss is not silent: `set_model` appears in pi's reference client and in
-     * its RPC mode, so a rejected call means this pi build does not offer that
-     * model — a custom endpoint's `models.json` not being read yet, say. Any
-     * failure falls back to a restart, which cannot be wrong.
-     */
     fun selectProfile(profile: ModelProfile, model: String) {
-        val committed = settingsStore.profiles.upsert(profile.copy(modelId = model))
-        settingsStore.profiles.setActive(committed.id)
-        // The switch is shown as made on the frame the user tapped it: the profile is
-        // committed synchronously above, and pi's confirming `get_state` is a round
-        // trip away — 320 ms on the emulator, well over a second on a busy phone —
-        // during which the chip otherwise kept the previous model's name and levels.
-        // The reducer drops this again when the state names another model.
-        _conversation.update { it.copy(requestedModel = model.takeIf { it.isNotBlank() }) }
-        val provider = committed.providerEntry
-        val profiles = settingsStore.profiles.profiles
-        // The id pi knows this profile by, which is not the provider's id for a profile
-        // sharing one — see [ProfileAddressing.runtimeProviderId]. This is the name the
-        // `models.json` entry was written under, so it is the name `set_model` matches.
-        val runtimeId = ProfileAddressing.runtimeProviderId(committed, profiles)
-        val providerId = ProfileAddressing.launchProviderId(
-            committed,
-            profiles,
-            registeredProviderIds,
-        )
-        if (provider == null || model.isBlank()) {
-            // Nothing pi could be told: an incomplete profile only makes sense as
-            // a launch-time configuration, so relaunch with it.
-            scheduleRestart()
-            return
-        }
-        runCommand {
-            // The profile's own id has no entry in the file this process was launched
-            // from, so there is nothing for `set_model` to match: pi would either answer
-            // `Model not found` or — with the profile's provider also registered under
-            // pi's own id — switch this conversation onto *the other profile's*
-            // credential. A relaunch is the honest answer: `--api-key` carries this
-            // profile's key and the launch is what makes the id real (or falls back to
-            // the provider's, which pi ships).
-            if (runtimeId != providerId) {
-                scheduleRestart()
-                return@runCommand
+        runModelCommand {
+            val store = settingsStore.profiles
+            if (!store.selectModel(profile, model)) {
+                val strings = stringsFor(settingsStore.read().language).settings
+                throw PiRpcException(if (store.lastWriteFailed) strings.saveFailed else strings.modelRouteUnavailable)
             }
-            // No live process to tell. This is the state a launch failure leaves
-            // behind — `client` is null and the agent is `Failed` — and it used to
-            // return here and do nothing at all, which is the report that picking
-            // another provider's model "does not load it" and only a manual
-            // restart recovered. The profile is already committed above, so a
-            // relaunch is the whole fix: `startAgent` reads the store.
-            val live = client
-            if (live == null) {
+            conversationProfile = profile.id to model
+            _conversation.update { it.copy(requestedModel = model, lastError = null) }
+            if (turnInFlight) {
                 scheduleRestart()
-                return@runCommand
+                return@runModelCommand
             }
-            val applied = runCatching {
-                live.requestOrThrow("set_model") {
-                    PiCommand.setModel(it, providerId, model)
-                }
-            }.isSuccess
-            if (!applied) {
-                scheduleRestart()
-                return@runCommand
-            }
-            // The level the reader chose, mapped onto the model that has just started
-            // answering. pi answers `set_model` with **that model's own remembered
-            // level** when it has one (`_getThinkingLevelForModelSwitch`, 1.4.0, reading
-            // `settings.json`'s `modelThinkingLevels`), so without this the switch
-            // silently returns to a level recorded for that model in an earlier
-            // session — which is what "the thinking level follows one model" describes.
-            // `thinkingLevelOf` derives the same answer for the chip from the same two
-            // inputs, so the process and the chip agree without either trusting the
-            // other's echo.
-            stateThinkingLevel(live, model, piLevel = null)
-            refreshState()
+            val selected = selectedProfile() ?: throw modelRouteError()
+            ensureModelForPrompt(selected)
         }
     }
 
@@ -2256,17 +2153,18 @@ class PiAgentSession internal constructor(
      * conversation had been duplicated when it had not.
      */
     fun cloneSession() {
-        runCommand {
-            val response = client?.requestOrThrow("clone") { PiCommand.clone(it) } ?: return@runCommand
-            val cancelled = response.data?.jsonObject?.get("cancelled")
-                ?.jsonPrimitive?.booleanOrNull == true
-            if (cancelled) return@runCommand
-            val live = client ?: return@runCommand
-            _conversation.value = ConversationState()
-            val state = live.request("get_state") { PiCommand.getState(it) }
-            _conversation.update { ConversationReducer.reduce(it, state) }
-            refreshThinkingLevels()
-            loadCurrentMessages(live)
+        runModelCommand {
+            val live = client ?: return@runModelCommand
+            if (turnInFlight) return@runModelCommand
+            confirmedRoute = null
+            val response = live.requestOrThrow("clone") { PiCommand.clone(it) }
+            if (!response.cancelled()) {
+                _conversation.value = ConversationState()
+                applyState(live)
+                loadCurrentMessages(live)
+            }
+            val profile = selectedProfile()
+            if (profile != null && profile.modelId.isNotBlank()) ensureModelForPrompt(profile)
         }
     }
 
@@ -2302,36 +2200,89 @@ class PiAgentSession internal constructor(
         }
     }
 
-    fun setSessionName(name: String) {
-        val path = sessionPath
-        // A conversation opened from the drawer has no child process until the reader
-        // sends something, so there is no RPC client to answer `set_session_name`. The
-        // name still has to be written: the file is the record, and `renameSession` uses
-        // the same append for a row that is not live. Without this branch the generated
-        // title was displayed once and lost on the next launch, while the drawer kept
-        // drawing the first prompt from the file.
-        if (client == null) {
-            if (path == null) return
-            scope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) { appendSessionInfo(File(path), name) }
-                }.onSuccess {
-                    _conversation.update { it.copy(sessionName = name) }
-                    host.notifySessionListingChanged()
+    private fun nameFirstPrompt(source: PiRpcClient) {
+        if (client !== source) return
+        val snapshot = _conversation.value
+        val candidate = autoTitleCandidate
+        var path = autoTitlePath.get()
+        if (path == null && candidate) {
+            // A handshake that did not name a file leaves the candidate armed; the
+            // first user message is the point where the reducer has one. Taking it
+            // here rather than waiting for a later `get_state` is what makes the rule
+            // cover both pi's "file named at launch" and "file named at first write"
+            // behaviours.
+            path = snapshot.sessionFile ?: return
+            if (!autoTitlePath.compareAndSet(null, path)) path = autoTitlePath.get() ?: return
+        }
+        if (path == null) return
+        if (snapshot.sessionFile != path || !autoTitlePath.compareAndSet(path, null)) return
+        if (candidate) autoTitleCandidate = false
+        val prompt = firstPromptText(snapshot, path, settingsStore.read().chatTitleEnabled) ?: return
+        // The title is a small request to the model this conversation answers from.
+        // Reading the profile and its route here, before the coroutine, keeps the
+        // request's target the one the launch actually confirmed; a profile change
+        // while the request is in flight does not make the title answer a model the
+        // conversation was never talking to.
+        val profile = runCatching { selectedProfile() }.getOrNull() ?: return
+        val route = launchedRoutes?.route(profile) ?: return
+        val cliEntry = PiInstallation.cliEntry(env) ?: return
+        // `pi --print` is a second short-lived child. It is given the same provider
+        // entry, credentials and workspace as this conversation, but no session, no
+        // tools and no extensions; see [PiProcessLauncher.generateTitle]. Reading
+        // these before the coroutine keeps the request on the route the launch
+        // confirmed, rather than on whatever profile is active when it finishes.
+        val titleOptions = PiLaunchOptions(
+            nodePath = env.node.absolutePath,
+            cliEntry = cliEntry.absolutePath,
+            workingDir = launchWorkspace(),
+            sessionDir = null,
+            provider = route.provider,
+            modelId = route.model,
+            thinkingLevel = "off",
+            extraEnv = ProfileAddressing.providerEnvironment(settingsStore.profiles.snapshots.value),
+            offline = true,
+            noSession = true,
+        )
+        scope.launch {
+            val raw = runCatching {
+                PiProcessLauncher.generateTitle(
+                    context = appContext,
+                    env = env,
+                    options = titleOptions,
+                    prompt = prompt,
+                    systemPrompt = titleSystemPrompt(),
+                )
+            }.getOrNull() ?: return@launch
+            val name = normalizeTitle(raw).takeIf { it.isNotBlank() } ?: return@launch
+            try {
+                modelCommandLock.withLock {
+                    if (client !== source || sessionPath != path || !settingsStore.read().chatTitleEnabled ||
+                        !_conversation.value.sessionName.isNullOrBlank()
+                    ) return@withLock
+                    val liveState = nameState(source)
+                    if (liveState.str("sessionFile") != path || !liveState.str("sessionName").isNullOrBlank()) {
+                        return@withLock
+                    }
+                    source.requestOrThrow("set_session_name", 2.seconds) { PiCommand.setSessionName(it, name) }
+                    publishSessionName(path, name)
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Could not store the new conversation title", error)
             }
-            return
         }
-        runCommand {
-            client?.requestOrThrow("set_session_name") { PiCommand.setSessionName(it, name) }
-            // The command's own `session_info_changed` event is the live path, but the
-            // generated title is written from a background request and the drawer's
-            // listing is a file scan: updating the transcript here is what makes the
-            // page header move immediately, and the revision is what makes the drawer
-            // re-read the file the title was just appended to.
-            _conversation.update { it.copy(sessionName = name) }
-            host.notifySessionListingChanged()
+    }
+
+    private suspend fun nameState(source: PiRpcClient): JsonObject =
+        source.requestOrThrow("get_state", 2.seconds) { PiCommand.getState(it) }.data as? JsonObject
+            ?: throw PiRpcException("Pi did not provide session state")
+
+    private fun publishSessionName(path: String, name: String) {
+        _conversation.update { state ->
+            if (state.sessionFile == path) state.copy(sessionName = name) else state
         }
+        host.notifySessionListingChanged()
     }
 
     // ------------------------------------------------------------ dialogs
@@ -2356,10 +2307,18 @@ class PiAgentSession internal constructor(
         _conversation.update { it.copy(pendingDialog = null) }
     }
 
-    private fun runCommand(block: suspend () -> Unit) {
-        scope.launch {
+    private fun runModelCommand(block: suspend () -> Unit) {
+        runCommand(ordered = true) {
+            modelCommandLock.withLock { withContext(Dispatchers.IO) { block() } }
+        }
+    }
+
+    private fun runCommand(ordered: Boolean = false, block: suspend () -> Unit) {
+        scope.launch(start = if (ordered) CoroutineStart.UNDISPATCHED else CoroutineStart.DEFAULT) {
             try {
                 block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: PiProcessExitedException) {
                 releaseCpuDuringTurn()
                 _conversation.update {
@@ -2407,7 +2366,7 @@ class PiAgentSession internal constructor(
         // own write (see it): the reducer drops this when the state names another model,
         // and a restart over a setting that is not a model rewrites the same id that is
         // already running.
-        val requested = settingsStore.profiles.snapshots.value.activeProfile?.modelId?.takeIf { it.isNotBlank() }
+        val requested = runCatching { selectedProfile()?.modelId }.getOrNull()?.takeIf { it.isNotBlank() }
         _conversation.update { it.copy(requestedModel = requested) }
         settingsRestartJob = scope.launch {
             delay(SETTINGS_RESTART_DEBOUNCE_MS)
@@ -2418,11 +2377,17 @@ class PiAgentSession internal constructor(
             // said the agent was gone. Wait for the turn to settle instead — the
             // debounce already coalesces a burst of edits, and this coalesces
             // "edit while answering" into "restart when the answer is done".
-            while (turnInFlight) {
+            while (true) {
+                val restarted = modelCommandLock.withLock {
+                    if (turnInFlight) false else {
+                        stopAgentSerialized()
+                        startAgentSerialized()
+                        true
+                    }
+                }
+                if (restarted) break
                 delay(SETTINGS_RESTART_POLL_MS)
             }
-            stopAgent()
-            startAgent()
         }
     }
 
@@ -2437,8 +2402,10 @@ class PiAgentSession internal constructor(
     fun restartAgent() {
         settingsRestartJob?.cancel()
         settingsRestartJob = scope.launch {
-            stopAgent()
-            startAgent()
+            modelCommandLock.withLock {
+                stopAgentSerialized()
+                startAgentSerialized()
+            }
         }
     }
 
@@ -2812,7 +2779,8 @@ class PiAgentSession internal constructor(
      * The restore is the only caller. Every other write in the app goes through the
      * store that owns the file, and that is what keeps each of them its one writer.
      */
-    suspend fun reloadAfterRestore() {
+    suspend fun reloadAfterRestore() = modelCommandLock.withLock {
+        conversationProfile = null
         settingsStore.reload()
         // The presets are a document of their own, and one restore replaces it wholesale:
         // the store read its list at startup, so without this the chat half would show the
@@ -2840,14 +2808,17 @@ class PiAgentSession internal constructor(
         // logged by the writers and does not fail the restore — the archive's own
         // copies are already in place, and a `pi` typed before the next launch
         // reads those.
-        withContext(Dispatchers.IO) {
-            val settings = settingsStore.read()
-            val restored = settingsStore.profiles.snapshots.value
-            val entries = profileProviderEntries(restored)
-            registeredProviderIds = entries.keys
-            writeModelsJson(settings, restored, entries)
-            writePiDefaults(settings)
+        host.launchFileLock.withLock {
+            withContext(Dispatchers.IO) {
+                val restored = settingsStore.profiles.snapshots.value
+                val routes = profileRoutes(restored)
+                runCatching {
+                    writeModelsJson(restored, routes.entries)
+                    writePiDefaults(settingsStore.read().withProfile(restored.activeProfile), routes.route(restored.activeProfile)?.provider)
+                }.onFailure { Log.w(TAG, "Could not project the restored profiles", it) }
+            }
         }
+        Unit
     }
 
     /**
@@ -2861,264 +2832,23 @@ class PiAgentSession internal constructor(
         _pinnedSessions.value = pinnedPrefs.getStringSet(KEY_PINNED, emptySet()).orEmpty().toSet()
     }
 
-    /**
-     * Merges PiKit's own entries into pi's `models.json`.
-     *
-     * The file is pi's, and pi's documentation invites the user to edit it by hand
-     * (`docs/models.md`), so nothing here may replace it or delete it. Three things
-     * are written and nothing else is touched:
-     *
-     *  - **one whole provider entry per saved profile** that pi cannot otherwise name —
-     *    a custom endpoint, and a second profile of a built-in provider
-     *    ([profileProviderEntries]). Every profile, not only the active one: pi reads
-     *    this file once, at startup, and a profile that is not in it is a model
-     *    `set_model` answers `Model not found` for, which is the relaunch the picker
-     *    used to pay;
-     *  - one `models` entry per model id pi's catalogue does **not** contain, for the ids
-     *    the user filled settings in for. The entry names the model pi would have
-     *    resolved the id to (`buildFallbackModel`'s copy of the provider's default, read
-     *    out of `get_state`), so the settings change what the user asked to change and
-     *    nothing else;
-     *  - the withdrawal of everything earlier builds of this app wrote: every `pikit-` id
-     *    that is no longer wanted (including the single shared `pikit-custom` endpoint a
-     *    build before this one used), and the `modelOverrides.input` declarations the
-     *    build before that wrote for every id the user had declared.
-     *
-     * Nothing is written for a model pi's own catalogue contains. That is the rule rather
-     * than an omission: `models` is the only mechanism that reaches an id pi does not
-     * know, and it *replaces* pi's entry for one it does, window and cost included. See
-     * [modelsJsonWith].
-     *
-     * Written only when the encoded document differs, so an untouched file keeps
-     * its bytes, its mtime and its comments.
-     *
-     * A failure used to be logged and ignored, on the argument that pi reports a
-     * missing provider itself. It does — as `Unknown provider "pikit-custom"` and
-     * `process.exit(1)`, which the chat page shows as `pi exit with code 1` — and
-     * for a built-in provider's relay URL it reports nothing at all: the override
-     * is simply absent and every prompt answers `401` from the official address,
-     * which reads as "the key is wrong" for a write that failed underneath. So a
-     * registration that *had* to land and did not is now a launch failure with a
-     * message naming the file and the fields to look at. A write that was not
-     * needed (nothing of PiKit's to say) is still a no-op, not a failure.
-     *
-     * @return null when the file is in the state the profile needs — written,
-     *   already matching, or deliberately untouched — and the failure otherwise.
-     *   Only a *required* registration reports one: the active profile is a custom
-     *   endpoint, some saved profile needs a whole entry, or a non-empty
-     *   [hasModelsJsonEntries] for a built-in. A withdrawal that could not run leaves a
-     *   stale entry behind, which is a mess and not a reason to refuse to start.
-     */
-    private fun writeModelsJson(
-        settings: PiSettings,
-        snapshot: PiConfigSnapshot,
-        /**
-         * The entries every saved profile needs, by the id it is launched as — computed
-         * once by the launch so that what the file defines and what the launch may name
-         * are the same answer ([ProfileAddressing.launchProviderId]).
-         */
-        entries: Map<String, JsonObject>,
-    ): Throwable? {
-        val target = File(env.home, CustomEndpoint.MODELS_FILE_RELATIVE)
-        val profile = snapshot.activeProfile
+    private fun profileRoutes(snapshot: PiConfigSnapshot): ProfileRoutes = prepareProfileRoutes(
+        env.prefix,
+        File(env.piConfigDir, CATALOGUE_STORE_NAME),
+        snapshot,
+    )
 
-        // Read before the body so the failure path can consult it: a registration
-        // that had to land and did not is a launch failure, a withdrawal that could
-        // not run is not.
-        val provider = settings.provider
-        val customInUse = provider != null && provider in PiProvider.needsBaseUrl
-        // The store is read once here and answers two questions: which ids pi's catalogue
-        // knows *right now* (the routing widening below), and — from the same model
-        // objects, `api` included — which wire protocol this provider speaks, which is
-        // what the endpoint override has to be spelled for. Reading the stripped
-        // `storeModelFacts` would answer the first and not the second: it drops `api`
-        // because a relay must not inherit it.
-        val storeModels = if (provider != null && !customInUse) {
-            storeProviderModels(File(env.piConfigDir, CATALOGUE_STORE_NAME), provider.id)
-        } else {
-            emptyMap()
+    private fun writeModelsJson(snapshot: PiConfigSnapshot, entries: Map<String, JsonObject>) {
+        val file = File(env.home, CustomEndpoint.MODELS_FILE_RELATIVE)
+        try {
+            val existing = if (file.isFile) Json.parseToJsonElement(file.readText()) as JsonObject
+                else JsonObject(emptyMap())
+            val cleaned = withdrawNativeProjection(existing, snapshot)
+            val projected = modelsJsonWith(cleaned, entries)
+            if (projected != existing) replaceConfigFile(file, projected.toString())
+        } catch (error: Exception) {
+            throw PiRpcException(stringsFor(settingsStore.read().language).settings.modelsJsonWriteFailed, error)
         }
-        val definitions = modelDefinitions(
-            provider,
-            profile,
-            catalogueBasis(env, provider),
-            currentCatalogueIds = storeModels.keys,
-            api = cataloguedApi(storeModels.values),
-        )
-        val required = customInUse || entries.isNotEmpty() || hasModelsJsonEntries(definitions)
-
-        return runCatching {
-            // Nothing of PiKit's to say and no file of the user's to say it in: the
-            // file is created only when something has to go in it. Without this a
-            // built-in provider on a fresh install would leave an empty
-            // `{"providers":{}}` behind, which reads as an app-written file rather
-            // than as one the user made.
-            //
-            // "Something to say" is about *entries to write*, not about the map's
-            // keys and not about withdrawals: the active provider is always in the
-            // map so that an entry turned off — or one a previous build wrote — can
-            // be withdrawn, and that is only worth doing to a file that exists.
-            // The same is true of a cleared `baseUrl`: `writtenBaseUrls` alone must
-            // not conjure a file. But a non-empty `baseUrl` *is* an entry to write
-            // — the whole point of pointing a built-in provider at a relay — and
-            // an `overrides` map is one too. Checking only `wanted` used to drop
-            // both on a fresh install: Xiaomi with a relay URL and no per-model
-            // numbers never created the file, the override was never written, and
-            // pi requested the official address and answered `401` for a key that
-            // was correct for the relay.
-            if (!target.isFile && !customInUse && entries.isEmpty() &&
-                !hasModelsJsonEntries(definitions)
-            ) {
-                return null
-            }
-
-            val existing = if (target.isFile) {
-                val read = runCatching {
-                    Json.parseToJsonElement(target.readText()) as? JsonObject
-                }.getOrNull()
-                if (read == null) {
-                    // Unreadable to us, and it is the user's: leave it exactly as it
-                    // is rather than replacing it with PiKit's idea of the document.
-                    // A registration that has to land in it is a launch failure
-                    // rather than a silent drop — see the return contract above.
-                    Log.w(TAG, "left ${CustomEndpoint.MODELS_FILE_RELATIVE} alone: not a JSON object")
-                    return if (required) {
-                        IllegalStateException(
-                            "${CustomEndpoint.MODELS_FILE_RELATIVE} is not a JSON object",
-                        )
-                    } else {
-                        null
-                    }
-                }
-                read
-            } else {
-                JsonObject(emptyMap())
-            }
-
-            // Every saved profile's whole entry, written under the id it is launched
-            // with. `definitions` is the other half: the *active* built-in provider's
-            // model list, which merges into pi's own entry for that provider rather
-            // than replacing it (see [modelDefinitions]).
-            val document = modelsJsonWith(
-                existing = existing,
-                entries = entries,
-                definitions = definitions,
-            )
-            val encoded = Json.encodeToString(JsonObject.serializer(), document)
-            // `!target.isFile ||` is load-bearing, not a shortcut. Without it the
-            // first write to a `models.json` that does not exist yet throws
-            // FileNotFoundException out of `readText()`, the enclosing
-            // `runCatching` swallows it as "could not merge models.json", and the
-            // file is never created. pi is then launched with
-            // `--provider pikit-custom`, does not find that provider in any
-            // models.json, and `findInitialModel` answers
-            // `Unknown provider "pikit-custom"` followed by `process.exit(1)`
-            // (pi's `core/model-resolver.js`). Measured as the report "custom
-            // endpoint configured, then pi exit with code 1 on the chat page":
-            // the provider registration is the one thing a custom endpoint needs,
-            // and this is the only path that writes it. `writePiDefaults` below
-            // has always had the guard; this writer lost it when it stopped
-            // replacing the file wholesale.
-            if (!target.isFile || target.readText() != encoded) {
-                target.parentFile?.mkdirs()
-                target.writeText(encoded)
-                Log.i(TAG, "wrote ${CustomEndpoint.MODELS_FILE_RELATIVE}")
-            }
-            null
-        }.fold(
-            onSuccess = { it },
-            onFailure = {
-                Log.w(TAG, "could not merge ${CustomEndpoint.MODELS_FILE_RELATIVE}", it)
-                // A write that was not needed is a no-op that happened to fail — a
-                // stale withdrawal is a mess, not a reason to refuse to start.
-                if (required) it else null
-            },
-        )
-    }
-
-    /**
-     * The `models.json` entry every **saved** profile needs, by the id it is launched as.
-     *
-     * Two kinds of entry are built here, and the difference is what pi already knows:
-     *
-     *  * a **custom endpoint** gets its whole provider object, endpoint and protocol and
-     *    every model of the profile ([CustomEndpoint.providerObject]) — pi has no
-     *    catalogue entry for a relay, so the entry is the only thing that can say what
-     *    the endpoint is;
-     *  * a **built-in provider reached by a second profile** gets the same shape filled
-     *    from pi's own catalogue store (`models-store.json`, which the launch path
-     *    refreshes for every built-in provider): the host, the protocol and every field
-     *    of every model, `compat` included, because that is what a second provider id
-     *    otherwise loses — DeepSeek's reasoning format is a `compat` field, not an
-     *    assumption of the `openai-completions` client.
-     *
-     * The **first** profile of a built-in provider gets no entry at all: pi's own id
-     * already names it, its catalogue already describes it, and its key reaches it
-     * through the provider's own environment variable ([ProfileAddressing]).
-     *
-     * An entry that cannot be built — no endpoint anywhere, a store that has never been
-     * refreshed — is left out rather than invented. That profile then costs a relaunch
-     * the first time it is picked, which is the behaviour this change removes for every
-     * profile it can describe.
-     */
-    private fun profileProviderEntries(snapshot: PiConfigSnapshot): Map<String, JsonObject> {
-        val profiles = snapshot.profiles
-        val entries = LinkedHashMap<String, JsonObject>()
-        val factsByProvider = HashMap<String, Map<String, JsonObject>>()
-        // The catalogue's "how this model thinks" statement, per wire protocol, read once per
-        // launch and only when a relay needs it. See `cataloguedThinkingShapes`.
-        val thinkingShapes = HashMap<String, Map<String, JsonObject>>()
-        for (profile in profiles) {
-            val provider = profile.providerEntry ?: continue
-            // A profile with no key cannot authenticate, and an entry that names a
-            // variable nothing resolves is worse than no entry: `pi update --models`
-            // aborts the *whole* refresh on the first provider whose credential does not
-            // resolve, which would leave every other provider's catalogue stale. That
-            // failure and its cause were measured — `Could not refresh model catalogs:
-            // deepseek: Failed to resolve API key … PIKIT_KEY_…`.
-            if (profile.apiKey.isBlank()) continue
-            val runtimeId = ProfileAddressing.runtimeProviderId(profile, profiles)
-            val entry = if (provider in PiProvider.needsBaseUrl) {
-                // The protocol decides which catalogue entries can say anything about these
-                // ids: a relay's `claude-opus-5-5` is the catalogue's model only when the same
-                // request shape reaches it. See `cataloguedThinkingShapes`.
-                val protocol = profile.api.ifBlank { CustomApi.DEFAULT_ID }
-                CustomEndpoint.providerObject(
-                    baseUrl = profile.baseUrl,
-                    // Every model the profile offers: `set_model` can only reach a model
-                    // that is in the entry, so a profile registered with one model is a
-                    // profile that can only be switched *to* by relaunching.
-                    modelIds = profile.selectableModels.ifEmpty { listOf(profile.modelId) },
-                    settings = profile.modelSettings.withThinkingShapes(
-                        thinkingShapes.getOrPut(protocol) {
-                            cataloguedThinkingShapes(
-                                File(env.piConfigDir, CATALOGUE_STORE_NAME),
-                                protocol,
-                            )
-                        },
-                    ),
-                    api = protocol,
-                    apiKey = ProfileAddressing.apiKeyReference(profile.id),
-                )
-            } else if (runtimeId != provider.id) {
-                builtInProviderObject(
-                    profile = profile,
-                    modelFacts = factsByProvider.getOrPut(provider.id) {
-                        // The provider's models **as pi wrote them**: a second provider id
-                        // has no host of its own, and `api`/`baseUrl` only exist on this
-                        // side of the store's two readers. See [storeProviderModels].
-                        storeProviderModels(
-                            File(env.piConfigDir, CATALOGUE_STORE_NAME),
-                            provider.id,
-                        )
-                    },
-                )
-            } else {
-                null
-            }
-            if (entry != null) entries[runtimeId] = entry
-        }
-        return entries
     }
 
     /**
@@ -3138,16 +2868,13 @@ class PiAgentSession internal constructor(
      * Failure is logged and ignored, like the `models.json` writer: without this
      * file the agent still starts, minus `grep`, `find` and `ls`.
      */
-    private fun writePiDefaults(settings: PiSettings) {
+    private fun writePiDefaults(settings: PiSettings, defaultProvider: String?) {
         val target = File(env.home, TOOL_DEFAULTS_FILE_RELATIVE)
         runCatching {
             val existing = if (target.isFile) {
                 Json.parseToJsonElement(target.readText()) as? JsonObject ?: JsonObject(emptyMap())
             } else {
                 JsonObject(emptyMap())
-            }
-            val defaultProvider = settingsStore.profiles.activeProfile?.let { active ->
-                ProfileAddressing.runtimeProviderId(active, settingsStore.profiles.profiles)
             }
             val document = settingsWithPiDefaults(
                 existing = existing,
@@ -3161,8 +2888,7 @@ class PiAgentSession internal constructor(
             // Rewritten only when it differs, so an unchanged file keeps its
             // timestamp and pi's own settings writes are not raced.
             if (!target.isFile || target.readText() != encoded) {
-                target.parentFile?.mkdirs()
-                target.writeText(encoded)
+                replaceConfigFile(target, encoded)
                 Log.i(
                     TAG,
                     "wrote $TOOL_DEFAULTS_FILE_RELATIVE defaultTools=${PiLaunchOptions.DEFAULT_TOOLS} " +
@@ -3436,10 +3162,7 @@ internal fun settingsWithPiDefaults(
 ): JsonObject {
     var merged = settingsWithDefaultTools(existing, tools)
 
-    // Written unconditionally rather than only when the profile is filled in: the
-    // retry is the *runtime's* patience, not a model preference, and a pi the user
-    // runs by hand in the terminal tab deserves the same of it.
-    merged = JsonObject(merged + ("retry" to RETRY_PATIENCE))
+    if ("retry" !in merged) merged = JsonObject(merged + ("retry" to RETRY_PATIENCE))
 
     // A `packages` key that is not an array is not this function's to reinterpret:
     // the write is skipped, the same way an unparseable `models.json` is left alone.
@@ -3574,7 +3297,7 @@ internal fun modelsJsonWith(
     // build wrote, and every profile the user has since deleted. A user's provider, and
     // any key inside one, is not this app's to remove.
     for (id in providers.keys.toList()) {
-        if (id.startsWith(ProfileAddressing.PREFIX) && id !in entries) providers.remove(id)
+        if (id !in entries && isAppProvider(id, providers[id] as? JsonObject)) providers.remove(id)
     }
     entries.forEach { (id, entry) -> providers[id] = entry }
 
@@ -3974,7 +3697,7 @@ internal fun builtInProviderObject(
         put("name", profile.displayName)
         put("baseUrl", baseUrl)
         put("api", api)
-        put("apiKey", ProfileAddressing.apiKeyReference(profile.id))
+        put("apiKey", ProfileAddressing.apiKeyReference(profile))
         put(
             "models",
             buildJsonArray {
@@ -4534,12 +4257,8 @@ internal fun PiSettings.toLaunchOptions(
     provider = providerId,
     modelId = modelId.takeIf { it.isNotBlank() },
     thinkingLevel = thinkingLevel,
-    // The placeholders and the credentials of every *other* saved profile. Written
-    // before `apiKeyEnvVar` by the launcher, so this profile's own key still wins for
-    // the variable it names.
     extraEnv = credentials,
-    apiKeyEnvVar = provider?.envVar,
-    apiKey = apiKey.takeIf { it.isNotBlank() },
+    offline = true,
     mode = mode,
     systemPromptFile = chatPromptFile,
     chatPromptExtension = chatPromptExtension,
