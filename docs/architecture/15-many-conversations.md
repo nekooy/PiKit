@@ -161,7 +161,7 @@ The wake lock is split the same way as before: a turn lock per conversation
 A conversation pi never names is titled by its first user turn, which is what the drawer
 has always drawn and what pi's own picker does. Since a title is a sentence about the
 conversation rather than part of it, the drawer can also ask a model for one: the
-**Generate conversation titles** switch (`PiSettings.chatTitleEnabled`, off by default)
+**Generate conversation titles** switch (`PiSettings.chatTitleEnabled`, on by default)
 makes the first answer that settles without an error send the conversation's first prompt
 to the same provider, once, and write the returned line with `set_session_name`. The
 policy — one line, the messages' language, about five words or ten CJK characters, no
@@ -178,9 +178,24 @@ timeout, and a failure is logged by status only and never retried for that conve
 The prompt is capped at two thousand characters, which is the opening question rather than
 the transcript.
 
-Two rules keep the feature from surprising the reader. It runs only while the title switch
-is on, and it never overwrites a name: the write happens only if `sessionName` is still
-blank, so a rename made while the request is in flight wins. The profile must carry a key
+**An opening is a trigger as well as a settle.** A saved conversation whose last turn
+completed while the switch was off, or before the feature existed, has no later settle to
+wait for; activating it — from the drawer or the cold-start restore — therefore asks for
+the missing title too. The host's `attempted` set still admits one request per file per
+process, so opening a conversation after its title landed is free. **A drawer-opened
+conversation has no child process**, so the name is appended to its session file with the
+same `session_info` record a saved row's rename uses; the RPC is only for a live
+conversation. `openFromDisk` reads that record back into the page's title, which it did not
+do before: the header drew the app's name and the generator saw an unnamed conversation
+even after a title had been written. The title is written
+into the session file, not the transcript, so `PiHost.sessionListingRevision` is bumped
+when it lands and the drawer re-runs its file scan; without that the row kept drawing the
+first prompt from a listing that had been read before the write.
+
+Three rules keep the feature from surprising the reader. It runs only while the title switch
+is on, it never overwrites a name, and a failed request is not retried on every later
+turn: the write happens only if `sessionName` is still blank, so a rename made while the
+request is in flight wins. The profile must carry a key
 and a model, and a provider whose chat base this app does not know is skipped rather than
 guessed — a guessed URL would send the reader's key to somebody else's server.
 

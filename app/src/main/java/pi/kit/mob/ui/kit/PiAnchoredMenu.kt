@@ -118,7 +118,14 @@ internal fun BoxScope.PiAnchoredMenu(
             morph -> GlassMotion.transformBounds(targetState)
             else -> GlassMotion.popupMorph()
         }
-    }, label = "bounds") { if (it) 1f else 0f }
+    }, label = "bounds") {
+        // An edge-revealed menu closes by fading in place; only the morph menus (a
+        // composer chip, a glass icon button) reverse their transform. Reversing the
+        // edge reveal made the panel empty itself first — the rows faded in 150 ms
+        // while the frame kept its size on a 300 ms spring — and what the reader saw
+        // was an empty glass rectangle collapsing into the row.
+        if (it) 1f else if (morph) 0f else 1f
+    }
     val center = if (morph) {
         transition.animateFloat({ GlassMotion.transformCenter(targetState) }, label = "center") { if (it) 1f else 0f }
     } else {
@@ -135,7 +142,9 @@ internal fun BoxScope.PiAnchoredMenu(
     // The library's popup blur: 40px at the start of the reveal, sharp by the time the
     // rows are readable. It is what carries an edge reveal that has no glyph to hand over.
     val sharpness = transition.animateFloat({ GlassMotion.popupMorphBlur() }, label = "sharpness") {
-        if (it) 1f else 0f
+        // A closing edge reveal stays sharp; blurring it as it fades put a smeared
+        // ghost of the rows over the page for the length of the exit.
+        if (it) 1f else if (morph) 0f else 1f
     }
     val dismiss by rememberUpdatedState(onDismissRequest)
     BackHandler(enabled = open) { dismiss() }
@@ -302,8 +311,14 @@ internal fun BoxScope.PiAnchoredMenu(
                     // The edge-reveal panel is glass from its first frame, as `GlassPopup`
                     // draws it; a glyph menu's surface is opaque from its first frame too
                     // — the button it replaces — and fades out under the glass. Only the
-                    // composer's transform fades a whole panel in.
-                    alpha = if (morph && anchorContent == null) surface.value.coerceIn(0f, 1f) else 1f
+                    // composer's transform fades a whole panel in. An edge-revealed menu
+                    // fades with its rows so the closing frame is a fade, not an empty
+                    // panel shrinking to a sliver.
+                    alpha = when {
+                        morph && anchorContent != null -> 1f
+                        morph -> surface.value.coerceIn(0f, 1f)
+                        else -> rows.value.coerceIn(0f, 1f)
+                    }
                 }
                 val contentScale = if (morph) 1f else popupContentScale(geometry.value)
                 val scale = if (morph && size.width > 0 && size.height > 0) {

@@ -648,13 +648,24 @@ enum class FontSize(val code: String, val scale: Float) {
     /**
      * Whether a conversation's title is generated after its first successful turn.
      *
-     * Off by default: the feature costs one small provider request per conversation,
-     * and a title is a convenience rather than part of the transcript. On, the first
-     * answer that settles without an error sends the first prompt to the same
-     * provider and writes the returned line with `set_session_name`; a name the
-     * reader set is never overwritten (see `TitleGenerator`).
+     * On by default: a drawer of first prompts is hard to scan, and the request is one
+     * small call per conversation rather than one per turn. The first answer that
+     * settles without an error, and the opening of a saved conversation whose title
+     * was never generated, send the first prompt to the same provider and write the
+     * returned line with `set_session_name`; a name the reader set is never overwritten
+     * (see `TitleGenerator`).
      */
-    val chatTitleEnabled: Boolean = false,
+    val chatTitleEnabled: Boolean = true,
+    /**
+     * Whether the current step's reasoning opens while it streams and folds when it ends.
+     *
+     * Off by default: a transcript that grows a screenful of reasoning on every tool
+     * call is the behaviour the reasoning row was made a disclosure to avoid. On, a
+     * step whose thinking is arriving is opened and its block follows the newest token;
+     * the block folds when that step finishes, leaving the finished transcript as the
+     * one the reader had before.
+     */
+    val expandThinkingWhileStreaming: Boolean = false,
     /**
      * The chat prompt the single-document editor stored before presets existed.
      *
@@ -925,7 +936,8 @@ class SettingsStore(context: Context) {
                 prefs.getString(KEY_CHAT_WEB_DEFAULT, null),
             ),
             lastChatWebAccess = prefs.getBoolean(KEY_LAST_CHAT_WEB_ACCESS, false),
-            chatTitleEnabled = prefs.getBoolean(KEY_CHAT_TITLE_ENABLED, false),
+            chatTitleEnabled = prefs.getBoolean(KEY_CHAT_TITLE_ENABLED, true),
+            expandThinkingWhileStreaming = prefs.getBoolean(KEY_EXPAND_THINKING_WHILE_STREAMING, false),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -1019,6 +1031,10 @@ class SettingsStore(context: Context) {
             .putString(KEY_CHAT_WEB_DEFAULT, next.chatWebAccessDefault.code)
             .putBoolean(KEY_LAST_CHAT_WEB_ACCESS, next.lastChatWebAccess)
             .putBoolean(KEY_CHAT_TITLE_ENABLED, next.chatTitleEnabled)
+            .putBoolean(
+                KEY_EXPAND_THINKING_WHILE_STREAMING,
+                next.expandThinkingWhileStreaming,
+            )
             .putString(KEY_CHAT_SYSTEM_PROMPT, next.chatSystemPrompt)
             .putString(KEY_PERMISSION, next.permissionMode.code)
             .putString(KEY_LANGUAGE, next.language.code)
@@ -1052,6 +1068,7 @@ class SettingsStore(context: Context) {
             chatWebAccessDefault = next.chatWebAccessDefault,
             lastChatWebAccess = next.lastChatWebAccess,
             chatTitleEnabled = next.chatTitleEnabled,
+            expandThinkingWhileStreaming = next.expandThinkingWhileStreaming,
             chatSystemPrompt = next.chatSystemPrompt,
             language = next.language,
             openNewOnLaunch = next.openNewOnLaunch,
@@ -1146,7 +1163,8 @@ class SettingsStore(context: Context) {
                 prefs.getString(KEY_CHAT_WEB_DEFAULT, null),
             ),
             lastChatWebAccess = prefs.getBoolean(KEY_LAST_CHAT_WEB_ACCESS, false),
-            chatTitleEnabled = prefs.getBoolean(KEY_CHAT_TITLE_ENABLED, false),
+            chatTitleEnabled = prefs.getBoolean(KEY_CHAT_TITLE_ENABLED, true),
+            expandThinkingWhileStreaming = prefs.getBoolean(KEY_EXPAND_THINKING_WHILE_STREAMING, false),
             chatSystemPrompt = chatSystemPrompt(),
             language = Lang.fromCode(prefs.getString(KEY_LANGUAGE, null)),
             openNewOnLaunch = prefs.getBoolean(KEY_OPEN_NEW_ON_LAUNCH, true),
@@ -1183,6 +1201,7 @@ class SettingsStore(context: Context) {
         chatWebAccessDefault: ChatWebAccessDefault = current.get().chatWebAccessDefault,
         lastChatWebAccess: Boolean = current.get().lastChatWebAccess,
         chatTitleEnabled: Boolean = current.get().chatTitleEnabled,
+        expandThinkingWhileStreaming: Boolean = current.get().expandThinkingWhileStreaming,
         chatSystemPrompt: String = current.get().chatSystemPrompt,
         language: Lang = current.get().language,
         openNewOnLaunch: Boolean = current.get().openNewOnLaunch,
@@ -1215,6 +1234,7 @@ class SettingsStore(context: Context) {
                 chatWebAccessDefault = chatWebAccessDefault,
                 lastChatWebAccess = lastChatWebAccess,
                 chatTitleEnabled = chatTitleEnabled,
+                expandThinkingWhileStreaming = expandThinkingWhileStreaming,
                 chatSystemPrompt = chatSystemPrompt,
                 language = language,
                 openNewOnLaunch = openNewOnLaunch,
@@ -1313,6 +1333,9 @@ class SettingsStore(context: Context) {
         /** The last chat conversation's network-tools switch; see [PiSettings.lastChatWebAccess]. */
         private const val KEY_LAST_CHAT_WEB_ACCESS = "last_chat_web_access"
         private const val KEY_CHAT_TITLE_ENABLED = "chat_title_enabled"
+
+        /** Whether the streaming step's reasoning opens itself; see [PiSettings]. */
+        private const val KEY_EXPAND_THINKING_WHILE_STREAMING = "expand_thinking_while_streaming"
 
         /** The chat prompt template; see [PiSettings.chatSystemPrompt]. */
         private const val KEY_CHAT_SYSTEM_PROMPT = "chat_system_prompt"

@@ -60,6 +60,7 @@ import pi.kit.mob.pi.ToolState
 import pi.kit.mob.ui.clipEntryFor
 import pi.kit.mob.ui.components.CopyButton
 import pi.kit.mob.ui.kit.PiTone
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -928,7 +929,23 @@ internal fun ReasoningToggle(
  * same thing: an information-dense inset inside a turn.
  */
 @Composable
-internal fun ReasoningBlock(thinking: String) {
+internal fun ReasoningBlock(
+    thinking: String,
+    /** Whether the block should follow its own newest line while the model is thinking. */
+    follow: Boolean = false,
+) {
+    val scroll = rememberScrollState()
+    // A streamed block grows below the viewport. `maxValue` is read in a snapshot
+    // flow rather than in composition: it changes after every layout pass, and the
+    // only work needed is a scroll. A reader who has taken the scroll with a finger
+    // keeps their place — the same division the transcript's own follow rule makes —
+    // so a drag in progress is let through and the next completed layout resumes.
+    LaunchedEffect(follow, scroll) {
+        if (!follow) return@LaunchedEffect
+        snapshotFlow { scroll.maxValue }.collect { max ->
+            if (max > 0 && !scroll.isScrollInProgress) scroll.scrollTo(max)
+        }
+    }
     Surface(
         color = PiTone.inset(),
         shape = ROW_SHAPE,
@@ -938,7 +955,7 @@ internal fun ReasoningBlock(thinking: String) {
             text = thinking,
             modifier = Modifier
                 .heightIn(max = REASONING_MAX_HEIGHT)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             style = MiuixTheme.textStyles.footnote1.copy(
                 lineHeight = MONO_LINE_HEIGHT,

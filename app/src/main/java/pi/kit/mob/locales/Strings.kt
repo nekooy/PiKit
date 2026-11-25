@@ -181,7 +181,6 @@ interface Strings {
         val extrasOpen: String
 
         val placeholder: String
-        val placeholderAttachment: String
 
         /**
          * The second line of the empty transcript: a tip, one of a rotating set.
@@ -1071,10 +1070,20 @@ interface Strings {
 
         /**
          * Whether a conversation is named by a short model-generated title after its
-         * first successful answer. Off by default because it costs one small request.
+         * first successful answer. On by default; the request costs one small call.
          */
         val chatTitle: String
         val chatTitleSubtitle: String
+
+        /**
+         * Whether a step's reasoning opens while it streams and folds when it ends.
+         *
+         * The two halves are one switch because they are one behaviour: the block is
+         * opened to watch it think, and left open after the step ends it would be a
+         * screenful of finished reasoning the reader never asked to keep.
+         */
+        val thinkingAutoExpand: String
+        val thinkingAutoExpandSubtitle: String
 
         /**
          * Light, dark, or the system's own answer.

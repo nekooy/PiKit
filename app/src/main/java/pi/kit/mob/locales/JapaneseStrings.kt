@@ -58,7 +58,6 @@ internal object JapaneseStrings : Strings {
             "人物設定や時刻の位置は、設定 → エージェント設定 → 会話モードで変えられます。",
         )
         override val loadingConversation = "会話を開いています…"
-        override val placeholderAttachment = "この画像についての指示を入力…"
         override val send = "送信"
         override val stop = "停止"
 
@@ -390,6 +389,8 @@ internal object JapaneseStrings : Strings {
 
         override val chatTitle = "会話タイトルを自動生成"
         override val chatTitleSubtitle = "最初の回答後に短いタイトルを生成します（小さなモデルリクエストが 1 回増えます）"
+        override val thinkingAutoExpand = "思考中は自動で展開"
+        override val thinkingAutoExpandSubtitle = "現在のステップが思考中の間は展開し、完了したら折りたたみます"
         override val theme = "テーマ"
         override val themeSystem = "システムに合わせる"
         override val themeLight = "ライト"

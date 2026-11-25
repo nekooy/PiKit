@@ -49,21 +49,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -282,6 +278,11 @@ fun SessionsScreen(
     }
     var deleteUp by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
+    // A generated title is written into the session file after the drawer scanned it.
+    // The host bumps this counter when that happens, and the scan below treats it as
+    // one more reason to run, so the row changes from its first prompt without the
+    // reader having to close and reopen anything.
+    val listingRevision by session.host.sessionListingRevision.collectAsStateWithLifecycle()
     var matches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var matchedQuery by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
@@ -289,7 +290,7 @@ fun SessionsScreen(
     val toasts = LocalPiToast.current
     val haptics = LocalPiHaptics.current
 
-    LaunchedEffect(reload) {
+    LaunchedEffect(reload, listingRevision) {
         // Only a drawer with nothing to show draws the spinner. With a listing already
         // on screen the scan is a refresh, and raising `loading` for it is what put an
         // empty panel over rows the reader had seen a frame earlier.
@@ -1375,49 +1376,32 @@ private fun ConversationRow(
     // without this the 500 ms before the menu appears is a hold with no answer at all —
     // the same reason the transcript answers with this haptic (§7.3).
     val haptics = LocalPiHaptics.current
-    val hold = {
-        haptics.hold()
-        actionsUp = true
-    }
 
     // The menu is the drawer's own, not the row's: it is registered with the drawer's
     // popup host so the panel is measured against the window rather than clipped to a
     // list row, and it samples the drawer's backdrop without containing itself. What the
     // row contributes is where it is — see `rowAnchor`.
     val rowAnchor = rememberPiMenuAnchor()
-    // The menu opens at the finger, not at the row's own rectangle. A row is the
-    // width of the drawer, and an edge reveal from that rectangle unfolded across
-    // the whole list instead of out of the thing the reader held. The press point
-    // is read on the initial pass without consuming it, so the row's click and
-    // long-press still belong to `combinedClickable`.
+    // The menu is anchored on the row itself, not at the finger. A row is the subject of
+    // the question — the four actions all apply to this conversation — and a panel that
+    // sprang out of a point in the list looked like it belonged to the touch rather than
+    // to the row. The row's own bounds are recorded once per layout; the menu's collapsed
+    // endpoint is then the row's rounded rectangle, which is the same object a tap on it
+    // is about.
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val hold = {
+        haptics.hold()
+        rowCoords?.takeIf { it.isAttached }?.let { coords ->
+            rowAnchor.bounds = coords.boundsInWindow()
+        }
+        actionsUp = true
+    }
 
     Box {
         Box(
             Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned { rowCoords = it }
-                .pointerInput(item.path) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(
-                            requireUnconsumed = false,
-                            pass = PointerEventPass.Initial,
-                        )
-                        val coords = rowCoords
-                        if (coords?.isAttached == true) {
-                            val point = coords.localToWindow(down.position)
-                            if (point.x.isFinite() && point.y.isFinite()) {
-                                rowAnchor.bounds = Rect(point.x, point.y, point.x, point.y)
-                            }
-                        }
-                        // Observe the rest of the gesture without consuming it, so
-                        // this detector restarts cleanly for the next press.
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            if (event.changes.none { it.pressed }) break
-                        }
-                    }
-                }
                 // The margin is outside the fill: a highlighted row has to be inset from
                 // the panel's edge to read as a highlight rather than as a band across it.
                 .padding(horizontal = 8.dp)

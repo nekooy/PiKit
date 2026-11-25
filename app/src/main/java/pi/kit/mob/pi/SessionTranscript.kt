@@ -37,29 +37,51 @@ object SessionTranscript {
     private const val MAX_BYTES = 32L * 1024 * 1024
 
     /**
+     * The messages and the stored name of one saved conversation.
+     *
+     * The name travels with the messages because both are facts about the same file and
+     * the caller that opens it needs both. Reading the file twice — once for the
+     * transcript and once for `SessionMetadata` — doubled the I/O of every drawer tap on
+     * a long conversation for one line.
+     */
+    data class Payload(val messages: JsonObject, val name: String?)
+
+    /**
      * The `{"messages": […]}` payload for [file], or null when it is not a session.
      *
      * The envelope is pi's own: `get_messages` answers an object with a `messages` array,
      * and [ConversationReducer.replaceWithMessages] reads exactly that.
      */
-    fun payload(file: File): JsonObject? {
+    fun payload(file: File): Payload? {
         if (!file.isFile || file.length() > MAX_BYTES) return null
+        var name: String? = null
         val messages = buildJsonArray {
             file.useLines { lines ->
                 for (line in lines) {
-                    if (!line.contains("\"message\"")) continue
-                    val record: JsonObject = try {
-                        PiRecordParser.json.parseToJsonElement(line).jsonObject
-                    } catch (e: Exception) {
+                    if (line.contains("\"message\"")) {
+                        val record: JsonObject = try {
+                            PiRecordParser.json.parseToJsonElement(line).jsonObject
+                        } catch (e: Exception) {
+                            continue
+                        }
+                        val message = record["message"] as? JsonObject ?: continue
+                        add(withTimestamp(message, record))
                         continue
                     }
-                    val message = record["message"] as? JsonObject ?: continue
-                    add(withTimestamp(message, record))
+                    if (line.contains("\"session_info\"")) {
+                        // The last naming record wins, and a blank name is how pi clears
+                        // one — the same rule `SessionMetadata` reads for the drawer. The
+                        // message branch is first because a prompt may quote the string.
+                        name = runCatching {
+                            PiRecordParser.json.parseToJsonElement(line)
+                                .jsonObject["name"]?.jsonPrimitive?.contentOrNull
+                        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+                    }
                 }
             }
         }
         if (messages.isEmpty()) return null
-        return buildJsonObject { put("messages", messages) }
+        return Payload(buildJsonObject { put("messages", messages) }, name)
     }
 
     /**

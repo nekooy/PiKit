@@ -395,10 +395,18 @@ class PiAgentSession internal constructor(
      * @return true when the file was read and had at least one message.
      */
     fun openFromDisk(path: String): Boolean {
-        val payload = SessionTranscript.payload(File(path)) ?: return false
-        val base = ConversationState(sessionFile = path)
+        val file = File(path)
+        val payload = SessionTranscript.payload(file) ?: return false
+        // The drawer's row is built from the same scan, but the page's own title comes
+        // from the conversation state. Without this the header redrew the app's name and
+        // `TitleGenerator` saw an unnamed conversation every time a saved row was opened
+        // — even one whose title the file already carried.
+        val base = ConversationState(
+            sessionFile = path,
+            sessionName = payload.name,
+        )
         _conversation.value = ConversationReducer
-            .replaceWithMessages(base, payload)
+            .replaceWithMessages(base, payload.messages)
             .copy(loadingSession = false)
         restoreTarget = path
         restoredFrom = path
@@ -1575,6 +1583,11 @@ class PiAgentSession internal constructor(
         }.getOrNull()
         _conversation.update { ConversationReducer.replaceWithMessages(it, messages?.data) }
         adoptSessionPath(_conversation.value.sessionFile)
+        // A conversation restored by the launch path has its title request's other
+        // trigger here: `activate` saw no turns when this process was created, and no
+        // turn will settle until the reader asks something. A name the file already
+        // carries, or one the host has already tried, makes this a no-op.
+        host.titleGenerator.maybeGenerate(this)
     }
 
     /**
@@ -2290,7 +2303,35 @@ class PiAgentSession internal constructor(
     }
 
     fun setSessionName(name: String) {
-        runCommand { client?.requestOrThrow("set_session_name") { PiCommand.setSessionName(it, name) } }
+        val path = sessionPath
+        // A conversation opened from the drawer has no child process until the reader
+        // sends something, so there is no RPC client to answer `set_session_name`. The
+        // name still has to be written: the file is the record, and `renameSession` uses
+        // the same append for a row that is not live. Without this branch the generated
+        // title was displayed once and lost on the next launch, while the drawer kept
+        // drawing the first prompt from the file.
+        if (client == null) {
+            if (path == null) return
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) { appendSessionInfo(File(path), name) }
+                }.onSuccess {
+                    _conversation.update { it.copy(sessionName = name) }
+                    host.notifySessionListingChanged()
+                }
+            }
+            return
+        }
+        runCommand {
+            client?.requestOrThrow("set_session_name") { PiCommand.setSessionName(it, name) }
+            // The command's own `session_info_changed` event is the live path, but the
+            // generated title is written from a background request and the drawer's
+            // listing is a file scan: updating the transcript here is what makes the
+            // page header move immediately, and the revision is what makes the drawer
+            // re-read the file the title was just appended to.
+            _conversation.update { it.copy(sessionName = name) }
+            host.notifySessionListingChanged()
+        }
     }
 
     // ------------------------------------------------------------ dialogs

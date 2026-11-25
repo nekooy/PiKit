@@ -65,7 +65,6 @@ internal object ChineseStrings : Strings {
             "想改人设或时间位置，可以去设置 → Agent 配置 → 聊天模式",
         )
         override val loadingConversation = "正在打开对话…"
-        override val placeholderAttachment = "给这些图片补充说明…"
         override val send = "发送"
         override val stop = "停止"
 
@@ -392,6 +391,8 @@ internal object ChineseStrings : Strings {
 
         override val chatTitle = "自动生成对话标题"
         override val chatTitleSubtitle = "首轮回答后生成一个简短标题（会额外产生一次很小的模型请求）"
+        override val thinkingAutoExpand = "思考时自动展开"
+        override val thinkingAutoExpandSubtitle = "当前步骤在思考时展开显示，该步骤完成后自动折叠"
         override val theme = "主题"
         override val themeSystem = "跟随系统"
         override val themeLight = "浅色"

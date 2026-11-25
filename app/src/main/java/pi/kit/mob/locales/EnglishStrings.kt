@@ -57,7 +57,6 @@ internal object EnglishStrings : Strings {
             "To change the persona or where the time goes, open Settings → Agent settings → Chat mode.",
         )
         override val loadingConversation = "Opening the conversation…"
-        override val placeholderAttachment = "Add a message for these images…"
         override val send = "Send"
         override val stop = "Stop"
 
@@ -398,6 +397,8 @@ internal object EnglishStrings : Strings {
 
         override val chatTitle = "Generate conversation titles"
         override val chatTitleSubtitle = "A short title after the first answer, at the cost of one small model request"
+        override val thinkingAutoExpand = "Expand thinking while it streams"
+        override val thinkingAutoExpandSubtitle = "Open the current step's reasoning while it thinks, and fold it when the step ends"
         override val theme = "Theme"
         override val themeSystem = "Follow system"
         override val themeLight = "Light"

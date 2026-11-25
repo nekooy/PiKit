@@ -2,6 +2,7 @@ package pi.kit.mob.pi
 
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -96,5 +97,42 @@ class SessionTranscriptTest {
         // the count line, and nothing is thrown at it.
         file.delete()
         SessionTranscript.forEachPromptPicture(file) { _, _ -> error("never called") }
+    }
+
+
+    @Test
+    fun `the stored name travels with the messages, last record wins`() {
+        val file = session(
+            """{"type":"session","version":3,"id":"01","cwd":"/w"}""",
+            message(
+                """{"role":"user","content":[{"type":"text","text":"please read session_info"}]}""",
+                1000,
+            ),
+            """{"type":"session_info","timestamp":2000,"name":"first title"}""",
+            """{"type":"session_info","timestamp":3000,"name":"数学作业检查"}""",
+        )
+
+        val payload = SessionTranscript.payload(file)!!
+
+        assertEquals("the last naming record is the name", "数学作业检查", payload.name)
+        assertEquals(
+            "a prompt that quotes the record's marker is still a message",
+            1,
+            payload.messages["messages"]!!.let { (it as kotlinx.serialization.json.JsonArray).size },
+        )
+        file.delete()
+    }
+
+    @Test
+    fun `a file with no naming record has no name`() {
+        val file = session(
+            message(
+                """{"role":"user","content":[{"type":"text","text":"hello"}]}""",
+                1000,
+            ),
+        )
+
+        assertNull(SessionTranscript.payload(file)!!.name)
+        file.delete()
     }
 }

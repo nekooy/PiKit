@@ -127,6 +127,21 @@ class PiHost private constructor(context: Context) {
     private val _turnCompletions = MutableSharedFlow<TurnCompleted>(extraBufferCapacity = 8)
     internal val turnCompletions = _turnCompletions.asSharedFlow()
 
+    /**
+     * A counter bumped when a conversation's stored row changes outside the drawer.
+     *
+     * The drawer scans session files and keeps the last listing; a generated title is
+     * written by pi after that scan, so the row it is about would keep its first-prompt
+     * label until some unrelated reload. One integer is enough — the drawer only needs
+     * to know that a rescan is owed.
+     */
+    private val _sessionListingRevision = MutableStateFlow(0)
+    internal val sessionListingRevision: StateFlow<Int> = _sessionListingRevision.asStateFlow()
+
+    internal fun notifySessionListingChanged() {
+        _sessionListingRevision.value += 1
+    }
+
     /** Called by a conversation when its stream goes idle. */
     internal fun onTurnFinished(session: PiAgentSession) {
         val state = session.conversation.value
@@ -946,6 +961,11 @@ class PiHost private constructor(context: Context) {
         // should inherit.
         if (shownMode == AgentMode.CHAT) session.rememberChatWebAccess()
         session.rememberAsLastConversation()
+        // A saved conversation may carry turns but no title — either it predates the
+        // title switch or the switch was turned on after it was written. Opening it is
+        // the moment the reader asks for its name, so the one-shot request is made
+        // here as well as on a settle. It is a no-op for a fresh conversation.
+        titleGenerator.maybeGenerate(session)
     }
 
     /**

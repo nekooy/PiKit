@@ -218,14 +218,25 @@ internal fun PersonalizationPage(
                     },
                 )
                 // A title is generated once, after the first successful answer, by a
-                // small request to the same provider. Off is the default because it is
-                // the only switch on this page that spends tokens.
+                // small request to the same provider; the switch is on by default
+                // because a drawer of first prompts is hard to scan.
                 SwitchPreference(
                     title = text.settings.chatTitle,
                     summary = text.settings.chatTitleSubtitle,
                     checked = settings.chatTitleEnabled,
                     onCheckedChange = { on ->
                         session.settingsStore.update { it.copy(chatTitleEnabled = on) }
+                    },
+                )
+                // The reasoning block's own two moments: open while the current step is
+                // thinking, fold once that step finishes. Off by default; the switch is
+                // the transcript's only control over how much of the work it shows.
+                SwitchPreference(
+                    title = text.settings.thinkingAutoExpand,
+                    summary = text.settings.thinkingAutoExpandSubtitle,
+                    checked = settings.expandThinkingWhileStreaming,
+                    onCheckedChange = { on ->
+                        session.settingsStore.update { it.copy(expandThinkingWhileStreaming = on) }
                     },
                 )
             }

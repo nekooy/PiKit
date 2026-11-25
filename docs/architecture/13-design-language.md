@@ -470,7 +470,15 @@ Two row rules are behaviour rather than taste:
   rows scale with its frame and the blur carries the opening, so the surface is the
   control unfolding rather than a second object appearing beside it. Every `Auto` menu
   — the drawer's row menu, the files row's and the transcript card's — is this one
-  path, so the three cannot drift apart.
+  path, so the three cannot drift apart. **The exit is a fade in place, not the reveal
+  reversed.** Reversing the edge reveal emptied the panel first: the rows faded out on a
+  150 ms tween while the frame kept its size on a 300 ms spring, so the last quarter-second
+  was an empty glass rectangle shrinking into the row. `PiAnchoredMenu` now holds the
+  geometry at its settled value for an `Auto` menu that is leaving and fades the whole
+  surface with its rows; the morph menus (a composer chip, a glass icon button) still
+  reverse their transform, because there the panel is the trigger unfolding and shrinking
+  it back is the control being handed back. A closing `Auto` menu also stays sharp: blurring
+  it while it fades left a smeared ghost over the page for the length of the exit.
 
   **A dropdown row's panel is not a menu and does not take that edge reveal.** Its alternatives
   are the row's own value unfolded, so it keeps the library's arc: a flat capsule at 69%
@@ -892,6 +900,14 @@ same answer the transcript settled on (§7.3). What is lit instead is the row it
 long as its menu is open: measured in the light scheme under the same dim, that row reads
 rgb(160) where its neighbours read rgb(178), which is `inset`'s 10% of the ink with the
 scrim over it.
+
+**The row's menu is anchored on the row, not on the press point.** A point anchor made the
+panel spring out of a finger's location, which reads as a menu about that spot rather than
+about the conversation all four actions act on; it also changed shape with the grip. The
+row reports its own `boundsInWindow()` when the hold lands, so the edge reveal's collapsed
+endpoint is the row's rounded rectangle. The transcript's card menu keeps its point anchor:
+there the press is about one sentence inside a document, and the card is the whole message
+rather than the thing being acted on.
 
 The drawer's travel is kept in pixels, so a window that changes size has to re-anchor it:
 after one rotation an open drawer kept the portrait width and drew about 170px off the

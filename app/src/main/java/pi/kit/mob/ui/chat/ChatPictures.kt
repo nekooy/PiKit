@@ -74,12 +74,14 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -138,16 +140,22 @@ import pi.kit.mob.locales.Strings
 import pi.kit.mob.pi.ChatImages
 import pi.kit.mob.pi.ImageAttachment
 import pi.kit.mob.pi.SessionTranscript
+import pi.kit.mob.ui.kit.LocalPiBackdrop
 import pi.kit.mob.ui.kit.LocalPiHaptics
+import pi.kit.mob.ui.kit.PiCorner
 import pi.kit.mob.ui.kit.PiGlass
 import pi.kit.mob.ui.kit.PiTone
+import pi.kit.mob.ui.kit.piGlass
+import pi.kit.mob.ui.kit.rememberPiBackdrop
 import top.yukonga.miuix.kmp.anim.SinOutEasing
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -175,6 +183,12 @@ internal data class PictureSource(
     val uri: Uri? = null,
     val preview: ImageBitmap? = null,
     val origin: Rect? = null,
+    /**
+     * The `[Image: …]` machinery note this picture's prompt carries, when it carries
+     * one. It is not drawn under the picture; the viewer's info button is the one place
+     * it can be read, because the prompt bubble deliberately hides it.
+     */
+    val note: String? = null,
 )
 
 /**
@@ -430,6 +444,8 @@ internal fun PromptPictures(
     text: Strings,
     onOpen: (PictureTarget) -> Unit,
     modifier: Modifier = Modifier,
+    /** The prompt's image notes, by picture index; null/empty when it has none. */
+    notes: List<String> = emptyList(),
 ) {
     val context = LocalContext.current
     val generation by ChatPictureCache.generation.collectAsStateWithLifecycle()
@@ -464,6 +480,7 @@ internal fun PromptPictures(
                         origin = tile?.coordinates
                             ?.takeIf { it.isAttached }
                             ?.screenRect(view),
+                        note = notes.getOrNull(i),
                     )
                 },
                 start = index,
@@ -629,7 +646,15 @@ private fun PictureFrame(
                 onLocated(PictureTileFrame(it, bitmap))
             }
             .clip(shape)
-            .background(PiTone.inset()),
+            .background(PiTone.inset())
+            // The tile is the entry point whether or not its bitmap decoded. A copy
+            // that is present but unreadable still has a picture behind it — and a
+            // machinery note the viewer's info disc can show — so the viewer is the
+            // honest place to say "unavailable" rather than an inert frame.
+            .clickable(
+                onClickLabel = text.chat.imageOpen,
+                onClick = onOpen,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap == null) {
@@ -644,12 +669,7 @@ private fun PictureFrame(
                 bitmap = bitmap,
                 contentDescription = text.chat.imageOpen,
                 contentScale = if (crop) ContentScale.Crop else ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        onClickLabel = text.chat.imageOpen,
-                        onClick = onOpen,
-                    ),
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -711,12 +731,14 @@ private fun PictureCount(count: Int, text: Strings, modifier: Modifier) {
  *
  * Top: the close disc at the leading edge and the position in the middle — the middle
  * because it is a caption for the set rather than a control, and a counter in a corner
- * competes with the photograph's own edge. Bottom: **Save** and **Share**, the two things
- * a reader does with a picture they did not draw, in the same 42dp `PiGlass.fill()`
- * capsules as the header's marks — a floating control is one object in this app whatever
- * page it floats over (§13, §7.3). Over a white screenshot the capsule's edge merges with
- * the picture and the glyph carries the control, the same trade the header makes over a
- * light page; the dark scrim that was tried first is the rejected design.
+ * competes with the photograph's own edge. Bottom: **Save**, **Share** and, when the prompt
+ * carried an `[Image: …]` note, an **info** disc, the two things a reader does with a
+ * picture they did not draw plus the one fact the model was told about it, in the same
+ * 42dp `PiGlass.panel(CircleShape)` capsules as the header's marks — a floating control is
+ * one object in this app whatever page it floats over (§13, §7.3). The picture is the
+ * viewer's recorded backdrop, so the disc is glass over the photograph; the opaque fill it
+ * had first was a sticker on the picture, and the dark scrim that was tried before that is
+ * the older rejected design.
  *
  * ## What it is decoded at, and why the tile is the first frame
  *
@@ -756,6 +778,10 @@ internal fun PictureViewer(
     // the toast is drawn in the activity's window and this window is above it, so a toast
     // raised from here is a sentence nobody sees.
     var notice by remember { mutableStateOf<String?>(null) }
+    // The image's machinery note is a second layer the reader asks for, not a caption
+    // under the picture: it is one line of English metadata and it belongs behind a
+    // control the same way a tool's output does.
+    var noteVisible by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -766,6 +792,7 @@ internal fun PictureViewer(
     val page = pager.currentPage.coerceIn(0, target.pictures.lastIndex)
     val current = target.pictures[page]
     val drawn = decoded?.takeIf { it.first == page }?.second ?: current.preview
+    LaunchedEffect(page) { noteVisible = false }
 
     LaunchedEffect(show) {
         if (show) {
@@ -907,37 +934,56 @@ internal fun PictureViewer(
                     )
                 },
         ) {
-            HorizontalPager(
-                state = pager,
-                modifier = Modifier
+            // The picture is the ground the chrome is cut from, so it is recorded as a
+            // backdrop and every control over it samples that recording. The recording
+            // holds the pager and the flight only; the marks are siblings, which is the
+            // same red line every page's glass obeys — a control inside the layer it
+            // samples would recurse through its own RenderNode.
+            val viewerBackdrop = rememberPiBackdrop(base = Color.Black)
+            Box(
+                Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        // The flight draws the picture itself until it has landed, so the
-                        // pager's copy would be a second picture a few pixels off it.
-                        alpha = if (flight.value >= 1f) 1f else 0f
-                        translationY = drag
-                    },
-            ) { index ->
-                PicturePage(
-                    source = target.pictures[index],
-                    text = text,
-                    onLoaded = { decoded = index to it },
-                    onToggleChrome = { chrome = !chrome },
+                    .then(
+                        if (viewerBackdrop != null) {
+                            Modifier.layerBackdrop(viewerBackdrop)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            ) {
+                HorizontalPager(
+                    state = pager,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            // The flight draws the picture itself until it has landed, so the
+                            // pager's copy would be a second picture a few pixels off it.
+                            alpha = if (flight.value >= 1f) 1f else 0f
+                            translationY = drag
+                        },
+                ) { index ->
+                    PicturePage(
+                        source = target.pictures[index],
+                        text = text,
+                        onLoaded = { decoded = index to it },
+                        onToggleChrome = { chrome = !chrome },
+                    )
+                }
+
+                FlightPicture(
+                    bitmap = drawn,
+                    origin = current.origin,
+                    frame = frame,
+                    rootOnScreen = rootOnScreen,
+                    // Lambdas rather than values: the flight and the drag are frame-rate
+                    // state, and reading them in the Canvas draw scope keeps this subtree
+                    // out of the per-frame recomposition.
+                    progress = { flight.value },
+                    drag = { drag },
                 )
             }
 
-            FlightPicture(
-                bitmap = drawn,
-                origin = current.origin,
-                frame = frame,
-                rootOnScreen = rootOnScreen,
-                // Lambdas rather than values: the flight and the drag are frame-rate
-                // state, and reading them in the Canvas draw scope keeps this subtree
-                // out of the per-frame recomposition.
-                progress = { flight.value },
-                drag = { drag },
-            )
-
+            CompositionLocalProvider(LocalPiBackdrop provides viewerBackdrop) {
             val haptics = LocalPiHaptics.current
             AnimatedVisibility(
                 visible = chrome,
@@ -970,8 +1016,7 @@ internal fun PictureViewer(
                         Box(
                             modifier = Modifier
                                 .height(VIEWER_MARK_SIZE)
-                                .clip(RoundedCornerShape(percent = 50))
-                                .background(PiGlass.fill())
+                                .piGlass(RoundedCornerShape(percent = 50))
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -1001,6 +1046,20 @@ internal fun PictureViewer(
                         .padding(bottom = VIEWER_ACTIONS_INSET),
                     horizontalArrangement = Arrangement.spacedBy(VIEWER_ACTION_GAP),
                 ) {
+                    // The picture's machinery note, when this prompt carried one. A
+                    // picture that had to be fitted carries the ratio the model was
+                    // told; the reader sees it here rather than as a caption under a
+                    // picture that is already the subject.
+                    if (current.note != null) {
+                        ViewerMark(
+                            icon = MiuixIcons.Info,
+                            label = text.chat.extrasNotes,
+                            onClick = {
+                                haptics.tap()
+                                noteVisible = !noteVisible
+                            },
+                        )
+                    }
                     ViewerMark(
                         icon = MiuixIcons.Share,
                         label = text.chat.imageShare,
@@ -1030,6 +1089,30 @@ internal fun PictureViewer(
                 }
             }
 
+            // The image note, in one of the viewer's own glass panels: a line of
+            // metadata is read like a caption, but it is not drawn under the picture
+            // unless asked for. `widthIn` bounds it on a tablet; the text wraps.
+            if (noteVisible) {
+                current.note?.let { note ->
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(horizontal = 24.dp)
+                            .padding(bottom = VIEWER_ACTIONS_INSET + VIEWER_MARK_SIZE + 12.dp)
+                            .widthIn(max = 420.dp)
+                            .piGlass(RoundedCornerShape(PiCorner.radius)),
+                    ) {
+                        Text(
+                            text = note,
+                            style = MiuixTheme.textStyles.footnote1,
+                            color = MiuixTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+            }
+
             // The save's answer, in the app's own toast capsule — `PiGlass.fill()` and the
             // theme's ink, at the toast's padding. It is a sentence the window says itself,
             // because a toast belongs to the window underneath this one.
@@ -1039,8 +1122,7 @@ internal fun PictureViewer(
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(bottom = VIEWER_ACTIONS_INSET + VIEWER_MARK_SIZE + 12.dp)
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(PiGlass.fill())
+                        .piGlass(RoundedCornerShape(percent = 50))
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                 ) {
                     Text(
@@ -1050,6 +1132,7 @@ internal fun PictureViewer(
                     )
                 }
             }
+            }
         }
     }
 }
@@ -1057,13 +1140,14 @@ internal fun PictureViewer(
 /**
  * One of the viewer's chrome marks: the header's 42dp glass disc, with its glyph.
  *
- * The same object the conversation page's header draws — `PiGlass.fill()`, `onSurface`
+ * The same object the conversation page's header draws — `PiGlass.panel`, `onSurface`
  * ink, a 22dp glyph — because a floating control is one object in this app whatever page
  * it floats over (§13). The first version of the viewer used a dark scrim instead, on the
  * argument that a photograph is not a page; the result was a second family of controls the
- * reader had to learn for one screen. Over a white screenshot the capsule's edge merges
- * with the picture and the glyph is what the reader aims at, which is the same trade the
- * header makes over a light page.
+ * reader had to learn for one screen. The viewer's picture is recorded as the backdrop
+ * (see `PictureViewer`), so the disc is the page's glass rather than an opaque pill: over
+ * a white screenshot the capsule's edge is the blurred picture, and the glyph is what the
+ * reader aims at.
  */
 @Composable
 private fun ViewerMark(
@@ -1075,8 +1159,7 @@ private fun ViewerMark(
     Box(
         modifier = modifier
             .size(VIEWER_MARK_SIZE)
-            .clip(CircleShape)
-            .background(PiGlass.fill())
+            .then(PiGlass.panel(CircleShape))
             .clickable(onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

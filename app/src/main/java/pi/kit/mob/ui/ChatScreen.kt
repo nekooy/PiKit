@@ -1125,6 +1125,7 @@ internal fun ChatScreen(
                         onRelease = { distance, velocity, minFling ->
                             settlePage(commitPage(distance, velocity, minFling), velocity)
                         },
+                        direction = PageDragDirection.Left,
                     ),
             ) {
                 SessionsScreen(
@@ -1207,6 +1208,7 @@ internal fun ChatScreen(
                     onRelease = { distance, velocity, minFling ->
                         settlePage(commitPage(distance, velocity, minFling), velocity)
                     },
+                    direction = PageDragDirection.Right,
                 ),
         ) {
             ChatPage(
@@ -1479,6 +1481,7 @@ internal fun ChatScreen(
                         onRelease = { distance, velocity, minFling ->
                             settlePage(commitPage(distance, velocity, minFling), velocity)
                         },
+                        direction = PageDragDirection.Left,
                     ),
             )
         }
@@ -2275,6 +2278,7 @@ private fun ChatPage(
                                                 onToggleTurn = onToggleTurn,
                                                 avatars = avatars,
                                                 showMessageTime = saved.showMessageTime,
+                                                thinkingAutoExpand = saved.expandThinkingWhileStreaming,
                                                 onShowExtras = onShowPromptExtras,
                                                 onOpenPictures = onOpenPictures,
                                             )
@@ -3675,6 +3679,8 @@ private fun TranscriptCardView(
     avatars: ChatAvatars?,
     /** Whether a finished message draws its date and time underneath. */
     showMessageTime: Boolean,
+    /** Whether the current step's reasoning opens while it streams and folds when it ends. */
+    thinkingAutoExpand: Boolean,
     onShowExtras: (PromptExtras) -> Unit,
     onOpenPictures: (PictureTarget) -> Unit,
 ) {
@@ -3738,6 +3744,7 @@ private fun TranscriptCardView(
                             text = text,
                             expandedTurns = expandedTurns,
                             onToggleTurn = onToggleTurn,
+                            thinkingAutoExpand = thinkingAutoExpand,
                             onShowExtras = onShowExtras,
                             onOpenPictures = onOpenPictures,
                         )
@@ -3796,6 +3803,7 @@ private fun TranscriptCardView(
                     text = text,
                     expandedTurns = expandedTurns,
                     onToggleTurn = onToggleTurn,
+                    thinkingAutoExpand = thinkingAutoExpand,
                     onShowExtras = onShowExtras,
                     onOpenPictures = onOpenPictures,
                 )
@@ -3853,6 +3861,7 @@ private fun AnswerCardRows(
     text: Strings,
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
+    thinkingAutoExpand: Boolean,
     onShowExtras: (PromptExtras) -> Unit,
     onOpenPictures: (PictureTarget) -> Unit,
 ) {
@@ -3874,6 +3883,7 @@ private fun AnswerCardRows(
                     text = text,
                     expandedTurns = expandedTurns,
                     onToggleTurn = onToggleTurn,
+                    thinkingAutoExpand = thinkingAutoExpand,
                     onShowExtras = onShowExtras,
                     onOpenPictures = onOpenPictures,
                 )
@@ -3886,6 +3896,7 @@ private fun AnswerCardRows(
                     text = text,
                     expandedTurns = expandedTurns,
                     onToggleTurn = onToggleTurn,
+                    thinkingAutoExpand = thinkingAutoExpand,
                     onShowExtras = onShowExtras,
                     onOpenPictures = onOpenPictures,
                 )
@@ -3937,15 +3948,21 @@ private fun StepGroup(
     text: Strings,
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
+    thinkingAutoExpand: Boolean,
     onShowExtras: (PromptExtras) -> Unit,
     onOpenPictures: (PictureTarget) -> Unit,
 ) {
     val rail = MiuixTheme.colorScheme.onSurface.copy(alpha = STEP_RAIL_ALPHA)
+    // A group of one draws no rail (see the KDoc below), so it has no mark to stand in
+    // for the step's own: a lone thinking step keeps its brain. The moment a second
+    // step arrives the rail appears and the marks drop, which is the existing rule for
+    // every row in a group.
+    val nested = rows.size > 1
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .drawBehind {
-                if (rows.size > 1) {
+                if (nested) {
                     drawLine(
                         color = rail,
                         start = Offset(STEP_RAIL_X.toPx(), 0f),
@@ -3967,9 +3984,10 @@ private fun StepGroup(
                     text = text,
                     expandedTurns = expandedTurns,
                     onToggleTurn = onToggleTurn,
+                    thinkingAutoExpand = thinkingAutoExpand,
                     onShowExtras = onShowExtras,
                     onOpenPictures = onOpenPictures,
-                    nested = true,
+                    nested = nested,
                 )
             }
         }
@@ -4171,6 +4189,7 @@ private fun TranscriptCardRow(
     text: Strings,
     expandedTurns: Set<Int>,
     onToggleTurn: (Int) -> Unit,
+    thinkingAutoExpand: Boolean,
     onShowExtras: (PromptExtras) -> Unit,
     onOpenPictures: (PictureTarget) -> Unit,
     /**
@@ -4187,7 +4206,7 @@ private fun TranscriptCardRow(
             is ChatItem.User -> PromptBody(item, text, onShowExtras, onOpenPictures)
 
             is ChatItem.Assistant ->
-                AssistantBlock(item, text, row.showReasoning, nested)
+                AssistantBlock(item, text, row.showReasoning, nested, thinkingAutoExpand)
 
             is ChatItem.Tool -> ToolCallRow(item = item, text = text)
 
@@ -4244,12 +4263,15 @@ private fun PromptBody(
     // speaker. The space *between* the two cards is `rowGap`'s job — it is the only
     // place that knows whether an answer, a fold band or a tool card comes next.
     val extras = remember(item.key, item.text) { parsePromptExtras(item.text) }
+    // The chip is the file-path block's control. An image note is machinery about a
+    // picture, not a paragraph the prompt should wear: it is shown by the picture
+    // viewer's own info button, next to the picture it describes.
+    val showExtrasChip = extras.filePaths.isNotEmpty()
     Column {
-        // The machinery first: file paths and image notes are one chip above the
-        // words, the same position the image-count chip has always held. Tapping it
-        // opens the full paths and the `[Image: …]` notes in a sheet — neither
-        // belongs in the sentence the reader typed.
-        if (extras.hasExtras) {
+        // The machinery first: file paths are one chip above the words, the same
+        // position the image-count chip has always held. Tapping it opens the full
+        // paths in a sheet — they do not belong in the sentence the reader typed.
+        if (showExtrasChip) {
             PromptExtrasChip(
                 extras = extras,
                 text = text,
@@ -4265,8 +4287,9 @@ private fun PromptBody(
                 count = item.imageCount,
                 text = text,
                 onOpen = onOpenPictures,
+                notes = extras.imageNotes,
                 modifier = Modifier.padding(
-                    top = if (extras.hasExtras) 6.dp else 0.dp,
+                    top = if (showExtrasChip) 6.dp else 0.dp,
                     bottom = if (extras.displayText.isBlank()) 0.dp else 6.dp,
                 ),
             )
@@ -4276,7 +4299,7 @@ private fun PromptBody(
                 text = extras.displayText,
                 modifier = Modifier.padding(
                     top = when {
-                        extras.hasExtras || item.imageCount > 0 -> 6.dp
+                        showExtrasChip || item.imageCount > 0 -> 6.dp
                         else -> 0.dp
                     },
                 ),
@@ -4294,25 +4317,26 @@ private fun PromptBody(
 }
 
 /**
- * The chip that replaces a prompt's file-path list and its image notes.
+ * The chip that replaces a prompt's file-path list.
  *
  * A 14dp glyph and a small label, like the image count beside it, and the chevron is
  * what says this one opens something. The label is a count rather than a title
- * (`2 files · 1 image note`) because that is the fact the reader wants before
- * deciding whether to look inside.
+ * (`2 files`) because that is the fact the reader wants before deciding whether to
+ * look inside. Image notes are deliberately absent: a note is machinery about one
+ * picture, it made the prompt bubble carry an English metadata line's count, and the
+ * viewer's info button is where a note belongs.
  *
  * ## Why it is a pill on a step of its own
  *
- * This is the one control inside a prompt: tapping it opens the paths and the image
- * notes in a sheet, so it is an action and it takes the fully round shape — the
- * page's shape for an action, the same one the composer's send button wears. Its
- * fill is `PiTone.inset()`, the wash every quotation on this page is drawn in: the
- * prompt card is the accent's own wash now, so the chip has to be a *step* from
- * whatever that card turns out to be rather than a palette role chosen against the
- * grey it used to be. The height is 28dp — the transcript's own pill, the size the
- * tool card's status uses — so the row of machinery above a prompt cannot change the
- * card's height; and it is a minimum, because the app's text-size setting draws the
- * label larger and a fixed height would clip it.
+ * This is the one control inside a prompt: tapping it opens the paths in a sheet, so it
+ * is an action and it takes the fully round shape — the page's shape for an action, the
+ * same one the composer's send button wears. Its fill is `PiTone.inset()`, the wash
+ * every quotation on this page is drawn in: the prompt card is the accent's own wash
+ * now, so the chip has to be a *step* from whatever that card turns out to be rather
+ * than a palette role chosen against the grey it used to be. The height is 28dp — the
+ * transcript's own pill, the size the tool card's status uses — so the row of machinery
+ * above a prompt cannot change the card's height; and it is a minimum, because the
+ * app's text-size setting draws the label larger and a fixed height would clip it.
  */
 @Composable
 private fun PromptExtrasChip(
@@ -4351,7 +4375,7 @@ private fun PromptExtrasChip(
                 modifier = Modifier.size(14.dp),
             )
             Text(
-                text = text.chat.extrasCount(extras.filePaths.size, extras.imageNotes.size),
+                text = text.chat.extrasCount(extras.filePaths.size, 0),
                 modifier = Modifier.padding(start = 4.dp),
                 style = MiuixTheme.textStyles.footnote1,
                 maxLines = 1,
@@ -4375,13 +4399,14 @@ private val SHEET_GUTTER = 16.dp
 private val SHEET_HEADING_INSET = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
 
 /**
- * The sheet a [PromptExtrasChip] opens: every path and every note, in full.
+ * The sheet a [PromptExtrasChip] opens: every file path, in full.
  *
- * The two headings are Miuix's [SmallTitle] — the library's own name for a group
- * inside a page: small, secondary, and deliberately quiet, so a heading is never
- * mistaken for something tappable. The rows under them are the sheet's body: a plain
- * scrolling column rather than a lazy list, because a prompt's machinery is a handful
- * of paths and the sheet's own window already bounds the height.
+ * The heading is Miuix's [SmallTitle] — the library's own name for a group inside a
+ * page: small, secondary, and deliberately quiet, so a heading is never mistaken for
+ * something tappable. The rows under it are the sheet's body: a plain scrolling column
+ * rather than a lazy list, because a prompt's machinery is a handful of paths and the
+ * sheet's own window already bounds the height. Image notes are not here; they belong
+ * to the picture they describe and live behind the viewer's info button.
  */
 @Composable
 private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
@@ -4411,20 +4436,6 @@ private fun PromptExtrasSheet(extras: PromptExtras, text: Strings) {
                     text = path,
                     style = MiuixTheme.textStyles.footnote1,
                     fontFamily = FontFamily.Monospace,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = SHEET_GUTTER, vertical = 2.dp),
-                )
-            }
-        }
-        if (extras.imageNotes.isNotEmpty()) {
-            SmallTitle(
-                text = text.chat.extrasNotes,
-                insideMargin = SHEET_HEADING_INSET,
-            )
-            extras.imageNotes.forEach { note ->
-                Text(
-                    text = note,
-                    style = MiuixTheme.textStyles.footnote1,
                     color = MiuixTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = SHEET_GUTTER, vertical = 2.dp),
                 )
@@ -4817,6 +4828,8 @@ private fun AssistantBlock(
     text: Strings,
     showReasoning: Boolean = true,
     nested: Boolean = false,
+    /** Whether the current step's reasoning opens while it streams and folds when it ends. */
+    thinkingAutoExpand: Boolean = false,
 ) {
     // `rememberSaveable`: a `LazyColumn` disposes the rows that scroll out of its
     // viewport, so a plain `remember` lost the opened reasoning block — the reader
@@ -4833,6 +4846,15 @@ private fun AssistantBlock(
     // it did. The row's own label carries the progress (`思考 · 1.2k 字`), and the
     // block is one tap away.
     var showThinking by rememberSaveable(item.key) { mutableStateOf(false) }
+
+    // The personalization switch's two moments. The block opens when this step starts
+    // producing reasoning and folds when the step is over; `isNotBlank` is a key
+    // because the first token of thinking arrives after the row itself, and a key on
+    // the text would re-open a block the reader had just closed on every token.
+    LaunchedEffect(item.status, thinkingAutoExpand, item.thinking.isNotBlank()) {
+        if (!thinkingAutoExpand) return@LaunchedEffect
+        showThinking = item.status == ReplyStatus.Streaming && item.thinking.isNotBlank()
+    }
 
     // The expanded block is below the toggle, so a tap near the foot of the
     // viewport opens a panel that is entirely under the fold — the reader could
@@ -4872,7 +4894,14 @@ private fun AssistantBlock(
                 // reasoning read as part of the button.
                 Spacer(Modifier.height(6.dp))
                 Box(Modifier.bringIntoViewRequester(reasoningBringIntoView)) {
-                    ReasoningBlock(item.thinking)
+                    // A streaming block follows its own newest token. The transcript's
+                    // follow rule is about the list; this is the block's own scroll, and
+                    // the report is that opening it while the model thinks left the
+                    // reader at the top of a growing panel.
+                    ReasoningBlock(
+                        thinking = item.thinking,
+                        follow = item.status == ReplyStatus.Streaming,
+                    )
                 }
                 LaunchedEffect(showThinking) {
                     reasoningBringIntoView.bringIntoView()
@@ -5084,7 +5113,6 @@ private fun Composer(
     val placeholder = when {
         agent is AgentStatus.Failed -> text.chat.agentFailed
         agent is AgentStatus.Stopped -> text.chat.agentStopped
-        attachments.isNotEmpty() -> text.chat.placeholderAttachment
         else -> text.chat.placeholder
     }
     // Chat mode has no tools, so the two controls that only mean something to an

@@ -3,9 +3,10 @@
  *
  * This lives in `pi` rather than in the chat page because the shapes it parses are pi's:
  * `[Image: original … displayed at …]` is pi's note, and the address header is the one this
- * app writes for a file attachment. Two callers need the split — the transcript, which
- * draws the sentence and folds the rest into a chip, and the session list, which must not
- * title a conversation after a note.
+ * app writes for a file attachment. Three callers need the split — the transcript, whose
+ * chip is the file-path block and whose viewer shows a note beside its picture, the picture
+ * viewer, whose info disc reads the note, and the session list, which must not title a
+ * conversation after either.
  */
 package pi.kit.mob.pi
 
@@ -17,8 +18,9 @@ package pi.kit.mob.pi
  * and they are not prose the reader wrote. They used to sit in the bubble as
  * plain text — the paths as a trailing list, the image note as a bracketed
  * English sentence in the middle of the message — which is the report that the
- * bubble is "a wall of paths". Parsed out here, drawn as one chip, and shown in
- * full only when that chip is tapped.
+ * bubble is "a wall of paths". Parsed out here, the paths are one chip that opens
+ * a sheet; an image note belongs to its picture and is shown behind the viewer's
+ * info disc, not as a count on the sentence the reader asked.
  */
 internal data class PromptExtras(
     val displayText: String,
