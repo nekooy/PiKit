@@ -18,7 +18,7 @@ runtime image has to exist at all is in
   `sourceCompatibility`/`targetCompatibility`/`jvmTarget` are all 17.
 - **Android SDK** with `compileSdk 37.2` and its build-tools, plus **NDK r29** — the
   vendored terminal emulator builds a small PTY shim through `ndk-build`. The 37.2 is
-  an AAR floor rather than a preference: Miuix 0.9.5-beta04 and the AndroidX
+  an AAR floor rather than a preference: Miuix 0.9.5-rc01 and the AndroidX
   artifacts this build resolves (core-ktx 1.19.1, Compose 1.13.0) declare
   `minCompileSdk=37.2` in their own metadata, the same mechanism that made 36 the
   floor before it. CI installs exactly
