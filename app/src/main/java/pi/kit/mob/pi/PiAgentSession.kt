@@ -1806,19 +1806,7 @@ class PiAgentSession internal constructor(
         val file = File(path)
         if (messages < 0 || !file.isFile) return null
         val lines = runCatching { file.readLines() }.getOrNull() ?: return null
-        if (lines.size < 2) return null
-        val kept = ArrayList<String>(lines.size)
-        kept += lines.first()
-        var seen = 0
-        for (line in lines.drop(1)) {
-            if (line.isBlank()) continue
-            kept += line
-            if (line.contains("\"type\":\"message\"")) {
-                seen++
-                if (seen >= messages) break
-            }
-        }
-        if (seen < messages) return null
+        val kept = forkRecords(lines, messages) ?: return null
         kept[0] = kept[0].replaceFirst(Regex("\"id\":\"[^\"]*\""), "\"id\":\"${UUID.randomUUID()}\"")
         return runCatching {
             val target = File(
@@ -4516,3 +4504,29 @@ internal fun PiSettings.toLaunchOptions(
     chatPromptExtension = chatPromptExtension,
     chatWebExtension = chatWebExtension,
 )
+
+/**
+ * The records a branch up to [messages] message records keeps.
+ *
+ * Extracted from [PiAgentSession.forkAt] so the count is testable without a
+ * process: `0` is a real branch point (regenerating the first turn), and the
+ * message *after* the requested count is where the copy stops. One line of a pi
+ * session is one record; only records whose `type` is `message` are counted, so
+ * a session-info record that follows the last kept message is not a reason to
+ * take one more turn.
+ */
+internal fun forkRecords(lines: List<String>, messages: Int): MutableList<String>? {
+    if (messages < 0 || lines.size < 2) return null
+    val kept = ArrayList<String>(lines.size)
+    kept += lines.first()
+    var seen = 0
+    for (line in lines.drop(1)) {
+        if (line.isBlank()) continue
+        if (line.contains("\"type\":\"message\"")) {
+            if (seen >= messages) break
+            seen++
+        }
+        kept += line
+    }
+    return if (seen < messages) null else kept
+}
