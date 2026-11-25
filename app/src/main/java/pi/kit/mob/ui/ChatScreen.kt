@@ -4853,7 +4853,11 @@ private fun AssistantBlock(
     // the text would re-open a block the reader had just closed on every token.
     LaunchedEffect(item.status, thinkingAutoExpand, item.thinking.isNotBlank()) {
         if (!thinkingAutoExpand) return@LaunchedEffect
-        showThinking = item.status == ReplyStatus.Streaming && item.thinking.isNotBlank()
+        showThinking = shouldExpandThinking(
+            enabled = thinkingAutoExpand,
+            status = item.status,
+            hasThinking = item.thinking.isNotBlank(),
+        )
     }
 
     // The expanded block is below the toggle, so a tap near the foot of the
@@ -4956,6 +4960,20 @@ private fun AssistantBlock(
 
 /** How many lines the field grows to before it scrolls inside itself. */
 private const val COMPOSER_MAX_LINES = 8
+
+/**
+ * Whether the personalization switch should have this reasoning block open right now.
+ *
+ * Only the current step's block, and only while it is streaming and has something to show;
+ * the moment the step ends the same rule closes it. A block the reader opened by hand is
+ * not governed here — this is the automatic state, written on the two edges of a step, not
+ * a value the toggle recomputes continuously.
+ */
+internal fun shouldExpandThinking(
+    enabled: Boolean,
+    status: ReplyStatus,
+    hasThinking: Boolean,
+): Boolean = enabled && status == ReplyStatus.Streaming && hasThinking
 
 /**
  * The room under the composer's frame: the agent's state line and its margins.
