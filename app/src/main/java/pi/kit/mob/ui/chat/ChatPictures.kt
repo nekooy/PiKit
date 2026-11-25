@@ -469,6 +469,11 @@ internal fun PromptPictures(
     // it is read in the tap handler, not during composition.
     val tiles = remember(keys) { mutableMapOf<Int, PictureTileFrame>() }
     val view = LocalView.current
+    // A prompt prints a note only for a picture this app had to fit, so a mixed set has
+    // fewer notes than pictures and no marker saying which picture each belongs to. The
+    // list is positional only when the counts agree; otherwise the viewer draws no info
+    // disc rather than putting one picture's ratio behind another picture.
+    val alignedNotes = notes.takeIf { it.size == keys.size }.orEmpty()
     val open = { index: Int ->
         onOpen(
             PictureTarget(
@@ -480,7 +485,7 @@ internal fun PromptPictures(
                         origin = tile?.coordinates
                             ?.takeIf { it.isAttached }
                             ?.screenRect(view),
-                        note = notes.getOrNull(i),
+                        note = alignedNotes.getOrNull(i),
                     )
                 },
                 start = index,
